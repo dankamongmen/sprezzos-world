@@ -1,0 +1,143 @@
+#!/usr/bin/make -f
+#
+# This is free software; see the GNU General Public Licence
+# version 2 or later for copying conditions.  There is NO warranty.
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+# Workaround for spurious error when building with gcc-4.4
+ifeq (,$(filter m68k alpha,$(DEB_HOST_ARCH)))
+#export DEB_CFLAGS_MAINT_APPEND := -Werror
+endif
+export DEB_CFLAGS_MAINT_APPEND += $(shell dpkg-buildflags --get CPPFLAGS)
+
+# always abort if there are any problems with the symbols file
+DPKG_GENSYMBOLS_CHECK_LEVEL = 4
+export DPKG_GENSYMBOLS_CHECK_LEVEL
+
+VERSION = $(shell dpkg-parsechangelog | sed -n -e's/^Version: //p')
+ver := $(shell dpkg-parsechangelog | sed -n -e's/^Version: \(.*\)-[^-]\+/\1/p')
+
+freetype_ver := $(ver)
+ftdocs_ver   := $(ver)
+ft2demos_ver := $(ver)
+dependency = $(libpkg) (>= 2.4.0)
+
+freetype_u := freetype-$(freetype_ver)
+ftdocs_u   := freetype-doc-$(ftdocs_ver)
+ftdocs_d   := $(freetype_u)
+ft2demos_u := ft2demos-$(ft2demos_ver)
+
+libpkg := libfreetype6
+devpkg := $(libpkg)-dev
+docpkg := $(libpkg)-doc
+demospkg := freetype2-demos
+udebpkg := libfreetype6-udeb
+docdir := usr/share/doc
+freetype_config_man := $(CURDIR)/debian/freetype-config.man
+freetype_config_sgml := $(CURDIR)/debian/freetype-config.man.sgml
+
+libdoc = FTL.TXT CHANGES TODO ft2faq.html
+
+%:
+	dh $@
+
+unpack:: unpack-stamp
+unpack-stamp::
+	# Unpack upstream tarballs
+	@for i in $(freetype_u) $(ftdocs_u) $(ft2demos_u); do \
+	    if [ -f $$i.tar.bz2 ]; then \
+		echo "Unpacking $$i.tar.bz2 ..."; \
+		tar -x --bzip2 -f $$i.tar.bz2; \
+	    elif [ -f $$i.tar.gz ]; then \
+		echo "Unpacking $$i.tar.gz ..."; \
+		tar -x --gzip -f $$i.tar.gz; \
+	    else \
+		echo "Error!  $$i.tar.{bz2,gz} not found!"; \
+		exit 1; \
+	    fi \
+	done
+	ln -s $(ftdocs_d)/docs docs
+	touch unpack-stamp
+
+patch: unpack patch-stamp
+patch-stamp:
+	cd $(freetype_u) \
+	    && QUILT_PATCHES=../debian/patches-freetype quilt --quiltrc /dev/null push -a
+	cd $(ft2demos_u) \
+	    && QUILT_PATCHES=../debian/patches-ft2demos quilt --quiltrc /dev/null push -a
+	touch patch-stamp
+
+override_dh_auto_configure: patch
+	dh_auto_configure -D $(freetype_u) -- --without-bzip2
+
+override_dh_auto_build:
+	dh_auto_build -D $(freetype_u)
+	dh_auto_build -D $(ft2demos_u) -- TOP_DIR=../$(freetype_u) \
+		OBJ_DIR=../$(freetype_u)/objs
+	docbook-to-man $(freetype_config_sgml) > $(freetype_config_man)
+
+override_dh_auto_clean:
+	rm -f $(freetype_config_man)
+	rm -f unpack-stamp patch-stamp
+	rm -rf $(freetype_u) $(ft2demos_u) docs
+
+override_dh_auto_install:
+	dh_auto_install -D $(freetype_u) --destdir=$(CURDIR)/debian/tmp
+	$(freetype_u)/builds/unix/libtool --mode=install \
+	    cp -av `find $(ft2demos_u)/bin -type f -perm -u=x -maxdepth 1` \
+		$(CURDIR)/debian/$(demospkg)/usr/bin/
+	sed -i -e'/dependency_libs/s/'.*'//' debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libfreetype.la
+
+override_dh_install:
+	dh_install --fail-missing
+
+override_dh_installdocs:
+ifneq (,$(findstring $(libpkg), $(shell dh_listpackages)))
+	dh_installdocs -p$(libpkg) $(addprefix $(freetype_u)/docs/,$(libdoc))
+	mkdir debian/$(libpkg)/$(docdir)/$(libpkg)/pcf
+	cp -a $(freetype_u)/src/pcf/README debian/$(libpkg)/$(docdir)/$(libpkg)/pcf/
+endif
+ifneq (,$(findstring $(devpkg), $(shell dh_listpackages)))
+	dh_installdocs --link-doc=$(libpkg) -p$(devpkg) \
+		-Xreference/README -Xreference/.gitignore \
+		-XLICENSE.TXT -XGPL.TXT -XBUILD -XINSTALL \
+		$(addprefix -X,$(libdoc)) \
+		$(ftdocs_d)/docs/*
+endif
+	dh_installdocs -N$(devpkg) -N$(libpkg) --link-doc=$(libpkg)
+
+override_dh_installchangelogs:
+ifneq (,$(findstring $(libpkg), $(shell dh_listpackages)))
+	dh_installchangelogs -p$(libpkg) $(freetype_u)/ChangeLog
+endif
+
+override_dh_makeshlibs:
+	dh_makeshlibs -V '$(dependency)' --add-udeb '$(udebpkg)'
+
+# This variable is used only by get-orig-source, which will normally only
+# be run by maintainers.
+URL	= http://savannah.nongnu.org/download/freetype/
+
+# Download the various upstream source tarballs and pack them into a
+# single orig.tar.gz.  Assumes wget and gpg are available.
+get-orig-source:
+	@if [ ! -d "debian" ] ; then \
+	    echo 'Run this from the top directory of the Debian source' >&2; \
+	    exit 1; \
+	fi
+	mkdir freetype-$(ver)
+	set -e; \
+	cd freetype-$(ver); \
+	for i in freetype freetype-doc ft2demos; do \
+		wget $(URL)/$$i-$(ver).tar.bz2; \
+		wget $(URL)/$$i-$(ver).tar.bz2.sig; \
+		gpg --verify $$i-$(ver).tar.bz2.sig $$i-$(ver).tar.bz2 \
+		&& rm $$i-$(ver).tar.bz2.sig; \
+	done
+	tar cf freetype_$(ver).orig.tar freetype-$(ver)
+	rm -rf freetype-$(ver)
+	gzip -9 freetype_$(ver).orig.tar
+
+.PHONY: unpack patch get-orig-source
