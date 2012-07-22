@@ -1,0 +1,105 @@
+#!/usr/bin/make -f
+# debian/rules file for nvi. Based on:
+#   Sample debian/rules that uses debhelper. GNU copyright 1997 by Joey Hess.
+
+package=nvi
+curdir=$(shell pwd)
+CC=gcc
+deb_cflags:=
+
+ifeq ($(filter nostrip,$(DEB_BUILD_OPTIONS)),nostrip)
+	make_deb_args=strip=/bin/true
+else
+	make_deb_args=
+endif
+
+ifeq ($(filter noopt,$(DEB_BUILD_OPTIONS)),noopt)
+	deb_cflags+=-O0 -g3
+else
+	deb_cflags+=-O2 -g
+endif
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp install-stamp dist/recover
+	rm -f dist/config.sub dist/config.guess
+	[ ! -f build.unix/Makefile ] || make -C build.unix distclean
+	find build.unix -type f -and -not -name 'README*' -print0 | xargs -0 rm -f
+	dpatch deapply-all
+	dh_clean
+
+build: build-stamp
+build-stamp:
+	dh_testdir
+	dpatch apply-all
+	# BUILD NVI
+	cp -f /usr/share/misc/config.guess /usr/share/misc/config.sub dist/
+	cd build.unix && \
+	  OPTFLAG="$(deb_cflags)" \
+	  ac_cv_path_vi_cv_path_sendmail=/usr/sbin/sendmail \
+	  vi_cv_revoke=no \
+	  ../dist/configure \
+		--disable-curses \
+		--prefix=/usr \
+		--disable-shared --enable-static \
+		--enable-widechar \
+		--disable-threads \
+		--without-x \
+		--with-gnu-ld=yes \
+		--datadir='$${prefix}/share' \
+		--mandir='$${prefix}/share/man' \
+		--program-prefix=n
+	sed -i -e '/define.*_PATH_MSGCAT/ s/".*"/"\/usr\/share\/vi\/catalog\/"/' build.unix/pathnames.h
+	make -C build.unix
+	touch build-stamp
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	rm -rf debian/nvi debian/nvi-doc
+	dh_installdirs
+	make -C build.unix install prefix=$(curdir)/debian/nvi/usr $(make_deb_args)
+	-rm -rf \
+		debian/nvi/usr/share/man/cat1 \
+		debian/nvi/usr/lib \
+		debian/nvi/usr/share/vi/perl \
+		debian/nvi/usr/share/vi/tcl
+	cp nvi-1.79/docs/changelog debian/nvi/usr/share/doc/nvi/changelog_stable
+	ln -sf nvi.1 debian/nvi/usr/share/man/man1/nex.1
+	ln -sf nvi.1 debian/nvi/usr/share/man/man1/nview.1
+	touch install-stamp
+
+binary: binary-indep binary-arch
+binary-indep: install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installdocs -i
+	dh_installchangelogs -i Changes
+	dh_compress -i -Xvi.advanced -Xvi.beginner
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdocs -a
+	dh_installinit -a --init-script=nviboot -- start 70 S .
+	dh_installchangelogs -a Changes
+	dh_lintian -a
+	dh_compress -a
+	dh_strip -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+.PHONY: build clean binary-indep binary-arch binary
