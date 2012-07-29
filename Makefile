@@ -1,9 +1,13 @@
 .DELETE_ON_ERROR:
 .PHONY: world all clean
 
-world: omphalos
+world: libbluray omphalos
 
 all: world
+
+.PHONY: libbluray
+libbluray:
+	git clone git clone git://git.videolan.org/libbluray.git
 
 .PHONY: omphalos
 omphalos:
