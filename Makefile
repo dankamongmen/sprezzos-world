@@ -1,20 +1,51 @@
 .DELETE_ON_ERROR:
 .PHONY: world all clean
+.DEFAULT_GOAL:=all
 
-world: growlight libbluray omphalos
+# This is all *very* proof-of-concept. At a bare minimum, we'll be
+# automatically generating all of this stuff. Preferably, we'll just induct it
+# from the packaging data itself somehow. FIXME FIXME FIXME --nlb
+
+SPREZZ:=packaging
+
+include sprezzos-world/*
+
+versions/growlight: $(SPREZZ)/growlight/changelog
+versions/libbluray: $(SPREZZ)/libbluray/changelog
+versions/omphalos: $(SPREZZ)/omphalos/changelog
+
+GROWLIGHT=growlight_$(GROWLIGHT_VERSION)
+LIBBLURAY=libbluray_$(LIBBLURAY_VERSION)
+OMPHALOS=omphalos_$(OMPHALOS_VERSION)
+
+PACKAGES:=$(GROWLIGHT) \
+	$(LIBBLURAY) \
+	$(OMPHALOS)
+PACKAGES:=$(addsuffix .deb,$(PACKAGES))
+
+UPACKAGES:=$(GROWLIGHT)
+UPACKAGES:=$(addsuffix .udeb,$(UPACKAGES))
 
 all: world
 
+world: $(PACKAGES)
+
+$(PACKAGES): $(basename $(PACKAGES))
+
 .PHONY: growlight
-growlight:
-	git clone https://github.com/dankamongmen/growlight.git
+growlight: $(GROWLIGHT)
+$(GROWLIGHT): $(SPREZZ)/growlight/changelog
+	git clone https://github.com/dankamongmen/growlight.git $@
 
 .PHONY: libbluray
-libbluray:
-	git clone git://git.videolan.org/libbluray.git
+libbluray: $(LIBBLURAY)
+$(LIBBLURAY): $(SPREZZ)/libbluray/changelog
+	git clone git://git.videolan.org/libbluray.git $@
 
 .PHONY: omphalos
-omphalos:
-	wget http://dank.qemfd.net/pub/omphalos-0.0.99-pre.tar.bz2
+omphalos:$(OMPHALOS)
+$(OMPHALOS): $(SPREZZ)/omphalos/changelog
+	git clone https://github.com/dankamongmen/omphalos.git $@
 
 clean:
+	rm -rf 
