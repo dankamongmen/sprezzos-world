@@ -8,9 +8,14 @@
 
 SPREZZ:=packaging
 
-include sprezzos-world/*
+include sprezzos-world/growlight
 
-versions/growlight: $(SPREZZ)/growlight/changelog
+sprezzos-world/growlight: $(SPREZZ)/growlight/changelog
+	@[ -d $(@D) ] || mkdir -p $(@D)
+	( echo "# Automatically generated from $<" && \
+	 echo -n "GROWLIGHT_VERSION:=" && \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource .) > $@
+
 versions/libbluray: $(SPREZZ)/libbluray/changelog
 versions/omphalos: $(SPREZZ)/omphalos/changelog
 
