@@ -2,6 +2,10 @@
 .PHONY: world all clean
 .DEFAULT_GOAL:=all
 
+DEBKEY:=9978711C
+DEBFULLNAME:='nick black'
+DEBEMAIL:=nick.black@sprezzatech.com
+
 # This is all *very* proof-of-concept. At a bare minimum, we'll be
 # automatically generating all of this stuff. Preferably, we'll just induct it
 # from the packaging data itself somehow. FIXME FIXME FIXME --nlb
@@ -32,7 +36,18 @@ all: world
 
 world: $(DEBS)
 
-$(DEBS): $(basename $(DEBS))
+%/configure:
+	cd $(@D) && autoreconf -fi
+
+%.orig.tar.bz2: %/configure
+	tar cjvf $@ $(shell echo $@ | cut -d. -f-3) --exclude=.git
+
+%/debian: %.orig.tar.bz2
+	cp -r $(SPREZZ)/$(shell echo $< | cut -d_ -f1) $@
+
+%.deb: %/debian
+	cd $(<D) && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1)
+	cd $(<D) && dpkg-buildpackage -k$(DEBKEY)
 
 .PHONY: growlight
 growlight: $(GROWLIGHT)
