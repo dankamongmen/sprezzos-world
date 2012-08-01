@@ -42,7 +42,7 @@ world: $(DEBS)
 %.orig.tar.bz2: %/configure
 	tar cjvf $@ $(shell echo $@ | cut -d. -f-3) --exclude=.git
 
-%/debian: %.orig.tar.bz2
+%/debian: $(shell echo % | cut -d- -f1).orig.tar.bz2
 	cp -r $(SPREZZ)/$(shell echo $< | cut -d_ -f1) $@
 
 %.deb: %/debian
