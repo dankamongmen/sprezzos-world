@@ -6,14 +6,22 @@
 # automatically generating all of this stuff. Preferably, we'll just induct it
 # from the packaging data itself somehow. FIXME FIXME FIXME --nlb
 
+PACKAGES:=growlight libbluray omphalos
+
 SPREZZ:=packaging
 
-include sprezzos-world/growlight
+include $(addprefix sprezzos-world/,$(PACKAGES))
+
+sprezzos-world/%: $(SPREZZ)/%/changelog
+	@[ -d $(@D) ] || mkdir -p $(@D)
+	( echo "# Automatically generated from $<" && \
+	 echo -n "%_VERSION:=" && \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource .) > $@
 
 sprezzos-world/growlight: $(SPREZZ)/growlight/changelog
 	@[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
-	 echo -n "GROWLIGHT_VERSION:=" && \
+	 echo -n "growlight_VERSION:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource .) > $@
 
 versions/libbluray: $(SPREZZ)/libbluray/changelog
@@ -23,19 +31,19 @@ GROWLIGHT=growlight_$(GROWLIGHT_VERSION)
 LIBBLURAY=libbluray_$(LIBBLURAY_VERSION)
 OMPHALOS=omphalos_$(OMPHALOS_VERSION)
 
-PACKAGES:=$(GROWLIGHT) \
+DEBS:=$(GROWLIGHT) \
 	$(LIBBLURAY) \
 	$(OMPHALOS)
-PACKAGES:=$(addsuffix .deb,$(PACKAGES))
+DEBS:=$(addsuffix .deb,$(DEBS))
 
 UPACKAGES:=$(GROWLIGHT)
 UPACKAGES:=$(addsuffix .udeb,$(UPACKAGES))
 
 all: world
 
-world: $(PACKAGES)
+world: $(DEBS)
 
-$(PACKAGES): $(basename $(PACKAGES))
+$(DEBS): $(basename $(DEBS))
 
 .PHONY: growlight
 growlight: $(GROWLIGHT)
