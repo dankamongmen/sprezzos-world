@@ -50,17 +50,17 @@ world: $(DEBS)
 	cd $(<D) && dpkg-buildpackage -k$(DEBKEY)
 
 .PHONY: growlight
-growlight: $(GROWLIGHT)
+growlight: $(GROWLIGHT).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/changelog
 	git clone https://github.com/dankamongmen/growlight.git $@
 
 .PHONY: omphalos
-omphalos:$(OMPHALOS)
+omphalos:$(OMPHALOS).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/changelog
 	git clone https://github.com/dankamongmen/omphalos.git $@
 
 .PHONY: valgrind
-valgrind:$(VALGRIND)
+valgrind:$(VALGRIND).deb
 $(VALGRIND): $(SPREZZ)/valgrind/changelog
 	svn co svn://svn.valgrind.org/valgrind/trunk $@
 
