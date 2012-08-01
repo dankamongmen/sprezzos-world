@@ -36,7 +36,7 @@ all: world
 
 world: $(DEBS)
 
-%/configure:
+%/configure: $(shell echo % | cut -d. -f-3)
 	cd $(@D) && autoreconf -fi
 
 %.orig.tar.bz2: %/configure
