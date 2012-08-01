@@ -40,12 +40,12 @@ world: $(DEBS)
 	cd $(@D) && autoreconf -fi
 
 %.orig.tar.bz2: %/configure
-	tar cjvf $@ $(shell echo $@ | cut -d. -f-3) --exclude=.git
+	tar cjf $(shell echo $@ | cut -d- -f1).orig.tar.bz2 $(shell echo $@ | cut -d. -f-3) --exclude=.git
 
-%/debian: $(shell echo % | cut -d- -f1).orig.tar.bz2
+%/debian: %.orig.tar.bz2
 	cp -r $(SPREZZ)/$(shell echo $< | cut -d_ -f1) $@
 
-%.deb: %/debian
+%.deb: %/debian %.orig.tar.bz2
 	cd $(<D) && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1)
 	cd $(<D) && dpkg-buildpackage -k$(DEBKEY)
 
