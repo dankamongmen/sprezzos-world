@@ -46,7 +46,7 @@ world: $(DEBS)
 	cp -r $(SPREZZ)/$(shell echo $< | cut -d_ -f1) $@
 
 %.deb: %/debian
-	cd $(<D) && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1)
+	cd $(<D) && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $(<D) && dpkg-buildpackage -k$(DEBKEY)
 
 .PHONY: growlight
