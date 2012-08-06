@@ -10,7 +10,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 # automatically generating all of this stuff. Preferably, we'll just induct it
 # from the packaging data itself somehow. FIXME FIXME FIXME --nlb
 
-PACKAGES:=growlight omphalos valgrind
+PACKAGES:=growlight omphalos fbterm valgrind
 
 SPREZZ:=packaging
 
@@ -25,6 +25,7 @@ sprezzos-world/%: $(SPREZZ)/%/changelog
 GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
+FBTERM=fbterm_$(fbterm_VERSION)
 
 DEBS:=$(GROWLIGHT) $(OMPHALOS) $(VALGRIND)
 DEBS:=$(addsuffix .deb,$(DEBS))
@@ -58,6 +59,11 @@ $(GROWLIGHT): $(SPREZZ)/growlight/changelog
 omphalos:$(OMPHALOS).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/changelog
 	git clone https://github.com/dankamongmen/omphalos.git $@
+
+.PHONY: fbterm
+fbterm:$(FBTERM).deb
+$(FBTERM): $(SPREZZ)/fbterm/changelog
+	svn checkout http://fbterm.googlecode.com/svn/trunk/ $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
