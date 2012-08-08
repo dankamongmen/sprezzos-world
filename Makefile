@@ -27,8 +27,9 @@ OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(grubtheme_VERSION)
+ADOBE=fonts-adobe-sourcesanspro_$(adobe_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(FBTERM) $(GRUBTHEME) $(VALGRIND)
+DEBS:=$(GROWLIGHT) $(OMPHALOS) $(FBTERM) $(GRUBTHEME) $(VALGRIND) $(ADOBE)
 DEBS:=$(addsuffix .deb,$(DEBS))
 
 UPACKAGES:=$(GROWLIGHT)
@@ -74,6 +75,12 @@ $(VALGRIND): $(SPREZZ)/valgrind/changelog
 .PHONY: grubtheme
 grubtheme:$(GRUBTHEME).deb
 $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/changelog
+	mkdir -p $@
+
+# FIXME think we'll need to fetch it, no?
+.PHONY: adobe
+adobe:$(ADOBE).deb
+$(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/changelog
 	mkdir -p $@
 
 clean:
