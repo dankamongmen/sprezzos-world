@@ -43,7 +43,8 @@ world: $(DEBS)
 	cd $(@D) && autoreconf -fi
 
 %.orig.tar.bz2: %/configure
-	tar cjf $(shell echo $@ | cut -d- -f1 | cut -d. -f-3).orig.tar.bz2 $(shell echo $@ | cut -d- -f1 | cut -d. -f-3) --exclude=.git --exclude=debian
+	tar cjf $(shell echo $@ | cut -d- -f1 | cut -d. -f-3).orig.tar.bz2 \
+		$(shell echo $@ | cut -d. -f1 | cut -d. -f-3 | tr _ -) --exclude=.git --exclude=debian
 
 %/debian: %.orig.tar.bz2
 	cp -r $(SPREZZ)/$(shell echo $< | cut -d_ -f1)/debian $@
