@@ -32,15 +32,14 @@ FBTERM=fbterm_$(fbterm_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(FBTERM) $(GRUBTHEME) $(VALGRIND) $(ADOBE)
+DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(ADOBE)
+UPACKAGES:=$(GROWLIGHT) $(FBTERM)
 
-%/debian: $(DEBS)
+%/debian: $(DEBS) $(UPACKAGES)
 	@[ -d $(@D) ] || mkdir -p $(@D)
 	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
 
 DEBS:=$(addsuffix .deb,$(DEBS))
-
-UPACKAGES:=$(GROWLIGHT)
 UPACKAGES:=$(addsuffix .udeb,$(UPACKAGES))
 
 world: $(DEBS)
