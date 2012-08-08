@@ -8,11 +8,7 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-# This is all *very* proof-of-concept. At a bare minimum, we'll be
-# automatically generating all of this stuff. Preferably, we'll just induct it
-# from the packaging data itself somehow. FIXME FIXME FIXME --nlb
-
-PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme \
+PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme fbv \
 	fonts-adobe-sourcesanspro
 
 SPREZZ:=packaging
@@ -29,6 +25,7 @@ GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
+FBV=fbv_$(fbv_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 
@@ -60,6 +57,11 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 omphalos:$(OMPHALOS).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone https://github.com/dankamongmen/omphalos.git $@
+
+.PHONY: fbv
+fbv:$(FBV).deb
+$(FBV): $(SPREZZ)/fbv/debian/changelog
+	git clone git://repo.or.cz/w/fbv.git $@
 
 .PHONY: fbterm
 fbterm:$(FBTERM).deb
