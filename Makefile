@@ -16,7 +16,7 @@ SPREZZ:=packaging
 
 include $(addprefix sprezzos-world/,$(PACKAGES))
 
-sprezzos-world/%: $(SPREZZ)/%/changelog
+sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	@[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
 	 echo -n "$(@F)_VERSION:=" && \
@@ -54,27 +54,27 @@ world: $(DEBS)
 
 .PHONY: growlight
 growlight: $(GROWLIGHT).deb
-$(GROWLIGHT): $(SPREZZ)/growlight/changelog
+$(GROWLIGHT):
 	git clone https://github.com/dankamongmen/growlight.git $@
 
 .PHONY: omphalos
 omphalos:$(OMPHALOS).deb
-$(OMPHALOS): $(SPREZZ)/omphalos/changelog
+$(OMPHALOS):
 	git clone https://github.com/dankamongmen/omphalos.git $@
 
 .PHONY: fbterm
 fbterm:$(FBTERM).deb
-$(FBTERM): $(SPREZZ)/fbterm/changelog
+$(FBTERM):
 	svn checkout http://fbterm.googlecode.com/svn/trunk/ $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
-$(VALGRIND): $(SPREZZ)/valgrind/changelog
+$(VALGRIND):
 	svn co svn://svn.valgrind.org/valgrind/trunk $@
 
 .PHONY: grubtheme
 sprezzos-grub2theme:$(GRUBTHEME).deb
-$(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/changelog
+$(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 	mkdir -p $@
 
 # FIXME think we'll need to fetch it, no? using uscan?
