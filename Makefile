@@ -64,8 +64,11 @@ $(OMPHALOS):
 
 .PHONY: fbterm
 fbterm:$(FBTERM).deb
-$(FBTERM): $(SPREZZ)/fbterm/debian/changelog
-	svn checkout http://fbterm.googlecode.com/svn/trunk/ $@
+$(FBTERM): fbterm-1.7.0.tar.gz
+	tar xzvf $<
+
+fbterm-1.7.0.tar.gz:
+	wget http://code.google.com/p/fbterm/downloads/detail?name=fbterm-1.7.0.tar.gz
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
