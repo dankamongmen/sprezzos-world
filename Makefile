@@ -92,8 +92,8 @@ SourceSansPro_FontsOnly-1.033.zip:
 .PHONY: adobe
 adobe:$(ADOBE).deb
 $(ADOBE): SourceSansPro_FontsOnly-1.033.zip $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
-	mkdir -p $@
-	cd $@ && unzip ../$<
+	unzip $<
+	mv SourceSansPro_FontsOnly-1.033 $@
 
 clean:
 	rm -rf sprezzos-world $(FETCHED)
