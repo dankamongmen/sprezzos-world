@@ -79,6 +79,7 @@ $(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
 sprezzos-grub2theme:$(GRUBTHEME).deb
 $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 	mkdir -p $@
+	cp -r $(SPREZZ)/sprezzos-grub2theme/images $@
 
 # FIXME think we'll need to fetch it, no? using uscan?
 .PHONY: adobe
