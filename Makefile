@@ -68,7 +68,7 @@ $(FBTERM): fbterm-1.7.0.tar.gz
 	tar xzvf $<
 
 fbterm-1.7.0.tar.gz:
-	wget http://code.google.com/p/fbterm/downloads/detail?name=fbterm-1.7.0.tar.gz
+	wget -nc http://fbterm.googlecode.com/files/fbterm-1.7.0.tar.gz -O $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
