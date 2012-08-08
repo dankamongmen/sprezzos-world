@@ -10,7 +10,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 # automatically generating all of this stuff. Preferably, we'll just induct it
 # from the packaging data itself somehow. FIXME FIXME FIXME --nlb
 
-PACKAGES:=growlight omphalos fbterm valgrind grubtheme
+PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme
 
 SPREZZ:=packaging
 
@@ -73,7 +73,7 @@ $(VALGRIND): $(SPREZZ)/valgrind/changelog
 	svn co svn://svn.valgrind.org/valgrind/trunk $@
 
 .PHONY: grubtheme
-grubtheme:$(GRUBTHEME).deb
+sprezzos-grub2theme:$(GRUBTHEME).deb
 $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/changelog
 	mkdir -p $@
 
