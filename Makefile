@@ -54,12 +54,12 @@ world: $(DEBS)
 
 .PHONY: growlight
 growlight: $(GROWLIGHT).deb
-$(GROWLIGHT):
+$(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone https://github.com/dankamongmen/growlight.git $@
 
 .PHONY: omphalos
 omphalos:$(OMPHALOS).deb
-$(OMPHALOS):
+$(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone https://github.com/dankamongmen/omphalos.git $@
 
 .PHONY: fbterm
