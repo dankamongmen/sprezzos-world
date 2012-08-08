@@ -2,6 +2,8 @@
 .PHONY: world all clean
 .DEFAULT_GOAL:=all
 
+all: world
+
 DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
@@ -10,7 +12,8 @@ DEBEMAIL:=nick.black@sprezzatech.com
 # automatically generating all of this stuff. Preferably, we'll just induct it
 # from the packaging data itself somehow. FIXME FIXME FIXME --nlb
 
-PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme
+PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme \
+	fonts-adobe-sourcesanspro
 
 SPREZZ:=packaging
 
@@ -26,30 +29,26 @@ GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
-GRUBTHEME=sprezzos-grub2theme_$(grubtheme_VERSION)
-ADOBE=fonts-adobe-sourcesanspro_$(adobe_VERSION)
+GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
+ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 
 DEBS:=$(GROWLIGHT) $(OMPHALOS) $(FBTERM) $(GRUBTHEME) $(VALGRIND) $(ADOBE)
+
+%/debian: $(DEBS)
+	@[ -d $(@D) ] || mkdir -p $(@D)
+	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
+
 DEBS:=$(addsuffix .deb,$(DEBS))
 
 UPACKAGES:=$(GROWLIGHT)
 UPACKAGES:=$(addsuffix .udeb,$(UPACKAGES))
 
-all: world
-
 world: $(DEBS)
 
-%/configure: $(shell echo % | cut -d. -f-3)
-	cd $(@D) && autoreconf -fi
-
-%.orig.tar.bz2: %/configure
-	tar cjf $(shell echo $@ | cut -d- -f1 | cut -d. -f-3).orig.tar.bz2 \
-		$(<D) --exclude=.git --exclude=debian
-
-%/debian: %.orig.tar.bz2
-	cp -r $(SPREZZ)/$(shell echo $< | cut -d_ -f1)/debian $@
-
 %.deb: %/debian
+	{ [ ! -e $(<D)/configure.in ] && [ ! -e $(<D)/configure.ac ] ; } || \
+		{ cd $(<D) && autoreconf -fi ; }
+	tar cjf $(shell echo $(<D) | cut -d- -f1).orig.tar.bz2 $(<D) --exclude=.git --exclude=debian
 	cd $(<D) && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $(<D) && dpkg-buildpackage -k$(DEBKEY)
 
@@ -85,8 +84,8 @@ $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 # FIXME think we'll need to fetch it, no? using uscan?
 .PHONY: adobe
 adobe:$(ADOBE).deb
-$(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
-	mkdir -p $@
+$(ADOBE): fonts-adobe-sourcesanspro_1.033.tar.gz $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
+	tar xzvf $<
 
 clean:
 	rm -rf sprezzos-world
