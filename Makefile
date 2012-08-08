@@ -10,7 +10,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 # automatically generating all of this stuff. Preferably, we'll just induct it
 # from the packaging data itself somehow. FIXME FIXME FIXME --nlb
 
-PACKAGES:=growlight omphalos fbterm valgrind
+PACKAGES:=growlight omphalos fbterm valgrind grubtheme
 
 SPREZZ:=packaging
 
@@ -26,8 +26,9 @@ GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
+GRUBTHEME=sprezzos-grub2theme_$(grubtheme_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(FBTERM) $(VALGRIND)
+DEBS:=$(GROWLIGHT) $(OMPHALOS) $(FBTERM) $(GRUBTHEME) $(VALGRIND)
 DEBS:=$(addsuffix .deb,$(DEBS))
 
 UPACKAGES:=$(GROWLIGHT)
@@ -69,6 +70,11 @@ $(FBTERM): $(SPREZZ)/fbterm/changelog
 valgrind:$(VALGRIND).deb
 $(VALGRIND): $(SPREZZ)/valgrind/changelog
 	svn co svn://svn.valgrind.org/valgrind/trunk $@
+
+.PHONY: grubtheme
+grubtheme:$(GRUBTHEME).deb
+$(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/changelog
+	mkdir -p $@
 
 clean:
 	rm -rf sprezzos-world
