@@ -66,6 +66,7 @@ $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 fbterm:$(FBTERM).deb
 $(FBTERM): fbterm-1.7.0.tar.gz
 	tar xzvf $<
+	ln -s fbterm-1.7 $(FBTERM)
 
 fbterm-1.7.0.tar.gz:
 	wget -nc http://fbterm.googlecode.com/files/fbterm-1.7.0.tar.gz -O $@
