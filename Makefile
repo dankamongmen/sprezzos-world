@@ -69,6 +69,7 @@ $(FBTERM): fbterm-1.7.0.tar.gz
 	tar xzvf $<
 	ln -s fbterm-1.7 $(FBTERM)
 
+FETCHED:=$(FETCHED) fbterm-1.7.0.tar.gz
 fbterm-1.7.0.tar.gz:
 	wget -nc http://fbterm.googlecode.com/files/fbterm-1.7.0.tar.gz -O $@
 
@@ -83,11 +84,17 @@ $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 	mkdir -p $@
 	cp -r $(SPREZZ)/sprezzos-grub2theme/images $@
 
-# FIXME think we'll need to fetch it, no? using uscan?
+FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
+SourceSansPro_FontsOnly-1.033.zip:
+	wget -nc http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip -O$@
+
 .PHONY: adobe
 adobe:$(ADOBE).deb
-$(ADOBE): fonts-adobe-sourcesanspro_1.033.tar.gz $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
-	tar xzvf $<
+$(ADOBE): SourceSansPro_FontsOnly-1.033.zip $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
+	mkdir -p $@
+	cd $@ && unzip $<
 
 clean:
-	rm -rf sprezzos-world
+	rm -rf sprezzos-world $(FETCHED)
+	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
+	rm -rf $(ADOBE) $(FBTERM)
