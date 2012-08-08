@@ -77,7 +77,7 @@ grubtheme:$(GRUBTHEME).deb
 $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/changelog
 	mkdir -p $@
 
-# FIXME think we'll need to fetch it, no?
+# FIXME think we'll need to fetch it, no? using uscan?
 .PHONY: adobe
 adobe:$(ADOBE).deb
 $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/changelog
