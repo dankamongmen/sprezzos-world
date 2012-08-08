@@ -46,7 +46,7 @@ world: $(DEBS)
 	tar cjf $(shell echo $@ | cut -d- -f1 | cut -d. -f-3).orig.tar.bz2 $(shell echo $@ | cut -d. -f-3) --exclude=.git --exclude=debian
 
 %/debian: %.orig.tar.bz2
-	cp -r $(SPREZZ)/$(shell echo $< | cut -d_ -f1) $@
+	cp -r $(SPREZZ)/$(shell echo $< | cut -d_ -f1)/debian $@
 
 %.deb: %/debian
 	cd $(<D) && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
@@ -80,7 +80,7 @@ $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 # FIXME think we'll need to fetch it, no? using uscan?
 .PHONY: adobe
 adobe:$(ADOBE).deb
-$(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/changelog
+$(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
 	mkdir -p $@
 
 clean:
