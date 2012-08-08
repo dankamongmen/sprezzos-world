@@ -27,7 +27,7 @@ OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(VALGRIND)
+DEBS:=$(GROWLIGHT) $(OMPHALOS) $(FBTERM) $(VALGRIND)
 DEBS:=$(addsuffix .deb,$(DEBS))
 
 UPACKAGES:=$(GROWLIGHT)
