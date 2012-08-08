@@ -92,7 +92,7 @@ SourceSansPro_FontsOnly-1.033.zip:
 adobe:$(ADOBE).deb
 $(ADOBE): SourceSansPro_FontsOnly-1.033.zip $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
 	mkdir -p $@
-	cd $@ && unzip $<
+	cd $@ && unzip ../$<
 
 clean:
 	rm -rf sprezzos-world $(FETCHED)
