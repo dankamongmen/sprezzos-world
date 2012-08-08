@@ -41,6 +41,7 @@ UPACKAGES:=$(addsuffix .udeb,$(UPACKAGES))
 
 world: $(DEBS)
 
+# FIXME tarball generation is broken for packages with hyphens in their names
 %.deb: %/debian
 	{ [ ! -e $(<D)/configure.in ] && [ ! -e $(<D)/configure.ac ] ; } || \
 		{ cd $(<D) && autoreconf -fi ; }
