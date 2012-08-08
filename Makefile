@@ -64,12 +64,12 @@ $(OMPHALOS):
 
 .PHONY: fbterm
 fbterm:$(FBTERM).deb
-$(FBTERM):
+$(FBTERM): $(SPREZZ)/fbterm/debian/changelog
 	svn checkout http://fbterm.googlecode.com/svn/trunk/ $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
-$(VALGRIND):
+$(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
 	svn co svn://svn.valgrind.org/valgrind/trunk $@
 
 .PHONY: grubtheme
