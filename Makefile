@@ -30,7 +30,7 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 
 DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(ADOBE)
-UPACKAGES:=$(GROWLIGHT) $(FBTERM)
+UPACKAGES:=$(GROWLIGHT) $(FBTERM) $(FBV)
 
 %/debian: $(DEBS) $(UPACKAGES)
 	@[ -d $(@D) ] || mkdir -p $(@D)
