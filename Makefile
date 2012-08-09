@@ -62,7 +62,7 @@ $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 .PHONY: fbv
 fbv:$(FBV).deb
 $(FBV): $(SPREZZ)/fbv/debian/changelog
-	git clone git://repo.or.cz/w/fbv.git $@
+	git clone git://repo.or.cz/fbv.git $@
 
 .PHONY: fbterm
 fbterm:$(FBTERM).deb
