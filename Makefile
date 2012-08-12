@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme fbv \
-	fonts-adobe-sourcesanspro eglibc
+	fonts-adobe-sourcesanspro eglibc mplayer
 
 SPREZZ:=packaging
 
@@ -24,13 +24,15 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
+MPLAYER=mplayer_$(mplayer_VERSION)
 EGLIBC=eglibc-$(eglibc_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 FBV=fbv_$(fbv_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(EGLIBC) $(ADOBE)
+DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(EGLIBC) $(ADOBE) \
+	$(MPLAYER)
 UDEBS:=$(GROWLIGHT) $(FBTERM) $(FBV) $(EGLIBC)
 
 %/debian: $(DEBS) $(UDEBS)
@@ -79,6 +81,11 @@ fbterm-1.7.0.tar.gz:
 eglibc:$(EGLIBC).deb
 $(EGLIBC): $(SPREZZ)/eglibc/debian/changelog
 	svn co svn://svn.eglibc.org/branches/eglibc-2_15 $@
+
+.PHONY: mplayer
+mplayer:$(MPLAYER).deb
+$(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
+	svn co svn://svn.mplayer.org/mplayer/trunk $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
