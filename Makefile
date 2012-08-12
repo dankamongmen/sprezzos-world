@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme fbv \
-	fonts-adobe-sourcesanspro
+	fonts-adobe-sourcesanspro eglibc
 
 SPREZZ:=packaging
 
@@ -24,22 +24,23 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
+EGLIBC=eglibc-$(eglibc_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 FBV=fbv_$(fbv_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(ADOBE)
-UPACKAGES:=$(GROWLIGHT) $(FBTERM) $(FBV)
+DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(EGLIBC) $(ADOBE)
+UDEBS:=$(GROWLIGHT) $(FBTERM) $(FBV) $(EGLIBC)
 
-%/debian: $(DEBS) $(UPACKAGES)
+%/debian: $(DEBS) $(UDEBS)
 	@[ -d $(@D) ] || mkdir -p $(@D)
 	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
 
 DEBS:=$(addsuffix .deb,$(DEBS))
-UPACKAGES:=$(addsuffix .udeb,$(UPACKAGES))
+UDEBS:=$(addsuffix .udeb,$(UDEBS))
 
-world: $(DEBS)
+world: $(DEBS) $(UDEBS)
 
 # FIXME tarball generation is broken for packages with hyphens in their names
 %.deb: %/debian
@@ -73,6 +74,11 @@ $(FBTERM): fbterm-1.7.0.tar.gz
 FETCHED:=$(FETCHED) fbterm-1.7.0.tar.gz
 fbterm-1.7.0.tar.gz:
 	wget -nc http://fbterm.googlecode.com/files/fbterm-1.7.0.tar.gz -O $@
+
+.PHONY: eglibc
+eglibc:$(EGLIBC).deb
+$(EGLIBC): $(SPREZZ)/eglibc/debian/changelog
+	svn co svn://svn.eglibc.org/branches/eglibc-2_14 $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
