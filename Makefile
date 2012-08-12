@@ -87,7 +87,7 @@ $(EGLIBC): $(SPREZZ)/eglibc/debian/changelog
 .PHONY: mplayer
 mplayer:$(MPLAYER).deb
 $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
-	svn co svn://svn.mplayer.org/mplayer/trunk $@
+	svn co svn://svn.mplayerhq.hu/mplayer/trunk $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
