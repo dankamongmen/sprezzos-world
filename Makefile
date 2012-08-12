@@ -78,7 +78,7 @@ fbterm-1.7.0.tar.gz:
 .PHONY: eglibc
 eglibc:$(EGLIBC).deb
 $(EGLIBC): $(SPREZZ)/eglibc/debian/changelog
-	svn co svn://svn.eglibc.org/branches/eglibc-2_14 $@
+	svn co svn://svn.eglibc.org/branches/eglibc-2_15 $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
