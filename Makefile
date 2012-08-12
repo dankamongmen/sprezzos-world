@@ -33,7 +33,8 @@ ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 
 DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(EGLIBC) $(ADOBE) \
 	$(MPLAYER)
-UDEBS:=$(GROWLIGHT) $(FBTERM) $(FBV) $(EGLIBC)
+UDEBS:=$(FBV)
+DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(EGLIBCS)
 
 %/debian: $(DEBS) $(UDEBS)
 	@[ -d $(@D) ] || mkdir -p $(@D)
