@@ -19,7 +19,8 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	@[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
 	 echo -n "$(@F)_VERSION:=" && \
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource .) > $@
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . \
+	  | sed -e 's/:/\\:/g' ) > $@
 
 GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
