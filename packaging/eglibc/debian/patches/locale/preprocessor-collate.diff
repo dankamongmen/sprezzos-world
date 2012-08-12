@@ -1,0 +1,342 @@
+Allow preprocessor-like directives.  These keywords were already
+defined in locale/programs/locfile-kw.h, an implementation for
+'define', 'undef', 'ifdef', 'else' and 'endif' is now provided in
+locale/programs/ld-collate.c.  For the moment, 'ifndef' and 'elif'
+are not implemented because they do not appear in locfile-kw.h.
+This patch is harmless, it only adds new keywords.
+
+# DP: Dpatch author: Denis Barbier
+# DP: Patch author: Denis Barbier
+# DP: Upstream status: BZ686
+# DP: Date: 2006-01-08
+
+---
+ locale/programs/ld-collate.c |  275 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 275 insertions(+)
+
+--- a/locale/programs/ld-collate.c
++++ b/locale/programs/ld-collate.c
+@@ -164,6 +164,24 @@
+   size_t line;
+ };
+ 
++/* Data type for toggles.  */
++struct toggle_list_t;
++
++struct toggle_list_t
++{
++  const char *name;
++
++  /* Predecessor in the list.  */
++  struct toggle_list_t *last;
++
++  /* This flag is set when a keyword is undefined.  */
++  int is_undefined;
++
++  /* Where does the branch come from.  */
++  const char *file;
++  size_t line;
++};
++
+ /* Sparse table of struct element_t *.  */
+ #define TABLE wchead_table
+ #define ELEMENT struct element_t *
+@@ -219,6 +237,9 @@
+   /* This value is used when handling ellipsis.  */
+   struct element_t ellipsis_weight;
+ 
++  /* This is a stack of .  */
++  struct toggle_list_t *flow_control;
++
+   /* Known collating elements.  */
+   hash_table elem_table;
+ 
+@@ -1467,6 +1488,56 @@
+ }
+ 
+ 
++static struct token *
++flow_skip (struct linereader *ldfile, const struct charmap_t *charmap,
++	   struct locale_collate_t *collate)
++{
++  int level = 0;
++  struct token *now;
++  enum token_t nowtok;
++  while (1)
++    {
++      lr_ignore_rest (ldfile, 0);
++      now = lr_token (ldfile, charmap, NULL, NULL, 0);
++      nowtok = now->tok;
++      if (nowtok == tok_eof)
++	break;
++      else if (nowtok == tok_ifdef || nowtok == tok_ifndef)
++	++level ;
++      else if (nowtok == tok_else)
++	{
++	  if (strcmp (collate->flow_control->name, "else") == 0)
++	    lr_error (ldfile,
++		      _("%s: `else' statement at `%s:%Zu' cannot be followed by another `else' statement"),
++		      "LC_COLLATE", collate->flow_control->name, collate->flow_control->line);
++	  if (level == 0)
++	    {
++	      collate->flow_control->name = "else";
++	      collate->flow_control->file = ldfile->fname;
++	      collate->flow_control->line = ldfile->lineno;
++	      break;
++	    }
++	}
++      else if (nowtok == tok_endif)
++	{
++	  if (level == 0)
++	    {
++	      collate->flow_control = collate->flow_control->last;
++	      break;
++	    }
++	  --level ;
++	}
++    }
++  if (nowtok == tok_eof)
++    WITH_CUR_LOCALE (error (0, 0, _("\
++%s: unterminated `%s' flow control beginning at %s:%Zu"),
++				 "LC_COLLATE", collate->flow_control->name,
++				 collate->flow_control->file,
++				 collate->flow_control->line));
++  return now;
++}
++
++
+ static void
+ collate_startup (struct linereader *ldfile, struct localedef_t *locale,
+ 		 struct localedef_t *copy_locale, int ignore_content)
+@@ -2514,6 +2585,8 @@
+   */
+   int state = 0;
+ 
++  static struct toggle_list_t *defined_keywords = NULL;
++
+   /* Get the repertoire we have to use.  */
+   if (repertoire_name != NULL)
+     repertoire = repertoire_read (repertoire_name);
+@@ -2528,6 +2601,82 @@
+ 	}
+       while (nowtok == tok_eol);
+ 
++  while (nowtok == tok_define || nowtok == tok_undef)
++    {
++      /* Ignore the rest of the line if we don't need the input of
++         this line.  */
++      if (ignore_content)
++        {
++          lr_ignore_rest (ldfile, 0);
++          now = lr_token (ldfile, charmap, result, NULL, verbose);
++          nowtok = now->tok;
++          continue;
++        }
++
++      arg = lr_token (ldfile, charmap, result, NULL, verbose);
++      if (arg->tok != tok_ident)
++        goto err_label;
++
++      if (nowtok == tok_define)
++        {
++	  struct toggle_list_t *runp = defined_keywords;
++	  char *name;
++
++	  while (runp != NULL)
++	    if (strncmp (runp->name, arg->val.str.startmb,
++	    	     arg->val.str.lenmb) == 0
++	        && runp->name[arg->val.str.lenmb] == '\0')
++              SYNTAX_ERROR (_("%s: syntax error"), "LC_COLLATE");
++	    else
++	      runp = runp->last;
++
++	  if (runp != NULL && runp->is_undefined == 0)
++	    {
++	      lr_ignore_rest (ldfile, 0);
++              SYNTAX_ERROR (_("%s: syntax error"), "LC_COLLATE");
++	    }
++
++	  if (runp == NULL)
++	    {
++	      runp = (struct toggle_list_t *) xcalloc (1, sizeof (*runp));
++	      runp->last = defined_keywords;
++	      defined_keywords = runp;
++	    }
++	  else
++	    {
++	      free ((char *) runp->name);
++	      runp->is_undefined = 0;
++	    }
++
++	  name = (char *) xmalloc (arg->val.str.lenmb + 1);
++	  memcpy (name, arg->val.str.startmb, arg->val.str.lenmb);
++	  name[arg->val.str.lenmb] = '\0';
++	  runp->name = name;
++        }
++      else
++        {
++	  struct toggle_list_t *runp = defined_keywords;
++	  while (runp != NULL)
++	    if (strncmp (runp->name, arg->val.str.startmb,
++	    	     arg->val.str.lenmb) == 0
++	        && runp->name[arg->val.str.lenmb] == '\0')
++	    {
++	      runp->is_undefined = 1;
++              SYNTAX_ERROR (_("%s: syntax error"), "LC_COLLATE");
++	    }
++	    else
++	      runp = runp->last;
++        }
++
++      lr_ignore_rest (ldfile, 1);
++      do
++        {
++          now = lr_token (ldfile, charmap, result, NULL, verbose);
++          nowtok = now->tok;
++        }
++      while (nowtok == tok_eol);
++    }
++
+   if (nowtok == tok_copy)
+     {
+       now = lr_token (ldfile, charmap, result, NULL, verbose);
+@@ -3682,6 +3831,125 @@
+ 			  repertoire, result, nowtok);
+ 	  break;
+ 
++	case tok_ifdef:
++	  /* Ignore the rest of the line if we don't need the input of
++	     this line.  */
++	  if (ignore_content)
++	    {
++	      lr_ignore_rest (ldfile, 0);
++	      break;
++	    }
++
++	  arg = lr_token (ldfile, charmap, result, NULL, verbose);
++	  if (arg->tok != tok_ident)
++	    goto err_label;
++	  else
++	    {
++	      struct toggle_list_t *runp = defined_keywords;
++	      struct toggle_list_t *flow = (struct toggle_list_t *) xcalloc (1, sizeof (*runp));
++	      flow->name = "ifdef";
++	      flow->file = ldfile->fname;
++	      flow->line = ldfile->lineno;
++	      flow->last = collate->flow_control;
++	      collate->flow_control = flow;
++
++	      while (runp != NULL)
++		if (strncmp (runp->name, arg->val.str.startmb,
++			     arg->val.str.lenmb) == 0
++		    && runp->name[arg->val.str.lenmb] == '\0')
++		  break;
++		else
++		  runp = runp->last;
++
++	      if (runp == NULL)
++		{
++		  now = flow_skip(ldfile, charmap, collate);
++		  if (now->tok == tok_eof)
++		    WITH_CUR_LOCALE (error (0, 0, _("\
++%s: unterminated `%s' flow control"), "LC_COLLATE", collate->flow_control->name));
++		}
++	    }
++	  lr_ignore_rest (ldfile, 1);
++	  break;
++
++	case tok_ifndef:
++	  /* Ignore the rest of the line if we don't need the input of
++	     this line.  */
++	  if (ignore_content)
++	    {
++	      lr_ignore_rest (ldfile, 0);
++	      break;
++	    }
++
++	  arg = lr_token (ldfile, charmap, result, NULL, verbose);
++	  if (arg->tok != tok_ident)
++	    goto err_label;
++	  else
++	    {
++	      struct toggle_list_t *runp = defined_keywords;
++	      struct toggle_list_t *flow = (struct toggle_list_t *) xcalloc (1, sizeof (*runp));
++	      flow->name = "ifndef";
++	      flow->file = ldfile->fname;
++	      flow->line = ldfile->lineno;
++	      flow->last = collate->flow_control;
++	      collate->flow_control = flow;
++
++	      while (runp != NULL)
++		if (strncmp (runp->name, arg->val.str.startmb,
++			     arg->val.str.lenmb) == 0
++		    && runp->name[arg->val.str.lenmb] == '\0')
++		  break;
++		else
++		  runp = runp->last;
++
++	      if (runp != NULL)
++		{
++		  now = flow_skip(ldfile, charmap, collate);
++		  if (now->tok == tok_eof)
++		    WITH_CUR_LOCALE (error (0, 0, _("\
++%s: unterminated `%s' flow control"), "LC_COLLATE", collate->flow_control->name));
++		}
++	    }
++	  lr_ignore_rest (ldfile, 1);
++	  break;
++
++	case tok_else:
++	  /* Ignore the rest of the line if we don't need the input of
++	     this line.  */
++	  if (ignore_content)
++	    {
++	      lr_ignore_rest (ldfile, 0);
++	      break;
++	    }
++
++	  if (strcmp (collate->flow_control->name, "else") == 0)
++	    lr_error (ldfile,
++		      _("%s: `else' statement at `%s:%Zu' cannot be followed by another `else' statement"),
++		      "LC_COLLATE", collate->flow_control->name, collate->flow_control->line);
++	  collate->flow_control->name = "else";
++	  collate->flow_control->file = ldfile->fname;
++	  collate->flow_control->line = ldfile->lineno;
++	  now = flow_skip(ldfile, charmap, collate);
++	  if (now->tok == tok_eof)
++	    WITH_CUR_LOCALE (error (0, 0, _("\
++%s: unterminated `%s' flow control"), "LC_COLLATE", collate->flow_control->name));
++	  break;
++
++	case tok_endif:
++	  /* Ignore the rest of the line if we don't need the input of
++	     this line.  */
++	  if (ignore_content)
++	    {
++	      lr_ignore_rest (ldfile, 0);
++	      break;
++	    }
++
++	  if (collate->flow_control == NULL)
++	    goto err_label;
++	  else
++	    collate->flow_control = collate->flow_control->last;
++	  break;
++
+ 	case tok_end:
+ 	  /* Next we assume `LC_COLLATE'.  */
+ 	  if (!ignore_content)
+@@ -3711,6 +3979,13 @@
+ 	      else if (state == 5)
+ 		WITH_CUR_LOCALE (error (0, 0, _("\
+ %s: missing `reorder-sections-end' keyword"), "LC_COLLATE"));
++	      if (collate->flow_control != NULL
++		  && strcmp(collate->flow_control->file, ldfile->fname) == 0)
++		WITH_CUR_LOCALE (error (0, 0, _("\
++%s: unterminated `%s' flow control beginning at %s:%Zu"),
++				 "LC_COLLATE", collate->flow_control->name,
++				 collate->flow_control->file,
++				 collate->flow_control->line));
+ 	    }
+ 	  arg = lr_token (ldfile, charmap, result, NULL, verbose);
+ 	  if (arg->tok == tok_eof)

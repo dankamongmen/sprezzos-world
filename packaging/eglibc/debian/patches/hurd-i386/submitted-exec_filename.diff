@@ -1,0 +1,324 @@
+2010-08-04  Emilio Pozuelo Monfort  <pochu27@gmail.com>
+	* hurd/hurdexec.c (_hurd_exec): Deprecate it.
+	(_hurd_exec_file_name): New function.
+	* hurd/hurd.h (_hurd_exec): Deprecate it.
+	(_hurd_exec_file_name): Declare it.
+	* hurd/Versions: Export it.
+	* sysdeps/mach/hurd/execve.c: Use it.
+	* sysdeps/mach/hurd/fexecve.c: Likewise.
+	* sysdeps/mach/hurd/spawni.c: Likewise.
+
+
+
+From d1793416cf8bf6fccd42679a8ec30b0058823ab8 Mon Sep 17 00:00:00 2001
+From: Emilio Pozuelo Monfort <pochu27@gmail.com>
+Date: Sat, 22 May 2010 18:26:29 +0200
+Subject: [PATCH] Use the new file_exec_file_name RPC
+
+Pass the file name of executable to the exec server, which it needs to
+execute #!-scripts.  Currently, the exec server tries to guess the name
+from argv[0] but argv[0] only contains the executable name by convention.
+---
+ Versions.def                |    1 
+ hurd/Makefile               |    4 +-
+ hurd/Versions               |    4 ++
+ hurd/hurd.h                 |   14 ++++++++--
+ hurd/hurdexec.c             |   50 ++++++++++++++++++++++++++++++-------
+ sysdeps/mach/hurd/execve.c  |    6 ++--
+ sysdeps/mach/hurd/fexecve.c |    7 ++---
+ sysdeps/mach/hurd/spawni.c  |   59 ++++++++++++++++++++++++++------------------
+ 8 files changed, 102 insertions(+), 43 deletions(-)
+
+--- a/Versions.def
++++ b/Versions.def
+@@ -39,6 +39,7 @@
+   GLIBC_PRIVATE
+   GLIBC_2.13_DEBIAN_19
+   GLIBC_2.13_DEBIAN_31
++  GLIBC_2.13_DEBIAN_33
+ }
+ libcrypt {
+   GLIBC_2.0
+--- a/hurd/Versions
++++ b/hurd/Versions
+@@ -164,6 +164,10 @@
+     _hurd_sigstate_unlock;
+     _hurd_sigstate_delete;
+   }
++  GLIBC_2.13_DEBIAN_33 {
++    # "quasi-internal" functions
++    _hurd_exec_file_name;
++  }
+ 
+ %if !SHLIB_COMPAT (libc, GLIBC_2_0, GLIBC_2_2)
+   HURD_CTHREADS_0.3 {
+--- a/hurd/Makefile
++++ b/hurd/Makefile
+@@ -38,8 +38,8 @@
+ 				       auth startup \
+ 				       process process_request \
+ 				       msg msg_reply msg_request \
+-				       exec exec_startup crash interrupt \
+-				       fs fsys io term tioctl socket ifsock \
++				       exec exec_experimental exec_startup crash interrupt \
++				       fs fs_experimental fsys io term tioctl socket ifsock \
+ 				       login password pfinet \
+ 				       )
+ server-interfaces	:= hurd/msg faultexc
+--- a/hurd/hurd.h
++++ b/hurd/hurd.h
+@@ -1,4 +1,4 @@
+-/* Copyright (C) 1993,94,95,96,97,98,99,2001,2002,2007
++/* Copyright (C) 1993,94,95,96,97,98,99,2001,2002,2007,2010
+    Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+@@ -247,12 +247,20 @@
+ extern FILE *__fopenport (io_t port, const char *mode);
+ 
+ 
+-/* Execute a file, replacing TASK's current program image.  */
++/* Deprecated: use _hurd_exec_file_name instead.  */
+ 
+ extern error_t _hurd_exec (task_t task,
+ 			   file_t file,
+ 			   char *const argv[],
+-			   char *const envp[]);
++			   char *const envp[]) __attribute_deprecated__;
++
++/* Execute a file, replacing TASK's current program image.  */
++
++extern error_t _hurd_exec_file_name (task_t task,
++				     file_t file,
++				     const char *filename,
++				     char *const argv[],
++				     char *const envp[]);
+ 
+ 
+ /* Inform the proc server we have exited with STATUS, and kill the
+--- a/hurd/hurdexec.c
++++ b/hurd/hurdexec.c
+@@ -32,11 +32,29 @@
+ 
+ /* Overlay TASK, executing FILE with arguments ARGV and environment ENVP.
+    If TASK == mach_task_self (), some ports are dealloc'd by the exec server.
+-   ARGV and ENVP are terminated by NULL pointers.  */
++   ARGV and ENVP are terminated by NULL pointers.
++   Deprecated: use _hurd_exec_file_name instead.  */
+ error_t
+ _hurd_exec (task_t task, file_t file,
+ 	    char *const argv[], char *const envp[])
+ {
++  return _hurd_exec_file_name (task, file, NULL, argv, envp);
++}
++
++link_warning (_hurd_exec,
++	      "_hurd_exec is deprecated, use _hurd_exec_file_name instead");
++
++/* Overlay TASK, executing FILE with arguments ARGV and environment ENVP.
++   If TASK == mach_task_self (), some ports are dealloc'd by the exec server.
++   ARGV and ENVP are terminated by NULL pointers.  FILENAME is the path
++   (either absolute or relative) to FILE.  Passing NULL, though possible,
++   should be avoided, since then the exec server may not know the path to
++   FILE if FILE is a script, and will then pass /dev/fd/N to the
++   interpreter.  */
++error_t
++_hurd_exec_file_name (task_t task, file_t file, const char *filename,
++		      char *const argv[], char *const envp[])
++{
+   error_t err;
+   char *args, *env;
+   size_t argslen, envlen;
+@@ -219,7 +237,7 @@
+       /* We have euid != svuid or egid != svgid.  POSIX.1 says that exec
+ 	 sets svuid = euid and svgid = egid.  So we must get a new auth
+ 	 port and reauthenticate everything with it.  We'll pass the new
+-	 ports in file_exec instead of our own ports.  */
++	 ports in file_exec_file_name instead of our own ports.  */
+ 
+       auth_t newauth;
+ 
+@@ -363,13 +381,27 @@
+       if (__sigismember (&_hurdsig_traced, SIGKILL))
+ 	flags |= EXEC_SIGTRAP;
+ #endif
+-      err = __file_exec (file, task, flags,
+-			 args, argslen, env, envlen,
+-			 dtable, MACH_MSG_TYPE_COPY_SEND, dtablesize,
+-			 ports, MACH_MSG_TYPE_COPY_SEND, _hurd_nports,
+-			 ints, INIT_INT_MAX,
+-			 please_dealloc, pdp - please_dealloc,
+-			 &_hurd_msgport, task == __mach_task_self () ? 1 : 0);
++      err = __file_exec_file_name (file, task, flags,
++				   filename ? filename : "",
++				   args, argslen, env, envlen,
++				   dtable, MACH_MSG_TYPE_COPY_SEND, dtablesize,
++				   ports, MACH_MSG_TYPE_COPY_SEND,
++				   _hurd_nports,
++				   ints, INIT_INT_MAX,
++				   please_dealloc, pdp - please_dealloc,
++				   &_hurd_msgport,
++				   task == __mach_task_self () ? 1 : 0);
++      /* Fall back for backwards compatibility.  This can just be removed
++         when __file_exec goes away.  */
++      if (err == MIG_BAD_ID)
++	err = __file_exec (file, task, flags,
++			   args, argslen, env, envlen,
++			   dtable, MACH_MSG_TYPE_COPY_SEND, dtablesize,
++			   ports, MACH_MSG_TYPE_COPY_SEND, _hurd_nports,
++			   ints, INIT_INT_MAX,
++			   please_dealloc, pdp - please_dealloc,
++			   &_hurd_msgport,
++			   task == __mach_task_self () ? 1 : 0);
+     }
+ 
+   /* Release references to the standard ports.  */
+--- a/sysdeps/mach/hurd/execve.c
++++ b/sysdeps/mach/hurd/execve.c
+@@ -1,4 +1,5 @@
+-/* Copyright (C) 1991, 92, 93, 94, 95, 97 Free Software Foundation, Inc.
++/* Copyright (C) 1991, 92, 93, 94, 95, 97, 2010
++   Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+    The GNU C Library is free software; you can redistribute it and/or
+@@ -35,7 +36,8 @@
+     return -1;
+ 
+   /* Hopefully this will not return.  */
+-  err = _hurd_exec (__mach_task_self (), file, argv, envp);
++  err = _hurd_exec_file_name (__mach_task_self (), file,
++			      file_name, argv, envp);
+ 
+   /* Oh well.  Might as well be tidy.  */
+   __mach_port_deallocate (__mach_task_self (), file);
+--- a/sysdeps/mach/hurd/fexecve.c
++++ b/sysdeps/mach/hurd/fexecve.c
+@@ -1,4 +1,4 @@
+-/* Copyright (C) 1993, 1994, 1997 Free Software Foundation, Inc.
++/* Copyright (C) 1993, 1994, 1997, 2010 Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+    The GNU C Library is free software; you can redistribute it and/or
+@@ -26,8 +26,9 @@
+ int
+ fexecve (int fd, char *const argv[], char *const envp[])
+ {
+-  error_t err = HURD_DPORT_USE (fd, _hurd_exec (__mach_task_self (), port,
+-						argv, envp));
++  error_t err = HURD_DPORT_USE (fd, _hurd_exec_file_name (__mach_task_self (),
++							  port, NULL,
++							  argv, envp));
+   if (! err)
+     err = EGRATUITOUS;
+   return __hurd_fail (err);
+--- a/sysdeps/mach/hurd/spawni.c
++++ b/sysdeps/mach/hurd/spawni.c
+@@ -1,5 +1,5 @@
+ /* spawn a new process running an executable.  Hurd version.
+-   Copyright (C) 2001,02,04 Free Software Foundation, Inc.
++   Copyright (C) 2001,02,04,10 Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+    The GNU C Library is free software; you can redistribute it and/or
+@@ -44,7 +44,7 @@
+ 	  int use_path)
+ {
+   pid_t new_pid;
+-  char *path, *p, *name;
++  char *path, *p, *name, *filename;
+   size_t len;
+   size_t pathlen;
+   short int flags;
+@@ -60,14 +60,14 @@
+      that remains visible after an exec is registration with the proc
+      server, and the inheritance of various values and ports.  All those
+      inherited values and ports are what get collected up and passed in the
+-     file_exec RPC by an exec call.  So we do the proc server registration
+-     here, following the model of fork (see fork.c).  We then collect up
+-     the inherited values and ports from this (parent) process following
+-     the model of exec (see hurd/hurdexec.c), modify or replace each value
+-     that fork would (plus the specific changes demanded by ATTRP and
+-     FILE_ACTIONS), and make the file_exec RPC on the requested executable
+-     file with the child process's task port rather than our own.  This
+-     should be indistinguishable from the fork + exec implementation,
++     file_exec_file_name RPC by an exec call.  So we do the proc server
++     registration here, following the model of fork (see fork.c).  We then
++     collect up the inherited values and ports from this (parent) process
++     following the model of exec (see hurd/hurdexec.c), modify or replace each
++     value that fork would (plus the specific changes demanded by ATTRP and
++     FILE_ACTIONS), and make the file_exec_file_name RPC on the requested
++     executable file with the child process's task port rather than our own.
++     This should be indistinguishable from the fork + exec implementation,
+      except that all errors will be detected here (in the parent process)
+      and return proper errno codes rather than the child dying with 127.
+ 
+@@ -548,7 +548,7 @@
+ 
+   if (! use_path || strchr (file, '/') != NULL)
+     /* The FILE parameter is actually a path.  */
+-    err = child_lookup (file, O_EXEC, 0, &execfile);
++    err = child_lookup (filename = file, O_EXEC, 0, &execfile);
+   else
+     {
+       /* We have to search for FILE on the path.  */
+@@ -575,20 +575,18 @@
+       p = path;
+       do
+ 	{
+-	  char *startp;
+-
+ 	  path = p;
+ 	  p = __strchrnul (path, ':');
+ 
+ 	  if (p == path)
+ 	    /* Two adjacent colons, or a colon at the beginning or the end
+ 	       of `PATH' means to search the current directory.  */
+-	    startp = name + 1;
++	    filename = name + 1;
+ 	  else
+-	    startp = (char *) memcpy (name - (p - path), path, p - path);
++	    filename = (char *) memcpy (name - (p - path), path, p - path);
+ 
+ 	  /* Try to open this file name.  */
+-	  err = child_lookup (startp, O_EXEC, 0, &execfile);
++	  err = child_lookup (filename, O_EXEC, 0, &execfile);
+ 	  switch (err)
+ 	    {
+ 	    case EACCES:
+@@ -625,14 +623,27 @@
+ 
+     inline error_t exec (file_t file)
+       {
+-	return __file_exec (file, task,
+-			    (__sigismember (&_hurdsig_traced, SIGKILL)
+-			     ? EXEC_SIGTRAP : 0),
+-			    args, argslen, env, envlen,
+-			    dtable, MACH_MSG_TYPE_COPY_SEND, dtablesize,
+-			    ports, MACH_MSG_TYPE_COPY_SEND, _hurd_nports,
+-			    ints, INIT_INT_MAX,
+-			    NULL, 0, NULL, 0);
++	error_t err = __file_exec_file_name
++	  (file, task,
++	   __sigismember (&_hurdsig_traced, SIGKILL) ? EXEC_SIGTRAP : 0,
++	   filename, args, argslen, env, envlen,
++	   dtable, MACH_MSG_TYPE_COPY_SEND, dtablesize,
++	   ports, MACH_MSG_TYPE_COPY_SEND, _hurd_nports,
++	   ints, INIT_INT_MAX, NULL, 0, NULL, 0);
++
++	/* Fallback for backwards compatibility.  This can just be removed
++	   when __file_exec goes away.  */
++	if (err == MIG_BAD_ID)
++	  return __file_exec (file, task,
++			      (__sigismember (&_hurdsig_traced, SIGKILL)
++			      ? EXEC_SIGTRAP : 0),
++			      args, argslen, env, envlen,
++			      dtable, MACH_MSG_TYPE_COPY_SEND, dtablesize,
++			      ports, MACH_MSG_TYPE_COPY_SEND, _hurd_nports,
++			      ints, INIT_INT_MAX,
++			      NULL, 0, NULL, 0);
++
++	return err;
+       }
+ 
+     /* Now we are out of things that can fail before the file_exec RPC,

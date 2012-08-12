@@ -1,0 +1,164 @@
+2011-07-23  Ulrich Drepper  <drepper@gmail.com>
+
+	* sysdeps/x86_64/dl-trampoline.S (_dl_runtime_profile): Fix one more
+	typo.
+	(_dl_x86_64_save_sse): Likewise.
+
+2011-07-22  Ulrich Drepper  <drepper@gmail.com>
+ 
+	* sysdeps/x86_64/dl-trampoline.S (_dl_runtime_profile): Fix test for
+	OSXSAVE.
+	(_dl_x86_64_save_sse): Likewise.
+
+2011-07-21  Andreas Schwab  <schwab@redhat.com>
+
+	* sysdeps/x86_64/dl-trampoline.S (_dl_runtime_profile): Fix last
+	change.
+	(_dl_x86_64_save_sse): Use correct AVX check.
+
+2011-07-20  Ulrich Drepper  <drepper@gmail.com>
+ 
+	[BZ #13007]
+	* sysdeps/x86_64/dl-trampoline.S (_dl_runtime_profile): More complete
+	check for AVX enablement so that we don't crash with old kernels and
+	new hardware.
+	* elf/tst-audit4.c: Add same checks here.
+	* elf/tst-audit6.c: Likewise.
+
+---
+ elf/tst-audit4.c               |   22 ++++++++++++++++++----
+ elf/tst-audit6.c               |   22 ++++++++++++++++++----
+ sysdeps/x86_64/dl-trampoline.S |   36 +++++++++++++++++++++++++++---------
+ 3 files changed, 63 insertions(+), 17 deletions(-)
+
+--- a/elf/tst-audit4.c
++++ b/elf/tst-audit4.c
+@@ -6,16 +6,30 @@
+ #include <cpuid.h>
+ #include <immintrin.h>
+ 
++
++static int
++avx_enabled (void)
++{
++  unsigned int eax, ebx, ecx, edx;
++
++  if (__get_cpuid (1, &eax, &ebx, &ecx, &edx) == 0
++      || (ecx & (bit_AVX | bit_OSXSAVE)) != (bit_AVX | bit_OSXSAVE))
++    return 0;
++
++  /* Check the OS has AVX and SSE saving enabled.  */
++  asm ("xgetbv" : "=a" (eax), "=d" (edx) : "c" (0));
++
++  return (eax & 6) == 6;
++}
++
++
+ extern __m256i audit_test (__m256i, __m256i, __m256i, __m256i,
+ 			   __m256i, __m256i, __m256i, __m256i);
+ int
+ main (void)
+ {
+-  unsigned int eax, ebx, ecx, edx;
+-
+   /* Run AVX test only if AVX is supported.  */
+-  if (__get_cpuid (1, &eax, &ebx, &ecx, &edx)
+-      && (ecx & bit_AVX))
++  if (avx_enabled ())
+     {
+       __m256i ymm = _mm256_setzero_si256 ();
+       __m256i ret = audit_test (ymm, ymm, ymm, ymm, ymm, ymm, ymm, ymm);
+--- a/elf/tst-audit6.c
++++ b/elf/tst-audit6.c
+@@ -9,14 +9,28 @@
+ extern __m128i audit_test (__m128i, __m128i, __m128i, __m128i,
+ 			   __m128i, __m128i, __m128i, __m128i);
+ 
+-int
+-main (void)
++
++static int
++avx_enabled (void)
+ {
+   unsigned int eax, ebx, ecx, edx;
+ 
++  if (__get_cpuid (1, &eax, &ebx, &ecx, &edx) == 0
++      || (ecx & (bit_AVX | bit_OSXSAVE)) != (bit_AVX | bit_OSXSAVE))
++    return 0;
++
++  /* Check the OS has AVX and SSE saving enabled.  */
++  asm ("xgetbv" : "=a" (eax), "=d" (edx) : "c" (0));
++
++  return (eax & 6) == 6;
++}
++
++
++int
++main (void)
++{
+   /* Run AVX test only if AVX is supported.  */
+-  if (__get_cpuid (1, &eax, &ebx, &ecx, &edx)
+-      && (ecx & bit_AVX))
++  if (avx_enabled ())
+     {
+       __m128i xmm = _mm_setzero_si128 ();
+       __m128i ret = audit_test (xmm, xmm, xmm, xmm, xmm, xmm, xmm, xmm);
+--- a/sysdeps/x86_64/dl-trampoline.S
++++ b/sysdeps/x86_64/dl-trampoline.S
+@@ -1,5 +1,5 @@
+ /* PLT trampolines.  x86-64 version.
+-   Copyright (C) 2004, 2005, 2007, 2009 Free Software Foundation, Inc.
++   Copyright (C) 2004, 2005, 2007, 2009, 2011 Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+    The GNU C Library is free software; you can redistribute it and/or
+@@ -139,11 +139,20 @@
+ 	movl	$1, %eax
+ 	cpuid
+ 	movq	%r11,%rbx		# Restore rbx
+-	movl	$1, %eax
+-	testl	$(1 << 28), %ecx
++	xorl	%eax, %eax
++	// AVX and XSAVE supported?
++	andl	$((1 << 28) | (1 << 27)), %ecx
++	cmpl	$((1 << 28) | (1 << 27)), %ecx
+ 	jne	2f
+-	negl	%eax
+-2:	movl	%eax, L(have_avx)(%rip)
++	xorl	%ecx, %ecx
++	// Get XFEATURE_ENABLED_MASK
++	xgetbv
++	andl	$0x6, %eax
++	cmpl	$0x6, %eax
++	// Nonzero if SSE and AVX state saving is enabled.
++	sete	%al
++2:	leal	-1(%eax,%eax), %eax
++	movl	%eax, L(have_avx)(%rip)
+ 	cmpl	$0, %eax
+ 
+ 1:	js	L(no_avx)
+@@ -176,11 +185,20 @@
+ 	movl	$1, %eax
+ 	cpuid
+ 	movq	%r11,%rbx		# Restore rbx
+-	movl	$1, %eax
+-	testl	$(1 << 28), %ecx
++	xorl	%eax, %eax
++	// AVX and XSAVE supported?
++	andl	$((1 << 28) | (1 << 27)), %ecx
++	cmpl	$((1 << 28) | (1 << 27)), %ecx
+ 	jne	2f
+-	negl	%eax
+-2:	movl	%eax, L(have_avx)(%rip)
++	xorl	%ecx, %ecx
++	// Get XFEATURE_ENABLED_MASK
++	xgetbv
++	andl	$0x6, %eax
++	cmpl	$0x6, %eax
++	// Nonzero if SSE and AVX state saving is enabled.
++	sete	%al
++2:	leal	-1(%eax,%eax), %eax
++	movl	%eax, L(have_avx)(%rip)
+ 	cmpl	$0, %eax
+ 
+ 1:	js	L(no_avx5)

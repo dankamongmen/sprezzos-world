@@ -1,0 +1,103 @@
+---
+ nptl/pthread_mutex_trylock.c                 |    3 ++-
+ nptl/sysdeps/pthread/aio_misc.h              |    4 ++--
+ nptl/sysdeps/pthread/gai_misc.h              |    4 ++--
+ nptl/sysdeps/unix/sysv/linux/sem_timedwait.c |    2 +-
+ nptl/sysdeps/unix/sysv/linux/sem_wait.c      |    4 ++--
+ sunrpc/clnt_udp.c                            |    2 +-
+ 6 files changed, 10 insertions(+), 9 deletions(-)
+
+--- a/nptl/pthread_mutex_trylock.c
++++ b/nptl/pthread_mutex_trylock.c
+@@ -240,7 +240,8 @@
+ 							  private), 0, 0);
+ 
+ 	    if (INTERNAL_SYSCALL_ERROR_P (e, __err)
+-		&& INTERNAL_SYSCALL_ERRNO (e, __err) == EWOULDBLOCK)
++		&& ((INTERNAL_SYSCALL_ERRNO (e, __err) == EWOULDBLOCK)
++		    || (INTERNAL_SYSCALL_ERRNO (e, __err) == EAGAIN)))
+ 	      {
+ 		THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
+ 
+--- a/nptl/sysdeps/pthread/aio_misc.h
++++ b/nptl/sysdeps/pthread/aio_misc.h
+@@ -51,7 +51,7 @@
+ 	  {								      \
+ 	    status = lll_futex_timed_wait (futexaddr, oldval, timeout,	      \
+ 					   LLL_PRIVATE);		      \
+-	    if (status != -EWOULDBLOCK)					      \
++	    if (status != -EWOULDBLOCK && status != -EAGAIN)		      \
+ 	      break;							      \
+ 									      \
+ 	    oldval = *futexaddr;					      \
+@@ -66,7 +66,7 @@
+ 	else if (status == -ETIMEDOUT)					      \
+ 	  result = EAGAIN;						      \
+ 	else								      \
+-	  assert (status == 0 || status == -EWOULDBLOCK);		      \
++	  assert (status == 0 || status == -EWOULDBLOCK || status == -EAGAIN);\
+ 									      \
+ 	pthread_mutex_lock (&__aio_requests_mutex);			      \
+       }									      \
+--- a/nptl/sysdeps/pthread/gai_misc.h
++++ b/nptl/sysdeps/pthread/gai_misc.h
+@@ -52,7 +52,7 @@
+ 	  {								      \
+ 	    status = lll_futex_timed_wait (futexaddr, oldval, timeout,	      \
+ 					   LLL_PRIVATE);		      \
+-	    if (status != -EWOULDBLOCK)					      \
++	    if (status != -EWOULDBLOCK && status != -EAGAIN)		      \
+ 	      break;							      \
+ 									      \
+ 	    oldval = *futexaddr;					      \
+@@ -67,7 +67,7 @@
+ 	else if (status == -ETIMEDOUT)					      \
+ 	  result = EAGAIN;						      \
+ 	else								      \
+-	  assert (status == 0 || status == -EWOULDBLOCK);		      \
++	  assert (status == 0 || status == -EWOULDBLOCK || status == -EAGAIN);\
+ 									      \
+ 	pthread_mutex_lock (&__gai_requests_mutex);			      \
+       }									      \
+--- a/nptl/sysdeps/unix/sysv/linux/sem_timedwait.c
++++ b/nptl/sysdeps/unix/sysv/linux/sem_timedwait.c
+@@ -90,7 +90,7 @@
+       /* Disable asynchronous cancellation.  */
+       __pthread_disable_asynccancel (oldtype);
+ 
+-      if (err != 0 && err != -EWOULDBLOCK)
++      if (err != 0 && err != -EWOULDBLOCK && err != -EAGAIN)
+ 	{
+ 	  __set_errno (-err);
+ 	  err = -1;
+--- a/nptl/sysdeps/unix/sysv/linux/sem_wait.c
++++ b/nptl/sysdeps/unix/sysv/linux/sem_wait.c
+@@ -62,7 +62,7 @@
+       /* Disable asynchronous cancellation.  */
+       __pthread_disable_asynccancel (oldtype);
+ 
+-      if (err != 0 && err != -EWOULDBLOCK)
++      if (err != 0 && err != -EWOULDBLOCK && err != -EAGAIN)
+ 	{
+ 	  __set_errno (-err);
+ 	  err = -1;
+@@ -107,7 +107,7 @@
+       /* Disable asynchronous cancellation.  */
+       __pthread_disable_asynccancel (oldtype);
+     }
+-  while (err == 0 || err == -EWOULDBLOCK);
++  while (err == 0 || err == -EWOULDBLOCK || err == -EAGAIN);
+ 
+   __set_errno (-err);
+   return -1;
+--- a/sunrpc/clnt_udp.c
++++ b/sunrpc/clnt_udp.c
+@@ -456,7 +456,7 @@
+       while (inlen < 0 && errno == EINTR);
+       if (inlen < 0)
+ 	{
+-	  if (errno == EWOULDBLOCK)
++	  if (errno == EWOULDBLOCK || errno == EAGAIN)
+ 	    continue;
+ 	  cu->cu_error.re_errno = errno;
+ 	  return (cu->cu_error.re_status = RPC_CANTRECV);

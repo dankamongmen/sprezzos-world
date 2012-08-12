@@ -1,0 +1,44 @@
+From: Samuel Thibault <samuel.thibault@ens-lyon.org>
+Subject: [PATCH] Allow the kernel to start earlier than VM_MAX_ADDRESS
+
+A bit hackish.
+
+---
+ sysdeps/mach/hurd/dl-sysdep.c |   26 ++++++++++++++++++++------
+ 1 file changed, 20 insertions(+), 6 deletions(-)
+
+--- a/sysdeps/mach/hurd/dl-sysdep.c
++++ b/sysdeps/mach/hurd/dl-sysdep.c
+@@ -108,12 +108,26 @@
+ 	max=a; break;}
+       fmha=a+=fmhs;}
+     if (err) assert(err==KERN_NO_SPACE);
+-    if (!fmha)fmhs=0;else{
+-    fmhs=max-fmha;
+-    err = __vm_map (__mach_task_self (),
+-		    &fmha, fmhs, 0, 0, MACH_PORT_NULL, 0, 1,
+-		    VM_PROT_NONE, VM_PROT_NONE, VM_INHERIT_COPY);
+-    assert_perror(err);}
++    if (!fmha)
++      fmhs=0;
++    else
++      while (1) {
++	fmhs=max-fmha;
++	err = __vm_map (__mach_task_self (),
++			&fmha, fmhs, 0, 0, MACH_PORT_NULL, 0, 1,
++			VM_PROT_NONE, VM_PROT_NONE, VM_INHERIT_COPY);
++	if (!err)
++	  break;
++	if (err != KERN_INVALID_ADDRESS && err != KERN_NO_SPACE)
++	  assert_perror(err);
++	vm_address_t new_max = (max - 1) & 0xf0000000U;
++	if (new_max >= max) {
++	  fmhs = 0;
++	  fmha = 0;
++	  break;
++	}
++	max = new_max;
++      }
+   }
+ /* XXX loser kludge for vm_map kernel bug */
+ #endif
