@@ -51,9 +51,9 @@ world: $(DEBS) $(UDEBS)
 %.udeb %.deb: %
 	{ [ ! -e $(<D)/configure.in ] && [ ! -e $(<D)/configure.ac ] ; } || \
 		{ cd $(<D) && autoreconf -fi ; }
-	tar cjf $(shell echo $(<D) | cut -d- -f1).orig.tar.bz2 $(<D) --exclude=.git --exclude=debian
-	cd $(<D) && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
-	cd $(<D) && dpkg-buildpackage -k$(DEBKEY)
+	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude=.git --exclude=debian
+	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
+	cd $< && dpkg-buildpackage -k$(DEBKEY)
 
 .PHONY: growlight
 growlight: $(GROWLIGHT).deb
