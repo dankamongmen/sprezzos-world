@@ -49,8 +49,8 @@ world: $(DEBS) $(UDEBS)
 # FIXME tarball generation is broken for packages with hyphens in their names
 #%.udeb %.deb: %/debian/changelog
 %.udeb %.deb: %
-	{ [ ! -e $(<D)/configure.in ] && [ ! -e $(<D)/configure.ac ] ; } || \
-		{ cd $(<D) && autoreconf -fi ; }
+	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
+		{ cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude=.git --exclude=debian
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
