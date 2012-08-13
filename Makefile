@@ -37,7 +37,7 @@ DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(EGLIBC) $(ADOBE) \
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(EGLIBCS)
 
-%/debian: $(DEBS) $(UDEBS)
+%/debian/changelog:
 	@[ -d $(@D) ] || mkdir -p $(@D)
 	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
 
@@ -47,7 +47,8 @@ UDEBS:=$(addsuffix .udeb,$(UDEBS))
 world: $(DEBS) $(UDEBS)
 
 # FIXME tarball generation is broken for packages with hyphens in their names
-%.deb: %/debian
+#%.udeb %.deb: %/debian/changelog
+%.udeb %.deb: %
 	{ [ ! -e $(<D)/configure.in ] && [ ! -e $(<D)/configure.ac ] ; } || \
 		{ cd $(<D) && autoreconf -fi ; }
 	tar cjf $(shell echo $(<D) | cut -d- -f1).orig.tar.bz2 $(<D) --exclude=.git --exclude=debian
@@ -58,6 +59,7 @@ world: $(DEBS) $(UDEBS)
 growlight: $(GROWLIGHT).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone https://github.com/dankamongmen/growlight.git $@
+	cp -r $(<D) $@/
 
 .PHONY: omphalos
 omphalos:$(OMPHALOS).deb
@@ -65,7 +67,7 @@ $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone https://github.com/dankamongmen/omphalos.git $@
 
 .PHONY: fbv
-fbv:$(FBV).deb
+fbv:$(FBV).udeb
 $(FBV): $(SPREZZ)/fbv/debian/changelog
 	git clone git://repo.or.cz/fbv.git $@
 
