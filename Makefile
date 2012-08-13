@@ -37,21 +37,17 @@ DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(EGLIBC) $(ADOBE) \
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(EGLIBCS)
 
-%/debian/changelog:
-	@[ -d $(@D) ] || mkdir -p $(@D)
-	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
-
 DEBS:=$(addsuffix .deb,$(DEBS))
 UDEBS:=$(addsuffix .udeb,$(UDEBS))
 
 world: $(DEBS) $(UDEBS)
 
 # FIXME tarball generation is broken for packages with hyphens in their names
-#%.udeb %.deb: %/debian/changelog
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
 		{ cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude=.git --exclude=debian
+	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
 
