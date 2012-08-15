@@ -61,6 +61,7 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 omphalos:$(OMPHALOS).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone https://github.com/dankamongmen/omphalos.git $@
+	cp -r $(<D) $@/
 
 .PHONY: fbv
 fbv:$(FBV).udeb
@@ -71,6 +72,7 @@ $(FBV): $(SPREZZ)/fbv/debian/changelog
 fbterm:$(FBTERM).deb
 $(FBTERM): $(SPREZZ)/fbterm/debian/changelog
 	git clone https://github.com/dankamongmen/nfbterm.git $@
+	cp -r $(<D) $@/
 
 .PHONY: eglibc
 eglibc:$(EGLIBC).deb
