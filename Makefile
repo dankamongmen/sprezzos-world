@@ -69,13 +69,8 @@ $(FBV): $(SPREZZ)/fbv/debian/changelog
 
 .PHONY: fbterm
 fbterm:$(FBTERM).deb
-$(FBTERM): fbterm-1.7.0.tar.gz
-	tar xzvf $<
-	ln -s fbterm-1.7 $(FBTERM)
-
-FETCHED:=$(FETCHED) fbterm-1.7.0.tar.gz
-fbterm-1.7.0.tar.gz:
-	wget -nc http://fbterm.googlecode.com/files/fbterm-1.7.0.tar.gz -O $@
+$(FBTERM): $(SPREZZ)/fbterm/debian/changelog
+	git clone https://github.com/dankamongmen/nfbterm.git $@
 
 .PHONY: eglibc
 eglibc:$(EGLIBC).deb
