@@ -78,6 +78,7 @@ $(FBTERM): $(SPREZZ)/fbterm/debian/changelog
 eglibc:$(EGLIBC).deb
 $(EGLIBC): $(SPREZZ)/eglibc/debian/changelog
 	svn co svn://svn.eglibc.org/branches/eglibc-2_15 $@
+	cp -r $(<D) $@/
 
 .PHONY: mplayer
 mplayer:$(MPLAYER).deb
@@ -88,6 +89,7 @@ $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 valgrind:$(VALGRIND).deb
 $(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
 	svn co svn://svn.valgrind.org/valgrind/trunk $@
+	cp -r $(<D) $@/
 
 .PHONY: grubtheme
 sprezzos-grub2theme:$(GRUBTHEME).deb
