@@ -96,6 +96,7 @@ sprezzos-grub2theme:$(GRUBTHEME).deb
 $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 	mkdir -p $@
 	cp -r $(SPREZZ)/sprezzos-grub2theme/images $@
+	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
