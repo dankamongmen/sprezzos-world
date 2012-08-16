@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme fbv \
-	fonts-adobe-sourcesanspro eglibc mplayer
+	fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
 
@@ -26,16 +26,15 @@ GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 MPLAYER=mplayer_$(mplayer_VERSION)
-EGLIBC=eglibc-$(eglibc_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 FBV=fbv_$(fbv_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(EGLIBC) $(ADOBE) \
+DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
 	$(MPLAYER)
 UDEBS:=$(FBV)
-DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(EGLIBCS)
+DUPUDEBS:=$(GROWLIGHT) $(FBTERM)
 
 DEBS:=$(addsuffix .deb,$(DEBS))
 UDEBS:=$(addsuffix .udeb,$(UDEBS))
@@ -72,12 +71,6 @@ $(FBV): $(SPREZZ)/fbv/debian/changelog
 fbterm:$(FBTERM).deb
 $(FBTERM): $(SPREZZ)/fbterm/debian/changelog
 	git clone https://github.com/dankamongmen/nfbterm.git $@
-	cp -r $(<D) $@/
-
-.PHONY: eglibc
-eglibc:$(EGLIBC).deb
-$(EGLIBC): $(SPREZZ)/eglibc/debian/changelog
-	svn co svn://svn.eglibc.org/branches/eglibc-2_15 $@
 	cp -r $(<D) $@/
 
 .PHONY: mplayer
