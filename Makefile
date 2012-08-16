@@ -95,11 +95,12 @@ FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
 	wget -nc http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip -O$@
 
+SANSPRO:=SourceSansPro_FontsOnly-1.033
 .PHONY: adobe
 adobe:$(ADOBE).deb
-$(ADOBE): SourceSansPro_FontsOnly-1.033.zip $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
-	unzip $<
-	mv SourceSansPro_FontsOnly-1.033 $@
+$(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
+	unzip $(SANSPRO).zip 
+	mv $(SANSPRO) $@
 	cp -r $(<D) $@/
 
 clean:
