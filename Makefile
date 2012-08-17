@@ -105,7 +105,7 @@ SourceSansPro_FontsOnly-1.033.zip:
 CONPAL:=App-ConPalette-0.1.5
 .PHONY: conpalette
 conpalette:$(CONPALETTE).deb
-$(conpalette): $(SPREZZ)/conpalette/debian/changelog $(CONPAL).tar.gz
+$(CONPALETTE): $(SPREZZ)/conpalette/debian/changelog $(CONPAL).tar.gz
 	tar xzvf $(CONPAL).tar.gz
 	mv $(CONPAL) $@
 	cp -r $(<D) $@/
