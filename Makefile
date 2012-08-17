@@ -77,6 +77,8 @@ $(FBTERM): $(SPREZZ)/fbterm/debian/changelog
 mplayer:$(MPLAYER).deb
 $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	svn co svn://svn.mplayerhq.hu/mplayer/trunk $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
