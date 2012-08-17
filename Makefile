@@ -8,8 +8,8 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight omphalos fbterm valgrind sprezzos-grub2theme fbv \
-	fonts-adobe-sourcesanspro mplayer
+PACKAGES:=growlight omphalos fbterm conpalette valgrind sprezzos-grub2theme \
+	fbv fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
 
@@ -30,11 +30,12 @@ FBTERM=fbterm_$(fbterm_VERSION)
 FBV=fbv_$(fbv_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
+CONPALETTE=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
-	$(MPLAYER)
+	$(MPLAYER) $(CONPALETTE)
 UDEBS:=$(FBV)
-DUPUDEBS:=$(GROWLIGHT) $(FBTERM)
+DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE)
 
 DEBS:=$(addsuffix .deb,$(DEBS))
 UDEBS:=$(addsuffix .udeb,$(UDEBS))
@@ -93,9 +94,21 @@ $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 	cp -r $(SPREZZ)/sprezzos-grub2theme/images $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) App-ConPalette-0.1.5.tar.gz
+App-ConPalette-0.1.5.tar.gz:
+	wget -nc -O$@ http://search.cpan.org/CPAN/authors/id/H/HI/HINRIK/App-ConPalette-0.1.5.tar.gz
+
 FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
 	wget -nc http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip -O$@
+
+CONPAL:=App-ConPalette-0.1.5
+.PHONY: conpalette
+conpalette:$(CONPALETTE).deb
+$(conpalette): $(SPREZZ)/conpalette/debian/changelog $(CONPAL).tar.gz
+	tar xzvf $(CONPAL).tar.gz
+	mv $(CONPAL) $@
+	cp -r $(<D) $@/
 
 SANSPRO:=SourceSansPro_FontsOnly-1.033
 .PHONY: adobe
@@ -108,5 +121,5 @@ $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
 clean:
 	rm -rf sprezzos-world $(FETCHED)
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
-	rm -rf $(ADOBE) $(FBTERM)
+	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE)
 	rm -rf $(DEBS) $(UDEBS)
