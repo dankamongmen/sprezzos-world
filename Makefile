@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight omphalos fbterm conpalette valgrind sprezzos-grub2theme \
-	fbv fonts-adobe-sourcesanspro mplayer
+	apitrace fbv fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
 
