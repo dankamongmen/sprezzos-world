@@ -28,12 +28,13 @@ VALGRIND=valgrind_$(valgrind_VERSION)
 MPLAYER=mplayer_$(mplayer_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 FBV=fbv_$(fbv_VERSION)
+APITRACE=apitrace_$(apitrace_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
-	$(MPLAYER) $(CONPALETTE)
+	$(MPLAYER) $(CONPALETTE) $(APITRACE)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE)
 
@@ -72,6 +73,12 @@ $(FBV): $(SPREZZ)/fbv/debian/changelog
 fbterm:$(FBTERM).deb
 $(FBTERM): $(SPREZZ)/fbterm/debian/changelog
 	git clone https://github.com/dankamongmen/nfbterm.git $@
+	cp -r $(<D) $@/
+
+.PHONY: apitrace
+apitrace:$(APITRACE).deb
+$(APITRACE): $(SPREZZ)/apitrace/debian/changelog
+	git clone https://github.com/apitrace/apitrace.git $@
 	cp -r $(<D) $@/
 
 .PHONY: mplayer
@@ -121,5 +128,5 @@ $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
 clean:
 	rm -rf sprezzos-world $(FETCHED)
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
-	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE)
+	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE)
 	rm -rf $(DEBS) $(UDEBS)
