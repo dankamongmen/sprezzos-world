@@ -8,8 +8,8 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight omphalos fbterm conpalette valgrind sprezzos-grub2theme \
-	apitrace fbv fonts-adobe-sourcesanspro mplayer
+PACKAGES:=growlight omphalos sudo fbterm conpalette valgrind \
+	sprezzos-grub2theme apitrace fbv fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
 
@@ -25,6 +25,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
+SUDO=sudo_$(sudo_VERSION)
 MPLAYER=mplayer_$(mplayer_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 FBV=fbv_$(fbv_VERSION)
@@ -33,7 +34,7 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
+DEBS:=$(GROWLIGHT) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
 	$(MPLAYER) $(CONPALETTE) $(APITRACE)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE)
@@ -88,6 +89,17 @@ $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	rm -rf $@/debian
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
+sudo-1.8.5p3.tar.gz:
+	wget -nc -O$@ http://www.gratisoft.us/sudo/dist/sudo-1.8.5p3.tar.gz
+
+.PHONY: sudo
+sudo:$(SUDO).deb
+$(SUDO): $(SPREZZ)/sudo/debian/changelog sudo-1.8.5p3.tar.gz
+	tar xzvf sudo-1.8.5p3.tar.gz
+	mv $(SUDO) $@
+	cp -r $(<D) $@/
+
 .PHONY: valgrind
 valgrind:$(VALGRIND).deb
 $(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
@@ -128,5 +140,5 @@ $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
 clean:
 	rm -rf sprezzos-world $(FETCHED)
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
-	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE)
+	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO)
 	rm -rf $(DEBS) $(UDEBS)
