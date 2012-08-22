@@ -49,7 +49,7 @@ world: $(DEBS) $(UDEBS)
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
 		[ -e $</configure ] || { cd $< && autoreconf -fi ; }
-	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude=.git --exclude=debian
+	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
 	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
