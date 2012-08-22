@@ -47,7 +47,7 @@ world: $(DEBS) $(UDEBS)
 # FIXME tarball generation is broken for packages with hyphens in their names
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
-		{ cd $< && autoreconf -fi ; }
+		[ -e $</configure ] || { cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude=.git --exclude=debian
 	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
@@ -96,8 +96,8 @@ sudo-1.8.5p3.tar.gz:
 .PHONY: sudo
 sudo:$(SUDO).deb
 $(SUDO): $(SPREZZ)/sudo/debian/changelog sudo-1.8.5p3.tar.gz
-	tar xzvf sudo-1.8.5p3.tar.gz
-	mv $(SUDO) $@
+	mkdir $@
+	tar xzvf sudo-1.8.5p3.tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 .PHONY: valgrind
