@@ -8,7 +8,7 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight omphalos sudo fbterm conpalette valgrind \
+PACKAGES:=growlight omphalos sudo fbterm conpalette valgrind xbmc \
 	sprezzos-grub2theme apitrace fbv fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
@@ -26,6 +26,7 @@ GROWLIGHT=growlight_$(growlight_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 SUDO=sudo_$(sudo_VERSION)
+XBMC=xbmc_$(xbmc_VERSION)
 MPLAYER=mplayer_$(mplayer_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 FBV=fbv_$(fbv_VERSION)
@@ -35,7 +36,7 @@ ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
-	$(MPLAYER) $(CONPALETTE) $(APITRACE)
+	$(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE)
 
@@ -80,6 +81,12 @@ $(FBTERM): $(SPREZZ)/fbterm/debian/changelog
 apitrace:$(APITRACE).deb
 $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
 	git clone https://github.com/apitrace/apitrace.git $@
+	cp -r $(<D) $@/
+
+.PHONY: xbmc
+xbmc:$(XBMC).deb
+$(XBMC): $(SPREZZ)/xbmc/debian/changelog
+	git clone git://github.com/xbmc/xbmc.git $@
 	cp -r $(<D) $@/
 
 .PHONY: mplayer
