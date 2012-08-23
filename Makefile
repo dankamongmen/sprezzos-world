@@ -49,7 +49,7 @@ world: $(DEBS) $(UDEBS)
 # FIXME tarball generation is broken for packages with hyphens in their names
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
-		{ [ -e $</configure ] || [ -e $</bootstrap ] } || \
+		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
 		{ cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
 	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
