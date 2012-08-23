@@ -104,7 +104,7 @@ libpng-1.5.12.tar.bz2:
 
 .PHONY: libpng
 libpng:$(LIBPNG).deb
-$(LIBPNG): $(SPREZZ)/sudo/debian/changelog libpng-1.5.12.tar.bz2
+$(LIBPNG): $(SPREZZ)/libpng/debian/changelog libpng-1.5.12.tar.bz2
 	mkdir $@
 	tar xjvf libpng-1.5.12.tar.bz2 --strip-components=1 -C $@
 	cp -r $(<D) $@/
