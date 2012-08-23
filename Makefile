@@ -8,8 +8,9 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight libpng omphalos sudo fbterm conpalette valgrind xbmc \
-	sprezzos-grub2theme apitrace fbv fonts-adobe-sourcesanspro mplayer
+PACKAGES:=growlight libpng libjpeg-turbo omphalos sudo fbterm conpalette \
+	valgrind xbmc sprezzos-grub2theme apitrace fbv \
+	fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
 
@@ -24,6 +25,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 GROWLIGHT=growlight_$(growlight_VERSION)
 LIBPNG=libpng_$(libpng_VERSION)
+LIBJPEGTURBO=libjpeg-turbo_$(libjpegturbo_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 SUDO=sudo_$(sudo_VERSION)
@@ -36,8 +38,8 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LIBPNG) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) \
-	$(ADOBE) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
+DEBS:=$(GROWLIGHT) $(LIBPNG) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) \
+	$(VALGRIND) $(ADOBE) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE)
 
@@ -96,6 +98,17 @@ mplayer:$(MPLAYER).deb
 $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	svn co svn://svn.mplayerhq.hu/mplayer/trunk $@
 	rm -rf $@/debian
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) libjpeg-turbo-1.2.1.tar.gz
+libjpeg-turbo-1.2.1.tar.gz:
+	wget -nc -O$@ http://sourceforge.net/projects/libjpeg-turbo/files/1.2.1/libjpeg-turbo-1.2.1.tar.gz/download
+
+.PHONY: libjpegturbo
+libjpegturbo:$(LIBJPEGTURBO).deb
+$(LIBJPEGTURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.tar.gz
+	mkdir $@
+	tar xzvf libjpeg-turbo-1.2.1.tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) libpng-1.5.12.tar.bz2
@@ -161,4 +174,4 @@ clean:
 	rm -rf sprezzos-world $(FETCHED)
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
-	rm -rf $(DEBS) $(UDEBS)
+	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO)
