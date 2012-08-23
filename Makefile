@@ -8,7 +8,7 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight omphalos sudo fbterm conpalette valgrind xbmc \
+PACKAGES:=growlight libpng omphalos sudo fbterm conpalette valgrind xbmc \
 	sprezzos-grub2theme apitrace fbv fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
@@ -23,6 +23,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 cut -d: -f2- ) > $@
 
 GROWLIGHT=growlight_$(growlight_VERSION)
+LIBPNG=libpng_$(libpng_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 SUDO=sudo_$(sudo_VERSION)
@@ -35,8 +36,8 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
-	$(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
+DEBS:=$(GROWLIGHT) $(LIBPNG) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) \
+	$(ADOBE) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE)
 
@@ -48,7 +49,8 @@ world: $(DEBS) $(UDEBS)
 # FIXME tarball generation is broken for packages with hyphens in their names
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
-		[ -e $</configure ] || { cd $< && autoreconf -fi ; }
+		{ [ -e $</configure ] || [ -e $</bootstrap ] } || \
+		{ cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
 	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
@@ -94,6 +96,17 @@ mplayer:$(MPLAYER).deb
 $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	svn co svn://svn.mplayerhq.hu/mplayer/trunk $@
 	rm -rf $@/debian
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) libpng-1.5.12.tar.bz2
+libpng-1.5.12.tar.bz2:
+	wget -nc -O$@ http://sourceforge.net/projects/libpng/files/libpng15/1.5.12/libpng-1.5.12.tar.bz2/download
+
+.PHONY: libpng
+libpng:$(LIBPNG).deb
+$(LIBPNG): $(SPREZZ)/sudo/debian/changelog libpng-1.5.12.tar.bz2
+	mkdir $@
+	tar xjvf libpng-1.5.12.tar.bz2 --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
@@ -147,5 +160,5 @@ $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
 clean:
 	rm -rf sprezzos-world $(FETCHED)
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
-	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO)
+	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS)
