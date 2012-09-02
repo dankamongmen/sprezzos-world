@@ -104,8 +104,8 @@ FETCHED:=$(FETCHED) libjpeg-turbo-1.2.1.tar.gz
 libjpeg-turbo-1.2.1.tar.gz:
 	wget -nc -O$@ http://sourceforge.net/projects/libjpeg-turbo/files/1.2.1/libjpeg-turbo-1.2.1.tar.gz/download
 
-.PHONY: libjpegturbo
-libjpegturbo:$(LIBJPEGTURBO).deb
+.PHONY: libjpeg-turbo
+libjpeg-turbo:$(LIBJPEGTURBO).deb
 $(LIBJPEGTURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.tar.gz
 	mkdir $@
 	tar xzvf libjpeg-turbo-1.2.1.tar.gz --strip-components=1 -C $@
