@@ -54,7 +54,7 @@ world: $(DEBS) $(UDEBS)
 		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
 		{ cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | cut -d_ -f1)_$(shell echo $< | cut -d_ -f2- | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
-	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
+	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $(basename $(@F))
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
 
