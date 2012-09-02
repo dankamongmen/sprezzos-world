@@ -25,7 +25,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 GROWLIGHT=growlight_$(growlight_VERSION)
 LIBPNG=libpng_$(libpng_VERSION)
-LIBJPEGTURBO=libjpeg-turbo_$(libjpegturbo_VERSION)
+LIBJPEGTURBO=libjpeg-turbo_$(libjpeg-turbo_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 SUDO=sudo_$(sudo_VERSION)
@@ -53,7 +53,7 @@ world: $(DEBS) $(UDEBS)
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
 		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
 		{ cd $< && autoreconf -fi ; }
-	tar cjf $(shell echo $< | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
+	tar cjf $(shell echo $< | cut -d_ -f1)_$(shell echo $< | cut -d_ -f2- | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
 	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $@
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
