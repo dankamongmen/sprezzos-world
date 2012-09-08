@@ -7,3 +7,4 @@
 
 export LS_OPTIONS='--color=auto'
 eval "`dircolors`"
+export GREP_OPTIONS='--color'
