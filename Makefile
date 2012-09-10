@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight libpng libjpeg-turbo omphalos sudo fbterm conpalette \
-	valgrind xbmc sprezzos-grub2theme apitrace fbv \
+	valgrind strace xbmc sprezzos-grub2theme apitrace fbv \
 	fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
@@ -32,6 +32,7 @@ SUDO=sudo_$(sudo_VERSION)
 XBMC=xbmc_$(xbmc_VERSION)
 MPLAYER=mplayer_$(mplayer_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
+STRACE=strace_$(strace_VERSION)
 FBV=fbv_$(fbv_VERSION)
 APITRACE=apitrace_$(apitrace_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
@@ -39,7 +40,8 @@ ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(LIBPNG) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) \
-	$(VALGRIND) $(ADOBE) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
+	$(VALGRIND) $(ADOBE) $(STRACE) $(XBMC) $(MPLAYER) $(CONPALETTE) \
+	$(APITRACE)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE)
 
@@ -62,6 +64,12 @@ world: $(DEBS) $(UDEBS)
 growlight: $(GROWLIGHT).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone https://github.com/dankamongmen/growlight.git $@
+	cp -r $(<D) $@/
+
+.PHONY: strace
+strace: $(STRACE).deb
+$(STRACE): $(SPREZZ)/strace/debian/changelog
+	git clone git://strace.git.sourceforge.net/gitroot/strace/strace $@
 	cp -r $(<D) $@/
 
 .PHONY: omphalos
@@ -174,4 +182,4 @@ clean:
 	rm -rf sprezzos-world $(FETCHED)
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
-	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO)
+	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE)
