@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight libpng libjpeg-turbo omphalos sudo fbterm conpalette \
-	valgrind strace xbmc sprezzos-grub2theme apitrace fbv \
+	valgrind strace splitvt xbmc sprezzos-grub2theme apitrace fbv \
 	fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
@@ -33,6 +33,7 @@ XBMC=xbmc_$(xbmc_VERSION)
 MPLAYER=mplayer_$(mplayer_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
 STRACE=strace_$(strace_VERSION)
+SPLITVT=splitvt_$(splitvt_VERSION)
 FBV=fbv_$(fbv_VERSION)
 APITRACE=apitrace_$(apitrace_VERSION)
 GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
@@ -40,10 +41,10 @@ ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(LIBPNG) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) \
-	$(VALGRIND) $(ADOBE) $(STRACE) $(XBMC) $(MPLAYER) $(CONPALETTE) \
-	$(APITRACE)
+	$(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) $(XBMC) $(MPLAYER) \
+	$(CONPALETTE) $(APITRACE)
 UDEBS:=$(FBV)
-DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE)
+DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT)
 
 DEBS:=$(addsuffix .deb,$(DEBS))
 UDEBS:=$(addsuffix .udeb,$(UDEBS))
@@ -182,4 +183,4 @@ clean:
 	rm -rf sprezzos-world $(FETCHED)
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
-	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE)
+	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
