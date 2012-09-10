@@ -1,0 +1,842 @@
+Description: Patch qith all changes done to upstream in version 1.6.6-7 and older versions.
+Author: Julien Danjou (version 1.6.6-7) Joey Hess (older versions)
+Last-Update: 2011-02-13
+
+--- splitvt-1.6.6.orig/misc.c
++++ splitvt-1.6.6/misc.c
+@@ -1,12 +1,19 @@
+ /* Miscellaneous system dependent routines for splitsh */
+ 
++#define _GNU_SOURCE /* for getpt and other gnu extensions to libc */
++
+ #include	<sys/types.h>
++#include	<sys/wait.h>
++#include	<unistd.h>
++#include	<stdlib.h>
+ #include	<sys/stat.h>
+ #include	<fcntl.h>
+ #include	<stdio.h>
+ #include	<stdlib.h>
+ #include	<string.h>
+ #include	<signal.h>
++#include	<utime.h>
++#include	<string.h>
+ 
+ 
+ #ifdef HAVE_TERMIO_H
+@@ -26,6 +33,8 @@
+ /*#define STTY_HACK*/
+ #endif
+ 
++int tty_reset(int fd);
++
+ /*
+  * Initialize a pty, fork a command running under it, and then 
+  * return the master file descriptor
+@@ -46,7 +55,10 @@ int win;		/* 0 for upper, 1 for lower */
+ 	int get_master_pty(), get_slave_pty();
+ 	char *get_ttyname(), *myputenv();
+ 
+-	char LINES[12], COLUMNS[12], SPLITVT[24];
++#ifndef TIOCGWINSZ
++	char LINES[12], COLUMNS[12];
++#endif
++	char SPLITVT[24];
+ 	int returnfd, slave_fd;
+ 
+ 	/* Get the master pty file descriptor */
+@@ -108,8 +120,16 @@ int win;		/* 0 for upper, 1 for lower */
+ 		/* "touch" the tty so 'w' reports proper idle times */
+ 		(void) utime(get_ttyname(), NULL);
+ 
++		/* Set our gid to our real gid if necessary */
++		if (setgid(getgid()) != 0) {
++			perror("setgid");
++			exit(1);
++		}
+ 		/* Set our uid to our real uid if necessary */
+-		(void) setuid(getuid());
++		if (setuid(getuid()) != 0) {
++			perror("setuid");
++			exit(1);
++		}
+ 			
+ 		/* Run the requested program, with possible leading dash. */
+ 		execvp(((*argv[0] == '-') ? argv[0]+1 : argv[0]), argv);
+@@ -184,14 +204,15 @@ int get_slave_pty()
+ #else /* ! IRIX */
+ 
+ 
+-#if defined(SOLARIS) || defined(linux)		/* System V.4 pty routines from W. Richard Stevens */
++#if defined(SOLARIS) || defined(__GLIBC__)	/* System V.4 pty routines from W. Richard Stevens */
+ 
+ #ifdef SOLARIS
+ #include <stropts.h>
+-#endif
+ 
+ #define DEV_CLONE	"/dev/ptmx"
+ 
++#endif
++
+ extern char *ptsname();
+ 
+ int get_master_pty()
+@@ -199,9 +220,14 @@ int get_master_pty()
+ 
+ 	char 	*ttyptr;
+ 
++#ifdef SOLARIS
+ 	if ( (master_fd=open(DEV_CLONE, O_RDWR)) < 0 )
+ 		return(-1);
+-
++#else /* GLIBC */
++	if ( (master_fd=getpt()) == -1 )
++		return (-1);
++#endif
++	
+ 	if ( grantpt(master_fd) < 0 )	/* grant access to slave */
+ 	{
+ 		close(master_fd);
+@@ -399,8 +425,10 @@ void d_zero(dst, len)
+ 
+ void dropctty()
+ {
++#ifndef CIBAUD
+ 	int fd;
+-
++#endif
++	
+ #if defined(_POSIX_SOURCE) || defined(SOLARIS) || \
+ 				defined(__386BSD__) || defined(__FreeBSD__)
+ 	setsid();		/* The POSIX solution is simple. :) */
+@@ -714,7 +742,6 @@ char *string;
+ 	extern char **environ;	/* The process environment strings */
+ 
+ 	char *newptr, **envptr;
+-	char *tmptr, temp[BUFSIZ];
+ 	int   distance, n=0;
+ 
+ 	for ( distance=0; ((*(string+distance)) && 
+@@ -765,7 +792,7 @@ int size;
+ char *line;
+ char *tokens;
+ {
+-	char *head, *ptr;
++	char *head;
+ 	int i=0;
+ 
+ 	for ( head=line; *line && i < size-2; ) {
+@@ -853,7 +880,7 @@ char *type;
+ {
+ 	char *argv[4];
+ 	int pipe_fds[2];
+-	int rw, child;
++	int rw;
+ 
+ 	if ( strcmp(type, "r") == 0 )
+ 		rw=0;	/* READ access for parent */
+@@ -877,7 +904,14 @@ char *type;
+ 			close(pipe_fds[0]); close(pipe_fds[1]); 
+ 
+ 			/* Set our uid to our real uid if necessary */
+-			(void) setuid(getuid());
++			if (setgid(getgid()) != 0) {
++				perror("setgid");
++				exit(1);
++			}
++			if (setuid(getuid()) != 0) {
++				perror("setuid");
++				exit(1);
++			}
+ 			
+ 			/* Run the requested program */
+ 			argv[0]="/bin/sh";
+--- splitvt-1.6.6.orig/parserc.c
++++ splitvt-1.6.6/parserc.c
+@@ -1,6 +1,8 @@
+ 
+ /* Routines to parse the ~/.splitvtrc file and set default options */
+ 
++#include <unistd.h>
++#include <stdlib.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <errno.h>
+@@ -223,7 +225,7 @@ void splitvtrc()
+ 	char line[BUFSIZ], newline[BUFSIZ*2], *parsed[256];
+ 	char *head, *tail, *ptr, *subptr;
+ 	char *envptr, envbuf[128];
+-	int  i, n, quoted=0;
++	int  i, n;
+ 	int  ignoring=0, ifs=0;
+ 
+ 	/* Get our home directory */
+--- splitvt-1.6.6.orig/vttest.c
++++ splitvt-1.6.6/vttest.c
+@@ -12,6 +12,7 @@
+ 	-Sam Lantinga		(slouken@toadflax.cs.ucdavis.edu)
+ */
+ 
++#include	<unistd.h>
+ #include	<sys/types.h>
+ #include	<stdio.h>
+ #include	<fcntl.h>
+@@ -48,9 +49,12 @@ static void alrm_trap() { alarmed=1; lon
+ int vttest() 
+ {
+ 	char   buff[512];
+-	int x=0, w, rc=0, fd;
++	int x=0, rc=0, fd;
+ 	struct termio ttold, ttraw;
+ 
++	/* Disabled since at least on sparc it causes a hang. */
++	return 1;
++	
+ 	/* Set the terminal in a raw mode */
+ 	if ( (fd=open("/dev/tty", O_RDWR, 0666)) < 0 )
+ 		return(0);
+--- splitvt-1.6.6.orig/vtmouse.c
++++ splitvt-1.6.6/vtmouse.c
+@@ -7,10 +7,13 @@
+ 
+ #define SPLITVT_SOURCE
+ 
++#include <string.h>
++#include <stdlib.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include "vtmouse.h"
++#include "splitvt.h"
+ 
+ extern FILE *safe_popen();		/* From misc.c */
+ 
+--- splitvt-1.6.6.orig/lock.c
++++ splitvt-1.6.6/lock.c
+@@ -1,9 +1,13 @@
+ 
+ /* The screen locking module for splitvt */
+ 
++#include	<unistd.h>
++#include	<sys/types.h>
++#include	<string.h>
+ #include	<stdio.h>
+ #include	<pwd.h>
+ #include	"vt100.h"
++#include	"splitvt.h"
+ 
+ #define UNLOCKED	0
+ #define ENTERED1	1
+--- splitvt-1.6.6.orig/splitvt.c
++++ splitvt-1.6.6/splitvt.c
+@@ -14,6 +14,9 @@
+ static char *version=
+ "@(#)Splitvt 1.6.6  3/11/2006  -Sam Lantinga   (slouken@devolution.com)\n";
+ 
++#include	<string.h>
++#include	<unistd.h>
++#include	<stdlib.h>
+ #include	<sys/types.h>
+ #include	<sys/time.h>
+ #include	<sys/wait.h>
+@@ -84,6 +87,8 @@ int     dologin=0;		/* Do the shells run
+ char *upper_args[MAX_ARGS+1]={NULL}, *lower_args[MAX_ARGS+1]={NULL};
+ int upper_empty=1, lower_empty=1;
+ 
++int force_height=0;
++
+ void print_usage(argv)
+ char *argv;
+ {
+@@ -101,13 +106,14 @@ char *argv;
+ 	fprintf(stderr, "\t-nologin\t\tOverrides \"set login on\" in startup file\n");
+ 	fprintf(stderr, "\t-rcfile file\t\tLoads 'file' at startup instead of ~/.splitvtrc\n");
+ 	fprintf(stderr, "\t-norc\t\t\tSuppresses loading your startup file\n");
++  	fprintf(stderr, "\t-f\t\t\tAllow setting screen size of less than 3 lines\n");
+ 	fprintf(stderr, "\t-v\t\t\tPrint out the version number\n");
+ 	fprintf(stderr, "\n");
+ 	exit(1);
+ }
+ 
+  
+-main(argc, argv)
++int main(argc, argv)
+ int argc;
+ char *argv[];
+ {
+@@ -117,7 +123,10 @@ char *argv[];
+ 	int i, len, maxfds, numready;
+ 	char buffer[BUFSIZ], *ptr;
+ 	char *xterm_title=NULL;
+-	struct timeval tv, *tvptr;
++#ifdef NEED_INET_H
++	struct timeval tv;
++#endif
++	struct timeval *tvptr;
+ 	fd_set read_mask;
+ 	static struct passwd pwdata;	/* Our passwd entry */
+ 
+@@ -157,7 +166,7 @@ char *argv[];
+ 		splitvtrc();
+ 
+ 	/* Parse command line options */
+-	while ( (i=getopt(argc, argv, "n:u:l:r:b:s:t:vh")) != EOF )
++	while ( (i=getopt(argc, argv, "fn:u:l:r:b:s:t:vh")) != EOF )
+ 	{
+ 		switch (i)
+ 		{
+@@ -169,11 +178,19 @@ char *argv[];
+ 				  break;
+ 			case 'u': if ( strcmp(optarg, "pper") != 0 )
+ 					print_usage(argv[0]);
++				  if (optind >= argc) {
++					fprintf(stderr, "-upper requires an argument\n");
++					print_usage(argv[0]);
++				  }
+ 				  tokenize(upper_args, MAX_ARGS+1,
+ 						  argv[optind++], " ");
+ 				  upper_empty=0;
+ 				  break;
+ 			case 'l': if ( strcmp(optarg, "ower") == 0 ) {
++					if (optind >= argc) {
++						fprintf(stderr, "-lower requires an argument\n");
++						print_usage(argv[0]);
++					}
+ 				  	tokenize(lower_args, MAX_ARGS+1,
+ 							argv[optind++], " ");
+ 				  	lower_empty=0;
+@@ -200,7 +217,9 @@ char *argv[];
+ 			case 'v': printf("%s", version+4);
+ 				  exit(0);
+ 				  break;
+-			case 'h':
++		  	case 'f': force_height=1;
++		  		  break;
++		        case 'h':
+ 			default:  print_usage(argv[0]);
+ 				  break;
+ 		}
+@@ -224,7 +243,7 @@ char *argv[];
+ 	}
+ 	(void) tty_raw(0);   /* Set the tty raw here to prevent lost input */
+ 
+-	if ( (ptr=init_vt100()) != NULL )
++	if ( (ptr=init_vt100(1)) != NULL )
+ 	{
+ 		if ( tty_reset(0) < 0 )	
+ 			(void) tty_sane(0);
+@@ -487,6 +506,7 @@ char *argv[];
+ 		}
+ 	}
+ 	finish(0);
++	exit(0);
+ }
+ 
+ void reset_bar(sleeptime)
+@@ -510,6 +530,7 @@ void print_help()
+ "	'x'	Lock the screen",
+ "	'h'	Show this help screen",
+ "	'q'	Quickly quit splitvt",
++"	'0-9'	Line count for + or -",
+ NULL
+ };
+ 	vt_showscreen("Splitvt HELP screen:", help);
+@@ -714,7 +735,7 @@ int howfar;
+ 	tmp_uulines=UU_lines;
+ 	UU_lines=WU_lines;
+ 	UU_lines += howfar;	/* Positive to go down, negative to go up */
+-	init_vt100();		/* Reset the windows to the new size */
++	init_vt100(0);		/* Reset the windows to the new size */
+ 
+ 	/* Tell the running processes about the size change */
+ 	if ( topok )
+@@ -736,7 +757,7 @@ int sig;
+ 
+ 	signal(sig, winch);
+ 
+-	if ( (ptr=init_vt100()) != NULL ) {
++	if ( (ptr=init_vt100(1)) != NULL ) {
+ 		fprintf(stderr, "Can't resize window: %s. (exiting)\n", ptr);
+ 		finish(0);
+ 	} else
+--- splitvt-1.6.6.orig/utmp.c
++++ splitvt-1.6.6/utmp.c
+@@ -1,22 +1,27 @@
+ 
+ /*  utmp.c    Shareware Copyright by Sam Lantinga	10/6/93	*/
+ 
++#include	<unistd.h>
+ #include	<sys/types.h>
+ #include	<sys/stat.h>
+ #include	<fcntl.h>
+ #include	<utmp.h>
+ #include	<stdio.h>
+ #include	<string.h>
++#include	<time.h>
++#include	"splitvt.h"
+ 
+ #ifdef DEBUG_UTMP
+ #undef  UTMP_FILE
+ #define UTMP_FILE  "/tmp/utmp"
+ #else
+ #ifndef UTMP_FILE
+-#define UTMP_FILE  "/etc/utmp"
++#define UTMP_FILE  "/var/run/utmp"
+ #endif /* UTMP_FILE */
+ #endif /* DEBUG_UTMP */
+ 
++int get_utmp(char *tty, struct utmp *save);
++int set_utmp(char *tty, struct utmp *save);
+ 
+ /* Remove us from the utmp file, saving our entry to replace later */
+ 
+@@ -95,7 +100,7 @@ struct utmp *save;
+   		if (strncmp(ttyptr, ut.ut_line, sizeof(ut.ut_line)) == 0) {
+ 			/* Break out; we've found our entry! */
+ 			if ( save )
+-				d_copy((char *)&ut, save, sizeof(ut));
++				d_copy((char *)&ut, (char *)&save, sizeof(ut));
+ 			close(fd);
+ 			return(0);
+     		}
+@@ -159,7 +164,9 @@ char *user;		/* The user to add to the u
+ int uid;		/* The uid corresponding to user */
+ char *tty;		/* /dev/ttyxx */
+ {
++#if !defined(SOLARIS) && !defined(IRIX) && !defined(__GLIBC__)
+ 	struct stat sb;
++#endif
+ 	struct utmp ut;
+ 	char *ttyptr;
+ 
+@@ -196,12 +203,13 @@ char *tty;		/* /dev/ttyxx */
+ #endif
+ 	(void) time(&ut.ut_time);
+ 
+-#if !defined(SOLARIS) && !defined(IRIX)
+-	/* Solaris and Irix machines do this automatically */
++#if !defined(SOLARIS) && !defined(IRIX) && !defined(__GLIBC__)
++	/* Solaris and Irix and GLIBC machines do this automatically */
+ 	/* Change the ownership and mode of the tty */
+ 	if ( stat(tty, &sb) == 0 ) {
+ 		(void) chmod(tty, 0620);  /* crw--w---- */
+ 		(void) chown(tty, uid, sb.st_gid);
++		
+ 	}
+ #endif
+ 	return(set_utmp(tty, &ut));
+--- splitvt-1.6.6.orig/splitvt.1
++++ splitvt-1.6.6/splitvt.1
+@@ -51,6 +51,11 @@ Loads 'file' as the startup file instead
+ Suppresses loading your ~/.splitvtrc
+ .TP
+ .TB
++.I -f
++Allow setting the height of either the top or the bottom window to less than
++3 lines.
++.TP
++.TB
+ .I -v
+ Print out the version number of splitvt
+ .LP
+@@ -177,7 +182,7 @@ and then releasing the button.
+ splitvt will attempt to erase the current utmp entry, and replace it
+ with entries for the two windows.  This allows you to use programs
+ such as 'talk' within the splitvt windows.  If you do not have write
+-permission to the /etc/utmp file, you will not be able to modify the
++permission to the /var/run/utmp file, you will not be able to modify the
+ utmp entries.
+ 
+ splitvt can be made set-uid root.  splitvt will reset its user id to
+--- splitvt-1.6.6.orig/videomem.c
++++ splitvt-1.6.6/videomem.c
+@@ -1,6 +1,7 @@
+ 
+ /* This file holds the functions for manipulating video memory */
+ 
++#include	<stdlib.h>
+ #include	<stdio.h>
+ #include	<stdlib.h>
+ #include	"video.h"
+@@ -114,7 +115,7 @@ int maxlen;
+ int x1, x2;
+ int y1, y2;
+ {
+-	int l=0, i, j, eol, eos;
++	int l=0, i, j, eol, eos=0;
+ 
+ 	--maxlen;	/* Account for trailing null */
+ 	for ( i=(x1-1); (i<x2 && l<maxlen); ++i ) {
+@@ -320,7 +321,7 @@ checkchange:
+ void paint_video(win)
+ window *win;
+ {
+-	unsigned char change, on=NORMAL;
++	unsigned char on=NORMAL;
+ 	int i, j, oldattr=0;
+ 
+ 	vt_setscroll(0,0);
+--- splitvt-1.6.6.orig/cut-paste.c
++++ splitvt-1.6.6/cut-paste.c
+@@ -3,8 +3,11 @@
+ 
+ #include	<stdio.h>
+ #include	<string.h>
++#include	<unistd.h>
+ #include	"vt100.h"
+ #include	"video.h"
++#include	"splitvt.h"
++#include	"terminal.h"
+ 
+ #define RIGHT 0x01
+ #define LEFT  0x02
+@@ -42,7 +45,7 @@ int direction;
+ 	} else
+ 		c ^= (SELECTED<<8);
+ 
+-	(*oldattr)=check_attr(c, *oldattr, on);
++	(*oldattr)=check_attr(c, *oldattr, (int)on);
+ 	put_video(c, win, x, y);
+ 
+ 	if ( c&0xFF )
+@@ -87,7 +90,6 @@ char *buf;
+ int len;
+ position *mark1, *mark2;
+ {
+-	int selection=0;
+ 	position startsel, endsel;
+ 
+ 	if ( mark1->x == mark2->x )
+@@ -201,9 +203,9 @@ static int use_xcb=0;	/* Do we use xcb t
+ void vt_initsel()
+ {
+ 	extern char *pathsearch();	/* From misc.c */
+-	char *display;
+ 
+ #ifdef USE_XCB
++	char *display;
+ 	/* Use xcb if we have both an X display and the command. */
+ 	/* xcb needs to support my hacked '-R' option. */
+ 	if ( (display=(char *)getenv("DISPLAY")) && pathsearch("xcb", 1) )
+@@ -255,7 +257,7 @@ int win;
+ char *buf;
+ int len;
+ {
+-	int c, state=NORMAL;
++	int c;
+ 	position here, cursor, mark1, mark2;
+ 	window *thiswin;
+ 	
+@@ -312,7 +314,7 @@ int len;
+ 			default:	break;
+ 		}
+ 	}
+-	return;	/* Hopefully, we never reach here */
++	return NULL; /* Hopefully, we never reach here */
+ }
+ 
+ 
+--- splitvt-1.6.6.orig/splitvt.man
++++ splitvt-1.6.6/splitvt.man
+@@ -176,7 +176,7 @@ SPLITVT(1)	    NONESSENTIAL UTILITIES
+        replace it with entries for the two windows.  This  allows
+        you to use programs such as 'talk' within the splitvt win-
+        dows.   If  you	do  not	have  write  permission  to  the
+-       /etc/utmp  file,	you  will not be able to modify the utmp
++       /etc/utmp  file, you  will not be able to modify the utmp
+        entries.
+ 
+        splitvt can be made set-uid root.  splitvt will reset  its
+--- splitvt-1.6.6.orig/config.c
++++ splitvt-1.6.6/config.c
+@@ -161,6 +161,7 @@ char *argv[];
+ 		VERBOSE_PRINT("\tI will use wait4() instead of waitpid().\n");
+ 	}
+ 
++#if 0
+ 	if ( exists("/usr/lib", "libnet.a") )	/* Socket routines */
+ 		strcat(ldflags, " -lnet");
+ 	if ( exists("/usr/lib", "libnsl.a") )	/* AT&T socket library */
+@@ -169,9 +170,10 @@ char *argv[];
+ 		strcat(ldflags, " -lnsl_s");
+ 	if ( exists("/usr/lib", "libsun.a") )	/* IRIX yp routines */
+ 		strcat(ldflags, " -lsun");
++#endif
+ 
+ 	/* Tell the user what kind of configuration to do */
+-	if ( (access("/etc/utmp", (R_OK|W_OK)) == 0) && getuid() )
++	if ( (access("/var/run/utmp", (R_OK|W_OK)) == 0) && getuid() )
+ 		write_utmp=1;
+ 	else
+ 		write_utmp=0;
+@@ -182,14 +184,14 @@ char *argv[];
+ 			VERBOSE_PRINT(
+ 	"This program doesn't need to be installed set-uid root.\n");
+ 			VERBOSE_PRINT(
+-	"\nThis program will put entries for its windows in /etc/utmp.\n");
++	"\nThis program will put entries for its windows in /var/run/utmp.\n");
+ 		} else {
+ 			VERBOSE_PRINT(
+-	"If installed set-uid root, this program will put entries for its windows\nin /etc/utmp.\n");
++	"If installed set-uid root, this program will put entries for its windows\nin /var/run/utmp.\n");
+ 		}
+ 	} else if ( write_utmp ) {
+ 		VERBOSE_PRINT(
+-	"This program will put entries for its windows in /etc/utmp.\n");
++	"This program will put entries for its windows in /var/run/utmp.\n");
+ 		VERBOSE_PRINT(
+ 	"\nIf installed set-uid root, this program will change ownership of the\n");
+ 		VERBOSE_PRINT(
+@@ -198,7 +200,7 @@ char *argv[];
+ 		VERBOSE_PRINT(
+ 	"If installed set-uid root, this program will put entries for its windows\n");
+ 		VERBOSE_PRINT(
+-	"in /etc/utmp, and will also change ownership of the ttys it acquires to the\n");
++	"in /var/run/utmp, and will also change ownership of the ttys it acquires to the\n");
+ 		VERBOSE_PRINT(
+ 	"user running this program.\n");
+ 	}
+@@ -227,13 +229,13 @@ char *argv[];
+ 	}
+ 	fprintf(makefile, 
+ 		"PTYOPTS = -DPTYCHAR=$(PTYCHAR) -DHEXDIGIT=$(HEXDIGIT)\n");
+-	sprintf(line, "\nCFLAGS = %s $(PTYOPTS)\nLIBS = %s\n", cflags, ldflags);
++	sprintf(line, "\nCFLAGS = -Wall %s $(PTYOPTS)\nLIBS = %s\n", cflags, ldflags);
+ 	fprintf(makefile, "%s", line);
+ 	fprintf(makefile, "OBJS = splitvt.o misc.o utmp.o vt100.o videomem.o terminal.o vttest.o vtmouse.o \\\n");
+ 	fprintf(makefile, "       parserc.o lock.o cut-paste.o\n\n");
+ 	fprintf(makefile, "splitvt: $(OBJS)\n");
+ #if defined(linux) && !defined(DEBUG)
+-	fprintf(makefile, "\t$(CC) -s -o $@ $(OBJS) $(LIBS)\n");
++	fprintf(makefile, "\t$(CC) -o $@ $(OBJS) $(LIBS)\n");
+ #else
+ 	fprintf(makefile, "\t$(CC) -o $@ $(OBJS) $(LIBS)\n");
+ #endif
+--- splitvt-1.6.6.orig/terminal.c
++++ splitvt-1.6.6/terminal.c
+@@ -4,9 +4,11 @@
+    actually write to the terminal.
+ */
+ 
+-
++#include	<curses.h>
++#include	<term.h>
+ #include	<stdio.h>
+ #include	<string.h>
++#include	"splitvt.h"
+ #include	"video.h"
+ #include	"terminal.h"
+ 
+@@ -126,7 +128,7 @@ char *termtype;
+ 	}
+ 	return(NULL);
+ }
+-void outc(c) int c; { putchar(c); }
++int outc(c) int c; { return putchar(c); }
+ 
+ void vt_rows_cols(termtype, rows, cols)
+ char *termtype;
+--- splitvt-1.6.6.orig/vt100.c
++++ splitvt-1.6.6/vt100.c
+@@ -8,6 +8,9 @@
+    Many thanks to Matt Ostanik who wrote the ANSI Handbook.
+ */
+ 
++#include	<unistd.h>
++#include	<string.h>
++#include	<stdlib.h>
+ #include	<sys/types.h>
+ #ifdef HAVE_TERMIO_H
+ #include	<termio.h>		/* Used only for TIOCGWINSZ */
+@@ -22,6 +25,7 @@
+ #include	"vt100.h"
+ #include	"video.h"
+ #include	"terminal.h"
++#include	"splitvt.h"
+ 
+ #define SEP_CHAR	' '		/* Separator bar character */
+ 
+@@ -137,7 +141,7 @@ window *win;
+ 	unsigned char on=NORMAL;
+ 
+ 	vt_resetattr();
+-	(void) check_attr(0, win->textattr, &on);
++	(void) check_attr(0, win->textattr, (int)&on);
+ }
+ 
+ /* Process the ^[[X;Xm escape.  Made into a separate routine to support
+@@ -685,10 +689,9 @@ int *source;
+ 					break;
+ 				case 3: /* 132 char/row */
+ 					if ( physical.cols != 132 ) {
+-						upper.cols=132;
+-						lower.cols=132;
+ 						physical.cols=132;
+ 						vt_widemode(1);
++						init_vt100(0);
+ 					}
+ 					break;
+ 				case 4: /* Set jump scroll */	
+@@ -728,11 +731,9 @@ int *source;
+ 					break;
+ 				case 3: /* 80 char/row */
+ 					if ( physical.cols == 132 ) {
+-						vt_rows_cols(terminal_type, 
+-							NULL, &physical.cols);
+-						upper.cols=physical.cols;
+-						lower.cols=physical.cols;
++					        physical.cols = 80;
+ 						vt_widemode(0);
++						init_vt100(0);
+ 					}
+ 					break;
+ 				case 4: /* Set smooth scroll */	
+@@ -845,7 +846,8 @@ int *source;
+ 
+ static int setup_vt100 = 0;	/* Have we initialized the vt100 system? */
+ 
+-char *init_vt100()
++char *init_vt100(reread_tsize)
++int reread_tsize;
+ {
+ #ifdef TIOCGWINSZ
+ 	struct /* winsize */ {
+@@ -855,7 +857,7 @@ char *init_vt100()
+ 		unsigned short	ws_ypixel;	/* vertical size - not used */
+ 	} mywinz;
+ #endif
+-	int i, **videomem, oldrows, newrows, newcols;
++	int i, **videomem, oldrows = 0, newrows, newcols;
+ 	position newpos;
+ 	char *ptr, *errmesg;
+ 
+@@ -871,18 +873,22 @@ char *init_vt100()
+ 		vt_initsel();
+ 	}
+ 
++	if (reread_tsize)
++	{
+ #ifdef TIOCGWINSZ
+-	if ( ioctl(0, TIOCGWINSZ, &mywinz) == 0 ) {
+-		if ( mywinz.ws_row )
+-			physical.rows=mywinz.ws_row;
+-		if ( mywinz.ws_col )
+-			physical.cols=mywinz.ws_col;
+-	}
++		if ( ioctl(0, TIOCGWINSZ, &mywinz) == 0 ) {
++			if ( mywinz.ws_row )
++				physical.rows=mywinz.ws_row;
++			if ( mywinz.ws_col )
++				physical.cols=mywinz.ws_col;
++		}
+ #endif
+-	if ( (ptr=(char *)getenv("LINES")) != NULL )
+-		physical.rows=atoi(ptr);
+-	if ( (ptr=(char *)getenv("COLUMNS")) != NULL )
+-		physical.cols=atoi(ptr);
++
++		if ( (ptr=(char *)getenv("LINES")) != NULL )
++			physical.rows=atoi(ptr);
++		if ( (ptr=(char *)getenv("COLUMNS")) != NULL )
++			physical.cols=atoi(ptr);
++	}
+ 
+ 	/* Now set defaults if we can't find the window size */
+ 	if ( ! physical.rows )	physical.rows=24;
+@@ -894,19 +900,21 @@ char *init_vt100()
+ 	if ( physical.rows < 7 )
+ 		return("Screen is not tall enough to split.");
+ 
+-	/* If physical.cols has been set to 132, assume we are on a
+-	   vt100 wide terminal, and set 132 column mode.  Note that
+-	   setting COLUMNS in the environment will override termcap */
+-	if ( physical.cols == 132 )
+-		vt_widemode(1);
++	if ( ! setup_vt100 ) {
++		/* If physical.cols has been set to 132, assume we are on a
++		   vt100 wide terminal, and set 132 column mode.  Note that
++		   setting COLUMNS in the environment will override termcap */
++		if ( physical.cols == 132 )
++			vt_widemode(1);
++	}
+ 
+ 	/* Set the exportable variables */
+ 	if ( UU_lines ) {
+ 		/* Check the user set # of lines */
+-		if ( UU_lines > (physical.rows-1-3) )
+-			LU_lines=(physical.rows-1-3);
+-		else if ( UU_lines < 3 )
+-			LU_lines=3;
++		if ( UU_lines > (physical.rows-1-3+(2*force_height)) )
++			LU_lines=(physical.rows-1-3+(2*force_height));
++	  	else if ( UU_lines < 3 - (2*force_height))
++	    		LU_lines=3 - (2*force_height);
+ 		else
+ 			LU_lines=UU_lines;
+ 
+--- splitvt-1.6.6.orig/splitvt.h
++++ splitvt-1.6.6/splitvt.h
+@@ -37,3 +37,25 @@ extern int stbottom;
+ 
+ /* Functions exported from splitvt.c */
+ extern void reset_bar();
++
++/* If set, allow resizing to less than 3 lines */
++extern int force_height;
++
++void tokenize(char *array[], int size, char *line, char *tokens);
++void d_copy(register char *src, register char *dst, register int len);
++int tty_getmode(int fd);
++int tty_raw(int fd);
++int tty_reset(int fd);
++int tty_sane(int fd);
++int remove_me(void);
++int pty_open(char *argv[], int *childpid, int win);
++int addutmp(char *user, int uid, char *tty);
++char *vt_setsel(char *buf, int len, int startx, int endx, int starty, int endy);
++int delutmp(char *user, char *tty);
++int replace_me(void);
++void pty_setwin(int fd, int win);
++int check_attr(int pixel, int lastattr, int currattr);
++void d_zero(register char *dst, register int len);
++void vt_initsel(void);
++int vttest(void);
++int safe_pclose(FILE *pipefp);
+--- splitvt-1.6.6.orig/examples/menu
++++ splitvt-1.6.6/examples/menu
+@@ -3,17 +3,6 @@
+ #	An example menu utilizing the SPLITVT environment variable.
+ #
+ 
+-# Portably echo a line with no trailing newline:
+-echo_n() {
+-	if [ "`echo -n \"\"`" = "" ]; then
+-		echo -n "$*"
+-	elif [ "`echo -e \"\\c\"`" == "" ]; then
+-		echo -e "$*\c"
+-	else 
+-		echo "$*\c"
+-	fi
+-}
+-
+ if [ "$SPLITVT" = "upper" ]; then
+ 	echo "This is the upper window MENU:"
+ 	echo ""
+@@ -21,7 +10,7 @@ if [ "$SPLITVT" = "upper" ]; then
+ 	echo "2)	oranges"
+ 	echo "3)	bananas"
+ 	echo ""
+-	echo_n "Enter your fruit of choice: "
++	printf "Enter your fruit of choice: "
+ 	read fruit
+ 	case $fruit in
+ 		1)	echo "You like apples!";;
+@@ -36,7 +25,7 @@ elif [ "$SPLITVT" = "lower" ]; then
+ 	echo "2)	carrots"
+ 	echo "3)	cabbage"
+ 	echo ""
+-	echo_n "Enter your vegetable of choice: "
++	printf "Enter your vegetable of choice: "
+ 	read fruit
+ 	case $fruit in
+ 		1)	echo "You like pickles!";;

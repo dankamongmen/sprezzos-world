@@ -1,0 +1,349 @@
+Description: Implement support for Termios.
+ Adding termios handling is a straight path
+ into support for GNU/kFreeBSD. Fairly standard.
+ .
+ The non-standard configuration tool is convinced
+ to recognise the presence of "<termios.h>", thus
+ defining HAVE_TERMIOS_H. Conditioning on __GLIBC__
+ avoids falling into the ioctl-compat trap!
+ .
+ On 64-bit systems, using time compatibility mode,
+ the Utmp code needs some fine tuning.
+Author: Mats Erik Andersson <debian@gisladisker.se>
+Forwarded: no
+Last-Update: 2011-03-21
+
+diff -Naurp splitvt-1.6.6.debian/config.c splitvt-1.6.6/config.c
+--- splitvt-1.6.6.debian/config.c	2011-03-21 17:31:37.000000000 +0100
++++ splitvt-1.6.6/config.c	2011-03-21 19:04:06.000000000 +0100
+@@ -93,7 +93,12 @@ char *argv[];
+ 		VERBOSE_PRINT("\tI see you are running Solaris.\n");
+ 	}
+ 	else
++#if defined(__GLIBC__)
++		VERBOSE_PRINT("\tA bold user of GNU/kFreeBSD or GNU/Hurd.\n");
++		strcat(cflags, " -O2");
++#else /* !__GLIBC__ */
+ 		strcat(cflags, " -O");
++#endif
+ 
+ 	/* Check for IRIX */
+ 	if ( grep("/usr/include", "unistd.h", "_getpty") )
+@@ -118,8 +123,11 @@ char *argv[];
+ 		VERBOSE_PRINT("\tYour utmp file uses the host field.\n");
+ 	}
+ 
+-	/* Check for termio.h */
+-	if ( exists(INCLUDE, "termio.h") ) {
++	/* Check for termio[s].h */
++	if ( exists(INCLUDE, "termios.h") ) {
++		strcat(cflags, " -DHAVE_TERMIOS_H");
++		VERBOSE_PRINT("\tI will use termios tty structures.\n");
++	} else if ( exists(INCLUDE, "termio.h") ) {
+ 		strcat(cflags, " -DHAVE_TERMIO_H");
+ 		VERBOSE_PRINT("\tI will use termio tty structures.\n");
+ 	} else 
+@@ -136,12 +144,14 @@ char *argv[];
+ 		VERBOSE_PRINT("\tI see you have BSD tty support.\n");
+ 	}
+ 
++#if !__GLIBC__	/* False positive for GNU/kFreeBSD */
+ 	/* Check for ioctl compatibility.  (FreeBSD) */
+ 	if ( exists(INCLUDE, "sys/ioctl_compat.h") ) {
+ 		strcat(cflags, " -DNEED_COMPAT_H");
+ 		VERBOSE_PRINT(
+ 			"\tI will use your ioctl compatibility header.\n");
+ 	}
++#endif
+ 
+ 	/* Check for BSD socket library header (AT&T) */
+ 	if ( exists(INCLUDE, "sys/inet.h") ) {
+diff -Naurp splitvt-1.6.6.debian/misc.c splitvt-1.6.6/misc.c
+--- splitvt-1.6.6.debian/misc.c	2011-03-21 17:31:37.000000000 +0100
++++ splitvt-1.6.6/misc.c	2011-03-21 21:50:15.000000000 +0100
+@@ -17,10 +17,16 @@
+ 
+ 
+ #ifdef HAVE_TERMIO_H
+-#include	<termio.h>
+-#else
+-#include	<sys/ioctl.h>
+-#endif  /* HAVE_TERMIO_H */
++# include	<termio.h>
++#elif defined(HAVE_TERMIOS_H)
++# include	<termios.h>
++# include	<sys/ioctl.h>
++# ifndef termio
++#  define termio termios
++# endif /* !termio */
++#else /* !HAVE_TERMIO_H && !HAVE_TERMIOS_H */
++# include	<sys/ioctl.h>
++#endif
+ 
+ #ifdef HAVE_BSDTTY_H
+ #include	<sys/bsdtty.h>
+@@ -33,6 +39,10 @@
+ /*#define STTY_HACK*/
+ #endif
+ 
++#ifndef OLCUC 
++# define OLCUC 0	/* Missing in FreeBSD, GNU/kFreeBSD */
++#endif /* !OLCUC */
++
+ int tty_reset(int fd);
+ 
+ /*
+@@ -454,7 +464,7 @@ void dropctty()
+ }
+ 
+ 
+-#ifdef HAVE_TERMIO_H
++#if defined(HAVE_TERMIO_H) || defined(HAVE_TERMIOS_H)
+ 
+ /* Get the modes of the controlling tty and save them.  Saves
+    ttymodes in tty_mode and returns -1 if ioctl fails. */
+@@ -475,7 +485,11 @@ int fd;
+ 	fprintf(stderr, "Getting tty modes for tty_mode.\r\n");
+ #endif
+ 
++#ifdef HAVE_TERMIOS_H
++	if (tcgetattr(fd, &tty_mode) < 0)
++#else /* HAVE_TERMIO_H */
+ 	if (ioctl(fd, TCGETA, (char *) &tty_mode) < 0)
++#endif
+ 	{
+ #ifdef DEBUG
+ 		perror("tty_getmode(): ioctl error");
+@@ -499,7 +513,11 @@ int fd;
+ 
+ 	if ( ! tty_init )
+ 	{
++#ifdef HAVE_TERMIOS_H
++		if (tcgetattr(fd, &tty_mode) < 0)
++#else /* HAVE_TERMIO_H */
+ 		if (ioctl(fd, TCGETA, (char *) &tty_mode) < 0)
++#endif
+ 			return(-1);  
+ 	}
+ 
+@@ -518,8 +536,12 @@ int fd;
+ 	temp_mode.c_cc[VINTR]=('C'^64);
+ 	temp_mode.c_cc[VEOF]=('D'^64);
+ 	
+-	/* TCSETAW is important for letting tty input drain. */
++	/* TCSADRAIN/TCSETAW is important for letting tty input drain. */
++#ifdef HAVE_TERMIOS_H
++	if ( tcsetattr(fd, TCSADRAIN, &temp_mode) < 0 )
++#else /* HAVE_TERMIO_H */
+ 	if ( ioctl(fd, TCSETAW, (char *)&temp_mode) < 0 )
++#endif
+ 	{
+ #ifdef DEBUG
+ 		perror("Can't set tty modes");
+@@ -544,7 +566,11 @@ int fd;     /* of tty device */
+ 	if ( ! isatty(fd) )
+ 		return(0);
+ 
++#ifdef HAVE_TERMIOS_H
++	if ( tcgetattr(fd, &temp_mode) < 0 )
++#else /* HAVE_TERMIO_H */
+ 	if ( ioctl(fd, TCGETA, (char *)&temp_mode) < 0 )
++#endif
+ 		return(-1);
+ 
+ #ifdef SEVEN_BIT
+@@ -558,8 +584,12 @@ int fd;     /* of tty device */
+ 	temp_mode.c_cc[VMIN]=1;		/* 1 or more chars satisfy read */
+ 	temp_mode.c_cc[VTIME]=0;	/* 10'ths of seconds between chars */
+ 
+-	/* TCSETAW is important for letting tty input drain. */
++	/* TCSADRAIN/TCSETAW is important for letting tty input drain. */
++#ifdef HAVE_TERMIOS_H
++	if (tcsetattr(fd, TCSADRAIN, &temp_mode) < 0)
++#else /* HAVE_TERMIO_H */
+ 	if (ioctl(fd, TCSETAW, (char *) &temp_mode) < 0)
++#endif
+ 		return(-1);
+ 	return(0);
+ }
+@@ -577,13 +607,17 @@ int fd;
+ 	if ( ! isatty(fd) )
+ 		return(0);
+ 
+-	/* TCSETAW is important for letting tty input drain. */
++	/* TCSADRAIN/TCSETAW is important for letting tty input drain. */
++#ifdef HAVE_TERMIOS_H
++	if (tcsetattr(fd, TCSADRAIN, &tty_mode) < 0)
++#else /* HAVE_TERMIO_H */
+ 	if (ioctl(fd, TCSETAW, (char *) &tty_mode) < 0)
++#endif
+ 		return(-1);
+ 	return(0);
+ }
+ 
+-#else  /* no /usr/include/termio.h */
++#else  /* no /usr/include/termio{,s}.h */
+ #ifdef NEED_COMPAT_H		/* FreeBSD needs this */
+ #include <sys/ioctl_compat.h>
+ #endif /* NEED_COMPAT_H */
+diff -Naurp splitvt-1.6.6.debian/utmp.c splitvt-1.6.6/utmp.c
+--- splitvt-1.6.6.debian/utmp.c	2011-03-21 17:31:37.000000000 +0100
++++ splitvt-1.6.6/utmp.c	2011-03-21 21:56:08.000000000 +0100
+@@ -201,7 +201,18 @@ char *tty;		/* /dev/ttyxx */
+ 		ut.ut_host[sizeof(ut.ut_host)-1]='\0';
+ 	}
+ #endif
++#if __WORDSIZE == 64 && __WORDSIZE_COMPAT32
++	/* 'time_t' is 64-bit, 'ut.ut_time' is 32-bit. */
++	{
++		time_t now;
++
++		(void) time(&now);
++		ut.ut_time = now & 0xffffffff; /* Discard upper bits. */
++	}
++#else /* Equal size time representation. */
+ 	(void) time(&ut.ut_time);
++#endif
++
+ 
+ #if !defined(SOLARIS) && !defined(IRIX) && !defined(__GLIBC__)
+ 	/* Solaris and Irix and GLIBC machines do this automatically */
+@@ -237,7 +248,17 @@ char *tty;		/* /dev/ttyxx */
+ #if defined(HAVE_UTHOST)
+ 		ut.ut_host[0]='\0';
+ #endif
++#if __WORDSIZE == 64 && __WORDSIZE_COMPAT32
++		/* 'time_t' is 64-bit, 'ut.ut_time' is 32-bit. */
++		{
++			time_t now;
++
++			(void) time(&now);
++			ut.ut_time = now & 0xffffffff; /* Discard bits. */
++		}
++#else /* Equal size time representation. */
+ 		(void) time(&ut.ut_time);
++#endif
+ 		retval=set_utmp(tty, &ut);
+ 	}
+ 
+diff -Naurp splitvt-1.6.6.debian/vt100.c splitvt-1.6.6/vt100.c
+--- splitvt-1.6.6.debian/vt100.c	2011-03-21 17:31:37.000000000 +0100
++++ splitvt-1.6.6/vt100.c	2011-03-21 21:44:18.000000000 +0100
+@@ -14,7 +14,9 @@
+ #include	<sys/types.h>
+ #ifdef HAVE_TERMIO_H
+ #include	<termio.h>		/* Used only for TIOCGWINSZ */
+-#else
++#elif defined(HAVE_TERMIOS_H)
++#include	<termios.h>
++#else /* !HAVE_TERMIO_H && !HAVE_TERMIOS_H */
+ #include	<sys/ioctl.h>		/* Used only for TIOCGWINSZ */
+ #endif
+ #include	<errno.h>
+@@ -141,7 +143,7 @@ window *win;
+ 	unsigned char on=NORMAL;
+ 
+ 	vt_resetattr();
+-	(void) check_attr(0, win->textattr, (int)&on);
++	(void) check_attr(0, win->textattr, (int)on);
+ }
+ 
+ /* Process the ^[[X;Xm escape.  Made into a separate routine to support
+diff -Naurp splitvt-1.6.6.debian/vttest.c splitvt-1.6.6/vttest.c
+--- splitvt-1.6.6.debian/vttest.c	2011-03-21 17:31:37.000000000 +0100
++++ splitvt-1.6.6/vttest.c	2011-03-21 21:47:43.000000000 +0100
+@@ -18,7 +18,13 @@
+ #include	<fcntl.h>
+ #ifdef HAVE_TERMIO_H 
+ #include        <termio.h> 
+-#else 
++#elif defined HAVE_TERMIOS_H
++# include <termios.h>
++# include <sys/ioctl.h>
++# ifndef termio
++#  define termio termios
++# endif
++#else /* !HAVE_TERMIO_H && !HAVE_TERMIOS_H */
+ #include	<setjmp.h> 
+ #include	<signal.h> 
+ #include	<sys/ioctl.h> 
+@@ -35,13 +41,17 @@
+ #include        <sys/bsdtty.h>
+ #endif /* HAVE_BSDTTY_H */
+ 
++#ifndef OLCUC
++# define OLCUC 0	/* Missing inf FreeBSD and GNU/kFreeBSD. */
++#endif
++
+ #ifdef MAIN
+ int main() { if ( vttest() ) printf("vt100\n"); }
+ #endif
+ 
+ /* Register that we are alarmed. (called by SIG_ALRM on BSD) */
+ static int alarmed;
+-#ifndef HAVE_TERMIO_H
++#if !defined(HAVE_TERMIO_H) && !defined(HAVE_TERMIOS_H)
+ static jmp_buf alarm_buf;
+ static void alrm_trap() { alarmed=1; longjmp(alarm_buf, 1); }
+ #endif /* No termio.h */
+@@ -59,11 +69,17 @@ int vttest()
+ 	if ( (fd=open("/dev/tty", O_RDWR, 0666)) < 0 )
+ 		return(0);
+ 
++#ifdef HAVE_TERMIOS_H
++	if ( tcgetattr(fd, &ttold) < 0 )
++		return(0);
++	(void) tcgetattr(fd, &ttraw);
++#else /* !HAVE_TERMIOS_H */
+ 	if ( ioctl(fd, TCGETA, (char *)&ttold) < 0 )
+ 		return(0);
+ 	(void) ioctl(fd, TCGETA, (char *)&ttraw);
++#endif
+ 
+-#ifdef HAVE_TERMIO_H
++#if defined(HAVE_TERMIO_H) || defined(HAVE_TERMIOS_H)
+ #ifdef SEVEN_BIT
+         ttraw.c_iflag=(IGNBRK | ISTRIP);   /* turn off all input control */
+ #else
+@@ -74,17 +90,22 @@ int vttest()
+         ttraw.c_lflag = 0;
+         ttraw.c_cc[VMIN]=0;          /* 1 or more chars satisfy read */
+         ttraw.c_cc[VTIME]=10;        /* 10'ths of seconds between chars */
+-#else
++#else /* !HAVE_TERMIO_H && !HAVE_TERMIOS_H */
+ 	ttraw.sg_flags |= RAW;		/* turn RAW mode on */
+ 	ttraw.sg_flags &= ~ECHO;	/* turn ECHO off */
+ #endif /* HAVE_TERMIO_H */
+ 
++#ifdef HAVE_TERMIOS_H
++        if (tcsetattr(fd, TCSADRAIN, &ttraw) < 0)
++#else /* !HAVE_TERMIOS_H */
+         if (ioctl(fd, TCSETAW, (char *)&ttraw) < 0)
++#endif
+                 return(0);
+ 
+   	write(fd,"\033[c", 3);	/* Vt100 test: ESC [ c */
+ 
+-#ifndef HAVE_TERMIO_H		/* We need to set an alarm */
++#if !defined(HAVE_TERMIO_H) && !defined(HAVE_TERMIOS_H)
++	/* We need to set an alarm */
+ 	signal(SIGALRM, alrm_trap);
+ 	alarmed=0;
+ 	alarm(1);
+@@ -98,11 +119,15 @@ int vttest()
+   	if ( buff[0] == '\033' )	/* An escape sequence? :) */
+ 		rc=1;
+ 
+-#ifndef HAVE_TERMIO_H
++#if !defined(HAVE_TERMIO_H) && !defined(HAVE_TERMIOS_H)
+ 	alarm(0);
+ 	signal(SIGALRM, SIG_DFL);
+ #endif
++#if HAVE_TERMIOS_H
++        (void) tcsetattr(fd, TCSADRAIN, &ttold);
++#else /* !HAVE_TERMIOS_H */
+         (void) ioctl(fd, TCSETAW, (char *)&ttold);
++#endif
+ 	(void) close(fd);
+ 
+ #ifdef not_defined		/* Print out the response for debugging */

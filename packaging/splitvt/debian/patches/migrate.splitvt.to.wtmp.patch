@@ -1,0 +1,172 @@
+Description: Stop using utmp, migrate to wtmp.
+ The old utmp-implementation is buggy since it
+ corrupts /var/run/wtmp. A standardized use of
+ logwtmp() is much securer and more common.
+ .
+ Built successfully against 1.6.6-9.
+Author: Mats Erik Andersson <debian@gisladisker.se>
+Last-Update: 2011-03-23
+Forwarded: no
+
+--- a/config.c
++++ b/config.c
+@@ -120,6 +120,7 @@
+ 	/* Check for the ut_host field in the utmp file */
+ 	if ( grep(INCLUDE, "utmp.h", "ut_host") ) {
+ 		strcat(cflags, " -DHAVE_UTHOST");
++		strcat(ldflags, " -lutil");
+ 		VERBOSE_PRINT("\tYour utmp file uses the host field.\n");
+ 	}
+ 
+--- a/splitvt.c
++++ b/splitvt.c
+@@ -298,7 +298,6 @@
+ 	signal(SIGCLD, SIG_IGN);
+ #endif
+ 
+-	(void) remove_me();
+ 	if ( (topfd=pty_open(upper_args, &toppid, UPPER)) < 0 )
+ 	{
+ 		end_vt100();
+@@ -638,8 +637,11 @@
+ 	if ( topok )
+ 		if (  kill(toppid, 0) < 0 )
+ 		{
+-			if ( pw ) 
++			if ( pw && upper_tty[0]) 
++			{
+ 				(void) delutmp(pw->pw_name, upper_tty);
++				upper_tty[0] = '\0';
++			}
+ 			if ( thisfd == topfd )
+ 				thisfd=bottomfd;
+ 			(void) close(topfd);
+@@ -650,8 +652,11 @@
+ 	if ( bottomok )
+ 		if ( kill(bottompid, 0) < 0 )
+ 		{
+-			if ( pw ) 
++			if ( pw && lower_tty[0]) 
++			{
+ 				(void) delutmp(pw->pw_name, lower_tty);
++				lower_tty[0] = '\0';
++			}
+ 			if ( thisfd == bottomfd )
+ 				thisfd=topfd;
+ 			(void) close(bottomfd);
+@@ -667,8 +672,11 @@
+ 	if ( topok )
+ 		if ( waitpid(toppid, &status, WNOHANG) != 0 )
+ 		{
+-			if ( pw ) 
++			if ( pw && upper_tty[0])
++			{
+ 				(void) delutmp(pw->pw_name, upper_tty);
++				upper_tty[0] = '\0';
++			}
+ 			if ( thisfd == topfd )
+ 				thisfd=bottomfd;
+ 			(void) close(topfd);
+@@ -679,8 +687,11 @@
+ 	if ( bottomok )
+ 		if ( waitpid(bottompid, &status, WNOHANG) != 0 )
+ 		{
+-			if ( pw ) 
++			if ( pw && lower_tty[0]) 
++			{
+ 				(void) delutmp(pw->pw_name, lower_tty);
++				lower_tty[0] = '\0';
++			}
+ 			if ( thisfd == bottomfd )
+ 				thisfd=topfd;
+ 			(void) close(bottomfd);
+@@ -712,7 +723,6 @@
+ 		(void) delutmp(pw->pw_name, upper_tty);
+ 	if ( pw && bottomok && lower_tty[0] )
+ 		(void) delutmp(pw->pw_name, lower_tty);
+-	(void) replace_me();
+ 
+ 	if ( sig )
+ 		printf("Exiting due to signal: %d\n", sig);
+--- a/utmp.c
++++ b/utmp.c
+@@ -172,7 +172,9 @@
+ 
+ 	/* Retrieve any existing utmp entry */
+ 	d_zero((char *)&ut, sizeof(ut));
++#if 0 /* Outdated */
+ 	(void) get_utmp(tty, &ut);
++#endif /* Outdated */
+ 
+ 	/* Get the ttyxy form of the tty pathname if possible. */
+ 	if ( *tty == '/' ) {
+@@ -195,11 +197,15 @@
+ 	ut.ut_pid=getpid();
+ #endif
+ #if defined(HAVE_UTHOST)
++#  if 0 /* Outdated */
+ 	/* remove_me() should be called before this function */
+ 	if ( utmp_saved ) {
+ 		strncpy(ut.ut_host, saved_utmp.ut_host, sizeof(ut.ut_host)-1);
+ 		ut.ut_host[sizeof(ut.ut_host)-1]='\0';
+ 	}
++#  else /* Portable and fun. */
++	strncpy(ut.ut_host, "splitvt", 8);
++#  endif
+ #endif
+ #if __WORDSIZE == 64 && __WORDSIZE_COMPAT32
+ 	/* 'time_t' is 64-bit, 'ut.ut_time' is 32-bit. */
+@@ -223,7 +229,12 @@
+ 		
+ 	}
+ #endif
++#if 0 /* Outdated */
+ 	return(set_utmp(tty, &ut));
++#else	/* Only the safe use of /var/log/wtmp. */
++	logwtmp(ttyptr, user, "splitvt");
++	return 0;
++#endif
+ }
+ 	
+ 
+@@ -237,6 +248,7 @@
+ 	struct utmp ut;
+ 	int retval=0;
+ 
++#if 0	/* Outdated manual manipulations. */
+ 	/* Retrieve any existing utmp entry */
+ 	d_zero((char *)&ut, sizeof(ut));
+ 	if ( get_utmp(tty, &ut) == 0 ) {
+@@ -261,6 +273,22 @@
+ #endif
+ 		retval=set_utmp(tty, &ut);
+ 	}
++#else /* Portable, half-way contemporary approach. */
++	char *ttyptr;
++
++	/* Get the ttyxy form of the tty pathname if possible. */
++	if ( *tty == '/' ) {
++		for ( ttyptr=(tty+1); *ttyptr; ++ttyptr ) {
++			if ( *ttyptr == '/' )
++				break;
++		}
++		if ( *ttyptr == '/' )
++			++ttyptr;
++	} else
++		ttyptr=tty;
++
++	logwtmp(ttyptr, "", "");
++#endif
+ 
+ #if !defined(SOLARIS) && !defined(IRIX)
+ 	/* Solaris and Irix machines do this automatically */
+--- a/vttest.c
++++ b/vttest.c
+@@ -15,6 +15,7 @@
+ #include	<unistd.h>
+ #include	<sys/types.h>
+ #include	<stdio.h>
++#include	<unistd.h>
+ #include	<fcntl.h>
+ #ifdef HAVE_TERMIO_H 
+ #include        <termio.h> 
