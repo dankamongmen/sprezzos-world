@@ -8,9 +8,9 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight libpng libjpeg-turbo omphalos sudo fbterm conpalette \
-	valgrind strace splitvt xbmc sprezzos-grub2theme apitrace fbv \
-	fonts-adobe-sourcesanspro mplayer
+PACKAGES:=growlight linux-latest libpng libjpeg-turbo omphalos sudo fbterm \
+	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
+	fbv fonts-adobe-sourcesanspro mplayer
 
 SPREZZ:=packaging
 
@@ -24,6 +24,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 cut -d: -f2- ) > $@
 
 GROWLIGHT=growlight_$(growlight_VERSION)
+LINUXLATEST=linux-latest_$(linux-latest_VERSION)
 LIBPNG=libpng_$(libpng_VERSION)
 LIBJPEGTURBO=libjpeg-turbo_$(libjpeg-turbo_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
@@ -40,9 +41,9 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LIBPNG) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) \
-	$(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) $(XBMC) $(MPLAYER) \
-	$(CONPALETTE) $(APITRACE)
+DEBS:=$(GROWLIGHT) $(LINUXLATEST) $(LIBPNG) $(LIBJPEGTURBO) $(OMPHALOS) \
+	$(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) \
+	$(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT)
 
@@ -107,6 +108,12 @@ mplayer:$(MPLAYER).deb
 $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	svn co svn://svn.mplayerhq.hu/mplayer/trunk $@
 	rm -rf $@/debian
+	cp -r $(<D) $@/
+
+.PHONY: linux-latest
+linux-latest:$(LINUXLATEST).deb
+$(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
+	mkdir $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) libjpeg-turbo-1.2.1.tar.gz
@@ -184,3 +191,4 @@ clean:
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
+	rm -rf $(LINUXLATEST)
