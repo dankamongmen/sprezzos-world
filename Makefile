@@ -10,7 +10,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight linux-latest libpng libjpeg-turbo omphalos sudo fbterm \
 	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
-	fbv fonts-adobe-sourcesanspro mplayer
+	fbv fonts-adobe-sourcesanspro mplayer nethorologist
 
 SPREZZ:=packaging
 
@@ -43,7 +43,7 @@ CONPALETTE=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(LINUXLATEST) $(LIBPNG) $(LIBJPEGTURBO) $(OMPHALOS) \
 	$(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) \
-	$(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
+	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT)
 
@@ -66,6 +66,12 @@ world: $(DEBS) $(UDEBS)
 growlight: $(GROWLIGHT).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone https://github.com/dankamongmen/growlight.git $@
+	cp -r $(<D) $@/
+
+.PHONY: nethorologist
+nethorologist: $(NETHOROLOGIST).deb
+$(NETHOROLOGIST): $(SPREZZ)/nethorologist/debian/changelog
+	git clone https://github.com/dankamongmen/nethorologist.git $@
 	cp -r $(<D) $@/
 
 .PHONY: strace
@@ -191,4 +197,4 @@ clean:
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
-	rm -rf $(LINUXLATEST)
+	rm -rf $(LINUXLATEST) $(NETHOROLOGIST)
