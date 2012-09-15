@@ -8,9 +8,9 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight linux-latest libpng libjpeg-turbo omphalos sudo fbterm \
+PACKAGES:=growlight fwts linux-latest libpng libjpeg-turbo omphalos sudo \
 	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
-	fbv fonts-adobe-sourcesanspro mplayer nethorologist
+	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
 SPREZZ:=packaging
 
@@ -28,6 +28,7 @@ LINUXLATEST=linux-latest_$(linux-latest_VERSION)
 LIBPNG=libpng_$(libpng_VERSION)
 LIBJPEGTURBO=libjpeg-turbo_$(libjpeg-turbo_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
+FWTS=fwts_$(fwts_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 SUDO=sudo_$(sudo_VERSION)
 XBMC=xbmc_$(xbmc_VERSION)
@@ -42,12 +43,13 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LINUXLATEST) $(LIBPNG) $(LIBJPEGTURBO) $(OMPHALOS) \
+DEBS:=$(GROWLIGHT) $(FWTS) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) \
 	$(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) \
-	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE)
+	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
+	$(LIBPNG)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
-	$(NETHOROLOGIST)
+	$(NETHOROLOGIST) $(FWTS)
 
 DEBS:=$(addsuffix .deb,$(DEBS))
 UDEBS:=$(addsuffix .udeb,$(UDEBS))
@@ -80,6 +82,14 @@ $(NETHOROLOGIST): $(SPREZZ)/nethorologist/debian/changelog
 strace: $(STRACE).deb
 $(STRACE): $(SPREZZ)/strace/debian/changelog
 	git clone git://strace.git.sourceforge.net/gitroot/strace/strace $@
+	cp -r $(<D) $@/
+
+# Ubuntu native packages ship their own debian/
+.PHONY: fwts
+fwts:$(FWTS).deb
+$(FWTS): $(SPREZZ)/fwts/debian/changelog
+	git clone git://kernel.ubuntu.com/hwe/fwts $@
+	rm -rf $@/debian
 	cp -r $(<D) $@/
 
 .PHONY: omphalos
@@ -199,4 +209,4 @@ clean:
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
-	rm -rf $(LINUXLATEST) $(NETHOROLOGIST)
+	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS)
