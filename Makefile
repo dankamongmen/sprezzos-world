@@ -8,7 +8,7 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight fwts linux-latest libpng libjpeg-turbo omphalos sudo \
+PACKAGES:=growlight fwts udev linux-latest libpng libjpeg-turbo omphalos sudo \
 	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -35,6 +35,7 @@ XBMC=xbmc_$(xbmc_VERSION)
 NETHOROLOGIST=nethorologist_$(nethorologist_VERSION)
 MPLAYER=mplayer_$(mplayer_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
+UDEV=udev_$(udev_VERSION)
 STRACE=strace_$(strace_VERSION)
 SPLITVT=splitvt_$(splitvt_VERSION)
 FBV=fbv_$(fbv_VERSION)
@@ -43,13 +44,13 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(FWTS) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) \
+DEBS:=$(GROWLIGHT) $(FWTS) $(UDEV) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) \
 	$(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(LIBPNG)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
-	$(NETHOROLOGIST) $(FWTS)
+	$(NETHOROLOGIST) $(FWTS) $(UDEV)
 
 DEBS:=$(addsuffix .deb,$(DEBS))
 UDEBS:=$(addsuffix .udeb,$(UDEBS))
@@ -209,4 +210,4 @@ clean:
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
-	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS)
+	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UDEV)

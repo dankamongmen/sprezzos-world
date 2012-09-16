@@ -1,0 +1,550 @@
+--- /dev/null
++++ b/rules/debian/60-persistent-storage.rules
+@@ -0,0 +1,167 @@
++# This file contains the rules needed to create persistent device names.
++
++# forward scsi device events to the corresponding block device
++ACTION=="change", SUBSYSTEM=="scsi", ENV{DEVTYPE}=="scsi_device", \
++	TEST=="block",			ATTR{block/*/uevent}="change"
++
++ACTION=="remove",			GOTO="persistent_storage_end"
++
++# enable in-kernel media-presence polling
++ACTION=="add", SUBSYSTEM=="module", KERNEL=="block", \
++	ATTR{parameters/events_dfl_poll_msecs}=="0", \
++	ATTR{parameters/events_dfl_poll_msecs}="2000"
++
++SUBSYSTEM!="block",			GOTO="persistent_storage_end"
++
++# and we can safely ignore these kinds of devices
++KERNEL=="fd[0-9]*|mtd[0-9]*|mtdblock[0-9]*|nbd[0-9]*|gnbd[0-9]*|dm-[0-9]*|md[0-9]*|btibm[0-9]*", \
++					GOTO="persistent_storage_end"
++
++# skip removable ide devices, because open(2) on them causes an events loop
++KERNEL=="hd*[!0-9]", ATTR{removable}=="1", \
++	SUBSYSTEMS=="ide", ATTRS{media}=="disk|floppy", \
++					GOTO="persistent_storage_end"
++KERNEL=="hd*[0-9]", ATTRS{removable}=="1", \
++					GOTO="persistent_storage_end"
++
++# ignore partitions that span the entire disk
++TEST=="whole_disk",			GOTO="persistent_storage_end"
++
++# partitions do not have hardware identificators
++ENV{DEVTYPE}!="disk",			GOTO="persistent_storage_not_a_disk"
++
++# look for different kinds of unique identificators
++KERNEL=="hd*", \
++	IMPORT{program}="ata_id --export $tempnode"
++
++KERNEL=="mmcblk[0-9]", ATTRS{name}=="?*", ATTRS{serial}=="?*", \
++	ENV{ID_BUS}="memstick", ENV{ID_SERIAL}="$attr{name}_$attr{serial}"
++KERNEL=="mspblk[0-9]", ATTRS{name}=="?*", ATTRS{serial}=="?*", \
++	ENV{ID_BUS}="mmc",	ENV{ID_SERIAL}="$attr{name}_$attr{serial}"
++
++KERNEL=="sd*|sr*",			ATTRS{ieee1394_id}=="?*", \
++	ENV{ID_BUS}="ieee1394", ENV{ID_SERIAL}="$attr{ieee1394_id}"
++
++KERNEL=="vd*",				ATTRS{serial}=="?*", \
++	ENV{ID_BUS}="virtio",	ENV{ID_SERIAL}="$attr{serial}"
++
++# ATA devices with their own "ata" kernel subsystem
++KERNEL=="sd*|sr*",			ENV{ID_SERIAL}!="?*", \
++	SUBSYSTEMS=="ata", \
++	IMPORT{program}="ata_id --export $tempnode"
++# ATA devices using the "scsi" subsystem
++KERNEL=="sd*|sr*",			ENV{ID_SERIAL}!="?*", \
++	SUBSYSTEMS=="scsi", ATTRS{vendor}=="ATA", \
++	IMPORT{program}="ata_id --export $tempnode"
++# ATA/ATAPI devices (SPC-3 or later) using the "scsi" subsystem
++KERNEL=="sd*[!0-9]|sr*",		ENV{ID_SERIAL}!="?*", \
++	SUBSYSTEMS=="scsi", ATTRS{type}=="5", ATTRS{scsi_level}=="[6-9]*", \
++	IMPORT{program}="ata_id --export $tempnode"
++
++# Run ata_id on non-removable USB Mass Storage (SATA/PATA disks in enclosures)
++KERNEL=="sd*[!0-9]|sr*",		ENV{ID_SERIAL}!="?*", \
++	SUBSYSTEMS=="usb", ATTR{removable}=="0", \
++	IMPORT{program}="ata_id --export $tempnode"
++# Otherwise fall back to using usb_id for USB devices
++KERNEL=="sd*|sr*",			ENV{ID_SERIAL}!="?*", \
++	SUBSYSTEMS=="usb", \
++	IMPORT{builtin}="usb_id"
++
++# scsi devices
++KERNEL=="sd*|sr*",			ENV{ID_SERIAL}!="?*", \
++	ENV{ID_BUS}="scsi", \
++	IMPORT{program}="scsi_id --export --whitelisted --device=$tempnode"
++
++KERNEL=="cciss*", 			ENV{ID_SERIAL}!="?*", \
++	ENV{ID_BUS}="cciss", \
++	IMPORT{program}="scsi_id --export --whitelisted --device=$tempnode"
++
++KERNEL=="dasd*", \
++	IMPORT{program}="dasd_id --export $tempnode"
++
++# BIOS Enhanced Disk Device
++KERNEL=="sd*|hd*|cciss*", \
++	IMPORT{program}="edd_id --export $tempnode"
++
++# scsi compat links for ATA devices
++KERNEL=="sd*", ENV{ID_BUS}=="ata", \
++    PROGRAM="scsi_id --whitelisted --replace-whitespace -p0x80 -d$tempnode", \
++	RESULT=="?*", ENV{ID_SCSI_COMPAT}="$result"
++
++# find the physical path of the device
++ENV{ID_PATH}=="", DEVPATH!="*/virtual/*", \
++	IMPORT{builtin}="path_id"
++
++LABEL="persistent_storage_not_a_disk"
++
++# import the variables of partitions from the parent disks
++ENV{DEVTYPE}=="partition",		IMPORT{parent}="ID_*"
++
++# by-id (hardware serial number)
++KERNEL=="hd*[!0-9]",			ENV{ID_SERIAL}=="?*", \
++	SYMLINK+="disk/by-id/ata-$env{ID_SERIAL}"
++KERNEL=="hd*[0-9]",			ENV{ID_SERIAL}=="?*", \
++	SYMLINK+="disk/by-id/ata-$env{ID_SERIAL}-part%n"
++
++KERNEL=="sd*[!0-9]",			ENV{ID_SCSI_COMPAT}=="?*", \
++	SYMLINK+="disk/by-id/scsi-$env{ID_SCSI_COMPAT}"
++KERNEL=="sd*[0-9]",			ENV{ID_SCSI_COMPAT}=="?*", \
++	SYMLINK+="disk/by-id/scsi-$env{ID_SCSI_COMPAT}-part%n"
++
++ENV{DEVTYPE}=="disk",		ENV{ID_BUS}=="?*", ENV{ID_SERIAL}=="?*", \
++	SYMLINK+="disk/by-id/$env{ID_BUS}-$env{ID_SERIAL}"
++ENV{DEVTYPE}=="partition",	ENV{ID_BUS}=="?*", ENV{ID_SERIAL}=="?*", \
++	SYMLINK+="disk/by-id/$env{ID_BUS}-$env{ID_SERIAL}-part%n"
++
++ENV{DEVTYPE}=="disk",			ENV{ID_EDD}=="?*", \
++	SYMLINK+="disk/by-id/edd-$env{ID_EDD}"
++ENV{DEVTYPE}=="partition",		ENV{ID_EDD}=="?*", \
++	SYMLINK+="disk/by-id/edd-$env{ID_EDD}-part%n"
++
++ENV{DEVTYPE}=="disk",			ENV{ID_WWN_WITH_EXTENSION}=="?*", \
++	SYMLINK+="disk/by-id/wwn-$env{ID_WWN_WITH_EXTENSION}"
++ENV{DEVTYPE}=="partition",		ENV{ID_WWN_WITH_EXTENSION}=="?*", \
++	SYMLINK+="disk/by-id/wwn-$env{ID_WWN_WITH_EXTENSION}-part%n"
++
++# by-partlabel/by-partuuid links (partition metadata)
++ENV{ID_PART_ENTRY_SCHEME}=="gpt",	ENV{ID_PART_ENTRY_UUID}=="?*", \
++	SYMLINK+="disk/by-partuuid/$env{ID_PART_ENTRY_UUID}"
++ENV{ID_PART_ENTRY_SCHEME}=="gpt",	ENV{ID_PART_ENTRY_NAME}=="?*", \
++	SYMLINK+="disk/by-partlabel/$env{ID_PART_ENTRY_NAME}"
++
++# by-path (parent device path)
++ENV{DEVTYPE}=="disk",			ENV{ID_PATH}=="?*", \
++	SYMLINK+="disk/by-path/$env{ID_PATH}"
++ENV{DEVTYPE}=="partition",		ENV{ID_PATH}=="?*", \
++	SYMLINK+="disk/by-path/$env{ID_PATH}-part%n"
++
++# skip unpartitioned removable media devices from drivers which do not send
++# "change" events
++ENV{DEVTYPE}=="disk", KERNEL!="sd*|sr*", ATTR{removable}=="1", \
++					GOTO="persistent_storage_end"
++
++# probe filesystem metadata of optical drives which have a media inserted
++KERNEL=="sr*", ENV{ID_CDROM_MEDIA_TRACK_COUNT_DATA}=="?*", \
++	ENV{DISK_EJECT_REQUEST}!="?*", \
++	ENV{ID_CDROM_MEDIA_SESSION_LAST_OFFSET}=="?*", \
++	IMPORT{program}="/sbin/blkid -o udev -p -u noraid -O $env{ID_CDROM_MEDIA_SESSION_LAST_OFFSET} $tempnode"
++# single-session CDs do not have ID_CDROM_MEDIA_SESSION_LAST_OFFSET
++KERNEL=="sr*", ENV{ID_CDROM_MEDIA_TRACK_COUNT_DATA}=="?*", \
++	ENV{DISK_EJECT_REQUEST}!="?*", \
++	ENV{ID_CDROM_MEDIA_SESSION_LAST_OFFSET}=="", \
++	IMPORT{program}="/sbin/blkid -o udev -p -u noraid $tempnode"
++
++# probe filesystem metadata of disks
++KERNEL!="sr*", IMPORT{program}="/sbin/blkid -o udev -p $tempnode"
++
++# watch metadata changes by tools closing the device after writing
++KERNEL!="sr*", OPTIONS+="watch"
++
++# by-label/by-uuid links (filesystem metadata)
++ENV{ID_FS_UUID_ENC}=="?*",	ENV{ID_FS_USAGE}=="filesystem|other|crypto", \
++	SYMLINK+="disk/by-uuid/$env{ID_FS_UUID_ENC}"
++ENV{ID_FS_LABEL_ENC}=="?*",	ENV{ID_FS_USAGE}=="filesystem|other", \
++	SYMLINK+="disk/by-label/$env{ID_FS_LABEL_ENC}"
++
++LABEL="persistent_storage_end"
++
+--- /dev/null
++++ b/rules/debian/60-persistent-storage-tape.rules
+@@ -0,0 +1,41 @@
++# This file contains the rules needed to create persistent device names.
++
++# we are only interested in add and change actions for block devices
++ACTION=="remove",			GOTO="persistent_storage_tape_end"
++
++# "Medium Changers"
++SUBSYSTEM=="scsi_generic", SUBSYSTEMS=="scsi", ATTRS{type}=="8", \
++	IMPORT{program}="scsi_id --export --sg-version=3 --whitelisted --device=$tempnode"
++
++KERNEL=="sg[0-9]*", ATTRS{type}=="8",	ENV{ID_SERIAL}=="?*", \
++	SYMLINK+="tape/by-id/scsi-$env{ID_SERIAL}"
++
++SUBSYSTEM!="scsi_tape",			GOTO="persistent_storage_tape_end"
++
++KERNEL=="st*[0-9]|nst*[0-9]",		ATTRS{ieee1394_id}=="?*", \
++	ENV{ID_BUS}="ieee1394", ENV{ID_SERIAL}="$attr{ieee1394_id}"
++KERNEL=="st*[0-9]|nst*[0-9]",		ENV{ID_SERIAL}!="?*", \
++	SUBSYSTEMS=="usb", \
++	IMPORT{builtin}="usb_id"
++
++KERNEL=="st*[0-9]|nst*[0-9]",		ENV{ID_SERIAL}!="?*", \
++	SUBSYSTEMS=="scsi", KERNELS=="[0-9]*:*[0-9]", \
++	ENV{.BSG_DEV}="$root/bsg/$id"
++KERNEL=="st*[0-9]|nst*[0-9]",		ENV{ID_SERIAL}!="?*", \
++	WAIT_FOR="$env{.BSG_DEV}", \
++	ENV{ID_BUS}="scsi", \
++	IMPORT{program}="scsi_id --export --device=$env{.BSG_DEV}"
++
++KERNEL=="st*[0-9]|nst*[0-9]",		ENV{ID_SERIAL}=="?*", \
++	SYMLINK+="tape/by-id/$env{ID_BUS}-$env{ID_SERIAL}"
++
++KERNEL=="st*[0-9]|nst*[0-9]", \
++	IMPORT{builtin}="path_id"
++KERNEL=="st*[0-9]",			ENV{ID_PATH}=="?*", \
++	SYMLINK+="tape/by-path/$env{ID_PATH}"
++KERNEL=="nst*[0-9]",			ENV{ID_PATH}=="?*", \
++	SYMLINK+="tape/by-path/$env{ID_PATH}-nst"
++
++# end of processing
++LABEL="persistent_storage_tape_end"
++
+--- /dev/null
++++ b/rules/debian/75-cd-aliases-generator.rules
+@@ -0,0 +1,11 @@
++# These rules generate rules for the /dev/{cdrom,dvd,...} symlinks and
++# write them to /etc/udev/rules.d/70-persistent-cd.rules.
++
++ACTION=="add", SUBSYSTEM=="block", ENV{GENERATED}!="?*", ENV{ID_CDROM}=="?*", \
++	SUBSYSTEMS!="usb|ieee1394", \
++	PROGRAM="write_cd_rules", SYMLINK+="$result"
++
++ACTION=="add", SUBSYSTEM=="block", ENV{GENERATED}!="?*", ENV{ID_CDROM}=="?*", \
++	SUBSYSTEMS=="usb|ieee1394", \
++	PROGRAM="write_cd_rules by-id", SYMLINK+="$result"
++
+--- /dev/null
++++ b/rules/debian/75-persistent-net-generator.rules
+@@ -0,0 +1,119 @@
++# These rules generate rules to keep network interface names unchanged
++# across reboots and write them to /etc/udev/rules.d/70-persistent-net.rules.
++
++# variables used to communicate:
++#   MATCHADDR		MAC address used for the match
++#   MATCHID		bus_id used for the match
++#   MATCHDRV		driver name used for the match
++#   MATCHIFTYPE		interface type match
++#   COMMENT		comment to add to the generated rule
++#   INTERFACE_NAME	requested name supplied by external tool
++#   INTERFACE_NEW	new interface name returned by rule writer
++
++ACTION!="add",				GOTO="persistent_net_generator_end"
++SUBSYSTEM!="net",			GOTO="persistent_net_generator_end"
++
++# ignore the interface if a name has already been set
++NAME=="?*",				GOTO="persistent_net_generator_end"
++
++# device name whitelist
++KERNEL!="eth*|ath*|wlan*[0-9]|msh*|ra*|sta*|ctc*|lcs*|hsi*", \
++					GOTO="persistent_net_generator_end"
++
++# ignore Xen virtual interfaces
++SUBSYSTEMS=="xen",			GOTO="persistent_net_generator_end"
++
++# ignore UML virtual interfaces
++DRIVERS=="uml-netdev",			GOTO="persistent_net_generator_end"
++
++# ignore "secondary" raw interfaces of the madwifi driver
++KERNEL=="ath*", ATTRS{type}=="802",	GOTO="persistent_net_generator_end"
++
++# ignore "secondary" monitor interfaces of mac80211 drivers
++KERNEL=="wlan*", ATTRS{type}=="803",	GOTO="persistent_net_generator_end"
++
++# by default match on the MAC address and interface type
++ENV{MATCHADDR}="$attr{address}"
++ENV{MATCHIFTYPE}="$attr{type}"
++
++# match interface dev_id
++ATTR{dev_id}=="?*", ENV{MATCHDEVID}="$attr{dev_id}"
++
++# These vendors are known to violate the local MAC address assignment scheme
++# Interlan, DEC (UNIBUS or QBUS), Apollo, Cisco, Racal-Datacom
++ENV{MATCHADDR}=="02:07:01:*", GOTO="globally_administered_whitelist"
++# 3Com
++ENV{MATCHADDR}=="02:60:60:*", GOTO="globally_administered_whitelist"
++# 3Com IBM PC; Imagen; Valid; Cisco; Apple
++ENV{MATCHADDR}=="02:60:8c:*", GOTO="globally_administered_whitelist"
++# Intel
++ENV{MATCHADDR}=="02:a0:c9:*", GOTO="globally_administered_whitelist"
++# Olivetti
++ENV{MATCHADDR}=="02:aa:3c:*", GOTO="globally_administered_whitelist"
++# CMC Masscomp; Silicon Graphics; Prime EXL
++ENV{MATCHADDR}=="02:cf:1f:*", GOTO="globally_administered_whitelist"
++# Prominet Corporation Gigabit Ethernet Switch
++ENV{MATCHADDR}=="02:e0:3b:*", GOTO="globally_administered_whitelist"
++# BTI (Bus-Tech, Inc.) IBM Mainframes
++ENV{MATCHADDR}=="02:e6:d3:*", GOTO="globally_administered_whitelist"
++# Novell 2000
++ENV{MATCHADDR}=="52:54:4c:*", GOTO="globally_administered_whitelist"
++# Realtec
++ENV{MATCHADDR}=="52:54:ab:*", GOTO="globally_administered_whitelist"
++# Kingston Technologies
++ENV{MATCHADDR}=="e2:0c:0f:*", GOTO="globally_administered_whitelist"
++
++# ignore interfaces with locally administered or null MAC addresses
++# and VMWare, Hyper-V, KVM, Virtualbox and Xen virtual interfaces
++ENV{MATCHADDR}=="?[2367abef]:*",	ENV{MATCHADDR}=""
++ENV{MATCHADDR}=="00:00:00:00:00:00",	ENV{MATCHADDR}=""
++ENV{MATCHADDR}=="00:0c:29:*|00:50:56:*|00:05:69:*|00:1C:14:*", \
++					ENV{MATCHADDR}=""
++ENV{MATCHADDR}=="00:15:5d:*",		ENV{MATCHADDR}=""
++ENV{MATCHADDR}=="52:54:00:*|54:52:00:*", ENV{MATCHADDR}=""
++ENV{MATCHADDR}=="08:00:27:*",		ENV{MATCHADDR}=""
++ENV{MATCHADDR}=="00:16:3e:*",		ENV{MATCHADDR}=""
++
++LABEL="globally_administered_whitelist"
++
++# ibmveth interfaces have stable locally administered MAC addresses
++SUBSYSTEMS=="ibmveth",			ENV{MATCHADDR}="$attr{address}"
++
++# S/390 interfaces are matched only by id
++SUBSYSTEMS=="ccwgroup", \
++	ENV{MATCHDRV}="$driver", ENV{MATCHID}="$id", \
++	ENV{MATCHADDR}="", ENV{MATCHDEVID}=""
++
++# terminate processing if there are not enough conditions to create a rule
++ENV{MATCHADDR}=="", ENV{MATCHID}=="", ENV{INTERFACE_NAME}=="", \
++					GOTO="persistent_net_generator_end"
++
++
++# provide nice comments for the generated rules
++SUBSYSTEMS=="pci", \
++ ENV{COMMENT}="PCI device $attr{vendor}:$attr{device}"
++SUBSYSTEMS=="pcmcia", \
++ ENV{COMMENT}="PCMCIA device $attr{card_id}:$attr{manf_id}"
++SUBSYSTEMS=="usb", \
++ ENV{COMMENT}="USB device 0x$attr{idVendor}:0x$attr{idProduct}"
++SUBSYSTEMS=="ccwgroup", \
++ ENV{COMMENT}="S/390 device at $id"
++SUBSYSTEMS=="ibmveth", \
++ ENV{COMMENT}="LPAR virtual device at $id"
++SUBSYSTEMS=="ieee1394", \
++ ENV{COMMENT}="Firewire device $attr{host_id}"
++ENV{COMMENT}=="", \
++ ENV{COMMENT}="Unknown $env{SUBSYSTEM} device ($env{DEVPATH})"
++ATTRS{driver}=="?*", \
++ ENV{COMMENT}="$env{COMMENT} ($attr{driver})"
++
++
++# ignore interfaces without a driver link like bridges and VLANs, otherwise
++# generate and write the rule
++DRIVERS=="?*", IMPORT{program}="write_net_rules"
++
++# rename the interface if requested
++ENV{INTERFACE_NEW}=="?*", NAME="$env{INTERFACE_NEW}"
++
++LABEL="persistent_net_generator_end"
++
+--- /dev/null
++++ b/rules/debian/80-drivers.rules
+@@ -0,0 +1,46 @@
++ACTION=="remove", GOTO="drivers_end"
++
++# check if the device has already been claimed by a driver
++ENV{DRIVER}=="?*", SUBSYSTEM!="input", GOTO="hotplug_driver_loaded"
++
++# load the drivers
++ENV{MODALIAS}=="?*",			RUN+="/sbin/modprobe -b $env{MODALIAS}"
++
++SUBSYSTEM=="pcmcia_socket",		RUN+="/sbin/modprobe -b pcmcia"
++
++# rules for subsystems which lack proper hotplug support
++SUBSYSTEM=="i2o",			RUN+="/sbin/modprobe -b i2o_block"
++SUBSYSTEM=="memstick",	RUN+="/sbin/modprobe -b --all ms_block mspro_block"
++SUBSYSTEM=="tifm", ENV{TIFM_CARD_TYPE}=="SD", \
++					RUN+="/sbin/modprobe -b tifm_sd"
++SUBSYSTEM=="tifm", ENV{TIFM_CARD_TYPE}=="MS", \
++					RUN+="/sbin/modprobe -b tifm_ms"
++
++SUBSYSTEM=="scsi", ENV{DEVTYPE}=="scsi_device", TEST!="[module/sg]", \
++					RUN+="/sbin/modprobe -b sg"
++
++# Load VIO modules based on the device type
++SUBSYSTEM!="vio", GOTO="hotplug_vio_end"
++ENV{MODALIAS}=="?*", GOTO="hotplug_vio_end"
++ENV{VIO_TYPE}!="?*", IMPORT{program}="vio_type --export $devpath"
++ENV{VIO_TYPE}=="serial",		RUN+="/sbin/modprobe -b hvc_console"
++ENV{VIO_TYPE}=="serial-server",		RUN+="/sbin/modprobe -b hvcs"
++ENV{VIO_TYPE}=="network",		RUN+="/sbin/modprobe -b ibmveth"
++ENV{VIO_TYPE}=="vscsi",			RUN+="/sbin/modprobe -b ibmvscsic"
++ENV{VIO_TYPE}=="vlan",			RUN+="/sbin/modprobe -b iseries_veth"
++ENV{VIO_TYPE}=="viodasd",		RUN+="/sbin/modprobe -b viodasd"
++ENV{VIO_TYPE}=="viocd",			RUN+="/sbin/modprobe -b viocd"
++ENV{VIO_TYPE}=="vnet",			RUN+="/sbin/modprobe -b sunvnet"
++ENV{VIO_TYPE}=="vdisk",			RUN+="/sbin/modprobe -b sunvdc"
++LABEL="hotplug_vio_end"
++
++# From here on follows the hotplug agents which do not load modules
++LABEL="hotplug_driver_loaded"
++
++SUBSYSTEM=="firmware",			RUN+="firmware.agent"
++
++LABEL="drivers_end"
++
++# Log every event to /dev/hotplug.log (for debugging).
++#SUBSYSTEM!="uids",			RUN+="logger.agent"
++
+--- /dev/null
++++ b/rules/debian/50-udev-default.rules
+@@ -0,0 +1,12 @@
++# virtio serial / console ports
++KERNEL=="vport*", ATTR{name}=="?*",	SYMLINK+="virtio-ports/$attr{name}"
++
++SUBSYSTEM=="input", ENV{ID_INPUT}=="", IMPORT{builtin}="input_id"
++
++# RTC on some architectures
++SUBSYSTEM=="rtc", DRIVERS=="rtc_cmos",		SYMLINK+="rtc"
++
++# /dev/sndstat
++SUBSYSTEM=="module", KERNEL=="snd", ACTION=="add", \
++        RUN+="/bin/ln -sf /proc/asound/oss/sndstat $root/sndstat"
++
+--- /dev/null
++++ b/rules/debian/91-permissions.rules
+@@ -0,0 +1,126 @@
++ACTION=="remove", GOTO="permissions_end"
++
++# default permissions for block devices
++SUBSYSTEM=="block",				GROUP="disk"
++SUBSYSTEM=="block", ATTRS{removable}=="1",	GROUP="floppy"
++# the aacraid driver is broken and reports the disks as removable (see #404927)
++SUBSYSTEM=="block", DRIVERS=="aacraid",		GROUP="disk"
++# all block devices on these buses are "removable"
++SUBSYSTEM=="block", SUBSYSTEMS=="usb|ieee1394|mmc|pcmcia", GROUP="floppy"
++
++KERNEL=="cbm",					GROUP="floppy"
++
++# IDE devices
++ENV{ID_CDROM}=="?*",				GROUP="cdrom"
++KERNEL=="ht[0-9]*", 				GROUP="tape"
++KERNEL=="nht[0-9]*", 				GROUP="tape"
++
++# SCSI devices
++SUBSYSTEM=="scsi_generic|scsi_tape", \
++SUBSYSTEMS=="scsi", ATTRS{type}=="1|8",		GROUP="tape"
++SUBSYSTEM=="scsi_generic", \
++SUBSYSTEMS=="scsi", ATTRS{type}=="4|5",		GROUP="cdrom"
++
++# USB devices
++KERNEL=="legousbtower*",	MODE="0666"
++KERNEL=="lp[0-9]*", SUBSYSTEMS=="usb",		GROUP="lp"
++# hplip and cups 1.4+ use raw USB devices, so permissions should be similar to
++# the ones from the old usblp kernel module
++SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", \
++	ENV{ID_USB_INTERFACES}=="", IMPORT{builtin}="usb_id"
++SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", \
++	ENV{ID_USB_INTERFACES}=="*:0701??:*",	GROUP="lp"
++
++# usbfs-like devices
++SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", \
++				MODE="0664"
++
++# serial devices
++SUBSYSTEM=="tty",				GROUP="dialout"
++SUBSYSTEM=="capi",				GROUP="dialout"
++SUBSYSTEM=="slamr",				GROUP="dialout"
++SUBSYSTEM=="zaptel",				GROUP="dialout"
++KERNEL=="mISDNtimer",				GROUP="dialout"
++KERNEL=="mwave",				GROUP="dialout"
++KERNEL=="hvc*|hvsi*",				GROUP="dialout"
++
++# vc devices (all members of the tty subsystem)
++KERNEL=="ptmx",			MODE="0666",	GROUP="root"
++KERNEL=="console",		MODE="0600",	GROUP="root"
++KERNEL=="tty",			MODE="0666",	GROUP="root"
++KERNEL=="tty[0-9]*",				GROUP="root"
++KERNEL=="pty*",			MODE="0666",	GROUP="tty"
++
++# video devices
++SUBSYSTEM=="video4linux",			GROUP="video"
++SUBSYSTEM=="drm",				GROUP="video"
++SUBSYSTEM=="dvb",				GROUP="video"
++SUBSYSTEM=="em8300",				GROUP="video"
++SUBSYSTEM=="graphics",				GROUP="video"
++SUBSYSTEM=="nvidia",				GROUP="video"
++
++# misc devices
++KERNEL=="random",		MODE="0666"
++KERNEL=="urandom",		MODE="0666"
++KERNEL=="mem",			MODE="0640",	GROUP="kmem"
++KERNEL=="kmem",			MODE="0640",	GROUP="kmem"
++KERNEL=="port",			MODE="0640",	GROUP="kmem"
++KERNEL=="nvram",		MODE="0640",	GROUP="kmem"
++KERNEL=="full",			MODE="0666"
++KERNEL=="null",			MODE="0666"
++KERNEL=="zero",			MODE="0666"
++KERNEL=="inotify",		MODE="0666"
++KERNEL=="sonypi",		MODE="0666"
++KERNEL=="cpu[0-9]*",		MODE="0444"
++KERNEL=="agpgart",				GROUP="video"
++KERNEL=="pmu",					GROUP="video"
++KERNEL=="kqemu",		MODE="0666"
++KERNEL=="tun",			MODE="0666",	OPTIONS+="static_node=net/tun"
++KERNEL=="rfkill",		MODE="0644"
++
++KERNEL=="cdemu[0-9]*",				GROUP="cdrom"
++KERNEL=="pktcdvd[0-9]*",			GROUP="cdrom"
++KERNEL=="pktcdvd",		MODE="0644"
++
++# printers and parallel devices
++SUBSYSTEM=="printer",				GROUP="lp"
++SUBSYSTEM=="ppdev",				GROUP="lp"
++KERNEL=="irlpt[0-9]*",				GROUP="lp"
++KERNEL=="pt[0-9]*",				GROUP="tape"
++KERNEL=="pht[0-9]*",				GROUP="tape"
++
++# sound devices
++SUBSYSTEM=="sound",				GROUP="audio",
++	OPTIONS+="static_node=snd/seq", OPTIONS+="static_node=snd/timer"
++
++# ieee1394 devices
++SUBSYSTEM=="firewire", ATTR{units}=="*0x00a02d:0x00010*",  GROUP="video"
++SUBSYSTEM=="firewire", ATTR{units}=="*0x00b09d:0x00010*",  GROUP="video"
++SUBSYSTEM=="firewire", ATTR{units}=="*0x00a02d:0x010001*", GROUP="video"
++SUBSYSTEM=="firewire", ATTR{units}=="*0x00a02d:0x014001*", GROUP="video"
++KERNEL=="raw1394",				GROUP="disk"
++KERNEL=="dv1394-[0-9]*",			GROUP="video"
++KERNEL=="video1394-[0-9]*",			GROUP="video"
++
++# input devices
++KERNEL=="event[0-9]*", ATTRS{name}=="*dvb*|*DVB*|* IR *" \
++				MODE="0664",	GROUP="video"
++KERNEL=="js[0-9]*",		MODE="0664"
++KERNEL=="event[0-9]*", ENV{ID_CLASS}=="joystick", \
++				MODE="0664",	GROUP="audio"
++KERNEL=="lirc[0-9]*",				GROUP="video"
++
++KERNEL=="mmtimer",		MODE="0644"
++KERNEL=="sgi_*",		MODE="0666"
++KERNEL=="z90crypt",		MODE="0666"
++KERNEL=="iseries/ibmsis*",			GROUP="disk"
++KERNEL=="iseries/nvt*",				GROUP="disk"
++KERNEL=="iseries/vt*",				GROUP="disk"
++KERNEL=="iseries/vtty*",			GROUP="dialout"
++
++# AOE character devices
++SUBSYSTEM=="aoe",		MODE="0220",	GROUP="disk"
++SUBSYSTEM=="aoe", KERNEL=="err", MODE="0440",	GROUP="disk"
++
++LABEL="permissions_end"
++
+--- /dev/null
++++ b/rules/debian/80-networking.rules
+@@ -0,0 +1,4 @@
++SUBSYSTEM=="net",			RUN+="net.agent"
++
++SUBSYSTEM=="atm",			RUN+="dsl-modem.agent"
++

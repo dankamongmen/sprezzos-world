@@ -1,0 +1,352 @@
+--- /dev/null
++++ udev-167/extra/dsl-modem.agent
+@@ -0,0 +1,102 @@
++#!/bin/sh -e 
++#
++# Copyright 2008 Marco d'Itri <md@Linux.IT>
++#
++# This script automatically starts networking when a DSL modem is connected
++# and its ATM interface is ready.
++#
++#
++# For PPPoE you can set PROTOCOL=2684bridged and then add something like
++# this to /etc/network/interfaces:
++#
++# allow-hotplug nas0
++# iface nas0 inet manual
++#        pre-up          ip link set up $IFACE
++#        up              pppd persist call dsl-provider
++#
++#
++# Support for CLIP (Classical IP over ATM, RFC 1577) may be incomplete.
++#
++
++# defaults
++[ "$IP_INTERFACE" ] || IP_INTERFACE='nas0'
++[ "$VP" ] || VP='8'
++[ "$VC" ] || VC='35'
++
++if [ -e /etc/default/dsl-modem.agent ]; then
++  . /etc/default/dsl-modem.agent
++fi
++
++# just exit unless a protocol is configured
++[ "$PROTOCOL" ] || exit 0
++
++##############################################################################
++wait_and_run_pppd() {
++  # this guarantees that everything pppd needs to work is ready
++  wait_for_file /dev/log
++
++  exec pppd persist call ${PPP_PEER:-dsl-provider}
++}
++
++wait_and_run_br2684ctl() {
++  wait_for_file /dev/log
++
++  exec br2684ctl $BR2684_ARGS -b -c ${IP_INTERFACE#nas} \
++    -a ${ATM_INTERFACE}.${VP}.${VC}
++}
++
++wait_and_run_atmarp() {
++  wait_for_file /var/run/atmarpd.table
++
++  # create the IP interface
++  atmarp -c ${IP_INTERFACE:-atm0}
++  # setup the VC
++#  atmarp -s 192.0.2.254 ${ATM_INTERFACE}.${VP}.${VC}
++  exec ifup ${IP_INTERFACE:-atm0} # XXX
++}
++
++##############################################################################
++ATM_DRIVER=${NAME%%[0-9]*}
++ATM_INTERFACE=${NAME##$ATM_DRIVER}
++
++# is this a DSL modem?
++case "$ATM_DRIVER" in
++cxacru|speedtch|ueagle-atm|xusbatm|UNICORN) ;;
++*) exit 0 ;;
++esac
++
++cd /lib/udev/
++. ./hotplug.functions
++
++##############################################################################
++case "$ACTION" in
++add)
++  case "$PROTOCOL" in
++  pppoa)	wait_and_run_pppd & ;;
++  2684bridged)	wait_and_run_br2684ctl & ;;
++  clip)		wait_and_run_atmarp & ;;
++  esac
++  ;;
++
++remove)
++  case "$PROTOCOL" in
++  pppoa)
++    # pppd will terminate automatically
++    ;;
++  2684bridged)
++    PIDFILE="/var/run/br2684ctl-$IP_INTERFACE.pid"
++    if [ -e $PIDFILE ]; then
++      kill $(cat $PIDFILE)
++      rm -f $PIDFILE
++    fi
++    ;;
++  clip)
++    ifdown ${IP_INTERFACE:-atm0} # XXX
++#    atmarp -d 192.0.2.254
++    ;;
++  esac
++  ;;
++esac
++
++exit 0
++
+--- /dev/null
++++ udev-167/extra/firmware.agent
+@@ -0,0 +1,37 @@
++#!/bin/sh -e
++#
++# firmware loader agent
++#
++
++cd /lib/udev/
++. ./hotplug.functions
++
++if [ ! -e /sys/$DEVPATH/loading ]; then
++    mesg "/sys/$DEVPATH/ does not exist"
++    exit 1
++fi
++
++FIRMWARE_DIRS="/lib/firmware/$(uname -r) /lib/firmware /usr/local/lib/firmware /usr/lib/hotplug/firmware"
++
++for DIR in $FIRMWARE_DIRS; do
++    [ -e "$DIR/$FIRMWARE" ] || continue
++    echo 1 > /sys/$DEVPATH/loading
++    cat "$DIR/$FIRMWARE" > /sys/$DEVPATH/data
++    echo 0 > /sys/$DEVPATH/loading
++    exit 0
++done
++
++# the firmware was not found
++echo -1 > /sys/$DEVPATH/loading
++
++RUNDIR=$(udevadm info --run)
++
++if [ -d "$RUNDIR" ]; then
++    mkdir -p "$RUNDIR/firmware-missing/"
++    file=$(echo "$FIRMWARE" | sed -e 's#/#\\x2f#g')
++    ln -s -f "$DEVPATH" "$RUNDIR/firmware-missing/$file"
++fi
++
++debug_mesg "Cannot find the $FIRMWARE firmware"
++exit 1
++
+--- /dev/null
++++ udev-167/extra/hotplug.functions
+@@ -0,0 +1,61 @@
++# Setup and shell utility functions for use in hotplug agents.
++# vim: syntax=sh
++#
++# This program is free software; you can redistribute it and/or modify it
++# under the terms of the GNU General Public License as published by the
++# Free Software Foundation version 2 of the License.
++
++if [ "$UDEV_LOG" ] && [ "$UDEV_LOG" -ge 7 ]; then
++	DEBUG=yes
++fi
++
++PATH='/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin'
++
++[ -e /etc/default/hotplug ] && . /etc/default/hotplug
++
++
++if [ -x /usr/bin/logger ]; then
++	LOGGER=/usr/bin/logger
++elif [ -x /bin/logger ]; then
++	LOGGER=/bin/logger
++else
++	unset LOGGER
++fi
++
++# for diagnostics
++if [ -t 1 -a -z "$LOGGER" ] || [ ! -e '/dev/log' ]; then
++	mesg() {
++		echo "$@" >&2
++	}
++elif [ -t 1 ]; then
++	mesg() {
++		echo "$@"
++		$LOGGER -t "${0##*/}[$$]" "$@"
++	}
++else
++	mesg() {
++		$LOGGER -t "${0##*/}[$$]" "$@"
++	}
++fi
++
++debug_mesg() {
++	[ -z "$DEBUG" -o "$DEBUG" = no ] && return 0
++	mesg "$@"
++}
++
++wait_for_file() {
++	local file=$1
++	local timeout=$2
++	[ "$timeout" ] || timeout=120
++
++	local count=$timeout
++	while [ $count != 0 ]; do
++		[ -e "$file" ] && return 0
++		sleep 1
++		count=$(($count - 1))
++	done
++
++	mesg "$file did not appear before the timeout!"
++	exit 1
++}
++
+--- /dev/null
++++ udev-167/extra/logger.agent
+@@ -0,0 +1,32 @@
++#!/bin/sh -e
++#
++# log the event to a file
++#
++
++cd /lib/udev/
++. ./hotplug.functions
++
++# provide env-like output when the real thing is not available
++if [ ! -x /usr/bin/env ]; then
++    env() {
++        # bash prepends "declare -x " at the beginning of each line
++        export -p | sed -e 's/^\(declare -x\|export\) //'
++    }
++fi
++
++# writes a copy of the current hotplug event to stdout
++log_to_stdout()
++{
++    {
++	echo "HOTPLUG_TIME='$(date)'"
++	env
++	echo ''
++    } | egrep -v "^'$|^(_|PATH|PWD|PPID|SHLVL|HOME|IFS|OPTIND|PS[1234])="
++}
++
++[ "$EVENTS_LOG" ] || EVENTS_LOG='/dev/hotplug.log'
++
++log_to_stdout >> $EVENTS_LOG
++
++exit 0
++
+--- /dev/null
++++ udev-167/extra/net.agent
+@@ -0,0 +1,105 @@
++#!/bin/sh -e
++#
++# run /sbin/{ifup,ifdown} with the --allow=hotplug option.
++#
++
++. /lib/udev/hotplug.functions
++
++if [ -z "$INTERFACE" ]; then
++    mesg "Bad net.agent invocation: \$INTERFACE is not set"
++    exit 1
++fi
++
++check_program() {
++    [ -x $1 ] && return 0
++
++    mesg "ERROR: $1 not found. You need to install the ifupdown package."
++    mesg "net.agent $ACTION event for $INTERFACE not handled."
++    exit 1
++}
++
++wait_for_interface() {
++    local interface=$1
++
++    while :; do
++	local state="$(cat /sys/class/net/$interface/operstate 2>/dev/null || true)"
++	if [ "$state" != down ]; then
++		return 0
++	fi
++	sleep 1
++    done
++}
++
++net_ifup() {
++    check_program /sbin/ifup
++
++    if grep -q '^auto[[:space:]].*\<'"$INTERFACE"'\>' \
++	    /etc/network/interfaces; then
++	# this $INTERFACE is marked as "auto"
++	IFUPARG='\('$INTERFACE'\|-a\|--all\)'
++    else
++	IFUPARG=$INTERFACE
++    fi
++
++    if ps -C ifup ho args | grep -q "$IFUPARG"; then
++        debug_mesg "Already ifup-ing interface $INTERFACE"
++	exit 0
++    fi
++
++    wait_for_interface lo
++    if [ -e /sys/fs/cgroup/systemd ]; then
++      exec systemctl start ifup@${INTERFACE}.service
++    else
++      exec ifup --allow=hotplug $INTERFACE
++    fi
++}
++
++net_ifdown() {
++    check_program /sbin/ifdown
++
++    if ps -C ifdown ho args | grep -q $INTERFACE; then
++	debug_mesg "Already ifdown-ing interface $INTERFACE"
++	exit 0
++    fi
++
++    exec ifdown --allow=hotplug $INTERFACE
++}
++
++do_everything() {
++
++case "$ACTION" in
++    add)
++    # these interfaces generate hotplug events *after* they are brought up
++    case $INTERFACE in
++	ppp*|ippp*|isdn*|plip*|lo|irda*|ipsec*)
++	exit 0 ;;
++    esac
++
++    net_ifup
++    ;;
++
++    remove)
++    # the pppd persist option may have been used, so it should not be killed
++    case $INTERFACE in
++	ppp*)
++	exit 0 ;;
++    esac
++
++    net_ifdown
++    ;;
++
++    *)
++    debug_mesg "NET $ACTION event not supported"
++    exit 1
++    ;;
++esac
++
++}
++
++# When udev_log="debug" stdout and stderr are pipes connected to udevd.
++# They need to be closed or udevd will wait for this process which will
++# deadlock with udevsettle until the timeout.
++do_everything > /dev/null 2> /dev/null &
++
++exit 0
++
