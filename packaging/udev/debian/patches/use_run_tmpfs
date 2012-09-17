@@ -1,0 +1,58 @@
+Use /run only if it is a tmpfs
+
+--- a/udev/udevd.c
++++ b/udev/udevd.c
+@@ -43,6 +43,7 @@
+ #include <sys/ioctl.h>
+ #include <sys/inotify.h>
+ #include <sys/utsname.h>
++#include <sys/vfs.h>
+ 
+ #include "udev.h"
+ #include "sd-daemon.h"
+@@ -1050,6 +1051,29 @@ static int mem_size_mb(void)
+ 	return memsize;
+ }
+ 
++static int is_run_config_path_tmpfs(struct udev *udev)
++{
++	char dir[UTIL_PATH_SIZE];
++	int lastchar;
++	struct statfs buf;
++	int status;
++
++	util_strscpyl(dir, sizeof(dir), udev_get_run_config_path(udev), NULL);
++
++	util_remove_trailing_chars(dir, '/');
++	lastchar = strlen(dir) - 1;
++
++	/* remove the last component from the path name */
++	for (; lastchar >= 0; lastchar--)
++		if (dir[lastchar] == '/') {
++			dir[lastchar] = '\0';
++			break;
++	}
++
++	status = statfs(dir, &buf);
++	return (status != -1 && buf.f_type == 0x01021994); /* TMPFS_MAGIC */
++}
++
+ static int convert_db(struct udev *udev)
+ {
+ 	char filename[UTIL_PATH_SIZE];
+@@ -1213,10 +1237,13 @@ int main(int argc, char *argv[])
+ 
+ 	/* make sure, that our runtime dir exists and is writable */
+ 	if (utimensat(AT_FDCWD, udev_get_run_config_path(udev), NULL, 0) < 0) {
++		int run_is_tmpfs = is_run_config_path_tmpfs(udev);
++
+ 		/* try to create our own subdirectory, do not create parent directories */
+-		mkdir(udev_get_run_config_path(udev), 0755);
++		if (run_is_tmpfs)
++			mkdir(udev_get_run_config_path(udev), 0755);
+ 
+-		if (utimensat(AT_FDCWD, udev_get_run_config_path(udev), NULL, 0) >= 0) {
++		if (run_is_tmpfs && utimensat(AT_FDCWD, udev_get_run_config_path(udev), NULL, 0) >= 0) {
+ 			/* directory seems writable now */
+ 			udev_set_run_path(udev, udev_get_run_config_path(udev));
+ 		} else {
