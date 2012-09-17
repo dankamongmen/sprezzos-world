@@ -170,15 +170,15 @@ $(LIBPNG): $(SPREZZ)/libpng/debian/changelog libpng-1.5.12.tar.bz2
 	tar xjvf libpng-1.5.12.tar.bz2 --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) udev-182.tar.bz2
-udev-182.tar.bz2:
-	wget -nc -O$@ http://www.kernel.org/pub/linux/utils/kernel/hotplug/udev-182.tar.bz2
+FETCHED:=$(FETCHED) udev-175.tar.bz2
+udev-175.tar.bz2:
+	wget -nc -O$@ http://www.kernel.org/pub/linux/utils/kernel/hotplug/udev-175.tar.bz2
 
 .PHONY: udev
 udev:$(UDEV).deb
-$(UDEV): $(SPREZZ)/udev/debian/changelog udev-182.tar.bz2
+$(UDEV): $(SPREZZ)/udev/debian/changelog udev-175.tar.bz2
 	mkdir $@
-	tar xjvf udev-182.tar.bz2 --strip-components=1 -C $@
+	tar xjvf udev-175.tar.bz2 --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
