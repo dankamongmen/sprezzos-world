@@ -76,7 +76,7 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 .PHONY: nethorologist
 nethorologist: $(NETHOROLOGIST).deb
 $(NETHOROLOGIST): $(SPREZZ)/nethorologist/debian/changelog
-	git clone https://github.com/dankamongmen/nethorologist.git $@
+	git clone https://github.com/sprezzatech/nethorologist.git $@
 	cp -r $(<D) $@/
 
 .PHONY: strace
