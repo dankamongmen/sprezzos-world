@@ -20,7 +20,8 @@ CONFFLAGS := --prefix=/usr --sysconfdir=/etc --sbindir=/sbin \
   --enable-static --disable-dependency-tracking
 CONFFLAGS_deb  := $(CONFFLAGS) \
   --with-rootlibdir=/lib/$(DEB_HOST_MULTIARCH) \
-  --enable-rule_generator \
+  --enable-gtk-doc --enable-introspection \
+  --enable-rule_generator --enable-udev_acl \
   --enable-edd --with-systemdsystemunitdir=/lib/systemd/system
 CONFFLAGS_udeb := $(CONFFLAGS) \
   --with-rootlibdir=/lib
@@ -98,17 +99,19 @@ binary-arch: build checkroot
 	$(MAKE) install DESTDIR=$D
 
 	dh_movefiles --sourcedir=debian/udev
-	cd $D && rm -r usr/lib/pkgconfig/ usr/include/ \
+	cd $D && rm -r usr/lib/pkgconfig/ usr/include/ usr/share/gtk-doc/ \
 		usr/share/gir-1.0/ usr/lib/girepository-1.0/ \
 		usr/lib/*.la
 	cd $D && rmdir lib/$(DEB_HOST_MULTIARCH) usr/lib/$(DEB_HOST_MULTIARCH)
 
 	install --mode=755 extra/*.agent extra/create_static_nodes \
+		extra/write_dev_root_rule \
 		$D/lib/udev/
 	cp extra/hotplug.functions $D/lib/udev/
 
-	mv $D/lib/udev/udev/udevd $D/sbin/
-	cp rules/debian/*.rules $D/lib/udev/udev/rules.d/
+	mv $D/lib/udev/udevd $D/sbin/
+	cd $D/lib/udev/rules.d/ && rm 61-persistent-storage-edd.rules
+	cp rules/debian/*.rules $D/lib/udev/rules.d/
 	cp extra/links.conf $D/etc/udev/
 
 	install --mode=644 extra/fbdev-blacklist.conf \
@@ -123,34 +126,46 @@ binary-arch: build checkroot
 
 ifdef BUILD_UDEB
 	grep '^[[:alnum:]]' extra/links.conf > $(DU)/etc/udev/links.conf
-	grep '^[[:alnum:]]' src/udev.conf > $(DU)/etc/udev/udev.conf || true
+	grep '^[[:alnum:]]' udev.conf > $(DU)/etc/udev/udev.conf
 
 	cp rules/debian/*-generator.rules rules/debian/80-drivers.rules \
-		rules/debian/50-udev-default.rules \
-		rules/60-persistent-input.rules \
-		src/cdrom_id/60-cdrom_id.rules $(DU)/lib/udev/rules.d/
+		extras/cdrom_id/60-cdrom_id.rules $(DU)/lib/udev/rules.d/
 	sed -r -e '/Enhanced Disk Device/,/^$$/d' \
 		< rules/debian/60-persistent-storage.rules \
 		> $(DU)/lib/udev/rules.d/60-persistent-storage.rules
 	echo 'MODE="0666"' > $(DU)/lib/udev/rules.d/91-permissions.rules
 
-	install --mode=755 $(addprefix build-udeb/, udevd udevadm) \
+	install --mode=755 $(addprefix build-udeb/udev/, udevd udevadm) \
 		$(DU)/sbin/
-	install --mode=755 $(addprefix build-udeb/, ata_id cdrom_id scsi_id ) \
-		extra/firmware.agent \
+	install --mode=755 $(addprefix build-udeb/extras/, \
+		ata_id/ata_id cdrom_id/cdrom_id scsi_id/scsi_id ) \
+		extras/rule_generator/write_*_rules extra/firmware.agent \
 		$(DU)/lib/udev/
-	install --mode=644 extra/hotplug.functions \
+	install --mode=644 extras/rule_generator/rule_generator.functions \
+		extra/hotplug.functions \
 		$(DU)/lib/udev/
 	install --mode=755 extra/udev.startup \
 		$(DU)/lib/debian-installer/start-udev
 	install --mode=755 extra/udev.base-installer \
 		$(DU)/usr/lib/base-installer.d/05udev
 
-	cp -a build-udeb/.libs/libudev.so.0* $(DGU)/lib/
+	cp -a build-udeb/libudev/.libs/libudev.so.0* $(DGU)/lib/
+	cp rules/rules.d/60-persistent-input.rules $(DGU)/lib/udev/rules.d/
+	cp rules/debian/50-udev-default.rules $(DGU)/lib/udev/rules.d/
 ifeq ($(DEB_HOST_ARCH),$(filter $(DEB_HOST_ARCH),sparc sparc64))
-	install --mode=755 build-udeb/vio_type $(DGU)/lib/udev/
+	install --mode=755 build-udeb/extras/vio_type/vio_type $(DGU)/lib/udev/
 endif
 endif
+
+ifneq ($(DEB_HOST_ARCH),$(filter $(DEB_HOST_ARCH),sparc sparc64))
+	rm $D/lib/udev/vio_type $D/usr/share/man/man8/vio_type.8
+endif
+
+	# workaround for #555111
+	cp -a libudev/docs/html/* \
+		$(CURDIR)/debian/libudev-dev/usr/share/gtk-doc/html/libudev/
+	cp -a extras/gudev/docs/html/* \
+		$(CURDIR)/debian/libgudev-1.0-dev/usr/share/gtk-doc/html/gudev/
 
 	dh_link
 	mv $D/usr/share/doc/udev $D/usr/share/doc/libudev0
@@ -169,7 +184,7 @@ endif
 	dh_compress
 	dh_fixperms
 	dh_makeshlibs --add-udeb=udev-gtk-udeb -- -c4
-	dh_shlibdeps -- --warnings=7
+	dh_shlibdeps --exclude=/lib/udev/udev-acl -- --warnings=7
 	dh_girepository
 	dh_installdeb
 	dh_gencontrol $(NO_PACKAGE)
