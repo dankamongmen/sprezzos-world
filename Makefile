@@ -207,7 +207,7 @@ $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) http://www.freedesktop.org/software/systemd/systemd-44.tar.xz
-systemd-44.tar.xz:
+systemd-44-4.tar.xz:
 	wget -nc -O$@ http://www.freedesktop.org/software/systemd/systemd-44.tar.xz
 
 .PHONY: systemd
