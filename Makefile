@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
-	omphalos sudo udev \
+	omphalos sudo udev systemd \
 	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -31,6 +31,7 @@ LIBPNG=libpng_$(libpng_VERSION)
 LIBJPEGTURBO=libjpeg-turbo_$(libjpeg-turbo_VERSION)
 OMPHALOS=omphalos_$(omphalos_VERSION)
 FWTS=fwts_$(fwts_VERSION)
+SYSTEMD=systemd_$(systemd_VERSION)
 VALGRIND=valgrind_$(valgrind_VERSION)
 SUDO=sudo_$(sudo_VERSION)
 XBMC=xbmc_$(xbmc_VERSION)
@@ -46,10 +47,10 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(FWTS) $(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) \
-	$(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) \
-	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
-	$(LIBPNG) $(UDEV)
+DEBS:=$(GROWLIGHT) $(SYSTEMD) $(FWTS) $(UTILLINUX) $(LINUXLATEST) \
+	$(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
+	$(STRACE) $(SPLITVT) $(NETHOROLOGIST) $(XBMC) $(MPLAYER) \
+	$(CONPALETTE) $(APITRACE) $(LIBPNG) $(UDEV)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UDEV) $(UTILLINUX)
@@ -60,6 +61,7 @@ UDEBS:=$(addsuffix .udeb,$(UDEBS))
 world: $(DEBS) $(UDEBS)
 
 # FIXME tarball generation is broken for packages with hyphens in their names
+# FIXME only generate tarballs when we haven't downloaded one!
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
 		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
@@ -205,6 +207,17 @@ $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 	cp -r $(SPREZZ)/sprezzos-grub2theme/images $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) http://www.freedesktop.org/software/systemd/systemd-44.tar.xz
+$(SYSTEMD).tar.xz:
+	wget -nc -O$@ http://www.freedesktop.org/software/systemd/systemd-44.tar.xz
+
+.PHONY: systemd
+systemd:$(SYSTEMD).deb
+$(SYSTEMD): $(SPREZZ)/systemd/debian/changelog $(SYSTEMD).tar.xz
+	tar xJvf $(SYSTEMD).tar.xz
+	cp -r $(<D) $@/
+
+
 FETCHED:=$(FETCHED) App-ConPalette-0.1.5.tar.gz
 App-ConPalette-0.1.5.tar.gz:
 	wget -nc -O$@ http://search.cpan.org/CPAN/authors/id/H/HI/HINRIK/App-ConPalette-0.1.5.tar.gz
@@ -235,3 +248,4 @@ clean:
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UDEV) $(UTILLINUX)
+	rm -rf $(SYSTEMD)
