@@ -61,6 +61,7 @@ UDEBS:=$(addsuffix .udeb,$(UDEBS))
 world: $(DEBS) $(UDEBS)
 
 # FIXME tarball generation is broken for packages with hyphens in their names
+# FIXME only generate tarballs when we haven't downloaded one!
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
 		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
