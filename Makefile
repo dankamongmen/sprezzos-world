@@ -210,7 +210,6 @@ FETCHED:=$(FETCHED) http://www.freedesktop.org/software/systemd/systemd-44.tar.x
 systemd-44.tar.xz:
 	wget -nc -O$@ http://www.freedesktop.org/software/systemd/systemd-44.tar.xz
 
-SYSTEMD:=systemd-44
 .PHONY: systemd
 systemd:$(SYSTEMD).deb
 $(SYSTEMD): $(SPREZZ)/systemd/debian/changelog $(SYSTEMD).tar.xz
