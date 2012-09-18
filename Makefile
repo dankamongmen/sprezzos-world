@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
-	omphalos sudo udev systemd \
+	omphalos sudo systemd \
 	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -38,7 +38,6 @@ XBMC=xbmc_$(xbmc_VERSION)
 NETHOROLOGIST=nethorologist_$(nethorologist_VERSION)
 MPLAYER=mplayer_$(mplayer_VERSION)
 FBTERM=fbterm_$(fbterm_VERSION)
-UDEV=udev_$(udev_VERSION)
 STRACE=strace_$(strace_VERSION)
 SPLITVT=splitvt_$(splitvt_VERSION)
 FBV=fbv_$(fbv_VERSION)
@@ -50,10 +49,10 @@ CONPALETTE=conpalette_$(conpalette_VERSION)
 DEBS:=$(GROWLIGHT) $(SYSTEMD) $(FWTS) $(UTILLINUX) $(LINUXLATEST) \
 	$(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
 	$(STRACE) $(SPLITVT) $(NETHOROLOGIST) $(XBMC) $(MPLAYER) \
-	$(CONPALETTE) $(APITRACE) $(LIBPNG) $(UDEV)
+	$(CONPALETTE) $(APITRACE) $(LIBPNG)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
-	$(NETHOROLOGIST) $(FWTS) $(UDEV) $(UTILLINUX)
+	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX)
 
 DEBS:=$(addsuffix .deb,$(DEBS))
 UDEBS:=$(addsuffix .udeb,$(UDEBS))
@@ -172,17 +171,6 @@ $(LIBPNG): $(SPREZZ)/libpng/debian/changelog libpng-1.5.12.tar.bz2
 	tar xjvf libpng-1.5.12.tar.bz2 --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) udev-175.tar.bz2
-udev-175.tar.bz2:
-	wget -nc -O$@ http://www.kernel.org/pub/linux/utils/kernel/hotplug/udev-175.tar.bz2
-
-.PHONY: udev
-udev:$(UDEV).deb
-$(UDEV): $(SPREZZ)/udev/debian/changelog udev-175.tar.bz2
-	mkdir $@
-	tar xjvf udev-175.tar.bz2 --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
 sudo-1.8.5p3.tar.gz:
 	wget -nc -O$@ http://www.gratisoft.us/sudo/dist/sudo-1.8.5p3.tar.gz
@@ -247,5 +235,4 @@ clean:
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
-	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UDEV) $(UTILLINUX)
-	rm -rf $(SYSTEMD)
+	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
