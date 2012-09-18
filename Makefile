@@ -214,7 +214,6 @@ $(SYSTEMD).tar.xz:
 systemd:$(SYSTEMD).deb
 $(SYSTEMD): $(SPREZZ)/systemd/debian/changelog $(SYSTEMD).tar.xz
 	tar xJvf $(SYSTEMD).tar.xz
-	mv $(SYSTEMD) $@
 	cp -r $(<D) $@/
 
 
