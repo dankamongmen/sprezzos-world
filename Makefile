@@ -201,9 +201,9 @@ $(SYSTEMD).tar.xz:
 .PHONY: systemd
 systemd:$(SYSTEMD).deb
 $(SYSTEMD): $(SPREZZ)/systemd/debian/changelog $(SYSTEMD).tar.xz
+	mkdir -p $@
 	tar xJvf $(SYSTEMD).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
-
 
 FETCHED:=$(FETCHED) App-ConPalette-0.1.5.tar.gz
 App-ConPalette-0.1.5.tar.gz:
