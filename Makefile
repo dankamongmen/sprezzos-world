@@ -61,12 +61,17 @@ UDEBS:=$(addsuffix .udeb,$(UDEBS))
 world: $(DEBS) $(UDEBS)
 
 # FIXME tarball generation is broken for packages with hyphens in their names
+$(LIBRSVG).deb: $(LIBRSVG)
+	tar cjf $(shell echo $< | cut -d- -f-2 | tr - _).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
+	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d- -f1) || true # source package might not exist
+	cd $< && dpkg-buildpackage -k$(DEBKEY)
+
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
 		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
 		{ cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | cut -d_ -f1)_$(shell echo $< | cut -d_ -f2- | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
-	#cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $(basename $(@F))
+	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $(basename $(@F))
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
 
