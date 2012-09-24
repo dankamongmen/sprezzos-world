@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
-	omphalos sudo systemd \
+	omphalos sudo systemd librsvg \
 	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -25,6 +25,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 cut -d: -f2- ) > $@
 
 GROWLIGHT=growlight_$(growlight_VERSION)
+LIBRSVG=librsvg-$(librsvg_VERSION)
 LINUXLATEST=linux-latest_$(linux-latest_VERSION)
 UTILLINUX=util-linux_$(util-linux_VERSION)
 LIBPNG=libpng_$(libpng_VERSION)
@@ -46,7 +47,7 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(SYSTEMD) $(FWTS) $(UTILLINUX) $(LINUXLATEST) \
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(SYSTEMD) $(FWTS) $(UTILLINUX) $(LINUXLATEST) \
 	$(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
 	$(STRACE) $(SPLITVT) $(NETHOROLOGIST) $(XBMC) $(MPLAYER) \
 	$(CONPALETTE) $(APITRACE) $(LIBPNG)
@@ -65,7 +66,7 @@ world: $(DEBS) $(UDEBS)
 		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
 		{ cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | cut -d_ -f1)_$(shell echo $< | cut -d_ -f2- | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
-	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $(basename $(@F))
+	#cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $(basename $(@F))
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
 
@@ -211,7 +212,18 @@ App-ConPalette-0.1.5.tar.gz:
 
 FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
-	wget -nc http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip -O$@
+	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip
+
+FETCHED:=$(FETCHED) $(LIBRSVG).tar.xz
+$(LIBRSVG).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/librsvg/2.36/librsvg-2.36.3.tar.xz
+
+.PHONY: librsvg
+librsvg:$(LIBRSVG).deb
+$(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog $(LIBRSVG).tar.xz
+	mkdir -p $@
+	tar xJvf $(LIBRSVG).tar.xz --strip-components=1 -C $@
+	cp -r $(<D) $@/
 
 CONPAL:=App-ConPalette-0.1.5
 .PHONY: conpalette
@@ -235,3 +247,4 @@ clean:
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
+	rm -rf $(LIBRSVG)
