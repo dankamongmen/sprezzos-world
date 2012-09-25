@@ -1,0 +1,187 @@
+2011-10-09  Robert Millan  <rmh@gnu.org>
+
+	LVM support for FreeBSD and GNU/kFreeBSD.
+
+	* util/lvm.c (grub_util_lvm_isvolume): Enable on FreeBSD and
+	GNU/kFreeBSD.
+	(LVM_DEV_MAPPER_STRING): Move from here ...
+	* include/grub/util/lvm.h (LVM_DEV_MAPPER_STRING): ... to here.
+	* util/getroot.c: Include `<grub/util/lvm.h>'.
+	(grub_util_get_dev_abstraction): Enable
+	grub_util_biosdisk_is_present() on FreeBSD and GNU/kFreeBSD.
+	Check for LVM abstraction on FreeBSD and GNU/kFreeBSD.
+	(grub_util_get_grub_dev): Replace "/dev/mapper/" with
+	`LVM_DEV_MAPPER_STRING'.  Enable LVM and mdRAID only on platforms that
+	support it.
+	* util/grub-setup.c (main): Check for LVM also on FreeBSD and
+	GNU/kFreeBSD.
+	* util/grub.d/10_kfreebsd.in: Load `geom_linux_lvm' kernel module
+	when LVM abstraction is required for ${GRUB_DEVICE}.
+
+--- a/grub-core/kern/emu/getroot.c
++++ b/grub-core/kern/emu/getroot.c
+@@ -33,6 +33,7 @@
+ #include <stdlib.h>
+ #include <stdint.h>
+ #include <grub/util/misc.h>
++#include <grub/util/lvm.h>
+ 
+ #ifdef HAVE_DEVICE_MAPPER
+ # include <libdevmapper.h>
+@@ -709,11 +710,13 @@
+ int
+ grub_util_get_dev_abstraction (const char *os_dev __attribute__((unused)))
+ {
+-#ifdef __linux__
++#if defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+   /* User explicitly claims that this drive is visible by BIOS.  */
+   if (grub_util_biosdisk_is_present (os_dev))
+     return GRUB_DEV_ABSTRACTION_NONE;
++#endif
+ 
++#if defined(__linux__)
+   /* Check for LVM.  */
+   if (grub_util_is_lvm (os_dev))
+     return GRUB_DEV_ABSTRACTION_LVM;
+@@ -723,6 +726,12 @@
+     return GRUB_DEV_ABSTRACTION_RAID;
+ #endif
+ 
++#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
++  /* Check for LVM.  */
++  if (!strncmp (os_dev, LVM_DEV_MAPPER_STRING, sizeof(LVM_DEV_MAPPER_STRING)-1))
++    return GRUB_DEV_ABSTRACTION_LVM;
++#endif
++
+   /* No abstraction found.  */
+   return GRUB_DEV_ABSTRACTION_NONE;
+ }
+@@ -815,11 +824,12 @@
+ 
+   switch (grub_util_get_dev_abstraction (os_dev))
+     {
++#if defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+     case GRUB_DEV_ABSTRACTION_LVM:
+ 
+       {
+ 	unsigned short i, len;
+-	grub_size_t offset = sizeof ("/dev/mapper/") - 1;
++	grub_size_t offset = sizeof (LVM_DEV_MAPPER_STRING) - 1;
+ 
+ 	len = strlen (os_dev) - offset + 1;
+ 	grub_dev = xmalloc (len);
+@@ -833,7 +843,9 @@
+       }
+ 
+       break;
++#endif
+ 
++#ifdef __linux__
+     case GRUB_DEV_ABSTRACTION_RAID:
+ 
+       if (os_dev[7] == '_' && os_dev[8] == 'd')
+@@ -909,7 +921,6 @@
+       else
+ 	grub_util_error ("unknown kind of RAID device `%s'", os_dev);
+ 
+-#ifdef __linux__
+       {
+ 	char *mdadm_name = get_mdadm_uuid (os_dev);
+ 	struct stat st;
+@@ -934,9 +945,8 @@
+ 	    free (mdadm_name);
+ 	  }
+       }
+-#endif /* __linux__ */
+-
+       break;
++#endif /* __linux__ */
+ 
+     default:  /* GRUB_DEV_ABSTRACTION_NONE */
+       grub_dev = grub_util_biosdisk_get_grub_dev (os_dev);
+--- a/include/grub/util/lvm.h
++++ b/include/grub/util/lvm.h
+@@ -20,7 +20,14 @@
+ #ifndef GRUB_LVM_UTIL_HEADER
+ #define GRUB_LVM_UTIL_HEADER	1
+ 
++#if defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
++
+ #ifdef __linux__
++#define LVM_DEV_MAPPER_STRING "/dev/mapper/"
++#else
++#define LVM_DEV_MAPPER_STRING "/dev/linux_lvm/"
++#endif
++
+ int grub_util_lvm_isvolume (char *name);
+ #endif
+ 
+--- a/util/grub-setup.c
++++ b/util/grub-setup.c
+@@ -959,10 +959,12 @@
+                       arguments.dir ? : DEFAULT_DIRECTORY);
+     }
+ 
+-#ifdef __linux__
++#if defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+   if (grub_util_lvm_isvolume (root_dev))
+     must_embed = 1;
++#endif
+ 
++#ifdef __linux__
+   if (root_dev[0] == 'm' && root_dev[1] == 'd'
+       && ((root_dev[2] >= '0' && root_dev[2] <= '9') || root_dev[2] == '/'))
+     {
+--- a/util/grub.d/10_kfreebsd.in
++++ b/util/grub.d/10_kfreebsd.in
+@@ -98,6 +98,23 @@
+ 
+   load_kfreebsd_module acpi true
+ 
++  for abstraction in dummy $(grub-probe -t abstraction --device ${GRUB_DEVICE}) ; do
++    case $abstraction in
++      lvm) load_kfreebsd_module geom_linux_lvm false ;;
++    esac
++  done
++
++  case "$(grub-probe -t abstraction --device ${GRUB_DEVICE})" in
++    lvm)
++      test -e "${module_dir}/geom_linux_lvm.ko"
++
++      printf '%s\n' "${prepare_module_dir_cache}"
++      cat << EOF
++	kfreebsd_module_elf	${module_dir_rel}/geom_linux_lvm.ko
++EOF
++    ;;
++  esac
++
+   case "${kfreebsd_fs}" in
+     zfs)
+       load_kfreebsd_module opensolaris false
+--- a/util/lvm.c
++++ b/util/lvm.c
+@@ -17,8 +17,7 @@
+  *  along with GRUB.  If not, see <http://www.gnu.org/licenses/>.
+  */
+ 
+-/* We only support LVM on Linux.  */
+-#ifdef __linux__
++#if defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+ #include <grub/emu/misc.h>
+ #include <grub/util/misc.h>
+ #include <grub/util/lvm.h>
+@@ -26,8 +25,6 @@
+ #include <string.h>
+ #include <sys/stat.h>
+ 
+-#define LVM_DEV_MAPPER_STRING "/dev/mapper/"
+-
+ int
+ grub_util_lvm_isvolume (char *name)
+ {
+@@ -49,4 +46,4 @@
+     return 1;
+ }
+ 
+-#endif /* ! __linux__ */
++#endif
