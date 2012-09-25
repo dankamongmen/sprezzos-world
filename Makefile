@@ -76,7 +76,7 @@ world: $(DEBS) $(UDEBS)
 		{ cd $< && autoreconf -fi ; }
 	tar cjf $(shell echo $< | sed -e 's/-SprezzOS.//' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
-	cd $< && dpkg-buildpackage $(MAKEFLAGS) -k$(DEBKEY)
+	cd $< && dpkg-buildpackage -k$(DEBKEY)
 
 .PHONY: growlight
 growlight: $(GROWLIGHT).deb
