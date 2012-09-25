@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
-	omphalos sudo systemd librsvg grub \
+	omphalos sudo systemd librsvg grub-pc \
 	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -25,7 +25,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 cut -d: -f2- ) > $@
 
 # experimental new way
-GRUBPC:=grub-pc_$(grub_VERSION)
+GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(GRUBPC) | cut -d_ -f2- | cut -d- -f1)
 
 GROWLIGHT=growlight_$(growlight_VERSION)
@@ -228,8 +228,8 @@ $(GRUBUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnu.org/gnu/grub/$(GRUBUP).tar.xz
 
 .PHONY: grub
-grub:$(GRUBPC).deb
-$(GRUBPC): $(SPREZZ)/grub/debian/changelog $(GRUBUP).tar.xz
+grub-pc:$(GRUBPC).deb
+$(GRUBPC): $(SPREZZ)/grub-pc/debian/changelog $(GRUBUP).tar.xz
 	mkdir -p $@
 	tar xJvf $(GRUBUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
