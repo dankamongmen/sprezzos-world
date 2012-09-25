@@ -24,8 +24,11 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . |\
 	 cut -d: -f2- ) > $@
 
+# experimental new way
+GRUB:=grub_$(grub_VERSION)
+GRUBUP:=grub-$(shell echo $(GRUB) | cut -d_ -f2- | cut -d- -f1)
+
 GROWLIGHT=growlight_$(growlight_VERSION)
-GRUB=grub_$(grub_VERSION)
 LIBRSVG=librsvg-$(librsvg_VERSION)
 LINUXLATEST=linux-latest_$(linux-latest_VERSION)
 UTILLINUX=util-linux_$(util-linux_VERSION)
@@ -220,15 +223,15 @@ FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
 	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip
 
-FETCHED:=$(FETCHED) $(GRUB).tar.xz
-$(GRUB).tar.xz:
-	wget -nc -O$@ http://ftp.gnu.org/gnu/grub/$(GRUB).tar.xz
+FETCHED:=$(FETCHED) $(GRUBUP).tar.xz
+$(GRUBUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnu.org/gnu/grub/$(GRUBUP).tar.xz
 
 .PHONY: grub
 grub:$(GRUB).deb
-$(GRUB): $(SPREZZ)/grub/debian/changelog $(GRUB).tar.xz
+$(GRUB): $(SPREZZ)/grub/debian/changelog $(GRUBUP).tar.xz
 	mkdir -p $@
-	tar xJvf $(GRUB).tar.xz --strip-components=1 -C $@
+	tar xJvf $(GRUBUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIBRSVG).tar.xz
