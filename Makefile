@@ -26,7 +26,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 # experimental new way
 GRUBPC:=grub-pc_$(grub_VERSION)
-GRUBUP:=grub-$(shell echo $(GRUB) | cut -d_ -f2- | cut -d- -f1)
+GRUBUP:=grub-$(shell echo $(GRUBPC) | cut -d_ -f2- | cut -d- -f1)
 
 GROWLIGHT=growlight_$(growlight_VERSION)
 LIBRSVG=librsvg-$(librsvg_VERSION)
