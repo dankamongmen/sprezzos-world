@@ -9,7 +9,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
-	omphalos sudo systemd librsvg \
+	omphalos sudo systemd librsvg grub \
 	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -25,6 +25,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 cut -d: -f2- ) > $@
 
 GROWLIGHT=growlight_$(growlight_VERSION)
+GRUB=grub_$(grub_VERSION)
 LIBRSVG=librsvg-$(librsvg_VERSION)
 LINUXLATEST=linux-latest_$(linux-latest_VERSION)
 UTILLINUX=util-linux_$(util-linux_VERSION)
@@ -47,10 +48,10 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(SYSTEMD) $(FWTS) $(UTILLINUX) $(LINUXLATEST) \
-	$(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) $(VALGRIND) $(ADOBE) \
-	$(STRACE) $(SPLITVT) $(NETHOROLOGIST) $(XBMC) $(MPLAYER) \
-	$(CONPALETTE) $(APITRACE) $(LIBPNG)
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB) $(SYSTEMD) $(FWTS) $(UTILLINUX)
+	$(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) \
+	$(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) $(NETHOROLOGIST) $(XBMC) \
+	$(MPLAYER) $(CONPALETTE) $(APITRACE) $(LIBPNG)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX)
@@ -219,6 +220,17 @@ FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
 	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip
 
+FETCHED:=$(FETCHED) $(GRUB).tar.xz
+$(GRUB).tar.xz:
+	wget -nc -O$@ http://ftp.gnu.org/gnu/grub/$(GRUB).tar.xz
+
+.PHONY: grub
+grub:$(GRUB).deb
+$(GRUB): $(SPREZZ)/grub/debian/changelog $(GRUB).tar.xz
+	mkdir -p $@
+	tar xJvf $(GRUB).tar.xz --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(LIBRSVG).tar.xz
 $(LIBRSVG).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/librsvg/2.36/librsvg-2.36.3.tar.xz
@@ -252,4 +264,4 @@ clean:
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
-	rm -rf $(LIBRSVG)
+	rm -rf $(LIBRSVG) $(GRUB)
