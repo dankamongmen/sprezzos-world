@@ -25,7 +25,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 cut -d: -f2- ) > $@
 
 # experimental new way
-GRUB:=grub_$(grub_VERSION)
+GRUBPC:=grub-pc_$(grub_VERSION)
 GRUBUP:=grub-$(shell echo $(GRUB) | cut -d_ -f2- | cut -d- -f1)
 
 GROWLIGHT=growlight_$(growlight_VERSION)
@@ -51,7 +51,7 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB) $(SYSTEMD) $(FWTS) $(UTILLINUX) \
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(SYSTEMD) $(FWTS) $(UTILLINUX) \
 	$(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) \
 	$(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) $(NETHOROLOGIST) $(XBMC) \
 	$(MPLAYER) $(CONPALETTE) $(APITRACE) $(LIBPNG)
@@ -228,8 +228,8 @@ $(GRUBUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnu.org/gnu/grub/$(GRUBUP).tar.xz
 
 .PHONY: grub
-grub:$(GRUB).deb
-$(GRUB): $(SPREZZ)/grub/debian/changelog $(GRUBUP).tar.xz
+grub:$(GRUBPC).deb
+$(GRUBPC): $(SPREZZ)/grub/debian/changelog $(GRUBUP).tar.xz
 	mkdir -p $@
 	tar xJvf $(GRUBUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
@@ -267,4 +267,4 @@ clean:
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
-	rm -rf $(LIBRSVG) $(GRUB)
+	rm -rf $(LIBRSVG) $(GRUBPC)
