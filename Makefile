@@ -27,10 +27,11 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 # experimental new way
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(GRUBPC) | cut -d_ -f2- | cut -d- -f1)
+XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
+XMLSTARLETUP:=xmlstarlet-$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 LIBRSVG:=librsvg-$(librsvg_VERSION)
-XMLSTARLET:=xmlstarlet-$(xmlstarlet-VERSION)
 LINUXLATEST:=linux-latest_$(linux-latest_VERSION)
 UTILLINUX:=util-linux_$(util-linux_VERSION)
 LIBPNG:=libpng_$(libpng_VERSION)
@@ -69,20 +70,13 @@ UDEBS:=$(addsuffix .udeb,$(UDEBS))
 
 world: $(DEBS) $(UDEBS)
 
-# FIXME tarball generation is broken for packages with hyphens in their names
-$(LIBRSVG).deb: $(LIBRSVG)
-	tar cjf $(shell echo $< | cut -d- -f-2 | tr - _).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
-	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d- -f1) || true # source package might not exist
-	cd $< && dpkg-buildpackage -k$(DEBKEY)
-
 %.udeb %.deb: %
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
 		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
 		{ cd $< && autoreconf -fi ; }
-	tar cjf $(shell echo $< | cut -d_ -f1)_$(shell echo $< | cut -d_ -f2- | cut -d- -f1).orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
-	cp -r $(SPREZZ)/$(shell echo $@ | cut -d_ -f1)/debian $(basename $(@F))
+	tar cjf $(shell echo $< | sed -e 's/-SprezzOS.//' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
-	cd $< && dpkg-buildpackage -k$(DEBKEY)
+	cd $< && dpkg-buildpackage $(MAKEFLAGS) -k$(DEBKEY)
 
 .PHONY: growlight
 growlight: $(GROWLIGHT).deb
