@@ -59,6 +59,9 @@ UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX)
 
+DSCS:=$(addsuffix .dsc,$(DEBS) $(UDEBS))
+CHANGES:=$(addsuffix .changes,$(DEBS) $(UDEBS))
+
 DEBS:=$(addsuffix .deb,$(DEBS))
 UDEBS:=$(addsuffix .udeb,$(UDEBS))
 
@@ -262,7 +265,7 @@ $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
 	cp -r $(<D) $@/
 
 clean:
-	rm -rf sprezzos-world $(FETCHED) $(DEBS) $(UDEBS)
+	rm -rf sprezzos-world $(FETCHED) $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
 	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
