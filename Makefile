@@ -48,7 +48,7 @@ GRUBTHEME=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB) $(SYSTEMD) $(FWTS) $(UTILLINUX)
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB) $(SYSTEMD) $(FWTS) $(UTILLINUX) \
 	$(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) $(GRUBTHEME) \
 	$(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) $(NETHOROLOGIST) $(XBMC) \
 	$(MPLAYER) $(CONPALETTE) $(APITRACE) $(LIBPNG)
