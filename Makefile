@@ -84,6 +84,12 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone https://github.com/dankamongmen/growlight.git $@
 	cp -r $(<D) $@/
 
+.PHONY: xmlstarlet
+xmlstarlet:$(XMLSTARLET).deb
+$(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
+	git clone https://github.com/dankamongmen/xmlstarlet.git $@
+	cp -r $(<D) $@/
+
 .PHONY: nethorologist
 nethorologist: $(NETHOROLOGIST).deb
 $(NETHOROLOGIST): $(SPREZZ)/nethorologist/debian/changelog
@@ -221,17 +227,6 @@ App-ConPalette-0.1.5.tar.gz:
 FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
 	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip
-
-FETCHED:=$(FETCHED) $(XMLSTARLETUP).tar.gz
-$(XMLSTARLETUP).tar.gz:
-	wget -nc -O$@ http://sourceforge.net/projects/xmlstar/files/xmlstarlet/1.4.0/$(XMLSTARLETUP).tar.gz
-
-.PHONY: xmlstarlet
-xmlstarlet:$(XMLSTARLET).deb
-$(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog $(XMLSTARLETUP).tar.gz
-	mkdir -p $@
-	tar xzvf $(XMLSTARLETUP).tar.gz --strip-components=1 -C $@
-	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GRUBUP).tar.xz
 $(GRUBUP).tar.xz:
