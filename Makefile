@@ -23,14 +23,14 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	@[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
 	 echo -n "$(@F)_VERSION:=" && \
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . |\
-	 tr : . ) > $@
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . ) > $@
 
 # experimental new way
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
-GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | tr : -)
-OPENSSH:=openssh_$(openssh_VERSION)
-OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | tr : -)
+GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
+MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
+OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
+OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
@@ -45,7 +45,6 @@ SYSTEMD:=systemd_$(systemd_VERSION)
 SUDO:=sudo_$(sudo_VERSION)
 XBMC:=xbmc_$(xbmc_VERSION)
 NETHOROLOGIST:=nethorologist_$(nethorologist_VERSION)
-MPLAYER:=mplayer_$(mplayer_VERSION)
 FBTERM:=fbterm_$(fbterm_VERSION)
 STRACE:=strace_$(strace_VERSION)
 SPLITVT:=splitvt_$(splitvt_VERSION)
@@ -63,6 +62,9 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWT
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX)
+
+DEBS:=$(subst :,.,$(DEBS))
+UDEBS:=$(subst :,.,$(UDEBS))
 
 DSCS:=$(addsuffix .dsc,$(DEBS) $(UDEBS))
 CHANGES:=$(addsuffix .changes,$(DEBS) $(UDEBS))
@@ -226,13 +228,13 @@ SourceSansPro_FontsOnly-1.033.zip:
 
 FETCHED:=$(FETCHED) $(OPENSSH).tar.gz
 $(OPENSSHUP).tar.gz:
-	wget -nc -O$@ ftp://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$(OPENSSHUP).tar.gz
+	wget -nc -O$@ ftp://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/$(OPENSSHUP).tar.gz
 
 .PHONY: openssh
 openssh:$(OPENSSH)_$(ARCH).deb
 $(OPENSSH): $(SPREZZ)/openssh/debian/changelog $(OPENSSHUP).tar.gz
 	mkdir -p $@
-	tar xzvf $(GRUBUP).tar.gz --strip-components=1 -C $@
+	tar xzvf $(OPENSSHUP).tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GRUBUP).tar.xz
