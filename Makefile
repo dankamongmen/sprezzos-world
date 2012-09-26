@@ -4,6 +4,8 @@
 
 all: world
 
+ARCH:=amd64
+
 DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
@@ -64,8 +66,8 @@ DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 DSCS:=$(addsuffix .dsc,$(DEBS) $(UDEBS))
 CHANGES:=$(addsuffix .changes,$(DEBS) $(UDEBS))
 
-DEBS:=$(addsuffix .deb,$(DEBS))
-UDEBS:=$(addsuffix .udeb,$(UDEBS))
+DEBS:=$(addsuffix _$(ARCH).deb,$(DEBS))
+UDEBS:=$(addsuffix _$(ARCH).udeb,$(UDEBS))
 
 world: $(DEBS) $(UDEBS)
 
