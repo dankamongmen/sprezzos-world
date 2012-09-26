@@ -75,7 +75,7 @@ world: $(DEBS) $(UDEBS)
 	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
 		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
 		{ cd $< && autoreconf -fi ; }
-	tar cjf $(shell echo $< | sed -e 's/-SprezzOS.*//' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
+	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
 	cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
 
