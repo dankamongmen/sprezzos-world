@@ -11,7 +11,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
-	omphalos sudo systemd librsvg grub-pc xmlstarlet \
+	omphalos sudo systemd librsvg2 grub-pc xmlstarlet \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -32,7 +32,7 @@ GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
-LIBRSVG:=librsvg-$(librsvg_VERSION)
+LIBRSVG2:=librsvg2-$(librsvg2_VERSION)
 LINUXLATEST:=linux-latest_$(linux-latest_VERSION)
 UTILLINUX:=util-linux_$(util-linux_VERSION)
 LIBPNG:=libpng_$(libpng_VERSION)
@@ -53,7 +53,7 @@ GRUBTHEME:=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE:=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
+DEBS:=$(GROWLIGHT) $(LIBRSVG2) $(GRUBPC) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
@@ -233,15 +233,15 @@ $(GRUBPC): $(SPREZZ)/grub-pc/debian/changelog $(GRUBUP).tar.xz
 	tar xJvf $(GRUBUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(LIBRSVG).tar.xz
-$(LIBRSVG).tar.xz:
+FETCHED:=$(FETCHED) $(LIBRSVG2).tar.xz
+$(LIBRSVG2).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/librsvg/2.36/librsvg-2.36.3.tar.xz
 
-.PHONY: librsvg
-librsvg:$(LIBRSVG)_$(ARCH).deb
-$(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog $(LIBRSVG).tar.xz
+.PHONY: librsvg2
+librsvg2:$(LIBRSVG2)_$(ARCH).deb
+$(LIBRSVG2): $(SPREZZ)/librsvg2/debian/changelog $(LIBRSVG2).tar.xz
 	mkdir -p $@
-	tar xJvf $(LIBRSVG).tar.xz --strip-components=1 -C $@
+	tar xJvf $(LIBRSVG2).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 CONPAL:=App-ConPalette-0.1.5
@@ -266,4 +266,4 @@ clean:
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
-	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET)
+	rm -rf $(LIBRSVG2) $(GRUBPC) $(XMLSTARLET)
