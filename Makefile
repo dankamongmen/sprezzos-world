@@ -24,7 +24,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	( echo "# Automatically generated from $<" && \
 	 echo -n "$(@F)_VERSION:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . |\
-	 cut -d: -f2- ) > $@
+	 tr : . ) > $@
 
 # experimental new way
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
