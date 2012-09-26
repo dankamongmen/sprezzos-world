@@ -11,7 +11,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
-	omphalos sudo systemd librsvg grub-pc xmlstarlet \
+	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -28,7 +28,9 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 # experimental new way
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
-GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1)
+GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | tr : -)
+OPENSSH:=openssh_$(openssh_VERSION)
+OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION | cut -d- -f1 | tr : -)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
@@ -53,7 +55,7 @@ GRUBTHEME:=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE:=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
@@ -222,6 +224,17 @@ FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
 	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip
 
+FETCHED:=$(FETCHED) $(OPENSSH).tar.gz
+$(OPENSSHUP).tar.gz:
+	wget -nc -O$@ ftp://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$(OPENSSHUP).tar.gz
+
+.PHONY: openssh
+openssh:$(OPENSSH)_$(ARCH).deb
+$(OPENSSH): $(SPREZZ)/openssh/debian/changelog $(OPENSSHUP).tar.gz
+	mkdir -p $@
+	tar xzvf $(GRUBUP).tar.gz --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(GRUBUP).tar.xz
 $(GRUBUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnu.org/gnu/grub/$(GRUBUP).tar.xz
@@ -266,4 +279,4 @@ clean:
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
-	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET)
+	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH)
