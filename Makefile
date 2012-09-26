@@ -12,7 +12,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet \
-	conpalette valgrind strace splitvt xbmc sprezzos-grub2theme apitrace \
+	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
 SPREZZ:=packaging
@@ -40,7 +40,6 @@ LIBJPEGTURBO:=libjpeg-turbo_$(libjpeg-turbo_VERSION)
 OMPHALOS:=omphalos_$(omphalos_VERSION)
 FWTS:=fwts_$(fwts_VERSION)
 SYSTEMD:=systemd_$(systemd_VERSION)
-VALGRIND:=valgrind_$(valgrind_VERSION)
 SUDO:=sudo_$(sudo_VERSION)
 XBMC:=xbmc_$(xbmc_VERSION)
 NETHOROLOGIST:=nethorologist_$(nethorologist_VERSION)
@@ -56,7 +55,7 @@ CONPALETTE:=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
-	$(GRUBTHEME) $(VALGRIND) $(ADOBE) $(STRACE) $(SPLITVT) \
+	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD)
 UDEBS:=$(FBV)
@@ -197,12 +196,6 @@ $(SUDO): $(SPREZZ)/sudo/debian/changelog sudo-1.8.5p3.tar.gz
 	tar xzvf sudo-1.8.5p3.tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-.PHONY: valgrind
-valgrind:$(VALGRIND)_$(ARCH).deb
-$(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
-	svn co svn://svn.valgrind.org/valgrind/trunk $@
-	cp -r $(<D) $@/
-
 .PHONY: grubtheme
 sprezzos-grub2theme:$(GRUBTHEME)_$(ARCH).deb
 $(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
@@ -269,7 +262,7 @@ $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
 
 clean:
 	rm -rf sprezzos-world $(FETCHED) $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
-	rm -rf $(VALGRIND) $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
+	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
