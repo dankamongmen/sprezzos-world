@@ -26,11 +26,10 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 # experimental new way
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
-GRUBUP:=grub-$(shell echo $(GRUBPC) | cut -d_ -f2- | cut -d- -f1)
-XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
-XMLSTARLETUP:=xmlstarlet-$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1)
+GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
+XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
 LIBRSVG:=librsvg-$(librsvg_VERSION)
 LINUXLATEST:=linux-latest_$(linux-latest_VERSION)
 UTILLINUX:=util-linux_$(util-linux_VERSION)
