@@ -30,7 +30,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | tr : -)
 OPENSSH:=openssh_$(openssh_VERSION)
-OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION | cut -d- -f1 | tr : -)
+OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | tr : -)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
