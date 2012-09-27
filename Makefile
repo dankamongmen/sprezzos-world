@@ -11,7 +11,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
-	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh \
+	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
 
@@ -31,6 +31,8 @@ GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr :
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
+HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
@@ -56,12 +58,12 @@ CONPALETTE:=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
-	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) \
+	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
-	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX)
+	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -281,4 +283,4 @@ clean:
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
-	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH)
+	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
