@@ -10,7 +10,7 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo \
+PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
@@ -33,6 +33,8 @@ OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
+LVM2UP:=lvm2-$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
@@ -56,7 +58,7 @@ GRUBTHEME:=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE:=conpalette_$(conpalette_VERSION)
 
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
@@ -228,7 +230,18 @@ FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
 	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip
 
-FETCHED:=$(FETCHED) $(OPENSSH).tar.gz
+FETCHED:=$(FETCHED) $(LVM2UP).tar.gz
+$(LVM2UP).tar.gz:
+	wget -nc -O$@ ftp://sources.redhat.com/pub/lvm2/$@
+
+.PHONY: lvm2
+lvm2:$(LVM2)_$(ARCH).deb
+$(LVM2): $(SPREZZ)/lvm2/debian/changelog $(LVM2UP).tar.gz
+	mkdir -p $@
+	tar xzvf $(LVM2UP).tar.gz --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(OPENSSHUP).tar.gz
 $(OPENSSHUP).tar.gz:
 	wget -nc -O$@ ftp://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/$(OPENSSHUP).tar.gz
 
@@ -279,7 +292,7 @@ $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
 
 clean:
 	rm -rf sprezzos-world $(FETCHED) $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
-	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV)
+	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV) $(LVM2)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
