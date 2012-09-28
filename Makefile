@@ -34,7 +34,7 @@ OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- 
 HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
-LVM2UP:=lvm2-$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
@@ -230,15 +230,15 @@ FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
 SourceSansPro_FontsOnly-1.033.zip:
 	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip
 
-FETCHED:=$(FETCHED) $(LVM2UP).tar.gz
-$(LVM2UP).tar.gz:
+FETCHED:=$(FETCHED) $(LVM2UP).tgz
+$(LVM2UP).tgz:
 	wget -nc -O$@ ftp://sources.redhat.com/pub/lvm2/$@
 
 .PHONY: lvm2
 lvm2:$(LVM2)_$(ARCH).deb
-$(LVM2): $(SPREZZ)/lvm2/debian/changelog $(LVM2UP).tar.gz
+$(LVM2): $(SPREZZ)/lvm2/debian/changelog $(LVM2UP).tgz
 	mkdir -p $@
-	tar xzvf $(LVM2UP).tar.gz --strip-components=1 -C $@
+	tar xzvf $(LVM2UP).tgz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(OPENSSHUP).tar.gz
