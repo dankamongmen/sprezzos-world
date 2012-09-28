@@ -25,7 +25,6 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 echo -n "$(@F)_VERSION:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . ) > $@
 
-# experimental new way
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
@@ -35,6 +34,8 @@ HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
+ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
@@ -55,7 +56,6 @@ SPLITVT:=splitvt_$(splitvt_VERSION)
 FBV:=fbv_$(fbv_VERSION)
 APITRACE:=apitrace_$(apitrace_VERSION)
 GRUBTHEME:=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
-ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 CONPALETTE:=conpalette_$(conpalette_VERSION)
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
@@ -226,10 +226,6 @@ FETCHED:=$(FETCHED) App-ConPalette-0.1.5.tar.gz
 App-ConPalette-0.1.5.tar.gz:
 	wget -nc -O$@ http://search.cpan.org/CPAN/authors/id/H/HI/HINRIK/App-ConPalette-0.1.5.tar.gz
 
-FETCHED:=$(FETCHED) SourceSansPro_FontsOnly-1.033.zip
-SourceSansPro_FontsOnly-1.033.zip:
-	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/SourceSansPro_FontsOnly-1.033.zip
-
 FETCHED:=$(FETCHED) $(LVM2UP).tgz
 $(LVM2UP).tgz:
 	wget -nc -O$@ ftp://sources.redhat.com/pub/lvm2/$@
@@ -282,12 +278,15 @@ $(CONPALETTE): $(SPREZZ)/conpalette/debian/changelog $(CONPAL).tar.gz
 	mv $(CONPAL) $@
 	cp -r $(<D) $@/
 
-SANSPRO:=SourceSansPro_FontsOnly-1.033
+FETCHED:=$(FETCHED) $(ADOBEUP)
+$(ADOBEUP):
+	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/$@
+
 .PHONY: adobe
 adobe:$(ADOBE)_$(ARCH).deb
-$(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(SANSPRO).zip
-	unzip $(SANSPRO).zip 
-	mv $(SANSPRO) $@
+$(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(ADOBEUP)
+	unzip $(ADOBEUP)
+	mv $(basename $(ADOBEUP)) $@
 	cp -r $(<D) $@/
 
 clean:
