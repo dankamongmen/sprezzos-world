@@ -14,7 +14,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
-	netbase base-installer firmware-all gtk+3
+	netbase base-installer firmware-all gtk3
 
 SPREZZ:=packaging
 
@@ -37,6 +37,7 @@ FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 #GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
+GTK3ORIG:=$(GTK3UP).orig.tar.xz
 #HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
@@ -215,7 +216,7 @@ $(GTK3ORIG): $(GTK3UP).tar.xz
 gtk3:$(GTK3)_$(ARCH).deb
 $(GTK3): $(SPREZZ)/gtk3/debian/changelog $(GTK3ORIG)
 	mkdir $@
-	tar xjvf $(GTK3ORIG) --strip-components=1 -C $@
+	tar xJvf $(GTK3ORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
