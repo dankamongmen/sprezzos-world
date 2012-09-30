@@ -11,7 +11,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
-	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils \
+	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all
@@ -29,7 +29,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 FBI:=fbi_$(fbi_VERSION)
-FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2-)
+FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
@@ -172,7 +172,7 @@ $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
 
 FETCHED:=$(FETCHED) $(FBIUP).tar.gz
 $(FBIUP).tar.gz:
-	wget -nc -O$@ https://www.kraxel.org/releases/fbida/$@
+	wget -nc -O$@ http://www.kraxel.org/releases/fbida/$@
 
 .PHONY: fbi
 fbi:$(FBI)_$(ARCH).deb
