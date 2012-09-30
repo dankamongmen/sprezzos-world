@@ -37,7 +37,7 @@ LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d:
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 LIBPNG:=libpng_$(libpng_VERSION)
-LIBPNGUP:=libpng-$(libpng_VERSION)
+LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 BASEFILES:=base-files_$(base-files_VERSION)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
