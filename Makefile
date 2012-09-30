@@ -14,7 +14,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
-	netbase base-installer firmware-all gtk3
+	netbase base-installer firmware-all gtk3 libdrm
 
 SPREZZ:=packaging
 
@@ -28,21 +28,17 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 echo -n "$(shell echo $(@F) | tr [[:lower:]] [[:upper:]] | tr -d -):=$(@F)_" &&\
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . ) > $@
 
-#ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
-#CAIRO:=cairo_$(cairo_VERSION)
 CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
-#FBI:=fbi_$(fbi_VERSION)
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
-#GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
 GTK3ORIG:=$(GTK3UP).orig.tar.xz
-#HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
-#LIBPNG:=libpng_$(libpng_VERSION)
+LIBDRMUP:=libdrm-$(shell echo $(libdrm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBDRMORIG:=$(shell echo $(LIBDRMUP) | tr - _).orig.tar.bz2
 LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
 
@@ -57,7 +53,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
-	$(GTK3)
+	$(GTK3) $(LIBDRM)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG)
@@ -223,6 +219,20 @@ $(GTK3): $(SPREZZ)/gtk3/debian/changelog $(GTK3ORIG)
 	tar xJvf $(GTK3ORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(LIBDRMUP).tar.bz2
+$(LIBDRMUP).tar.bz2:
+	wget -nc -O$@ http://dri.freedesktop.org/libdrm/$(LIBDRMUP).tar.bz2
+
+$(LIBDRMORIG): $(LIBDRMUP).tar.bz2
+	ln -s $< $@
+
+.PHONY: libdrm
+libdrm:$(LIBDRM)_$(ARCH).deb
+$(LIBDRM): $(SPREZZ)/libdrm/debian/changelog $(LIBDRMORIG)
+	mkdir $@
+	tar xjvf $(LIBPNGORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
 $(LIBPNGUP).tar.bz2:
 	wget -nc -O$@ ftp://ftp.simplesystems.org/pub/libpng/png/src/$(LIBPNGUP).tar.bz2
@@ -362,6 +372,7 @@ clean:
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
+	rm -rf $(LIBDRM)
 
 clobber:
 	rm -rf $(FETCHED)
