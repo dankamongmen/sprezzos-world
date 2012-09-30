@@ -14,7 +14,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
-	netbase
+	netbase base-installer
 
 SPREZZ:=packaging
 
@@ -40,10 +40,6 @@ ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 LIBPNG:=libpng_$(libpng_VERSION)
 LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
-# native packages
-BASEFILES:=base-files_$(base-files_VERSION)
-NETBASE:=netbase_$(netbase_VERSION)
-
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
 LIBRSVG:=librsvg-$(librsvg_VERSION)
@@ -64,12 +60,17 @@ APITRACE:=apitrace_$(apitrace_VERSION)
 GRUBTHEME:=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
 CONPALETTE:=conpalette_$(conpalette_VERSION)
 
+# native packages
+BASEFILES:=base-files_$(base-files_VERSION)
+NETBASE:=netbase_$(netbase_VERSION)
+BASEINSTALLER:=base-installer_$(base-installer_VERSION)
+
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE)
-UDEBS:=$(FBV)
+UDEBS:=$(FBV) $(BASEINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS)
 
@@ -301,6 +302,11 @@ base-files:$(BASEFILES)_$(ARCH).deb
 $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
 	cp -r $(<D)/.. $@
 
+.PHONY: base-installer
+base-installer:$(BASEINSTALLER)_$(ARCH).udeb
+$(BASEINSTALLER): $(SPREZZ)/base-installer/debian/changelog
+	cp -r $(<D)/.. $@
+
 .PHONY: netbase
 netbase:$(NETBASE)_$(ARCH).deb
 $(NETBASE): $(SPREZZ)/netbase/debian/changelog
@@ -313,4 +319,4 @@ clean:
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
-	rm -rf $(BASEFILES) $(NETBASE)
+	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER)
