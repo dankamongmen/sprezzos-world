@@ -1,0 +1,66 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/rules/autoreconf.mk
+
+common-build-arch::
+	grep -v -e alsa -e evdev -e udev -e share/pulseaudio -e systemd \
+	  debian/pulseaudio.install > debian/pulseaudio.install.kfreebsd-i386
+	grep -v -e alsa -e evdev -e udev -e share/pulseaudio -e systemd \
+	  debian/pulseaudio.install >  debian/pulseaudio.install.kfreebsd-amd64
+	grep -v -e alsa -e evdev -e udev -e share/pulseaudio -e systemd \
+	  debian/pulseaudio.install > debian/pulseaudio.install.hurd-i386
+
+common-install-arch::
+	find $(DEB_DESTDIR) -name "*.la" -delete
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/lintian
+	cp -a $(CURDIR)/debian/overrides $(CURDIR)/debian/tmp/usr/share/lintian
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/alsa/alsa.conf.d
+	cp -a $(CURDIR)/debian/pulse.conf \
+		$(CURDIR)/debian/tmp/usr/share/alsa/alsa.conf.d
+	cp -a $(CURDIR)/debian/pulse-alsa.conf $(CURDIR)/debian/tmp/usr/share/alsa
+
+
+common-configure-arch::
+ifneq (,$(findstring $(DEB_HOST_ARCH), "arm armel"))
+	make -C src libpulsecore_2.0_la-svolume_arm.lo CFLAGS+=-march=armv6
+endif
+
+pulseaudio-install-arch::
+	dh_installman --language=C debian/tmp/usr/share/man/man5/default.pa.5
+
+common-binary-post-install-arch:: list-missing
+
+clean::
+	rm -f debian/pulseaudio.install.kfreebsd-i386
+	rm -f debian/pulseaudio.install.kfreebsd-amd64
+	rm -f debian/pulseaudio.install.hurd-i386
+
+update-patch-series:
+	mkdir -p $(CURDIR)/debian/patches
+	rm -f $(CURDIR)/debian/patches/*.patch
+	git format-patch -o $(CURDIR)/debian/patches patches ^upstream | \
+		xargs -n 1 basename > $(CURDIR)/debian/patches/series
+	for patch in $$(ls $(CURDIR)/debian/patches/*.patch) ; \
+	do \
+		lines=$$(cat $$patch | wc -l) ; \
+		head -n $$(($$lines - 3)) $$patch > $${patch}.chomped ; \
+		mv $${patch}.chomped $$patch ; \
+	done
+
+# Libs should be in the multi-arch path, but the modules should be in the
+# normal directory as pulseaudio is foreign
+DEB_CONFIGURE_EXTRA_FLAGS = --enable-x11 --disable-hal \
+  --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+  --with-module-dir=\$${prefix}/lib/pulse-$(DEB_UPSTREAM_VERSION)/modules
+
+DEB_DH_MAKESHLIBS_ARGS_ALL = --exclude=usr/lib/pulse-$(DEB_UPSTREAM_VERSION)/modules
+
+LDFLAGS += -Wl,--no-as-needed
+
+DEB_DH_INSTALL_ARGS = --sourcedir=$(CURDIR)/debian/tmp
+DEB_UPDATE_RCD_PARAMS = start 25 2 3 4 5 . stop 15 0 1 6 .
+
+DEB_DH_BUILDDEB_ARGS = -- -Zxz
