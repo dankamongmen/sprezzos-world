@@ -42,6 +42,8 @@ LIBDRMUP:=libdrm-$(shell echo $(libdrm_VERSION) | cut -d- -f1 | cut -d= -f2- | c
 LIBDRMORIG:=$(shell echo $(LIBDRMUP) | tr - _).orig.tar.bz2
 LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
+LIBRSVGUP:=librsvg-$(shell echo $(librsvg_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
 
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -331,15 +333,15 @@ $(GRUBPC): $(SPREZZ)/grub-pc/debian/changelog $(GRUBUP).tar.xz
 	tar xJvf $(GRUBUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(LIBRSVG).tar.xz
-$(LIBRSVG).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/librsvg/2.36/librsvg-2.36.3.tar.xz
+FETCHED:=$(FETCHED) $(LIBRSVGORIG)
+$(LIBRSVGORIG):
+	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/librsvg/2.36/$(LIBRSVGUP).tar.xz
 
 .PHONY: librsvg
 librsvg:$(LIBRSVG)_$(ARCH).deb
-$(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog $(LIBRSVG).tar.xz
+$(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog $(LIBRSVGORIG)
 	mkdir -p $@
-	tar xJvf $(LIBRSVG).tar.xz --strip-components=1 -C $@
+	tar xJvf $(LIBRSVGORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 CONPAL:=App-ConPalette-0.1.5
