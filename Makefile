@@ -13,7 +13,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
-	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm
+	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files
 
 SPREZZ:=packaging
 
@@ -36,6 +36,7 @@ LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
+BASEFILES:=base-files_$(base-files_VERSION)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
@@ -62,7 +63,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(XMLSTARLE
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
-	$(SYSTEMD)
+	$(SYSTEMD) $(BASEFILES)
 UDEBS:=$(FBV)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS)
@@ -289,6 +290,12 @@ $(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(ADOBEUP)
 	mv $(basename $(ADOBEUP)) $@
 	cp -r $(<D) $@/
 
+# Native packages (those containing their own source)
+.PHONY: base-files
+base-files:$(BASEFILES)_$(ARCH).deb
+$(BASEFILES): $(SPREZZ)/base-files/debian/changelog
+	cp -r $(<D)/.. $@
+
 clean:
 	rm -rf sprezzos-world $(FETCHED) $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
 	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV) $(LVM2)
@@ -296,3 +303,4 @@ clean:
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
+	rm -rf $(BASEFILES)
