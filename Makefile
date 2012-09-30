@@ -12,7 +12,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils fbi \
-	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
+	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all
 
@@ -29,7 +29,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 CAIRO:=cairo_$(cairo_VERSION)
-CIAROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
+CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 FBI:=fbi_$(fbi_VERSION)
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
@@ -172,15 +172,15 @@ $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(CAIROUP).tar.gz
-$(CAIROUP).tar.gz:
+FETCHED:=$(FETCHED) $(CAIROUP).tar.xz
+$(CAIROUP).tar.xz:
 	wget -nc -O$@ http://cairographics.org/releases/$@
 
 .PHONY: cairo
 cairo:$(CAIRO)_$(ARCH).deb
-$(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROUP).tar.gz
+$(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROUP).tar.xz
 	mkdir $@
-	tar xzvf $(CAIROUP).tar.gz --strip-components=1 -C $@
+	tar xJvf $(CAIROUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(FBIUP).tar.gz
