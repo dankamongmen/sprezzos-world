@@ -54,13 +54,15 @@ MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.bz2
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_VERSION) | cut -d- -f1)
+PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
-	$(GTK3) $(LIBDRM)
+	$(GTK3) $(LIBDRM) $(PULSEAUDIO)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG)
@@ -286,6 +288,20 @@ $(MESA): $(SPREZZ)/mesa/debian/changelog $(MESAORIG)
 	tar xjvf $(MESAORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(PULSEAUDIOUP).tar.xz
+$(PULSEAUDIOUP).tar.xz:
+	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(PULSEAUDIOUP)
+
+$(PULSEAUDIOORIG): $(PULSEAUDIOUP).tar.xz
+	ln -s $< $@
+
+.PHONY: pulseaudio
+pulseaudio:$(PULSEAUDIO)_$(ARCH).deb
+$(PULSEAUDIO): $(SPREZZ)/pulseaudio/debian/changelog $(PULSEAUDIOORIG)
+	mkdir $@
+	tar xJvf $(PULSEAUDIOORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 .PHONY: sudo
 sudo:$(SUDO)_$(ARCH).deb
 $(SUDO): $(SPREZZ)/sudo/debian/changelog sudo-1.8.5p3.tar.gz
@@ -407,7 +423,7 @@ clean:
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
-	rm -rf $(LIBDRM) $(MESA)
+	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO)
 
 clobber:
 	rm -rf $(FETCHED)
