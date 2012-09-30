@@ -14,7 +14,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
-	netbase base-installer
+	netbase base-installer firmware-all
 
 SPREZZ:=packaging
 
@@ -64,12 +64,13 @@ CONPALETTE:=conpalette_$(conpalette_VERSION)
 BASEFILES:=base-files_$(base-files_VERSION)
 NETBASE:=netbase_$(netbase_VERSION)
 BASEINSTALLER:=base-installer_$(base-installer_VERSION)
+FIRMWAREALL:=firmware-all_$(firmware-all_VERSION)
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
-	$(SYSTEMD) $(BASEFILES) $(NETBASE)
+	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FIRMWAREALL)
 UDEBS:=$(FBV) $(BASEINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS)
@@ -312,6 +313,11 @@ netbase:$(NETBASE)_$(ARCH).deb
 $(NETBASE): $(SPREZZ)/netbase/debian/changelog
 	cp -r $(<D)/.. $@
 
+.PHONY: firmware-all
+firmware-all:$(FIRMWAREALL)_$(ARCH).deb
+$(FIRMWAREALL): $(SPREZZ)/firmware-all/debian/changelog
+	cp -r $(<D)/.. $@
+
 clean:
 	rm -rf sprezzos-world $(FETCHED) $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
 	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV) $(LVM2)
@@ -319,4 +325,4 @@ clean:
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
-	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER)
+	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL)
