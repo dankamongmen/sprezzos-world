@@ -37,6 +37,7 @@ GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr :
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
 GTK3ORIG:=gtk+3.0_$(shell echo $(gtk3_VERSION) | cut -d- -f1).orig.tar.xz
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_VERSION) | cut -d- -f1).orig.tar.gz
 
 LIBDRMUP:=libdrm-$(shell echo $(libdrm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBDRMORIG:=$(shell echo $(LIBDRMUP) | tr - _).orig.tar.bz2
@@ -223,6 +224,20 @@ gtk3:$(GTK3)_$(ARCH).deb
 $(GTK3): $(SPREZZ)/gtk3/debian/changelog $(GTK3ORIG)
 	mkdir $@
 	tar xJvf $(GTK3ORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(HFSUTILSUP).tar.gz
+$(HFSUTILSUP).tar.gz:
+	wget -nc -O$@ ftp://ftp.mars.org/pub/hfs/$(HFSUTILSUP).tar.gz
+
+$(HFSUTILSORIG): $(HFSUTILSUP).tar.gz
+	ln -s $< $@
+
+.PHONY: hfsutils
+hfsutils:$(HFSUTILS)_$(ARCH).deb
+$(HFSUTILS): $(SPREZZ)/hfsutils/debian/changelog $(HFSUTILSORIG)
+	mkdir $@
+	tar xzvf $(HFSUTILSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIBDRMUP).tar.bz2
