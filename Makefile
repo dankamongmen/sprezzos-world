@@ -14,7 +14,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
-	netbase base-installer firmware-all gtk3 libdrm
+	netbase base-installer firmware-all gtk3 libdrm mesa
 
 SPREZZ:=packaging
 
@@ -44,6 +44,8 @@ LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
 
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+MESAUP:=MesaLib-$(shell echo $(mesa_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+MESAORIG:=mesa-$(shell echo $(MESAUP) | tr - _).orig.tar.bz2
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -251,6 +253,20 @@ FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
 sudo-1.8.5p3.tar.gz:
 	wget -nc -O$@ http://www.gratisoft.us/sudo/dist/sudo-1.8.5p3.tar.gz
 
+FETCHED:=$(FETCHED) $(MESAUP).tar.bz2
+$(MESAUP).tar.bz2:
+	wget -nc -O$@ ftp://ftp.freedesktop.org/pub/mesa/$(shell echo $(mesa_VERSION) | cut -d- -f1)/$(MESAUP).tar.bz2
+
+$(MESAORIG): $(MESAUP).tar.bz2
+	ln -s $< $@
+
+.PHONY: mesa
+mesa:$(MESA)_$(ARCH).deb
+$(MESA): $(SPREZZ)/mesa/debian/changelog $(MESAORIG)
+	mkdir $@
+	tar xjvf $(MESAORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 .PHONY: sudo
 sudo:$(SUDO)_$(ARCH).deb
 $(SUDO): $(SPREZZ)/sudo/debian/changelog sudo-1.8.5p3.tar.gz
@@ -372,7 +388,7 @@ clean:
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
-	rm -rf $(LIBDRM)
+	rm -rf $(LIBDRM) $(MESA)
 
 clobber:
 	rm -rf $(FETCHED)
