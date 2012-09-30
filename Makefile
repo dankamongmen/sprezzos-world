@@ -185,7 +185,7 @@ $(LIBJPEGTURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.ta
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
-libpng-1.5.12.tar.bz2:
+$(LIBPNGUP):
 	wget -nc -O$@ ftp://ftp.simplesystems.org/pub/libpng/png/src/$(LIBPNGUP).tar.bz2
 
 .PHONY: libpng
