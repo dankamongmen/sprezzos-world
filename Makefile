@@ -26,19 +26,21 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 echo -n "$(@F)_VERSION:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . ) > $@
 
+ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
+ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
+FBI:=fbi_$(fbi_VERSION)
+FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2-)
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
+HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
+HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBPNG:=libpng_$(libpng_VERSION)
+LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
+LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
-HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
-LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
-ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
-LIBPNG:=libpng_$(libpng_VERSION)
-LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
 XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
@@ -70,7 +72,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(XMLSTARLE
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
-	$(SYSTEMD) $(BASEFILES) $(NETBASE)
+	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS)
@@ -168,9 +170,20 @@ $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(FBIUP).tar.gz
+$(FBIUP).tar.gz:
+	wget -nc -O$@ https://www.kraxel.org/releases/fbida/$@
+
+.PHONY: fbi
+fbi:$(FBI)_$(ARCH).deb
+$(FBI): $(SPREZZ)/fbi/debian/changelog $(FBIUP).tar.gz
+	mkdir $@
+	tar xzvf $(FBIUP).tar.gz --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) util-linux_2.20.1.tar.gz
 util-linux-2.20.1.tar.gz:
-	wget -nc -O$@ ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.20/util-linux-2.20.1.tar.gz
+	wget -nc -O$@ ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.20/$@
 
 .PHONY: util-linux
 util-linux:$(UTILLINUX)_$(ARCH).deb
@@ -325,4 +338,4 @@ clean:
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
-	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL)
+	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
