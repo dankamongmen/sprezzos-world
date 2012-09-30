@@ -1,0 +1,54 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# Add -O0 to workaround ¢675125, a bug that appeared with gcc-4.7. 
+# Probably to do with uninitialized memory somewhere ?
+# "src/tests/sltest ./utf8" triggers the bug; works fine in UTF-8 mode, fails otherwise.
+# - amck, 2012-06-30
+
+DEB_CFLAGS_MAINT_APPEND= -D_XOPEN_SOURCE=500 `dpkg-buildflags --get CPPFLAGS` -O0
+PKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+# Magic debhelper rule
+%:
+	dh $@ --with autotools_dev
+
+override_dh_auto_configure:
+	cd autoconf \
+        && autoconf \
+        && mv configure ..
+	dh_auto_configure -- --libdir=\$${prefix}/lib/${DEB_HOST_MULTIARCH}
+
+override_dh_auto_build:
+	dh_auto_build
+	${MAKE} -C src static
+	ar cqv libslang_pic.a src/elfobjs/*.o
+	INSTANT_OPT=" " docbook-to-man debian/slsh.sgml > slsh.1
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -f slsh.1 libslang_pic.a src/test/sltest
+
+override_dh_auto_install:
+	dh_auto_install
+	cp src/slang.ver debian/libslang2-pic/usr/lib/libslang_pic.map
+	mkdir -p debian/tmp/lib/${DEB_HOST_MULTIARCH}
+	cp -a src/objs/libslang.a debian/tmp/usr/lib/${DEB_HOST_MULTIARCH}
+	mv debian/tmp/usr/lib/${DEB_HOST_MULTIARCH}/libslang.so.* debian/tmp/lib/${DEB_HOST_MULTIARCH}
+	ln -sf /lib/${DEB_HOST_MULTIARCH}/libslang.so.2 debian/tmp/usr/lib/${DEB_HOST_MULTIARCH}/libslang.so
+	chrpath -d debian/tmp/usr/lib/${DEB_HOST_MULTIARCH}/slang/v2/modules/*.so
+	chrpath -d debian/tmp/usr/bin/slsh
+	mkdir -p debian/libslang2-modules/usr/lib/${DEB_HOST_MULTIARCH}/slang/v2/modules
+	mv debian/tmp/usr/lib/*/slang/v2/modules/* debian/libslang2-modules/usr/lib/${DEB_HOST_MULTIARCH}/slang/v2/modules
+
+override_dh_installchangelogs:
+	dh_installchangelogs -a changes.txt
+	
+override_dh_makeshlibs:
+	dh_makeshlibs -a -V --add-udeb="libslang2-udeb"
+
+override_dh_compress:
+	dh_compress -a -X.sl -X.c -X.h
