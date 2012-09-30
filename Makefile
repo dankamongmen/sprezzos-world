@@ -24,57 +24,36 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	@[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
 	 echo -n "$(@F)_VERSION:=" && \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . && \
+	 echo -n "$(shell echo $(@F) | tr [[:lower:]] [[:upper:]] | tr -d -):=$(@F)_" &&\
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . ) > $@
 
-ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
+#ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
-CAIRO:=cairo_$(cairo_VERSION)
+#CAIRO:=cairo_$(cairo_VERSION)
 CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
-FBI:=fbi_$(fbi_VERSION)
+#FBI:=fbi_$(fbi_VERSION)
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
-GRUBPC:=grub-pc_$(grub-pc_VERSION)
+#GRUBPC:=grub-pc_$(grub-pc_VERSION)
 GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
-HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
+#HFSUTILS:=hfsutils_$(shell echo $(hfsutils_VERSION) | tr : .)
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-LIBPNG:=libpng_$(libpng_VERSION)
+
+#LIBPNG:=libpng_$(libpng_VERSION)
 LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
+
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 
-GROWLIGHT:=growlight_$(growlight_VERSION)
-XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
-LIBRSVG:=librsvg-$(librsvg_VERSION)
-LINUXLATEST:=linux-latest_$(linux-latest_VERSION)
-UTILLINUX:=util-linux_$(util-linux_VERSION)
-LIBJPEGTURBO:=libjpeg-turbo_$(libjpeg-turbo_VERSION)
-OMPHALOS:=omphalos_$(omphalos_VERSION)
-FWTS:=fwts_$(fwts_VERSION)
-SYSTEMD:=systemd_$(systemd_VERSION)
-SUDO:=sudo_$(sudo_VERSION)
-XBMC:=xbmc_$(xbmc_VERSION)
-NETHOROLOGIST:=nethorologist_$(nethorologist_VERSION)
-FBTERM:=fbterm_$(fbterm_VERSION)
-STRACE:=strace_$(strace_VERSION)
-SPLITVT:=splitvt_$(splitvt_VERSION)
-FBV:=fbv_$(fbv_VERSION)
-APITRACE:=apitrace_$(apitrace_VERSION)
-GRUBTHEME:=sprezzos-grub2theme_$(sprezzos-grub2theme_VERSION)
-CONPALETTE:=conpalette_$(conpalette_VERSION)
-
-# native packages
-BASEFILES:=base-files_$(base-files_VERSION)
-NETBASE:=netbase_$(netbase_VERSION)
-BASEINSTALLER:=base-installer_$(base-installer_VERSION)
-FIRMWAREALL:=firmware-all_$(firmware-all_VERSION)
-
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(XMLSTARLET) $(FWTS) \
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
-	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO)
+	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG)
@@ -227,11 +206,14 @@ FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
 $(LIBPNGUP).tar.bz2:
 	wget -nc -O$@ ftp://ftp.simplesystems.org/pub/libpng/png/src/$(LIBPNGUP).tar.bz2
 
+$(LIBPNGORIG): $(LIBPNGUP).tar.bz2
+	ln -s $< $@
+
 .PHONY: libpng
 libpng:$(LIBPNG)_$(ARCH).deb
-$(LIBPNG): $(SPREZZ)/libpng/debian/changelog $(LIBPNGUP).tar.bz2
+$(LIBPNG): $(SPREZZ)/libpng/debian/changelog $(LIBPNGORIG)
 	mkdir $@
-	tar xjvf $(LIBPNGUP).tar.bz2 --strip-components=1 -C $@
+	tar xjvf $(LIBPNGORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
