@@ -28,6 +28,8 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
+CAIRO:=cairo_$(cairo_VERSION)
+CIAROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 FBI:=fbi_$(fbi_VERSION)
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 GRUBPC:=grub-pc_$(grub-pc_VERSION)
@@ -72,7 +74,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(XMLSTARLE
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
-	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI)
+	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS)
@@ -168,6 +170,17 @@ $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 linux-latest:$(LINUXLATEST)_$(ARCH).deb
 $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
 	mkdir $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(CAIROUP).tar.gz
+$(CAIROUP).tar.gz:
+	wget -nc -O$@ http://cairographics.org/releases/$@
+
+.PHONY: cairo
+cairo:$(CAIRO)_$(ARCH).deb
+$(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROUP).tar.gz
+	mkdir $@
+	tar xzvf $(CAIROUP).tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(FBIUP).tar.gz
@@ -333,9 +346,13 @@ $(FIRMWAREALL): $(SPREZZ)/firmware-all/debian/changelog
 
 clean:
 	rm -rf sprezzos-world $(FETCHED) $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
-	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV) $(LVM2)
+	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV) $(LVM2) $(CAIRO)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
+
+clobber:
+	rm -rf $(ADOBEUP) $(CAIROUP) $(FBIUP) $(GRUBUP) $(HFSUTILSUP)
+	rm -rf $(LIBPNGUP) $(LVM2UP) $(OPENSSHUP)
