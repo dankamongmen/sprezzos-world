@@ -32,6 +32,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 #CAIRO:=cairo_$(cairo_VERSION)
 CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
+CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
 #FBI:=fbi_$(fbi_VERSION)
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 #GRUBPC:=grub-pc_$(grub-pc_VERSION)
@@ -165,9 +166,12 @@ FETCHED:=$(FETCHED) $(CAIROUP).tar.xz
 $(CAIROUP).tar.xz:
 	wget -nc -O$@ http://cairographics.org/releases/$@
 
+$(CAIROORIG): $(CAIROUP).tar.xz
+	ln -s $< $@
+
 .PHONY: cairo
 cairo:$(CAIRO)_$(ARCH).deb
-$(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROUP).tar.xz
+$(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROORIG)
 	mkdir $@
 	tar xJvf $(CAIROUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
