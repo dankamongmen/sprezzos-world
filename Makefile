@@ -290,7 +290,7 @@ $(MESA): $(SPREZZ)/mesa/debian/changelog $(MESAORIG)
 
 FETCHED:=$(FETCHED) $(PULSEAUDIOUP).tar.xz
 $(PULSEAUDIOUP).tar.xz:
-	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(PULSEAUDIOUP)
+	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(PULSEAUDIOUP).tar.xz
 
 $(PULSEAUDIOORIG): $(PULSEAUDIOUP).tar.xz
 	ln -s $< $@
