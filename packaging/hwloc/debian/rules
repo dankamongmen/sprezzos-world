@@ -1,0 +1,116 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/class/langcore.mk
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+else
+CROSS= --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+export DEB_BUILD_HARDENING=1
+
+ifneq (,$(DEB_PARALLEL_JOBS))
+MAKEFLAGS += -j$(DEB_PARALLEL_JOBS)
+endif
+
+confflags=--prefix=/usr --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --enable-static CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs"
+
+configure: configure.ac config/hwloc.m4
+	autoconf
+
+obj-x/config.status: configure
+	dh_testdir
+
+	mkdir -p obj-x
+	cd obj-x && ../configure $(CROSS) $(confflags)
+
+obj-nox/config.status: configure
+	dh_testdir
+
+	mkdir -p obj-nox
+	cd obj-nox && ../configure $(CROSS) $(confflags) --disable-cairo
+
+
+build: build-stamp-x build-stamp-nox debian/libhwloc5.links
+build-stamp-x: obj-x/config.status
+	dh_testdir
+
+	cd obj-x && $(MAKE)
+
+	touch $@
+
+build-stamp-nox: obj-nox/config.status
+	dh_testdir
+
+	cd obj-nox && $(MAKE)
+	-cd obj-nox && $(MAKE) check
+
+	touch $@
+
+debian/libhwloc5.links: debian/libhwloc5.links.in
+	sed -e 's/@DEB_HOST_MULTIARCH@/$(DEB_HOST_MULTIARCH)/g' < $< > $@
+
+clean: 
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp-x
+	rm -f build-stamp-nox
+	rm -f debian/libhwloc5.links
+
+	rm -fr obj-x obj-nox
+	rm -f config.sub config.guess
+	rm -f configure
+
+	dh_clean 
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep  
+	dh_installdirs
+
+	cd obj-x && $(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+
+binary-indep: export DH_OPTIONS=-i
+binary-indep: install
+	dh_testdir
+	dh_testroot
+	dh_install
+	dh_installdocs
+	dh_installchangelogs 
+	dh_installexamples
+	dh_installman
+	dh_link
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-arch: export DH_OPTIONS=-s
+binary-arch: install
+	dh_testdir
+	dh_testroot
+	dh_install
+	dh_installdocs
+	dh_installchangelogs 
+	dh_installman
+	dh_installmenu
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install 
