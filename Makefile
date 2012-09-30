@@ -230,7 +230,7 @@ $(LIBDRMORIG): $(LIBDRMUP).tar.bz2
 libdrm:$(LIBDRM)_$(ARCH).deb
 $(LIBDRM): $(SPREZZ)/libdrm/debian/changelog $(LIBDRMORIG)
 	mkdir $@
-	tar xjvf $(LIBPNGORIG) --strip-components=1 -C $@
+	tar xjvf $(LIBDRMORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
