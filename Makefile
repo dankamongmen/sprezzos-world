@@ -92,16 +92,24 @@ world: $(DEBS) $(UDEBS)
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	{ [ ! -e $</configure.in ] && [ ! -e $</configure.ac ] ; } || \
-		{ [ -e $</configure ] || [ -e $</bootstrap ] ; } || \
-		{ cd $< && autoreconf -sif ; }
-	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs --exclude=\*/debian/
 	cd $< && dpkg-buildpackage -k$(DEBKEY)
 
+# Packages which we take from upstream source repositories rather than a
+# release tarball. We must make our own *.orig.tar.* files for these.
 .PHONY: growlight
 growlight: $(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone https://github.com/dankamongmen/growlight.git $@
+	cd $@ && autoreconf -sif
+	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs
+	cp -r $(<D) $@/
+
+.PHONY: omphalos
+omphalos:$(OMPHALOS)_$(ARCH).deb
+$(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
+	git clone https://github.com/dankamongmen/omphalos.git $@
+	cd $@ && autoreconf -sif
+	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: xmlstarlet
@@ -114,26 +122,15 @@ $(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
 nethorologist: $(NETHOROLOGIST)_$(ARCH).deb
 $(NETHOROLOGIST): $(SPREZZ)/nethorologist/debian/changelog
 	git clone https://github.com/Sprezzatech/nethorologist.git $@
+	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: strace
 strace: $(STRACE)_$(ARCH).deb
 $(STRACE): $(SPREZZ)/strace/debian/changelog
 	git clone git://strace.git.sourceforge.net/gitroot/strace/strace $@
-	cp -r $(<D) $@/
-
-# Ubuntu native packages ship their own debian/
-.PHONY: fwts
-fwts:$(FWTS)_$(ARCH).deb
-$(FWTS): $(SPREZZ)/fwts/debian/changelog
-	git clone git://kernel.ubuntu.com/hwe/fwts $@
-	rm -rf $@/debian
-	cp -r $(<D) $@/
-
-.PHONY: omphalos
-omphalos:$(OMPHALOS)_$(ARCH).deb
-$(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
-	git clone https://github.com/dankamongmen/omphalos.git $@
+	cd $@ && autoreconf -sif
+	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: fbv
@@ -164,6 +161,16 @@ mplayer:$(MPLAYER)_$(ARCH).deb
 $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	svn co svn://svn.mplayerhq.hu/mplayer/trunk $@
 	rm -rf $@/debian
+	cp -r $(<D) $@/
+
+# Ubuntu native packages ship their own debian/
+.PHONY: fwts
+fwts:$(FWTS)_$(ARCH).deb
+$(FWTS): $(SPREZZ)/fwts/debian/changelog
+	git clone git://kernel.ubuntu.com/hwe/fwts $@
+	rm -rf $@/debian
+	cd $@ && autoreconf -sif
+	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: linux-latest
