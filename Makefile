@@ -36,6 +36,8 @@ LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 ADOBE:=fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_VERSION)
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
+LIBPNG:=libpng_$(libpng_VERSION)
+LIBPNGUP:=libpng-$(libpng_VERSION)
 BASEFILES:=base-files_$(base-files_VERSION)
 
 GROWLIGHT:=growlight_$(growlight_VERSION)
@@ -43,7 +45,6 @@ XMLSTARLET:=xmlstarlet-$(xmlstarlet_VERSION)
 LIBRSVG:=librsvg-$(librsvg_VERSION)
 LINUXLATEST:=linux-latest_$(linux-latest_VERSION)
 UTILLINUX:=util-linux_$(util-linux_VERSION)
-LIBPNG:=libpng_$(libpng_VERSION)
 LIBJPEGTURBO:=libjpeg-turbo_$(libjpeg-turbo_VERSION)
 OMPHALOS:=omphalos_$(omphalos_VERSION)
 FWTS:=fwts_$(fwts_VERSION)
@@ -183,15 +184,15 @@ $(LIBJPEGTURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.ta
 	tar xzvf libjpeg-turbo-1.2.1.tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) libpng-1.5.12.tar.bz2
+FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
 libpng-1.5.12.tar.bz2:
-	wget -nc -O$@ http://sourceforge.net/projects/libpng/files/libpng15/1.5.12/libpng-1.5.12.tar.bz2/download
+	wget -nc -O$@ ftp://ftp.simplesystems.org/pub/libpng/png/src/$(LIBPNGUP).tar.bz2
 
 .PHONY: libpng
 libpng:$(LIBPNG)_$(ARCH).deb
-$(LIBPNG): $(SPREZZ)/libpng/debian/changelog libpng-1.5.12.tar.bz2
+$(LIBPNG): $(SPREZZ)/libpng/debian/changelog $(LIBPNGUP).tar.bz2
 	mkdir $@
-	tar xjvf libpng-1.5.12.tar.bz2 --strip-components=1 -C $@
+	tar xjvf $(LIBPNGUP).tar.bz2 --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
