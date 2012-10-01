@@ -128,12 +128,6 @@ fbv:$(FBV).udeb
 $(FBV): $(SPREZZ)/fbv/debian/changelog
 	git clone git://repo.or.cz/fbv.git $@
 
-.PHONY: fbterm
-fbterm:$(FBTERM)_$(ARCH).deb
-$(FBTERM): $(SPREZZ)/fbterm/debian/changelog
-	git clone https://github.com/dankamongmen/nfbterm.git $@
-	cp -r $(<D) $@/
-
 .PHONY: apitrace
 apitrace:$(APITRACE)_$(ARCH).deb
 $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
@@ -214,6 +208,20 @@ libjpeg-turbo:$(LIBJPEGTURBO)_$(ARCH).deb
 $(LIBJPEGTURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.tar.gz
 	mkdir $@
 	tar xzvf libjpeg-turbo-1.2.1.tar.gz --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(FBTERMUP).tar.gz
+$(FBTERMUP).tar.gz:
+	wget -nc -O$@ http://nick-black.com/pub/$@
+
+$(FBTERMORIG): $(FBTERMUP).tar.gz
+	ln -s $< $@
+
+.PHONY: fbterm
+fbterm:$(FBTERM)_$(ARCH).deb
+$(FBTERM): $(SPREZZ)/fbterm/debian/changelog $(FBTERMORIG)
+	mkdir $@
+	tar xzvf $(FBTERMORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GTK3UP).tar.xz
