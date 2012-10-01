@@ -11,7 +11,7 @@ DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
-	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils fbi \
+	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat
@@ -33,7 +33,7 @@ CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.bz2
-GRUBUP:=grub-$(shell echo $(grub-pc_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
+GRUBUP:=grub-$(shell echo $(grub2_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
 GTK3ORIG:=gtk+3.0_$(shell echo $(gtk3_VERSION) | cut -d- -f1).orig.tar.xz
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -59,7 +59,7 @@ PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 SOCATUP:=socat-$(shell echo $(socat_VERSION) | cut -d- -f1)
 SOCATORIG:=$(shell echo $(SOCATUP) | tr - _).orig.tar.bz2
 
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
@@ -373,9 +373,9 @@ FETCHED:=$(FETCHED) $(GRUBUP).tar.xz
 $(GRUBUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnu.org/gnu/grub/$(GRUBUP).tar.xz
 
-.PHONY: grub-pc
-grub-pc:$(GRUBPC)_$(ARCH).deb
-$(GRUBPC): $(SPREZZ)/grub-pc/debian/changelog $(GRUBUP).tar.xz
+.PHONY: grub2
+grub2:$(GRUB2)_$(ARCH).deb
+$(GRUB2): $(SPREZZ)/grub2/debian/changelog $(GRUBUP).tar.xz
 	mkdir -p $@
 	tar xJvf $(GRUBUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
@@ -437,7 +437,7 @@ clean:
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT) $(GTK+3)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
-	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
+	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT)
 
