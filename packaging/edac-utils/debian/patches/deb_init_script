@@ -1,0 +1,149 @@
+From: Yaroslav Halchenko <debian@onerussian.com>
+Subject: Various changes to the init script provided by upstream to be more appropriate on Debian systems
+
+  Created as a diff between release branch of pre 0.18 Debian releases
+  and vanilla upstream releases
+
+Origin: Debian
+Last-Update: 2012-05-19
+
+diff --git a/src/etc/edac.init.in b/src/etc/edac.init.in
+old mode 100644
+new mode 100755
+index 07aab94..4676ffd
+--- a/src/etc/edac.init.in
++++ b/src/etc/edac.init.in
+@@ -6,22 +6,25 @@
+ # Produced at Lawrence Livermore National Laboratory.
+ # Written by Mark Grondona <mgrondona@llnl.gov>
+ # UCRL-CODE-230739.
++# Modified by Yaroslav Halchenko <debian@onerussian.com> 2007 for Debian OS
+ ###############################################################################
+ # chkconfig:      345 40 60
+ ###############################################################################
+ ### BEGIN INIT INFO
+ # Provides:       edac
+-# Required-Start: $named $time
+-# Default-Start:  3 5
+-# Default-Stop:   0 1 2 6
+-# Description:    Initialize EDAC drivers for machine hardware
++# Required-Start: $remote_fs $time
++# Required-Stop: $remote_fs $time
++# Default-Start:  2 3 4 5
++# Default-Stop:   0 1 6
++# Short-Description: Initialize EDAC
++# Description:    Initialize EDAC: load DIMM labels into EDAC
+ ### END INIT INFO
+ ###############################################################################
+ 
+ unset SERVICE
+ 
+ SERVICE="edac"
+-
++DESC="Memory Error Detection and Correction"
+ prefix="@prefix@"
+ exec_prefix="@exec_prefix@"
+ sbindir="@sbindir@"
+@@ -45,6 +48,15 @@ done
+ 
+ ###############################################################################
+ 
++# Load the VERBOSE setting and other rcS variables
++. /lib/init/vars.sh
++
++# Define LSB log_* functions.
++. /lib/lsb/init-functions
++
++
++###############################################################################
++
+ service_start ()
+ {
+ # Start the service.  Required by LSB.
+@@ -53,21 +65,24 @@ service_start ()
+ #  automatically, thus return successfully, but don't do anything.
+ #
+   if [ -n "$EDAC_DRIVER" ]; then
+-     echo -n "Starting ${SERVICE}: "
++     log_daemon_msg "Enabling ${DESC}" "$SERVICE"
+      modprobe $EDAC_DRIVER
+      STATUS=$?
+      case $STATUS in 
+-       0) echo success ;;
+-       5) echo No EDAC support for this hardware. ;;
+-       *) echo failure ;;
++       0) log_end_msg 0 ;;
++       5) log_failure_msg "No EDAC support for this hardware"; log_end_msg 1 ;;
++       *) log_failure_msg "failure with exit code $STATUS"; log_end_msg 1 ;;
+      esac
++  else
++      log_daemon_msg "Not enabling ${DESC} since EDAC_DRIVER is not set"
++      log_end_msg 0
+   fi
+-  echo -n "Loading ${SERVICE} DIMM labels: "
++  log_daemon_msg "Loading DIMM labels for ${DESC}" "$SERVICE"
+   $edac_ctl --register-labels --quiet
+   STATUS=$?
+   case $STATUS in
+-   0) echo success ;;
+-   *) echo failure ;;
++   0) log_end_msg 0 ;;
++   *) log_failure_msg "failure with exit code $STATUS"; log_end_msg 1 ;;
+   esac
+ }
+ 
+@@ -75,14 +90,18 @@ service_start ()
+ 
+ service_stop ()
+ {
+-  echo -n "Disabling ${SERVICE}: "
+   if [ -n "$EDAC_DRIVER" ]; then
++
+     modprobe -r $EDAC_DRIVER
+     STATUS=$?
+-    [ $STATUS -eq 0 ] && echo success || echo failure
++    case $STATUS in
++      0) log_end_msg 0 ;;
++      *) log_failure_msg "failure with exit code $STATUS"; log_end_msg 1 ;;
++    esac
+   else
+-    echo "Not supported for this configuration."
+-    STATUS=6
++    [ "$VERBOSE" != no ] && log_daemon_msg "Not disabling $DESC since EDAC_DRIVER is not set" "$SERVICE"
++    # No need to complaint if no driver is provided
++    # STATUS=6
+   fi
+ }
+ 
+@@ -92,7 +111,8 @@ service_status ()
+ {
+ # Print the current status of the service.  Required by LSB.
+ #
+-  edac-ctl --status
++  log_daemon_msg "Status of $DESC"
++  $edac_ctl --status
+   STATUS=0
+ }
+ 
+@@ -110,11 +130,17 @@ case "$1" in
+   status)
+     service_status
+     ;;
++  restart|force-reload)
++    log_daemon_msg "Forcing reload of drivers for $DESC" "${SERVICE}"
++    service_stop  || log_end_msg 1
++    service_start && log_end_msg 0 || log_end_msg 1
++    ;;
+   *)
+-    COMMANDS="start|stop|status"
+-    echo "Usage: $0 {${COMMANDS}}"
+-    exit 2
++    COMMANDS="{start|stop|status|restart|force-reload}"
++    echo "Usage: $0 ${COMMANDS}" >&2
++    exit 3
+     ;;
+ esac
+ 
+-exit $STATUS
++# exit $STATUS
++:
