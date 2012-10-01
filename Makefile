@@ -14,7 +14,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	omphalos sudo systemd librsvg grub-pc xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
-	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio
+	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat
 
 SPREZZ:=packaging
 
@@ -56,13 +56,15 @@ OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_VERSION) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
+SOCATUP:=socat-$(shell echo $(socat_VERSION) | cut -d- -f1)
+SOCATORIG:=$(shell echo $(SOCATUP) | tr - _).orig.tar.bz2
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUBPC) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
-	$(GTK3) $(LIBDRM) $(PULSEAUDIO)
+	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG)
@@ -290,7 +292,7 @@ $(MESA): $(SPREZZ)/mesa/debian/changelog $(MESAORIG)
 
 FETCHED:=$(FETCHED) $(PULSEAUDIOUP).tar.xz
 $(PULSEAUDIOUP).tar.xz:
-	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(PULSEAUDIOUP).tar.xz
+	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(@F)
 
 $(PULSEAUDIOORIG): $(PULSEAUDIOUP).tar.xz
 	ln -s $< $@
@@ -300,6 +302,20 @@ pulseaudio:$(PULSEAUDIO)_$(ARCH).deb
 $(PULSEAUDIO): $(SPREZZ)/pulseaudio/debian/changelog $(PULSEAUDIOORIG)
 	mkdir $@
 	tar xJvf $(PULSEAUDIOORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(SOCATUP).tar.bz2
+$(SOCATUP).tar.bz2:
+	wget -nc -O$@ http://www.dest-unreach.org/socat/download/$(@F)
+
+$(SOCATORIG): $(SOCATUP).tar.bz2
+	ln -s $< $@
+
+.PHONY: socat
+socat:$(SOCAT)_$(ARCH).deb
+$(SOCAT): $(SPREZZ)/socat/debian/changelog $(SOCATORIG)
+	mkdir $@
+	tar xjvf $(SOCATORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 .PHONY: sudo
@@ -423,7 +439,7 @@ clean:
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUBPC) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
-	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO)
+	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT)
 
 clobber:
 	rm -rf $(FETCHED)
