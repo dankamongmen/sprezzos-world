@@ -1,0 +1,75 @@
+#! /usr/bin/make -f
+
+# Parsing of DEB_BUILD_OPTIONS flags.
+# Note that nostrip is handled automatically by debhelper.
+CFLAGS := -g -Wall
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+    CFLAGS += -O0
+else
+    CFLAGS += -O2
+endif
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+# Temporary root
+DEBTMP := $(CURDIR)/debian/tmp
+
+build: build-indep build-arch
+build-indep: build-stamp
+build-arch: build-stamp
+build-stamp:
+	dh_testdir
+	dh_autoreconf
+	CFLAGS="$(CFLAGS)" ./configure \
+		--mandir='$${prefix}/share/man' \
+		--enable-nfsv41 \
+		--enable-ipv6 \
+		--enable-libmount-mount
+	$(MAKE) $(MAKEFLAGS)
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	rm -rf $(DEBTMP)
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_autoreconf_clean
+	dh_clean
+
+binary-indep: build
+binary-arch: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	mkdir $(DEBTMP)
+	$(MAKE) DESTDIR='$(DEBTMP)' install
+	dh_installman
+	dh_install -Xman --fail-missing
+	dh_installdocs -A
+	dh_installdocs -pnfs-common debian/README.Debian.nfsv4
+	install -m 0755 debian/nfs-common.init debian/nfs-common/etc/init.d/nfs-common
+	install -m 0755 debian/nfs-kernel-server.init debian/nfs-kernel-server/etc/init.d/nfs-kernel-server
+	install -m 0644 debian/nfs-common.bugcontrol debian/nfs-common/usr/share/bug/nfs-common/control
+	install -m 0755 debian/nfs-common.bugscript debian/nfs-common/usr/share/bug/nfs-common/script
+	install -m 0644 debian/nfs-utils.bugcontrol debian/nfs-common/usr/share/bug/nfs-utils/control
+	install -m 0644 debian/nfs-utils.bugpresubj debian/nfs-common/usr/share/bug/nfs-utils/presubj
+	install -m 0755 debian/nfs-kernel-server.bugscript debian/nfs-kernel-server/usr/share/bug/nfs-kernel-server/script
+	dh_link
+	dh_installchangelogs ChangeLog
+	dh_lintian
+	dh_strip
+	dh_compress
+	dh_fixperms
+	chmod u+s debian/nfs-common/sbin/mount.nfs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums -Xvar/lib
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary

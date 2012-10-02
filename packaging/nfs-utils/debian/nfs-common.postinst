@@ -1,0 +1,50 @@
+#!/bin/sh
+
+set -e
+
+#DEBHELPER#
+
+case "$1" in
+    configure)
+        ucf --three-way /usr/share/nfs-common/conffiles/idmapd.conf /etc/idmapd.conf
+        ucf --three-way /usr/share/nfs-common/conffiles/nfs-common.default /etc/default/nfs-common
+
+        if [ "$2" != "" ] && dpkg --compare-versions "$2" lt 1:1.1.0-10; then
+            update-rc.d -f nfs-common remove >/dev/null
+        fi
+        update-rc.d nfs-common start 20 2 3 4 5 . stop 20 0 1 6 . start 44 S . >/dev/null
+
+        if ! getent passwd statd >/dev/null; then
+            adduser --system --home /var/lib/nfs --no-create-home statd
+        fi
+        if dpkg --compare-versions "$2" ge 1:1.0.7-10 && dpkg --compare-versions "$2" lt 1:1.0.7-13; then
+            usermod --home /var/lib/nfs statd || true
+            if [ -d /home/statd ]; then
+                rmdir --ignore-fail-on-non-empty /home/statd
+            fi
+        fi
+
+        chown statd: /var/lib/nfs/sm \
+            /var/lib/nfs/sm.bak \
+            /var/lib/nfs/rpc_pipefs \
+            /var/lib/nfs
+        if [ -f /var/lib/nfs/state ]; then
+            chown statd /var/lib/nfs/state
+        fi
+        
+        if [ "$2" != "" ] || dpkg --compare-versions "$2" lt 1:1.1.0-14; then
+            if dpkg-statoverride --list /sbin/mount.nfs >/dev/null 2>&1; then
+                dpkg-statoverride --remove /sbin/mount.nfs
+            fi
+        fi
+
+	# Migrate /lib/init/rw/sendsigs.omit.statd to /run.
+	if [ -f /lib/init/rw/sendsigs.omit.d/statd ]; then 
+	    mv /lib/init/rw/sendsigs.omit.d/statd /run/sendsigs.omit.d/statd
+	fi
+    ;;
+esac
+
+act="restart"
+[ "$1:$2" = "configure:" ] && act="start"
+invoke-rc.d nfs-common $act
