@@ -1,0 +1,278 @@
+2012-01-05  Paul Pluzhnikov  <ppluzhnikov@google.com>
+
+	* stdio-common/vfscanf.c (_IO_vfscanf_internal): Use alloca when
+	appropriate.
+
+2011-09-09  Ulrich Drepper  <drepper@gmail.com>
+ 
+	[BZ #13138]
+	* stdio-common/vfscanf.c (ADDW): Allocate large memory block with
+	realloc.
+	(_IO_vfscanf_internal): Remove reteof.  Use errout after setting done.
+	Free memory block if necessary.
+
+---
+ stdio-common/vfscanf.c |  124 ++++++++++++++++++++++++++++++++++++++-----------
+ 1 file changed, 97 insertions(+), 27 deletions(-)
+
+--- a/stdio-common/vfscanf.c
++++ b/stdio-common/vfscanf.c
+@@ -272,16 +272,39 @@
+   CHAR_T *wp = NULL;		/* Workspace.  */
+   size_t wpmax = 0;		/* Maximal size of workspace.  */
+   size_t wpsize;		/* Currently used bytes in workspace.  */
++  bool use_malloc = false;
+ #define ADDW(Ch)							    \
+   do									    \
+     {									    \
+-      if (wpsize == wpmax)						    \
++      if (__builtin_expect (wpsize == wpmax, 0))			    \
+ 	{								    \
+ 	  CHAR_T *old = wp;						    \
+-	  wpmax = (UCHAR_MAX + 1 > 2 * wpmax ? UCHAR_MAX + 1 : 2 * wpmax);  \
+-	  wp = (CHAR_T *) alloca (wpmax * sizeof (CHAR_T));		    \
+-	  if (old != NULL)						    \
+-	    MEMCPY (wp, old, wpsize);					    \
++	  size_t newsize = (UCHAR_MAX + 1 > 2 * wpmax			    \
++			    ? UCHAR_MAX + 1 : 2 * wpmax);		    \
++	  if (use_malloc || !__libc_use_alloca (newsize))		    \
++	    {								    \
++	      wp = realloc (use_malloc ? wp : NULL, newsize);		    \
++	      if (wp == NULL)						    \
++		{							    \
++		  if (use_malloc)					    \
++		    free (old);						    \
++		  done = EOF;						    \
++		  goto errout;						    \
++		}							    \
++	      if (! use_malloc)						    \
++		MEMCPY (wp, old, wpsize);				    \
++	      wpmax = newsize;						    \
++	      use_malloc = true;					    \
++	    }								    \
++	  else								    \
++	    {								    \
++	      size_t s = wpmax * sizeof (CHAR_T);			    \
++	      wp = (CHAR_T *) extend_alloca (wp, s,			    \
++					     newsize * sizeof (CHAR_T));    \
++	      wpmax = s / sizeof (CHAR_T);				    \
++	      if (old != NULL)						    \
++		MEMCPY (wp, old, wpsize);				    \
++	    }								    \
+ 	}								    \
+       wp[wpsize++] = (Ch);						    \
+     }									    \
+@@ -690,7 +713,10 @@
+ 		      if (Str != NULL)					      \
+ 			add_ptr_to_free (strptr);			      \
+ 		      else if (flags & POSIX_MALLOC)			      \
+-			goto reteof;					      \
++			{						      \
++			  done = EOF;					      \
++			  goto errout;					      \
++			}						      \
+ 		    }							      \
+ 		  else							      \
+ 		    Str = ARG (Type *);					      \
+@@ -731,8 +757,11 @@
+ 			  newstr = (char *) realloc (*strptr,
+ 						     strleng + MB_CUR_MAX);
+ 			  if (newstr == NULL)
+-			    /* c can't have `a' flag, only `m'.  */
+-			    goto reteof;
++			    {
++			      /* c can't have `a' flag, only `m'.  */
++			      done = EOF;
++			      goto errout;
++			    }
+ 			  else
+ 			    {
+ 			      *strptr = newstr;
+@@ -778,8 +807,11 @@
+ 				 effort.  */
+ 			      str = (char *) realloc (*strptr, strsize + 1);
+ 			      if (str == NULL)
+-				/* c can't have `a' flag, only `m'.  */
+-				goto reteof;
++				{
++				  /* c can't have `a' flag, only `m'.  */
++				  done = EOF;
++				  goto errout;
++				}
+ 			      else
+ 				{
+ 				  *strptr = (char *) str;
+@@ -850,8 +882,12 @@
+ 						      (strsize + 1)
+ 						      * sizeof (wchar_t));
+ 			  if (wstr == NULL)
+-			    /* C or lc can't have `a' flag, only `m' flag.  */
+-			    goto reteof;
++			    {
++			      /* C or lc can't have `a' flag, only `m'
++				 flag.  */
++			      done = EOF;
++			      goto errout;
++			    }
+ 			  else
+ 			    {
+ 			      *strptr = (char *) wstr;
+@@ -901,8 +937,11 @@
+ 						    ((strsize + 1)
+ 						     * sizeof (wchar_t)));
+ 			if (wstr == NULL)
+-			  /* C or lc can't have `a' flag, only `m' flag.  */
+-			  goto reteof;
++			  {
++			    /* C or lc can't have `a' flag, only `m' flag.  */
++			    done = EOF;
++			    goto errout;
++			  }
+ 			else
+ 			  {
+ 			    *strptr = (char *) wstr;
+@@ -1014,7 +1053,10 @@
+ 			    if (newstr == NULL)
+ 			      {
+ 				if (flags & POSIX_MALLOC)
+-				  goto reteof;
++				  {
++				    done = EOF;
++				    goto errout;
++				  }
+ 				/* We lose.  Oh well.  Terminate the
+ 				   string and stop converting,
+ 				   so at least we don't skip any input.  */
+@@ -1064,7 +1106,10 @@
+ 			      if (str == NULL)
+ 				{
+ 				  if (flags & POSIX_MALLOC)
+-				    goto reteof;
++				    {
++				      done = EOF;
++				      goto errout;
++				    }
+ 				  /* We lose.  Oh well.  Terminate the
+ 				     string and stop converting,
+ 				     so at least we don't skip any input.  */
+@@ -1110,7 +1155,10 @@
+ 		      if (newstr == NULL)
+ 			{
+ 			  if (flags & POSIX_MALLOC)
+-			    goto reteof;
++			    {
++			      done = EOF;
++			      goto errout;
++			    }
+ 			  /* We lose.  Oh well.  Terminate the string
+ 			     and stop converting, so at least we don't
+ 			     skip any input.  */
+@@ -1194,7 +1242,10 @@
+ 			    if (wstr == NULL)
+ 			      {
+ 				if (flags & POSIX_MALLOC)
+-				  goto reteof;
++				  {
++				    done = EOF;
++				    goto errout;
++				  }
+ 				/* We lose.  Oh well.  Terminate the string
+ 				   and stop converting, so at least we don't
+ 				   skip any input.  */
+@@ -1266,7 +1317,10 @@
+ 			  if (wstr == NULL)
+ 			    {
+ 			      if (flags & POSIX_MALLOC)
+-				goto reteof;
++				{
++				  done = EOF;
++				  goto errout;
++				}
+ 			      /* We lose.  Oh well.  Terminate the
+ 				 string and stop converting, so at
+ 				 least we don't skip any input.  */
+@@ -2470,7 +2524,10 @@
+ 			      if (wstr == NULL)
+ 				{
+ 				  if (flags & POSIX_MALLOC)
+-				    goto reteof;
++				    {
++				      done = EOF;
++				      goto errout;
++				    }
+ 				  /* We lose.  Oh well.  Terminate the string
+ 				     and stop converting, so at least we don't
+ 				     skip any input.  */
+@@ -2552,7 +2609,10 @@
+ 			      if (wstr == NULL)
+ 				{
+ 				  if (flags & POSIX_MALLOC)
+-				    goto reteof;
++				    {
++				      done = EOF;
++				      goto errout;
++				    }
+ 				  /* We lose.  Oh well.  Terminate the
+ 				     string and stop converting,
+ 				     so at least we don't skip any input.  */
+@@ -2694,7 +2754,10 @@
+ 			      if (newstr == NULL)
+ 				{
+ 				  if (flags & POSIX_MALLOC)
+-				    goto reteof;
++				    {
++				      done = EOF;
++				      goto errout;
++				    }
+ 				  /* We lose.  Oh well.  Terminate the string
+ 				     and stop converting, so at least we don't
+ 				     skip any input.  */
+@@ -2759,7 +2822,10 @@
+ 				  goto allocagain;
+ 				}
+ 			      if (flags & POSIX_MALLOC)
+-				goto reteof;
++				{
++				  done = EOF;
++				  goto errout;
++				}
+ 			      /* We lose.  Oh well.  Terminate the
+ 				 string and stop converting,
+ 				 so at least we don't skip any input.  */
+@@ -2802,7 +2868,10 @@
+ 		      if (newstr == NULL)
+ 			{
+ 			  if (flags & POSIX_MALLOC)
+-			    goto reteof;
++			    {
++			      done = EOF;
++			      goto errout;
++			    }
+ 			  /* We lose.  Oh well.  Terminate the string
+ 			     and stop converting, so at least we don't
+ 			     skip any input.  */
+@@ -2865,12 +2934,14 @@
+   /* Unlock stream.  */
+   UNLOCK_STREAM (s);
+ 
++  if (use_malloc)
++    free (wp);
++
+   if (errp != NULL)
+     *errp |= errval;
+ 
+-  if (done == EOF)
++  if (__builtin_expect (done == EOF, 0))
+     {
+-  reteof:
+       if (__builtin_expect (ptrs_to_free != NULL, 0))
+ 	{
+ 	  struct ptrs_to_free *p = ptrs_to_free;
+@@ -2885,7 +2956,6 @@
+ 	      ptrs_to_free = p;
+ 	    }
+ 	}
+-      return EOF;
+     }
+   else if (__builtin_expect (strptr != NULL, 0))
+     {

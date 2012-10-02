@@ -1,0 +1,88 @@
+From: Thomas Schwinge <thomas@schwinge.name>
+Subject: [PATCH] gscope
+
+Minimal gscope stuff.
+
+glibc-2.8/debian/patches/hurd-i386/local-gscope.diff 3085
+
+Probably written by Samuel Thibault.
+
+---
+
+I think that's the corresponding error message:
+
+    /media/Stalin/tmp/glibc.hurd.gnu-2/elf/librtld.os: In function `add_dependency':
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-lookup.c:106: undefined reference to `atomic_forced_read'
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-lookup.c:109: undefined reference to `atomic_read_barrier'
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-lookup.c:113: undefined reference to `atomic_forced_read'
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-lookup.c:141: undefined reference to `THREAD_GSCOPE_RESET_FLAG'
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-lookup.c:147: undefined reference to `atomic_forced_read'
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-lookup.c:284: undefined reference to `THREAD_GSCOPE_SET_FLAG'
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-lookup.c:261: undefined reference to `atomic_write_barrier'
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-lookup.c:250: undefined reference to `atomic_write_barrier'
+    /media/Stalin/tmp/glibc.hurd.gnu-2/elf/librtld.os: In function `add_to_global':
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-open.c:162: undefined reference to `atomic_write_barrier'
+    /media/Stalin/tmp/glibc.hurd.gnu-2/elf/librtld.os: In function `dl_open_worker':
+    /media/data/home/thomas/tmp/source/glibc/git/glibc.hurd/elf/dl-open.c:478: undefined reference to `atomic_write_barrier'
+    collect2: ld returned 1 exit status
+    make[2]: *** [/media/Stalin/tmp/glibc.hurd.gnu-2/elf/ld.so] Error 1
+
+ elf/dl-support.c                  |    1 +
+ sysdeps/generic/ldsodefs.h        |    1 +
+ sysdeps/mach/hurd/sysdep-cancel.h |    9 +++++++++
+ sysdeps/mach/hurd/tls.h           |   13 +++++++++++++
+ 4 files changed, 24 insertions(+)
+
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -158,6 +158,7 @@
+ /* Function in libpthread to wait for termination of lookups.  */
+ void (*_dl_wait_lookup_done) (void);
+ 
++int volatile _dl_thread_gscope_count;
+ struct dl_scope_free_list *_dl_scope_free_list;
+ 
+ #ifdef NEED_DL_SYSINFO
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -515,6 +515,7 @@
+     size_t count;
+     void *list[50];
+   } *_dl_scope_free_list;
++  EXTERN volatile int _dl_thread_gscope_count;
+ #ifdef SHARED
+ };
+ # define __rtld_global_attribute__
+--- /dev/null
++++ b/sysdeps/mach/hurd/sysdep-cancel.h
+@@ -0,0 +1,9 @@
++#include <sysdep.h>
++
++/* Always multi-thread (since there's at least the sig handler), but no
++   handling enabled.  */
++#define SINGLE_THREAD_P (0)
++#define RTLD_SINGLE_THREAD_P (0)
++#define LIBC_CANCEL_ASYNC()	0 /* Just a dummy value.  */
++#define LIBC_CANCEL_RESET(val)	((void)(val)) /* Nothing, but evaluate it.  */
++#define LIBC_CANCEL_HANDLED()	/* Nothing.  */
+--- a/sysdeps/mach/hurd/tls.h
++++ b/sysdeps/mach/hurd/tls.h
+@@ -77,5 +77,18 @@
+ 
+ #endif /* HAVE_TLS_SUPPORT */
+ 
++#ifndef __ASSEMBLER__
++#include <mach/mach_traps.h>
++#include <atomic.h>
++/* Temporary poor-man's global scope switch support: just busy-waits */
++#define THREAD_GSCOPE_SET_FLAG() \
++	asm volatile ("lock incl %0":"=m"(GL(dl_thread_gscope_count)))
++#define THREAD_GSCOPE_RESET_FLAG() \
++	asm volatile ("lock decl %0":"=m"(GL(dl_thread_gscope_count)))
++#define THREAD_GSCOPE_WAIT() \
++  while (GL(dl_thread_gscope_count)) { \
++    __swtch_pri (0); \
++  }
++#endif
+ 
+ #endif /* tls.h */

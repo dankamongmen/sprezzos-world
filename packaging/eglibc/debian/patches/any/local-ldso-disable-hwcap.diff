@@ -1,0 +1,80 @@
+# DP: Allow hwcap's to be disabled with the existence of a file. This
+# DP: makes it easier to do upgrades with optimized (hwcap) library
+# DP: packages.
+# DP: Author: Rewritten by Daniel Jacobowitz <dan@debian.org>
+# DP: Upstream status: Debian-Specific
+# DP: Status Details: This isn't going to be acceptable upstream, we
+# DP:                 only need it because we support in-place upgrades.
+# DP: Date: 2003-10-28, (Updated 2005-01-02 gotom, 2007-05-20 aurel32)
+
+---
+ elf/dl-cache.c  |    6 ++++++
+ elf/dl-sysdep.c |   21 +++++++++++++++++++--
+ 2 files changed, 25 insertions(+), 2 deletions(-)
+
+--- a/elf/dl-sysdep.c
++++ b/elf/dl-sysdep.c
+@@ -417,6 +417,20 @@
+   /* For TLS enabled builds always add 'tls'.  */
+   ++cnt;
+ 
++  if (__access ("/etc/ld.so.nohwcap", F_OK) == 0)
++    {
++      /* If hwcap is disabled, we only have the base directory to search.  */
++      result = (struct r_strlenpair *) malloc (sizeof (*result));
++      if (result == NULL)
++	goto no_memory;
++
++      result[0].str = (char *) result;  /* Does not really matter.  */
++      result[0].len = 0;
++
++      *sz = 1;
++      return result;
++    }
++
+   /* Create temporary data structure to generate result table.  */
+   temp = (struct r_strlenpair *) alloca (cnt * sizeof (*temp));
+   m = 0;
+@@ -496,8 +510,11 @@
+   *sz = 1 << cnt;
+   result = (struct r_strlenpair *) malloc (*sz * sizeof (*result) + total);
+   if (result == NULL)
+-    _dl_signal_error (ENOMEM, NULL, NULL,
+-		      N_("cannot create capability list"));
++    {
++    no_memory:
++      _dl_signal_error (ENOMEM, NULL, NULL,
++		     	N_("cannot create capability list"));
++    }
+ 
+   if (cnt == 1)
+     {
+--- a/elf/dl-cache.c
++++ b/elf/dl-cache.c
+@@ -245,6 +245,7 @@
+   if (cache_new != (void *) -1)
+     {
+       uint64_t platform;
++      int disable_hwcap = 0;
+ 
+       /* This is where the strings start.  */
+       cache_data = (const char *) cache_new;
+@@ -256,6 +257,9 @@
+       if (platform != (uint64_t) -1)
+ 	platform = 1ULL << platform;
+ 
++      if (__access ("/etc/ld.so.nohwcap", F_OK) == 0)
++	disable_hwcap = 1;
++
+ #define _DL_HWCAP_TLS_MASK (1LL << 63)
+       uint64_t hwcap_exclude = ~((GLRO(dl_hwcap) & GLRO(dl_hwcap_mask))
+ 				 | _DL_HWCAP_PLATFORM | _DL_HWCAP_TLS_MASK);
+@@ -266,6 +270,8 @@
+ 	continue;							      \
+       if (GLRO(dl_osversion) && lib->osversion > GLRO(dl_osversion))	      \
+ 	continue;							      \
++      if (disable_hwcap && lib->hwcap != 0)				      \
++	continue;							      \
+       if (_DL_PLATFORMS_COUNT						      \
+ 	  && (lib->hwcap & _DL_HWCAP_PLATFORM) != 0			      \
+ 	  && (lib->hwcap & _DL_HWCAP_PLATFORM) != platform)		      \

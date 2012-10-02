@@ -1,0 +1,129 @@
+Revert
+
+commit 69e89a859882e4f675dd5491edc969159d8a4002
+Author: Pino Toscano <toscano.pino@tiscali.it>
+Date:   Sun Apr 22 00:38:26 2012 +0200
+
+    __pthread_timedblock: switch to clock_gettime
+    
+    Use `clock_gettime' with the provided clock instead of `gettimeofday',
+    linking to rt.
+    
+    * sysdeps/mach/pt-timedblock.c (__pthread_timedblock): Switch to
+    `clock_gettime'.
+    * Makefile [!IN_GLIBC] (LDLIBS): Link to rt.
+    [IN_GLIBC] ($(objpfx)libpthread.so): Likewise.
+    * Makefile.am (libpthread_a_LDADD): Likewise.
+
+--- b/libpthread/Makefile
++++ a/libpthread/Makefile
+@@ -210,10 +210,8 @@
+ 
+ ifeq ($(IN_GLIBC),no)
+ HURDLIBS = ihash
+-LDLIBS = -lrt
+ else
+ LDLIBS-pthread.so = -lihash
+-$(objpfx)libpthread.so: $(common-objpfx)rt/librt.so
+ endif
+ 
+ ifeq ($(IN_GLIBC),no)
+reverted:
+--- b/libpthread/Makefile.am
++++ a/libpthread/Makefile.am
+@@ -166,5 +166,3 @@
+ 	sigwaitinfo.c							    \
+ 	signal-dispatch-lowlevel.c					    \
+ 	sigprocmask.c
+-
+-libpthread_a_LDADD = -lrt
+reverted:
+--- b/libpthread/sysdeps/mach/pt-timedblock.c
++++ a/libpthread/sysdeps/mach/pt-timedblock.c
+@@ -36,26 +36,27 @@
+   error_t err;
+   mach_msg_header_t msg;
+   mach_msg_timeout_t timeout;
++  struct timeval now;
+-  struct timespec now;
+ 
+   /* We have an absolute time and now we have to convert it to a
+      relative time.  Arg.  */
+ 
++  err = gettimeofday(&now, NULL);
+-  err = clock_gettime (clock_id, &now);
+   assert (! err);
+ 
+   if (now.tv_sec > abstime->tv_sec
+       || (now.tv_sec == abstime->tv_sec
++	  && now.tv_usec > ((abstime->tv_nsec + 999) / 1000)))
+-	  && now.tv_nsec > abstime->tv_nsec))
+     return ETIMEDOUT;
+ 
+   timeout = (abstime->tv_sec - now.tv_sec) * 1000;
+ 
++  if (((abstime->tv_nsec + 999) / 1000) >= now.tv_usec)
++    timeout += (((abstime->tv_nsec + 999) / 1000) - now.tv_usec + 999) / 1000;
+-  if (abstime->tv_nsec >= now.tv_nsec)
+-    timeout += (abstime->tv_nsec - now.tv_nsec + 999999) / 1000000;
+   else
+     /* Need to do a carry.  */
++    timeout -= (now.tv_usec + 999) / 1000 -
++      ((abstime->tv_nsec + 999999) / 1000000);
+-    timeout -= (now.tv_nsec - abstime->tv_nsec + 999999) / 1000000;
+ 
+   err = __mach_msg (&msg, MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0,
+ 		    sizeof msg, thread->wakeupmsg.msgh_remote_port,
+
+Revert
+
+commit 581b822ea36002817f4c22b9ea715b72a0647166
+Author: Pino Toscano <toscano.pino@tiscali.it>
+Date:   Sun Apr 22 00:44:24 2012 +0200
+
+    pthread_condattr_setclock: allow a monotonic clock, if present
+    
+    If CLOCK_MONOTONIC is requested, check (only once) for the
+    availability of a monotonic clock using `clock_getres'.  If it is not,
+    reject CLOCK_MONOTONIC with EINVAL (as before).
+    
+    * sysdeps/generic/pt-condattr-setclock.c (pthread_condattr_setclock):
+    Check for monotonic clock if requested.
+
+--- b/libpthread/sysdeps/generic/pt-condattr-setclock.c
++++ a/libpthread/sysdeps/generic/pt-condattr-setclock.c
+@@ -23,30 +23,11 @@
+ int
+ pthread_condattr_setclock (pthread_condattr_t *attr, clockid_t clock)
+ {
++  if (__pthread_default_condattr.clock == clock)
+-  /* Only a few clocks are allowed.  CLOCK_REALTIME is always allowed.
+-     CLOCK_MONOTONIC only if the kernel has the necessary support.  */
+-  if (clock == CLOCK_MONOTONIC)
+     {
++      attr->clock = clock;
++      return 0;
+-      /* Check whether the clock is available.  */
+-      static int avail;
+-
+-      if (avail == 0)
+-	{
+-	  struct timespec ts;
+-	  int res;
+-
+-	  res = clock_getres (CLOCK_MONOTONIC, &ts);
+-	  avail = res < 0 ? -1 : 1;
+-	}
+-
+-      if (avail < 0)
+-	/* Not available.  */
+-	return EINVAL;
+     }
+-  else if (clock != CLOCK_REALTIME)
+-    return EINVAL;
+-
+-  attr->clock = clock;
+ 
++  return EINVAL;
+-  return 0;
+ }

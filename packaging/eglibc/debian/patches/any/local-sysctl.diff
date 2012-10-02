@@ -1,0 +1,81 @@
+--- linuxthreads/sysdeps/unix/sysv/linux/smp.h.orig
++++ linuxthreads/sysdeps/unix/sysv/linux/smp.h
+@@ -25,24 +25,6 @@
+ static inline int
+ is_smp_system (void)
+ {
+-  static const int sysctl_args[] = { CTL_KERN, KERN_VERSION };
+-  char buf[512];
+-  size_t reslen = sizeof (buf);
+-
+-  /* Try reading the number using `sysctl' first.  */
+-  if (__sysctl ((int *) sysctl_args,
+-		sizeof (sysctl_args) / sizeof (sysctl_args[0]),
+-		buf, &reslen, NULL, 0) < 0)
+-    {
+-      /* This was not successful.  Now try reading the /proc filesystem.  */
+-      int fd = __open ("/proc/sys/kernel/version", O_RDONLY);
+-      if (__builtin_expect (fd, 0) == -1
+-	  || (reslen = __read (fd, buf, sizeof (buf))) <= 0)
+-	/* This also didn't work.  We give up and say it's a UP machine.  */
+-	buf[0] = '\0';
+-
+-      __close (fd);
+-    }
+-
+-  return strstr (buf, "SMP") != NULL;
++  /* Assume all machines are SMP and/or CMT and/or SMT.  */
++  return 1;
+ }
+--- ports/sysdeps/unix/sysv/linux/arm/ioperm.c.orig
++++ ports/sysdeps/unix/sysv/linux/arm/ioperm.c
+@@ -49,6 +49,8 @@
+ 
+ #define PATH_ARM_SYSTYPE	"/etc/arm_systype"
+ #define PATH_CPUINFO		"/proc/cpuinfo"
++#define PATH_PORTBASE		"/proc/bus/isa/portbase"
++#define PATH_PORTSHIFT		"/proc/bus/isa/portshift"
+ 
+ #define MAX_PORT	0x10000
+ 
+@@ -100,15 +102,25 @@
+ {
+   char systype[256];
+   int i, n;
+-  static int iobase_name[] = { CTL_BUS, CTL_BUS_ISA, BUS_ISA_PORT_BASE };
+-  static int ioshift_name[] = { CTL_BUS, CTL_BUS_ISA, BUS_ISA_PORT_SHIFT };
++  FILE * fp;
++
+   size_t len = sizeof(io.base);
+ 
+-  if (! sysctl (iobase_name, 3, &io.io_base, &len, NULL, 0)
+-      && ! sysctl (ioshift_name, 3, &io.shift, &len, NULL, 0))
++  if ((fp = fopen (PATH_PORTBASE, "r")))
+     {
+-      io.initdone = 1;
+-      return 0;
++      n = fscanf (fp, "%li", &io.io_base);
++      fclose(fp);
++
++      if (n == 1 && (fp = fopen(PATH_PORTSHIFT, "r")))
++        {
++          n = fscanf (fp, "%i", &io.shift);
++          fclose(fp);
++          if (n == 1)
++	    {
++	      io.initdone = 1;
++              return 0;
++	    }
++	}
+     }
+ 
+   n = readlink (PATH_ARM_SYSTYPE, systype, sizeof (systype) - 1);
+@@ -127,8 +139,6 @@
+     }
+   else
+     {
+-      FILE * fp;
+-
+       fp = fopen (PATH_CPUINFO, "r");
+       if (! fp)
+ 	return -1;

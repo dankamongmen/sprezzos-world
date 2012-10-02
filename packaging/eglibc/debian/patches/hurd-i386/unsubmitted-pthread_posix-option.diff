@@ -1,0 +1,153 @@
+Even if glibc doesn't have an integrated pthread library, it depends on the hurd
+packages which have a pthread library, so we should provide all the defines etc.
+
+Avoid letting glibc try to install its own headers for libpthread.
+
+No topgit branch, TODO?
+
+---
+ sysdeps/mach/hurd/Makefile         |    4 +++
+ sysdeps/mach/hurd/bits/posix_opt.h |   40 ++++++++++++++++++++++-----------
+ sysdeps/mach/hurd/gai_misc.h       |   44 +++++++++++++++++++++++++++++++++++++
+ 3 files changed, 75 insertions(+), 13 deletions(-)
+
+--- a/sysdeps/mach/hurd/bits/posix_opt.h
++++ b/sysdeps/mach/hurd/bits/posix_opt.h
+@@ -72,24 +72,38 @@
+ /* XPG4.2 shared memory is supported.  */
+ #define _XOPEN_SHM      1
+ 
+-/* We do not have the POSIX threads interface.  */
+-#define _POSIX_THREADS	-1
++/* Tell we have POSIX threads.  */
++#define _POSIX_THREADS	200112L
+ 
+ /* We have the reentrant functions described in POSIX.  */
+ #define _POSIX_REENTRANT_FUNCTIONS      1
+ #define _POSIX_THREAD_SAFE_FUNCTIONS	200809L
+ 
+-/* These are all things that won't be supported when _POSIX_THREADS is not.  */
++/* We do not provide priority scheduling for threads.  */
+ #define _POSIX_THREAD_PRIORITY_SCHEDULING	-1
+-#define _POSIX_THREAD_ATTR_STACKSIZE		-1
+-#define _POSIX_THREAD_ATTR_STACKADDR		-1
++
++/* We support user-defined stack sizes.  */
++#define _POSIX_THREAD_ATTR_STACKSIZE	200112L
++
++/* We support user-defined stacks.  */
++#define _POSIX_THREAD_ATTR_STACKADDR	200112L
++
++/* We do not support priority inheritence.  */
+ #define _POSIX_THREAD_PRIO_INHERIT		-1
++
++/* We do not support priority protection.  */
+ #define _POSIX_THREAD_PRIO_PROTECT		-1
++
+ #ifdef __USE_XOPEN2K8
++/* We do not support priority inheritence for robust mutexes.  */
+ # define _POSIX_THREAD_ROBUST_PRIO_INHERIT	-1
++
++/* We do not support priority protection for robust mutexes.  */
+ # define _POSIX_THREAD_ROBUST_PRIO_PROTECT	-1
+ #endif
+-#define _POSIX_SEMAPHORES			-1
++
++/* We support POSIX.1b semaphores.  */
++#define _POSIX_SEMAPHORES			200112L
+ 
+ /* Real-time signals are not yet supported.  */
+ #define _POSIX_REALTIME_SIGNALS	-1
+@@ -122,17 +136,17 @@
+ /* GNU libc provides regular expression handling.  */
+ #define _POSIX_REGEXP	1
+ 
+-/* Reader/Writer locks are not available.  */
+-#define _POSIX_READER_WRITER_LOCKS	-1
++/* Reader/Writer locks are available.  */
++#define _POSIX_READER_WRITER_LOCKS	200112L
+ 
+ /* We have a POSIX shell.  */
+ #define _POSIX_SHELL	1
+ 
+-/* We cannot support the Timeouts option without _POSIX_THREADS.  */
+-#define _POSIX_TIMEOUTS	-1
++/* We support the Timeouts option.  */
++#define _POSIX_TIMEOUTS	200112L
+ 
+-/* We do not support spinlocks.  */
+-#define _POSIX_SPIN_LOCKS	-1
++/* We support spinlocks.  */
++#define _POSIX_SPIN_LOCKS	200112L
+ 
+ /* The `spawn' function family is supported.  */
+ #define _POSIX_SPAWN	200809L
+@@ -141,7 +155,7 @@
+ #define _POSIX_TIMERS	0
+ 
+ /* The barrier functions are not available.  */
+-#define _POSIX_BARRIERS	-1
++#define _POSIX_BARRIERS	200112L
+ 
+ /* POSIX message queues could be available in future.  */
+ #define	_POSIX_MESSAGE_PASSING	0
+--- a/sysdeps/mach/hurd/Makefile
++++ b/sysdeps/mach/hurd/Makefile
+@@ -172,6 +172,10 @@
+ CFLAGS-dl-load.c = -DEXTERNAL_MAP_FROM_FD
+ endif
+ 
++ifeq ($(subdir),posix)
++CFLAGS-confstr.c += -DLIBPTHREAD_VERSION='"libpthread 0.3"'
++endif
++
+ # We need these libs to link static programs in the libc source tree, too.
+ ifeq (yes,$(build-static))
+ link-libc-static := -Wl,-\( \
+--- /dev/null
++++ b/sysdeps/mach/hurd/gai_misc.h
+@@ -0,0 +1,44 @@
++#include <signal.h>
++#include <pthread.h>
++
++#define gai_start_notify_thread __gai_start_notify_thread
++#define gai_create_helper_thread __gai_create_helper_thread
++
++extern inline void
++__gai_start_notify_thread (void)
++{
++  sigset_t ss;
++  sigemptyset (&ss);
++  sigprocmask(SIG_SETMASK, &ss, NULL);
++}
++
++extern inline int
++__gai_create_helper_thread (pthread_t *threadp, void *(*tf) (void *),
++			    void *arg)
++{
++  pthread_attr_t attr;
++
++  /* Make sure the thread is created detached.  */
++  pthread_attr_init (&attr);
++  pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_DETACHED);
++
++  /* The helper thread needs only very little resources.  */
++  (void) pthread_attr_setstacksize (&attr, 0x10000);
++
++  /* Block all signals in the helper thread.  To do this thoroughly we
++     temporarily have to block all signals here.  */
++  sigset_t ss;
++  sigset_t oss;
++  sigfillset (&ss);
++  sigprocmask(SIG_SETMASK, &ss, &oss);
++
++  int ret = pthread_create (threadp, &attr, tf, arg);
++
++  /* Restore the signal mask.  */
++  sigprocmask(SIG_SETMASK, &oss, NULL);
++
++  (void) pthread_attr_destroy (&attr);
++  return ret;
++}
++
++#include_next <gai_misc.h>

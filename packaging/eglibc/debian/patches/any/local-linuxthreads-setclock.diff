@@ -1,0 +1,247 @@
+---
+ linuxthreads/Makefile                            |    1 
+ linuxthreads/Versions                            |    3 +
+ linuxthreads/condvar.c                           |    4 +
+ linuxthreads/internals.h                         |    1 
+ linuxthreads/pthread.c                           |   14 +++--
+ linuxthreads/pthread_condattr_getclock.c         |   30 ++++++++++
+ linuxthreads/pthread_condattr_setclock.c         |   63 +++++++++++++++++++++++
+ linuxthreads/sysdeps/pthread/bits/pthreadtypes.h |   11 ++--
+ linuxthreads/sysdeps/pthread/pthread.h           |    2 
+ 9 files changed, 120 insertions(+), 9 deletions(-)
+
+--- a/linuxthreads/Makefile
++++ b/linuxthreads/Makefile
+@@ -51,6 +51,7 @@
+ 		       ptw-open ptw-open64 ptw-pause ptw-pread ptw-pread64 \
+ 		       ptw-pwrite ptw-pwrite64 ptw-tcdrain ptw-wait \
+ 		       ptw-waitpid pt-system old_pthread_atfork pthread_atfork \
++		       pthread_condattr_getclock pthread_condattr_setclock \
+ 		       ptcleanup
+ #		       pthread_setuid pthread_seteuid pthread_setreuid \
+ #		       pthread_setresuid \
+--- a/linuxthreads/pthread.c
++++ b/linuxthreads/pthread.c
+@@ -1322,6 +1322,7 @@
+ 	struct timespec reltime;
+ 
+ 	/* Compute a time offset relative to now.  */
++#error "gettimeofday() ignores pthread_condattr_setclock() setting"
+ 	__gettimeofday (&now, NULL);
+ 	reltime.tv_nsec = abstime->tv_nsec - now.tv_usec * 1000;
+ 	reltime.tv_sec = abstime->tv_sec - now.tv_sec;
+@@ -1392,6 +1393,12 @@
+ int
+ __pthread_timedsuspend_new(pthread_descr self, const struct timespec *abstime)
+ {
++  return __pthread_timedsuspend_new_clk (self, abstime, CLOCK_REALTIME);
++}
++
++int
++__pthread_timedsuspend_new_clk(pthread_descr self, const struct timespec *abstime, clockid_t clock_id)
++{
+   sigset_t unblock, initial_mask;
+   int was_signalled = 0;
+   sigjmp_buf jmpbuf;
+@@ -1405,12 +1412,11 @@
+     sigprocmask(SIG_UNBLOCK, &unblock, &initial_mask);
+ 
+     while (1) {
+-      struct timeval now;
+-      struct timespec reltime;
++      struct timespec now, reltime;
+ 
+       /* Compute a time offset relative to now.  */
+-      __gettimeofday (&now, NULL);
+-      reltime.tv_nsec = abstime->tv_nsec - now.tv_usec * 1000;
++      INLINE_SYSCALL (clock_gettime, 2, clock_id, &now);
++      reltime.tv_nsec = abstime->tv_nsec - now.tv_nsec;
+       reltime.tv_sec = abstime->tv_sec - now.tv_sec;
+       if (reltime.tv_nsec < 0) {
+ 	reltime.tv_nsec += 1000000000;
+--- /dev/null
++++ b/linuxthreads/pthread_condattr_getclock.c
+@@ -0,0 +1,30 @@
++/* Copyright (C) 2003, 2004, 2007 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++   Contributed by Ulrich Drepper <drepper@redhat.com>, 2003.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, write to the Free
++   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
++   02111-1307 USA.  */
++
++#include <pthread.h>
++
++int
++pthread_condattr_getclock (attr, clock_id)
++     const pthread_condattr_t *attr;
++     clockid_t *clock_id;
++{
++  *clock_id = attr->__clock_id;
++
++  return 0;
++}
+--- /dev/null
++++ b/linuxthreads/pthread_condattr_setclock.c
+@@ -0,0 +1,63 @@
++/* Copyright (C) 2003, 2004, 2007, 2008 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++   Contributed by Ulrich Drepper <drepper@redhat.com>, 2003.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, write to the Free
++   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
++   02111-1307 USA.  */
++
++#include <assert.h>
++#include <errno.h>
++#include <stdbool.h>
++#include <time.h>
++#include <sysdep.h>
++#include <pthread.h>
++#include <kernel-features.h>
++
++int
++pthread_condattr_setclock (attr, clock_id)
++     pthread_condattr_t *attr;
++     clockid_t clock_id;
++{
++  /* Only a few clocks are allowed.  CLOCK_REALTIME is always allowed.
++     CLOCK_MONOTONIC only if the kernel has the necessary support.  */
++  if (clock_id == CLOCK_MONOTONIC)
++    {
++#ifndef __ASSUME_POSIX_TIMERS
++# ifdef SYS_clock_getres
++      /* Check whether the clock is available.  */
++      static int avail;
++
++      if (avail == 0)
++	{
++	  struct timespec ts;
++
++	  avail = INLINE_SYSCALL (clock_getres, 2, CLOCK_MONOTONIC, &ts);
++	}
++
++      if (avail < 0)
++# endif
++	/* Not available.  */
++	return EINVAL;
++#endif
++    }
++  else if (clock_id != CLOCK_REALTIME)
++    /* If more clocks are allowed some day the storing of the clock ID
++       in the pthread_cond_t structure needs to be adjusted.  */
++    return EINVAL;
++
++  attr->__clock_id = clock_id;
++
++  return 0;
++}
+--- a/linuxthreads/sysdeps/pthread/bits/pthreadtypes.h
++++ b/linuxthreads/sysdeps/pthread/bits/pthreadtypes.h
+@@ -66,16 +66,21 @@
+ {
+   struct _pthread_fastlock __c_lock; /* Protect against concurrent access */
+   _pthread_descr __c_waiting;        /* Threads waiting on this condition */
+-  char __padding[48 - sizeof (struct _pthread_fastlock)
++  /* Since we only support two clock_id types in pthread_condattr_setclock(),
++   * this can be shrinked into a single bit if we need more space.  */
++  int __clock_id;
++  char __padding[48 - sizeof (struct _pthread_fastlock) - sizeof (int)
+ 		 - sizeof (_pthread_descr) - sizeof (__pthread_cond_align_t)];
+   __pthread_cond_align_t __align;
+ } pthread_cond_t;
+ 
+ 
+ /* Attribute for conditionally variables.  */
+-typedef struct
++typedef struct pthread_condattr
+ {
+-  int __dummy;
++  /* Since we only support two clock_id types in pthread_condattr_setclock(),
++   * this can be shrinked into a single bit if we need more space.  */
++  int __clock_id;
+ } pthread_condattr_t;
+ 
+ /* Keys for thread-specific data */
+--- a/linuxthreads/condvar.c
++++ b/linuxthreads/condvar.c
+@@ -31,6 +31,7 @@
+ {
+   __pthread_init_lock(&cond->__c_lock);
+   cond->__c_waiting = NULL;
++  cond->__clock_id = cond_attr ? cond_attr->__clock_id : CLOCK_REALTIME;
+   return 0;
+ }
+ versioned_symbol (libpthread, __pthread_cond_init, pthread_cond_init,
+@@ -198,7 +199,7 @@
+   spurious_wakeup_count = 0;
+   while (1)
+     {
+-      if (!timedsuspend(self, abstime)) {
++      if (!__pthread_timedsuspend_new_clk(self, abstime, cond->__clock_id)) {
+ 	int was_on_queue;
+ 
+ 	/* __pthread_lock will queue back any spurious restarts that
+@@ -312,6 +313,7 @@
+ 
+ int __pthread_condattr_init(pthread_condattr_t *attr)
+ {
++  attr->__clock_id = CLOCK_REALTIME;
+   return 0;
+ }
+ strong_alias (__pthread_condattr_init, pthread_condattr_init)
+--- a/linuxthreads/internals.h
++++ b/linuxthreads/internals.h
+@@ -381,6 +381,7 @@
+ extern void __pthread_restart_new(pthread_descr th);
+ extern void __pthread_suspend_new(pthread_descr self);
+ extern int __pthread_timedsuspend_new(pthread_descr self, const struct timespec *abs);
++extern int __pthread_timedsuspend_new_clk(pthread_descr self, const struct timespec *abs, clockid_t clock_id);
+ 
+ extern void __pthread_wait_for_restart_signal(pthread_descr self);
+ 
+--- a/linuxthreads/Versions
++++ b/linuxthreads/Versions
+@@ -172,6 +172,9 @@
+     pthread_cond_wait; pthread_cond_timedwait;
+     pthread_cond_signal; pthread_cond_broadcast;
+   }
++  GLIBC_2.3.3 {
++    pthread_condattr_getclock; pthread_condattr_setclock;
++  }
+ 
+   # Hey you!!  Yes, YOU!  Do not add new symbols here!
+   # The linuxthreads libpthread ABI froze at GLIBC_2.3.2 and lacks
+--- a/linuxthreads/sysdeps/pthread/pthread.h
++++ b/linuxthreads/sysdeps/pthread/pthread.h
+@@ -41,7 +41,7 @@
+   {0, 0, 0, PTHREAD_MUTEX_ADAPTIVE_NP, __LOCK_ALT_INITIALIZER}
+ #endif
+ 
+-#define PTHREAD_COND_INITIALIZER {__LOCK_ALT_INITIALIZER, 0, "", 0}
++#define PTHREAD_COND_INITIALIZER {__LOCK_ALT_INITIALIZER, 0, CLOCK_REALTIME, "", 0}
+ 
+ #if defined __USE_UNIX98 || defined __USE_XOPEN2K
+ # define PTHREAD_RWLOCK_INITIALIZER \

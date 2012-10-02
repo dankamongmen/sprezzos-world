@@ -32,6 +32,8 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
+EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
+EGLIBCORIG:=eglibc_$(shell echo $(eglibc_VERSION) | cut -d- -f1).orig.tar.gz
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 FBTERMUP:=nfbterm-$(shell echo $(fbterm_VERSION) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_VERSION) | cut -d- -f1).orig.tar.gz
@@ -181,6 +183,20 @@ cairo:$(CAIRO)_$(ARCH).deb
 $(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROORIG)
 	mkdir $@
 	tar xJvf $(CAIROUP).tar.xz --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(EGLIBCUP).tar.gz
+$(EGLIBCUP).tar.gz:
+	wget -nc -O$@ ftp://ftp.gnu.org/gnu/glibc/$@
+
+$(EGLIBCORIG): $(EGLIBCUP).tar.gz
+	ln -s $< $@
+
+.PHONY: eglibc
+eglibc:$(EGLIBC)_$(ARCH).deb
+$(EGLIBC): $(SPREZZ)/eglibc/debian/changelog $(EGLIBCORIG)
+	mkdir $@
+	tar xzvf $(EGLIBCORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(FBIUP).tar.gz

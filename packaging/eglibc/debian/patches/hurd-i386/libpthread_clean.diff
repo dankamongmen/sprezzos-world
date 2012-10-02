@@ -1,0 +1,1731 @@
+These come from the l4 implementation and come in the way of the glibc
+Makefiles, drop them.
+
+---
+ libpthread/include/libc-symbols.h      |  395 ---------------------------------
+ libpthread/include/set-hooks.h         |   72 ------
+ libpthread/signal/README               |    4 
+ libpthread/signal/TODO                 |   29 --
+ libpthread/signal/kill.c               |   70 -----
+ libpthread/signal/pt-kill-siginfo-np.c |   88 -------
+ libpthread/signal/sig-internal.c       |   26 --
+ libpthread/signal/sig-internal.h       |  177 --------------
+ libpthread/signal/sigaction.c          |   72 ------
+ libpthread/signal/sigaltstack.c        |   69 -----
+ libpthread/signal/signal-dispatch.c    |  117 ---------
+ libpthread/signal/signal.h             |  275 ----------------------
+ libpthread/signal/sigpending.c         |   38 ---
+ libpthread/signal/sigsuspend.c         |   29 --
+ libpthread/signal/sigtimedwait.c       |   30 --
+ libpthread/signal/sigwaiter.c          |   91 -------
+ libpthread/signal/sigwaitinfo.c        |   74 ------
+ 17 files changed, 1656 deletions(-)
+
+--- a/libpthread/signal/README
++++ /dev/null
+@@ -1,4 +0,0 @@
+-This directory provides a signal implementation, which is appropriate
+-for operating systems where signals are managed at user-level.  It is
+-up to the run-time to catch the signals and forward them to the
+-implementation via, e.g., the pthread_kill_info_np call.
+--- a/libpthread/signal/TODO
++++ /dev/null
+@@ -1,29 +0,0 @@
+-Unimplemented Functionality
+----------------------------
+-
+-We don't support interruptible functions.  That is, if a signal is
+-delivered when a thread is in e.g. the write system call, then the
+-write function should be interrupted and return EINTR when the signal
+-handler is finished.  To realize this behavior, we could have a thread
+-local interruptible flag and a setjmp buffer.  A function that is
+-interruptible would fill the jump buffer and set the interruptible
+-flag.  If a signal comes in and the interruptible flag is set, rather
+-than resuming the thread, we longjmp to the buffer.
+-
+-If a signal action has set the SA_SIGINFO, the third argument must be
+-a pointer to a ucontext describing the thread's interrupted state;
+-this implementation passes NULL.  This isn't as bad as it sounds as
+-the the ucontext family of functions are marked obsolete in SUSv3 with
+-the advisory that any use of them should be replaced by the use of
+-pthread functionality (cf. makecontext rationale).
+-
+-stop and continue signals are not implemented (as we need to stop all
+-threads, this requires being in bed with libpthread).
+-
+-Implementation is not yet cancellation-safe.
+-
+-There are not even stubs for sighold, sigingore, sigpause, sigrelse,
+-however, according to posix: "Use of any of these functions is
+-unspecified in a multi-threaded process."
+-
+-Implement sigtimedwait, sigqueue.
+\ No newline at end of file
+--- a/libpthread/signal/kill.c
++++ /dev/null
+@@ -1,70 +0,0 @@
+-/* kill.c - Generic kill implementation.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "sig-internal.h"
+-
+-int
+-kill (pid_t pid, int signo)
+-{
+-  if (pid != getpid ())
+-    {
+-      errno = EOPNOTSUPP;
+-      return -1;
+-    }
+-
+-  /* "Signals generated for the process shall be delivered to exactly
+-     one of those threads within the process which is in a call to a
+-     sigwait() function selecting that signal or has not blocked
+-     delivery of the signal.  If there are no threads in a call to a
+-     sigwait() function selecting that signal, and if all threads
+-     within the process block delivery of the signal, the signal shall
+-     remaing pending on the process" (2.4.1).  */
+-
+-  /* First, see if there is a waiter, which is interested in this
+-     signal.  */
+-  pthread_mutex_lock (&sig_lock);
+-
+-  struct sigwaiter *waiter;
+-  for (waiter = sigwaiters; waiter; waiter = waiter->next)
+-    if ((waiter->signals & sigmask (signo)))
+-      /* Got a winner.  */
+-      {
+-	sigdelset (&process_pending, signo);
+-
+-	pthread_mutex_lock (&waiter->ss->lock);
+-	sigdelset (&waiter->ss->pending, signo);
+-
+-	memset (&waiter->info, 0, sizeof (waiter->info));
+-	waiter->info.si_signo = signo;
+-
+-	sigwaiter_unblock (waiter);
+-
+-	return 0;
+-      }
+-
+-  pthread_mutex_unlock (&sig_lock);
+-
+-  /* XXX: We just generate the signal for the current thread.  If the
+-     current thread has blocked the signal, the correct thing to do is
+-     to iterate over all the other threads and find on that hasn't
+-     blocked it.  */
+-  return pthread_kill (pthread_self (), signo);
+-}
+-
+--- a/libpthread/signal/pt-kill-siginfo-np.c
++++ /dev/null
+@@ -1,88 +0,0 @@
+-/* pthread-kill-siginfo-np.c - Generic pthread_kill_siginfo_np implementation.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "pt-internal.h"
+-#include "sig-internal.h"
+-
+-int
+-pthread_kill_siginfo_np (pthread_t tid, siginfo_t si)
+-{
+-  int sig = si.si_signo;
+-
+-  if (sig < 0 || sig >= NSIG)
+-    return EINVAL;
+-
+-  if (sig == 0)
+-    return 0;
+-
+-  struct signal_state *ss = &__pthread_getid (tid)->ss;
+-
+-  pthread_mutex_lock (&sig_lock);
+-  pthread_mutex_lock (&ss->lock);
+-
+-  if (ss->sigwaiter && (ss->sigwaiter->signals & sigmask (si.si_signo)))
+-    /* The thread is in a call to sigwait.  */
+-    {
+-      ss->sigwaiter->info = si;
+-      sigwaiter_unblock (ss->sigwaiter);
+-      return 0;
+-    }
+-
+-  pthread_mutex_unlock (&sig_lock);
+-
+-  if (ss->actions[sig - 1].sa_handler == (void *) SIG_IGN
+-      || (ss->actions[sig - 1].sa_handler == (void *) SIG_DFL
+-	  && default_action (sig) == sig_ignore))
+-    /* It is unclear (to me) what is supposed to happen when a signal
+-       is generated for a thread, which is blocking that signal and
+-       ignoring it.  POSIX does say that when the action associated
+-       with a pending, blocked signal is set to SIG_IGN, the pending
+-       signal is to be cleared.  Thus, it makes sense that any signal
+-       set to ignore is discarded at generation.  */
+-    {
+-      pthread_mutex_unlock (&ss->lock);
+-      return 0;
+-    }
+-
+-
+-  if ((sigmask (sig) & ss->blocked))
+-    /* The signal is blocked.  Mark it pending.  */
+-    {
+-      ss->pending |= sigmask (sig);
+-      pthread_mutex_unlock (&ss->lock);
+-      return 0;
+-    }
+-
+-  if (pthread_self () == tid
+-      && (! (ss->actions[si.si_signo - 1].sa_flags & SA_ONSTACK)
+-	  || (ss->stack.ss_flags & SS_DISABLE)
+-	  || (ss->stack.ss_flags & SS_ONSTACK)))
+-    /* We are sending a signal to ourself and we don't use an
+-       alternate stack.  */
+-    signal_dispatch (ss, &si);
+-  else
+-    signal_dispatch_lowlevel (ss, tid, si);
+-
+-  /* Don't unlock ss: signal_dispatch and signal_dispatch_lowlevel
+-     assume ownership of the lock.  */
+-
+-  return 0;
+-}
+-
+--- a/libpthread/signal/sig-internal.c
++++ /dev/null
+@@ -1,26 +0,0 @@
+-/* sig-internal.c - Signal state functions.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "sig-internal.h"
+-
+-pthread_mutex_t sig_lock = PTHREAD_MUTEX_INITIALIZER;
+-
+-sigset_t process_pending;
+-siginfo_t process_pending_info[NSIG];
+--- a/libpthread/signal/sig-internal.h
++++ /dev/null
+@@ -1,177 +0,0 @@
+-/* sig-internal.h - Internal signal handling interface.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#ifndef SIG_INTERNAL_H
+-#define SIG_INTERNAL_H
+-
+-#include <signal.h>
+-
+-#include <sig-sysdep.h>
+-
+-#define sigmask(sig) (1ULL << (sig - 1))
+-#define STOPSIGS (sigmask (SIGTTIN) | sigmask (SIGTTOU) | \
+-		  sigmask (SIGSTOP) | sigmask (SIGTSTP))
+-
+-/* General lock.  Protects PROCESS_PENDING, PROCESS_PENDING_INFO,
+-   SIGWAITERS.  */
+-extern pthread_mutex_t sig_lock;
+-
+-/* "Signals generated for the process shall be delivered to exactly
+-   one of those threads within the process which is in a call to a
+-   sigwait() function selecting that signal or has not blocked
+-   delivery of the signal.  If there are no threads in a call to a
+-   sigwait() function selecting that signal, and if all threads within
+-   the process block delivery of the signal, the signal shall remaing
+-   pending on the process"  (2.4.1).
+-
+-   This variable is protected by SIG_LOCK.  */
+-extern sigset_t process_pending;
+-extern siginfo_t process_pending_info[NSIG];
+-
+-struct sigwaiter;
+-
+-/* The per-thread signal state.  */
+-struct signal_state
+-{
+-  /* Protects the following fields.  STACK.SA_FLAGS may be accessed
+-     using atomic operations.  */
+-  pthread_mutex_t lock;
+-
+-  /* Pending signals.  */
+-  sigset_t pending;
+-
+-  /* Blocked signals (i.e., the signal mask).  */
+-  sigset_t blocked;
+-
+-  stack_t stack;
+-  struct sigaction actions[NSIG];
+-  siginfo_t info[NSIG];
+-
+-  /* If the thread is blocked in a call to sigwait.  */
+-  struct sigwaiter *sigwaiter;
+-};
+-
+-#define PTHREAD_SIGNAL_MEMBERS struct signal_state ss;
+-
+-/* Arranges for thread TID to call signal_dispatch.  Must not be
+-   called if TID is the caller and an alternate stack is not required.
+-   In this case, the caller should call signal_dispatch directly.  */
+-extern void signal_dispatch_lowlevel (struct signal_state *ss,
+-				      pthread_t tid, siginfo_t si);
+-
+-/* This is the signal handler entry point.  A thread is forced into
+-   this state when it receives a signal.  We need to save the thread's
+-   state and then invoke the high-level signal dispatcher.  SS->LOCK
+-   is locked by the caller.  */
+-extern void signal_dispatch (struct signal_state *ss, siginfo_t *si);
+-
+-#ifndef SIGNAL_DISPATCH_ENTRY
+-#define SIGNAL_DISPATCH_ENTRY
+-#endif
+-
+-#ifndef SIGNAL_DISPATCH_EXIT
+-#define SIGNAL_DISPATCH_EXIT
+-#endif
+-
+-/* When a thread calls sigwait and a requested signal is not pending,
+-   it allocates the following structure, fills it in, adds it to
+-   sigwaiters and sleeps.  */
+-struct sigwaiter
+-{
+-  struct sigwaiter *next;
+-  struct sigwaiter *prev;
+-
+-  /* Thread's signal state.  */
+-  struct signal_state *ss;
+-
+-  /* Signals this thread is waiting for.  */
+-  sigset_t signals;
+-
+-  /* The selected signal is returned here.  The waiter also
+-     futex_waits on this info.si_signo.  */
+-  siginfo_t info;
+-};
+-
+-/* This variable is protected by SIG_LOCK.  */
+-extern struct sigwaiter *sigwaiters;
+-
+-/* Block the caller waiting for a signal in set SET.  SIG_LOCK and
+-   SS->LOCK must be held and will be unlocked by this function before
+-   blocking.  */
+-extern siginfo_t sigwaiter_block (struct signal_state *ss,
+-				  const sigset_t *restrict set);
+-
+-/* Unblock the waiter WAITER.  SIG_LOCK and WAITER->SS->LOCK must be
+-   held.  Both will be dropped on return.  */
+-extern void sigwaiter_unblock (struct sigwaiter *waiter);
+-
+-enum sig_action { sig_core, sig_terminate, sig_ignore, sig_cont, sig_stop };
+-
+-static inline enum sig_action
+-default_action (int signo)
+-{
+-  switch (signo)
+-    {
+-    case SIGABRT:
+-    case SIGBUS:
+-    case SIGFPE:
+-    case SIGILL:
+-    case SIGQUIT:
+-    case SIGSEGV:
+-    case SIGSTKFLT:
+-    case SIGSYS:
+-    case SIGTRAP:
+-    case SIGXCPU:
+-    case SIGXFSZ:
+-      return sig_core;
+-
+-    case SIGALRM:
+-    case SIGHUP:
+-    case SIGINT:
+-    case SIGIO: /* Perhaps ignore?  */
+-    case SIGKILL:
+-    case SIGPIPE:
+-    case SIGPROF:
+-    case SIGTERM:
+-    case SIGUSR1:
+-    case SIGUSR2:
+-    case SIGVTALRM:
+-      return sig_terminate;
+-
+-    case SIGCHLD:
+-    case SIGPWR:
+-    case SIGURG:
+-    case SIGWINCH:
+-      return sig_ignore;
+-
+-    case SIGCONT:
+-      return sig_cont;
+-
+-    case SIGSTOP:
+-    case SIGTSTP:
+-    case SIGTTIN:
+-    case SIGTTOU:
+-      return sig_stop;
+-    }
+-
+-  panic ("Unknown signal number: %d", signo);
+-}
+-
+-#endif
+--- a/libpthread/signal/sigaction.c
++++ /dev/null
+@@ -1,72 +0,0 @@
+-/* sigaction.c - Generic sigaction implementation.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "sig-internal.h"
+-#include "pt-internal.h"
+-
+-int
+-sigaction (int sig, const struct sigaction *restrict sa,
+-	   struct sigaction *restrict osa)
+-{
+-  if (sig <= 0 || sig >= NSIG)
+-    {
+-      errno = EINVAL;
+-      return -1;
+-    }
+-
+-  struct signal_state *ss = &_pthread_self ()->ss;
+-
+-  pthread_mutex_lock (&ss->lock);
+-
+-  if (osa)
+-    *osa = ss->actions[sig - 1];
+-
+-  if (sa)
+-    {
+-      ss->actions[sig - 1] = *sa;
+-
+-      /* "The SIGKILL and SIGSTOP signals shall not be added to the
+-	 signal mask using this mechanism; this restriction shall be
+-	 enforced by the system without causing an error to be
+-	 indicated" (sigaction).  */
+-      sigdelset (&ss->blocked, SIGKILL);
+-      sigdelset (&ss->blocked, SIGSTOP);
+-
+-      /* A "signal shall remain pending on the process until it is
+-	 unblocked, it is accepted when ..., or the action associated
+-	 with it is set to ignore the signal"  (2.4.1).
+-
+-         "Setting a signal action to SIG_DFL for a signal that is
+-         pending, and whose default action is to ignore the signal,
+-         ..., shall cause the pending signal to be discarded, whether
+-         or not it is blocked" (2.4.3).  */
+-      if (sa->sa_handler == SIG_IGN
+-	  || (sa->sa_handler == SIG_DFL && default_action (sig) == sig_ignore))
+-	{
+-	  sigdelset (&ss->pending, sig);
+-	  sigdelset (&process_pending, sig);
+-	}
+-    }
+-
+-  pthread_mutex_unlock (&ss->lock);
+-
+-  return 0;
+-}
+-
+--- a/libpthread/signal/sigaltstack.c
++++ /dev/null
+@@ -1,69 +0,0 @@
+-/* sigaltstack.c - Generic sigaltstack implementation.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "sig-internal.h"
+-#include "pt-internal.h"
+-
+-int
+-sigaltstack (const stack_t *restrict stack, stack_t *restrict old)
+-{
+-  int err = 0;
+-  struct signal_state *ss = &_pthread_self ()->ss;
+-
+-  pthread_mutex_lock (&ss->lock);
+-
+-  if (old)
+-    *old = ss->stack;
+-
+-  if (stack)
+-    {
+-      if (stack->ss_size < MINSIGSTKSZ)
+-	{
+-	  err = ENOMEM;
+-	  goto out;
+-	}
+-
+-      if ((stack->ss_flags & ~(SS_DISABLE)))
+-	/* Flags contains a value other than SS_DISABLE.  */
+-	{
+-	  err = EINVAL;
+-	  goto out;
+-	}
+-
+-      if ((ss->stack.ss_flags & SS_ONSTACK))
+-	/* Stack in use.  */
+-	{
+-	  err = EPERM;
+-	  goto out;
+-	}
+-
+-      ss->stack = *stack;
+-    }
+-
+- out:
+-  pthread_mutex_unlock (&ss->lock);
+-
+-  if (err)
+-    {
+-      errno = err;
+-      return -1;
+-    }
+-  return 0;
+-}
+--- a/libpthread/signal/signal-dispatch.c
++++ /dev/null
+@@ -1,117 +0,0 @@
+-/* signal-dispatch.c - Signal dispatcher.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "sig-internal.h"
+-
+-/* This is the signal handler entry point.  A thread is forced into
+-   this state when it receives a signal.  We need to save the thread's
+-   state and then invoke the high-level signal dispatcher.  SS->LOCK
+-   is locked by the caller.  */
+-void
+-signal_dispatch (struct signal_state *ss, siginfo_t *si)
+-{
+-  SIGNAL_DISPATCH_ENTRY;
+-
+-  int signo = si->si_signo;
+-
+-  assert (signo > 0 && signo < NSIG);
+-  assert (pthread_mutex_trylock (&ss->lock) == EBUSY);
+-
+-  do
+-    {
+-      if ((sigmask (signo) & STOPSIGS))
+-	/* Stop signals clear a pending SIGCONT even if they
+-	   are handled or ignored (but not if preempted).  */
+-	{
+-	  sigdelset (&ss->pending, SIGCONT);
+-	  sigdelset (&process_pending, SIGCONT);
+-	}
+-      else if ((signo == SIGCONT))
+-	/* Even if handled or ignored (but not preempted), SIGCONT
+-	   clears stop signals and resumes the process.  */
+-	{
+-	  ss->pending &= ~STOPSIGS;
+-	  process_pending &= ~STOPSIGS;
+-	}
+-
+-      void (*handler)(int, siginfo_t *, void *)
+-	= ss->actions[signo - 1].sa_sigaction;
+-
+-      /* Reset to SIG_DFL if requested.  SIGILL and SIGTRAP cannot
+-	 be automatically reset when delivered; the system silently
+-	 enforces this restriction (sigaction).  */
+-      if (ss->actions[signo - 1].sa_flags & SA_RESETHAND
+-	  && signo != SIGILL && signo != SIGTRAP)
+-	ss->actions[signo - 1].sa_handler = SIG_DFL;
+-
+-      sigset_t orig_blocked = ss->blocked;
+-      /* Block requested signals while running the handler.  */
+-      ss->blocked |= ss->actions[signo - 1].sa_mask;
+-
+-      /* Block SIGNO unless we're asked not to.  */
+-      if (! (ss->actions[signo - 1].sa_flags & (SA_RESETHAND | SA_NODEFER)))
+-	sigaddset (&ss->blocked, signo);
+-
+-      sigdelset (&ss->pending, signo);
+-      pthread_mutex_unlock (&ss->lock);
+-
+-      pthread_mutex_lock (&sig_lock);
+-      sigdelset (&process_pending, signo);
+-      pthread_mutex_unlock (&sig_lock);
+-
+-      if (handler == (void *) SIG_DFL)
+-	{
+-	  enum sig_action action = default_action (signo);
+-
+-	  if (action == sig_terminate || action == sig_core)
+-	    _exit (128 + signo);
+-
+-	  if (action == sig_stop)
+-	    /* XXX: Implement me.  */
+-	    panic ("Stopping process unimplemented.");
+-
+-	  if (action == sig_cont)
+-	    /* XXX: Implement me.  */;
+-	    panic ("Continuing process unimplemented.");
+-	}
+-      else if (handler == (void *) SIG_IGN)
+-	;
+-      else
+-	handler (signo, si, NULL);
+-
+-      pthread_mutex_lock (&ss->lock);
+-
+-      /* "When a thread's signal mask is changed in a signal-catching
+-	 function that is installed by sigaction(), the restoration of
+-	 the signal mask on return from the signal-catching function
+-	 overrides that change (see sigaction())" (sigprocmask).  */
+-      ss->blocked = orig_blocked;
+-
+-      sigset_t pending = ~ss->blocked & ss->pending;
+-      if (! pending)
+-	pending = ~ss->blocked & process_pending;
+-      signo = l4_lsb64 (pending);
+-    }
+-  while (signo);
+-
+-  pthread_mutex_unlock (&ss->lock);
+-
+-  SIGNAL_DISPATCH_EXIT;
+-}
+--- a/libpthread/signal/signal.h
++++ /dev/null
+@@ -1,275 +0,0 @@
+-/* signal.h - Signal handling interface.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#ifndef _SIGNAL_H
+-#define _SIGNAL_H 1
+-
+-#include <stdint.h>
+-#include <sys/types.h>
+-
+-typedef volatile int sig_atomic_t;
+-
+-typedef uint64_t sigset_t;
+-
+-int sigaddset (sigset_t *, int);
+-int sigdelset (sigset_t *, int);
+-int sigemptyset (sigset_t *);
+-int sigfillset (sigset_t *);
+-int sigismember (const sigset_t *, int);
+-
+-/* These values are consistent with Linux.  */
+-#define SIGRTMIN 34
+-#define SIGRTMAX 64
+-
+-enum
+-  {
+-    SIGHUP = 1,
+-#define SIGHUP SIGHUP
+-    SIGINT,
+-#define SIGINT SIGINT
+-    SIGQUIT,
+-#define SIGQUIT SIGQUIT
+-    SIGILL,
+-#define SIGILL SIGILL
+-    SIGTRAP,
+-#define SIGTRAP SIGTRAP
+-    SIGABRT,
+-#define SIGABRT SIGABRT
+-    SIGBUS,
+-#define SIGBUS SIGBUS
+-    SIGFPE,
+-#define SIGFPE SIGFPE
+-    SIGKILL,
+-#define SIGKILL SIGKILL
+-    SIGUSR1,
+-#define SIGUSR1 SIGUSR1
+-    SIGSEGV,
+-#define SIGSEGV SIGSEGV
+-    SIGUSR2,
+-#define SIGUSR2 SIGUSR2
+-    SIGPIPE,
+-#define SIGPIPE SIGPIPE
+-    SIGALRM,
+-#define SIGALRM SIGALRM
+-    SIGTERM,
+-#define SIGTERM SIGTERM
+-    SIGSTKFLT,
+-#define SIGSTKFLT SIGSTKFLT
+-    SIGCHLD,
+-#define SIGCHLD SIGCHLD
+-    SIGCONT,
+-#define SIGCONT SIGCONT
+-    SIGSTOP,
+-#define SIGSTOP SIGSTOP
+-    SIGTSTP,
+-#define SIGTSTP SIGTSTP
+-    SIGTTIN,
+-#define SIGTTIN SIGTTIN
+-    SIGTTOU,
+-#define SIGTTOU SIGTTOU
+-    SIGURG,
+-#define SIGURG SIGURG
+-    SIGXCPU,
+-#define SIGXCPU SIGXCPU
+-    SIGXFSZ,
+-#define SIGXFSZ SIGXFSZ
+-    SIGVTALRM,
+-#define SIGVTALRM SIGVTALRM
+-    SIGPROF,
+-#define SIGPROF SIGPROF
+-    SIGWINCH,
+-#define SIGWINCH SIGWINCH
+-    SIGIO,
+-#define SIGIO SIGIO
+-    SIGPWR,
+-#define SIGPWR SIGPWR
+-    SIGSYS,
+-#define SIGSYS SIGSYS
+-    NSIG
+-  };
+-
+-/* The resulting set is the union of the current set and the signal
+-   set pointed to by the argument set.  */
+-#define SIG_BLOCK 1
+-/* The resulting set is the intersection of the current set and the
+-   complement of the signal set pointed to by the argument set.  */
+-#define SIG_UNBLOCK 2
+-/* The resulting set is the signal set pointed to by the argument
+-   set.  */
+-#define SIG_SETMASK 3
+-
+-int pthread_sigmask (int how, const sigset_t *mask, sigset_t *old);
+-int sigprocmask (int how, const sigset_t *restrict mask,
+-		 sigset_t *restrict old);
+-
+-/* Return set of pending signals.  */
+-int sigpending(sigset_t *set);
+-
+-union sigval
+-{
+-  int sival_int;
+-  void *sival_ptr;
+-};
+-
+-#define SIG_DFL ((void (*)(int)) (0))
+-#define SIG_ERR ((void (*)(int)) (-1))
+-#define SIG_IGN ((void (*)(int)) (1))
+-
+-/* Causes signal delivery to occur on an alternate stack.  */
+-#define SA_ONSTACK (1 << 0)
+-/* Do not generate SIGCHLD when children stop or stopped children
+-   continue.  */
+-#define SA_NOCLDSTOP (1 << 1)
+-/* Causes signal dispositions to be set to SIG_DFL on entry to signal
+-   handlers.  */
+-#define SA_RESETHAND (1 << 2)
+-/* Causes certain functions to become restartable.  */
+-#define SA_RESTART (1 << 3)
+-/* Causes extra information to be passed to signal handlers at the
+-   time of receipt of a signal.  */
+-#define SA_SIGINFO (1 << 4)
+-/* Causes implementations not to create zombie processes on child
+-   death.  */
+-#define SA_NOCLDWAIT (1 << 5)
+-/* Causes signal not to be automatically blocked on entry to
+-   signal handler.  */
+-#define SA_NODEFER (1 << 6)
+-
+-typedef struct
+-{
+-  int si_signo;
+-  int si_code;
+-  int si_errno;
+-  pid_t si_pid;
+-  uid_t si_uid;
+-  void *si_addr;
+-  int si_status;
+-  long si_band;
+-  union sigval si_value;
+-} siginfo_t;
+-
+-struct sigaction
+-{
+-  union
+-  {
+-    /* Pointer to a signal-catching function or one of the macros
+-       SIG_IGN or SIG_DFL.  */
+-    void (*sa_handler)(int);
+-                   
+-    /* Pointer to a signal-catching function.  */
+-    void (*sa_sigaction)(int, siginfo_t *, void *);
+-  };
+-
+-  /* Set of signals to be blocked during execution of the signal
+-     handling function.  */
+-  sigset_t sa_mask;
+-
+-  /* Special flags.  */
+-  int sa_flags;
+-};
+-
+-int sigaction (int signo, const struct sigaction *restrict newaction,
+-	       struct sigaction *restrict oldaction);
+-
+-void (*signal (int signo, void (*handler)(int)))(int);
+-void (*bsd_signal (int signo, void (*handler)(int)))(int);
+-
+-/* Process is executing on an alternate signal stack.  */
+-#define SS_ONSTACK (1 << 0)
+-/* Alternate signal stack is disabled.  */
+-#define SS_DISABLE (1 << 1)
+-
+-/* Minimum stack size for a signal handler.  */
+-#define MINSIGSTKSZ PAGESIZE
+-/* Default size in bytes for the alternate signal stack. */
+-#define SIGSTKSZ (16 * PAGESIZE)
+-
+-typedef struct
+-{
+-  void *ss_sp;
+-  size_t ss_size;
+-  int ss_flags;
+-} stack_t;
+-
+-int sigaltstack(const stack_t *restrict stack, stack_t *restrict old);
+-
+-#include <pthread.h>
+-
+-/* Send SIGNO to the process PID.  */
+-int kill(pid_t pid, int signo);
+-
+-/* Send SIGNO to the process group PG.  */
+-int killpg(pid_t pg, int signo);
+-
+-/* Send SIGNO to thread TID.  */
+-int pthread_kill(pthread_t tid, int signo);
+-
+-/* Send a signal to thread TID using SIGINFO.  */
+-int pthread_kill_siginfo_np (pthread_t tid, siginfo_t siginfo);
+-
+-/* Send SIGNO to the calling thread.  */
+-int raise(int signo);
+-
+-typedef struct sigevent
+-{
+-  /* Notification type.  */
+-  int sigev_notify;
+-
+-  /* Signal number.  */
+-  int sigev_signo;
+-
+-  /* Signal value.  */
+-  union sigval sigev_value;
+-
+-  /* Notification function.  */
+-  void (*sigev_notify_function) (union sigval);
+-
+-  /* Notification attributes.  */
+-  pthread_attr_t *sigev_notify_attributes;
+-} sigevent_t;
+-
+-enum
+-  {
+-    SIGEV_NONE = 0,
+-#define SIGEV_NONE SIGEV_NONE
+-    SIGEV_SIGNAL,
+-#define SIGEV_SIGNAL SIGEV_SIGNAL
+-    SIGEV_THREAD
+-#define SIGEV_THREAD SIGEV_THREAD
+-  };
+-
+-#define SIG_HOLD
+-
+-int sighold (int);
+-int sigignore (int);
+-int siginterrupt (int, int);
+-int sigpause (int);
+-int sigqueue (pid_t, int, const union sigval);
+-int sigrelse (int);
+-void (*sigset (int, void (*)(int)))(int);
+-int sigsuspend (const sigset_t *);
+-
+-/* Wait for a signal.  */
+-int sigwait (const sigset_t *restrict set, int *restrict signo);
+-int sigwaitinfo (const sigset_t *restrict set, siginfo_t *restrict info);
+-int sigtimedwait (const sigset_t *restrict set, siginfo_t *restrict info,
+-		  const struct timespec *restrict timespec);
+-
+-#endif
+--- a/libpthread/signal/sigpending.c
++++ /dev/null
+@@ -1,38 +0,0 @@
+-/* sigpending.c - Generic sigpending implementation.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sig-internal.h>
+-#include <pt-internal.h>
+-
+-int
+-sigpending (sigset_t *set)
+-{
+-  struct signal_state *ss = &_pthread_self ()->ss;
+-
+-  pthread_mutex_lock (&ss->lock);
+-
+-  /* There is no need to lock SIG_LOCK for process_pending since we
+-     just read it, which is atomic.  */
+-  *set = (ss->pending | process_pending) & ss->blocked;
+-
+-  pthread_mutex_unlock (&ss->lock);
+-
+-  return 0;
+-}
+--- a/libpthread/signal/sigsuspend.c
++++ /dev/null
+@@ -1,29 +0,0 @@
+-/* sigsuspend.c - Generic sigsuspend implementation.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "sig-internal.h"
+-
+-int
+-sigsuspend (const sigset_t *set)
+-{
+-  /* XXX: Implement me.  */
+-  errno = EOPNOTSUPP;
+-  return -1;
+-}
+--- a/libpthread/signal/sigtimedwait.c
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/* sigtimedwait.c - Generic sigtimedwait implementation.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "sig-internal.h"
+-
+-int
+-sigtimedwait (const sigset_t *restrict set, siginfo_t *restrict info,
+-	      const struct timespec *restrict timeout)
+-{
+-  errno = EOPNOTSUPP;
+-  return -1;
+-}
+-
+--- a/libpthread/signal/sigwaiter.c
++++ /dev/null
+@@ -1,91 +0,0 @@
+-/* sigwaiter.c - Signal handling functions.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include "sig-internal.h"
+-
+-#include <hurd/futex.h>
+-
+-struct sigwaiter *sigwaiters;
+-
+-siginfo_t
+-sigwaiter_block (struct signal_state *ss, const sigset_t *restrict set)
+-{
+-  assert (pthread_mutex_trylock (&sig_lock) == EBUSY);
+-  assert (pthread_mutex_trylock (&ss->lock) == EBUSY);
+-
+-  assert (! ss->sigwaiter);
+-
+-  struct sigwaiter waiter;
+-
+-  waiter.next = sigwaiters;
+-  if (waiter.next)
+-    {
+-      assert (! waiter.next->prev);
+-      waiter.next->prev = &waiter;
+-    }
+-  waiter.prev = 0;
+-  sigwaiters = &waiter;
+-
+-  waiter.ss = ss;
+-  waiter.info.si_signo = 0;
+-  waiter.signals = *set;
+-
+-  ss->sigwaiter = &waiter;
+-
+-  pthread_mutex_unlock (&ss->lock);
+-  pthread_mutex_unlock (&sig_lock);
+-
+-  futex_wait (&waiter.info.si_signo, 0);
+-
+-#ifndef NDEBUG
+-  pthread_mutex_lock (&ss->lock);
+-  ss->sigwaiter = 0;
+-  pthread_mutex_unlock (&ss->lock);
+-#endif
+-
+-  assert (waiter.info.si_signo);
+-  return waiter.info;
+-}
+-
+-void
+-sigwaiter_unblock (struct sigwaiter *waiter)
+-{
+-  assert (pthread_mutex_trylock (&sig_lock) == EBUSY);
+-  assert (pthread_mutex_trylock (&waiter->ss->lock) == EBUSY);
+-
+-  struct sigwaiter *prev = waiter->prev;
+-  struct sigwaiter *next = waiter->next;
+-
+-  if (next)
+-    next->prev = prev;
+-
+-  if (prev)
+-    prev->next = next;
+-  else
+-    sigwaiters = next;
+-
+-  sigdelset (&process_pending, waiter->info.si_signo);
+-  sigdelset (&waiter->ss->pending, waiter->info.si_signo);
+-
+-  pthread_mutex_unlock (&waiter->ss->lock);
+-  pthread_mutex_unlock (&sig_lock);
+-
+-  futex_wake (&waiter->info.si_signo, 1);
+-}
+--- a/libpthread/signal/sigwaitinfo.c
++++ /dev/null
+@@ -1,74 +0,0 @@
+-/* sigwaitinfo.c - Generic sigwaitinfo implementation.
+-   Copyright (C) 2008 Free Software Foundation, Inc.
+-   Written by Neal H. Walfield <neal@gnu.org>.
+-
+-   This file is part of the GNU Hurd.
+-
+-   The GNU Hurd is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License
+-   as published by the Free Software Foundation; either version 3 of
+-   the License, or (at your option) any later version.
+-
+-   The GNU Hurd is distributed in the hope that it will be useful, but
+-   WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with this program.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sig-internal.h>
+-#include <pt-internal.h>
+-
+-int
+-sigwaitinfo (const sigset_t *restrict set, siginfo_t *restrict info)
+-{
+-  pthread_mutex_lock (&sig_lock);
+-
+-  struct signal_state *ss = &_pthread_self ()->ss;
+-
+-  pthread_mutex_lock (&ss->lock);
+-
+-  if ((process_pending & *set) || (ss->pending & *set))
+-    /* There is at least one signal pending.  */
+-    {
+-      bool local = true;
+-      sigset_t extant = process_pending & *set;
+-      if (! extant)
+-	{
+-	  local = false;
+-	  extant = ss->pending & *set;
+-	}
+-
+-      assert (extant);
+-
+-      int signo = l4_msb64 (extant);
+-
+-      if (info)
+-	{
+-	  if (local)
+-	    *info = ss->info[signo - 1];
+-	  else
+-	    *info = process_pending_info[signo - 1];
+-	  info->si_signo = signo;
+-	}
+-
+-      sigdelset (&process_pending, signo);
+-      sigdelset (&ss->pending, signo);
+-
+-      pthread_mutex_unlock (&ss->lock);
+-      pthread_mutex_unlock (&sig_lock);
+-      return 0;
+-    }
+-
+-  siginfo_t i = sigwaiter_block (ss, set);
+-  assert (i.si_signo);
+-  assert ((sigmask (i.si_signo) & *set));
+-
+-  if (info)
+-    *info = i;
+-
+-  return 0;
+-}
+-
+--- a/libpthread/include/libc-symbols.h
++++ /dev/null
+@@ -1,395 +0,0 @@
+-/* Support macros for making weak and strong aliases for symbols,
+-   and for using symbol sets and linker warnings with GNU ld.
+-   Copyright (C) 1995, 1996, 1997, 1998, 2000, 2001, 2002, 2008
+-     Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, write to the Free
+-   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+-   02111-1307 USA.  */
+-
+-#ifndef _LIBC_SYMBOLS_H
+-#define _LIBC_SYMBOLS_H	1
+-
+-/* This file's macros are included implicitly in the compilation of every
+-   file in the C library by -imacros.
+-
+-   We include config.h which is generated by configure.
+-   It should define for us the following symbols:
+-
+-   * HAVE_ASM_SET_DIRECTIVE if we have `.set B, A' instead of `A = B'.
+-   * ASM_GLOBAL_DIRECTIVE with `.globl' or `.global'.
+-   * HAVE_GNU_LD if using GNU ld, with support for weak symbols in a.out,
+-   and for symbol set and warning messages extensions in a.out and ELF.
+-   * HAVE_ELF if using ELF, which supports weak symbols using `.weak'.
+-   * HAVE_ASM_WEAK_DIRECTIVE if we have weak symbols using `.weak'.
+-   * HAVE_ASM_WEAKEXT_DIRECTIVE if we have weak symbols using `.weakext'.
+-
+-   */
+-
+-/* This is defined for the compilation of all C library code.  features.h
+-   tests this to avoid inclusion of stubs.h while compiling the library,
+-   before stubs.h has been generated.  Some library code that is shared
+-   with other packages also tests this symbol to see if it is being
+-   compiled as part of the C library.  We must define this before including
+-   config.h, because it makes some definitions conditional on whether libc
+-   itself is being compiled, or just some generator program.  */
+-// #define _LIBC	1
+-
+-/* Enable declarations of GNU extensions, since we are compiling them.  */
+-#define _GNU_SOURCE	1
+-/* And we also need the data for the reentrant functions.  */
+-#define _REENTRANT	1
+-
+-// #include <config.h>
+-#define HAVE_ASM_WEAK_DIRECTIVE
+-#define HAVE_WEAK_SYMBOLS
+-#define HAVE_ASM_SET_DIRECTIVE
+-#define HAVE_BUILTIN_EXPECT
+-#define HAVE_GNU_LD
+-#define HAVE_ELF
+-#define HAVE_SECTION_QUOTES
+-#define HAVE_VISIBILITY_ATTRIBUTE
+-#define HAVE_ASM_PREVIOUS_DIRECTIVE
+-// #define SHARED
+-
+-/* The symbols in all the user (non-_) macros are C symbols.
+-   HAVE_GNU_LD without HAVE_ELF implies a.out.  */
+-
+-#if defined HAVE_ASM_WEAK_DIRECTIVE || defined HAVE_ASM_WEAKEXT_DIRECTIVE
+-# define HAVE_WEAK_SYMBOLS
+-#endif
+-
+-#ifndef __SYMBOL_PREFIX
+-# ifdef NO_UNDERSCORES
+-#  define __SYMBOL_PREFIX
+-# else
+-#  define __SYMBOL_PREFIX "_"
+-# endif
+-#endif
+-
+-#ifndef C_SYMBOL_NAME
+-# ifdef NO_UNDERSCORES
+-#  define C_SYMBOL_NAME(name) name
+-# else
+-#  define C_SYMBOL_NAME(name) _##name
+-# endif
+-#endif
+-
+-#ifndef ASM_LINE_SEP
+-# define ASM_LINE_SEP ;
+-#endif
+-
+-#ifndef C_SYMBOL_DOT_NAME
+-# define C_SYMBOL_DOT_NAME(name) .##name
+-#endif
+-
+-#ifndef __ASSEMBLER__
+-/* GCC understands weak symbols and aliases; use its interface where
+-   possible, instead of embedded assembly language.  */
+-
+-/* Define ALIASNAME as a strong alias for NAME.  */
+-# define strong_alias(name, aliasname) _strong_alias(name, aliasname)
+-# define _strong_alias(name, aliasname) \
+-  extern __typeof (name) aliasname __attribute__ ((alias (#name)));
+-
+-/* This comes between the return type and function name in
+-   a function definition to make that definition weak.  */
+-# define weak_function __attribute__ ((weak))
+-# define weak_const_function __attribute__ ((weak, __const__))
+-
+-# ifdef HAVE_WEAK_SYMBOLS
+-
+-/* Define ALIASNAME as a weak alias for NAME.
+-   If weak aliases are not available, this defines a strong alias.  */
+-#  define weak_alias(name, aliasname) _weak_alias (name, aliasname)
+-#  define _weak_alias(name, aliasname) \
+-  extern __typeof (name) aliasname __attribute__ ((weak, alias (#name)));
+-
+-/* Declare SYMBOL as weak undefined symbol (resolved to 0 if not defined).  */
+-#  define weak_extern(symbol) _weak_extern (symbol)
+-#  ifdef HAVE_ASM_WEAKEXT_DIRECTIVE
+-#   define _weak_extern(symbol) asm (".weakext " __SYMBOL_PREFIX #symbol);
+-#  else
+-#   define _weak_extern(symbol)    asm (".weak " __SYMBOL_PREFIX #symbol);
+-#  endif
+-
+-# else
+-
+-#  define weak_alias(name, aliasname) strong_alias(name, aliasname)
+-#  define weak_extern(symbol) /* Nothing. */
+-
+-# endif
+-
+-#else /* __ASSEMBLER__ */
+-
+-# ifdef HAVE_ASM_SET_DIRECTIVE
+-#  define strong_alias(original, alias)		\
+-  ASM_GLOBAL_DIRECTIVE C_SYMBOL_NAME (alias) ASM_LINE_SEP	\
+-  .set C_SYMBOL_NAME (alias),C_SYMBOL_NAME (original)
+-# else
+-#  ifdef HAVE_ASM_GLOBAL_DOT_NAME
+-#   define strong_alias(original, alias)	\
+-  ASM_GLOBAL_DIRECTIVE C_SYMBOL_NAME (alias) ASM_LINE_SEP	\
+-  C_SYMBOL_NAME (alias) = C_SYMBOL_NAME (original) ASM_LINE_SEP	\
+-  ASM_GLOBAL_DIRECTIVE C_SYMBOL_DOT_NAME (alias) ASM_LINE_SEP	\
+-  C_SYMBOL_DOT_NAME (alias) = C_SYMBOL_DOT_NAME (original)
+-#  else
+-#   define strong_alias(original, alias)	\
+-  ASM_GLOBAL_DIRECTIVE C_SYMBOL_NAME (alias) ASM_LINE_SEP	\
+-  C_SYMBOL_NAME (alias) = C_SYMBOL_NAME (original)
+-#  endif
+-# endif
+-
+-# ifdef HAVE_WEAK_SYMBOLS
+-#  ifdef HAVE_ASM_WEAKEXT_DIRECTIVE
+-#   define weak_alias(original, alias)	\
+-  .weakext C_SYMBOL_NAME (alias), C_SYMBOL_NAME (original)
+-#   define weak_extern(symbol)	\
+-  .weakext C_SYMBOL_NAME (symbol)
+-
+-#  else /* ! HAVE_ASM_WEAKEXT_DIRECTIVE */
+-
+-#   ifdef HAVE_ASM_GLOBAL_DOT_NAME
+-#    define weak_alias(original, alias)	\
+-  .weak C_SYMBOL_NAME (alias) ASM_LINE_SEP			\
+-  C_SYMBOL_NAME (alias) = C_SYMBOL_NAME (original) ASM_LINE_SEP	\
+-  ASM_GLOBAL_DIRECTIVE C_SYMBOL_DOT_NAME (alias) ASM_LINE_SEP	\
+-  C_SYMBOL_DOT_NAME (alias) = C_SYMBOL_DOT_NAME (original)
+-#   else
+-#    define weak_alias(original, alias)	\
+-  .weak C_SYMBOL_NAME (alias) ASM_LINE_SEP	\
+-  C_SYMBOL_NAME (alias) = C_SYMBOL_NAME (original)
+-#   endif
+-
+-#   define weak_extern(symbol)	\
+-  .weak C_SYMBOL_NAME (symbol)
+-
+-#  endif /* ! HAVE_ASM_WEAKEXT_DIRECTIVE */
+-
+-# else /* ! HAVE_WEAK_SYMBOLS */
+-
+-#  define weak_alias(original, alias) strong_alias(original, alias)
+-#  define weak_extern(symbol) /* Nothing */
+-# endif /* ! HAVE_WEAK_SYMBOLS */
+-
+-#endif /* __ASSEMBLER__ */
+-
+-/* On some platforms we can make internal function calls (i.e., calls of
+-   functions not exported) a bit faster by using a different calling
+-   convention.  */
+-#ifndef internal_function
+-# define internal_function	/* empty */
+-#endif
+-
+-/* Prepare for the case that `__builtin_expect' is not available.  */
+-#ifndef HAVE_BUILTIN_EXPECT
+-# define __builtin_expect(expr, val) (expr)
+-#endif
+-
+-/* Determine the return address.  */
+-#define RETURN_ADDRESS(nr) \
+-  __builtin_extract_return_addr (__builtin_return_address (nr))
+-
+-/* When a reference to SYMBOL is encountered, the linker will emit a
+-   warning message MSG.  */
+-#ifdef HAVE_GNU_LD
+-# ifdef HAVE_ELF
+-
+-/* We want the .gnu.warning.SYMBOL section to be unallocated.  */
+-#  ifdef HAVE_ASM_PREVIOUS_DIRECTIVE
+-#   define __make_section_unallocated(section_string)	\
+-  asm (".section " section_string "\n\t.previous");
+-#  elif defined HAVE_ASM_POPSECTION_DIRECTIVE
+-#   define __make_section_unallocated(section_string)	\
+-  asm (".pushsection " section_string "\n\t.popsection");
+-#  else
+-#   define __make_section_unallocated(section_string)
+-#  endif
+-
+-/* Tacking on "\n\t#" to the section name makes gcc put it's bogus
+-   section attributes on what looks like a comment to the assembler.  */
+-#  ifdef HAVE_SECTION_QUOTES
+-#   define link_warning(symbol, msg) \
+-  __make_section_unallocated (".gnu.warning." #symbol) \
+-  static const char __evoke_link_warning_##symbol[]	\
+-    __attribute__ ((unused, section (".gnu.warning." #symbol "\"\n\t#\""))) \
+-    = msg;
+-#  else
+-#   define link_warning(symbol, msg) \
+-  __make_section_unallocated (".gnu.warning." #symbol) \
+-  static const char __evoke_link_warning_##symbol[]	\
+-    __attribute__ ((unused, section (".gnu.warning." #symbol "\n\t#"))) = msg;
+-#  endif
+-# else /* Not ELF: a.out */
+-#  ifdef HAVE_XCOFF
+-/* XCOFF does not support .stabs.
+-   The native aix linker will remove the .stab and .stabstr sections
+-   The gnu linker will have a fatal error if there is a relocation for
+-   symbol in the .stab section.  Silently disable this macro.  */
+-#   define link_warning(symbol, msg)
+-#  else
+-#   define link_warning(symbol, msg)		\
+-     asm (".stabs \"" msg "\",30,0,0,0\n\t"	\
+-          ".stabs \"" __SYMBOL_PREFIX #symbol "\",1,0,0,0\n");
+-#  endif /* XCOFF */
+-# endif
+-#else
+-/* We will never be heard; they will all die horribly.  */
+-# define link_warning(symbol, msg)
+-#endif
+-
+-/* A canned warning for sysdeps/stub functions.  */
+-#define	stub_warning(name) \
+-  link_warning (name, \
+-		"warning: " #name " is not implemented and will always fail")
+-
+-/*
+-
+-*/
+-
+-#ifdef HAVE_GNU_LD
+-
+-/* Symbol set support macros.  */
+-
+-# ifdef HAVE_ELF
+-
+-/* Make SYMBOL, which is in the text segment, an element of SET.  */
+-#  define text_set_element(set, symbol)	_elf_set_element(set, symbol)
+-/* Make SYMBOL, which is in the data segment, an element of SET.  */
+-#  define data_set_element(set, symbol)	_elf_set_element(set, symbol)
+-/* Make SYMBOL, which is in the bss segment, an element of SET.  */
+-#  define bss_set_element(set, symbol)	_elf_set_element(set, symbol)
+-
+-/* These are all done the same way in ELF.
+-   There is a new section created for each set.  */
+-#  ifdef SHARED
+-/* When building a shared library, make the set section writable,
+-   because it will need to be relocated at run time anyway.  */
+-#   define _elf_set_element(set, symbol) \
+-  static const void *__elf_set_##set##_element_##symbol##__ \
+-    __attribute__ ((unused, section (#set))) = &(symbol)
+-#  else
+-#   define _elf_set_element(set, symbol) \
+-  static const void *const __elf_set_##set##_element_##symbol##__ \
+-    __attribute__ ((unused, section (#set))) = &(symbol)
+-#  endif
+-
+-/* Define SET as a symbol set.  This may be required (it is in a.out) to
+-   be able to use the set's contents.  */
+-#  define symbol_set_define(set)	symbol_set_declare(set)
+-
+-/* Declare SET for use in this module, if defined in another module.  */
+-#  define symbol_set_declare(set) \
+-  extern void *const __start_##set __attribute__ ((__weak__));		\
+-  extern void *const __stop_##set __attribute__ ((__weak__));		\
+-  weak_extern (__start_##set) weak_extern (__stop_##set)
+-
+-/* Return a pointer (void *const *) to the first element of SET.  */
+-#  define symbol_set_first_element(set)	(&__start_##set)
+-
+-/* Return true iff PTR (a void *const *) has been incremented
+-   past the last element in SET.  */
+-#  define symbol_set_end_p(set, ptr)	((ptr) >= &__stop_##set)
+-
+-# else	/* Not ELF: a.out.  */
+-
+-#  ifdef HAVE_XCOFF
+-/* XCOFF does not support .stabs.
+-   The native aix linker will remove the .stab and .stabstr sections
+-   The gnu linker will have a fatal error if there is a relocation for
+-   symbol in the .stab section.  Silently disable these macros.  */
+-#   define text_set_element(set, symbol)
+-#   define data_set_element(set, symbol)
+-#   define bss_set_element(set, symbol)
+-#  else
+-#   define text_set_element(set, symbol)	\
+-    asm (".stabs \"" __SYMBOL_PREFIX #set "\",23,0,0," __SYMBOL_PREFIX #symbol)
+-#   define data_set_element(set, symbol)	\
+-    asm (".stabs \"" __SYMBOL_PREFIX #set "\",25,0,0," __SYMBOL_PREFIX #symbol)
+-#   define bss_set_element(set, symbol)	?error Must use initialized data.
+-#  endif /* XCOFF */
+-#  define symbol_set_define(set)	void *const (set)[1];
+-#  define symbol_set_declare(set)	extern void *const (set)[1];
+-
+-#  define symbol_set_first_element(set)	&(set)[1]
+-#  define symbol_set_end_p(set, ptr)	(*(ptr) == 0)
+-
+-# endif	/* ELF.  */
+-#else
+-/* We cannot do anything in generial.  */
+-# define text_set_element(set, symbol) asm ("")
+-# define data_set_element(set, symbol) asm ("")
+-# define bss_set_element(set, symbol) asm ("")
+-# define symbol_set_define(set)		void *const (set)[1];
+-# define symbol_set_declare(set)	extern void *const (set)[1];
+-
+-# define symbol_set_first_element(set)	&(set)[1]
+-# define symbol_set_end_p(set, ptr)	(*(ptr) == 0)
+-#endif	/* Have GNU ld.  */
+-
+-#if DO_VERSIONING
+-# define symbol_version(real, name, version) \
+-     _symbol_version(real, name, version)
+-# define default_symbol_version(real, name, version) \
+-     _default_symbol_version(real, name, version)
+-# ifdef __ASSEMBLER__
+-#  define _symbol_version(real, name, version) \
+-     .symver real, name##@##version
+-#  define _default_symbol_version(real, name, version) \
+-     .symver real, name##@##@##version
+-# else
+-#  define _symbol_version(real, name, version) \
+-     __asm__ (".symver " #real "," #name "@" #version)
+-#  define _default_symbol_version(real, name, version) \
+-     __asm__ (".symver " #real "," #name "@@" #version)
+-# endif
+-#else
+-# define symbol_version(real, name, version)
+-# define default_symbol_version(real, name, version) \
+-  strong_alias(real, name)
+-#endif
+-
+-#if defined HAVE_VISIBILITY_ATTRIBUTE && defined SHARED
+-# define attribute_hidden __attribute__ ((visibility ("hidden")))
+-#else
+-# define attribute_hidden
+-#endif
+-
+-/* Handling on non-exported internal names.  We have to do this only
+-   for shared code.  */
+-#ifdef SHARED
+-# define INTUSE(name) name##_internal
+-# define INTDEF(name) strong_alias (name, name##_internal)
+-# define INTVARDEF(name) \
+-  _INTVARDEF (name, name##_internal)
+-# if defined HAVE_VISIBILITY_ATTRIBUTE
+-#  define _INTVARDEF(name, aliasname) \
+-  extern __typeof (name) aliasname __attribute__ ((alias (#name), \
+-						   visibility ("hidden")));
+-# else
+-#  define _INTVARDEF(name, aliasname) \
+-  extern __typeof (name) aliasname __attribute__ ((alias (#name)));
+-# endif
+-# define INTDEF2(name, newname) strong_alias (name, newname##_internal)
+-# define INTVARDEF2(name, newname) _INTVARDEF (name, newname##_internal)
+-#else
+-# define INTUSE(name) name
+-# define INTDEF(name)
+-# define INTVARDEF(name)
+-# define INTDEF2(name, newname)
+-# define INTVARDEF2(name, newname)
+-#endif
+-
+-#endif /* libc-symbols.h */
+--- a/libpthread/include/set-hooks.h
++++ /dev/null
+@@ -1,72 +0,0 @@
+-/* Macros for using symbol sets for running lists of functions.
+-   Copyright (C) 1994, 1995, 1997, 2000 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, write to the Free
+-   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+-   02111-1307 USA.  */
+-
+-#ifndef _SET_HOOKS_H
+-#define _SET_HOOKS_H 1
+-
+-#define __need_size_t
+-#include <stddef.h>
+-// #include <sys/cdefs.h>
+-#define __unbounded
+-
+-#ifdef symbol_set_define
+-/* Define a hook variable called NAME.  Functions put on this hook take
+-   arguments described by PROTO.  Use `text_set_element (NAME, FUNCTION)'
+-   from gnu-stabs.h to add a function to the hook.  */
+-
+-# define DEFINE_HOOK(NAME, PROTO)		\
+-  typedef void __##NAME##_hook_function_t PROTO; \
+-  symbol_set_define (NAME)
+-
+-# define DECLARE_HOOK(NAME, PROTO)		\
+-  typedef void __##NAME##_hook_function_t PROTO;\
+-  symbol_set_declare (NAME)
+-
+-/* Run all the functions hooked on the set called NAME.
+-   Each function is called like this: `function ARGS'.  */
+-
+-# define RUN_HOOK(NAME, ARGS)				\
+-do {							\
+-  void *const *__unbounded ptr;				\
+-  for (ptr = symbol_set_first_element (NAME);		\
+-       ! symbol_set_end_p (NAME, ptr); ++ptr)		\
+-    (*(__##NAME##_hook_function_t *) *ptr) ARGS;	\
+-} while (0)
+-
+-/* Define a hook variable with NAME and PROTO, and a function called RUNNER
+-   which calls each function on the hook in turn, with ARGS.  */
+-
+-# define DEFINE_HOOK_RUNNER(name, runner, proto, args) \
+-DEFINE_HOOK (name, proto); \
+-extern void runner proto; void runner proto { RUN_HOOK (name, args); }
+-
+-#else
+-
+-/* The system does not provide necessary support for this.  */
+-# define DEFINE_HOOK(NAME, PROTO)
+-
+-# define DECLARE_HOOK(NAME, PROTO)
+-
+-# define RUN_HOOK(NAME, ARGS)
+-
+-# define DEFINE_HOOK_RUNNER(name, runner, proto, args)
+-
+-#endif
+-
+-#endif /* set-hooks.h */

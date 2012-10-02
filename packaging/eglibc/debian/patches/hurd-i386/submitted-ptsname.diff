@@ -1,0 +1,57 @@
+hurd: fixes for ptsname_r
+
+ptsname_r on failure returns the value that is also set as errno; furthermore,
+add more checks to it.
+* set errno and return it on __term_get_peername failure
+* set errno to ERANGE other than returning it
+Also, change the type of `peername' to string_t, and check its length with
+__strnlen.
+
+In ptsname do not set errno manually, since ptsname_r has set it already.
+
+2012-04-28  Pino Toscano  <toscano.pino@tiscali.it>
+
+	* sysdeps/mach/hurd/ptsname.c (ptsname): Do not manually set errno.
+	(__ptsname_r): Set errno and return it on __term_get_peername failure.
+	Set errno if the buffer is too short.  Make PEERNAME a string_t,
+	and check its length with __strnlen.
+---
+ sysdeps/mach/hurd/ptsname.c |   14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+--- a/sysdeps/mach/hurd/ptsname.c
++++ b/sysdeps/mach/hurd/ptsname.c
+@@ -35,8 +35,6 @@
+   error_t err;
+ 
+   err = __ptsname_r (fd, peername, sizeof (peername));
+-  if (err)
+-    __set_errno (err);
+ 
+   return err ? NULL : peername;
+ }
+@@ -47,17 +45,19 @@
+ int
+ __ptsname_internal (int fd, char *buf, size_t buflen, struct stat64 *stp)
+ {
+-  char peername[1024];  /* XXX */
++  string_t peername;
+   size_t len;
+   error_t err;
+ 
+-  peername[0] = '\0';
+   if (err = HURD_DPORT_USE (fd, __term_get_peername (port, peername)))
+-    return _hurd_fd_error (fd, err);
++    return __hurd_dfail (fd, err), errno;
+ 
+-  len = strlen (peername) + 1;
++  len = __strnlen (peername, sizeof peername - 1) + 1;
+   if (len > buflen)
+-    return ERANGE;
++    {
++      errno = ERANGE;
++      return ERANGE;
++    }
+ 
+   memcpy (buf, peername, len);
+   return 0;

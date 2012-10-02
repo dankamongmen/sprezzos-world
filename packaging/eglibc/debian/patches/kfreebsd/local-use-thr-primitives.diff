@@ -1,0 +1,703 @@
+--- a/linuxthreads/attr.c
++++ b/linuxthreads/attr.c
+@@ -365,11 +365,11 @@
+ 			 ? PTHREAD_CREATE_DETACHED
+ 			 : PTHREAD_CREATE_JOINABLE);
+ 
+-  attr->__schedpolicy = __sched_getscheduler (descr->p_pid);
++  attr->__schedpolicy = __sched_getscheduler (getpid());
+   if (attr->__schedpolicy == -1)
+     return errno;
+ 
+-  if (__sched_getparam (descr->p_pid,
++  if (__sched_getparam (getpid(),
+ 			(struct sched_param *) &attr->__schedparam) != 0)
+     return errno;
+ 
+--- a/linuxthreads/cancel.c
++++ b/linuxthreads/cancel.c
+@@ -89,7 +89,7 @@
+ int pthread_cancel(pthread_t thread)
+ {
+   pthread_handle handle = thread_handle(thread);
+-  int pid;
++  long ktid;
+   int dorestart = 0;
+   pthread_descr th;
+   pthread_extricate_if *pextricate;
+@@ -112,7 +112,7 @@
+   }
+ 
+   pextricate = th->p_extricate;
+-  pid = th->p_pid;
++  ktid = th->p_ktid;
+ 
+   /* If the thread has registered an extrication interface, then
+      invoke the interface. If it returns 1, then we succeeded in
+@@ -139,7 +139,7 @@
+   if (dorestart)
+     restart(th);
+   else
+-    kill(pid, __pthread_sig_cancel);
++    __thr_kill(ktid, __pthread_sig_cancel);
+ 
+   return 0;
+ }
+--- a/linuxthreads/descr.h
++++ b/linuxthreads/descr.h
+@@ -26,6 +26,42 @@
+ #include <lowlevellock.h>
+ #include <tls.h>
+ 
++
++extern long int syscall (long int __sysno, ...);
++#include <sys/syscall.h>
++// should be in <sys/thr.h> 
++struct rtprio;
++struct thr_param {
++    void        (*start_func)(void *);  /* thread entry function. */
++    void        *arg;                   /* argument for entry function. */
++    char        *stack_base;            /* stack base address. */
++    size_t      stack_size;             /* stack size. */
++    char        *tls_base;              /* tls base address. */
++    size_t      tls_size;               /* tls size. */
++    long        *child_tid;             /* address to store new TID. */
++    long        *parent_tid;            /* parent accesses the new TID here. */
++    int         flags;                  /* thread flags. */
++    struct rtprio       *rtp;           /* Real-time scheduling priority */
++    void        *spare[3];              /* TODO: cpu affinity mask etc. */
++};
++
++#define KTID_TERMINATED  1
++static inline int __thr_self(long *ktid)
++{ return syscall(SYS_thr_self, ktid);};
++  
++static inline int __thr_kill(long ktid, int signo)
++{ return syscall(SYS_thr_kill, ktid, signo);};  
++
++static inline int __thr_exit(long *ktid)	// also *ktid = KTID_TERMINATED, wakeup(ktid)
++{ return syscall(SYS_thr_exit, ktid);}; 	// returns only for last thread in process
++
++static inline int __thr_new(struct thr_param *param, int param_size)
++{ return syscall(SYS_thr_new, param, param_size);};
++
++static inline int __lll_wait(long *addr, long val)
++{ return syscall(SYS__umtx_op, addr, UMTX_OP_WAIT, val, NULL, NULL);};
++
++
+ /* Fast thread-specific data internal to libc.  */
+ enum __libc_tsd_key_t { _LIBC_TSD_KEY_MALLOC = 0,
+ 			_LIBC_TSD_KEY_DL_ERROR,
+@@ -202,6 +238,8 @@
+   size_t p_alloca_cutoff;	/* Maximum size which should be allocated
+ 				   using alloca() instead of malloc().  */
+   /* New elements must be added at the end.  */
++  long p_ktid;                  /* kernel thread ID */
++
+ 
+   /* This member must be last.  */
+   char end_padding[];
+--- a/linuxthreads/join.c
++++ b/linuxthreads/join.c
+@@ -76,12 +76,15 @@
+   /* If this is the initial thread, block until all threads have terminated.
+      If another thread calls exit, we'll be terminated from our signal
+      handler. */
+-  if (self == __pthread_main_thread && __pthread_manager_request >= 0) {
++  if (self == __pthread_main_thread)
++  {
++   if (__pthread_manager_request >= 0) {
+     request.req_thread = self;
+     request.req_kind = REQ_MAIN_THREAD_EXIT;
+     TEMP_FAILURE_RETRY(write_not_cancel(__pthread_manager_request,
+ 					(char *)&request, sizeof(request)));
+     suspend(self);
++   }
+     /* Main thread flushes stdio streams and runs atexit functions.
+        It also calls a handler within LinuxThreads which sends a process exit
+        request to the thread manager. */
+@@ -89,6 +92,9 @@
+   }
+   /* Threads other than the main one  terminate without flushing stdio streams
+      or running atexit functions. */
++     
++  __thr_kill(__manager_thread->p_ktid, __pthread_sig_cancel);
++  __thr_exit(&(self->p_ktid));
+   _exit(0);
+ }
+ 
+--- a/linuxthreads/manager.c
++++ b/linuxthreads/manager.c
+@@ -151,13 +151,16 @@
+   while(1) {
+     n = __poll(&ufd, 1, 2000);
+ 
++#if 0
++    /* iff the main thread terminated abnormally, the signal should kill all threads already */
+     /* Check for termination of the main thread */
+     if (getppid() == 1) {
+       pthread_kill_all_threads(SIGKILL, 0);
+       _exit(0);
+     }
++#endif    
+     /* Check for dead children */
+-    if (terminated_children) {
++    if (1 || terminated_children || main_thread_exiting) {
+       terminated_children = 0;
+       pthread_reap_children();
+     }
+@@ -182,7 +185,7 @@
+                                 request.req_args.create.fn,
+                                 request.req_args.create.arg,
+                                 &request.req_args.create.mask,
+-                                request.req_thread->p_pid,
++                                request.req_thread->p_ktid,
+ 				request.req_thread->p_report_events,
+ 				&request.req_thread->p_eventbuf.eventmask);
+         restart(request.req_thread);
+@@ -271,10 +274,13 @@
+ #endif
+   /* Make sure our pid field is initialized, just in case we get there
+      before our father has initialized it. */
+-  THREAD_SETMEM(self, p_pid, __getpid());
++  // done in  kernel   
++  // __thr_self(&ktid);   
++  // THREAD_SETMEM(self, p_ktid, ktid);
+   /* Initial signal mask is that of the creating thread. (Otherwise,
+      we'd just inherit the mask of the thread manager.) */
+   sigprocmask(SIG_SETMASK, &self->p_start_args.mask, NULL);
++#if 0  
+   /* Set the scheduling policy and priority for the new thread, if needed */
+   if (THREAD_GETMEM(self, p_start_args.schedpolicy) >= 0)
+     /* Explicit scheduling attributes were provided: apply them */
+@@ -290,6 +296,7 @@
+       __sched_setscheduler(THREAD_GETMEM(self, p_pid),
+                            SCHED_OTHER, &default_params);
+     }
++#endif    
+ #if !(USE_TLS && HAVE___THREAD)
+   /* Initialize thread-locale current locale to point to the global one.
+      With __thread support, the variable's initializer takes care of this.  */
+@@ -324,7 +331,9 @@
+ #endif
+   /* Make sure our pid field is initialized, just in case we get there
+      before our father has initialized it. */
+-  THREAD_SETMEM(self, p_pid, __getpid());
++  // done in kernel   
++  // __thr_self(&ktid);   
++  // THREAD_SETMEM(self, p_ktid, ktid);
+   /* Get the lock the manager will free once all is correctly set up.  */
+   __pthread_lock (THREAD_GETMEM(self, p_lock), NULL);
+   /* Free it immediately.  */
+@@ -586,7 +595,7 @@
+ 				 td_thr_events_t *event_maskp)
+ {
+   size_t sseg;
+-  int pid;
++  int rv;
+   pthread_descr new_thread;
+   char *stack_addr;
+   char * new_thread_bottom;
+@@ -595,6 +604,7 @@
+   size_t guardsize = 0, stksize = 0;
+   int pagesize = __getpagesize();
+   int saved_errno = 0;
++  struct thr_param p;
+ 
+ #ifdef USE_TLS
+   new_thread = _dl_allocate_tls (NULL);
+@@ -691,6 +701,7 @@
+     new_thread->p_detached = attr->__detachstate;
+     new_thread->p_userstack = attr->__stackaddr_set;
+ 
++#if 0
+     switch(attr->__inheritsched) {
+     case PTHREAD_EXPLICIT_SCHED:
+       new_thread->p_start_args.schedpolicy = attr->__schedpolicy;
+@@ -702,6 +713,7 @@
+       __sched_getparam(father_pid, &new_thread->p_start_args.schedparam);
+       break;
+     }
++#endif    
+     new_thread->p_priority =
+       new_thread->p_start_args.schedparam.sched_priority;
+   }
+@@ -717,7 +729,7 @@
+   __pthread_manager_adjust_prio(new_thread->p_priority);
+   /* Do the cloning.  We have to use two different functions depending
+      on whether we are debugging or not.  */
+-  pid = 0;	/* Note that the thread never can have PID zero.  */
++  rv = 0;
+   if (report_events)
+     {
+       /* See whether the TD_CREATE event bit is set in any of the
+@@ -733,30 +745,22 @@
+ 
+ 	  /* We have to report this event.  */
+ #ifdef NEED_SEPARATE_REGISTER_STACK
+-	  /* Perhaps this version should be used on all platforms. But
+-	   this requires that __clone2 be uniformly supported
+-	   everywhere.
+-
+-	   And there is some argument for changing the __clone2
+-	   interface to pass sp and bsp instead, making it more IA64
+-	   specific, but allowing stacks to grow outward from each
+-	   other, to get less paging and fewer mmaps.  */
+-	  pid = __clone2(pthread_start_thread_event,
+-  		 (void **)new_thread_bottom,
+-			 (char *)stack_addr - new_thread_bottom,
+-			 CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM |
+-			 __pthread_sig_cancel, new_thread);
++#error unimplemented SEPARATE_REGISTER_STACK
+ #elif _STACK_GROWS_UP
+-	  pid = __clone(pthread_start_thread_event, (void *) new_thread_bottom,
+-			CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM |
+-			__pthread_sig_cancel, new_thread);
++#error unimplemented _STACK_GROWS_UP
+ #else
+-	  pid = __clone(pthread_start_thread_event, stack_addr,
+-			CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM |
+-			__pthread_sig_cancel, new_thread);
++      memset(&p, 0, sizeof(p));
++      p.start_func = pthread_start_thread_event;
++      p.arg        = new_thread;
++      p.stack_base = new_thread_bottom;
++      p.stack_size = stack_addr - new_thread_bottom;
++      p.tls_base   = new_thread;
++      p.child_tid  = &(new_thread->p_ktid);
++   
++      rv = __thr_new(&p, sizeof(p));
+ #endif
+ 	  saved_errno = errno;
+-	  if (pid != -1)
++	  if (rv != -1)
+ 	    {
+ 	      /* Now fill in the information about the new thread in
+ 		 the newly created thread's data structure.  We cannot let
+@@ -769,7 +773,7 @@
+ 	      /* We have to set the PID here since the callback function
+ 		 in the debug library will need it and we cannot guarantee
+ 		 the child got scheduled before the debugger.  */
+-	      new_thread->p_pid = pid;
++               // kernel already done that
+ 
+ 	      /* Now call the function which signals the event.  */
+ 	      __linuxthreads_create_event ();
+@@ -779,27 +783,31 @@
+ 	    }
+ 	}
+     }
+-  if (pid == 0)
++
++  if (rv == 0)
+     {
+ #ifdef NEED_SEPARATE_REGISTER_STACK
+-      pid = __clone2(pthread_start_thread,
+-		     (void **)new_thread_bottom,
+-                     (char *)stack_addr - new_thread_bottom,
+-		     CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM |
+-		     __pthread_sig_cancel, new_thread);
++#error unimplemented SEPARATE_REGISTER_STACK
+ #elif _STACK_GROWS_UP
+-      pid = __clone(pthread_start_thread, (void *) new_thread_bottom,
+-		    CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM |
+-		    __pthread_sig_cancel, new_thread);
++#error unimplemented _STACK_GROWS_UP
+ #else
+-      pid = __clone(pthread_start_thread, stack_addr,
+-		    CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM |
+-		    __pthread_sig_cancel, new_thread);
++
++      memset(&p, 0, sizeof(p));
++      p.start_func = pthread_start_thread;
++      p.arg        = new_thread;
++      p.stack_base = new_thread_bottom;
++      p.stack_size = stack_addr - new_thread_bottom;
++      p.tls_base   = new_thread;
++      p.child_tid  = &(new_thread->p_ktid);
++   
++      rv = __thr_new(&p, sizeof(p));
++
+ #endif /* !NEED_SEPARATE_REGISTER_STACK */
+       saved_errno = errno;
+     }
++
+   /* Check if cloning succeeded */
+-  if (pid == -1) {
++  if (rv == -1) {
+     /* Free the stack if we allocated it */
+     if (attr == NULL || !attr->__stackaddr_set)
+       {
+@@ -843,7 +851,7 @@
+   __pthread_main_thread->p_nextlive = new_thread;
+   /* Set pid field of the new thread, in case we get there before the
+      child starts. */
+-  new_thread->p_pid = pid;
++  // kernel already done that
+   return 0;
+ }
+ 
+@@ -928,17 +936,18 @@
+ 
+ /* Handle threads that have exited */
+ 
+-static void pthread_exited(pid_t pid)
++static void pthread_reap_children(void)
+ {
+-  pthread_descr th;
++  pthread_descr th, tth;
+   int detached;
++  
+   /* Find thread with that pid */
+   for (th = __pthread_main_thread->p_nextlive;
+        th != __pthread_main_thread;
+        th = th->p_nextlive) {
+-    if (th->p_pid == pid) {
++    if (th->p_ktid == KTID_TERMINATED) {
+       /* Remove thread from list of active threads */
+-      th->p_nextlive->p_prevlive = th->p_prevlive;
++      tth = th->p_nextlive->p_prevlive = th->p_prevlive;
+       th->p_prevlive->p_nextlive = th->p_nextlive;
+       /* Mark thread as exited, and if detached, free its resources */
+       __pthread_lock(th->p_lock, NULL);
+@@ -966,7 +975,7 @@
+       __pthread_unlock(th->p_lock);
+       if (detached)
+ 	pthread_free(th);
+-      break;
++      th = tth;	
+     }
+   }
+   /* If all threads have exited and the main thread is pending on a
+@@ -978,22 +987,6 @@
+   }
+ }
+ 
+-static void pthread_reap_children(void)
+-{
+-  pid_t pid;
+-  int status;
+-
+-  while ((pid = waitpid_not_cancel(-1, &status, WNOHANG | __WCLONE)) > 0) {
+-    pthread_exited(pid);
+-    if (WIFSIGNALED(status)) {
+-      /* If a thread died due to a signal, send the same signal to
+-         all other threads, including the main thread. */
+-      pthread_kill_all_threads(WTERMSIG(status), 1);
+-      _exit(0);
+-    }
+-  }
+-}
+-
+ /* Try to free the resources of a thread when requested by pthread_join
+    or pthread_detach on a terminated thread. */
+ 
+@@ -1030,10 +1023,10 @@
+   for (th = __pthread_main_thread->p_nextlive;
+        th != __pthread_main_thread;
+        th = th->p_nextlive) {
+-    kill(th->p_pid, sig);
++    __thr_kill(th->p_ktid, sig);
+   }
+   if (main_thread_also) {
+-    kill(__pthread_main_thread->p_pid, sig);
++    __thr_kill(__pthread_main_thread->p_ktid, sig);
+   }
+ }
+ 
+@@ -1071,18 +1064,24 @@
+   for (th = issuing_thread->p_nextlive;
+        th != issuing_thread;
+        th = th->p_nextlive) {
+-    kill(th->p_pid, __pthread_sig_cancel);
++    __thr_kill(th->p_ktid, __pthread_sig_cancel);
+   }
+   /* Now, wait for all these threads, so that they don't become zombies
+      and their times are properly added to the thread manager's times. */
+   for (th = issuing_thread->p_nextlive;
+        th != issuing_thread;
+        th = th->p_nextlive) {
+-    waitpid(th->p_pid, NULL, __WCLONE);
++    if (th == __pthread_main_thread)	// it waits for thread manager
++        continue;
++    long ktid;
++    while (KTID_TERMINATED != (ktid = th->p_ktid))
++        __lll_wait(&(th->p_ktid), ktid);
+   }
+   __fresetlockfiles();
+   restart(issuing_thread);
+-  _exit(0);
++  __thr_exit(&(manager_thread->p_ktid));
++  // should not return */
++  _exit(__pthread_exit_code);
+ }
+ 
+ /* Handler for __pthread_sig_cancel in thread manager thread */
+@@ -1114,11 +1113,12 @@
+ void __pthread_manager_adjust_prio(int thread_prio)
+ {
+   struct sched_param param;
+-
++#if 0
+   if (thread_prio <= manager_thread->p_priority) return;
+   param.sched_priority =
+     thread_prio < __sched_get_priority_max(SCHED_FIFO)
+     ? thread_prio + 1 : thread_prio;
+   __sched_setscheduler(manager_thread->p_pid, SCHED_FIFO, &param);
+   manager_thread->p_priority = thread_prio;
++#endif  
+ }
+--- a/linuxthreads/pthread.c
++++ b/linuxthreads/pthread.c
+@@ -520,6 +520,7 @@
+ {
+   struct sigaction sa;
+   sigset_t mask;
++  long ktid;
+ 
+   /* If already done (e.g. by a constructor called earlier!), bail out */
+   if (__pthread_initial_thread_bos != NULL) return;
+@@ -548,14 +549,16 @@
+ #endif
+ #ifdef USE_TLS
+   /* Update the descriptor for the initial thread. */
+-  THREAD_SETMEM (((pthread_descr) NULL), p_pid, __getpid());
++  __thr_self(&ktid);
++  THREAD_SETMEM (((pthread_descr) NULL), p_ktid, ktid);
+ # ifndef HAVE___THREAD
+   /* Likewise for the resolver state _res.  */
+   THREAD_SETMEM (((pthread_descr) NULL), p_resp, &_res);
+ # endif
+ #else
+   /* Update the descriptor for the initial thread. */
+-  __pthread_initial_thread.p_pid = __getpid();
++  __thr_self(&ktid);
++  __pthread_initial_thread.p_ktid = ktid;
+   /* Likewise for the resolver state _res.  */
+   __pthread_initial_thread.p_resp = &_res;
+ #endif
+@@ -629,7 +632,8 @@
+ int __pthread_initialize_manager(void)
+ {
+   int manager_pipe[2];
+-  int pid;
++  int rv;
++  struct thr_param p;
+   struct pthread_request request;
+   int report_events;
+   pthread_descr mgr;
+@@ -743,7 +747,7 @@
+   __pthread_manager_reader = manager_pipe[0]; /* reading end */
+ 
+   /* Start the thread manager */
+-  pid = 0;
++  rv = 0;
+ #ifdef USE_TLS
+   if (__linuxthreads_initial_report_events != 0)
+     THREAD_SETMEM (((pthread_descr) NULL), p_report_events,
+@@ -776,24 +780,22 @@
+ 	  __pthread_lock(mgr->p_lock, NULL);
+ 
+ #ifdef NEED_SEPARATE_REGISTER_STACK
+-	  pid = __clone2(__pthread_manager_event,
+-			 (void **) __pthread_manager_thread_bos,
+-			 THREAD_MANAGER_STACK_SIZE,
+-			 CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM,
+-			 mgr);
++#error unimplemented SEPARATE_REGISTER_STACK
+ #elif _STACK_GROWS_UP
+-	  pid = __clone(__pthread_manager_event,
+-			(void **) __pthread_manager_thread_bos,
+-			CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM,
+-			mgr);
++#error unimplemented  STACK_GROWS_UP
+ #else
+-	  pid = __clone(__pthread_manager_event,
+-			(void **) __pthread_manager_thread_tos,
+-			CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM,
+-			mgr);
++      memset(&p, 0, sizeof(p));
++      p.start_func = __pthread_manager_event;
++      p.arg        = mgr;
++      p.stack_base = __pthread_manager_thread_bos;
++      p.stack_size = __pthread_manager_thread_tos - __pthread_manager_thread_bos;
++      p.tls_base   = mgr;
++      p.child_tid  = &(mgr->p_ktid);
++   
++      rv = __thr_new(&p, sizeof(p));
+ #endif
+ 
+-	  if (pid != -1)
++	  if (rv != -1)
+ 	    {
+ 	      /* Now fill in the information about the new thread in
+ 	         the newly created thread's data structure.  We cannot let
+@@ -803,7 +805,6 @@
+ 	      mgr->p_eventbuf.eventnum = TD_CREATE;
+ 	      __pthread_last_event = mgr;
+ 	      mgr->p_tid = 2* PTHREAD_THREADS_MAX + 1;
+-	      mgr->p_pid = pid;
+ 
+ 	      /* Now call the function which signals the event.  */
+ 	      __linuxthreads_create_event ();
+@@ -814,21 +815,26 @@
+ 	}
+     }
+ 
+-  if (__builtin_expect (pid, 0) == 0)
++  if (__builtin_expect (rv, 0) == 0)
+     {
++
+ #ifdef NEED_SEPARATE_REGISTER_STACK
+-      pid = __clone2(__pthread_manager, (void **) __pthread_manager_thread_bos,
+-		     THREAD_MANAGER_STACK_SIZE,
+-		     CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM, mgr);
++#error unimplemented SEPARATE_REGISTER_STACK
+ #elif _STACK_GROWS_UP
+-      pid = __clone(__pthread_manager, (void **) __pthread_manager_thread_bos,
+-		    CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM, mgr);
++#error unimplemented  STACK_GROWS_UP
+ #else
+-      pid = __clone(__pthread_manager, (void **) __pthread_manager_thread_tos,
+-		    CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_SYSVSEM, mgr);
++      memset(&p, 0, sizeof(p));
++      p.start_func = __pthread_manager;
++      p.arg        = mgr;
++      p.stack_base = __pthread_manager_thread_bos;
++      p.stack_size = __pthread_manager_thread_tos - __pthread_manager_thread_bos;
++      p.tls_base   = mgr;
++      p.child_tid  = &(mgr->p_ktid);
++   
++      rv = __thr_new(&p, sizeof(p));
+ #endif
+     }
+-  if (__builtin_expect (pid, 0) == -1) {
++  if (__builtin_expect (rv, 0) == -1) {
+ #ifdef USE_TLS
+     _dl_deallocate_tls (tcbp, true);
+ #endif
+@@ -838,7 +844,6 @@
+     return -1;
+   }
+   mgr->p_tid = 2* PTHREAD_THREADS_MAX + 1;
+-  mgr->p_pid = pid;
+   /* Make gdb aware of new thread manager */
+   if (__builtin_expect (__pthread_threads_debug, 0) && __pthread_sig_debug > 0)
+     {
+@@ -998,7 +1003,7 @@
+     return ESRCH;
+   }
+   th = handle->h_descr;
+-  if (__builtin_expect (__sched_setscheduler(th->p_pid, policy, param) == -1,
++  if (__builtin_expect (__sched_setscheduler(getpid(), policy, param) == -1,
+ 			0)) {
+     __pthread_unlock(&handle->h_lock);
+     return errno;
+@@ -1022,7 +1027,7 @@
+     __pthread_unlock(&handle->h_lock);
+     return ESRCH;
+   }
+-  pid = handle->h_descr->p_pid;
++  pid = getpid();
+   __pthread_unlock(&handle->h_lock);
+   pol = __sched_getscheduler(pid);
+   if (__builtin_expect (pol, 0) == -1) return errno;
+@@ -1062,9 +1067,11 @@
+     if (self == __pthread_main_thread)
+       {
+ #ifdef USE_TLS
+-	waitpid(manager_thread->p_pid, NULL, __WCLONE);
++        long ktid;
++        while (KTID_TERMINATED != (ktid = manager_thread->p_ktid))
++            __lll_wait(&(manager_thread->p_ktid), ktid);
+ #else
+-	waitpid(__pthread_manager_thread.p_pid, NULL, __WCLONE);
++#error TLS required
+ #endif
+ 	/* Since all threads have been asynchronously terminated
+            (possibly holding locks), free cannot be used any more.
+@@ -1128,11 +1135,19 @@
+        children, so that timings for main thread account for all threads. */
+     if (self == __pthread_main_thread) {
+ #ifdef USE_TLS
+-      waitpid(manager_thread->p_pid, NULL, __WCLONE);
++        long ktid;
++        while (KTID_TERMINATED != (ktid = manager_thread->p_ktid))
++            __lll_wait(&(manager_thread->p_ktid), ktid);
+ #else
+-      waitpid(__pthread_manager_thread.p_pid, NULL, __WCLONE);
++#error TLS required
+ #endif
+     }
++    else
++    {
++       __thr_kill(__manager_thread->p_ktid, __pthread_sig_cancel);
++       __thr_exit(&(self->p_ktid));
++       /* should not return */
++    }
+     _exit(__pthread_exit_code);
+   }
+   if (__builtin_expect (THREAD_GETMEM(self, p_canceled), 0)
+@@ -1170,6 +1185,7 @@
+ 
+ void __pthread_reset_main_thread(void)
+ {
++  long ktid;
+   pthread_descr self = thread_self();
+ 
+   if (__pthread_manager_request != -1) {
+@@ -1183,7 +1199,8 @@
+   }
+ 
+   /* Update the pid of the main thread */
+-  THREAD_SETMEM(self, p_pid, __getpid());
++  __thr_self(&ktid);
++  THREAD_SETMEM(self, p_ktid, ktid);
+   /* Make the forked thread the main thread */
+   __pthread_main_thread = self;
+   THREAD_SETMEM(self, p_nextlive, self);
+@@ -1289,7 +1306,7 @@
+ void __pthread_restart_old(pthread_descr th)
+ {
+   if (pthread_atomic_increment(&th->p_resume_count) == -1)
+-    kill(th->p_pid, __pthread_sig_restart);
++    __thr_kill(th->p_ktid, __pthread_sig_restart);
+ }
+ 
+ void __pthread_suspend_old(pthread_descr self)
+@@ -1384,7 +1401,7 @@
+      memory so the woken thread will have a consistent view.  Complementary
+      read barriers are present to the suspend functions. */
+   WRITE_MEMORY_BARRIER();
+-  kill(th->p_pid, __pthread_sig_restart);
++  __thr_kill(th->p_ktid, __pthread_sig_restart);
+ }
+ 
+ /* There is no __pthread_suspend_new because it would just
+--- a/linuxthreads/signals.c
++++ b/linuxthreads/signals.c
+@@ -57,16 +57,16 @@
+ int pthread_kill(pthread_t thread, int signo)
+ {
+   pthread_handle handle = thread_handle(thread);
+-  int pid;
++  long  ktid;
+ 
+   __pthread_lock(&handle->h_lock, NULL);
+   if (invalid_handle(handle, thread)) {
+     __pthread_unlock(&handle->h_lock);
+     return ESRCH;
+   }
+-  pid = handle->h_descr->p_pid;
++  ktid = handle->h_descr->p_ktid;
+   __pthread_unlock(&handle->h_lock);
+-  if (kill(pid, signo) == -1)
++  if (__thr_kill(ktid, signo) == -1)
+     return errno;
+   else
+     return 0;
+--- a/linuxthreads/Banner
++++ b/linuxthreads/Banner
+@@ -1 +1 @@
+-linuxthreads-0.10 by Xavier Leroy
++linuxthreads-0.11 by Debian GNU/kFreeBSD

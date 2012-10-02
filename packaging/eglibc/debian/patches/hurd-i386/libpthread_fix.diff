@@ -1,0 +1,75 @@
+Temporary patch from Thomas Schwinge to fix libpthread bugs.
+
+---
+ libpthread/sysdeps/mach/hurd/pt-init-specific.c |   29 ++++++++++++++++++++++++
+ libpthread/sysdeps/mach/pt-thread-dealloc.c     |    2 +
+ libpthread/sysdeps/mach/pt-thread-halt.c        |   19 ++++++++++++++-
+ 3 files changed, 48 insertions(+), 2 deletions(-)
+
+--- a/libpthread/sysdeps/mach/pt-thread-dealloc.c
++++ b/libpthread/sysdeps/mach/pt-thread-dealloc.c
+@@ -38,4 +38,6 @@
+      assert.  */
+   __mach_port_destroy (__mach_task_self (),
+ 		       thread->wakeupmsg.msgh_remote_port);
++
++  thread->have_kernel_resources = 0;
+ }
+--- a/libpthread/sysdeps/mach/pt-thread-halt.c
++++ b/libpthread/sysdeps/mach/pt-thread-halt.c
+@@ -32,6 +32,21 @@
+ void
+ __pthread_thread_halt (struct __pthread *thread)
+ {
+-  error_t err = __thread_terminate (thread->kernel_thread);
+-  assert_perror (err);
++  if (thread->have_kernel_resources)
++    {
++      if (thread == _pthread_self ())
++	{
++	  while (1)
++	    {
++	      error_t err = __thread_suspend (thread->kernel_thread);
++	      assert_perror (err);
++	      assert (! "Failed to suspend self.");
++	    }
++	}
++      else
++	{
++	  error_t err = __thread_terminate (thread->kernel_thread);
++	  assert_perror (err);
++	}
++    }
+ }
+--- /dev/null
++++ b/libpthread/sysdeps/mach/hurd/pt-init-specific.c
+@@ -0,0 +1,29 @@
++/* __pthread_init_specific.  Mach version.
++   Copyright (C) 2002, 2009 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Library General Public License as
++   published by the Free Software Foundation; either version 2 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Library General Public License for more details.
++
++   You should have received a copy of the GNU Library General Public
++   License along with the GNU C Library; see the file COPYING.LIB.  If not,
++   write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
++   Boston, MA 02111-1307, USA.  */
++
++#include <pthread.h>
++#include <pt-internal.h>
++
++error_t
++__pthread_init_specific (struct __pthread *thread)
++{
++  thread->thread_specifics = 0;
++  thread->have_kernel_resources = 0;
++  return 0;
++}
