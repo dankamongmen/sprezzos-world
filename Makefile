@@ -55,7 +55,7 @@ MESAUP:=MesaLib-$(shell echo $(mesa_VERSION) | cut -d- -f1 | cut -d= -f2- | cut 
 MESAORIG:=mesa-$(shell echo $(mesa_VERSION) | cut -d- -f1).orig.tar.bz2
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 NFSUTILSUP:=nfs-utils-$(shell echo $(nfs-utils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-NFSUTILSORIG:=$(shell echo $(NFSUTILSUP) | tr - _).orig.tar.bz2
+NFSUTILSORIG:=nfs-$(shell echo $(NFSUTILSUP) | cut -d- -f2- | tr - _).orig.tar.bz2
 NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.bz2
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
