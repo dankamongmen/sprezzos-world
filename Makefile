@@ -15,7 +15,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
-	nfs-utils
+	nfs-utils eglibc
 
 SPREZZ:=packaging
 
@@ -72,10 +72,10 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
-	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS)
+	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
-	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG)
+	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -483,7 +483,7 @@ clean:
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
-	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT)
+	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC)
 
 clobber:
 	rm -rf $(FETCHED)
