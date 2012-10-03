@@ -44,7 +44,7 @@ GTK3ORIG:=gtk+3.0_$(shell echo $(gtk3_VERSION) | cut -d- -f1).orig.tar.xz
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_VERSION) | cut -d- -f1).orig.tar.gz
 HWLOCUP:=hwloc-$(shell echo $(hwloc_VERSION) | cut -d- -f1)
-HWLOCORIG:=hwloc-$(shell echo $(hwloc_VERSION) | cut -d- -f1).orig.tar.bz2
+HWLOCORIG:=hwloc_$(shell echo $(hwloc_VERSION) | cut -d- -f1).orig.tar.bz2
 
 LIBDRMUP:=libdrm-$(shell echo $(libdrm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBDRMORIG:=$(shell echo $(LIBDRMUP) | tr - _).orig.tar.bz2
