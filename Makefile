@@ -67,7 +67,7 @@ OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 PANGOUP:=pango-$(shell echo $(pango_VERSION) | cut -d- -f1)
-PANGOORIG:=$(shell echo $(PANGOUP) | tr - _).orig.tar.xz
+PANGOORIG:=pango1.0-$(shell echo $(PANGOUP) | cut -d- -f2 | tr - _).orig.tar.xz
 PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_VERSION) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 SOCATUP:=socat-$(shell echo $(socat_VERSION) | cut -d- -f1 | tr \~ -)
