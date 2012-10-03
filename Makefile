@@ -278,7 +278,7 @@ $(GDK-PIXBUFORIG): $(GDK-PIXBUFUP).tar.xz
 	ln -s $< $@
 
 .PHONY: gdk-pixbuf
-gdk-pixbuf:$(GDK-PIXBUF)_$(ARCH).deb
+gdk-pixbuf:$(GDK-PIXBUFORIG)_$(ARCH).deb
 $(GDK-PIXBUF): $(SPREZZ)/gdk-pixbuf/debian/changelog $(GDK-PIXBUFORIG)
 	mkdir $@
 	tar xJvf $(GDK-PIXBUFORIG) --strip-components=1 -C $@
