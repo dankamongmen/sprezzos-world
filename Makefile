@@ -15,7 +15,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
-	nfs-utils eglibc
+	nfs-utils eglibc hwloc
 
 SPREZZ:=packaging
 
@@ -43,6 +43,8 @@ GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
 GTK3ORIG:=gtk+3.0_$(shell echo $(gtk3_VERSION) | cut -d- -f1).orig.tar.xz
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_VERSION) | cut -d- -f1).orig.tar.gz
+HWLOCUP:=hwloc-$(shell echo $(hwloc_VERSION) | cut -d- -f1)
+HWLOCORIG:=hwloc-$(shell echo $(hwloc_VERSION) | cut -d- -f1).orig.tar.bz2
 
 LIBDRMUP:=libdrm-$(shell echo $(libdrm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBDRMORIG:=$(shell echo $(LIBDRMUP) | tr - _).orig.tar.bz2
@@ -272,6 +274,20 @@ hfsutils:$(HFSUTILS)_$(ARCH).deb
 $(HFSUTILS): $(SPREZZ)/hfsutils/debian/changelog $(HFSUTILSORIG)
 	mkdir $@
 	tar xzvf $(HFSUTILSORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(HWLOCUP).tar.bz2
+$(HWLOCUP).tar.bz2:
+	wget -nc -O$@ http://www.open-mpi.org/software/hwloc/v1.5/downloads/$@
+
+$(HWLOCORIG): $(HWLOCUP).tar.bz2
+	ln -s $< $@
+
+.PHONY: hwloc
+hwloc:$(HWLOC)_$(ARCH).deb
+$(HWLOC): $(SPREZZ)/hwloc/debian/changelog $(HWLOCORIG)
+	mkdir $@
+	tar xjvf $(HWLOCORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIBDRMUP).tar.bz2
