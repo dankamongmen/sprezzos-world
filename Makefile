@@ -269,7 +269,7 @@ $(FONTCONFIGORIG): $(FONTCONFIGUP).tar.gz
 fontconfig:$(FONTCONFIG)_$(ARCH).deb
 $(FONTCONFIG): $(SPREZZ)/fontconfig/debian/changelog $(FONTCONFIGORIG)
 	mkdir $@
-	tar xjvf $(FONTCONFIGORIG) --strip-components=1 -C $@
+	tar xzvf $(FONTCONFIGORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(FREETYPEUP).tar.gz
