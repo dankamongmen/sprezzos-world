@@ -15,7 +15,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
-	nfs-utils eglibc hwloc freetype pango
+	nfs-utils eglibc hwloc freetype pango fontconfig
 
 SPREZZ:=packaging
 
@@ -37,6 +37,8 @@ EGLIBCORIG:=eglibc_$(shell echo $(eglibc_VERSION) | cut -d- -f1).orig.tar.gz
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 FBTERMUP:=nfbterm-$(shell echo $(fbterm_VERSION) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_VERSION) | cut -d- -f1).orig.tar.gz
+FONTCONFIGUP:=fontconfig-$(shell echo $(fontconfig_VERSION) | cut -d- -f1)
+FONTCONFIGORIG:=fontconfig_$(shell echo $(fontconfig_VERSION) | cut -d- -f1).orig.tar.bz2
 FREETYPEUP:=freetype-$(shell echo $(freetype_VERSION) | cut -d- -f1)
 FREETYPEORIG:=freetype_$(shell echo $(freetype_VERSION) | cut -d- -f1).orig.tar.gz
 GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1)
@@ -254,6 +256,20 @@ fbterm:$(FBTERM)_$(ARCH).deb
 $(FBTERM): $(SPREZZ)/fbterm/debian/changelog $(FBTERMORIG)
 	mkdir $@
 	tar xzvf $(FBTERMORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(FONTCONFIGUP).tar.gz
+$(FONTCONFIGUP).tar.gz:
+	wget -nc -O$@ http://www.freedesktop.org/software/fontconfig/release/$@
+
+$(FONTCONFIGORIG): $(FONTCONFIGUP).tar.gz
+	ln -s $< $@
+
+.PHONY: fontconfig
+fontconfig:$(FONTCONFIG)_$(ARCH).deb
+$(FONTCONFIG): $(SPREZZ)/fontconfig/debian/changelog $(FONTCONFIGORIG)
+	mkdir $@
+	tar xjvf $(FONTCONFIGORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(FREETYPEUP).tar.gz
@@ -550,7 +566,7 @@ clean:
 	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
-	rm -rf $(PANGO) $(GDK-PIXBUF)
+	rm -rf $(PANGO) $(GDK-PIXBUF) $(FONTCONFIG)
 
 clobber:
 	rm -rf $(FETCHED)
