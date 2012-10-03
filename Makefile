@@ -15,7 +15,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
-	nfs-utils eglibc hwloc freetype
+	nfs-utils eglibc hwloc freetype pango
 
 SPREZZ:=packaging
 
@@ -66,6 +66,8 @@ NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.bz2
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+PANGOUP:=pango-$(shell echo $(pango_VERSION) | cut -d- -f1)
+PANGOORIG:=$(shell echo $(PANGOUP) | tr - _).orig.tar.xz
 PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_VERSION) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 SOCATUP:=socat-$(shell echo $(socat_VERSION) | cut -d- -f1 | tr \~ -)
@@ -77,7 +79,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
-	$(FREETYPE)
+	$(FREETYPE) $(PANGO)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -368,6 +370,20 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog $(NFSUTILSORIG)
 	tar xjvf $(NFSUTILSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(PANGOUP).tar.xz
+$(PANGOUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/pango/1.30/$@
+
+$(PANGOORIG): $(PANGOUP).tar.xz
+	ln -s $< $@
+
+.PHONY: pango
+pango:$(PANGO)_$(ARCH).deb
+$(PANGO): $(SPREZZ)/pango/debian/changelog $(PANGOORIG)
+	mkdir $@
+	tar xJvf $(PANGOORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(PULSEAUDIOUP).tar.xz
 $(PULSEAUDIOUP).tar.xz:
 	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(@F)
@@ -518,6 +534,7 @@ clean:
 	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
+	rm -rf $(PANGO)
 
 clobber:
 	rm -rf $(FETCHED)
