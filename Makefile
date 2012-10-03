@@ -388,7 +388,7 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog $(NFSUTILSORIG)
 
 FETCHED:=$(FETCHED) $(PANGOUP).tar.xz
 $(PANGOUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/pango/1.30/$@
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/pango/1.32/$@
 
 $(PANGOORIG): $(PANGOUP).tar.xz
 	ln -s $< $@
