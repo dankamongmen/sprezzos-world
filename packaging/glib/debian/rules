@@ -1,0 +1,113 @@
+#!/usr/bin/make -f
+
+DEB_BUILDDIR = debian/build
+DEB_MAKE_FLAVORS = deb udeb refdbg
+DISABLE_UPDATE_UPLOADERS := 1
+
+include /usr/share/cdbs/1/rules/autoreconf.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/class/gnome.mk
+include /usr/share/gnome-pkg-tools/1/rules/clean-la.mk
+include /usr/share/gnome-pkg-tools/1/rules/uploaders.mk
+include /usr/share/gnome-pkg-tools/1/rules/gnome-get-source.mk
+
+GNOME_MODULE := glib
+
+# Ensure the build aborts when there are still references to undefined symbols
+LDFLAGS += -Wl,-z,defs
+
+# NB: do NOT use -Wl,--as-needed to build glib; for instance the link to
+# pthread is carefully crafted to allow dlopen()ing pthread-using libs; see
+# http://mid.gmane.org/1257999019.21780.15.camel@marzipan
+LDFLAGS += -Wl,--no-as-needed
+
+# Make the linker work a bit harder so dynamic loading can be done faster
+LDFLAGS += -Wl,-O1
+
+APIVER := 2.0
+SONAME := 0
+SHVER := 2.32.3
+
+# package names
+SHARED_PKG := libglib$(APIVER)-$(SONAME)
+DATA_PKG := libglib$(APIVER)-data
+DEV_PKG := libglib$(APIVER)-dev
+BIN_PKG := libglib$(APIVER)-bin
+UDEB_PKG := libglib$(APIVER)-udeb
+DOC_PKG := libglib$(APIVER)-doc
+DEBUG_PKG := $(SHARED_PKG)-dbg
+REFDBG_PKG := libglib$(APIVER)-$(SONAME)-refdbg
+
+DEB_MAKE_DESTDIRSKEL = $(CURDIR)/debian/install/@FLAVOR@
+
+DEB_DH_INSTALL_ARGS += --sourcedir=debian/install/deb
+DEB_DH_INSTALL_ARGS_$(UDEB_PKG) += --sourcedir=debian/install/udeb
+DEB_DH_INSTALL_ARGS_$(REFDBG_PKG) += --sourcedir=debian/install/refdbg
+
+DEB_DH_MAKESHLIBS_ARGS_$(SHARED_PKG) += -V'$(SHARED_PKG) (>= $(SHVER))' --add-udeb=$(UDEB_PKG) -- -c4
+DEB_DH_MAKESHLIBS_ARGS_$(REFDBG_PKG) = --no-act
+DEB_DH_STRIP_ARGS_$(REFDBG_PKG) = --no-act
+# Don't put the symbols in the -dbg package
+DEB_DH_STRIP_ARGS_$(UDEB_PKG) =
+
+DEB_MAKE_CHECK_TARGET = -k check || true
+
+# configure flags
+DEB_CONFIGURE_EXTRA_FLAGS := \
+			--with-html-dir=\$${prefix}/share/doc/$(DOC_PKG) \
+			--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+			--with-pcre=system
+
+DEB_CONFIGURE_FLAGS_deb := \
+			--enable-gtk-doc \
+			--enable-static
+
+DEB_CONFIGURE_FLAGS_udeb := \
+			--disable-selinux
+
+DEB_CONFIGURE_FLAGS_refdbg := \
+			--disable-Bsymbolic \
+			--enable-debug=yes
+
+binary-install/libglib2.0-0::
+	set -e; for script in postinst postrm; do \
+		sed -e"s/#MULTIARCH#/$(DEB_HOST_MULTIARCH)/g" \
+		    -e"s/#ARCH#/$(DEB_HOST_ARCH)/g" \
+		    debian/$(cdbs_curpkg).$$script.in \
+		    > debian/$(cdbs_curpkg).$$script ; \
+	done
+
+
+common-install-arch::
+	set -e; for file in libgio-fam.install libglib2.0-0.install \
+	            libglib2.0-0-refdbg.install libglib2.0-dbg.install \
+	            libglib2.0-dev.install \
+	            libglib2.0-udeb.install libglib2.0-bin.links \
+	            libglib2.0-dev.links \
+	            libglib2.0-0.dirs libglib2.0-0.triggers; \
+	do \
+		sed -e"s,\$${DEB_HOST_MULTIARCH},${DEB_HOST_MULTIARCH},g" \
+		        debian/$${file}.in > debian/$$file; \
+	done
+
+clean::
+	sed \
+		-e "s#@SONAME@#$(SONAME)#g" \
+		-e "s#@APIVER@#$(APIVER)#g" \
+		-e "s#@VERSION@#$(DEB_UPSTREAM_VERSION)#g" \
+		-e "s#@SHARED_PKG@#$(SHARED_PKG)#g" \
+		-e "s#@BIN_PKG@#$(BIN_PKG)#g" \
+		-e "s#@DATA_PKG@#$(DATA_PKG)#g" \
+		-e "s#@DEV_PKG@#$(DEV_PKG)#g" \
+		-e "s#@UDEB_PKG@#$(UDEB_PKG)#g" \
+		-e "s#@DOC_PKG@#$(DOC_PKG)#g" \
+		-e "s#@DEBUG_PKG@#$(DEBUG_PKG)#g" \
+		-e "s#@GNOME_TEAM@#$(UPLOADERS)#g" \
+		-e "s#@REFDBG_PKG@#$(REFDBG_PKG)#g" \
+		debian/control.in > debian/control
+
+list-missing:
+	# FIXME: remove this when CDBS' list-missing works with multiple flavors
+	perl -w debian/dh_listmissing.pl $(foreach f,$(DEB_MAKE_FLAVORS),debian/install/$(f)) 2>&1 | \
+	    egrep -v '(\.la|\.pyc|\.pyo) has been installed' >&2

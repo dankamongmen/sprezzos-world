@@ -15,7 +15,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
-	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf
+	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib
 
 SPREZZ:=packaging
 
@@ -43,6 +43,8 @@ FREETYPEUP:=freetype-$(shell echo $(freetype_VERSION) | cut -d- -f1) \
 	freetype-doc-$(shell echo $(freetype_VERSION) | cut -d- -f1) \
 	ft2demos-$(shell echo $(freetype_VERSION) | cut -d- -f1)
 FREETYPEORIG:=freetype_$(shell echo $(freetype_VERSION) | cut -d- -f1).orig.tar.gz
+GLIBUP:=glib-$(shell echo $(glib_VERSION) | cut -d- -f1)
+GLIBORIG:=glib_$(shell echo $(glib_VERSION) | cut -d- -f1).orig.tar.xz
 GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1)
 GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1).orig.tar.xz
 GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.bz2
@@ -85,7 +87,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
-	$(FREETYPE) $(PANGO) $(GDKPIXBUF)
+	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -286,6 +288,20 @@ freetype:$(FREETYPE)_$(ARCH).deb
 $(FREETYPE): $(SPREZZ)/freetype/debian/changelog $(FREETYPEORIG)
 	mkdir $@
 	tar xzvf $(FREETYPEORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(GLIBUP).tar.xz
+$(GLIBUP).tar.xz:
+	wget -nc -O$@ http://ftp.acc.umu.se/pub/gnome/sources/glib/2.33/$@
+
+$(GLIBORIG): $(GLIBUP).tar.xz
+	ln -s $< $@
+
+.PHONY: glib
+glib:$(GLIB)_$(ARCH).deb
+$(GLIB): $(SPREZZ)/glib/debian/changelog $(GLIBORIG)
+	mkdir $@
+	tar xJvf $(GLIBORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GDKPIXBUFUP).tar.xz
@@ -568,7 +584,7 @@ clean:
 	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
-	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG)
+	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB)
 
 clobber:
 	rm -rf $(FETCHED)
