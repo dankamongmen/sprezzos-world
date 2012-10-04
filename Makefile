@@ -337,7 +337,7 @@ $(GTK3): $(SPREZZ)/gtk3/debian/changelog $(GTK3ORIG)
 
 FETCHED:=$(FETCHED) $(HARFBUZZUP).tar.gz
 $(HARFBUZZUP).tar.gz:
-	wget -nc -O$@ http://cgit.freedesktop.org/harfbuzz/$@
+	wget -nc -O$@ http://cgit.freedesktop.org/harfbuzz/snapshot/$@
 
 $(HARFBUZZORIG): $(HARFBUZZUP).tar.gz
 	ln -s $< $@
