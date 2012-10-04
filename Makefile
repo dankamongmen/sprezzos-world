@@ -44,7 +44,7 @@ FREETYPEUP:=freetype-$(shell echo $(freetype_VERSION) | cut -d- -f1) \
 	ft2demos-$(shell echo $(freetype_VERSION) | cut -d- -f1)
 FREETYPEORIG:=freetype_$(shell echo $(freetype_VERSION) | cut -d- -f1).orig.tar.gz
 GLIBUP:=glib-$(shell echo $(glib_VERSION) | cut -d- -f1)
-GLIBORIG:=glib_$(shell echo $(glib_VERSION) | cut -d- -f1).orig.tar.xz
+GLIBORIG:=glib2.0_$(shell echo $(glib_VERSION) | cut -d- -f1).orig.tar.xz
 GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1)
 GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1).orig.tar.xz
 GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.bz2
