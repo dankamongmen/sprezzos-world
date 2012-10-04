@@ -15,7 +15,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
-	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib
+	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
+	harfbuzz
 
 SPREZZ:=packaging
 
@@ -51,6 +52,8 @@ GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.t
 GRUBUP:=grub-$(shell echo $(grub2_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
 GTK3ORIG:=gtk+3.0_$(shell echo $(gtk3_VERSION) | cut -d- -f1).orig.tar.xz
+HARFBUZZUP:=harfbuzz-$(shell echo $(harfbuzz_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+HARFBUZZORIG:=harfbuzz_$(shell echo $(harfbuzz_VERSION) | cut -d- -f1).orig.tar.gz
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_VERSION) | cut -d- -f1).orig.tar.gz
 HWLOCUP:=hwloc-$(shell echo $(hwloc_VERSION) | cut -d- -f1)
@@ -87,7 +90,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
-	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB)
+	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -332,9 +335,23 @@ $(GTK3): $(SPREZZ)/gtk3/debian/changelog $(GTK3ORIG)
 	tar xJvf $(GTK3ORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(HARFBUZZUP).tar.gz
+$(HARFBUZZUP).tar.gz:
+	wget -nc -O$@ http://cgit.freedesktop.org/harfbuzz/$@
+
+$(HARFBUZZORIG): $(HARFBUZZUP).tar.gz
+	ln -s $< $@
+
+.PHONY: harfbuzz
+harfbuzz:$(HARFBUZZ)_$(ARCH).deb
+$(HARFBUZZ): $(SPREZZ)/harfbuzz/debian/changelog $(HARFBUZZORIG)
+	mkdir $@
+	tar xzvf $(HARFBUZZORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(HFSUTILSUP).tar.gz
 $(HFSUTILSUP).tar.gz:
-	wget -nc -O$@ ftp://ftp.mars.org/pub/hfs/$(HFSUTILSUP).tar.gz
+	wget -nc -O$@ ftp://ftp.mars.org/pub/hfs/$@
 
 $(HFSUTILSORIG): $(HFSUTILSUP).tar.gz
 	ln -s $< $@
@@ -584,7 +601,7 @@ clean:
 	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
-	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB)
+	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ)
 
 clobber:
 	rm -rf $(FETCHED)
