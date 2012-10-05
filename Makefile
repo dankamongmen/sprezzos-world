@@ -67,7 +67,7 @@ LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | c
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
 LIBRSVGUP:=librsvg-$(shell echo $(librsvg_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
-LIBXSLTUP:=libxslt-$(shell echo $(libxslt_VERSION) | cut -d- -f1-)
+LIBXSLTUP:=libxslt-$(shell echo $(libxslt_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBXSLTORIG:=$(shell echo $(LIBXSLTUP) | tr - _).orig.tar.gz
 
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
@@ -563,9 +563,12 @@ $(GRUB2): $(SPREZZ)/grub2/debian/changelog $(GRUBUP).tar.xz
 	tar xJvf $(GRUBUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(LIBXSLTORIG)
-$(LIBXSLTORIG):
+FETCHED:=$(FETCHED) $(LIBXSLTUP).tar.gz
+$(LIBXSLTUP).tar.gz:
 	wget -nc -O$@ ftp://xmlsoft.org/libxslt/$@
+
+$(LIBXSLTORIG): $(LIBXSLTUP).tar.gz
+	ln -sf $< $@
 
 .PHONY: libxslt
 libxslt:$(LIBXSLT)_$(ARCH).deb
