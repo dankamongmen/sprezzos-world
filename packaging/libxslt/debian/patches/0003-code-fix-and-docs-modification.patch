@@ -1,0 +1,153 @@
+From: YunQiang Su <wzssyqa@gmail.com>
+Date: Mon, 28 May 2012 18:36:18 +0800
+Subject: code fix and docs modification
+
+---
+ doc/xsltproc.1      |    8 ++++++++
+ doc/xsltproc.xml    |    5 +++++
+ libxslt/functions.c |   26 +++++++++++++++++++++-----
+ python/generator.py |   18 +++++++++++++-----
+ 4 files changed, 47 insertions(+), 10 deletions(-)
+
+diff --git a/doc/xsltproc.1 b/doc/xsltproc.1
+index d94e7a2..328ef7b 100644
+--- a/doc/xsltproc.1
++++ b/doc/xsltproc.1
+@@ -161,6 +161,14 @@ as described in RFC 2396 and laters\. This means, that e\.g\.
+ will maybe not work, but
+ \fB\-o directory/\fR
+ will\.
++.sp
++Also note that if there is no output to xsltproc,
++\fIFILE\fR
++will not be created at all\&. An empty file will
++\fBnot\fR
++be created\.
++.sp .5v
++.RE
+ .RE
+ .PP
+ \fB\-\-encoding \fR\fB\fIENCODING\fR\fR
+diff --git a/doc/xsltproc.xml b/doc/xsltproc.xml
+index d3849e2..a0cd77f 100644
+--- a/doc/xsltproc.xml
++++ b/doc/xsltproc.xml
+@@ -282,6 +282,11 @@
+ 				e.g. <option>-o directory</option> will maybe not work,
+ 				but <option>-o directory/</option> will.
+ 			</para>
++			<para>
++				Also note that if there is no output to xsltproc,
++				<replaceable>FILE</replaceable> will not be created at all.
++				An empty file will <emphasis role="bold">not</emphasis> be created.
++			</para>
+ 		</note>
+ 	</listitem>
+ 		</varlistentry>
+diff --git a/libxslt/functions.c b/libxslt/functions.c
+index 4720c7a..de962f4 100644
+--- a/libxslt/functions.c
++++ b/libxslt/functions.c
+@@ -654,8 +654,9 @@ xsltFormatNumberFunction(xmlXPathParserContextPtr ctxt, int nargs)
+ void
+ xsltGenerateIdFunction(xmlXPathParserContextPtr ctxt, int nargs){
+     xmlNodePtr cur = NULL;
+-    unsigned long val;
+-    xmlChar str[20];
++    long val;
++    xmlChar str[30];
++    xmlDocPtr doc;
+ 
+     if (nargs == 0) {
+ 	cur = ctxt->context->node;
+@@ -694,9 +695,24 @@ xsltGenerateIdFunction(xmlXPathParserContextPtr ctxt, int nargs){
+      * Okay this is ugly but should work, use the NodePtr address
+      * to forge the ID
+      */
+-    val = (unsigned long)((char *)cur - (char *)0);
+-    val /= sizeof(xmlNode);
+-    sprintf((char *)str, "id%ld", val);
++    if (cur->type != XML_NAMESPACE_DECL)
++        doc = cur->doc;
++    else {
++        xmlNsPtr ns = (xmlNsPtr) cur;
++
++        if (ns->context != NULL)
++            doc = ns->context;
++        else
++            doc = ctxt->context->doc;
++
++    }
++
++    val = (long)((char *)cur - (char *)doc);
++    if (val >= 0) {
++      sprintf((char *)str, "idp%ld", val);
++    } else {
++      sprintf((char *)str, "idm%ld", -val);
++    }
+     valuePush(ctxt, xmlXPathNewString(str));
+ }
+ 
+diff --git a/python/generator.py b/python/generator.py
+index 2269106..63657f1 100755
+--- a/python/generator.py
++++ b/python/generator.py
+@@ -6,15 +6,23 @@
+ functions = {}
+ enums = {} # { enumType: { enumConstant: enumValue } }
+ 
++import os
++import sys
+ import string
+ 
++if __name__ == "__main__":
++    # launched as a script
++    srcPref = os.path.dirname(sys.argv[0])
++else:
++    # imported
++    srcPref = os.path.dirname(__file__)
++
+ #######################################################################
+ #
+ #  That part if purely the API acquisition phase from the
+ #  XML API description
+ #
+ #######################################################################
+-import os
+ import xmllib
+ try:
+     import sgmlop
+@@ -442,20 +450,20 @@ def buildStubs():
+     global unknown_types
+ 
+     try:
+-        f = open("libxslt-api.xml")
++        f = open(os.path.join(srcPref,"libxslt-api.xml"))
+         data = f.read()
+         (parser, target)  = getparser()
+         parser.feed(data)
+         parser.close()
+     except IOError, msg:
+         try:
+-            f = open("../doc/libxslt-api.xml")
++            f = open(os.path.join(srcPref,"..","doc","libxslt-api.xml"))
+             data = f.read()
+             (parser, target)  = getparser()
+             parser.feed(data)
+             parser.close()
+         except IOError, msg:
+-            print "../doc/libxslt-api.xml", ":", msg
++            print os.path.join(srcPref,"..","doc","libxslt-api.xml"), ":", msg
+ 
+     n = len(functions.keys())
+     print "Found %d functions in libxslt-api.xml" % (n)
+@@ -463,7 +471,7 @@ def buildStubs():
+     py_types['pythonObject'] = ('O', "pythonObject", "pythonObject",
+                                 "pythonObject", "libxml_")
+     try:
+-        f = open("libxslt-python-api.xml")
++        f = open(os.path.join(srcPref,"libxslt-python-api.xml"))
+         data = f.read()
+         (parser, target)  = getparser()
+         parser.feed(data)
+-- 
