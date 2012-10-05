@@ -71,6 +71,7 @@ LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d:
 MESAUP:=MesaLib-$(shell echo $(mesa_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MESAORIG:=mesa-$(shell echo $(mesa_VERSION) | cut -d- -f1).orig.tar.bz2
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
+NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_VERSION) | cut -d- -f1).orig.tar.xz
 NFSUTILSUP:=nfs-utils-$(shell echo $(nfs-utils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 NFSUTILSORIG:=nfs-$(shell echo $(NFSUTILSUP) | cut -d- -f2- | tr - _).orig.tar.bz2
 NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
@@ -141,7 +142,7 @@ $(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
 nethorologist: $(NETHOROLOGIST)_$(ARCH).deb
 $(NETHOROLOGIST): $(SPREZZ)/nethorologist/debian/changelog
 	git clone https://github.com/Sprezzatech/nethorologist.git $@
-	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs
+	tar cJf $(NETHOROLOGISTORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: strace
