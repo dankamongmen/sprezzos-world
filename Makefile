@@ -75,6 +75,7 @@ NFSUTILSUP:=nfs-utils-$(shell echo $(nfs-utils_VERSION) | cut -d- -f1 | cut -d= 
 NFSUTILSORIG:=nfs-$(shell echo $(NFSUTILSUP) | cut -d- -f2- | tr - _).orig.tar.bz2
 NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.bz2
+XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 PANGOUP:=pango-$(shell echo $(pango_VERSION) | cut -d- -f1)
@@ -133,6 +134,7 @@ $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 xmlstarlet:$(XMLSTARLET)_$(ARCH).deb
 $(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
 	git clone https://github.com/dankamongmen/xmlstarlet.git $@
+	tar cjf $(XMLSTARLETORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: nethorologist
