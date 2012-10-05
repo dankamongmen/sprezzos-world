@@ -67,7 +67,7 @@ LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | c
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
 LIBRSVGUP:=librsvg-$(shell echo $(librsvg_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
-LIBXMLUP:=libxml-$(shell echo $(libxml_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBXMLUP:=libxml2-$(shell echo $(libxml_VERSION) | cut -d- -f1 | cut -d. -f-3 | cut -d= -f2- | cut -d: -f2)
 LIBXMLORIG:=$(shell echo $(LIBXMLUP) | tr - _).orig.tar.gz
 LIBXSLTUP:=libxslt-$(shell echo $(libxslt_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBXSLTORIG:=$(shell echo $(LIBXSLTUP) | tr - _).orig.tar.gz
