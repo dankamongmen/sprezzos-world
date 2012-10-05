@@ -1,0 +1,181 @@
+#! /usr/bin/make -f
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_BUILD_ARCH		?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEB_BUILD_ARCH_OS	?= $(shell dpkg-architecture -qDEB_BUILD_ARCH_OS)
+DEB_BUILD_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH	?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# set the number of build jobs
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    JOBS:=-j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+endif
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE) --with-random=/dev/urandom
+else
+CROSS= --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+ifneq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+    DO_TEST=no
+else
+    DO_TEST=no
+    ifeq (${DEB_BUILD_GNU_TYPE},${DEB_HOST_GNU_TYPE})
+    ifneq (${DEB_BUILD_ARCH},m68k)
+    ifneq (${DEB_BUILD_ARCH_OS},kfreebsd)
+    ifneq (${DEB_BUILD_ARCH_OS},knetbsd)
+    ifneq (${DEB_BUILD_ARCH_OS},hurd)
+        DO_TEST=yes
+    endif
+    endif
+    endif
+    endif
+    endif
+endif
+
+CFLAGS   = $(shell dpkg-buildflags --get CFLAGS)
+CFLAGS  += $(shell dpkg-buildflags --get CPPFLAGS)
+LDFLAGS  = $(shell dpkg-buildflags --get LDFLAGS)
+
+# this will avoid unneded dependencies
+LDFLAGS += -Wl,--as-needed
+
+# this will catch miss-linking. (e.g. undefined symbols)
+#LDFLAGS+= -Wl,-z,defs
+
+CONFIGURE_ARGS = $(CROSS) --prefix=/usr --mandir=/usr/share/man	\
+		--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH)	\
+		--disable-dependency-tracking --enable-ipv6	\
+		--with-lber-lib=lber --disable-symbol-hiding	\
+		--enable-versioned-symbols --enable-manual	\
+		--enable-debug --disable-curldebug		\
+		CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
+# this is still not ready
+#		--enable-ares
+# this fixes the ldap warning of dpkg-shlibdebs, but we dont want that.
+#		--with-ldap-lib=/usr/lib/libldap_r.so
+
+ifneq (${DEB_BUILD_ARCH_OS},hurd)
+CONFIGURE_ARGS += --with-gssapi=/usr
+endif
+
+CONFIGURE_ARGS_UDEB = $(filter-out --with-lber-lib=lber --with-gssapi=/usr,$(CONFIGURE_ARGS))
+
+build-arch: build-stamp
+build-indep: build-stamp
+
+build: build-arch build-indep
+
+configure-stamp:
+	dh_testdir
+	mkdir -p debian/build debian/build-gnutls debian/build-nss debian/build-udeb
+	# pop the last patch (nss)
+	quilt pop
+	# pop the second last patch (gnutls)
+	quilt pop
+	# get the source without nss and gnutls patches
+	tar -cf - --exclude=debian --exclude=.pc . | tar -xf - -C debian/build
+	tar -cf - --exclude=debian --exclude=.pc . | tar -xf - -C debian/build-udeb
+	# push the second last patch which must be gnutls
+	quilt push
+	# get the source with gnutls patch applied
+	tar -cf - --exclude=debian --exclude=.pc . | tar -xf - -C debian/build-gnutls
+	# push the last patch which must be nss
+	quilt push
+	# get the source with nss patch applied
+	tar -cf - --exclude=debian --exclude=.pc . | tar -xf - -C debian/build-nss
+	# run buildconf and make sure to copy the patched ltmain.sh
+	for flavour in build build-udeb build-gnutls build-nss; do \
+		(cd debian/$$flavour && ./buildconf && cp ../../ltmain.sh .) \
+	done
+	cd debian/build && ./configure ${CONFIGURE_ARGS}		\
+		--with-librtmp --with-ca-path=/etc/ssl/certs
+	cd debian/build-udeb && ./configure ${CONFIGURE_ARGS_UDEB}	\
+		--with-ca-path=/etc/ssl/certs --without-gnutls		\
+		--without-nss --disable-ldap --disable-ldaps		\
+		--disable-file --disable-ftp --disable-pop4		\
+		--disable-rtsp --disable-imap --disable-smtp		\
+		--without-librtmp --without-libidn
+	cd debian/build-gnutls && ./configure ${CONFIGURE_ARGS}		\
+		--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt	\
+		--without-ssl --with-gnutls
+	cd debian/build-nss && ./configure ${CONFIGURE_ARGS}		\
+		--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt	\
+		--without-ssl --with-nss
+	touch configure-stamp
+
+build-stamp: configure-stamp
+	dh_testdir
+	${MAKE} $(JOBS) -C debian/build
+	${MAKE} $(JOBS) -C debian/build-udeb
+	${MAKE} $(JOBS) -C debian/build-gnutls
+	${MAKE} $(JOBS) -C debian/build-nss
+ifeq (${DO_TEST},yes)
+	-${MAKE} -C debian/build test
+	-${MAKE} -C debian/build-udeb test
+	-${MAKE} -C debian/build-gnutls test
+	-${MAKE} -C debian/build-nss test
+endif
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	$(RM) -r build-stamp configure-stamp debian/build* debian/tmp*
+
+#install: DH_OPTIONS=
+install: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	${MAKE} -C debian/build		\
+		DESTDIR=$(shell pwd)/debian/tmp install
+	${MAKE} -C debian/build-udeb	\
+		DESTDIR=$(shell pwd)/debian/tmp-udeb install
+	${MAKE} -C debian/build-gnutls	\
+		DESTDIR=$(shell pwd)/debian/tmp-gnutls install
+	${MAKE} -C debian/build-nss	\
+		DESTDIR=$(shell pwd)/debian/tmp-nss install
+	dh_install -plibcurl3-gnutls -plibcurl4-gnutls-dev	\
+		--sourcedir=debian/tmp-gnutls
+	dh_install -plibcurl3-nss -plibcurl4-nss-dev		\
+		--sourcedir=debian/tmp-nss
+	dh_install -pcurl-udeb -plibcurl3-udeb			\
+		--sourcedir=debian/tmp-udeb
+	dh_install -pcurl -plibcurl3 -plibcurl4-openssl-dev	\
+		--sourcedir=debian/tmp
+	dh_lintian
+	sed -i "/dependency_libs/ s/'.*'/''/" `find . -name '*.la'`
+
+# Build architecture-independent files here.
+binary-indep: build-stamp install
+# We have nothing to do here.
+
+# Build architecture-dependent files here.
+binary-arch: build-stamp install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installman
+	dh_installexamples
+	dh_installchangelogs CHANGES
+	dh_link
+	dh_strip -plibcurl3 -plibcurl3-gnutls -plibcurl3-nss	\
+		--dbg-package=libcurl3-dbg
+	dh_strip --remaining-packages
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs -plibcurl3 --add-udeb=libcurl3-udeb
+	dh_makeshlibs -Nlibcurl3
+	dh_installdeb
+	dh_shlibdeps
+	dh_md5sums
+	dh_gencontrol
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+.PHONY: binary binary-arch binary-indep build clean install

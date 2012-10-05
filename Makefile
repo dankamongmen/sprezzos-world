@@ -16,7 +16,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
-	harfbuzz
+	harfbuzz curl
 
 SPREZZ:=packaging
 
@@ -33,6 +33,8 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
+CURLUP:=curl-$(shell echo $(curl_VERSION) | cut -d= -f2- | cut -d- -f1)
+CURLORIG:=curl_$(shell echo $(curl_VERSION) | cut -d- -f1).orig.tar.bz2
 EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
 EGLIBCORIG:=eglibc_$(shell echo $(eglibc_VERSION) | cut -d- -f1).orig.tar.gz
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
@@ -92,11 +94,11 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
-	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ)
+	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
-	$(FREETYPE)
+	$(FREETYPE) $(CURL)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -205,6 +207,20 @@ cairo:$(CAIRO)_$(ARCH).deb
 $(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROORIG)
 	mkdir $@
 	tar xJvf $(CAIROUP).tar.xz --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
+$(CURLUP).tar.bz2:
+	wget -nc -O$@ http://curl.haxx.se/download/$@
+
+$(CURLORIG): $(CURLUP).tar.xz
+	ln -s $< $@
+
+.PHONY: curl
+curl:$(CURL)_$(ARCH).deb
+$(CURL): $(SPREZZ)/curl/debian/changelog $(CURLORIG)
+	mkdir $@
+	tar xjvf $(CURLUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(EGLIBCUP).tar.gz
@@ -604,7 +620,7 @@ clean:
 	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS)
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
-	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ)
+	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
 
 clobber:
 	rm -rf $(FETCHED)
