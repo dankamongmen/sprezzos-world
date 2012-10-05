@@ -220,7 +220,7 @@ $(CURLORIG): $(CURLUP).tar.bz2
 curl:$(CURL)_$(ARCH).deb
 $(CURL): $(SPREZZ)/curl/debian/changelog $(CURLORIG)
 	mkdir $@
-	tar xjvf $(CURLUP).tar.xz --strip-components=1 -C $@
+	tar xjvf $(CURLUP).tar.bz2 --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(EGLIBCUP).tar.gz
