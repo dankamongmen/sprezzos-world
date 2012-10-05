@@ -213,7 +213,7 @@ FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
 	wget -nc -O$@ http://curl.haxx.se/download/$@
 
-$(CURLORIG): $(CURLUP).tar.xz
+$(CURLORIG): $(CURLUP).tar.bz2
 	ln -s $< $@
 
 .PHONY: curl
