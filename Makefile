@@ -16,7 +16,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
-	harfbuzz curl libxslt
+	harfbuzz curl libxml libxslt
 
 SPREZZ:=packaging
 
@@ -67,6 +67,8 @@ LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | c
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
 LIBRSVGUP:=librsvg-$(shell echo $(librsvg_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
+LIBXMLUP:=libxml-$(shell echo $(libxml_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBXMLORIG:=$(shell echo $(LIBXMLUP) | tr - _).orig.tar.gz
 LIBXSLTUP:=libxslt-$(shell echo $(libxslt_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBXSLTORIG:=$(shell echo $(LIBXSLTUP) | tr - _).orig.tar.gz
 
@@ -97,11 +99,11 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) \
-	$(LIBXSLT)
+	$(LIBXSLT) $(LIBXML)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
-	$(FREETYPE) $(CURL) $(LIBXSLT)
+	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -563,6 +565,20 @@ $(GRUB2): $(SPREZZ)/grub2/debian/changelog $(GRUBUP).tar.xz
 	tar xJvf $(GRUBUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(LIBXMLUP).tar.gz
+$(LIBXMLUP).tar.gz:
+	wget -nc -O$@ ftp://xmlsoft.org/libxml/$@
+
+$(LIBXMLORIG): $(LIBXMLUP).tar.gz
+	ln -sf $< $@
+
+.PHONY: libxml
+libxml:$(LIBXML)_$(ARCH).deb
+$(LIBXML): $(SPREZZ)/libxml/debian/changelog $(LIBXMLORIG)
+	mkdir -p $@
+	tar xzvf $(LIBXMLORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(LIBXSLTUP).tar.gz
 $(LIBXSLTUP).tar.gz:
 	wget -nc -O$@ ftp://xmlsoft.org/libxslt/$@
@@ -638,7 +654,7 @@ clean:
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
-	rm -rf $(LIBXSLT)
+	rm -rf $(LIBXSLT) $(LIBXML)
 
 clobber:
 	rm -rf $(FETCHED)
