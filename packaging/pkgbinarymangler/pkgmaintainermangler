@@ -1,0 +1,69 @@
+#!/bin/bash -e
+
+CONFFILE=/etc/pkgbinarymangler/maintainermangler.conf
+CONFFILE=${PKGBINARYMANGLER_CONF_DIR:-/etc/pkgbinarymangler}/maintainermangler.conf
+OVERRIDEFILE=${PKMAINTAINERGMANGLER_OVERRIDES:-/etc/pkgbinarymangler/maintainermangler.overrides}
+
+. ${PKGBINARYMANGLER_COMMON_PATH:-/usr/share/pkgbinarymangler}/common
+
+readctrl "$OVERRIDEFILE" "default"
+OVERRIDE="$RET"
+
+if [ -f "$BUILDINFO" ]; then
+    readctrl "$BUILDINFO" "Component"
+    COMPONENT="$RET"
+    readctrl "$OVERRIDEFILE" "%$RET"
+    if [ -n "$RET" ]; then
+        OVERRIDE="$RET"
+    fi
+    if grep -qs '^Purpose: PPA' "$BUILDINFO"; then
+        echo "INFO: Disabling pkgmaintainermangler for PPA build"
+        exit 0
+    fi
+fi
+
+readctrl "$PKGCTL" "Maintainer"
+OLDMAINT="$RET"
+OLDMAINTEMAIL=$(echo "$OLDMAINT" | sed -e 's/.*<\(.*\)>.*/\1/')
+OLDMAINTDOMAIN=$(echo "$OLDMAINTEMAIL" | sed -e 's/.*@//')
+
+readctrl "$OVERRIDEFILE" "ignore_domains"
+IGNORE_DOMAINS="$RET"
+if [ -n "$IGNORE_DOMAINS" ]; then
+    for i in $IGNORE_DOMAINS; do
+        if [ "$i" = "$OLDMAINTDOMAIN" ]; then
+            echo "pkgmaintainermangler: Not overriding Maintainer for domain $OLDMAINTDOMAIN"
+            exit 0
+        fi
+    done
+fi
+
+readctrl "$OVERRIDEFILE" "ignore_emails"
+IGNORE_EMAILS="$RET"
+if [ -n "$IGNORE_EMAILS" ]; then
+    for i in $IGNORE_EMAILS; do
+        if [ "$i" = "$OLDMAINTEMAIL" ]; then
+            echo "pkgmaintainermangler: Not overriding Maintainer for address $OLDMAINTEMAIL"
+            exit 0
+        fi
+    done
+fi
+
+readctrl "$OVERRIDEFILE" "@$OLDMAINTEMAIL"
+if [ -n "$RET" ]; then
+    OVERRIDE="$RET"
+fi
+
+readctrl "$PKGCTL" "Original-Maintainer"
+if [ -n "$RET" ]; then
+    echo "pkgmaintainermangler: $PKGCTL already contains an Original-Maintainer field; doing nothing" >&2
+    exit 0
+fi
+
+if [ "$OLDMAINT" = "$OVERRIDE" ]; then
+    echo "pkgmaintainermangler: Override matches original Maintainer; doing nothing"
+    exit 0
+fi
+
+echo "pkgmaintainermangler: Maintainer field overridden to \"$OVERRIDE\""
+sed -i -e "s/^Maintainer: \(.*\)$/Maintainer: $OVERRIDE\nOriginal-Maintainer: \1/" $PKGCTL

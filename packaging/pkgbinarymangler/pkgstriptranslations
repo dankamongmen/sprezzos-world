@@ -1,0 +1,382 @@
+#!/bin/bash -e
+
+CONFFILE=${PKGBINARYMANGLER_CONF_DIR:-/etc/pkgbinarymangler}/striptranslations.conf
+
+. ${PKGBINARYMANGLER_COMMON_PATH:-/usr/share/pkgbinarymangler}/common
+
+compliant_symlink() {
+    # Shell port of lines 184-222 of dh_link from debhelper
+    # 8.9.0ubuntu1
+    #
+    # This function must be called from the top-level of the package
+    local tmp src dest src_dirs dest_dirs x i
+
+    src="$(echo "$1" | sed -e 's,/+,/,g; s,^/,,')"
+    dest="$(echo "$2" | sed -e 's,/+,/,g; s,^/,,')"
+
+    # Make sure the directory the link will be in exists
+    mkdir -p "$(dirname "$dest")"
+
+    # Policy says that if the link is all within one toplevel
+    # directory, it should be relative. If it's between top level
+    # directories, leave it absolute.
+    IFS="/" read -ra src_dirs <<< "$src"
+    IFS="/" read -ra dest_dirs <<< "$dest"
+
+    if [ ${#src_dirs[@]} -gt 0 ] && [ "${src_dirs[0]}" = "${dest_dirs[0]}" ]; then
+        # Figure out how much of a path $src and $dest share in common
+        for (( x = 0; x < ${#src_dirs[@]}; x++ )); do
+            [ "${src_dirs[$x]}" = "${dest_dirs[$x]}" ] || break
+        done
+
+        # Build up the new src
+        src=""
+        # Note: use of < and not <= is deliberate here - the Perl
+        # version used $#dest_dirs, which is "the index of dest_dirs'
+        # last element" - i.e. length minus 1
+        for (( i = 1; i < (${#dest_dirs[@]} - x); i++ )); do
+            src="${src}../"
+        done
+        for (( i = x; i < ${#src_dirs[@]}; i++ )); do
+            src="${src}${src_dirs[$i]}/"
+        done
+        if [ $x -gt ${#src_dirs[@]} ] && [ "$src" = "" ]; then
+            src="." # special case
+        fi
+        src="${src%/}"
+    else
+        # Make sure it's properly absolute
+        src="/$src"
+    fi
+
+    if [ -d "$dest" ] && ! [ -L "$dest" ]; then
+        echo "pkgstriptranslations: link destination $dest is a directory"
+    fi
+    rm -f "$dest"
+    ln -sf "$src" "$dest"
+}
+
+# strip translations from .desktop files if they have a gettext domain (since
+# inline translations are preferred)
+desktop_files()
+{
+    for desktop in `find "$PKGDIR" -type f -name "*.desktop"`; do
+        if grep -q '^X-.*-Gettext-Domain=' "$desktop"; then
+            echo "$desktop: stripping translations"
+            sed -ri '/^(Name|GenericName|Comment|Keywords)\[/d' "$desktop";
+            # adapt md5sums file
+            if [ -f $PKGDIR/DEBIAN/md5sums ]; then
+                P=${desktop#$PKGDIR}
+                P=${P#/}
+                (cd "$PKGDIR"; sed -i "s#^[[:alnum:]]\+  $P\$#`md5sum $P`#" DEBIAN/md5sums)
+            fi
+        else
+            echo "$desktop: does not have gettext domain, not stripping"
+        fi
+    done
+}
+
+# save/strip GNOME help files; put translations into $tmp/_static/
+gnome2_help()
+{
+    [ -d "$PKGDIR/usr/share/gnome/help" ] || return 0
+
+    r=`pwd`
+    pushd "$PKGDIR/usr/share/gnome/help" >/dev/null
+    # replace help files which are copies of the C version with a symlink
+    # to the C version
+    find -type f ! -wholename '*/C/*' | while read f; do
+        f=${f#./}
+
+        # construct relative path to C file
+        numslash=`echo "$f" | tr -cd / | wc -c`
+        dirqueue=./${f#*\/*\/*} # strip off initial pkgname/locale prefix
+        back=""
+        dir=""
+        while [ $numslash -gt 1 ]; do
+            back="../$back"
+            dir=$dir${dirqueue%%/*}/
+            dirqueue=${dirqueue#*/}
+            numslash=$((numslash-1))
+        done
+        dir=${dir#./} # beautify
+        c_file="${back}C/$dir$(basename "$f")"
+
+        # if C file exists and is identical, symlink it
+        fdir=`dirname "$f"`
+        if [ -e "$fdir/$c_file" ] && zcmp "$f" "$fdir/$c_file" >/dev/null; then
+            echo "symlinking duplicate GNOME help file $f to $c_file"
+            rm "$f"
+            ln -s "$c_file" "$f"
+            [ ! -f $r/$PKGDIR/DEBIAN/md5sums ] || sed -i "\& usr/share/gnome/help/$f$&d" $r/$PKGDIR/DEBIAN/md5sums
+        fi
+    done
+    popd >/dev/null
+
+    # extract the files which are actually translated and replace with
+    # links to the langpack
+    pushd "$PKGDIR" >/dev/null
+    (find usr/share/gnome/help -type f ! -wholename '*/C/*'; [ ! -d usr/share/omf ] || find usr/share/omf -type f -name '*.omf' ! -name '*-C.omf') | while read f; do
+        install -D -m 644 "$f" "$tmp/_static/$PKGNAME/$f"
+        dest=${f/gnome\/help/gnome\/help-langpack}
+        dest=${dest/share\/omf/share\/omf-langpack}
+        compliant_symlink "$dest" "$f"
+        [ ! -f DEBIAN/md5sums ] || sed -i "\& $f$&d" DEBIAN/md5sums
+    done
+    popd >/dev/null
+}
+
+# save/strip Mallard help files; put translations into $tmp/_static/
+mallard_help()
+{
+    [ -d "$PKGDIR/usr/share/help" ] || return 0
+
+    r=`pwd`
+    pushd "$PKGDIR/usr/share/help" >/dev/null
+    # replace help files which are copies of the C version with a symlink
+    # to the C version
+    find -type f ! -wholename './C/*' | while read f; do
+        f=${f#./}
+
+        loc=${f%%/*}
+        sub=${f#*/}
+        project=${sub%%/*}
+        sub=${sub#*/}
+
+        # construct relative path to C file
+        numslash=`echo "$sub" | tr -cd / | wc -c`
+        c_file="../../C/$project/$sub"
+        while [ $numslash -gt 0 ]; do
+            c_file="../$c_file"
+            numslash=$((numslash-1))
+        done
+
+        # if C file exists and is identical, symlink it
+        fdir=`dirname "$f"`
+        if [ -e "$fdir/$c_file" ] && zcmp "$f" "$fdir/$c_file" >/dev/null; then
+            echo "symlinking duplicate Mallard help file $f to $c_file"
+            rm "$f"
+            ln -s "$c_file" "$f"
+            [ ! -f $r/$PKGDIR/DEBIAN/md5sums ] || sed -i "\& usr/share/help/$f$&d" $r/$PKGDIR/DEBIAN/md5sums
+        fi
+    done
+    popd >/dev/null
+
+    # extract the files which are actually translated and replace with
+    # links to the langpack
+    pushd "$PKGDIR" >/dev/null
+    find usr/share/help -type f ! -wholename '*/C/*' | while read f; do
+        install -D -m 644 "$f" "$tmp/_static/$PKGNAME/$f"
+        dest=${f/share\/help/share\/help-langpack}
+        compliant_symlink "$dest" "$f"
+        [ ! -f DEBIAN/md5sums ] || sed -i "\& $f$&d" DEBIAN/md5sums
+    done
+    popd >/dev/null
+}
+
+# Remove gettext *.mo files from binary, and save translations
+gettext()
+{
+    # copy po/pot files; no need to do it again if tarball already exists
+    # these might be used for help translations etc., so we need to do this
+    # even if none of the packages ships *.mo files
+    if [ ! -f "$tarball" ]; then
+	find \( -name "*.po" -o -name "*.pot" -o -name "*.ts" \) ! -wholename '*/.pc/*' ! -empty -exec install -D -m 644 '{}' "$tmp/source/{}" \;
+    fi
+
+    if [ ! -d "$PKGDIR/usr/share/locale" ]; then
+        echo "pkgstriptranslations: $PKGNAME does not contain translations, skipping"
+        return 0
+    fi
+
+    # save *.mo files
+    pushd "$PKGDIR" >/dev/null
+    find -type f -name "*.mo" -exec install -D -m 644 '{}' "$tmp/$PKGNAME/{}" \;
+
+    find usr/share/locale -type f -name "*.mo" -exec rm '{}' \;
+    find usr/share/locale -depth -type d -empty -exec rmdir '{}' \; || true
+
+    # adapt md5sums file
+    if [ -f DEBIAN/md5sums ]; then
+        sed -i '/usr\/share\/locale\/.*\.mo$/d' DEBIAN/md5sums
+    fi
+
+    # adapt Installed-Size
+    is=`du -k -s .|cut -f1`
+    sed -i "s/^Installed-Size:.*$/Installed-Size: $is/" DEBIAN/control
+
+    popd >/dev/null
+}
+
+# grab sdf files from LibO
+libreoffice()
+{
+	if [ "$srcname" = "openoffice.org" ]; then
+	    find debian/ -name "*.sdf" -exec install -D -m 644 '{}' "$tmp/source/{}" \;
+	fi
+}
+
+# if we saved any files, create/update $tarball and $tarball_static
+save_files()
+{
+    if [ -n "$(ls -I _static $tmp)" ]; then
+        if [ -f "$tarball" ]; then
+            echo -n "pkgstriptranslations: updating translation tarball $tarball_name..."
+            tar -C $tmp -xzf "$tarball"
+        else
+            echo -n "pkgstriptranslations: preparing translation tarball $tarball_name..."
+            dpkg-distaddfile "$tarball_name" raw-translations -
+        fi
+
+        tar -C $tmp -c --exclude=_static . | gzip -9 > "$tarball"
+        echo "done"
+    else
+        echo "pkgstriptranslations: no translation files, not creating tarball"
+    fi
+
+    if [ -d "$tmp/_static" ]; then
+        if [ -f "$tarball_static" ]; then
+            echo -n "pkgstriptranslations: updating static translation tarball $tarball_static_name..."
+            tar -C "$tmp/_static" -xzf "$tarball_static"
+        else
+            echo -n "pkgstriptranslations: preparing static translation tarball $tarball_static_name..."
+            dpkg-distaddfile "$tarball_static_name" raw-translations-static -
+        fi
+
+        tar -C $tmp/_static -c . | gzip -9 > "$tarball_static"
+        echo "done "
+    fi
+}
+
+#
+# main
+#
+
+echo "INFO: pkgstriptranslations version #VERSION#"
+
+# ignore language packs
+if echo "$srcname" | grep -q ^language-pack; then
+    echo "pkgstriptranslations: building language pack, doing nothing"
+    exit 0
+fi
+
+# ignore backports
+if dpkg-parsechangelog | grep -q 'Distribution:.*backport'; then
+    echo "pkgstriptranslations: building backport, doing nothing"
+    exit 0
+fi
+
+# first, check if the package explicitly requests stripping
+if grep -q 'X[[:alpha:]]*-Ubuntu-Use-Langpack: yes' debian/control; then
+    dostrip=1
+# check whether build info is present; so we can check the component
+elif [ -f "$BUILDINFO" ]; then
+    unset dostrip
+
+    if grep -qs '^Purpose: PPA' "$BUILDINFO"; then
+        if grep -q '/oem-archive' ${PKGBINARYMANGLER_APT_CONF_DIR:-/etc/apt}/sources.list; then
+            echo "INFO: Running pkgstriptranslations for OEM build"
+            oemstrip=1
+
+	    # check blacklist
+	    readctrl "$CONFFILE" oem_blacklist
+	    for project in $RET; do
+		if grep -q "oem-archive/$project" ${PKGBINARYMANGLER_APT_CONF_DIR:-/etc/apt}/sources.list; then
+		    echo "INFO: Disabling pkgstriptranslations for blacklisted OEM project"
+		    exit 0
+		fi
+	    done
+        else
+            echo "INFO: Disabling pkgstriptranslations for PPA build"
+            exit 0
+        fi
+    else
+        # we have a PRIMARY build, check component
+        readctrl "$CONFFILE" "components"
+        stripcomponents="$RET"
+        readctrl "$BUILDINFO" "Component"
+        for c in $stripcomponents; do
+            if [ $c = "$RET" ]; then dostrip=1; fi
+        done
+    fi
+else
+    dostrip=1
+fi
+
+# determine tarball name
+readctrl "$CONFFILE" "posuffix"
+posuffix=$RET
+arch=$(dpkg --print-architecture)
+[ "$posuffix" ] || posuffix=translations
+tarball_name=${srcname}_${version}_${arch}_$posuffix.tar.gz
+tarball=`pwd`/../$tarball_name
+tarball_static_name=${srcname}_${version}_static_${posuffix}.tar.gz
+tarball_static=`pwd`/../$tarball_static_name
+readctrl $PKGCTL Package
+PKGNAME=$RET
+PKGDIR=$(dirname $(dirname $PKGCTL))
+
+# skip installer udebs
+readctrl $PKGCTL Section
+if [ "$RET" = debian-installer ]; then
+    exit 0
+fi
+
+# special-case OEM builds here: strip packages if we are building a package
+# for an OEM archive which would be stripped in Ubuntu
+if [ -n "$oemstrip" ]; then
+    if env -u LD_PRELOAD apt-cache madison "$PKGNAME" | egrep -v '://[^ ]*ppa' | grep -q '/ubuntu.*/main .*Packages'; then
+        echo "INFO (OEM mode): Package is in Ubuntu main, enabling stripping of *.mo"
+        dostrip=1
+    else
+        echo "INFO (OEM mode): Package is not in Ubuntu main, not stripping"
+        unset dostrip
+    fi
+fi
+
+
+echo "pkgstriptranslations: processing $PKGNAME (in $PKGDIR); do_strip: $dostrip, oemstrip: $oemstrip"
+
+# read blacklist file and test all regexps
+if [ -f /etc/pkgbinarymangler/striptranslations.blacklist ]; then
+    while read regex; do
+        if echo "$PKGNAME" | egrep -xq "$regex"; then
+            echo "pkgstriptranslations: $PKGNAME is blacklisted, not stripping"
+            exit 0
+        fi
+    done < /etc/pkgbinarymangler/striptranslations.blacklist
+fi
+
+# check for empty files, as they indicate a package bug
+EMPTYFILES="`find -mindepth 1 -name '.*' -prune -o \( -name "*.po" -o -name "*.pot" \) -empty -print`"
+if [ -n "$EMPTYFILES" ]; then
+    cat <<EOF
+pkgstriptranslations: The following PO/POT files are empty. This is known to
+cause trouble in the translation importer and generally indicates a package
+bug:
+
+$EMPTYFILES
+EOF
+fi
+
+#
+# Now start the actual work
+#
+
+# make sure that only one pkgstriptranslations runs at a time, so that we don't
+# corrupt the tarball
+lockfile-create --retry 20 "$tarball"
+tmp=$(mktemp -t -d pkgstriptranslations.XXXXXX)
+trap "lockfile-remove '$tarball'; rm -rf $tmp" 0 1 2 3 7 10 13 15
+
+desktop_files
+
+if [ "$dostrip" ]; then
+    gnome2_help
+    mallard_help
+    gettext
+    #libreoffice # currently unused
+
+    save_files
+fi
+

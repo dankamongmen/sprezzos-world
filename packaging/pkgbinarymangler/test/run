@@ -1,0 +1,1379 @@
+#!/usr/bin/python3
+# pkgbinarymangler automatic tests
+# (C) 2010 - 2011 Canonical Ltd.
+# Author: Martin Pitt <martin.pitt@ubuntu.com>
+# License: GPL 2 or later
+
+import pickle
+import unittest
+import subprocess
+import tempfile
+import shutil
+import os.path
+import sys
+import tarfile
+import re
+from glob import glob
+
+class T(unittest.TestCase):
+    def setUp(self):
+        self.srcdir = os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))
+        
+        self.workdir = tempfile.mkdtemp()
+        self.pkgdir = os.path.join(self.workdir, 'icecream')
+        shutil.copytree(os.path.join(self.srcdir, 'test', 'icecream'),
+                self.pkgdir)
+
+        self.buildinfo = None
+        # do not depend on host induced build options
+        os.environ['DEB_BUILD_OPTIONS'] = ''
+
+        os.environ['PKGBINARYMANGLER_COMMON_PATH'] = self.srcdir
+        # locally fake the diversions
+        if os.path.exists('/usr/bin/dpkg-deb.pkgbinarymangler'):
+            os.symlink('/usr/bin/dpkg-deb.pkgbinarymangler', os.path.join(self.srcdir, 'dpkg-deb.pkgbinarymangler'))
+        else:
+            os.symlink('/usr/bin/dpkg-deb', os.path.join(self.srcdir, 'dpkg-deb.pkgbinarymangler'))
+        if os.path.exists('/usr/bin/dh_builddeb.pkgbinarymangler'):
+            os.symlink('/usr/bin/dh_builddeb.pkgbinarymangler', os.path.join(self.srcdir, 'dh_builddeb.pkgbinarymangler'))
+        else:
+            os.symlink('/usr/bin/dh_builddeb', os.path.join(self.srcdir, 'dh_builddeb.pkgbinarymangler'))
+
+        # copy our default configuration files, and enable them
+        for conf in glob(os.path.join(self.srcdir, '*.conf')):
+            with open(conf) as old:
+                with open(os.path.join(self.workdir, os.path.basename(conf)), 'w') as new:
+                    new.write(old.read().replace('enable: false', 'enable: true'))
+        os.environ['PKGBINARYMANGLER_CONF_DIR'] = self.workdir
+
+        os.environ['PKMAINTAINERGMANGLER_OVERRIDES'] = os.path.join(
+                self.srcdir, 'maintainermangler.overrides')
+
+        # point to local debhelper sequencer
+        d = os.path.join(self.workdir, 'Debian', 'Debhelper', 'Sequence')
+        os.makedirs(d)
+        shutil.copy('translations.pm', d)
+        os.environ['PERLLIB'] = '%s:%s' % (self.workdir, os.environ.get('PERLLIB', ''))
+
+    def tearDown(self):
+        shutil.rmtree(self.workdir)
+        os.unlink(os.path.join(self.srcdir, 'dpkg-deb.pkgbinarymangler'))
+        os.unlink(os.path.join(self.srcdir, 'dh_builddeb.pkgbinarymangler'))
+
+    def build(self, use_local_mangler=True, extra_env=None, srcname='icecream'):
+        env = os.environ.copy()
+        if use_local_mangler:
+            env['PATH'] = self.srcdir + ':' + env.get('PATH', '')
+
+            bi = os.path.join(self.workdir, 'CurrentlyBuilding')
+            env['CURRENTLY_BUILDING_PATH'] = bi
+            # ignore system apt sources, otherwise we'll break some tests if we
+            # run them in an OEM buildd environment
+            env['PKGBINARYMANGLER_APT_CONF_DIR'] = self.workdir
+            if self.buildinfo:
+                f = open(bi, 'w')
+                f.write(self.buildinfo)
+                f.close()
+        else:
+            # disable a system-installed pkgbinarymangler
+            if os.path.exists('/usr/bin/dpkg-deb.pkgbinarymangler'):
+                os.symlink('/usr/bin/dpkg-deb.pkgbinarymangler',
+                        os.path.join(self.workdir, 'dpkg-deb'))
+            # make dh_translations available in $PATH
+            os.symlink(os.path.join(self.srcdir, 'dh_translations'),
+                       os.path.join(self.workdir, 'dh_translations'))
+            env['PATH'] = self.workdir + ':' + env.get('PATH', '')
+
+        if extra_env:
+            env.update(extra_env)
+
+        build = subprocess.Popen(['dpkg-buildpackage', '-us', '-uc', '-b'],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                cwd=self.pkgdir, env=env)
+        out = build.communicate()[0].decode()
+        self.assertEqual(build.returncode, 0, 
+            '--- dpkg failed with error %i:\n%s\n-----' % (build.returncode, out))
+
+        with open(glob(os.path.join(self.workdir, '%s_12*_*.changes' % srcname))[0]) as f:
+            self.changes = f.read()
+
+        tars = glob(os.path.join(self.workdir, '%s_12*_*_translations.tar.gz' % srcname))
+        if len(tars) == 0:
+            self.translations_tar = None
+            self.static_translations_tar = None
+        elif len(tars) == 2:
+            # gettext and static tarballs
+            if '_static_' in tars[0]:
+                self.static_translations_tar = tars[0]
+                self.translations_tar = tars[1]
+            else:
+                self.static_translations_tar = tars[1]
+                self.translations_tar = tars[0]
+        else:
+            assert len(tars) == 1
+            self.translations_tar = tars[0]
+            self.static_translations_tar = None
+
+        self.check_deb_integrity()
+
+    def sed_control(self, cmd, files=['control']):
+        '''Apply sed commands to icecream debian/control
+        
+        You can specify different/more files with the "files" list argument.
+        '''
+        f = [os.path.join(self.pkgdir, 'debian', name) for name in files]
+        subprocess.check_call(['sed', '-i', cmd] + f)
+
+    def deb_contents(self):
+        '''Return contents for all built binary packages.
+
+        Returns dictionary: package name -> file -> info, where info is a map
+        with 'size', 'owner', 'mode', 'linkto' (None for non-symlinks).
+        '''
+        contents_map = {}
+        contents_line_re = re.compile('^([\w-]+)\s+([\w/]+)\s+(\d+)\s+([\d-]+)\s+([\d:]+)\s+(\S+)(?: -> (\S+))?$')
+
+        for deb in glob(os.path.join(self.workdir, '*_*_*.deb')):
+            deb_map = contents_map.setdefault(os.path.basename(deb).split('_')[0], {})
+
+            dpkg = subprocess.Popen(['dpkg', '-c', deb], stdout=subprocess.PIPE)
+            for line in dpkg.stdout:
+                m = contents_line_re.match(line.decode())
+                info = deb_map.setdefault(m.group(6), {})
+                info['mode'] = m.group(1)
+                info['owner'] = m.group(2)
+                info['size'] = int(m.group(3))
+                info['linkto'] = m.group(7)
+
+            dpkg.communicate()
+            assert dpkg.returncode == 0
+
+        return contents_map
+
+    def check_deb_mo(self, expect_mo):
+        '''Verify the built .deb contents for translations
+        
+        This also checks the validity of the corresponding translation tarball.
+        '''
+        for pkg in ('vanilla', 'chocolate'):
+            deb = glob(os.path.join(self.workdir, '%s_12_*.deb' % pkg))[0]
+            dpkg = subprocess.Popen(['dpkg', '-c', deb],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out = dpkg.communicate()[0].decode()
+            if expect_mo:
+                self.assertTrue('./usr/share/locale/fr/LC_MESSAGES/%s.mo' % pkg in out)
+                self.assertTrue('./usr/share/locale/de/LC_MESSAGES/%s.mo' % pkg in out)
+            else:
+                self.assertFalse('/usr/share/locale/' in out)
+            self.assertTrue('./usr/share/doc/%s/copyright' % pkg in out)
+
+        if expect_mo:
+            self.assertEqual(self.translations_tar, None, 
+                    'does not build a translation tarball for unstripped packages')
+        else:
+            self.assertTrue('raw-translations - ' + os.path.basename(self.translations_tar) in self.changes)
+
+            tar = tarfile.open(self.translations_tar)
+            self.assertTrue('./vanilla/usr/share/locale/fr/LC_MESSAGES/vanilla.mo' 
+                    in tar.getnames())
+            self.assertTrue('./chocolate/usr/share/locale/de/LC_MESSAGES/chocolate.mo' 
+                    in tar.getnames())
+            self.assertTrue('./source/po-vanilla/vanilla.pot'
+                    in tar.getnames())
+            self.assertFalse('./source/po-vanilla/empty.pot'
+                    in tar.getnames())
+            self.assertTrue('./source/po-chocolate/de.po'
+                    in tar.getnames())
+
+    def check_deb_stripfiles(self, expect_files):
+        '''Verify the built .deb contents for files we want to strip'''
+
+        for pkg in ('vanilla', 'chocolate'):
+            deb = glob(os.path.join(self.workdir, '%s_12*_*.deb' % pkg))[0]
+            dpkg = subprocess.Popen(['dpkg', '-c', deb],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out = dpkg.communicate()[0].decode()
+            if expect_files:
+                self.assertTrue('./usr/share/doc/%s/buildinfo.gz' % pkg in out)
+                self.assertTrue('./usr/share/doc/%s/changelog.gz' % pkg in out or 
+                             './usr/share/doc/%s/changelog.Debian.gz' % pkg in out)
+            else:
+                self.assertFalse('./usr/share/doc/%s/buildinfo.gz' % pkg in out)
+                if 'changelog.Debian.gz' in out:
+                    self.assertFalse('changelog.gz' in out)
+
+            dpkg = subprocess.Popen('ar p %s control.tar.gz | tar xOz ./md5sums' % deb, shell=True,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (out, err) = dpkg.communicate()
+            out = out.decode()
+            self.assertEqual(err, b'')
+            if expect_files:
+                self.assertTrue('usr/share/doc/%s/buildinfo.gz' % pkg in out)
+                self.assertTrue('usr/share/doc/%s/changelog.gz' % pkg in out or 
+                             'usr/share/doc/%s/changelog.Debian.gz' % pkg in out)
+            else:
+                self.assertFalse('buildinfo.gz' in out)
+                if 'changelog.Debian.gz' in out:
+                    self.assertFalse('changelog.gz' in out)
+
+    def check_maintainer(self, expect_mangle):
+        '''Verify the built .deb for mangled maintainer'''
+
+        for deb in glob(os.path.join(self.workdir, '*_12_*.deb')):
+            dpkg = subprocess.Popen(['dpkg', '-I', deb],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (out, err) = dpkg.communicate()
+            out = out.decode()
+            self.assertEqual(err, b'')
+            if expect_mangle:
+                self.assertTrue('Maintainer: Ubuntu' in out)
+                self.assertTrue('Original-Maintainer: Joe User <joe@example.com>' in out)
+            else:
+                self.assertTrue('Maintainer: Joe User <joe@example.com>' in out)
+                self.assertFalse('Original-Maintainer:' in out)
+
+    def check_deb_integrity(self):
+        '''Check that we can properly unpack the generated .debs
+        
+        This also verifies md5sums.
+        '''
+        debs = glob(os.path.join(self.workdir, '*.deb'))
+        if not debs:
+            self.fail('No .debs produced')
+
+        for deb in debs:
+            extractdir = os.path.join(self.workdir, 'deb-' +
+                    os.path.splitext(os.path.basename(deb))[0])
+
+            env = os.environ.copy()
+            env['PATH'] = self.srcdir + ':' + env.get('PATH', '')
+            dpkg = subprocess.Popen(['dpkg-deb', '-x', deb, extractdir],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+            (out, err) = dpkg.communicate()
+
+            # dpkg-deb must not print anything, otherwise apt falls over
+            self.assertEqual(out, b'')
+            self.assertEqual(err, b'')
+            self.assertEqual(dpkg.returncode, 0)
+
+            # verify md5sums
+            md5sum = subprocess.Popen('ar p %s control.tar.gz | tar xOz ./md5sums | md5sum -c' % deb, 
+                    shell=True, cwd=extractdir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out, err = md5sum.communicate()
+            self.assertEqual(err, b'', out + err)
+            self.assertEqual(md5sum.returncode, 0)
+
+            # our link to .png file must remain a link
+            foolink = os.path.join(extractdir, 'usr', 'share', 'icecream',
+                    'foolink.png')
+            if os.path.exists(foolink):
+                self.assertTrue(os.path.islink(foolink))
+                self.assertEqual(os.readlink(foolink), 'foo%.png')
+
+            # verify permissions are kept
+            d = os.path.join(extractdir, 'usr', 'share', 'icecream')
+            foo_png = os.path.join(d, 'foo%.png')
+            if os.path.exists(foo_png):
+                self.assertEqual(os.stat(foo_png).st_mode & 0o777, 0o600)
+            notapng = os.path.join(d, 'nota.png')
+            if os.path.exists(notapng):
+                self.assertEqual(os.stat(notapng).st_mode & 0o777, 0o644)
+
+    def test_no_mangler(self):
+        '''No pkgbinarymangler'''
+
+        self.build(False)
+        self.check_deb_mo(True)
+        self.check_maintainer(False)
+        self.check_deb_stripfiles(True)
+
+    def test_no_pkg_mangle(self):
+        '''$NO_PKG_MANGLE disables pkgbinarymangler'''
+
+        self.build(True, {'NO_PKG_MANGLE': '1'})
+        self.check_deb_mo(True)
+        self.check_maintainer(False)
+        self.check_deb_stripfiles(True)
+
+    def test_no_buildinfo(self):
+        '''No build info'''
+
+        # this should always strip
+        self.build()
+        self.check_deb_mo(False)
+        self.check_maintainer(True)
+        self.check_deb_stripfiles(False)
+
+    def test_main(self):
+        '''Component: main'''
+
+        self.buildinfo = '''Package: icecream
+Component: main
+Suite: lucid
+Purpose: PRIMARY
+'''
+
+        self.build()
+        # main packages get stripped and produce a tarball
+        self.check_deb_mo(False)
+        self.check_deb_stripfiles(False)
+        self.check_maintainer(True)
+
+    def test_universe(self):
+        '''Component: universe'''
+
+        self.buildinfo = '''Package: icecream
+Component: universe
+Suite: lucid
+Purpose: PRIMARY
+'''
+
+        self.build()
+        # universe packages don't get stripped, and don't produce a tarball
+        self.check_deb_mo(True)
+        self.check_maintainer(True)
+        self.check_deb_stripfiles(False)
+
+    def test_force_stripping(self):
+        '''Component: universe, but with X-Ubuntu-Use-Langpack: yes'''
+
+        self.buildinfo = '''Package: icecream
+Component: universe
+Suite: lucid
+Purpose: PRIMARY
+'''
+
+        self.sed_control('s/^Section:/X-Ubuntu-Use-Langpack: yes\\n&/')
+
+        self.build()
+        self.check_deb_mo(False)
+        self.check_deb_stripfiles(False)
+        self.check_maintainer(True)
+
+    def test_ppa(self):
+        '''Purpose: PPA'''
+
+        self.buildinfo = '''Package: icecream
+Component: main
+Suite: lucid
+Purpose: PPA
+'''
+
+        # PPA builds are never touched by default
+        self.build()
+        self.check_deb_mo(True)
+        self.check_maintainer(False)
+        self.check_deb_stripfiles(True)
+
+    def test_partner(self):
+        '''Section: partner'''
+
+        self.sed_control('s/^Section:.*$/Section: partner/')
+
+        # partner builds are not touched
+        self.build()
+        self.check_deb_mo(True)
+        self.check_maintainer(False)
+        self.check_deb_stripfiles(True)
+
+    def test_langpack(self):
+        '''language packs are not stripped'''
+
+        self.buildinfo = '''Package: language-pack-de
+Component: main
+Suite: lucid
+Purpose: PRIMARY
+'''
+
+        # rename source to langpack
+        self.sed_control('s/icecream/language-pack-de/g', ['control', 'changelog'])
+        self.build(True, srcname='language-pack-de')
+
+        # should not strip translations, since partner is blacklisted
+        self.check_deb_mo(True)
+        self.check_deb_stripfiles(False)
+
+    def test_ppa_oem_non_main(self):
+        '''OEM PPA for non-main package'''
+
+        # these currently look like normal PPAs, we can't yet determine the PPA
+        # name from buildinfo; hack around with checking apt sources
+        self.buildinfo = '''Package: icecream
+Component: main
+Suite: lucid
+Purpose: PPA
+'''
+        apt_sources = open(os.path.join(self.workdir, 'sources.list'), 'w')
+        apt_sources.write('''deb http://private-ppa.buildd/oem-archive/myoem/ubuntu lucid main
+deb https://cesg.canonical.com/canonical myoem public private
+deb https://cesg.canonical.com/canonical myoem-devel public private
+deb http://ftpmaster.internal/ubuntu lucid main restricted universe multiverse
+''')
+        apt_sources.close()
+
+        # those should not strip translations, since it's not in main
+        self.build(True, {'PKGBINARYMANGLER_APT_CONF_DIR': self.workdir})
+        self.check_deb_mo(True)
+        self.check_deb_stripfiles(False)
+
+        # no maintainer mangling in PPAs, as usual
+        self.check_maintainer(False)
+
+    def test_ppa_oem_main(self):
+        '''OEM PPA for main package'''
+
+        # these currently look like normal PPAs, we can't yet determine the PPA
+        # name from buildinfo; hack around with checking apt sources
+        self.buildinfo = '''Package: icecream
+Component: main
+Suite: lucid
+Purpose: PPA
+'''
+        apt_sources = open(os.path.join(self.workdir, 'sources.list'), 'w')
+        apt_sources.write('''deb http://private-ppa.buildd/oem-archive/myoem/ubuntu lucid main
+deb https://cesg.canonical.com/canonical myoem public private
+deb https://cesg.canonical.com/canonical myoem-devel public private
+deb http://ftpmaster.internal/ubuntu lucid main restricted universe multiverse
+''')
+        apt_sources.close()
+
+        # rename binaries to two in main
+        self.sed_control('s/vanilla/coreutils/g; s/chocolate/bash/g')
+        os.rename(os.path.join(self.pkgdir, 'debian', 'vanilla.install'),
+                os.path.join(self.pkgdir, 'debian', 'coreutils.install'))
+        os.rename(os.path.join(self.pkgdir, 'debian', 'chocolate.install'),
+                os.path.join(self.pkgdir, 'debian', 'bash.install'))
+
+        self.build(True, {'PKGBINARYMANGLER_APT_CONF_DIR': self.workdir})
+
+        # should strip translations, since the are in Ubuntu main
+        for pkg in ('coreutils', 'bash'):
+            deb = glob(os.path.join(self.workdir, '%s_12_*.deb' % pkg))[0]
+            dpkg = subprocess.Popen(['dpkg', '-c', deb],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out = dpkg.communicate()[0].decode()
+            self.assertFalse('/usr/share/locale/' in out)
+            self.assertTrue('./usr/share/doc/%s/copyright' % pkg in out)
+
+        tar = tarfile.open(self.translations_tar)
+        self.assertTrue('./coreutils/usr/share/locale/fr/LC_MESSAGES/vanilla.mo' 
+                in tar.getnames())
+        self.assertTrue('./bash/usr/share/locale/de/LC_MESSAGES/chocolate.mo' 
+                in tar.getnames())
+        self.assertTrue('./source/po-vanilla/vanilla.pot'
+                in tar.getnames())
+        self.assertTrue('./source/po-chocolate/de.po'
+                in tar.getnames())
+
+        # no maintainer mangling in PPAs, as usual
+        self.check_maintainer(False)
+
+    def test_ppa_oem_main_blacklisted(self):
+        '''OEM PPA for main package for blacklisted project'''
+
+        # these currently look like normal PPAs, we can't yet determine the PPA
+        # name from buildinfo; hack around with checking apt sources
+        self.buildinfo = '''Package: icecream
+Component: main
+Suite: lucid
+Purpose: PPA
+'''
+        apt_sources = open(os.path.join(self.workdir, 'sources.list'), 'w')
+        apt_sources.write('''deb http://private-ppa.buildd/oem-archive/partner/ubuntu lucid main
+deb https://cesg.canonical.com/canonical partner public private
+deb https://cesg.canonical.com/canonical partner-devel public private
+deb http://ftpmaster.internal/ubuntu lucid main restricted universe multiverse
+''')
+        apt_sources.close()
+
+        # rename binaries to two in main
+        self.sed_control('s/vanilla/coreutils/g; s/chocolate/bash/g')
+        os.rename(os.path.join(self.pkgdir, 'debian', 'vanilla.install'),
+                os.path.join(self.pkgdir, 'debian', 'coreutils.install'))
+        os.rename(os.path.join(self.pkgdir, 'debian', 'chocolate.install'),
+                os.path.join(self.pkgdir, 'debian', 'bash.install'))
+
+        self.build(True, {'PKGBINARYMANGLER_APT_CONF_DIR': self.workdir})
+
+        # should not strip translations, since partner is blacklisted
+        for pkg in ('coreutils', 'bash'):
+            deb = glob(os.path.join(self.workdir, '%s_12_*.deb' % pkg))[0]
+            dpkg = subprocess.Popen(['dpkg', '-c', deb],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out = dpkg.communicate()[0].decode()
+            if pkg == 'coreutils':
+                self.assertTrue('./usr/share/locale/fr/LC_MESSAGES/vanilla.mo' in out)
+            else:
+                self.assertTrue('./usr/share/locale/de/LC_MESSAGES/chocolate.mo' in out)
+            self.assertTrue('./usr/share/doc/%s/copyright' % pkg in out)
+
+        self.assertEqual(self.translations_tar, None)
+
+        # no maintainer mangling in PPAs, as usual
+        self.check_maintainer(False)
+
+    def test_installed_size(self):
+        '''Installed-Size gets updated'''
+
+        # add some bloat to the vanilla po to get a recognizable size increase
+        f = open(os.path.join(self.pkgdir, 'po-vanilla', 'de.po'), 'a')
+        for i in range(10000):
+            f.write('\nmsgid "%i"\nmsgstr"%i"\n' % (i, i))
+        f.close()
+
+        self.build()
+
+        dpkg = subprocess.Popen(['dpkg', '-I', os.path.join(self.workdir, 'vanilla_12_all.deb')],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            for l in dpkg.stdout:
+                l = l.decode().strip()
+                if l.startswith('Installed-Size:'):
+                    self.assertTrue(re.match('^Installed-Size: \d+$', l))
+                    self.assertTrue(int(l.split()[1]) < 200)
+                    break
+            else:
+                self.fail('No Installed-Size: header')
+        finally:
+            dpkg.communicate()
+            self.assertEqual(dpkg.returncode, 0)
+
+    def test_empty_pot(self):
+        '''Handling of empty POT'''
+
+        self.buildinfo = '''Package: icecream
+Component: main
+Suite: lucid
+Purpose: PRIMARY
+'''
+
+        open(os.path.join(self.pkgdir, 'po-vanilla', 'empty.pot'), 'w').close()
+        self.build()
+        self.check_deb_mo(False)
+        self.check_deb_stripfiles(False)
+        self.check_maintainer(True)
+
+    def test_debian_changelog_truncation(self):
+        '''Long Debian changelog gets truncated'''
+
+        # change into non-native package
+        cpath = os.path.join(self.pkgdir, 'debian', 'changelog')
+        with open(cpath) as f:
+            contents = f.readlines()
+        contents[0] = contents[0].replace('(12)', '(12-1)')
+        f = open(cpath, 'w')
+        f.write(''.join(contents))
+        f.close()
+
+        self.build()
+        self.check_deb_stripfiles(False)
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12*_*.deb'))[0]
+        dpkg = subprocess.Popen('ar p %s data.tar.gz | tar xOz ./usr/share/doc/vanilla/changelog.Debian.gz | gzip -cd' % deb, 
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = dpkg.communicate()
+        out = out.decode()
+        self.assertEqual(err, b'')
+        self.assertTrue('icecream (12-1)' in out)
+        self.assertTrue('\n  * release 12' in out)
+        self.assertTrue('icecream (3)' in out)
+        self.assertFalse('icecream (2)' in out)
+        self.assertFalse('icecream (1)' in out)
+        self.assertTrue('apt-get changelog' in out)
+
+    def test_native_changelog_truncation(self):
+        '''Long Debian changelog for native packages gets truncated'''
+
+        self.build()
+        self.check_deb_stripfiles(False)
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12*_*.deb'))[0]
+        dpkg = subprocess.Popen('ar p %s data.tar.gz | tar xOz ./usr/share/doc/vanilla/changelog.gz | gzip -cd' % deb, 
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = dpkg.communicate()
+        out = out.decode()
+        self.assertEqual(err, b'')
+        self.assertTrue('icecream (12)' in out)
+        self.assertTrue('\n  * release 12' in out)
+        self.assertTrue('icecream (3)' in out)
+        self.assertFalse('icecream (2)' in out)
+        self.assertFalse('icecream (1)' in out)
+        self.assertTrue('apt-get changelog' in out)
+
+    def test_native_changelog_truncation_symlink(self):
+        '''Long Debian changelog for native packages with symlinked doc dir'''
+
+        # perl does a hackery like this
+        rpath = os.path.join(self.pkgdir, 'debian', 'rules')
+        with open(rpath, 'a') as f:
+            f.write('''
+override_dh_installdocs:
+	dh_installdocs
+	cp debian/changelog debian/vanilla/usr/share/doc/vanilla/changelog.Debian
+	mv debian/vanilla/usr/share/doc/vanilla debian/vanilla/usr/share/doc/vanilla-base
+	ln -s vanilla-base debian/vanilla/usr/share/doc/vanilla
+''')
+
+        self.build()
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12*_*.deb'))[0]
+        dpkg = subprocess.Popen('ar p %s data.tar.gz | tar xOz ./usr/share/doc/vanilla-base/changelog.gz | gzip -cd' % deb, 
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = dpkg.communicate()
+        out = out.decode()
+        self.assertEqual(err, b'')
+        self.assertTrue('icecream (12)' in out)
+        self.assertTrue('\n  * release 12' in out)
+        # make no assumption whether this gets truncated or not
+
+    def test_short_debian_changelog(self):
+        '''Short Debian changelog remains unaltered'''
+
+        # change into non-native package
+        cpath = os.path.join(self.pkgdir, 'debian', 'changelog')
+        with open(cpath) as f:
+            contents = f.readlines()[:11]
+        contents[0] = contents[0].replace('(12)', '(12-1)')
+        with open(cpath, 'w') as f:
+            f.write(''.join(contents))
+
+        self.build()
+        self.check_deb_stripfiles(False)
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12*_*.deb'))[0]
+        dpkg = subprocess.Popen('ar p %s data.tar.gz | tar xOz ./usr/share/doc/vanilla/changelog.Debian.gz | gzip -cd' % deb, 
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = dpkg.communicate()
+        out = out.decode()
+        self.assertEqual(err, b'')
+        self.assertTrue('icecream (12-1)' in out)
+        self.assertTrue('icecream (11)' in out)
+        self.assertFalse('icecream (10)' in out)
+        self.assertFalse('apt-get changelog' in out)
+
+    def test_short_native_changelog(self):
+        '''Short Debian changelog for native packages remains unaltered'''
+
+        # truncate changelog
+        cpath = os.path.join(self.pkgdir, 'debian', 'changelog')
+        with open(cpath) as f:
+            contents = f.readlines()[:11]
+        with open(cpath, 'w') as f:
+            f.write(''.join(contents))
+
+        self.build()
+        self.check_deb_stripfiles(False)
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12*_*.deb'))[0]
+        dpkg = subprocess.Popen('ar p %s data.tar.gz | tar xOz ./usr/share/doc/vanilla/changelog.gz | gzip -cd' % deb, 
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = dpkg.communicate()
+        out = out.decode()
+        self.assertEqual(err, b'')
+        self.assertTrue('icecream (12)' in out)
+        self.assertTrue('icecream (11)' in out)
+        self.assertFalse('icecream (10)' in out)
+        self.assertFalse('apt-get changelog' in out)
+
+    def test_ppa_debian_changelog(self):
+        '''Debian changelog in PPA build remains unaltered'''
+
+        self.buildinfo = '''Package: icecream
+Component: main
+Suite: lucid
+Purpose: PPA
+'''
+
+        # change into non-native package
+        cpath = os.path.join(self.pkgdir, 'debian', 'changelog')
+        with open(cpath) as f:
+            contents = f.readlines()
+        contents[0] = contents[0].replace('(12)', '(12-1)')
+        with open(cpath, 'w') as f:
+            f.write(''.join(contents))
+
+        self.build()
+        self.check_deb_stripfiles(True)
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12*_*.deb'))[0]
+        dpkg = subprocess.Popen('ar p %s data.tar.gz | tar xOz ./usr/share/doc/vanilla/changelog.Debian.gz | gzip -cd' % deb, 
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = dpkg.communicate()
+        out = out.decode()
+        self.assertEqual(err, b'')
+        self.assertTrue('icecream (12-1)' in out)
+        self.assertTrue('icecream (11)' in out)
+        self.assertTrue('icecream (1)' in out)
+        self.assertFalse('apt-get changelog' in out)
+
+    def test_png_shrinking(self):
+        '''PNGs get optimized, and non-PNGs unmodified'''
+
+        self.build()
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12_*.deb'))[0]
+        self.assertEqual(subprocess.call(['dpkg', '-x', deb, self.workdir]), 0)
+
+        png_orig = os.path.join(self.pkgdir, 'foo%.png')
+        png_ship = os.path.join(self.workdir, 'usr', 'share', 'icecream', 'foo%.png')
+
+        # shipped PNG should be visually identical to original
+        subprocess.call(['convert', '-depth', '24', '-compress', 'none', png_orig,
+            'ppm:%s/orig.ppm' % self.workdir])
+        subprocess.call(['convert', '-depth', '24', '-compress', 'none', png_ship,
+            'ppm:%s/ship.ppm' % self.workdir])
+        # we need to filter out comments
+        orig = ''
+        with open(os.path.join(self.workdir, 'orig.ppm')) as f:
+            for l in f:
+                if not l.startswith('#'):
+                    orig += l
+        ship = ''
+        with open(os.path.join(self.workdir, 'ship.ppm')) as f:
+            for l in f:
+                if not l.startswith('#'):
+                    ship += l
+        self.assertEqual(orig, ship)
+
+        # shipped PNG should be smaller than original
+        self.assertTrue(os.path.getsize(png_ship) < os.path.getsize(png_orig))
+
+        # non-PNG should be unmodified
+        nopng_orig = open(os.path.join(self.pkgdir, 'notapng.png'), 'rb')
+        nopng_ship = open(os.path.join(self.workdir, 'usr', 'share',
+            'icecream', 'notapng.png'), 'rb')
+        self.assertEqual(nopng_orig.read(), nopng_ship.read())
+        nopng_orig.close()
+        nopng_ship.close()
+
+    def test_png_games(self):
+        '''PNGs in Section: games are left unmodified'''
+
+        self.sed_control('s/^Section:.*$/Section: games/')
+        self.build()
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12_*.deb'))[0]
+        self.assertEqual(subprocess.call(['dpkg', '-x', deb, self.workdir]), 0)
+
+        orig = open(os.path.join(self.pkgdir, 'foo%.png'), 'rb')
+        ship = open(os.path.join(self.workdir, 'usr', 'share',
+            'icecream', 'foo%.png'), 'rb')
+        self.assertTrue(orig.read() == ship.read(), 'PNG is left unmodified')
+        orig.close()
+        ship.close()
+
+        orig = open(os.path.join(self.pkgdir, 'notapng.png'), 'rb')
+        ship = open(os.path.join(self.workdir, 'usr', 'share',
+            'icecream', 'notapng.png'), 'rb')
+        self.assertTrue(orig.read() == ship.read(), 'non-PNG is left unmodified')
+        orig.close()
+        ship.close()
+
+    def test_png_disable_optimization(self):
+        '''$NO_PNG_PKG_MANGLE disables PNG optimization'''
+
+        self.build(True, {'NO_PNG_PKG_MANGLE': '1'})
+
+        deb = glob(os.path.join(self.workdir, 'vanilla_12_*.deb'))[0]
+        self.assertEqual(subprocess.call(['dpkg', '-x', deb, self.workdir]), 0)
+
+        orig = open(os.path.join(self.pkgdir, 'foo%.png'), 'rb')
+        ship = open(os.path.join(self.workdir, 'usr', 'share',
+            'icecream', 'foo%.png'), 'rb')
+        self.assertTrue(orig.read() == ship.read(), 'PNG is left unmodified')
+        orig.close()
+        ship.close()
+
+        orig = open(os.path.join(self.pkgdir, 'notapng.png'), 'rb')
+        ship = open(os.path.join(self.workdir, 'usr', 'share',
+            'icecream', 'notapng.png'), 'rb')
+        self.assertTrue(orig.read() == ship.read(), 'non-PNG is left unmodified')
+        orig.close()
+        ship.close()
+
+    def test_dpkg_deb_argv_handling(self):
+        '''dpkg-deb doesn't split up arguments with whitespace in them'''
+
+        # Wrap all the scripts that dpkg-deb wants to call with arguments
+        for wrapped_cmd in ['pkgsanitychecks',
+                            'pkgmaintainermangler',
+                            'pkgstripfiles',
+                            'pkgstriptranslations',
+                            'dpkg-deb.pkgbinarymangler']:
+            os.symlink(os.path.join(self.srcdir, 'test', 'pickle_argv'),
+                       os.path.join(self.workdir, wrapped_cmd))
+
+        # Run dpkg-deb
+        env = os.environ.copy()
+        env['PATH'] = '%s:%s' % (self.workdir, env['PATH'])
+        dpkg_deb = os.path.join(self.srcdir, 'dpkg-deb')
+        argv_test = subprocess.Popen(['pickle_argv', '-b', 'foo bar'],
+                                     executable=dpkg_deb, env=env,
+                                     stdout=subprocess.PIPE)
+
+        # Make the check
+        while True:
+            try:
+                argv = pickle.load(argv_test.stdout)
+            except EOFError:
+                break
+            self.assertEqual(argv[-1], 'foo bar',
+                             'argument with space in it did not make it through dpkg-deb alive (%r)' % (argv,))
+        argv_test.communicate()
+
+
+    def test_doc_symlink_nodep(self):
+        '''doc symlinking: no dependency (no linking)'''
+
+        with open(os.path.join(self.pkgdir, 'debian', 'vanilla.docs'), 'w') as f:
+            f.write('test.c\n')
+        with open(os.path.join(self.pkgdir, 'debian', 'chocolate.docs'), 'w') as f:
+            f.write('test.c\n')
+        orig_size = os.path.getsize(os.path.join(self.pkgdir, 'test.c'))
+        self.sed_control('/^Architecture:/ s/all/any/g')
+
+        self.build()
+        c = self.deb_contents()
+
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/test.c']['size'], orig_size)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/test.c']['linkto'], None)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/changelog.gz']['linkto'], None)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['size'], orig_size)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['linkto'], None)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/changelog.gz']['linkto'], None)
+
+    def test_doc_symlink_archmismatch(self):
+        '''doc symlinking: different architecture (no linking)'''
+
+        with open(os.path.join(self.pkgdir, 'debian', 'vanilla.docs'), 'w') as f:
+            f.write('test.c\n')
+        with open(os.path.join(self.pkgdir, 'debian', 'chocolate.docs'), 'w') as f:
+            f.write('test.c\n')
+        self.sed_control('s/^Description: chocolate/Depends: vanilla\\n&/')
+        orig_size = os.path.getsize(os.path.join(self.pkgdir, 'test.c'))
+
+        self.build()
+        c = self.deb_contents()
+
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/test.c']['size'], orig_size)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/test.c']['linkto'], None)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/changelog.gz']['linkto'], None)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['size'], orig_size)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['linkto'], None)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/changelog.gz']['linkto'], None)
+
+    def test_doc_symlink(self):
+        '''doc symlinking: Architecture: any, linking of identical files to dependency'''
+
+        # install Makefile into all doc dirs, and add some extra binaries, to
+        # also test transitive dependencies
+        with open(os.path.join(self.pkgdir, 'debian', 'rules'), 'a') as f:
+            f.write('\tdh_installdocs --all Makefile\n')
+
+        with open(os.path.join(self.pkgdir, 'debian', 'control'), 'w') as f:
+            f.write('''Source: icecream
+Section: utils
+Priority: extra
+Maintainer: Joe User <joe@example.com>
+Build-Depends: debhelper (>= 7.0.50~)
+Standards-Version: 3.9.2
+
+Package: vanilla
+Architecture: all
+Description: vanilla
+ vanilla
+
+Package: libbase1
+Architecture: any
+Description: test
+
+Package: libfoo1
+Architecture: any
+Depends: libbase1
+Description: test
+
+Package: libbar2
+Architecture: any
+Depends: libbase1
+Description: test
+
+Package: chocolate
+Architecture: any
+Depends: libc6 (>= 2.6), libfoo1, libbar2
+Description: chocolate
+ chocolate
+''')
+        with open(os.path.join(self.pkgdir, 'debian', 'test.c'), 'w') as f:
+            f.write('moo')
+        with open(os.path.join(self.pkgdir, 'debian', 'vanilla.docs'), 'w') as f:
+            f.write('test.c\nnotapng.png')
+        with open(os.path.join(self.pkgdir, 'debian', 'chocolate.docs'), 'w') as f:
+            f.write('debian/test.c')
+        with open(os.path.join(self.pkgdir, 'debian', 'chocolate.links'), 'w') as f:
+            f.write('''usr/share/doc/chocolate/test.c /usr/share/doc/chocolate/test2.c
+            /usr/share/doc/vanilla/changelog.gz /usr/share/doc/chocolate/notapng.png
+            /bin/nonexisting /usr/share/doc/chocolate/nirvana1
+            /usr/share/doc/chocolate/nonexisting /usr/share/doc/chocolate/nirvana2
+            ''')
+        test_c_size = os.path.getsize(os.path.join(self.pkgdir, 'test.c'))
+        makefile_size = os.path.getsize(os.path.join(self.pkgdir, 'Makefile'))
+
+        self.build()
+        c = self.deb_contents()
+
+        self.assertEqual(c['libbase1']['./usr/share/doc/libbase1/Makefile']['size'], makefile_size)
+        self.assertEqual(c['libbase1']['./usr/share/doc/libbase1/Makefile']['linkto'], None)
+        self.assertEqual(c['libbase1']['./usr/share/doc/libbase1/changelog.gz']['linkto'], None)
+        self.assertEqual(c['libfoo1']['./usr/share/doc/libfoo1/changelog.gz']['linkto'], '../libbase1/changelog.gz')
+        self.assertEqual(c['libfoo1']['./usr/share/doc/libfoo1/Makefile']['linkto'], '../libbase1/Makefile')
+        self.assertEqual(c['libbar2']['./usr/share/doc/libbar2/changelog.gz']['linkto'], '../libbase1/changelog.gz')
+        self.assertEqual(c['libbar2']['./usr/share/doc/libbar2/Makefile']['linkto'], '../libbase1/Makefile')
+
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/test.c']['size'], test_c_size)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/test.c']['linkto'], None)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/Makefile']['size'], makefile_size)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/Makefile']['linkto'], None)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/changelog.gz']['linkto'], None)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/notapng.png']['linkto'], None)
+
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['size'], 3)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['linkto'], None)
+        # link to transitive dependency
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/Makefile']['linkto'], '../libbase1/Makefile')
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/changelog.gz']['linkto'], '../libbase1/changelog.gz')
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test2.c']['linkto'], 'test.c')
+        # this one was manually created by chocolate.links above
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/notapng.png']['linkto'], '../vanilla/changelog.gz')
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/nirvana1']['linkto'], '/bin/nonexisting')
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/nirvana2']['linkto'], 'nonexisting')
+
+    def test_doc_symlink_parallel_fixed(self):
+        '''doc symlinking: parallel=4 build'''
+        
+        try:
+            os.environ['DEB_BUILD_OPTIONS'] = 'parallel=4'
+            # as this is a race condition, run it a couple of times
+            for i in range(3):
+                self.test_doc_symlink()
+            
+            # also test "unlimited" case
+            os.environ['DEB_BUILD_OPTIONS'] = 'parallel,nostrip'
+            # as this is a race condition, run it a couple of times
+            self.test_doc_symlink()
+        finally:
+            os.environ['DEB_BUILD_OPTIONS'] = ''
+
+    def test_doc_symlink_parallel_unlimited(self):
+        '''doc symlinking: unlimited parallel build'''
+        
+        try:
+            os.environ['DEB_BUILD_OPTIONS'] = 'parallel,nostrip'
+            # as this is a race condition, run it a couple of times
+            for i in range(3):
+                self.test_doc_symlink()
+        finally:
+            os.environ['DEB_BUILD_OPTIONS'] = ''
+
+    def test_doc_symlink_archall(self):
+        '''doc symlinking: Architecture: all, linking of identical files to dependency'''
+
+        with open(os.path.join(self.pkgdir, 'debian', 'vanilla.docs'), 'w') as f:
+            f.write('test.c')
+        with open(os.path.join(self.pkgdir, 'debian', 'chocolate.docs'), 'w') as f:
+            f.write('test.c')
+        self.sed_control('/^Architecture:/ s/any/all/g; s/^Description: chocolate/Depends: libc6 (>= 2.6), vanilla\\n&/')
+        orig_size = os.path.getsize(os.path.join(self.pkgdir, 'test.c'))
+
+        self.build()
+        c = self.deb_contents()
+
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/test.c']['size'], orig_size)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/test.c']['linkto'], None)
+        self.assertEqual(c['vanilla']['./usr/share/doc/vanilla/changelog.gz']['linkto'], None)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['linkto'], '../vanilla/test.c')
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/changelog.gz']['linkto'], '../vanilla/changelog.gz')
+
+    def test_doc_symlink_dependency_cycle(self):
+        '''doc symlinking: cyclic dependency'''
+
+        with open(os.path.join(self.pkgdir, 'debian', 'vanilla.docs'), 'w') as f:
+            f.write('test.c')
+        with open(os.path.join(self.pkgdir, 'debian', 'chocolate.docs'), 'w') as f:
+            f.write('test.c')
+        self.sed_control('/^Architecture:/ s/any/all/g')
+        self.sed_control('s/^Description: vanilla/Depends: chocolate\\n&/')
+        self.sed_control('s/^Description: chocolate/Depends: vanilla\\n&/')
+        orig_size = os.path.getsize(os.path.join(self.pkgdir, 'test.c'))
+
+        self.build()
+        c = self.deb_contents()
+
+        vanilla_link = c['vanilla']['./usr/share/doc/vanilla/test.c']['linkto']
+        chocolate_link = c['chocolate']['./usr/share/doc/chocolate/test.c']['linkto']
+
+        # exactly one of them has to be a symlink
+        self.assertTrue(vanilla_link is None or chocolate_link is None)
+        self.assertTrue(vanilla_link is not None or chocolate_link is not None)
+
+        if vanilla_link is None:
+            file_pkg = "vanilla"
+            link_pkg = "chocolate"
+        else:
+            file_pkg = "chocolate"
+            link_pkg = "vanilla"
+
+        self.assertEqual(c[file_pkg]['./usr/share/doc/%s/test.c' % (file_pkg,)]['linkto'], None)
+        self.assertEqual(c[file_pkg]['./usr/share/doc/%s/test.c' % (file_pkg,)]['size'], orig_size)
+        self.assertEqual(c[file_pkg]['./usr/share/doc/%s/changelog.gz' % (file_pkg,)]['linkto'], None)
+        self.assertEqual(c[link_pkg]['./usr/share/doc/%s/test.c' % (link_pkg,)]['linkto'], '../%s/test.c' % (file_pkg,))
+        self.assertEqual(c[link_pkg]['./usr/share/doc/%s/changelog.gz' % (link_pkg,)]['linkto'], '../%s/changelog.gz' % (file_pkg,))
+
+    def test_doc_symlink_disable(self):
+        '''doc symlinking: Disabling with $NO_DOC_PKG_MANGLE'''
+
+        with open(os.path.join(self.pkgdir, 'debian', 'vanilla.docs'), 'w') as f:
+            f.write('test.c')
+        with open(os.path.join(self.pkgdir, 'debian', 'chocolate.docs'), 'w') as f:
+            f.write('test.c')
+        self.sed_control('/^Architecture:/ s/any/all/g; s/^Description: chocolate/Depends: libc6 (>= 2.6), vanilla\\n&/')
+        orig_size = os.path.getsize(os.path.join(self.pkgdir, 'test.c'))
+
+        self.build(extra_env={'NO_DOC_PKG_MANGLE': '1'})
+        c = self.deb_contents()
+
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['size'], orig_size)
+        self.assertEqual(c['chocolate']['./usr/share/doc/chocolate/test.c']['linkto'], None)
+
+    def test_gnome_help(self):
+        '''GNOME help symlinking and static translation tarball'''
+
+        os.makedirs(os.path.join(self.pkgdir, 'help', 'C', 'figures'))
+        os.makedirs(os.path.join(self.pkgdir, 'help', 'de', 'figures'))
+        os.makedirs(os.path.join(self.pkgdir, 'help', 'es', 'figures'))
+        with open(os.path.join(self.pkgdir, 'help', 'C', 'figures', 'main.png'), 'w') as f:
+            f.write('moo')
+        with open(os.path.join(self.pkgdir, 'help', 'C', 'index.html'), 'w') as f:
+            f.write('htmlC')
+        # "translated"
+        with open(os.path.join(self.pkgdir, 'help', 'de', 'figures', 'main.png'), 'w') as f:
+            f.write('muh!')
+        with open(os.path.join(self.pkgdir, 'help', 'de', 'index.html'), 'w') as f:
+            f.write('htmlde')
+        # "untranslated"
+        with open(os.path.join(self.pkgdir, 'help', 'es', 'figures', 'main.png'), 'w') as f:
+            f.write('moo')
+        with open(os.path.join(self.pkgdir, 'help', 'es', 'index.html'), 'w') as f:
+            f.write('htmlC')
+        # manual symlink
+        os.symlink('../C/index.html', os.path.join(self.pkgdir, 'help', 'de', 'link.html'))
+
+        with open(os.path.join(self.pkgdir, 'debian', 'vanilla.install'), 'a') as f:
+            f.write('help/* usr/share/gnome/help/vanilla/\n')
+
+        self.build()
+        self.check_deb_mo(False)
+
+        c = self.deb_contents()
+
+        # C always keeps the originals
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/C/index.html']['size'], 5)
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/C/index.html']['linkto'], None)
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/C/figures/main.png']['size'], 3)
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/C/figures/main.png']['linkto'], None)
+
+        # manual symlink untouched
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/de/link.html']['linkto'],
+                '../C/index.html')
+
+        # translated de will be replaced with symlink to langpack
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/de/index.html']['linkto'],
+                '../../../help-langpack/vanilla/de/index.html')
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/de/figures/main.png']['linkto'],
+                '../../../../help-langpack/vanilla/de/figures/main.png')
+
+        # untranslated es will be replace with a symlink to C file
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/es/index.html']['linkto'],
+                '../C/index.html')
+        self.assertEqual(c['vanilla']['./usr/share/gnome/help/vanilla/es/figures/main.png']['linkto'],
+                '../../C/figures/main.png')
+
+        # translation tarball should not have the C files nor the identical
+        # copies, just the actually translated ones
+        tar = tarfile.open(self.static_translations_tar)
+        names = tar.getnames()
+        tar.close()
+        self.assertTrue('./vanilla/usr/share/gnome/help/vanilla/de/figures/main.png' in names)
+        self.assertTrue('./vanilla/usr/share/gnome/help/vanilla/de/index.html' in names)
+        self.assertFalse('./vanilla/usr/share/gnome/help/vanilla/es/figures/main.png' in names)
+        self.assertFalse('./vanilla/usr/share/gnome/help/vanilla/es/index.html' in names)
+        self.assertFalse('./vanilla/usr/share/gnome/help/vanilla/C/figures/main.png' in names)
+        self.assertFalse('./vanilla/usr/share/gnome/help/vanilla/C/index.html' in names)
+         
+    def test_mallard_help(self):
+        '''Mallard help symlinking and static translation tarball'''
+
+        os.makedirs(os.path.join(self.pkgdir, 'help', 'C', 'vanilla', 'figures'))
+        os.makedirs(os.path.join(self.pkgdir, 'help', 'de', 'vanilla', 'figures'))
+        os.makedirs(os.path.join(self.pkgdir, 'help', 'es', 'vanilla', 'figures'))
+        with open(os.path.join(self.pkgdir, 'help', 'C', 'vanilla', 'figures', 'main.png'), 'w') as f:
+            f.write('moo')
+        with open(os.path.join(self.pkgdir, 'help', 'C', 'vanilla', 'index.page'), 'w') as f:
+            f.write('htmlC')
+        # "translated"
+        with open(os.path.join(self.pkgdir, 'help', 'de', 'vanilla', 'figures', 'main.png'), 'w') as f:
+            f.write('muh!')
+        with open(os.path.join(self.pkgdir, 'help', 'de', 'vanilla', 'index.page'), 'w') as f:
+            f.write('htmlde')
+        # "untranslated"
+        with open(os.path.join(self.pkgdir, 'help', 'es', 'vanilla', 'figures', 'main.png'), 'w') as f:
+            f.write('moo')
+        with open(os.path.join(self.pkgdir, 'help', 'es', 'vanilla', 'index.page'), 'w') as f:
+            f.write('htmlC')
+        # manual symlink
+        os.symlink('../../C/vanilla/index.page', os.path.join(self.pkgdir,
+            'help', 'de', 'vanilla', 'link.page'))
+
+        with open(os.path.join(self.pkgdir, 'debian', 'vanilla.install'), 'a') as f:
+            f.write('help usr/share/\n')
+
+        self.build()
+        self.check_deb_mo(False)
+
+        c = self.deb_contents()
+
+        # C always keeps the originals
+        self.assertEqual(c['vanilla']['./usr/share/help/C/vanilla/index.page']['size'], 5)
+        self.assertEqual(c['vanilla']['./usr/share/help/C/vanilla/index.page']['linkto'], None)
+        self.assertEqual(c['vanilla']['./usr/share/help/C/vanilla/figures/main.png']['size'], 3)
+        self.assertEqual(c['vanilla']['./usr/share/help/C/vanilla/figures/main.png']['linkto'], None)
+
+        # manual symlink untouched
+        self.assertEqual(c['vanilla']['./usr/share/help/de/vanilla/link.page']['linkto'],
+                '../../C/vanilla/index.page')
+
+        # translated de will be replaced with symlink to langpack
+        self.assertEqual(c['vanilla']['./usr/share/help/de/vanilla/index.page']['linkto'],
+                '../../../help-langpack/de/vanilla/index.page')
+        self.assertEqual(c['vanilla']['./usr/share/help/de/vanilla/figures/main.png']['linkto'],
+                '../../../../help-langpack/de/vanilla/figures/main.png')
+
+        # untranslated es will be replace with a symlink to C file
+        self.assertEqual(c['vanilla']['./usr/share/help/es/vanilla/index.page']['linkto'],
+                '../../C/vanilla/index.page')
+        self.assertEqual(c['vanilla']['./usr/share/help/es/vanilla/figures/main.png']['linkto'],
+                '../../../C/vanilla/figures/main.png')
+
+        # translation tarball should not have the C files nor the identical
+        # copies, just the actually translated ones
+        tar = tarfile.open(self.static_translations_tar)
+        names = tar.getnames()
+        tar.close()
+        self.assertTrue('./vanilla/usr/share/help/de/vanilla/figures/main.png' in names)
+        self.assertTrue('./vanilla/usr/share/help/de/vanilla/index.page' in names)
+        self.assertFalse('./vanilla/usr/share/help/es/vanilla/figures/main.png' in names)
+        self.assertFalse('./vanilla/usr/share/help/es/vanilla/index.page' in names)
+        self.assertFalse('./vanilla/usr/share/help/C/vanilla/figures/main.png' in names)
+        self.assertFalse('./vanilla/usr/share/help/C/vanilla/index.page' in names)
+         
+    def test_dh_translations(self):
+        '''dh_translations'''
+
+        # this should always strip
+        pot = os.path.join(self.pkgdir, 'po', 'icecream.pot')
+        self.assertFalse(os.path.exists(pot))
+        self.build()
+        self.assertTrue(os.path.exists(pot))
+        with open(pot) as f:
+            lines = f.readlines()
+            self.assertTrue('msgid "icecream"\n' in lines)
+
+        # check *.desktop stripping
+        expected_desktop = {'simple': '''[Desktop Entry]
+Name=icecream
+Comment=Yummy!
+Exec=/usr/bin/vanilla
+X-Ubuntu-Gettext-Domain=icecream
+''',
+
+                            'translated': '''[Desktop Entry]
+Name=icecream
+GenericName=desert
+X-GNOME-FullName=Vanilla or Chocolate
+Comment=Yummy!
+Keywords=Dessert;Sweets;
+Exec=/usr/bin/vanilla
+X-Ubuntu-Gettext-Domain=icecream
+''',
+
+                            'leadingspace': '''
+[Desktop Entry]
+Name=icecream
+Comment=Yummy!
+Exec=/usr/bin/vanilla
+X-Ubuntu-Gettext-Domain=icecream
+''',
+
+                            'multisection': '''[Desktop Entry]
+Name=icecream
+GenericName=desert
+X-GNOME-FullName=Vanilla or Chocolate
+Comment=Yummy!
+Exec=/usr/bin/vanilla
+X-Ubuntu-Gettext-Domain=icecream
+
+X-Ayatana-Desktop-Shortcuts=Request
+
+[Request Shortcut Group]
+Name=Request some icecream
+Exec=vanilla request:
+OnlyShowIn=Messaging Menu
+''',
+                            'withdomain': '''[Desktop Entry]
+Name=icecream
+Comment=Yummy!
+X-GNOME-Gettext-Domain=icecream
+Exec=/usr/bin/vanilla
+''',
+                            'withdomain2': '''[Desktop Entry]
+Name=icecream
+Comment=Yummy!
+Exec=/usr/bin/vanilla
+X-Ubuntu-Gettext-Domain=icecream
+''',
+            }
+                
+        for name, expected in expected_desktop.items():
+            with open(os.path.join(self.pkgdir, 
+                'debian/vanilla/usr/share/applications/%s.desktop' % name)) as f:
+                actual = f.read()
+                self.assertEqual(actual, expected, '%s.desktop mismatch:\n"%s"' % (name, actual))
+
+        # check *.server domain addition
+        with open(os.path.join(self.pkgdir, 'debian/vanilla/usr/lib/bonobo/servers/bonobo.server')) as f:
+            self.assertEqual(f.read(), '''<oaf_info>
+
+<oaf_server ubuntu-gettext-domain="icecream" iid="OAFIID:IcecreamExample" type="exe" 
+	location="/usr/lib/bonobo-2.0/samples/bonobo-icecream">
+	<oaf_attribute name="name" type="string" value="Vanilla example"/>
+	<oaf_attribute name="name-de" type="string" value="Vanille-Beispiel"/>
+</oaf_server>
+
+<oaf_server ubuntu-gettext-domain="icecream" iid="OAFIID:AnotherExample" type="factory" 
+	location="OAFIID:Vanilla_Factory">
+	<oaf_attribute name="name" type="string" value="Icecream component"/>
+	<oaf_attribute name="name-de" type="string" value="Eiscreme-Komponente"/>
+</oaf_server>
+
+</oaf_info>
+''')
+
+        # check *.policy domain addition and stripping
+        with open(os.path.join(self.pkgdir, 'debian/vanilla/usr/share/polkit-1/actions/icecream.policy')) as f:
+            self.assertEqual(f.read(), '''<?xml version="1.0" encoding="UTF-8"?>
+<policyconfig>
+
+  <vendor>World Ice, Inc.</vendor>
+
+  <action id="icecream.info">
+    <description gettext-domain="icecream">Get information about ice cream</description>
+    <message gettext-domain="icecream">System policy prevents querying icecream info</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+    </defaults>
+  </action>
+</policyconfig>
+''')
+
+        # check *.schemas domain addition and stripping
+        with open(os.path.join(self.pkgdir, 'debian/vanilla/usr/share/gconf/schemas/icecream.schemas')) as f:
+            actual = f.read()
+            expected = '''<?xml version="1.0"?>
+<gconfschemafile>
+<schemalist>
+    <schema>
+	<key>/apps/icecream/simple</key>
+	<owner>icecream</owner>
+	<type>bool</type>
+	<default>FALSE</default>
+	<gettext_domain>icecream</gettext_domain>
+	<locale name="C">
+	    <short>Simple bool option</short>
+	    <long>Bool doc</long>
+	</locale>
+    </schema>
+
+    <schema>
+	<key>/apps/icecream/localedefault</key>
+	<owner>icecream</owner>
+	<type>string</type>
+	<default>xxx</default>
+	<gettext_domain>icecream</gettext_domain>
+	<locale name="C">
+	    <default>CCC</default>
+	    <short>Locale dependent default option</short>
+	    <long>Locale doc</long>
+	</locale>
+	<locale name="de">
+	    <default>dede</default>
+	</locale>
+    </schema>
+
+ </schemalist>
+</gconfschemafile>
+'''
+            self.assertEqual(actual, expected)
+
+    def test_dh_translations_no_domain(self):
+        '''dh_translations on package without po/Makefile'''
+
+        os.remove(os.path.join(self.pkgdir, 'po', 'Makefile'))
+        self.build()
+
+        # should not touch files
+        file_pairs = [
+            (os.path.join(self.pkgdir, 'data/translated.desktop'),
+             os.path.join(self.pkgdir, 'debian/vanilla/usr/share/applications/translated.desktop')),
+            (os.path.join(self.pkgdir, 'data/icecream.schemas'),
+             os.path.join(self.pkgdir, 'debian/vanilla/usr/share/gconf/schemas/icecream.schemas')),
+            ]
+        for (orig, ship) in file_pairs:
+            with open(orig, encoding='UTF-8') as forig:
+                with open(ship, encoding='UTF-8') as fship:
+                    self.assertEqual(forig.read(), fship.read())
+
+    def test_dh_translations_python(self):
+        '''dh_translations: Get domain from Python setup.cfg'''
+
+        os.remove(os.path.join(self.pkgdir, 'po', 'Makefile'))
+        with open(os.path.join(self.pkgdir, 'setup.cfg'), 'w') as f:
+            f.write('[build_i18n]\ndomain=icecream\n')
+
+        self.build()
+
+        with open(os.path.join(self.pkgdir,
+            'debian/vanilla/usr/share/applications/translated.desktop')) as f:
+            self.assertTrue('X-Ubuntu-Gettext-Domain=icecream' in f.read())
+
+    def test_dh_translations_cmake(self):
+        '''dh_translations: Get domain from cmake CMakeLists. CMakeLists.txt'''
+
+        os.remove(os.path.join(self.pkgdir, 'po', 'Makefile'))
+        with open(os.path.join(self.pkgdir, 'CMakeLists.txt'), 'w') as f:
+            f.write('set (GETTEXT_PACKAGE "icecream")\n')
+        with open(os.path.join(self.pkgdir, 'po', 'POTFILES.in'), 'w') as f:
+            f.write('test.c\n')
+
+        pot = os.path.join(self.pkgdir, 'po', 'icecream.pot')
+        self.assertFalse(os.path.exists(pot))
+        self.build()
+
+        self.assertTrue(os.path.exists(pot))
+        with open(pot) as f:
+            lines = f.readlines()
+            self.assertTrue('msgid "icecream"\n' in lines)
+
+#
+# main
+#
+
+unittest.main()

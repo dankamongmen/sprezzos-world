@@ -1,0 +1,208 @@
+#!/bin/bash -e
+
+CONFFILE=${PKGBINARYMANGLER_CONF_DIR:-/etc/pkgbinarymangler}/stripfiles.conf
+
+. ${PKGBINARYMANGLER_COMMON_PATH:-/usr/share/pkgbinarymangler}/common
+
+#
+# Remove buildinfo files and upstream changelogs; take care to keep native changelogs
+#
+clean_upstream_changelogs()
+{
+    # skip if we have symlinked dirs (e. g. Perl, see LP#923430)
+    if [ -L usr/share/doc -o -L usr/share/doc/$PKGNAME ]; then
+        return
+    fi
+
+    dch=usr/share/doc/$PKGNAME/changelog.Debian.gz
+    if [ ! -e "$dch" ] && [ ! -h "$dch" ]; then
+	dch=usr/share/doc/$PKGNAME/changelog.gz
+    fi
+
+    if [ -d usr/share/doc ]; then
+	(find usr/share/doc -type f \( -name buildinfo.gz -o -iname 'changelog.*' -o -iname changes -o -iname changes.gz -o -iname '*.changes.gz' \) -a ! -name `basename $dch` ) | while read f; do
+	    echo ".. removing $f"
+	    rm "$f"
+	    [ ! -f DEBIAN/md5sums ] || sed -i "\& $f$&d" DEBIAN/md5sums
+	done
+    fi
+}
+
+#
+# Only keep the topmost ten entries in Debian changelogs. If we truncate, add a
+# pointer to apt-get changelog.
+#
+strip_debian_changelogs()
+{
+    record_sep="^[^ ]+ (.*) .*; urgency"
+    if [ -e "$dch" -a ! -L "$dch" ]; then
+	record_count=0
+	changelog=""
+	gzip -cd $dch | (while read; do
+	    if [[ "$REPLY" =~ $record_sep ]]; then
+		((++record_count))
+		if [ "$record_count" -eq 11 ]; then
+		    echo "pkgstripfiles: Truncating $dch to topmost ten records"
+		    echo -e "${changelog}# For older changelog entries, run 'apt-get changelog $PKGNAME'" | gzip -9n > $dch
+		    if [ -f DEBIAN/md5sums ]; then
+			MD5=`md5sum "$dch"`
+			sed -i "s%^.*  $dch\$%$MD5%" DEBIAN/md5sums
+		    fi
+		    break
+		fi
+	    fi
+	    changelog="$changelog$REPLY\n"
+	done)
+    fi
+}
+
+#
+# Optimize PNGs
+#
+optimize_pngs()
+{
+    # skip PNG modification for games; they often rely on their particular image
+    # format
+    if [ "${SECTION%games}" != "$SECTION" ]; then
+	echo "pkgstripfiles: Skipping PNG optimization for package in games section."
+	return
+    fi
+
+    # skip -doc packages; optimizing them takes a long build time and is not so
+    # important as these are not on the CDs
+    if [ "${PKGNAME%-doc}" != "$PKGNAME" ]; then
+	echo "pkgstripfiles: Disabled PNG optimization for -doc package $PKGNAME (to save build time)"
+	return
+    fi
+
+    # also skip when disabling explicitly
+    if [ -n "$NO_PNG_PKG_MANGLE" ]; then
+	echo "pkgstripfiles: Disabled PNG optimization for package."
+	return
+    fi
+
+    time_start=`date +%s`
+
+    # optipng/advancecomp
+    find -type f -name '*.png' | while read f; do
+	orig_perms=`stat -c %a "$f"`
+	if ! optipng -o4 -preserve "$f"; then
+	    echo "WARNING: optipng failed on $f, ignoring" >&2
+	fi
+	if ! advpng -z4 "$f"; then
+	    echo "WARNING: advpng failed on $f, ignoring" >&2
+	fi
+
+	# advpng does not keep permissions
+	chmod "$orig_perms" "$f"
+
+	# update md5sum
+	if [ -f DEBIAN/md5sums ]; then
+	    f=${f#./}
+	    MD5=`md5sum "$f"`
+	    sed -i "s%^.*  ${f//%/\%}\$%${MD5//%/\%}%" DEBIAN/md5sums
+	fi
+    done
+
+    time_end=`date +%s`
+    duration=$(($time_end-$time_start))
+    echo "pkgstripfiles: PNG optimization for package $PKGNAME took $duration s" >&2
+}
+
+#
+# Symlink identical documentation to depending packages
+#
+symlink_doc()
+{
+    if [ -n "$CDBS_NO_DOC_SYMLINKING" -o -n "$NO_DOC_PKG_MANGLE" ]; then
+	echo "pkgstripfiles: documentation symlinking disabled"
+	return
+    fi
+
+    # skip if doc dirs are already symlinks
+    if [ ! -d usr/share/doc -o -h usr/share/doc -o -h usr/share/doc/$PKGNAME ];
+    then
+	return
+    fi
+
+    # iterate over all dependencies
+    for dep in `perl -ne 'if (/^(Pre-)?Depends:/) {s/^\w+://; foreach (split /,/) { @f=split; print($f[0], "\n"); } }' DEBIAN/control`; do
+	[ -d ../$dep/usr/share/doc ] || continue
+	# don't replace docs with symlinks to matching files in dependent
+	# packages when the dependent package is arch: all and the depending
+	# package isn't; ensures consistency between packages built with -b vs.
+	# -B, required by multiarch.
+	readctrl ../$dep/DEBIAN/control Architecture
+	DEPARCH=$RET
+	if [ "$ARCHITECTURE" != "$DEPARCH" ] && [ "$DEPARCH" = "all" ];
+	then
+	    echo "Skipping arch: any to arch: all dependency to $dep"
+	    continue
+	fi
+	echo "Searching for duplicated docs in dependency $dep..."
+	(
+	    r=`pwd`
+	    cd usr/share/doc/$PKGNAME
+	    find -type f ! -name copyright | while read f; do
+		f=${f#./}
+		thisfile="$r/usr/share/doc/$PKGNAME/$f"
+		depfile="$r/../$dep/usr/share/doc/$dep/$f"
+		if [ -L $depfile ]; then
+		    dep=$(basename $(dirname $(readlink "$depfile")))
+		    depfile="$r/../$dep/usr/share/doc/$dep/$f"
+		fi
+
+		[ "$dep" != "$PKGNAME" ] || continue
+		[ -f "$depfile" ] || continue
+
+		# special-case Debian changelog: as we truncate them they may
+                # differ, so only compare the topmost lines
+		if [ "$f" = "`basename $dch`" ]; then
+		    if ! cmp <(zcat $thisfile | head -n 20) <(zcat $depfile | head -n 20); then
+			continue
+		    fi
+		elif ! zcmp "$thisfile" "$depfile" >/dev/null; then
+		    continue
+		fi
+
+		# files are identical, symlink
+		echo "  symlinking $f in $PKGNAME to file in $dep"
+		rm "$thisfile"
+		ln -s "../$dep/$f" "$thisfile";
+		[ ! -f $r/DEBIAN/md5sums ] || sed -i "\& usr/share/doc/$PKGNAME/$f$&d" $r/DEBIAN/md5sums
+	    done
+	)
+    done
+}
+
+#
+# main
+#
+
+# don't do anything for PPA builds
+if [ -f "$BUILDINFO" ]; then
+    if grep -qs '^Purpose: PPA' "$BUILDINFO"; then
+        if grep -q '/oem-archive' ${PKGBINARYMANGLER_APT_CONF_DIR:-/etc/apt}/sources.list; then
+	    echo "INFO: Running pkgstripfiles for OEM PPA build"
+	else
+	    echo "INFO: Disabling pkgstripfiles for PPA build"
+	    exit 0
+	fi
+    fi
+fi
+
+readctrl $PKGCTL Package
+PKGNAME=$RET
+readctrl $PKGCTL Section
+SECTION=$RET
+readctrl $PKGCTL Architecture
+ARCHITECTURE=$RET
+PKGDIR=$(dirname $(dirname $PKGCTL))
+echo "pkgstripfiles: processing control file: $PKGCTL, package $PKGNAME, directory $PKGDIR"
+
+cd "$PKGDIR"
+
+clean_upstream_changelogs
+symlink_doc
+strip_debian_changelogs
+optimize_pngs

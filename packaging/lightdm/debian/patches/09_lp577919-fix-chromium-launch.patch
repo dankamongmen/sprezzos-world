@@ -1,0 +1,264 @@
+Author: Jamie Strandboge <jamie@canonical.com>
+Description: Because of chromium-browser's sandboxing, it needs some additional
+ accesses beyond what is allowed in the default lightdm guest session profile.
+ Create data/guest-session.apparmor_abstraction and put all the accesses in
+ there, then adjust data/guest-session.apparmor to include this abstraction as
+ well as add the chromium_browser child profile.
+Index: lightdm-1.3.3/data/guest-session.apparmor
+===================================================================
+--- lightdm-1.3.3.orig/data/guest-session.apparmor	2012-10-01 12:57:13.000000000 -0500
++++ lightdm-1.3.3/data/guest-session.apparmor	2012-10-01 14:00:02.000000000 -0500
+@@ -1,75 +1,12 @@
+ # vim:syntax=apparmor
+-# Profile for restricting lightdm guest session 
+-# Author: Martin Pitt <martin.pitt@ubuntu.com>
++# Profile for restricting lightdm guest session
+ 
+ #include <tunables/global>
+ 
+ PKGLIBEXECDIR/lightdm-guest-session-wrapper {
+-  #include <abstractions/authentication>
+-  #include <abstractions/nameservice>
+-  #include <abstractions/wutmp>
+-  /etc/compizconfig/config rw, # bug in compiz https://launchpad.net/bugs/697678
+- 
+-  / r,
+-  /bin/ rmix,
+-  /bin/fusermount Px,
+-  /bin/** rmix,
+-  /cdrom/ rmix,
+-  /cdrom/** rmix,
+-  /dev/ r,
+-  /dev/** rmw, # audio devices etc.
+-  owner /dev/shm/** rmw,
+-  /etc/ r,
+-  /etc/** rmk,
+-  /etc/gdm/Xsession ix,
+-  /lib/ r,
+-  /lib/** rmixk,
+-  /lib32/ r,
+-  /lib32/** rmixk,
+-  /lib64/ r,
+-  /lib64/** rmixk,
+-  owner /media/ r,
+-  owner /media/** rmwlixk,  # we want access to USB sticks and the like
+-  /opt/ r,
+-  /opt/** rmixk,
+-  @{PROC}/ r,
+-  @{PROC}/* rm,
+-  @{PROC}/asound rm,
+-  @{PROC}/asound/** rm,
+-  @{PROC}/ati rm,
+-  @{PROC}/ati/** rm,
+-  owner @{PROC}/** rm,
+-  # needed for gnome-keyring-daemon
+-  @{PROC}/*/status r,
+-  /sbin/ r,
+-  /sbin/** rmixk,
+-  /sys/ r,
+-  /sys/** rm,
+-  /tmp/ rw,
+-  owner /tmp/** rwlkmix,
+-  /usr/ r,
+-  /usr/** rmixk,
+-  /var/ r,
+-  /var/** rmixk,
+-  /var/guest-data/** rw, # allow to store files permanently
+-  /var/tmp/ rw,
+-  owner /var/tmp/** rwlkm,
+-  /{,var/}run/ r,
+-  # necessary for writing to sockets, etc.
+-  /{,var/}run/** rmkix,
+-  /{,var/}run/shm/** wl,
+-  # libpam-xdg-support
+-  owner /{,var/}run/user/guest-*/dconf/ rw,
+-  owner /{,var/}run/user/guest-*/dconf/user rw,
+-  owner /{,var/}run/user/guest-*/keyring-*/ rw,
+-  owner /{,var/}run/user/guest-*/keyring-*/{control,gpg,pkcs11,ssh} rw,
++  # Most applications are confined via the main abstraction
++  #include <abstractions/lightdm>
+ 
+-  capability ipc_lock,
+-
+-  # silence warnings for stuff that we really don't want to grant
+-  deny capability dac_override,
+-  deny capability dac_read_search,
+-  #deny /etc/** w, # re-enable once LP#697678 is fixed
+-  deny /usr/** w,
+-  deny /var/crash/ w,
++  # chromium-browser needs special confinement due to its sandboxing
++  #include <abstractions/lightdm_chromium-browser>
+ }
+Index: lightdm-1.3.3/data/guest-session.apparmor_abstraction
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ lightdm-1.3.3/data/guest-session.apparmor_abstraction	2012-10-01 12:57:13.000000000 -0500
+@@ -0,0 +1,76 @@
++# vim:syntax=apparmor
++# Profile for restricting lightdm guest session
++# Author: Martin Pitt <martin.pitt@ubuntu.com>
++
++# This abstraction provides the majority of the confinement for guest sessions.
++# It is in its own abstraction so we can have a centralized place for
++# confinement for the various lightdm sessions (guest, freerdp, uccsconfigure,
++# etc). Note that this profile intentionally omits chromium-browser.
++
++  #include <abstractions/authentication>
++  #include <abstractions/nameservice>
++  #include <abstractions/wutmp>
++  /etc/compizconfig/config rw, # bug in compiz https://launchpad.net/bugs/697678
++
++  / r,
++  /bin/ rmix,
++  /bin/fusermount Px,
++  /bin/** rmix,
++  /cdrom/ rmix,
++  /cdrom/** rmix,
++  /dev/ r,
++  /dev/** rmw, # audio devices etc.
++  owner /dev/shm/** rmw,
++  /etc/ r,
++  /etc/** rmk,
++  /etc/gdm/Xsession ix,
++  /lib/ r,
++  /lib/** rmixk,
++  /lib32/ r,
++  /lib32/** rmixk,
++  /lib64/ r,
++  /lib64/** rmixk,
++  owner /media/ r,
++  owner /media/** rmwlixk,  # we want access to USB sticks and the like
++  /opt/ r,
++  /opt/** rmixk,
++  @{PROC}/ r,
++  @{PROC}/* rm,
++  @{PROC}/asound rm,
++  @{PROC}/asound/** rm,
++  @{PROC}/ati rm,
++  @{PROC}/ati/** rm,
++  owner @{PROC}/** rm,
++  # needed for gnome-keyring-daemon
++  @{PROC}/*/status r,
++  /sbin/ r,
++  /sbin/** rmixk,
++  /sys/ r,
++  /sys/** rm,
++  /tmp/ rw,
++  owner /tmp/** rwlkmix,
++  /usr/ r,
++  /usr/** rmixk,
++  /var/ r,
++  /var/** rmixk,
++  /var/guest-data/** rw, # allow to store files permanently
++  /var/tmp/ rw,
++  owner /var/tmp/** rwlkm,
++  /{,var/}run/ r,
++  # necessary for writing to sockets, etc.
++  /{,var/}run/** rmkix,
++  /{,var/}run/shm/** wl,
++  # libpam-xdg-support
++  owner /{,var/}run/user/guest-*/dconf/ rw,
++  owner /{,var/}run/user/guest-*/dconf/user rw,
++  owner /{,var/}run/user/guest-*/keyring-*/ rw,
++  owner /{,var/}run/user/guest-*/keyring-*/{control,gpg,pkcs11,ssh} rw,
++
++  capability ipc_lock,
++
++  # silence warnings for stuff that we really don't want to grant
++  deny capability dac_override,
++  deny capability dac_read_search,
++  #deny /etc/** w, # re-enable once LP#697678 is fixed
++  deny /usr/** w,
++  deny /var/crash/ w,
+Index: lightdm-1.3.3/data/Makefile.am
+===================================================================
+--- lightdm-1.3.3.orig/data/Makefile.am	2012-10-01 12:31:10.000000000 -0500
++++ lightdm-1.3.3/data/Makefile.am	2012-10-01 12:57:13.000000000 -0500
+@@ -11,7 +11,9 @@
+                 pam/lightdm-autologin \
+                 pam/lightdm-greeter
+ 
+-EXTRA_DIST = guest-session.apparmor
++EXTRA_DIST = guest-session.apparmor \
++             guest-session.apparmor_abstraction \
++             guest-session.apparmor_chromium_abstraction
+ 
+ apparmor_profiledir = $(sysconfdir)/apparmor.d
+ 
+@@ -19,6 +21,11 @@
+ 	install -d $(DESTDIR)$(apparmor_profiledir)
+ 	sed 's!PKGLIBEXECDIR!$(pkglibexecdir)!g' < $(srcdir)/guest-session.apparmor \
+ 		> $(DESTDIR)$(apparmor_profiledir)/lightdm-guest-session
++	install -d $(DESTDIR)$(apparmor_profiledir)/abstractions
++	install $(srcdir)/guest-session.apparmor_abstraction \
++		$(DESTDIR)$(apparmor_profiledir)/abstractions/lightdm
++	install $(srcdir)/guest-session.apparmor_chromium_abstraction \
++		$(DESTDIR)$(apparmor_profiledir)/abstractions/lightdm_chromium-browser
+ 
+ dist_man1_MANS = lightdm.1
+ 
+Index: lightdm-1.3.3/data/Makefile.in
+===================================================================
+--- lightdm-1.3.3.orig/data/Makefile.in	2012-10-01 12:31:10.000000000 -0500
++++ lightdm-1.3.3/data/Makefile.in	2012-10-01 12:57:13.000000000 -0500
+@@ -341,7 +341,9 @@
+                 pam/lightdm-autologin \
+                 pam/lightdm-greeter
+ 
+-EXTRA_DIST = guest-session.apparmor
++EXTRA_DIST = guest-session.apparmor \
++             guest-session.apparmor_abstraction \
++             guest-session.apparmor_chromium_abstraction
+ apparmor_profiledir = $(sysconfdir)/apparmor.d
+ dist_man1_MANS = lightdm.1
+ DISTCLEANFILES = \
+@@ -830,6 +832,11 @@
+ 	install -d $(DESTDIR)$(apparmor_profiledir)
+ 	sed 's!PKGLIBEXECDIR!$(pkglibexecdir)!g' < $(srcdir)/guest-session.apparmor \
+ 		> $(DESTDIR)$(apparmor_profiledir)/lightdm-guest-session
++	install -d $(DESTDIR)$(apparmor_profiledir)/abstractions
++	install $(srcdir)/guest-session.apparmor_abstraction \
++		$(DESTDIR)$(apparmor_profiledir)/abstractions/lightdm
++	install $(srcdir)/guest-session.apparmor_chromium_abstraction \
++		$(DESTDIR)$(apparmor_profiledir)/abstractions/lightdm_chromium-browser
+ 
+ # Tell versions [3.59,3.63) of GNU make to not export all variables.
+ # Otherwise a system limit (for SysV at least) may be exceeded.
+Index: lightdm-1.3.3/data/guest-session.apparmor_chromium_abstraction
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ lightdm-1.3.3/data/guest-session.apparmor_chromium_abstraction	2012-10-01 12:57:13.000000000 -0500
+@@ -0,0 +1,33 @@
++# vim:syntax=apparmor
++# Profile abstraction for restricting chromium-browser in the lightdm guest session
++# Author: Jamie Strandboge <jamie@canonical.com>
++
++# The abstraction provides the additional accesses required to launch
++# chromium-browser from within an lightdm session. Because AppArmor cannot yet
++# merge profiles and because we want to utilize the access rules provided in
++# abstractions/lightdm, this abstraction must be separate from
++# abstractions/lightdm.
++
++  /usr/lib/chromium-browser/chromium-browser Cx -> chromium_browser,
++  profile chromium_browser {
++    # Allow all the same accesses as other applications in the guest session
++    #include <abstractions/lightdm>
++
++    # but also allow a few things because of chromium-browser's sandboxing that
++    # are not appropriate to other guest session applications.
++    owner @{PROC}/[0-9]*/oom_{,score_}adj w,
++    @{PROC}/sys/kernel/shmmax r,
++    capability sys_admin,  # for sandbox to change namespaces
++    capability sys_chroot, # fod sandbox to chroot to a safe directory
++    capability setgid,     # for sandbox to drop privileges
++    capability setuid,     # for sandbox to drop privileges
++    capability sys_ptrace, # chromium needs this to keep track of itself
++
++    @{PROC}/[0-9]*/ r,                 # sandbox wants these
++    @{PROC}/[0-9]*/fd/ r,              # sandbox wants these
++    @{PROC}/[0-9]*/task/[0-9]*/stat r, # sandbox wants these
++
++    /selinux/ r,
++
++    /usr/lib/chromium-browser/chromium-browser-sandbox ix,
++  }

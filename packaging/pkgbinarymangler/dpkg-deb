@@ -1,0 +1,54 @@
+#!/bin/bash -e
+
+# Checks whether -b or --build is in the flags
+has_build_flag() {
+    local arg
+
+    for arg; do
+        if [ "$arg" = "--build" ] || [ "$arg" = "-b" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+if [ -z "$NO_PKG_MANGLE" ] && has_build_flag "$@"; then
+    if grep -qs '^Suite: [a-z]*-autotest' ${CURRENTLY_BUILDING_PATH:-"/CurrentlyBuilding"}; then
+        NO_PKG_MANGLE=1
+        echo "INFO: Disabling pkgbinarymangler for archive rebuild test"
+    fi
+    if grep -q '^Section: partner' debian/control; then
+        NO_PKG_MANGLE=1
+        echo "INFO: Disabling pkgbinarymangler for partner packages"
+    fi
+    if [ -z "$NO_PKG_MANGLE" ]; then
+        if which pkgsanitychecks >/dev/null; then
+            pkgsanitychecks "$@"
+        else
+            echo "ERROR: dpkg-deb is diverted, but pkgsanitychecks is not executable; please check your configuration"
+            exit 1
+        fi
+        if which pkgstriptranslations >/dev/null; then
+            pkgstriptranslations "$@"
+        else
+            echo "ERROR: dpkg-deb is diverted, but pkgstriptranslations is not executable; please check your configuration"
+            exit 1
+        fi
+        if which pkgmaintainermangler >/dev/null; then
+            pkgmaintainermangler "$@"
+        else
+            echo "ERROR: dpkg-deb is diverted, but pkgmaintainermangler is not executable; please check your configuration"
+            exit 1
+        fi
+        if which pkgstripfiles >/dev/null; then
+            pkgstripfiles "$@"
+        else
+            echo "ERROR: dpkg-deb is diverted, but pkgstripfiles is not executable; please check your configuration"
+            exit 1
+        fi
+    else
+        echo "WARNING: not running pkgbinarymangler for this package, as requested"
+    fi
+fi
+
+exec -a "$0" dpkg-deb.pkgbinarymangler "$@"

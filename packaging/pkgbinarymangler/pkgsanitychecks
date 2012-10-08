@@ -1,0 +1,52 @@
+#!/bin/bash -e
+
+CONFFILE=${PKGBINARYMANGLER_CONF_DIR:-/etc/pkgbinarymangler}/sanitychecks.conf
+
+. ${PKGBINARYMANGLER_COMMON_PATH:-/usr/share/pkgbinarymangler}/common
+
+if grep -q '^Section: debian-installer$' "$PKGCTL"; then
+    echo "INFO: Disabling pkgsanitychecks for udeb" >&2
+    exit 0
+fi
+
+readctrl $PKGCTL Package
+PKGNAME=$RET
+DIR=$(dirname $(dirname "$PKGCTL"))
+
+# locations of python modules for 2.6 and newer python versions
+case $PKGNAME in
+    python2.6|python2.7|python3.0|python3.1) 
+	:
+	;;
+    *)
+	for pv in 2.6 2.7 3.0 3.1; do
+	    if [ -d $DIR/usr/lib/python$pv/site-packages ]; then
+		echo "Found files in /usr/lib/python$pv/site-packages (must be in dist-packages for python$pv)." >&2
+		find $DIR/usr/lib/python$pv/site-packages >&2
+		pysite_found=y
+	    fi
+	    if [ -d $DIR/usr/local/lib/python$pv ]; then
+		echo "Found files in /usr/local/lib/python$pv (must be in /usr/lib for python$pv)." >&2
+		find $DIR/usr/local/lib/python$pv >&2
+		pysite_found=y
+	    fi
+	done
+	if [ -n "$pysite_found" ]; then
+	    break_build=y
+	fi
+esac
+
+# check for files in /usr/local
+if [ -d $DIR/usr/local ]; then
+    echo "Found files in /usr/local (must be in /usr)." >&2
+    find $DIR/usr/local >&2
+    break_build=y
+fi
+# more sanity checks ...
+
+# break the build if necessary
+if [ -n "$break_build" ]; then
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,62 @@
+# read value for attribute $2 in dpkg control style file $1
+# return value in $RET
+readctrl() {
+    _line=$(grep "^$2: " $1) || true
+    RET=${_line#"$2: "}
+}
+
+#
+# Execution starts here
+#
+
+# Check configuration: enabled?
+[ -f "$CONFFILE" ] || exit 0
+readctrl "$CONFFILE" "enable"
+[ "$RET" = "true" ] || exit 0
+
+if [ ! -f debian/control ]; then
+    echo "$0: Error: not in source package directory" >&2
+    exit 0
+fi
+
+srcname=$(dpkg-parsechangelog | grep ^Source: | cut -f 2 -d\ )
+version=$(dpkg-parsechangelog | grep ^Version: | cut -f 2 -d\ )
+version=${version#*:}
+
+BUILDINFO=${CURRENTLY_BUILDING_PATH:-"/CurrentlyBuilding"}
+
+# check whether build info is present and if it's consistent
+if [ "$PKG_IGNORE_CURRENTLY_BUILDING" != 1 ] && [ -f "$BUILDINFO" ]; then
+    unset ignore_invalid_cb
+    readctrl "$CONFFILE" "invalid_currentlybuilding"
+    [ "$RET" != "ignore" ] || ignore_invalid_cb=1
+
+    readctrl "$BUILDINFO" "Package"
+
+    if [ "$RET" != $srcname ]; then
+        echo "$0: inconsistent $BUILDINFO file, Package: value is $RET (should be $srcname)" >&2
+        [ "$ignore_invalid_cb" ] || exit 1
+    fi
+
+    readctrl "$BUILDINFO" "Component"
+    if [ -z "$RET" ]; then
+        echo "$0: inconsistent $BUILDINFO file, Component: value is empty" >&2
+        [ "$ignore_invalid_cb" ] || exit 1
+    fi
+fi
+
+# find binary package control file and name
+while [ $# -gt 0 ]; do
+    if [ -f "$1"/DEBIAN/control ]; then
+        PKGCTL="$1"/DEBIAN/control
+        break
+    else
+        shift
+    fi
+done
+
+if [ -z "$PKGCTL" ]; then
+    echo "$0: did not find a package name argument or control file, skipping"
+    exit 0
+fi
+

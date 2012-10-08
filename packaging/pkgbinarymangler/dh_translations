@@ -1,0 +1,292 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+dh_translations - perform common translation related operations
+
+=cut
+
+use strict;
+
+use File::Find;
+use Debian::Debhelper::Dh_Lib;
+
+=head1 SYNOPSIS
+
+B<dh_translations> [S<B<debhelper options>>]
+
+=head1 DESCRIPTION
+
+dh_translations is a debhelper program to perform common translation
+related operations during package build:
+
+=over 4
+
+=item
+
+Try to build a current PO template.
+
+=item
+
+Remove inline translations from *.desktop, *.server, *.schemas, and
+*.policy files and replace them with a link to the gettext domain, so that
+strings in them will get translated at runtime from *.mo files.  This allows
+language packs to ship updated translations.
+
+=back
+
+=cut
+
+my ($domain, $use_intltool);
+
+# figure out intltool usage and domain
+sub check_buildsystem {
+    $use_intltool = 0;
+    if (open MAKEFILE, 'po/Makefile') {
+	while (<MAKEFILE>) {
+	    $use_intltool = 1 if /intltool/;
+
+	    $domain = $1 if /^GETTEXT_PACKAGE\s*=\s*(\S*)/;
+	}
+	close (MAKEFILE);
+    }
+    if (!$domain && open CFGFILE, 'configure.ac') {
+	while (<CFGFILE>) {
+	    $use_intltool = 1 if /INTLTOOL/;
+
+	    $domain = $1 if /^GETTEXT_PACKAGE\s*=\s*(\S*)/;
+	}
+	close (CFGFILE);
+    }
+    if (!$domain && open CFGFILE, 'configure.in') {
+	while (<CFGFILE>) {
+	    $use_intltool = 1 if /INTLTOOL/;
+
+	    $domain = $1 if /^GETTEXT_PACKAGE\s*=\s*(\S*)/;
+	}
+	close (CFGFILE);
+    }
+    if (open CFGFILE, 'config.h') {
+	while (<CFGFILE>) {
+	    $domain = $1 if /^#define GETTEXT_PACKAGE\s*"(\S*)"/;
+	}
+	close (CFGFILE);
+    }
+    if (!$domain && open CFGFILE, 'setup.cfg') {
+	while (<CFGFILE>) {
+	    $domain = $1 if /^\s*domain\s*=\s*(\S*)/;
+	}
+	close (CFGFILE);
+    }
+    if (!$domain && open CMAKELISTSFILE, 'CMakeLists.txt') {
+	while (<CMAKELISTSFILE>) {
+	    if ( -e 'po/POTFILES.in' ) {
+	         $use_intltool = 1;
+	    }
+	    $domain = $1 if /^set \(GETTEXT_PACKAGE\s*"(\S*)"\)/;
+	}
+	close (CMAKELISTSFILE)
+    }
+
+    verbose_print "check_buildsystem: got domain '$domain', using intltool: $use_intltool";
+}
+
+# Try to build a POT
+sub build_pot {
+
+    my @cmd;
+    if ($use_intltool) {
+	# use intltool-update
+	if ($domain) {
+	    @cmd=('/usr/bin/intltool-update', '-p', '--verbose', '-g', $domain);
+	} else {
+	    @cmd=('/usr/bin/intltool-update', '-p', '--verbose');
+	}
+    } else {
+        return unless -e 'po/Makefile';
+	if ($domain) {
+	    # let the Makefile itself handle it
+	    @cmd=('make', $domain . '.pot');
+	} else {
+	    warn 'Does not use intltool and po/Makefile does not define GETTEXT_PACKAGE, cannot build POT automatically';
+	    return;
+	}
+    }
+    verbose_print (escape_shell (@cmd));
+    chdir 'po';
+    system @cmd;
+    chdir '..';
+
+    # try to build help POT
+    if (-e 'help/Makefile') {
+	chdir 'help';
+	system ('make', 'pot');
+	chdir '..';
+    }
+}
+
+# strip translations and add domain to *.desktop/*.directory
+sub process_desktop {
+    my @lines = @{$_[0]};
+    my @result;
+    my $in_desktop_entry = 0;
+    my $added_domain = 0;
+    foreach (@lines) {
+	# filter out translated fields
+	next if (/^(Name|GenericName|Comment|X-GNOME-FullName)\[/);
+	
+	if (/^[A-Za-z-0-9-]*Gettext-Domain\s*=/) {
+	    $added_domain = 1;
+	}
+
+	# catch section headers
+	if (/^\[\s*(.+)\s*\]/) {
+	    $in_desktop_entry = ($1 eq 'Desktop Entry');
+	}
+
+	# if we are ending the desktop section, append the domain
+	if (/^\s*$/ && $in_desktop_entry && !$added_domain) {
+	    push @result, "X-Ubuntu-Gettext-Domain=$domain\n";
+	    $added_domain = 1;
+	}
+	
+	push @result, $_;
+    }
+
+    # single-section .desktop files without ending empty lines
+    if ($in_desktop_entry && !$added_domain) {
+	push @result, "X-Ubuntu-Gettext-Domain=$domain\n";
+    }
+    return @result;
+}
+
+# add domain to Bonobo *.server files
+sub process_server {
+    my @lines = @{$_[0]};
+    my @result;
+    foreach (@lines) {
+	if (/^<oaf_server\b/ && !/ubuntu-gettext-domain/) {
+	    s/^<oaf_server/<oaf_server ubuntu-gettext-domain="icecream"/;
+	}
+	push @result, $_;
+    }
+    return @result;
+}
+
+# strip translations and add domain to gconf *.schemas files
+sub process_gconf {
+    my @lines = @{$_[0]};
+    my @result;
+    my $in_locale = 0;
+    my $wrote_locale_tag = 0;
+    my $locale_tag;
+
+    foreach (@lines) {
+	#case: within a non-C <locale> tag
+	if ($in_locale) {
+	    if (/^\s*<default>/) {
+		if (!$wrote_locale_tag) {
+		    push @result, $locale_tag;
+		    $wrote_locale_tag = 1;
+		}
+		push @result, $_;
+	    } elsif (/^\s*<\/locale>/) {
+		push @result, $_ if $wrote_locale_tag;
+		$in_locale = 0;
+	    }
+	}
+	# case: locale name="C": add <gettext_domain> and leave alone
+	elsif (/^(\s*)<locale name=\"C\">/) {
+	    push @result, "$1<gettext_domain>$domain</gettext_domain>\n";
+	    push @result, $_;
+	} 
+	# case: locale name="something": start $in_locale and purge <short> and <long>
+	elsif (/<locale name=\"[^C]/) {
+	    $in_locale = 1;
+	    $wrote_locale_tag = 0;
+	    $locale_tag = $_;
+	}
+	else {
+	    push @result, $_ unless /^$/;
+	    push @result, "\n" if /^\s*<\/schema>/; # to not kill all whitespace
+	}
+    }
+    return @result;
+}
+
+# strip translations and add domain to *.policy files
+sub process_polkit {
+    my @lines = @{$_[0]};
+    my @result;
+    foreach (@lines) {
+	# filter out translated fields
+	next if (/<(message|description)\s+xml:lang=.*\/\1>/);
+
+	# add domain
+	s/<(message|description)\b/<$1 gettext-domain="$domain"/;
+
+	push @result, $_;
+    }
+    return @result;
+}
+
+sub strip_file {
+    my $f = $_;
+    return unless $f =~ /\.(desktop|directory|server|policy|schemas)$/;
+    my $ext = $1;
+    return if -l $f or -d $f; # Skip directories and symlinks
+
+    # See if we were asked to exclude this file.
+    foreach my $x (@{$dh{EXCLUDE}}) {
+            return if ($File::Find::name =~ m/\Q$x\E/);
+    }
+
+    print "  $f\n";
+    my @lines;
+    open F, $f or die "open $f: $!";
+    @lines = <F>;
+    close F;
+
+    if ($ext eq 'desktop' || $ext eq 'directory') {
+	@lines = process_desktop \@lines;
+    }
+    elsif ($ext eq 'server' && index($File::Find::name, '/bonobo/servers/') > 0) {
+	@lines = process_server \@lines;
+    } elsif ($ext eq 'policy' && index($File::Find::name, '/polkit-1/actions/') > 0) {
+	@lines = process_polkit \@lines;
+    } elsif ($ext eq 'schemas' && index($File::Find::name, '/gconf/') > 0) {
+	@lines = process_gconf \@lines;
+    }
+
+    # write back modified result
+    open F, ">$f" or die "open $f: $!";
+    foreach (@lines) {
+	print F $_;
+    }
+}
+
+init();
+
+check_buildsystem();
+build_pot();
+
+if ($domain) {
+    print "dh_langpack: processing files to add translation domain '$domain'..\n";
+    foreach my $package (@{$dh{DOPACKAGES}}) {
+	    next if is_udeb($package);
+
+	    find(\&strip_file, tmpdir($package))
+    }
+}
+
+=head1 SEE ALSO
+
+L<debhelper(1)>
+
+=head1 AUTHOR
+
+Martin Pitt <martin.pitt@ubuntu.com>
+
+Copyright (C) 2011 Canonical Ltd., licensed under the GNU GPL v2 or later.
+
+=cut
