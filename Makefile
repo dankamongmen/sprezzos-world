@@ -16,18 +16,19 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
-	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools
+	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
+	lightdm
 
 SPREZZ:=packaging
 
 include $(addprefix sprezzos-world/,$(PACKAGES))
 
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
-	@[ -d $(@D) ] || mkdir -p $(@D)
+	[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
 	 echo -n "$(@F)_VERSION:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . && \
-	 echo -n "$(shell echo $(@F) | tr [[:lower:]] [[:upper:]] | tr -d -):=$(@F)_" &&\
+	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . ) > $@
 
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
@@ -74,6 +75,9 @@ LIBXMLORIG:=$(shell echo $(LIBXMLUP) | tr - _).orig.tar.gz
 LIBXSLTUP:=libxslt-$(shell echo $(libxslt_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBXSLTORIG:=$(shell echo $(LIBXSLTUP) | tr - _).orig.tar.gz
 
+LIGHTDMUP:=lightdm_$(shell echo $(lightdm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIGHTDMORIG:=$(shell echo $(LIGHTDMUP) | tr - _).orig.tar.gz
+
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MESAUP:=MesaLib-$(shell echo $(mesa_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -101,7 +105,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) \
-	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS)
+	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -609,6 +613,17 @@ $(LIBXSLT): $(SPREZZ)/libxslt/debian/changelog $(LIBXSLTORIG)
 	tar xzvf $(LIBXSLTORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(LIGHTDMUP).orig.tar.gz
+$(LIGHTDMUP).orig.tar.gz:
+	wget -nc -O$@ https://launchpad.net/ubuntu/quantal/+source/lightdm/1.4.0-0ubuntu1/+files/$@
+
+.PHONY: lightdm
+lightdm:$(LIGHTDM)_$(ARCH).deb
+$(LIGHTDM): $(SPREZZ)/lightdm/debian/changelog $(LIGHTDMORIG)
+	mkdir -p $@
+	tar xzvf $(LIGHTDMORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(LIBRSVGORIG)
 $(LIBRSVGORIG):
 	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/librsvg/2.36/$(LIBRSVGUP).tar.xz
@@ -681,6 +696,7 @@ clean:
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
+	rm -rf $(LIGHTDM)
 
 clobber:
 	rm -rf $(FETCHED)
