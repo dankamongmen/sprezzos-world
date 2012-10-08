@@ -1,0 +1,340 @@
+#!/usr/bin/perl 
+
+#     Copyright © 2011 Anton Zinoviev <anton@lml.bas.bg>
+
+#     This program is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 2 of the License, or
+#     (at your option) any later version.
+
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+
+#     If you have not received a copy of the GNU General Public License
+#     along with this program, write to the Free Software Foundation, Inc.,
+#     59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+use warnings 'all';
+use strict;
+
+sub debug {
+    if (1) {
+	print STDERR "@_";
+    }
+}
+
+my @forbidden = (0) x 32;
+$forbidden[0x00] = 1; # NUL
+$forbidden[0x07] = 1; # BEL
+$forbidden[0x08] = 1; # BS
+$forbidden[0x09] = 1; # HT
+$forbidden[0x0a] = 1; # LF (NL)
+$forbidden[0x0b] = 1; # VT
+$forbidden[0x0c] = 1; # FF
+$forbidden[0x0d] = 1; # CR
+$forbidden[0x1b] = 1; # ESC
+
+# Maps the names used in freebsd.set to the terminfo symbol and code.
+# The symbols are termcap/terminfo standard and may not be changed.
+# Changes in the codes will lead in incompatibility with the previous
+# versions the terminal description but not too drastic so perhaps
+# such changes are acceptable.
+
+my %acsc = ( 'UK pound sign' => [ '}', 0 ],
+             'arrow pointing down' => [ '.', 0x01 ],
+             'arrow pointing left' => [ ',', 0x02 ],
+             'arrow pointing right' => [ '+', 0x03 ],
+             'arrow pointing up' => [ '-', 0x04 ],
+             'board of squares' => [ 'h', 0x05 ],
+             'bullet' => [ '~', 0x06 ],
+             'checker board (stipple)' => [ 'a', 0x0e ],
+             'degree symbol' => [ 'f', 0x0f ],
+             'diamond' => [ '`', 0x10 ],
+             'greater-than-or-equal-to' => [ 'z', 0 ],
+             'greek pi' => [ '{', 0 ],
+             'horizontal line' => [ 'q', 0x11 ],
+             'lantern symbol' => [ 'i', 0 ],
+             'large plus or crossover' => [ 'n', 0x12 ],
+             'less-than-or-equal-to' => [ 'y', 0 ],
+             'lower left corner' => [ 'm', 0x13 ],
+             'lower right corner' => [ 'j', 0x14 ],
+             'not-equal' => [ '|', 0 ],
+             'plus/minus' => [ 'g', 0 ],
+             'scan line 1' => [ 'o', 0 ],
+             'scan line 3' => [ 'p', 0 ],
+             'scan line 7' => [ 'r', 0 ],
+             'scan line 9' => [ 's', 0 ],
+             'solid square block' => [ '0', 0x15 ],
+             'tee pointing down' => [ 'w', 0x16 ],
+             'tee pointing left' => [ 'u', 0x17 ],
+             'tee pointing right' => [ 't', 0x18 ],
+             'tee pointing up' => [ 'v', 0x19 ],
+             'upper left corner' => [ 'l', 0x1a ],
+             'upper right corner' => [ 'k', 0x1c ],
+             'vertical line' => [ 'x', 0x1d ] );
+
+for my $name (keys %acsc) {
+    my $code = $acsc{$name}[1];
+    die if ($code != 0 && $forbidden[$code]);
+}
+
+my ($file1, $file2, $file3, $task);
+
+sub mono {
+    my $a = $_[0];
+    $a =~ s/[|]/-m|/g;
+    $a =~ s/-line /-line monochrome /;
+    return $a;
+}
+
+sub lines {
+    my $a = $_[1];
+    $a =~ s/25/$_[0]/g;
+    return $a;
+}
+
+sub print_term {
+    my $ac = "";
+    for my $name (keys %acsc) {
+        if ($acsc{$name}[1]) {
+            $ac = $ac . sprintf("%s\\%03o", $acsc{$name}[0], $acsc{$name}[1]);
+        }
+    }
+    my $name1 = 'cons25cs|cons25cs-bs|FreeBSD 25-line console with console-setup (Backspace is BS)';
+    my $name2 = 'cons25cs-del|cons25cs-debian|FreeBSD 25-line console with console-setup (Backspace is DEL)';
+    my $name1m = mono($name1);
+    my $name2m = mono($name2);
+    if ($task eq 'termcap') {
+        print <<EOT;
+#
+# TERMCAP ENTRIES FOR CONSOLE-SETUP
+#
+EOT
+        my $monochrome = ':pa@:Co@:AF@:AB@:AX@:op@:us=\\E[4m:ue=\\E[24m';
+        print <<EOT;
+$name1:\\
+	:ac=$ac:\\
+	:tc=cons25w:
+$name2:\\
+	:ac=$ac:\\
+	:kb=\\177:kD=\\E[3~:\\
+	:tc=cons25w:
+$name1m:\\
+	$monochrome:tc=cons25cs:
+$name2m:\\
+	$monochrome:tc=cons25cs-del:
+EOT
+        for my $lines (30, 43, 50, 60) {
+            my $n1 = lines($lines, $name1);
+            my $n2 = lines($lines, $name2);
+            my $n1m = lines($lines, $name1m);
+            my $n2m = lines($lines, $name2m);
+            print <<EOT;
+$n1:\\
+	:li#$lines:tc=cons25cs:
+$n2:\\
+	:li#$lines:tc=cons25cs-del:
+$n1m:\\
+	:li#$lines:tc=cons25cs-m:
+$n2m:\\
+	:li#$lines:tc=cons25cs-del-m:
+EOT
+        }
+    } elsif ($task eq 'terminfo') {
+        print <<EOT;
+#
+# TERMINFO ENTRIES FOR CONSOLE-SETUP
+#
+EOT
+        my $monochrome = 'colors@, pairs@,
+	bold@, dim@, op@, rmul=\\E[m, setab@, setaf@,
+	sgr=\\E[0%?%p1%t;2;7%;%?%p2%t;4%;%?%p3%t;7%;%?%p4%t;5%;m,
+	smul=\\E[4m';
+        $ac =~ s/,/\\,/g;
+        print <<EOT;
+$name1,
+	acsc=$ac,
+	use=cons25w,
+$name2,
+	acsc=$ac,
+	kbs=\\177, kdch1=\\E[3~,
+	use=cons25w,
+$name1m,
+	$monochrome, use=cons25cs,
+$name2m,
+	$monochrome, use=cons25cs-del,
+EOT
+        for my $lines (30, 43, 50, 60) {
+            my $n1 = lines($lines, $name1);
+            my $n2 = lines($lines, $name2);
+            my $n1m = lines($lines, $name1m);
+            my $n2m = lines($lines, $name2m);
+            print <<EOT;
+$n1,
+	lines#$lines, use=cons25cs,
+$n2,
+	lines#$lines, use=cons25cs-del,
+$n1m,
+	lines#$lines, use=cons25cs-m,
+$n2m,
+	lines#$lines, use=cons25cs-del-m,
+EOT
+        }
+    }
+}
+
+while ($#ARGV >= 0) {
+    if ($ARGV[0] eq "--help" || $ARGV[0] eq "-h") {
+        print STDERR <<EOT;
+Usage:
+fbsdmap --termcap | --terminfo
+Create termcap or terminfo record describing the position of the
+special line graphics symbols in the fonts of console-setup.
+
+fbsdmap --textscm|--binaryscm freebsd.set SFM ACM
+Create 8-bit translation map from application to font code.
+
+--textscm   Generate map in visual text format.
+--binaryscm Generate map in binary format suitable for vidcontrol.
+SFM         Font position -> list of unicodes
+ACM         8-bit encoding -> Unicode
+EOT
+        exit 0;
+    } elsif ($ARGV[0] eq "--binaryscm") {
+        $task='binaryscm';
+    } elsif ($ARGV[0] eq "--textscm") {
+        $task='textscm';
+    } elsif ($ARGV[0] eq "--termcap") {
+        $task='termcap';
+        print_term();
+        exit 0;
+    } elsif ($ARGV[0] eq "--terminfo") {
+        $task='terminfo';
+        print_term();
+        exit 0;
+    } else {
+        if (! defined $file1) {
+            $file1=$ARGV[0];
+        } elsif (! defined $file2) {
+            $file2=$ARGV[0];
+        } elsif (! defined $file3) {
+            $file3=$ARGV[0];
+        } else {
+            die "$0: Unknown argument $ARGV[0]\n";
+        }
+    }
+    shift @ARGV;
+}
+
+sub output {
+    my $a = $_[0];
+    my $b = $_[1];
+    if ($task eq 'binaryscm') {
+        printf "%c", $b;
+    } elsif ($task eq 'textscm') {
+        printf "0x%02x   0x%02x\n", $a, $b;
+    }
+}
+
+sub printable {
+    my $u = $_[0];
+    return (($u >= 0x20 && $u <= 0x7e) 
+	    || $u >= 0xa0);
+}
+
+my %acs2uni;
+my %sfm;
+my @acm;
+
+open (ACS, $file1) or die "$0: $file1: $!\n";
+while (<ACS>) {
+    chomp;
+    next unless (/^\s*[^#\s]/);
+    unless (/^\s*U\+([0-9a-fA-F]{4})\s+# (.+?)\s*$/) {
+        die "<$_>";
+    }
+    if (/^\s*U\+([0-9a-fA-F]{4})\s+# (.+?)\s*$/) {
+        my $uni = $1;
+        my $name = $2;
+        if (! defined $acsc{$name}) {
+            die "$0: unknown symbol $name in $file1\n";
+        }
+        $acs2uni{$name} = $uni;
+    } else {
+        die "$0: Syntax error in ACS file: $_\n";
+    }
+    }
+close ACS;
+
+if ($file2 =~ /gz$/) {
+    open (SFM, '-|:utf8', "zcat $file2") or die "$0: $file2: $!\n";
+} else {
+    open (SFM, '<:utf8', $file2) or die "$0: $file2: $!\n";
+}
+while (<SFM>) {
+    s/\#.*//;
+    chomp;
+    next unless (/[^\s]/);
+    if (s/^\s*0x([0-9a-fA-F]{1,2})\s+//) {
+        my $c = hex ($1);
+        while (s/^U\+([0-9a-fA-F]{4})\s*//) {
+            $sfm{hex ($1)} = $c;
+        }
+        die "$0: Garbage in SFM file: $_\n" unless (/^\s*$/);
+    } else {
+        die "$0: Syntax error in SFM file: $_\n";
+    }
+}
+close SFM;
+
+for my $c (32..126) {
+    if (defined $sfm{$c}) {
+        $acm[$c] = $sfm{$c};
+    }
+}
+if ($file3 =~ /gz$/) {
+    open (ACM, '-|:utf8', "zcat $file3") or die "$0: $file3: $!\n";
+} else {
+    open (ACM, '<:utf8', $file3) or die "$0: $file3: $!\n";
+}
+while (<ACM>) {
+    s/\#.*//;
+    chomp;
+    next unless (/[^\s]/);
+    if (/^\s*0x([0-9a-fA-F]{1,2})\s+\'([^\']+)\'\s*$/) {
+        my $uni = ord ($2);
+        my $c = hex ($1);
+        if (printable($uni) && defined $sfm{$uni}) {
+            $acm[$c] = $sfm{$uni};
+        }
+    } else {
+        die "$0: Syntax error in ACM file: $_\n";
+    }
+}
+close ACM;
+
+my @acm2acsname;
+for my $name (keys %acsc) {
+    my $a = $acsc{$name}[1];
+    next if ($a == 0);
+    my $uni = hex($acs2uni{$name});
+    next unless (defined $sfm{$uni});
+    if (defined $acm[$a] && $acm[$a] != $sfm{$uni}) {
+        die "$0: Contradicting definition for $name and $acm2acsname[$a], both competing for position $a in the font.\n"
+    } else {
+        $acm[$a] = $sfm{$uni};
+        $acm2acsname[$a] = $name;
+    }
+}
+
+my $fallback = 0x10; # diamond
+output 0, 0;
+for my $i (1..255) {
+    if ($acm[$i]) {
+        output $i, $acm[$i];
+    } else {
+        output $i, $fallback;
+    }
+}
