@@ -1,18 +1,14 @@
-PROGS = genksyms
 
-OUTDIR = scripts/genksyms
+hostprogs-y	:= genksyms
+always		:= $(hostprogs-y)
 
-include ../../Makefile.inc
+genksyms-objs	:= genksyms.o parse.tab.o lex.lex.o
 
-genksyms: genksyms.o parse.tab.o lex.lex.o
+# -I needed for generated C source (shipped source)
+HOSTCFLAGS_parse.tab.o := -I$(src)
+HOSTCFLAGS_lex.lex.o := -I$(src)
 
-lex.lex.o: keywords.hash.c parse.tab.h
+# dependencies on generated files need to be listed explicitly
+$(obj)/lex.lex.o: $(obj)/keywords.hash.c $(obj)/parse.tab.h
 
-%.c: %.c_shipped
-	ln -s $< $@
-
-%.h: %.h_shipped
-	ln -s $< $@
-
-clean:
-	rm -f keywords.hash.c parse.tab.c parse.tab.h
+clean-files	:= keywords.hash.c lex.lex.c parse.tab.c parse.tab.h
