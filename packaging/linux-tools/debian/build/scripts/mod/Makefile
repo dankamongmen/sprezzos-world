@@ -1,24 +1,16 @@
-PROGS = \
-	modpost \
-	modpost.real-lsb-32 \
-	modpost.real-lsb-64 \
-	modpost.real-msb-32 \
-	modpost.real-msb-64
+hostprogs-y	:= modpost mk_elfconfig
+always		:= $(hostprogs-y) empty.o
 
-OUTDIR = scripts/mod
+modpost-objs	:= modpost.o file2alias.o sumversion.o
 
-include ../../Makefile.inc
+# dependencies on generated files need to be listed explicitly
 
-modpost.real-%:
-	$(MAKE) -f Makefile.real TYPE=$* SOURCEDIR=$(top_srcdir)/scripts/mod
+$(obj)/modpost.o $(obj)/file2alias.o $(obj)/sumversion.o: $(obj)/elfconfig.h
 
-%: %.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+quiet_cmd_elfconfig = MKELF   $@
+      cmd_elfconfig = $(obj)/mk_elfconfig < $< > $@
 
-modpost.h: $(top_srcdir)/scripts/mod/modpost.c
-	python ./gendef.py $< > $@
+$(obj)/elfconfig.h: $(obj)/empty.o $(obj)/mk_elfconfig FORCE
+	$(call if_changed,elfconfig)
 
-modpost.o: modpost.c modpost.h
-
-clean:
-	rm -f modpost.h
+targets += elfconfig.h
