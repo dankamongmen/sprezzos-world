@@ -16,7 +16,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
-	harfbuzz curl libxml libxslt
+	harfbuzz curl libxml libxslt console-setup
 
 SPREZZ:=packaging
 
@@ -634,6 +634,11 @@ base-installer:$(BASEINSTALLER)_$(ARCH).udeb
 $(BASEINSTALLER): $(SPREZZ)/base-installer/debian/changelog
 	cp -r $(<D)/.. $@
 
+.PHONY: console-setup
+console-setup:$(CONSOLESETUP)_$(ARCH).deb
+$(CONSOLESETUP): $(SPREZZ)/console-setup/debian/changelog
+	cp -r $(<D)/.. $@
+
 .PHONY: netbase
 netbase:$(NETBASE)_$(ARCH).deb
 $(NETBASE): $(SPREZZ)/netbase/debian/changelog
@@ -654,7 +659,7 @@ clean:
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
-	rm -rf $(LIBXSLT) $(LIBXML)
+	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP)
 
 clobber:
 	rm -rf $(FETCHED)
