@@ -1,46 +1,40 @@
-PROGS = \
-	bin2c \
-	conmakehash \
-	kallsyms \
-	pnmtologo
+###
+# scripts contains sources for various helper programs used throughout
+# the kernel for the build process.
+# ---------------------------------------------------------------------------
+# kallsyms:      Find all symbols in vmlinux
+# pnmttologo:    Convert pnm files to logo files
+# conmakehash:   Create chartable
+# conmakehash:	 Create arrays for initializing the kernel console tables
+# docproc:       Used in Documentation/DocBook
 
-DATA = \
-	Kbuild.include \
-	Makefile.build \
-	Makefile.clean \
-	Makefile.host \
-	Makefile.lib \
-	Makefile.modinst \
-	Makefile.modpost \
-	mkversion \
-	module-common.lds
+HOST_EXTRACFLAGS += -I$(srctree)/tools/include
 
-SCRIPTS =  \
-	checkincludes.pl \
-	checkstack.pl \
-	checkversion.pl \
-	depmod.sh \
-	gcc-goto.sh \
-	gcc-version.sh \
-	gcc-x86_32-has-stack-protector.sh \
-	gcc-x86_64-has-stack-protector.sh \
-	gen_initramfs_list.sh \
-	kernel-doc \
-	Lindent \
-	makelst \
-	mksysmap \
-	mkuboot.sh \
-	namespace.pl \
-	patch-kernel \
-	setlocalversion \
-	ver_linux
+hostprogs-$(CONFIG_KALLSYMS)     += kallsyms
+hostprogs-$(CONFIG_LOGO)         += pnmtologo
+hostprogs-$(CONFIG_VT)           += conmakehash
+hostprogs-$(CONFIG_IKCONFIG)     += bin2c
+hostprogs-$(BUILD_C_RECORDMCOUNT) += recordmcount
+hostprogs-$(CONFIG_BUILDTIME_EXTABLE_SORT) += sortextable
 
-SUBDIRS = \
-	basic \
-	genksyms \
-	kconfig \
-	mod
+HOSTCFLAGS_sortextable.o = -I$(srctree)/tools/include
 
-OUTDIR = scripts
+always		:= $(hostprogs-y) $(hostprogs-m)
 
-include ..//Makefile.inc
+# The following hostprogs-y programs are only build on demand
+hostprogs-y += unifdef docproc
+
+# These targets are used internally to avoid "is up to date" messages
+PHONY += build_unifdef
+build_unifdef: scripts/unifdef FORCE
+	@:
+build_docproc: scripts/docproc FORCE
+	@:
+
+subdir-$(CONFIG_MODVERSIONS) += genksyms
+subdir-y                     += mod
+subdir-$(CONFIG_SECURITY_SELINUX) += selinux
+subdir-$(CONFIG_DTC)         += dtc
+
+# Let clean descend into subdirs
+subdir-	+= basic kconfig package selinux
