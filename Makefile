@@ -16,7 +16,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
-	harfbuzz curl libxml libxslt console-setup f2fs-tools
+	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools
 
 SPREZZ:=packaging
 
@@ -101,7 +101,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) \
-	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS)
+	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -655,6 +655,11 @@ console-setup:$(CONSOLESETUP)_$(ARCH).deb
 $(CONSOLESETUP): $(SPREZZ)/console-setup/debian/changelog
 	cp -r $(<D)/.. $@
 
+.PHONY: linux-tools
+linux-tools:$(LINUXTOOLS)_$(ARCH).deb
+$(LINUXTOOLS): $(SPREZZ)/linux-tools/debian/changelog
+	cp -r $(<D)/.. $@
+
 .PHONY: netbase
 netbase:$(NETBASE)_$(ARCH).deb
 $(NETBASE): $(SPREZZ)/netbase/debian/changelog
@@ -675,7 +680,7 @@ clean:
 	rm -rf $(BASEFILES) $(NETBASE) $(BASEINSTALLER) $(FIRMWAREALL) $(FBI)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
-	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS)
+	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 
 clobber:
 	rm -rf $(FETCHED)
