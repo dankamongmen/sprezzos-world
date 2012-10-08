@@ -1,0 +1,80 @@
+#!/usr/bin/make -f
+
+SHELL    := sh -e
+DEB_HOST_ARCH  := $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_BUILD_ARCH := $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+SOURCE   := $(shell dpkg-parsechangelog | sed -ne 's,^Source: *\(.*\)$$,\1,p')
+VERSION_DEBIAN := $(shell dpkg-parsechangelog | sed -ne 's,^Version: *\(.*\)$$,\1,p')
+VERSION  := $(shell echo "$(VERSION_DEBIAN)" | sed -e 's,-[^-]*$$,,')
+VERSION_DEBIAN_BINNMU := $(shell echo "$(VERSION_DEBIAN)" | sed -ne 's,.*\+b\(.*\)$$,\1,p')
+
+include debian/rules.defs
+
+build: debian/control $(STAMPS_DIR)/build-base
+$(STAMPS_DIR)/build-base: $(STAMPS_DIR)
+	dh_testdir
+	$(MAKE) -f debian/rules.gen build
+	touch $@
+
+$(STAMPS_DIR):
+	@[ -d $@ ] || mkdir $@
+
+DIR_ORIG = ../orig/$(SOURCE)-$(VERSION)
+TAR_ORIG_NAME = $(SOURCE)_$(VERSION).orig.tar.gz
+TAR_ORIG = $(firstword $(wildcard ../$(TAR_ORIG_NAME)) $(wildcard ../orig/$(TAR_ORIG_NAME)))
+
+orig: $(DIR_ORIG)
+	rsync --delete --exclude debian --exclude .svk --exclude .svn --link-dest=$(DIR_ORIG)/ -a $(DIR_ORIG)/ .
+
+$(DIR_ORIG):
+ifeq ($(TAR_ORIG),)
+	$(error Cannot find orig tarball $(TAR_ORIG_NAME))
+else
+	mkdir -p ../orig
+	tar -C ../orig -xzf $(TAR_ORIG)
+endif
+
+maintainerclean:
+	rm -f debian/control debian/control.md5sum debian/rules.gen
+	rm -rf $(filter-out debian .svk .svn, $(wildcard * .[^.]*))
+
+clean: debian/control
+	dh_testdir
+	make -C $(BUILD_DIR) clean top_srcdir=$(CURDIR)
+	rm -rf $(STAMPS_DIR) debian/lib/python/debian_linux/*.pyc
+	dh_clean
+
+binary-indep:
+	dh_testdir
+
+binary-arch:
+	dh_testdir
+	$(MAKE) -f debian/rules.gen binary-arch
+
+binary:	binary-indep binary-arch
+
+CONTROL_FILES = debian/changelog $(wildcard debian/templates/control.*)
+debian/control debian/rules.gen: debian/bin/gencontrol.py $(CONTROL_FILES)
+ifeq ($(wildcard debian/control.md5sum),)
+	$(MAKE) -f debian/rules debian/control-real
+else ifeq ($(VERSION_DEBIAN_BINNMU),)
+	md5sum --check debian/control.md5sum --status || \
+		$(MAKE) -f debian/rules debian/control-real
+else
+	grep -v debian/changelog debian/control.md5sum | md5sum --check - --status || \
+		$(MAKE) -f debian/rules debian/control-real
+endif
+
+debian/control-real: debian/bin/gencontrol.py $(CONTROL_FILES)
+	chmod +x $<
+	$<
+	md5sum $^ > debian/control.md5sum
+	@echo
+	@echo This target is made to fail intentionally, to make sure
+	@echo that it is NEVER run during the automated build. Please
+	@echo ignore the following error, the debian/control file has
+	@echo been generated SUCCESSFULLY.
+	@echo
+	exit 1
+
+.PHONY: clean build setup binary-indep binary-arch binary
