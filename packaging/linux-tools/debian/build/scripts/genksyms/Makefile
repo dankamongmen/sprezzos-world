@@ -12,4 +12,6 @@ HOSTCFLAGS_lex.lex.o := -I$(src)
 $(obj)/lex.lex.o: $(obj)/keywords.hash.c $(obj)/parse.tab.h
 
 clean-files	:= keywords.hash.c lex.lex.c parse.tab.c parse.tab.h
-clean: rm *.o
+
+clean:
+	rm *.o
