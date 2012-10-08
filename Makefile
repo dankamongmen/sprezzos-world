@@ -77,7 +77,7 @@ LIBXSLTORIG:=$(shell echo $(LIBXSLTUP) | tr - _).orig.tar.gz
 
 LIGHTDMUP:=lightdm_$(shell echo $(lightdm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIGHTDMORIG:=$(shell echo $(LIGHTDMUP) | tr - _).orig.tar.gz
-
+LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_VERSION) | cut -d- -f1).orig.tar.bz2
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MESAUP:=MesaLib-$(shell echo $(mesa_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -165,6 +165,12 @@ $(STRACE): $(SPREZZ)/strace/debian/changelog
 	cd $@ && autoreconf -sif
 	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs
 	cp -r $(<D) $@/
+
+.PHONY: linux-tools
+linux-tools:$(LINUXTOOLS)_$(ARCH).deb
+$(LINUXTOOLS): $(SPREZZ)/linux-tools/debian/changelog
+	cp -r $(<D)/.. $@
+	tar cjf $(LINUXTOOLSORIG) $@ --exclude-vcs
 
 .PHONY: fbv
 fbv:$(FBV).udeb
@@ -668,11 +674,6 @@ $(BASEINSTALLER): $(SPREZZ)/base-installer/debian/changelog
 .PHONY: console-setup
 console-setup:$(CONSOLESETUP)_$(ARCH).deb
 $(CONSOLESETUP): $(SPREZZ)/console-setup/debian/changelog
-	cp -r $(<D)/.. $@
-
-.PHONY: linux-tools
-linux-tools:$(LINUXTOOLS)_$(ARCH).deb
-$(LINUXTOOLS): $(SPREZZ)/linux-tools/debian/changelog
 	cp -r $(<D)/.. $@
 
 .PHONY: netbase
