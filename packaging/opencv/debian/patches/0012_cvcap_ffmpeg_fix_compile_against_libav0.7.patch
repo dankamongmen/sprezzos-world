@@ -1,0 +1,125 @@
+diff --git a/modules/highgui/src/cap_ffmpeg_impl.hpp b/modules/highgui/src/cap_ffmpeg_impl.hpp
+index 14ed8b7..02d89cc 100644
+--- a/modules/highgui/src/cap_ffmpeg_impl.hpp
++++ b/modules/highgui/src/cap_ffmpeg_impl.hpp
+@@ -146,6 +146,12 @@ extern "C" {
+     #include <sys/sysctl.h>
+ #endif
+ 
++#if LIBAVFORMAT_BUILD < AV_VERSION_INT(53, 2, 0)
++#define AVMEDIA_TYPE_VIDEO CODEC_TYPE_VIDEO
++#endif
++#ifndef PKT_FLAG_KEY
++#define PKT_FLAG_KEY AV_PKT_FLAG_KEY
++#endif
+ int get_number_of_cpus(void)
+ {
+ #if defined WIN32 || defined _WIN32
+@@ -467,7 +473,6 @@ void CvCapture_FFMPEG::close()
+     init();
+ }
+ 
+-
+ /*
+     Used to reopen a video if the slower fallback function for seeking is used.
+ */
+@@ -540,10 +545,6 @@ bool CvCapture_FFMPEG::open( const char* _filename )
+ 
+         avcodec_thread_init(enc, get_number_of_cpus());
+ 
+-        #if LIBAVFORMAT_BUILD < CALC_FFMPEG_VERSION(53, 4, 0)
+-            #define AVMEDIA_TYPE_VIDEO CODEC_TYPE_VIDEO
+-        #endif
+-        
+         if( AVMEDIA_TYPE_VIDEO == enc->codec_type && video_stream < 0) {
+             AVCodec *codec = avcodec_find_decoder(enc->codec_id);
+             if (!codec ||
+@@ -596,6 +597,24 @@ exit_func:
+     return valid;
+ }
+ 
++#if LIBAVFORMAT_BUILD >= (53<<16 | 0<<8 | 0)
++	/* As defined when compiled against libav-0.7 from Ubuntu 11.10 Oneiric */
++	/*Gal Shalif: temporary add a backward compatible function - till OpenCV is properly ported to compile against ffmpeg 0.7 */
++	/* Gal Shalif: code is copy from Ubuntu 11.04 Natty libav-0.6.2/libavcodec/utils.c */
++int avcodec_decode_video(AVCodecContext *avctx, AVFrame *picture,
++			int *got_picture_ptr,
++			uint8_t *buf, int buf_size)
++{
++	AVPacket avpkt;
++	av_init_packet(&avpkt);
++	avpkt.data = buf;
++	avpkt.size = buf_size;
++	// HACK for CorePNG to decode as normal PNG by default
++	avpkt.flags = AV_PKT_FLAG_KEY;
++	return avcodec_decode_video2(avctx, picture, got_picture_ptr, &avpkt);
++}
++#endif /* LIBAVFORMAT_BUILD >= (53<<16 | 0<<8 | 0) */
++
+ 
+ bool CvCapture_FFMPEG::grabFrame()
+ {
+@@ -631,7 +650,7 @@ bool CvCapture_FFMPEG::grabFrame()
+ 		        continue;
+     		}
+ 
+-#if LIBAVFORMAT_BUILD >= CALC_FFMPEG_VERSION(53, 4, 0)
++#if LIBAVFORMAT_BUILD >= AV_VERSION_INT(53, 4, 0)
+ 			avcodec_decode_video2(video_st->codec, picture, &got_picture, &packet); 
+ #else
+ 	#if LIBAVFORMAT_BUILD > 4628
+@@ -879,9 +898,22 @@ struct CvVideoWriter_FFMPEG
+ #endif
+ };
+ 
++#if LIBAVFORMAT_BUILD >= (53<<16 | 0<<8 | 0)
++	/* As defined when compiled against libav-0.7 from Ubuntu 11.10 Oneiric */
++	/* Gal Shalif: temporary add a backward compatible define
++	 * - till OpenCV is properly ported to compile against ffmpeg 0.7 */
++
++	/* Gal Shalif: code is copy from Ubuntu 11.04 Natty libav-0.6.2/libavutil/error.h
++	 * and is enclosed within LIBAVUTIL_VERSION_MAJOR < 51 ... #endif */
++	#define AVERROR_NUMEXPECTED AVERROR(EDOM)    ///< Number syntax expected in filename
++	#define AVERROR_NOFMT       AVERROR(EILSEQ)  ///< Unknown format
++	#define AVERROR_IO          AVERROR(EIO)     ///< I/O error
++	#define AVERROR_NOMEM       AVERROR(ENOMEM)  ///< Not enough memory
++#endif /* LIBAVFORMAT_BUILD >= (53<<16 | 0<<8 | 0) */
++
+ static const char * icvFFMPEGErrStr(int err)
+ {
+-#if LIBAVFORMAT_BUILD >= CALC_FFMPEG_VERSION(53, 4, 0)
++#if LIBAVFORMAT_BUILD >= AV_VERSION_INT(53, 4, 0)
+     switch(err) {
+  		case AVERROR_BSF_NOT_FOUND:
+  			return "Bitstream filter not found";
+@@ -1106,11 +1138,7 @@ int icv_av_write_frame_FFMPEG( AVFormatContext * oc, AVStream * video_st, uint8_
+         AVPacket pkt;
+         av_init_packet(&pkt);
+ 
+-		#ifndef PKT_FLAG_KEY
+-			#define PKT_FLAG_KEY AV_PKT_FLAG_KEY
+-		#endif
+-		
+-        pkt.flags |= PKT_FLAG_KEY; 
++        pkt.flags |= PKT_FLAG_KEY;
+         pkt.stream_index= video_st->index;
+         pkt.data= (uint8_t *)picture;
+         pkt.size= sizeof(AVPicture);
+@@ -1333,7 +1361,7 @@ bool CvVideoWriter_FFMPEG::open( const char * filename, int fourcc,
+ 
+ 	/* auto detect the output format from the name and fourcc code. */
+ 
+-#if LIBAVFORMAT_BUILD >= CALC_FFMPEG_VERSION(53, 4, 0)
++#if LIBAVFORMAT_BUILD >= CALC_FFMPEG_VERSION(53, 2, 0)
+ 	fmt = av_guess_format(NULL, filename, NULL);
+ #else
+ 	fmt = guess_format(NULL, filename, NULL);
+@@ -1361,7 +1389,7 @@ bool CvVideoWriter_FFMPEG::open( const char * filename, int fourcc,
+ #endif
+ 
+     // alloc memory for context
+-#if LIBAVFORMAT_BUILD >= CALC_FFMPEG_VERSION(53, 4, 0)
++#if LIBAVFORMAT_BUILD >= CALC_FFMPEG_VERSION(53, 2, 0)
+ 	oc = avformat_alloc_context();
+ #else
+ 	oc = av_alloc_format_context();

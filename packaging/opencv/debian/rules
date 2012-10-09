@@ -1,0 +1,77 @@
+#!/usr/bin/make -f
+
+CFLAGS := $(shell dpkg-buildflags --get CFLAGS)
+CXXFLAGS := $(shell dpkg-buildflags --get CXXFLAGS)
+LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
+
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+# These don't need to be exported and if they are we'll get the flags
+# duplicated in the command line.
+unexport CFLAGS
+unexport CXXFLAGS
+unexport LDFLAGS
+
+# SSE options
+ifeq ($(DEB_HOST_ARCH),amd64)
+CMAKE_ARCH_FLAGS = -DENABLE_SSE=ON -DENABLE_SSE2=ON -DENABLE_SSSE3=OFF 
+else
+CMAKE_ARCH_FLAGS = -DENABLE_SSE=OFF -DENABLE_SSE2=OFF -DENABLE_SSSE3=OFF 
+endif
+
+# TBB support
+ifneq (,$(findstring $(DEB_HOST_ARCH), amd64 i386 ia64))
+CMAKE_ARCH_FLAGS += -DWITH_TBB=ON
+else
+CMAKE_ARCH_FLAGS += -DWITH_TBB=OFF
+endif
+
+CMAKE_FLAGS = \
+	-DCMAKE_INSTALL_PREFIX=/usr \
+	-DCMAKE_VERBOSE_MAKEFILE=ON \
+	-DCMAKE_C_FLAGS_RELEASE="$(CFLAGS)" \
+	-DCMAKE_CXX_FLAGS_RELEASE="$(CXXFLAGS)" \
+	-DCMAKE_SHARED_LINKER_FLAGS_RELEASE="$(LDFLAGS)" \
+	-DCMAKE_BUILD_TYPE=Release	\
+	$(CMAKE_ARCH_FLAGS) \
+	-DUSE_FAST_MATH=ON	\
+	-DUSE_OMIT_FRAME_POINTER=ON	\
+	-DBUILD_EXAMPLES=ON	\
+	-DINSTALL_C_EXAMPLES=ON	\
+	-DINSTALL_PYTHON_EXAMPLES=ON	\
+	-DBUILD_NEW_PYTHON_SUPPORT=ON	\
+	-DWITH_FFMPEG=ON	\
+	-DWITH_GSTREAMER=OFF	\
+	-DWITH_GTK=ON	\
+	-DWITH_JASPER=ON	\
+	-DWITH_JPEG=ON	\
+	-DWITH_PNG=ON	\
+	-DWITH_TIFF=ON	\
+	-DWITH_OPENEXR=ON \
+	-DWITH_PVAPI=ON	\
+	-DWITH_UNICAP=OFF	\
+	-DWITH_1394=ON	\
+	-DWITH_V4L=ON	\
+	-DWITH_XINE=OFF	\
+	-DBUILD_TESTS=OFF \
+	-DCMAKE_SKIP_RPATH=ON
+
+%:
+	dh $@ --buildsystem=cmake
+
+override_dh_clean:
+	rm -rf modules/python/src2/hdr_parser.pyc
+
+	dh_clean -O--buildsystem=cmake
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CMAKE_FLAGS) $(CMAKE_ARCH_FLAGS)
+
+override_dh_install:
+	-rm --verbose -rf debian/tmp/usr/share/opencv/samples/octave # just in case
+	-rm --verbose -f debian/tmp/usr/share/opencv/samples/c/cvsample.dsp
+	-rm --verbose -f debian/tmp/usr/share/OpenCV/doc/license.txt
+	chmod --verbose +x debian/tmp/usr/share/opencv/samples/c/build_all.sh
+	for f in $$(ls obj-*/lib/libopencv_*_s.a); do \
+		cp --verbose --preserve=mode $$f debian/tmp/usr/lib/$$(basename $$f _s.a).a; done
+	dh_install -O--buildsystem=cmake --list-missing
