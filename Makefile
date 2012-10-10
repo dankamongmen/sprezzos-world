@@ -20,7 +20,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
-	gnome-control-center eog
+	gnome-control-center eog atk aptitude
 
 SPREZZ:=packaging
 
@@ -35,6 +35,8 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- ) > $@
 
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
+ATKUP:=atk-$(shell echo $(atk_VERSION) | cut -d- -f1)
+ATKORIG:=atk_$(shell echo $(atk_VERSION) | cut -d- -f1).orig.tar.xz
 CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
 CURLUP:=curl-$(shell echo $(curl_VERSION) | cut -d= -f2- | cut -d- -f1)
@@ -117,13 +119,13 @@ SOCATORIG:=socat_$(shell echo $(socat_VERSION) | cut -d- -f1).orig.tar.bz2
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
-	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) \
+	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
-	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) \
+	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
 	$(GNOMECONTROLCENTER)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
@@ -536,6 +538,20 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog $(NFSUTILSORIG)
 	tar xjvf $(NFSUTILSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(ATKUP).tar.xz
+$(ATKUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/atk/2.6/$@
+
+$(ATKORIG): $(ATKUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: atk
+atk:$(ATK)_$(ARCH).deb
+$(ATK): $(SPREZZ)/atk/debian/changelog $(ATKORIG)
+	mkdir -p $@
+	tar xJvf $(ATKORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(EOGUP).tar.xz
 $(EOGUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/eog/3.6/$@
@@ -817,7 +833,8 @@ clean:
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
-	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG)
+	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK)
+	rm -rf $(APTITUDE)
 
 clobber:
 	rm -rf $(FETCHED)
