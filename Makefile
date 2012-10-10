@@ -36,7 +36,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 ATKUP:=atk-$(shell echo $(atk_VERSION) | cut -d- -f1)
-ATKORIG:=atk_$(shell echo $(atk_VERSION) | cut -d- -f1).orig.tar.xz
+ATKORIG:=atk1.0_$(shell echo $(atk_VERSION) | cut -d- -f1).orig.tar.xz
 CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
 CURLUP:=curl-$(shell echo $(curl_VERSION) | cut -d= -f2- | cut -d- -f1)
