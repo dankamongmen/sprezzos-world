@@ -92,7 +92,7 @@ NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.bz2
 XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
 OPENCVUP:=opencv-$(shell echo $(opencv_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-OPENCVORIG:=opencv_$(shell echo $(opencv_VERSION) | tr : .)
+OPENCVORIG:=opencv_$(shell echo $(opencv_VERSION) | tr : .).orig.tar.bz2
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 PANGOUP:=pango-$(shell echo $(pango_VERSION) | cut -d- -f1)
@@ -634,7 +634,7 @@ $(OPENCVORIG): $(OPENCVUP).tar.bz2
 opencv:$(OPENCV)_$(ARCH).deb
 $(OPENCV): $(SPREZZ)/opencv/debian/changelog $(OPENCVORIG)
 	mkdir -p $@
-	tar xjvf $(OPENCVORIG).tar.bz2 --strip-components=1 -C $@
+	tar xjvf $(OPENCVORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIGHTDMUP).orig.tar.gz
