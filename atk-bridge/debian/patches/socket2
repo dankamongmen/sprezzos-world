@@ -1,0 +1,174 @@
+commit 6fbb1ba2c5281706525ae93bd78ee6cd1f1c9bc8
+Author: Mike Gorse <mgorse@suse.com>
+Date:   Thu Jul 5 19:58:43 2012 -0500
+
+    Only create a directory and a socket when requested
+    
+    Currently, atk-bridge clutters XDG_RUNTIME_DIR with directories for sockets,
+    which is especially annoying since gtk currently does not call
+    atk_bridge_adaptor_cleanup, so the directories never go away. This change does
+    not really solve the problem--it only hides it from users who do not really
+    need AT-SPI--but, nevertheless, there is no reason to create a directory or a
+    socket if nothing has requested it, so doing this lazily makes sense.
+
+diff --git a/atk-adaptor/adaptors/application-adaptor.c b/atk-adaptor/adaptors/application-adaptor.c
+index dc2231d..260a4d7 100644
+--- a/atk-adaptor/adaptors/application-adaptor.c
++++ b/atk-adaptor/adaptors/application-adaptor.c
+@@ -104,6 +104,9 @@ DBusMessage *reply;
+   if (bus == spi_global_app_data->bus)
+     spi_atk_add_client (dbus_message_get_sender (msg));
+ 
++  if (!spi_global_app_data->app_bus_addr)
++    spi_atk_create_socket (spi_global_app_data);
++
+ reply = dbus_message_new_method_return(msg);
+ if (reply)
+     {
+diff --git a/atk-adaptor/bridge.c b/atk-adaptor/bridge.c
+index 9880639..08dfbd4 100644
+--- a/atk-adaptor/bridge.c
++++ b/atk-adaptor/bridge.c
+@@ -297,26 +297,6 @@ register_application (SpiBridge * app)
+   if (message)
+     dbus_message_unref (message);
+ 
+-#ifndef DISABLE_P2P
+-  if (getuid () != 0)
+-  {
+-    app->app_tmp_dir = g_build_filename (g_get_user_runtime_dir (),
+-                                         "at-spi2-XXXXXX", NULL);
+-    if (!g_mkdtemp (app->app_tmp_dir))
+-    {
+-      g_free (app->app_tmp_dir);
+-      app->app_tmp_dir = NULL;
+-      return FALSE;
+-    }
+-  }
+-
+-  if (app->app_tmp_dir)
+-    app->app_bus_addr = g_strdup_printf ("unix:path=%s/socket", app->app_tmp_dir);
+-  else
+-    app->app_bus_addr = g_strdup_printf ("unix:path=%s/at-spi2-socket-%d",
+-                                         g_get_user_runtime_dir (), getpid ());
+-#endif
+-
+   return TRUE;
+ }
+ 
+@@ -539,37 +519,6 @@ new_connection_cb (DBusServer *server, DBusConnection *con, void *data)
+   spi_global_app_data->direct_connections = g_list_append (spi_global_app_data->direct_connections, con);
+ }
+ 
+-static int
+-setup_bus (void)
+-{
+-#ifndef DISABLE_P2P
+-  DBusServer *server;
+-  DBusError err;
+-
+-  if (!spi_global_app_data->app_bus_addr)
+-    return -1;
+-
+-  dbus_error_init(&err);
+-  server = dbus_server_listen(spi_global_app_data->app_bus_addr, &err);
+-  if (server == NULL)
+-  {
+-    g_warning ("atk-bridge: Couldn't listen on dbus server: %s", err.message);
+-    dbus_error_init (&err);
+-    spi_global_app_data->app_bus_addr [0] = '\0';
+-    g_main_context_unref (spi_global_app_data->main_context);
+-    spi_global_app_data->main_context = NULL;
+-    return -1;
+-  }
+-
+-  atspi_dbus_server_setup_with_g_main(server, NULL);
+-  dbus_server_set_new_connection_function(server, new_connection_cb, NULL, NULL);
+-
+-  spi_global_app_data->server = server;
+-#endif
+-
+-  return 0;
+-}
+-
+ 
+ gchar *atspi_dbus_name = NULL;
+ static gboolean atspi_no_register = FALSE;
+@@ -724,6 +673,55 @@ signal_filter (DBusConnection *bus, DBusMessage *message, void *user_data)
+   return result;
+ }
+ 
++int
++spi_atk_create_socket (SpiBridge *app)
++{
++#ifndef DISABLE_P2P
++  DBusServer *server;
++  DBusError err;
++
++  if (getuid () != 0)
++  {
++    app->app_tmp_dir = g_build_filename (g_get_user_runtime_dir (),
++                                         "at-spi2-XXXXXX", NULL);
++    if (!g_mkdtemp (app->app_tmp_dir))
++    {
++      g_free (app->app_tmp_dir);
++      app->app_tmp_dir = NULL;
++      return FALSE;
++    }
++  }
++
++  if (app->app_tmp_dir)
++    app->app_bus_addr = g_strdup_printf ("unix:path=%s/socket", app->app_tmp_dir);
++  else
++    app->app_bus_addr = g_strdup_printf ("unix:path=%s/at-spi2-socket-%d",
++                                         g_get_user_runtime_dir (), getpid ());
++
++  if (!spi_global_app_data->app_bus_addr)
++    return -1;
++
++  dbus_error_init(&err);
++  server = dbus_server_listen(spi_global_app_data->app_bus_addr, &err);
++  if (server == NULL)
++  {
++    g_warning ("atk-bridge: Couldn't listen on dbus server: %s", err.message);
++    dbus_error_init (&err);
++    spi_global_app_data->app_bus_addr [0] = '\0';
++    g_main_context_unref (spi_global_app_data->main_context);
++    spi_global_app_data->main_context = NULL;
++    return -1;
++  }
++
++  atspi_dbus_server_setup_with_g_main(server, NULL);
++  dbus_server_set_new_connection_function(server, new_connection_cb, NULL, NULL);
++
++  spi_global_app_data->server = server;
++#endif
++
++  return 0;
++}
++
+ /*
+  * Checks the status of the environment variables
+  *
+@@ -896,8 +894,6 @@ atk_bridge_adaptor_init (gint * argc, gchar ** argv[])
+   else
+     get_registered_event_listeners (spi_global_app_data);
+ 
+-  setup_bus();
+-
+   return 0;
+ }
+ 
+diff --git a/atk-adaptor/bridge.h b/atk-adaptor/bridge.h
+index 2a79c6d..ddc79f5 100644
+--- a/atk-adaptor/bridge.h
++++ b/atk-adaptor/bridge.h
+@@ -70,6 +70,8 @@ extern SpiBridge *spi_global_app_data;
+ void spi_atk_add_client (const char *bus_name);
+ void spi_atk_remove_client (const char *bus_name);
+ 
++int spi_atk_create_socket (SpiBridge *app);
++
+ G_END_DECLS
+ 
+ #endif /* BRIDGE_H */
