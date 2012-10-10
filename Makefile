@@ -408,7 +408,7 @@ $(GDKPIXBUF): $(SPREZZ)/gdk-pixbuf/debian/changelog $(GDKPIXBUFORIG)
 
 FETCHED:=$(FETCHED) $(GTK3UP).tar.xz
 $(GTK3UP).tar.xz:
-	wget -nc -O$@ http://ftp.acc.umu.se/pub/GNOME/sources/gtk+/3.4/$(GTK3UP).tar.xz
+	wget -nc -O$@ http://ftp.acc.umu.se/pub/GNOME/sources/gtk+/3.6/$(GTK3UP).tar.xz
 
 $(GTK3ORIG): $(GTK3UP).tar.xz
 	ln -s $< $@
