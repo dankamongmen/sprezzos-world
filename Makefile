@@ -56,7 +56,7 @@ GLIBORIG:=glib2.0_$(shell echo $(glib_VERSION) | cut -d- -f1).orig.tar.xz
 GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1)
 GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1).orig.tar.xz
 GNOMEDESKTOPUP:=gnome-desktop-$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1)
-GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1).orig.tar.xz
+GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1).orig.tar.bz2
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1)
 GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1).orig.tar.xz
 GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.bz2
@@ -628,18 +628,18 @@ $(LIBXSLT): $(SPREZZ)/libxslt/debian/changelog $(LIBXSLTORIG)
 	tar xzvf $(LIBXSLTORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(GNOMEDESKTOPUP).tar.xz
-$(GNOMEDESKTOPUP).tar.xz:
+FETCHED:=$(FETCHED) $(GNOMEDESKTOPUP).tar.bz2
+$(GNOMEDESKTOPUP).tar.bz2:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-desktop/3.0/$@
 
-$(GNOMEDESKTOPORIG): $(GNOMEDESKTOPUP).tar.xz
+$(GNOMEDESKTOPORIG): $(GNOMEDESKTOPUP).tar.bz2
 	ln -sf $< $@
 
 .PHONY: gnome-desktop
 gnome-desktop:$(GNOMEDESKTOP)_$(ARCH).deb
 $(GNOMEDESKTOP): $(SPREZZ)/gnome-desktop/debian/changelog $(GNOMEDESKTOPORIG)
 	mkdir -p $@
-	tar xJvf $(GNOMEDESKTOPORIG) --strip-components=1 -C $@
+	tar xjvf $(GNOMEDESKTOPORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GSETSCHEMASUP).tar.xz
