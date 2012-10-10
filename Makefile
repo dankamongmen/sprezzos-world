@@ -95,7 +95,7 @@ NFSUTILSORIG:=nfs-$(shell echo $(NFSUTILSUP) | cut -d- -f2- | tr - _).orig.tar.b
 NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.bz2
 XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
-OPENCVUP:=opencv-$(shell echo $(opencv_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+OPENCVUP:=OpenCV-$(shell echo $(opencv_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 OPENCVORIG:=opencv_$(shell echo $(opencv_VERSION) | tr : .).orig.tar.bz2
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -658,7 +658,7 @@ $(GSETTINGSDESKTOPSCHEMAS): $(SPREZZ)/gsettings-desktop-schemas/debian/changelog
 
 FETCHED:=$(FETCHED) $(OPENCVUP).tar.bz2
 $(OPENCVUP).tar.bz2:
-	wget -nc -O$@ http://sourceforge.net/projects/opencvlibrary/files/$@
+	wget -nc -O$@ http://sourceforge.net/projects/opencvlibrary/files/opencv-unix/2.4.2/$@
 
 $(OPENCVORIG): $(OPENCVUP).tar.bz2
 	ln -sf $< $@
