@@ -20,7 +20,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
-	gnome-control-center nautilus eog atk aptitude atk-bridge
+	gnome-control-center nautilus eog atk aptitude atk-bridge \
+	gnome-settings-daemon
 
 SPREZZ:=packaging
 
@@ -64,6 +65,8 @@ GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1)
 GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1).orig.tar.xz
 GNOMECONTROLCENTERUP:=gnome-control-center-$(shell echo $(gnome-control-center_VERSION) | cut -d: -f2- | cut -d- -f1)
 GNOMECONTROLCENTERORIG:=gnome-control-center_$(shell echo $(gnome-control-center_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+GNOMESETTINGSDAEMONUP:=gnome-settings-daemon-$(shell echo $(gnome-settings-daemon_VERSION) | cut -d: -f2- | cut -d- -f1)
+GNOMESETTINGSDAEMONORIG:=gnome-settings-daemon_$(shell echo $(gnome-settings-daemon_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GNOMEDESKTOPUP:=gnome-desktop-$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1)
 GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1).orig.tar.xz
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1)
@@ -130,7 +133,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
-	$(GNOMECONTROLCENTER) $(NAUTILUS)
+	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -772,6 +775,20 @@ $(GSETTINGSDESKTOPSCHEMAS): $(SPREZZ)/gsettings-desktop-schemas/debian/changelog
 	tar xJvf $(GSETSCHEMASORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(GNOMESETTINGSDAEMONUP).tar.xz
+$(GNOMESETTINGSDAEMONUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-settings-daemon/3.6/$@
+
+$(GNOMESETTINGSDAEMONORIG): $(GNOMESETTINGSDAEMONUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: gnome-settings-daemon
+gnome-settings-daemon:$(GNOMESETTINGSDAEMON)_$(ARCH).deb
+$(GNOMESETTINGSDAEMON): $(SPREZZ)/gnome-settings-daemon/debian/changelog $(GNOMESETTINGSDAEMONORIG)
+	mkdir -p $@
+	tar xJvf $(GNOMESETTINGSDAEMONORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(OPENCVUP).tar.bz2
 $(OPENCVUP).tar.bz2:
 	wget -nc -O$@ http://sourceforge.net/projects/opencvlibrary/files/opencv-unix/2.4.2/$@
@@ -866,7 +883,7 @@ clean:
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK)
-	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS)
+	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
 
 clobber:
 	rm -rf $(FETCHED)
