@@ -19,7 +19,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
-	lightdm opencv gsettings-desktop-schemas gnome-desktop less
+	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs
 
 SPREZZ:=packaging
 
