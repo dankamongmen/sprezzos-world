@@ -59,6 +59,8 @@ GNOMEDESKTOPUP:=gnome-desktop-$(shell echo $(gnome-desktop_VERSION) | cut -d- -f
 GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1).orig.tar.xz
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1)
 GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1).orig.tar.xz
+SPLORIG:=spl_$(shell echo $(spl_VERSION) | cut -d- -f1).orig.tar.xz
+ZFSORIG:=zfs_$(shell echo $(zfs_VERSION) | cut -d- -f1).orig.tar.xz
 GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.bz2
 GRUBUP:=grub-$(shell echo $(grub2_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
@@ -116,11 +118,11 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
-	$(GSETTINGSDESKTOPSCHEMAS) $(LESS)
+	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
-	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS)
+	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -160,6 +162,22 @@ xmlstarlet:$(XMLSTARLET)_$(ARCH).deb
 $(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
 	git clone https://github.com/dankamongmen/xmlstarlet.git $@
 	tar cjf $(XMLSTARLETORIG) $@ --exclude-vcs
+	cp -r $(<D) $@/
+
+.PHONY: spl
+spl: $(SPL)_$(ARCH).deb
+$(SPL): $(SPREZZ)/spl/debian/changelog
+	git clone https://github.com/Sprezzatech/spl.git $@
+	cd $@ && ./autogen.sh
+	tar cJf $(SPLORIG) $@ --exclude-vcs
+	cp -r $(<D) $@/
+
+.PHONY: zfs
+zfs: $(ZFS)_$(ARCH).deb
+$(ZFS): $(SPREZZ)/zfs/debian/changelog
+	git clone https://github.com/Sprezzatech/zfs.git $@
+	cd $@ && ./autogen.sh
+	tar cJf $(ZFSORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: nethorologist
@@ -765,7 +783,7 @@ clean:
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
-	rm -rf $(LESS)
+	rm -rf $(LESS) $(SPL) $(ZFS)
 
 clobber:
 	rm -rf $(FETCHED)
