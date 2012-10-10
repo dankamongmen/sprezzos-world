@@ -19,7 +19,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	netbase base-installer firmware-all gtk3 libdrm mesa pulseaudio socat \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
-	lightdm opencv gsettings-desktop-schemas gnome-desktop
+	lightdm opencv gsettings-desktop-schemas gnome-desktop less
 
 SPREZZ:=packaging
 
@@ -70,6 +70,8 @@ HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_VERSION) | cut -d- -f1).orig.tar.
 HWLOCUP:=hwloc-$(shell echo $(hwloc_VERSION) | cut -d- -f1)
 HWLOCORIG:=hwloc_$(shell echo $(hwloc_VERSION) | cut -d- -f1).orig.tar.bz2
 
+LESSUP:=less-$(shell echo $(less_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LESSORIG:=$(shell echo $(LESSUP) | tr - _).orig.tar.gz
 LIBDRMUP:=libdrm-$(shell echo $(libdrm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBDRMORIG:=$(shell echo $(LIBDRMUP) | tr - _).orig.tar.bz2
 LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -114,7 +116,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
-	$(GSETTINGSDESKTOPSCHEMAS)
+	$(GSETTINGSDESKTOPSCHEMAS) $(LESS)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -436,6 +438,20 @@ $(HWLOC): $(SPREZZ)/hwloc/debian/changelog $(HWLOCORIG)
 	tar xjvf $(HWLOCORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(LESSUP).tar.gz
+$(LESSUP).tar.gz:
+	wget -nc -O$@ http://www.greenwoodsoftware.com/less/$@
+
+$(LESSORIG): $(LESSUP).tar.gz
+	ln -s $< $@
+
+.PHONY: less
+less:$(LESS)_$(ARCH).deb
+$(LESS): $(SPREZZ)/less/debian/changelog $(LESSORIG)
+	mkdir $@
+	tar xzvf $(LESSORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(LIBDRMUP).tar.bz2
 $(LIBDRMUP).tar.bz2:
 	wget -nc -O$@ http://dri.freedesktop.org/libdrm/$(LIBDRMUP).tar.bz2
@@ -749,6 +765,7 @@ clean:
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
+	rm -rf $(LESS)
 
 clobber:
 	rm -rf $(FETCHED)
