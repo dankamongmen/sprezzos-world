@@ -10,7 +10,6 @@
 extern "C" {
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #ifndef __cplusplus
 #include <stdbool.h>

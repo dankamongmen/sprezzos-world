@@ -40,7 +40,6 @@ static char *dirname(const char *path)
 	return NULL;
 }
 
-FILE *depfile; /* = NULL */
 struct srcfile_state *current_srcfile; /* = NULL */
 
 /* Detect infinite include recursion. */
@@ -67,9 +66,6 @@ FILE *srcfile_relative_open(const char *fname, char **fullnamep)
 			die("Couldn't open \"%s\": %s\n", fname,
 			    strerror(errno));
 	}
-
-	if (depfile)
-		fprintf(depfile, " %s", fullname);
 
 	if (fullnamep)
 		*fullnamep = fullname;

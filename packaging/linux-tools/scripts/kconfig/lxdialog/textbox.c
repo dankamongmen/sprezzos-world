@@ -129,7 +129,6 @@ do_resize:
 		case 'e':
 		case 'X':
 		case 'x':
-		case 'q':
 			delwin(box);
 			delwin(dialog);
 			return 0;
@@ -191,7 +190,6 @@ do_resize:
 			break;
 		case 'B':	/* Previous page */
 		case 'b':
-		case 'u':
 		case KEY_PPAGE:
 			if (begin_reached)
 				break;
@@ -216,7 +214,6 @@ do_resize:
 			break;
 		case KEY_NPAGE:	/* Next page */
 		case ' ':
-		case 'd':
 			if (end_reached)
 				break;
 
