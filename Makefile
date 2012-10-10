@@ -20,7 +20,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
-	gnome-control-center eog atk aptitude
+	gnome-control-center eog atk aptitude atk-bridge
 
 SPREZZ:=packaging
 
@@ -35,6 +35,8 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- ) > $@
 
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
+ATSPI2ATKUP:=at-spi2-atk-$(shell echo $(atk-bridge_VERSION) | cut -d- -f1)
+ATSPI2ATKORIG:=at-spi2-atk_$(shell echo $(atk-bridge_VERSION) | cut -d- -f1).orig.tar.xz
 ATKUP:=atk-$(shell echo $(atk_VERSION) | cut -d- -f1)
 ATKORIG:=atk1.0_$(shell echo $(atk_VERSION) | cut -d- -f1).orig.tar.xz
 CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
@@ -538,6 +540,20 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog $(NFSUTILSORIG)
 	tar xjvf $(NFSUTILSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(ATSPI2ATKUP).tar.xz
+$(ATSPI2ATKUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/at-spi2-atk/2.6/$@
+
+$(ATSPI2ATKORIG): $(ATSPI2ATKUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: atk-bridge
+atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
+$(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog $(ATSPI2ATKORIG)
+	mkdir -p $@
+	tar xJvf $(ATSPI2ATKORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(ATKUP).tar.xz
 $(ATKUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/atk/2.6/$@
@@ -834,7 +850,7 @@ clean:
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK)
-	rm -rf $(APTITUDE)
+	rm -rf $(APTITUDE) $(ATSPI2ATK)
 
 clobber:
 	rm -rf $(FETCHED)
