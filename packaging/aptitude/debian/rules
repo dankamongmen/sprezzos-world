@@ -1,0 +1,74 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# Temporary hack to ensure that aptitude builds on s390 and sh4. As of this
+# writing, g++ on s390 miscompiles some of the parsing code unless
+# -fno-gcse is enabled.  See Debian bug #580085.
+DEB_BUILD_ARCH_CPU ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH_CPU)
+ifneq (,$(findstring $(DEB_BUILD_ARCH_CPU), s390 sh4))
+  DEB_CXXFLAGS_MAINT_APPEND += -fno-gcse
+endif
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  DEB_CXXFLAGS_MAINT_APPEND += -fno-inline
+endif
+
+export DEB_CXXFLAGS_MAINT_APPEND
+
+BUILDDIR=build-arch
+
+%:
+	dh $@ --parallel --builddirectory=$(BUILDDIR) --dbg-package=aptitude-dbg
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+	    --htmldir='$${docdir}/html' \
+	    --program-transform='s&aptitude$$&aptitude-curses&' \
+	    $(if $(filter nocheck,$(DEB_BUILD_OPTIONS)),--disable-tests)
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	# Run the unit tests, but protect against Boost.Test's flakiness.
+	(cd $(BUILDDIR) && $(MAKE) -C tests check || (cd tests && ./cppunit_test))
+endif
+
+override_dh_installdocs:
+	dh_installdocs -paptitude -XREADME.Debian
+	dh_installdocs --remaining-packages
+
+	@pkgs=`dh_listpackages | grep ^aptitude-doc`; \
+	for pkg in $$pkgs; do \
+	  echo "  installing html for $$pkg"; \
+	  ll=`echo $$pkg | sed -e 's/^aptitude-doc-//'`; \
+	  mkdir -p "debian/$$pkg/usr/share/doc/aptitude/html"; \
+	  cp -Rf "debian/tmp/usr/share/doc/aptitude/html/$$ll" \
+	      "debian/$$pkg/usr/share/doc/aptitude/html/$$ll"; \
+	done
+
+override_dh_installman:
+	dh_installman -paptitude debian/tmp/usr/share/man/man8/aptitude-curses.8
+	dh_installman -paptitude-common debian/tmp/usr/share/man/man1/aptitude-*-state-bundle.1
+	ln -f debian/tmp/usr/share/man/gl/man8/aptitude.8 \
+	    debian/tmp/usr/share/man/gl/man8/aptitude-curses.8
+	@for ll in $(notdir $(wildcard debian/tmp/usr/share/man/??)); do \
+	  mans=`find debian/tmp/usr/share/man/$$ll -name aptitude-curses.8`; \
+	  if [ "x$$mans" != "x" ]; then \
+	    echo "dh_installman -paptitude --language=$$ll $$mans"; \
+	    dh_installman -paptitude --language=$$ll $$mans; \
+	  fi; \
+	  mans=`find debian/tmp/usr/share/man/$$ll -name aptitude-*-state-bundle.1`; \
+	  if [ "x$$mans" != "x" ]; then \
+	    echo "dh_installman -paptitude-common --language=$$ll $$mans"; \
+	    dh_installman -paptitude-common --language=$$ll $$mans; \
+	  fi; \
+	done
+	dh_installman --remaining-packages
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
