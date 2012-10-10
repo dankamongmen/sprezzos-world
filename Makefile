@@ -20,7 +20,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
-	gnome-control-center
+	gnome-control-center eog
 
 SPREZZ:=packaging
 
@@ -41,6 +41,8 @@ CURLUP:=curl-$(shell echo $(curl_VERSION) | cut -d= -f2- | cut -d- -f1)
 CURLORIG:=curl_$(shell echo $(curl_VERSION) | cut -d- -f1).orig.tar.bz2
 EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
 EGLIBCORIG:=eglibc_$(shell echo $(eglibc_VERSION) | cut -d- -f1).orig.tar.gz
+EOGUP:=eog-$(shell echo $(eog_VERSION) | cut -d: -f2- | cut -d- -f1)
+EOGORIG:=eog_$(shell echo $(eog_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 F2FSUP:=f2fs-tools-$(shell echo $(f2fs-tools_VERSION) | cut -d- -f1)
 F2FSORIG:=f2fs-tools_$(shell echo $(f2fs-tools_VERSION) | cut -d- -f1).orig.tar.gz
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
@@ -121,7 +123,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
-	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(GNOMECONTROLCENTER)
+	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) \
+	$(GNOMECONTROLCENTER)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -533,6 +536,20 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog $(NFSUTILSORIG)
 	tar xjvf $(NFSUTILSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(EOGUP).tar.xz
+$(EOGUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/eog/3.6/$@
+
+$(EOGORIG): $(EOGUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: eog
+eog:$(EOG)_$(ARCH).deb
+$(EOG): $(SPREZZ)/eog/debian/changelog $(EOGORIG)
+	mkdir -p $@
+	tar xJvf $(EOGORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(PANGOUP).tar.xz
 $(PANGOUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/pango/1.32/$@
@@ -800,7 +817,7 @@ clean:
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
-	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER)
+	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG)
 
 clobber:
 	rm -rf $(FETCHED)
