@@ -21,7 +21,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese \
-	gnome-settings-daemon
+	gnome-settings-daemon clutter-gtk clutter-gst
 
 SPREZZ:=packaging
 
@@ -44,6 +44,10 @@ CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
 CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
 CHEESEUP:=cheese-$(shell echo $(cheese_VERSION) | cut -d: -f2- | cut -d- -f1)
 CHEESEORIG:=cheese_$(shell echo $(cheese_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+CLUTTERGSTUP:=clutter-gst-$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | cut -d- -f1)
+CLUTTERGSTORIG:=clutter-gst_$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+CLUTTERGTKUP:=clutter-gtk-$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1)
+CLUTTERGTKORIG:=clutter-gtk_$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CURLUP:=curl-$(shell echo $(curl_VERSION) | cut -d= -f2- | cut -d- -f1)
 CURLORIG:=curl_$(shell echo $(curl_VERSION) | cut -d- -f1).orig.tar.bz2
 EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
@@ -136,7 +140,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) $(IBUS) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
-	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE)
+	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
+	$(CLUTTERGST) $(CLUTTERGTK)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -764,6 +769,34 @@ $(CHEESE): $(SPREZZ)/cheese/debian/changelog $(CHEESEORIG)
 	tar xJvf $(CHEESEORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(CLUTTERGSTUP).tar.xz
+$(CLUTTERGSTUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter-gst/1.9/$@
+
+$(CLUTTERGSTORIG): $(CLUTTERGSTUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: clutter-gst
+clutter-gst:$(CLUTTERGST)_$(ARCH).deb
+$(CLUTTERGST): $(SPREZZ)/clutter-gst/debian/changelog $(CLUTTERGSTORIG)
+	mkdir -p $@
+	tar xJvf $(CLUTTERGSTORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(CLUTTERGTKUP).tar.xz
+$(CLUTTERGTKUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter-gtk/1.3/$@
+
+$(CLUTTERGTKORIG): $(CLUTTERGTKUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: clutter-gtk
+clutter-gtk:$(CLUTTERGTK)_$(ARCH).deb
+$(CLUTTERGTK): $(SPREZZ)/clutter-gtk/debian/changelog $(CLUTTERGTKORIG)
+	mkdir -p $@
+	tar xJvf $(CLUTTERGTKORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(GNOMECONTROLCENTERUP).tar.xz
 $(GNOMECONTROLCENTERUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-control-center/3.6/$@
@@ -915,7 +948,7 @@ clean:
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK)
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
-	rm -rf $(CHEESE)
+	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK)
 
 clobber:
 	rm -rf $(FETCHED)
