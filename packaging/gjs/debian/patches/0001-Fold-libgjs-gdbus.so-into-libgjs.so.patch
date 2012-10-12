@@ -1,0 +1,124 @@
+From d9bf2a4a65bafabacc04808e77dd57fc5cd10771 Mon Sep 17 00:00:00 2001
+From: Colin Walters <walters@verbum.org>
+Date: Wed, 25 Apr 2012 15:30:25 -0400
+Subject: [PATCH] Fold libgjs-gdbus.so into libgjs.so
+
+There's no strong reason to have it be a separate shared library,
+and having private shared libraries in the main $(libdir) is
+frowned upon.
+
+We should also install Gjs-DBus.typelib into a package-private
+typelib directory.  Fortunately, gjs_context_constructor() already
+had the code to push PKGLIBDIR into the girepository search path.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=674756
+---
+ Makefile-gjs-dbus.am |   22 +---------------------
+ Makefile.am          |   22 +++++++++++++++++-----
+ gjs/context.c        |    6 +++++-
+ 3 files changed, 23 insertions(+), 27 deletions(-)
+
+diff --git a/Makefile-gjs-dbus.am b/Makefile-gjs-dbus.am
+index e4e8da2..88dabf0 100644
+--- a/Makefile-gjs-dbus.am
++++ b/Makefile-gjs-dbus.am
+@@ -1,5 +1,5 @@
+ 
+-lib_LTLIBRARIES += libgjs-dbus.la libgjs-gdbus.la
++lib_LTLIBRARIES += libgjs-dbus.la
+ 
+ gjs_dbusheaderdir=$(gjs_module_includedir)/gjs-dbus
+ gjs_dbusheader_HEADERS =	\
+@@ -28,23 +28,3 @@ pkgconfig_DATA += gjs-dbus-1.0.pc
+ 
+ EXTRA_DIST += 			\
+ 	gjs-dbus-1.0.pc.in
+-
+-######################################################################
+-
+-libgjs_gdbus_la_SOURCES = 	\
+-	gjs-dbus/gjs-gdbus-wrapper.c	\
+-	gjs-dbus/gjs-gdbus-wrapper.h
+-
+-libgjs_gdbus_la_CPPFLAGS = $(AM_CPPFLAGS) -DG_LOG_DOMAIN=\"GjsGDBus\"
+-libgjs_gdbus_la_CFLAGS = $(AM_CFLAGS) $(GJS_GDBUS_CFLAGS)
+-libgjs_gdbus_la_LIBADD = $(GJS_GDBUS_LIBS)
+-
+--include $(INTROSPECTION_MAKEFILE)
+-
+-GjsDBus-1.0.gir: libgjs-gdbus.la
+-GjsDBus_1_0_gir_LIBS = libgjs-gdbus.la
+-GjsDBus_1_0_gir_INCLUDES = GObject-2.0 Gio-2.0
+-GjsDBus_1_0_gir_FILES = $(libgjs_gdbus_la_SOURCES)
+-GjsDBus_1_0_gir_SCANNERFLAGS = --identifier-prefix=GjsDBus --symbol-prefix=gjs_dbus --warn-all
+-
+-INTROSPECTION_GIRS += GjsDBus-1.0.gir
+diff --git a/Makefile.am b/Makefile.am
+index 83c6ebb..7b42756 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -1,6 +1,8 @@
+ # http://people.gnome.org/~walters/docs/build-api.txt
+ .buildapi-allow-builddir:
+ 
++-include $(INTROSPECTION_MAKEFILE)
++
+ bin_PROGRAMS =
+ lib_LTLIBRARIES =
+ noinst_HEADERS =
+@@ -137,6 +139,20 @@ libgjs_la_SOURCES += \
+ 	gi/interface.c	\
+ 	gi/gtype.c
+ 
++# Also, these files used to be a separate library
++gdbus_wrapper_source_files = \
++	gjs-dbus/gjs-gdbus-wrapper.c	\
++	gjs-dbus/gjs-gdbus-wrapper.h
++libgjs_la_SOURCES += $(gdbus_wrapper_source_files)
++
++GjsDBus-1.0.gir: libgjs.la
++GjsDBus_1_0_gir_LIBS = libgjs.la
++GjsDBus_1_0_gir_INCLUDES = GObject-2.0 Gio-2.0
++GjsDBus_1_0_gir_FILES = $(gdbus_wrapper_source_files)
++GjsDBus_1_0_gir_SCANNERFLAGS = --identifier-prefix=GjsDBus --symbol-prefix=gjs_dbus --warn-all
++
++INTROSPECTION_GIRS += GjsDBus-1.0.gir
++
+ if ENABLE_DTRACE
+ gjs_gi_probes.h: gi/gjs_gi_probes.d
+ 	$(DTRACE) -C -h -s $< -o $@
+@@ -168,13 +184,9 @@ include Makefile-gjs-dbus.am
+ include Makefile-modules.am
+ include Makefile-examples.am
+ 
+-girdir = $(datadir)/gir-1.0
+-gir_DATA = $(INTROSPECTION_GIRS)
+-
+-typelibdir = $(libdir)/girepository-1.0
++typelibdir = $(pkglibdir)/girepository-1.0
+ typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
+ 
+-
+ ########################################################################
+ bin_PROGRAMS += gjs-console
+ 
+diff --git a/gjs/context.c b/gjs/context.c
+index c8039d2..f833856 100644
+--- a/gjs/context.c
++++ b/gjs/context.c
+@@ -692,7 +692,11 @@ gjs_context_constructor (GType                  type,
+         gjs_register_native_module("gi", gjs_define_gi_stuff, GJS_NATIVE_SUPPLIES_MODULE_OBJ);
+ 
+     /* For GjsDBus */
+-    g_irepository_prepend_search_path(PKGLIBDIR);
++    {
++        char *priv_typelib_dir = g_build_filename (PKGLIBDIR, "girepository-1.0", NULL);
++        g_irepository_prepend_search_path(priv_typelib_dir);
++        g_free (priv_typelib_dir);
++    }
+ 
+     if (js_context->gc_notifications_enabled)
+         JS_SetGCCallback(js_context->context, gjs_on_context_gc);
+-- 
+1.7.10
+
