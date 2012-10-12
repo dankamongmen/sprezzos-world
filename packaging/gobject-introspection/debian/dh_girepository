@@ -1,0 +1,354 @@
+#! /usr/bin/perl -w
+
+=head1 NAME
+
+dh_girepository - compute dependencies for GObject introspection packages
+
+=cut
+
+use strict;
+use File::Find;
+use Debian::Debhelper::Dh_Lib;
+
+=head1 SYNOPSIS
+
+B<dh_girepository> [I<debhelper options>] [-lI<directory>] [-pI<directory>] [-XI<item>] [I<private [...]>]
+
+=head1 DESCRIPTION
+
+dh_girepository is a debhelper program to compute dependencies for packages
+shipping GObject introspection data.
+
+The dependencies are generated in the ${gir:Depends} substitution variable.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-l>I<directory>
+
+Specify a directory (or a colon-separated list of directories) where to look
+for the .gir XML files that were used to generate the .typelib files that
+are scanned. This option is only necessary if those files are not shipped in
+another, architecture-dependent package.
+
+=item B<-p>I<directory>
+
+Specify a directory (or a colon-separated list of directories) where to look
+for the dependencies. This is useful when a dependency ships the .typelib
+in a private directory.
+
+=item B<-X>I<item>
+
+Exclude files that contain I<item> anywhere in their filename from being
+analyzed.
+
+=item I<private [...]>
+List of directories where to look for typelibs and the corresponding .gir
+files. Useful when the package installs its typelibs in a private
+directory, such as /usr/lib/<package>. Library dependencies are also looked
+there, in case your typelib depends on a library that you ship on a private
+directory.
+
+=back
+
+=head1 CONFORMS TO
+
+GObject introspection mini policy as of 2010-12-07.
+
+=cut
+
+# Initialisation code
+init(options => {
+    "l=s", => \$dh{L_PARAMS},
+    "p=s", => \$dh{P_PARAMS},
+});
+my @paths_first = ();
+my @privdirs = ();
+if ($dh{L_PARAMS}) {
+    push @paths_first, split /:/, $dh{L_PARAMS};
+}
+if ($dh{P_PARAMS}) {
+    push @privdirs, split /:/, $dh{P_PARAMS};
+}
+isnative($dh{MAINPACKAGE}); # Necessary to have $dh{VERSION}
+my $bin_version = $dh{VERSION};
+my @archpackages = getpackages("arch");
+
+my $typelib_path = "/usr/lib/girepository-1.0";
+my @typelibdirs = (@ARGV, $typelib_path);
+my $gir_path = "/usr/share/gir-1.0";
+my @girdirs = (@ARGV, $gir_path);
+my $arch_triplet = `dpkg-architecture -qDEB_HOST_MULTIARCH`;
+chomp $arch_triplet;
+my @privlibdirs = (@ARGV);
+my @libdirs = ("/lib/$arch_triplet", "/lib", "/usr/lib/$arch_triplet", "/usr/lib", @privlibdirs);
+my $format;
+
+# Get Build-Depends in an array
+my @bdeps;
+my $cur = 0;
+open (my $control, "<", "debian/control") or error ("Cannot open debian/control");
+while (<$control>) {
+    chomp;
+    s/\s+$//;
+    if ($cur) {
+        if (/^\s+(.*)$/) {
+            push @bdeps, split ",",$1;
+            if ($1 !~ /,$/) {
+                $cur = 0;
+            }
+        } else {
+            $cur = 0;
+        }
+    }
+    if (/^Build-Depends:\s*(.*)$/) {
+        push @bdeps, split ",",$1;
+        if ($1 =~ /,$/) {
+            $cur = 1;
+        } else {
+            $cur = 0;
+        }
+    }
+}
+close $control;
+
+
+# We can’t parse .typelib files, so we need the corresponding .gir
+# somewhere in the same source package (or with -l).
+
+sub find_gir {
+    my $req = shift;
+    $req =~ s/\.typelib$//;
+    my $f;
+    foreach my $path (@paths_first) {
+        $f = "$path/$req.gir";
+        if (-f $f) {
+            verbose_print ("Found $req.gir in $path");
+            return $f;
+        }
+    }
+    foreach my $otherpkg (@archpackages) {
+        foreach my $girdir (@girdirs) {
+            $f = tmpdir($otherpkg)."$girdir/$req.gir";
+            if (-f $f) {
+                verbose_print ("Found $req.gir in $otherpkg package");
+                return $f;
+            }
+        }
+    }
+    error("Could not find gir file for $req.typelib");
+}
+
+
+# Function used for dependencies on other .typelib files
+
+sub require_typelib {
+    my $req = shift;
+    my $package = shift;
+    my $fullpath = "$typelib_path/$req";
+
+    verbose_print ("Dependency: $req");
+    foreach my $girdir (@girdirs) {
+        if (-f tmpdir($package)."$girdir/$req") {
+            verbose_print("  found in the same package");
+            return;
+        }
+    }
+    foreach my $otherpkg (@archpackages) {
+        if (-f tmpdir($otherpkg)."$fullpath") {
+            verbose_print ("  found in $otherpkg");
+            error("Dependency on $otherpkg with a different format than $format") unless $otherpkg =~ /^gir$format/;
+            addsubstvar ($package, "gir:Depends", $otherpkg, "= $bin_version");
+            return;
+        }
+    }
+    foreach my $privpath (@privdirs) {
+        if (-f "$privpath/$req") {
+            verbose_print ("  found in $privpath");
+            $fullpath = "$privpath/$req";
+            last;
+        }
+    }
+    error("Could not find $req dependency") unless -f "$fullpath";
+    my @output = (split ':', `dpkg -S $fullpath 2>/dev/null`);
+    error("$fullpath does not belong to any package") unless @output;
+    my $deppkg = $output[0];
+    error("Dependency on $deppkg with a different format than $format") unless $deppkg =~ /^gir$format/;
+    # Look for version information in build-dependencies
+    my $found = 0;
+    foreach my $bdep (@bdeps) {
+        if ($bdep =~ /^\s*([a-z0-9\._\-\+]+)\s*\((.*)\)/) {
+            if ($1 eq $deppkg) {
+                addsubstvar ($package, "gir:Depends", $1, $2);
+                $found = 1;
+            }
+        }
+    }
+    if (! $found) {
+        addsubstvar ($package, "gir:Depends", $deppkg);
+    }
+}
+
+
+sub find_library_in_package {
+    my $req = shift;
+    my $package = shift;
+    my $tmp = "";
+    if ($package) {
+        $tmp = tmpdir ($package);
+    }
+    my @loclibdirs = grep -d, map "$tmp$_", @libdirs;
+    foreach my $libdir (@loclibdirs) {
+        if (-f "$libdir/$req" or -l "$libdir/$req") {
+            return "$libdir/$req";
+        }
+    }
+}
+
+sub find_library {
+    my $req = shift;
+    my $package = shift;
+
+    my $file = find_library_in_package ($req, $package);
+    if ($file) {
+        verbose_print ("    found in the same package");
+    } else {
+        foreach my $otherpkg (@archpackages) {
+            $file = find_library_in_package ($req, $otherpkg);
+            if ($file) {
+                verbose_print ("    found in $otherpkg");
+                last;
+            }
+        }
+    }
+    if (!$file) {
+        $file = find_library_in_package ($req);
+        if ($file) {
+            verbose_print ("    found on filesystem");
+        } else {
+            error ("Could not find library $req");
+        }
+    }
+
+    if (-l $file and not -f $file) {
+        # We have a symbolic link that points to another package
+        verbose_print ("    ... it's a symlink ...");
+        return find_library (readlink ($file), $package);
+    }
+    return $file;
+}
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+    my $tmp = tmpdir($package);
+    my $ext = pkgext($package);
+    my @bin_files = ();
+    my @c_files = ();
+    my @typelib_deps = ();
+    foreach my $dir (@typelibdirs) {
+        my $typelibdir = "$tmp$dir";
+        next unless -d $typelibdir;
+        opendir(DIRHANDLE, $typelibdir);
+        while (my $typelib = readdir(DIRHANDLE)) {
+            next unless $typelib =~ /\.typelib$/;
+            next if excludefile ($typelib);
+            my $girfile = find_gir ($typelib);
+            error("Unable to open $girfile") unless open (my $f, "<", $girfile);
+            verbose_print ("$girfile...");
+            my @libraries = ();
+            my @symbols = ();
+            my $infunction = 0;
+            while (<$f>) {
+                # "Parse" the XML file
+                chomp;
+                if (/<repository.+version="(.*?)"/) {
+                    # gir format version
+                    $format="$1";
+                } elsif (/<include\s+name="(.*?)"\s+version="(.*?)"\/>/) {
+                    # Dependency on another typelib file
+                    my $deptypelib="$1-$2.typelib";
+                    verbose_print ("  Dependency: $deptypelib");
+                    if (! grep { $_ eq $deptypelib } @typelib_deps) {
+                        push @typelib_deps, $deptypelib;
+                    }
+                } elsif (/shared-library="(.*?)"/) {
+                    # Dependency on a shared library
+                    foreach my $shlibname (split ",", $1) {
+                        if ($shlibname !~ /\.so/) {
+                            $shlibname = "lib$shlibname.so"
+                        }
+                        verbose_print ("  Library: $shlibname");
+                        push @libraries, find_library ($shlibname, $package);
+                    }
+                } elsif (/<(method|constructor|function)\s.*c:identifier="(.*?)"/) {
+                    push @symbols, $2;
+                } elsif (/<(method|constructor|function)/) {
+                    $infunction = 1;
+                } elsif ($infunction and /c:identifier="(.*?)"/) {
+                    push @symbols, $1;
+                }
+                if (/>$/) {
+                    $infunction = 0;
+                }
+            }
+            close $f;
+            error("Unable to determine gir format") unless $format;
+            error("Package name $package doesn't match gir format $format")
+                unless $package =~ /^gir$format/
+                or not $typelibdir =~ /usr\/lib\/girepository/;
+            verbose_print(sprintf("  %d symbols found", $#symbols+1));
+            if (@libraries or @symbols) {
+                my $c_file = "$typelibdir/$typelib.c";
+                my $bin_file = "$typelibdir/$typelib.so";
+                verbose_print ("  writing $c_file");
+                if (!$dh{NO_ACT}){
+                    error("Unable to open $girfile") unless open (F, ">", $c_file);
+                    print F "void gir_dummy_function () {\n";
+                    foreach my $symbol (@symbols) {
+                        print F "$symbol ();\n";
+                    }
+                    print F "}";
+                    close F;
+                }
+                push @c_files, $c_file;
+
+                # Build a dummy binary using all referenced symbols and libraries
+                # We use -shared so that gcc doesn’t try to resolve references
+                verbose_print ("  building $bin_file");
+                doit (("gcc", "-shared", "-fPIC", "-o", $bin_file, $c_file, @libraries));
+                push @bin_files, $bin_file;
+            }
+        }
+    }
+    if (@bin_files) {
+        # dpkg-shlibdeps expects this directory to exist
+        if (! -d "$tmp/DEBIAN") {
+            doit("install","-o",0,"-g",0,"-d","$tmp/DEBIAN");
+        }
+
+        # Let dpkg-shlibdeps generate the corresponding dependencies
+        # It must run first since otherwise it overwrites the variable
+        push @privlibdirs, $ENV{"LD_LIBRARY_PATH"} if $ENV{"LD_LIBRARY_PATH"};
+        my $llp = join (":", @privlibdirs);
+        complex_doit ("LD_LIBRARY_PATH=$llp dpkg-shlibdeps -pgir -Tdebian/${ext}substvars -xlibc6 -xlibc0 @bin_files");
+    }
+    doit (("rm", "-f", @c_files, @bin_files));
+
+    # Generate dependencies on other .typelib files
+    foreach my $dep (@typelib_deps) {
+        require_typelib ($dep, $package);
+    }
+}
+
+=head1 SEE ALSO
+
+L<debhelper(7)>
+
+This program is a part of gobject-introspection but is made to work with 
+debhelper.
+
+=head1 AUTHOR
+
+Josselin Mouette <joss@debian.org>
+
+=cut
