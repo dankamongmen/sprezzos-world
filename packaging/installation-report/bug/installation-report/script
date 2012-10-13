@@ -1,0 +1,130 @@
+#!/bin/sh
+
+logsavedir=/var/log/installer
+
+header () {
+	echo
+	echo "=============================================="
+	echo "$@"
+	echo "=============================================="
+}
+
+gettext=$(which gettext 2>/dev/null) || true
+_ () {
+	if [ -n "$gettext" ]; then
+		gettext "$@"
+	else
+		printf "$@"
+	fi
+}
+
+echo
+echo "$(_ "Now some questions about your install ...")"
+
+_ "How did you boot the installer (CD/floppy/network/..)?"
+printf " "
+read bootmethod
+
+_ "What image did you use to install? (If you can, give its URL and build date)"
+echo
+printf "> "
+read image
+
+_ "Describe your machine (eg, IBM Thinkpad R32):"
+printf " "
+read machine
+
+perl -e '
+	$tpl=shift;
+	$bootmethod=shift;
+	$image=shift;
+	$machine=shift;
+
+	$|=1;
+	open (IN, "$tpl") || die "$tpl: $!";
+	while (<IN>) {
+		if (/^Boot method: <.*>/i) {
+			s/<.*>/$bootmethod/;
+			print;
+		}
+		elsif (/^Image version: <.*>/i) {
+			s/<.*>/$image/;
+			print;
+		}
+		elsif (/^Machine: <.*>/i) {
+			s/<.*>/$machine/;
+			print;
+		}
+		else {
+			print;
+		}
+	}
+' /usr/share/installation-report/install-report.template "$bootmethod" "$image" "$machine" | tail -n +2 >&3
+
+if [ ! -e "$logsavedir/hardware-summary" ]; then
+	_ "Cannot find installation logs in $logsavedir"
+	echo
+	while [ ! -e "$logsavedir/hardware-summary" ]; do
+		yesno "$(_ "Use installation logs from another location? [Y/n] ") " yep
+		if [ "$REPLY" = yep ]; then
+			_ "Enter location of installation logs:"
+			printf " "
+			read logsavedir
+			if [ ! -e "$logsavedir/hardware-summary" ]; then
+				_ "$logsavedir/hardware-summary does not exist"
+				echo
+			fi
+		else
+			exit 0
+		fi
+	done
+fi
+
+getlog () {
+	log="$1"
+
+	if [ -e "$logsavedir/$log" ]; then
+		_ "Including installer $log in report.."
+		echo
+		header "Installer $log:" >&3
+		if [ -r "$logsavedir/$log" ]; then
+			cat "$logsavedir/$log" 2>&1 >&3
+		else
+			_ "Only root can read $logsavedir/$log .."
+			echo
+			su root -c "cat $logsavedir/$log" >&3
+		fi
+	fi
+}
+
+getlog lsb-release
+if [ -e "$logsavedir/hardware-summary" ]; then
+	getlog hardware-summary
+else
+	_ "Running report-hw to summarise hardware for report."
+	echo
+	header "Hardware information for running system:" >&3
+	report-hw 2>&1 >&3
+fi
+
+# Commented out as this takes up relatively much space and is used
+# only rarely. Also, the syslog now lists which udebs are actually
+# installed by anna, including versions.
+#getlog status
+
+# Commented out as inclusion of these files causes installation reports to
+# not reach the debian-boot list (#403346)
+#if [ -e "$logsavedir/messages" ] || [ -e "$logsavedir/syslog" ] || \
+#   [ -e "$logsavedir/partman" ]; then
+#	_ "
+#Additional installer log files can be included in the report.
+#This is generally only necessary for debugging if there was a problem with
+#the install."
+#	echo
+#	yesno "$(_ "Include additional log files in report? [y/N] ") " nop
+#	if [ "$REPLY" = yep ]; then
+#		getlog syslog
+#		getlog messages
+#		getlog partman
+#	fi
+#fi
