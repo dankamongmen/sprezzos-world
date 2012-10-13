@@ -21,7 +21,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese \
-	gnome-settings-daemon clutter-gtk clutter-gst brasero
+	gnome-settings-daemon clutter-gtk clutter-gst brasero \
+	installation-report
 
 SPREZZ:=packaging
 
@@ -143,7 +144,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
-	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO)
+	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -258,6 +259,12 @@ $(FWTS): $(SPREZZ)/fwts/debian/changelog
 	rm -rf $@/debian
 	cd $@ && autoreconf -sif
 	tar cjf $(shell echo $< | sed -e 's/\(.*\)-.*/\1/' | sed -e 's/\(.*\)-/\1_/').orig.tar.bz2 $< --exclude-vcs
+	cp -r $(<D) $@/
+
+.PHONY: installation-report
+installation-report:$(INSTALLATIONREPORT)_$(ARCH).deb
+$(INSTALLATIONREPORT): $(SPREZZ)/installation-report/debian/changelog
+	mkdir $@
 	cp -r $(<D) $@/
 
 .PHONY: linux-latest
@@ -965,6 +972,7 @@ clean:
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK)
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO)
+	rm -rf $(INSTALLATIONREPORT)
 
 clobber:
 	rm -rf $(FETCHED)
