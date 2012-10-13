@@ -3,6 +3,10 @@ FIRMWAREDIR = /lib/firmware
 all:
 
 install:
-	install -d $(DESTDIR)/$(FIRMWARE)/usr
-	cp -rv etc lib $(DESTDIR)/$(FIRMWARE)
-	cp -rv usr/lib $(DESTDIR)/$(FIRMWARE)/usr
+	install -d $(DESTDIR)/$(FIRMWARE) $(DESTDIR)/usr/share $(DESTDIR)/bin
+	install -d $(DESTDIR)/sbin
+	cp -rv etc/* $(DESTDIR)/etc
+	cp -rv lib/firmware/* $(DESTDIR)/$(FIRMWARE)
+	cp -rv usr/bin/* $(DESTDIR)/bin
+	cp -rv usr/sbin/* $(DESTDIR)/sbin
+	cp -rv usr/share/* $(DESTDIR)/usr/share
