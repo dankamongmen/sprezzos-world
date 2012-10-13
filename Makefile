@@ -172,7 +172,7 @@ world: $(DEBS) $(UDEBS)
 .PHONY: growlight
 growlight: $(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
-	git clone https://github.com/dankamongmen/growlight.git $@
+	git clone git://github.com/dankamongmen/growlight.git $@
 	cd $@ && autoreconf -sif
 	tar cjf $(GROWLIGHTORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
@@ -180,7 +180,7 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 .PHONY: omphalos
 omphalos:$(OMPHALOS)_$(ARCH).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
-	git clone https://github.com/dankamongmen/omphalos.git $@
+	git clone git://github.com/dankamongmen/omphalos.git $@
 	cd $@ && autoreconf -sif
 	tar cjf $(OMPHALOSORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
@@ -196,14 +196,14 @@ $(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
 .PHONY: xmlstarlet
 xmlstarlet:$(XMLSTARLET)_$(ARCH).deb
 $(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
-	git clone https://github.com/dankamongmen/xmlstarlet.git $@
+	git clone git://github.com/dankamongmen/xmlstarlet.git $@
 	tar cjf $(XMLSTARLETORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
 .PHONY: spl
 spl: $(SPL)_$(ARCH).deb
 $(SPL): $(SPREZZ)/spl/debian/changelog
-	git clone https://github.com/Sprezzatech/spl.git $@
+	git clone git://github.com/zfsonlinux/spl.git $@
 	cd $@ && ./autogen.sh
 	tar cJf $(SPLORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
@@ -211,7 +211,7 @@ $(SPL): $(SPREZZ)/spl/debian/changelog
 .PHONY: zfs
 zfs: $(ZFS)_$(ARCH).deb
 $(ZFS): $(SPREZZ)/zfs/debian/changelog
-	git clone https://github.com/Sprezzatech/zfs.git $@
+	git clone git://github.com/zfsonlinux/zfs.git $@
 	cd $@ && ./autogen.sh
 	tar cJf $(ZFSORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
@@ -219,7 +219,7 @@ $(ZFS): $(SPREZZ)/zfs/debian/changelog
 .PHONY: nethorologist
 nethorologist: $(NETHOROLOGIST)_$(ARCH).deb
 $(NETHOROLOGIST): $(SPREZZ)/nethorologist/debian/changelog
-	git clone https://github.com/Sprezzatech/nethorologist.git $@
+	git clone git://github.com/Sprezzatech/nethorologist.git $@
 	tar cJf $(NETHOROLOGISTORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
@@ -245,7 +245,7 @@ $(FBV): $(SPREZZ)/fbv/debian/changelog
 .PHONY: apitrace
 apitrace:$(APITRACE)_$(ARCH).deb
 $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
-	git clone https://github.com/apitrace/apitrace.git $@
+	git clone git://github.com/apitrace/apitrace.git $@
 	cp -r $(<D) $@/
 
 .PHONY: xbmc
