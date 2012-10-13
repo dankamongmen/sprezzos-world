@@ -21,7 +21,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese \
-	gnome-settings-daemon clutter-gtk clutter-gst brasero \
+	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude \
 	installation-report
 
 SPREZZ:=packaging
@@ -37,6 +37,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- ) > $@
 
 ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
+APTITUDEORIG:=aptitude_$(shell echo $(aptitude_VERSION) | cut -d- -f1).orig.tar.bz2
 ATSPI2ATKUP:=at-spi2-atk-$(shell echo $(atk-bridge_VERSION) | cut -d- -f1)
 ATSPI2ATKORIG:=at-spi2-atk_$(shell echo $(atk-bridge_VERSION) | cut -d- -f1).orig.tar.xz
 ATKUP:=atk-$(shell echo $(atk_VERSION) | cut -d- -f1)
@@ -144,7 +145,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
-	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT)
+	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) \
+	$(APTITUDE)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -172,7 +174,7 @@ growlight: $(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone https://github.com/dankamongmen/growlight.git $@
 	cd $@ && autoreconf -sif
-	tar cjf $(GROWLIGHTORIG) $@ --exclude-vcs
+	tar cjf $(GROWLIGHTORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
 .PHONY: omphalos
@@ -180,14 +182,22 @@ omphalos:$(OMPHALOS)_$(ARCH).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone https://github.com/dankamongmen/omphalos.git $@
 	cd $@ && autoreconf -sif
-	tar cjf $(OMPHALOSORIG) $@ --exclude-vcs
+	tar cjf $(OMPHALOSORIG) $@ --exclude-vcs --exclude=debian
+	cp -r $(<D) $@/
+
+.PHONY: aptitude
+aptitude: $(APTITUDE)_$(ARCH).deb
+$(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
+	git clone git://git.debian.org/git/aptitude/aptitude.git $@
+	cd $@ && autoreconf -sif
+	tar cjf $(APTITUDEORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
 .PHONY: xmlstarlet
 xmlstarlet:$(XMLSTARLET)_$(ARCH).deb
 $(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
 	git clone https://github.com/dankamongmen/xmlstarlet.git $@
-	tar cjf $(XMLSTARLETORIG) $@ --exclude-vcs
+	tar cjf $(XMLSTARLETORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
 .PHONY: spl
@@ -210,7 +220,7 @@ $(ZFS): $(SPREZZ)/zfs/debian/changelog
 nethorologist: $(NETHOROLOGIST)_$(ARCH).deb
 $(NETHOROLOGIST): $(SPREZZ)/nethorologist/debian/changelog
 	git clone https://github.com/Sprezzatech/nethorologist.git $@
-	tar cJf $(NETHOROLOGISTORIG) $@ --exclude-vcs
+	tar cJf $(NETHOROLOGISTORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
 .PHONY: strace
@@ -225,7 +235,7 @@ $(STRACE): $(SPREZZ)/strace/debian/changelog
 linux-tools:$(LINUXTOOLS)_$(ARCH).deb
 $(LINUXTOOLS): $(SPREZZ)/linux-tools/debian/changelog
 	cp -r $(<D)/.. $@
-	tar cjf $(LINUXTOOLSORIG) $@ --exclude-vcs
+	tar cjf $(LINUXTOOLSORIG) $@ --exclude-vcs --exclude=debian
 
 .PHONY: fbv
 fbv:$(FBV).udeb
@@ -264,14 +274,14 @@ $(FWTS): $(SPREZZ)/fwts/debian/changelog
 .PHONY: installation-report
 installation-report:$(INSTALLATIONREPORT)_$(ARCH).deb
 $(INSTALLATIONREPORT): $(SPREZZ)/installation-report/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
+	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
+	cp -r $(<D)/.. $@
 
 .PHONY: linux-latest
 linux-latest:$(LINUXLATEST)_$(ARCH).deb
 $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
+	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
+	cp -r $(<D)/.. $@
 
 FETCHED:=$(FETCHED) $(CAIROUP).tar.xz
 $(CAIROUP).tar.xz:
@@ -971,7 +981,7 @@ clean:
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK)
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
-	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO)
+	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT)
 
 clobber:
