@@ -21,7 +21,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
-	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude \
+	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts
 
 SPREZZ:=packaging
@@ -48,6 +48,8 @@ BRASEROUP:=brasero-$(shell echo $(brasero_VERSION) | cut -d: -f2- | cut -d- -f1)
 BRASEROORIG:=brasero_$(shell echo $(brasero_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CHEESEUP:=cheese-$(shell echo $(cheese_VERSION) | cut -d: -f2- | cut -d- -f1)
 CHEESEORIG:=cheese_$(shell echo $(cheese_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+CLUTTERUP:=clutter-$(shell echo $(clutter_VERSION) | cut -d: -f2- | cut -d- -f1)
+CLUTTERORIG:=clutter-1.0_$(shell echo $(clutter_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CLUTTERGSTUP:=clutter-gst-$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | cut -d- -f1)
 CLUTTERGSTORIG:=clutter-gst_$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CLUTTERGTKUP:=clutter-gtk-$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1)
@@ -153,7 +155,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
-	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) \
+	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
@@ -807,6 +809,20 @@ $(CHEESE): $(SPREZZ)/cheese/debian/changelog $(CHEESEORIG)
 	tar xJvf $(CHEESEORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(CLUTTERUP).tar.xz
+$(CLUTTERUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter/1.12/$@
+
+$(CLUTTERORIG): $(CLUTTERUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: clutter
+clutter:$(CLUTTER)_$(ARCH).deb
+$(CLUTTER): $(SPREZZ)/clutter/debian/changelog $(CLUTTERORIG)
+	mkdir -p $@
+	tar xJvf $(CLUTTERORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(CLUTTERGSTUP).tar.xz
 $(CLUTTERGSTUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter-gst/1.9/$@
@@ -1044,7 +1060,7 @@ clean:
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
-	rm -rf $(GNOMECONTACTS)
+	rm -rf $(GNOMECONTACTS) $(CLUTTER)
 
 clobber:
 	rm -rf $(FETCHED)
