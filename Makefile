@@ -22,7 +22,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude \
-	installation-report
+	installation-report gnome-shell gnome-shell-extensions
 
 SPREZZ:=packaging
 
@@ -77,6 +77,10 @@ GNOMECONTROLCENTERUP:=gnome-control-center-$(shell echo $(gnome-control-center_V
 GNOMECONTROLCENTERORIG:=gnome-control-center_$(shell echo $(gnome-control-center_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GNOMESETTINGSDAEMONUP:=gnome-settings-daemon-$(shell echo $(gnome-settings-daemon_VERSION) | cut -d: -f2- | cut -d- -f1)
 GNOMESETTINGSDAEMONORIG:=gnome-settings-daemon_$(shell echo $(gnome-settings-daemon_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+GNOMESHELLUP:=gnome-shell-$(shell echo $(gnome-shell_VERSION) | cut -d: -f2- | cut -d- -f1)
+GNOMESHELLORIG:=gnome-shell_$(shell echo $(gnome-shell_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+GNOMESHELLEXTENSIONSUP:=gnome-shell-extensions-$(shell echo $(gnome-shell-extensions_VERSION) | cut -d: -f2- | cut -d- -f1)
+GNOMESHELLEXTENSIONSORIG:=gnome-shell-extensions_$(shell echo $(gnome-shell-extensions_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GNOMEDESKTOPUP:=gnome-desktop-$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1)
 GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1).orig.tar.xz
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1)
@@ -146,7 +150,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) \
-	$(APTITUDE)
+	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -886,6 +890,34 @@ $(GNOMESETTINGSDAEMON): $(SPREZZ)/gnome-settings-daemon/debian/changelog $(GNOME
 	tar xJvf $(GNOMESETTINGSDAEMONORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(GNOMESHELLUP).tar.xz
+$(GNOMESHELLUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-shell/3.6/$@
+
+$(GNOMESHELLORIG): $(GNOMESHELLUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: gnome-shell
+gnome-shell:$(GNOMESHELL)_$(ARCH).deb
+$(GNOMESHELL): $(SPREZZ)/gnome-shell/debian/changelog $(GNOMESHELLORIG)
+	mkdir -p $@
+	tar xJvf $(GNOMESHELLORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
+FETCHED:=$(FETCHED) $(GNOMESHELLEXTENSIONSUP).tar.xz
+$(GNOMESHELLEXTENSIONSUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-control-center/3.6/$@
+
+$(GNOMESHELLEXTENSIONSORIG): $(GNOMESHELLEXTENSIONSUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: gnome-shell-extensions
+gnome-shell-extensions:$(GNOMESHELLEXTENSIONS)_$(ARCH).deb
+$(GNOMESHELLEXTENSIONS): $(SPREZZ)/gnome-shell-extensions/debian/changelog $(GNOMESHELLEXTENSIONSORIG)
+	mkdir -p $@
+	tar xJvf $(GNOMESHELLEXTENSIONSORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(OPENCVUP).tar.bz2
 $(OPENCVUP).tar.bz2:
 	wget -nc -O$@ http://sourceforge.net/projects/opencvlibrary/files/opencv-unix/2.4.2/$@
@@ -982,7 +1014,7 @@ clean:
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK)
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
-	rm -rf $(INSTALLATIONREPORT)
+	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
 
 clobber:
 	rm -rf $(FETCHED)
