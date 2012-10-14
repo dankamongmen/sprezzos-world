@@ -906,7 +906,7 @@ $(GNOMESHELL): $(SPREZZ)/gnome-shell/debian/changelog $(GNOMESHELLORIG)
 
 FETCHED:=$(FETCHED) $(GNOMESHELLEXTENSIONSUP).tar.xz
 $(GNOMESHELLEXTENSIONSUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-control-center/3.6/$@
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-shell-extensions/3.2/$@
 
 $(GNOMESHELLEXTENSIONSORIG): $(GNOMESHELLEXTENSIONSUP).tar.xz
 	ln -sf $< $@
