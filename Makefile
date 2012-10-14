@@ -181,7 +181,6 @@ world: $(DEBS) $(UDEBS)
 growlight: $(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone git://github.com/dankamongmen/growlight.git $@
-	cd $@ && autoreconf -sif
 	tar cjf $(GROWLIGHTORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
@@ -189,7 +188,6 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 omphalos:$(OMPHALOS)_$(ARCH).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone git://github.com/dankamongmen/omphalos.git $@
-	cd $@ && autoreconf -sif
 	tar cjf $(OMPHALOSORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
@@ -197,7 +195,6 @@ $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 aptitude: $(APTITUDE)_$(ARCH).deb
 $(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
 	git clone git://git.debian.org/git/aptitude/aptitude.git $@
-	cd $@ && autoreconf -sif
 	tar cjf $(APTITUDEORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
