@@ -23,7 +23,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
-	gnome-power-manager evince
+	gnome-power-manager evince poppler
 
 SPREZZ:=packaging
 
@@ -143,6 +143,8 @@ OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 PANGOUP:=pango-$(shell echo $(pango_VERSION) | cut -d- -f1)
 PANGOORIG:=pango1.0_$(shell echo $(PANGOUP) | cut -d- -f2 | tr - _).orig.tar.xz
+POPPLERUP:=poppler-$(shell echo $(poppler_VERSION) | cut -d- -f1)
+POPPLERORIG:=poppler_$(shell echo $(POPPLERUP) | cut -d- -f2 | tr - _).orig.tar.gz
 PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_VERSION) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 SOCATUP:=socat-$(shell echo $(socat_VERSION) | cut -d- -f1 | tr \~ -)
@@ -162,7 +164,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
-	$(EVINCE)
+	$(EVINCE) $(POPPLER)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -669,6 +671,14 @@ $(PANGO): $(SPREZZ)/pango/debian/changelog $(PANGOORIG)
 	tar xJvf $(PANGOORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+.PHONY: poppler
+poppler:$(POPPLER)_$(ARCH).deb
+$(POPPLER): $(SPREZZ)/poppler/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf $(POPPLERORIG) --strip-components=1 -C $@
+
 FETCHED:=$(FETCHED) $(PULSEAUDIOUP).tar.xz
 $(PULSEAUDIOUP).tar.xz:
 	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(@F)
@@ -1095,6 +1105,7 @@ clean:
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE)
+	rm -rf $(POPPLER)
 
 clobber:
 	rm -rf $(FETCHED)
