@@ -22,7 +22,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
-	installation-report gnome-shell gnome-shell-extensions gnome-contacts
+	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
+	gnome-power-manager
 
 SPREZZ:=packaging
 
@@ -81,6 +82,8 @@ GNOMECONTROLCENTERUP:=gnome-control-center-$(shell echo $(gnome-control-center_V
 GNOMECONTROLCENTERORIG:=gnome-control-center_$(shell echo $(gnome-control-center_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GNOMEDESKTOPUP:=gnome-desktop-$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1)
 GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1).orig.tar.xz
+GNOMEPOWERMANAGERUP:=gnome-power-manager-$(shell echo $(gnome-power-manager_VERSION) | cut -d: -f2- | cut -d- -f1)
+GNOMEPOWERMANAGERORIG:=gnome-power-manager_$(shell echo $(gnome-power-manager_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GNOMESETTINGSDAEMONUP:=gnome-settings-daemon-$(shell echo $(gnome-settings-daemon_VERSION) | cut -d: -f2- | cut -d- -f1)
 GNOMESETTINGSDAEMONORIG:=gnome-settings-daemon_$(shell echo $(gnome-settings-daemon_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GNOMESHELLUP:=gnome-shell-$(shell echo $(gnome-shell_VERSION) | cut -d: -f2- | cut -d- -f1)
@@ -893,6 +896,20 @@ $(GNOMEDESKTOP): $(SPREZZ)/gnome-desktop/debian/changelog $(GNOMEDESKTOPORIG)
 	tar xJvf $(GNOMEDESKTOPORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(GNOMEPOWERMANAGERUP).tar.xz
+$(GNOMEPOWERMANAGERUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/gnome-power-manager/3.6/$@
+
+$(GNOMEPOWERMANAGERORIG): $(GNOMEPOWERMANAGERUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: gnome-power-manager
+gnome-power-manager:$(GNOMEPOWERMANAGER)_$(ARCH).deb
+$(GNOMEPOWERMANAGER): $(SPREZZ)/gnome-power-manager/debian/changelog $(GNOMEPOWERMANAGERORIG)
+	mkdir -p $@
+	tar xJvf $(GNOMEPOWERMANAGERORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(GSETSCHEMASUP).tar.xz
 $(GSETSCHEMASUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/gsettings-desktop-schemas/3.6/$@
@@ -1060,7 +1077,7 @@ clean:
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
-	rm -rf $(GNOMECONTACTS) $(CLUTTER)
+	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER)
 
 clobber:
 	rm -rf $(FETCHED)
