@@ -23,7 +23,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
-	gnome-power-manager
+	gnome-power-manager evince
 
 SPREZZ:=packaging
 
@@ -61,6 +61,8 @@ EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
 EGLIBCORIG:=eglibc_$(shell echo $(eglibc_VERSION) | cut -d- -f1).orig.tar.gz
 EOGUP:=eog-$(shell echo $(eog_VERSION) | cut -d: -f2- | cut -d- -f1)
 EOGORIG:=eog_$(shell echo $(eog_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+EVINCEUP:=evince-$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1)
+EVINCEORIG:=evince_$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 F2FSUP:=f2fs-tools-$(shell echo $(f2fs-tools_VERSION) | cut -d- -f1)
 F2FSORIG:=f2fs-tools_$(shell echo $(f2fs-tools_VERSION) | cut -d- -f1).orig.tar.gz
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
@@ -159,7 +161,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
-	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS)
+	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
+	$(EVINCE)
 UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -638,6 +641,20 @@ $(EOG): $(SPREZZ)/eog/debian/changelog $(EOGORIG)
 	tar xJvf $(EOGORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+FETCHED:=$(FETCHED) $(EVINCEUP).tar.xz
+$(EVINCEUP).tar.xz:
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/evince/3.6/$@
+
+$(EVINCEORIG): $(EVINCEUP).tar.xz
+	ln -sf $< $@
+
+.PHONY: evince
+evince:$(EVINCE)_$(ARCH).deb
+$(EVINCE): $(SPREZZ)/evince/debian/changelog $(EVINCEORIG)
+	mkdir -p $@
+	tar xJvf $(EVINCEORIG) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 FETCHED:=$(FETCHED) $(PANGOUP).tar.xz
 $(PANGOUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/pango/1.32/$@
@@ -1077,7 +1094,7 @@ clean:
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
-	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER)
+	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE)
 
 clobber:
 	rm -rf $(FETCHED)
