@@ -1,0 +1,64 @@
+#!/usr/bin/make -f
+
+# the upstream version (i.e. without the Debian revision)
+UPSTREAM_VERSION := $(shell dpkg-parsechangelog | sed -n 's/^Version: //p' | cut -f1 -d '-')
+# symbols.in files & their "generated" file names
+SYMBOLS_in := $(wildcard debian/*.symbols.in)
+SYMBOLS_generated := $(patsubst %.in,%,$(SYMBOLS_in))
+
+# use qt4's moc as the default moc is qt3's when both are installed
+PATH := /usr/share/qt4/bin:$(PATH)
+export PATH
+
+# avoid overlinking and reduce library dependencies
+export DEB_LDFLAGS_MAINT_APPEND := -Wl,--as-needed
+
+# make the build verbose
+export V=1
+
+# enable all the hardening options
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# disable gtk stuff to minimize Build-Depends
+CONFIGURE_ARGS :=				\
+	--enable-libjpeg			\
+	--enable-splash-output			\
+	--enable-cairo-output			\
+	--enable-poppler-glib			\
+	--enable-poppler-qt4			\
+	--enable-poppler-cpp			\
+	--enable-gtk-doc			\
+	--enable-xpdf-headers			\
+	--enable-introspection=yes		\
+	--disable-gtk-test
+
+%:
+	dh $@ --parallel --with gir
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -f glib/reference/html/*
+	rm -f $(SYMBOLS_generated)
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CONFIGURE_ARGS)
+
+override_dh_install:
+	dh_install --list-missing
+
+override_dh_installchangelogs:
+	dh_installchangelogs -plibpoppler28
+	dh_installchangelogs --remaining-packages -XChangeLog
+
+override_dh_strip:
+	dh_strip --dbg-package=poppler-dbg
+
+override_dh_makeshlibs: $(SYMBOLS_generated)
+	dh_makeshlibs -plibpoppler28 -V
+	dh_makeshlibs -plibpoppler-cpp0 -V"libpoppler-cpp0 (>= 0.16)"
+	dh_makeshlibs --remaining-packages
+
+debian/%.symbols: debian/%.symbols.in
+	cat $^ | sed -e 's/#CURVER#/$(UPSTREAM_VERSION)/g' > $@
+
+.PHONY: override_dh_auto_test
