@@ -1,0 +1,61 @@
+#! /bin/sh
+set -e
+
+. /usr/share/debconf/confmodule
+EVO_PROCESS='evolution|/usr/lib/evolution/.*/evolution-exchange-storage|/usr/lib/evolution/evolution-data-server-.*'
+
+error_msg() {
+  db_title Upgrading evolution
+  db_fset evolution/needs_shutdown seen false
+  db_input high evolution/needs_shutdown || true
+  db_go
+}
+
+end_msg() {
+  db_title Evolution processes still present
+  db_input high evolution/kill_processes || true
+  db_fset evolution/kill_processes seen false
+  db_go
+}
+
+upgrade_check() {
+  seen=0
+  while pgrep -fx ${EVO_PROCESS} > /dev/null; do
+    seen=$(($seen + 1))
+    if [ $seen -lt 4 ];
+    then
+        error_msg
+    fi
+    if [ $seen = 3 ]; then
+      end_msg
+      db_get evolution/kill_processes
+      if [ "$RET" = "Abort" ];
+      then
+        db_stop
+        echo "Evolution is still running, aborting..."
+        exit 1
+      else
+        # proceed with the upgrade, try to kill any remaining evolution process
+        # before
+        echo "Evolution is still running but proceeding with the upgrade..." 
+        pkill -fx ${EVO_PROCESS} > /dev/null
+      fi
+    fi
+    if [ $seen = 4 ]; then
+      # means we choose to proceed and tried to kill evo process but failed for
+      # some reason. Try harder, then continue anyway
+      db_stop
+      pkill -9 -fx ${EVO_PROCESS} > /dev/null
+      return
+    fi
+  done
+
+  db_stop
+  echo "No more Evolution instances running, proceeding with the upgrade..."
+}
+
+if dpkg --compare-versions "$2" lt-nl 2.24; then
+  upgrade_check
+fi
+
+#DEBHELPER#
