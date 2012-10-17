@@ -1,0 +1,80 @@
+From: Christoph Egger <christoph@debian.org>
+Date: Fri, 13 Apr 2012 19:42:33 +0200
+Subject: [PATCH] Fix time accounting for (k)freebsd
+
+gnome-system-monitor fails to build on non-Linux plattforms
+
+> procproperties.cpp:27:23: fatal error: asm/param.h: No such file or directory
+
+Needed for the HZ macro.
+
+Reading why this would be needed, diving into libgtop. This is basically
+for reading the rtime field of glibtop_proc_time which is filled on
+linux by reading from /proc/stat
+
+        /* clock_t  (1/100 s) */
+        buf->utime  = strtoull (p, &p, 0);
+        buf->stime  = strtoull (p, &p, 0);
+        buf->rtime = buf->utime + buf->stime;
+
+So seemingly non-normalized values
+
+but on freebsd  with
+
+        pinfo = kvm_getprocs (server->machine.kd, KERN_PROC_PID, pid, &count);
+        if ((pinfo == NULL) || (count != 1)) {
+                glibtop_warn_io_r (server, "kvm_getprocs (%d)", pid);
+                glibtop_suid_leave (server);
+                return;
+        }
+
+        glibtop_suid_leave (server);
+
+        buf->rtime = pinfo [0].ki_runtime * 1e-6;
+
+        len = sizeof (ci);
+        if (sysctlbyname ("kern.clockrate", &ci, &len, NULL, 0)) {
+                glibtop_warn_io_r (server, "sysctl (kern.clockrate) (%d)", pid);
+                glibtop_suid_leave (server);
+                return;
+        }
+
+        buf->frequency = (ci.stathz ? ci.stathz : ci.hz);
+        buf->flags = _glibtop_sysdeps_proc_time;
+
+        buf->rtime *= buf->frequency;
+
+where kvm_getprocs is, according to [0], returning the value in
+microsecs which is then normalized away with * 1e-6 and then again
+multiplied by sysctl kernel.clockrate field stathz
+
+kern.clockrate: { hz = 1000, tick = 1000, profhz = 8128, stathz = 127 }
+
+so 127.
+
+Please everyone recheck my math here, it's nearly 1 am in the morning
+here ;-)
+
+[0] http://bintree.net/freebsd/d8/ddb/user_8h_source.html#l00139
+
+https://bugzilla.gnome.org/show_bug.cgi?id=674064
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=665999
+
+
+diff --git a/src/procproperties.cpp b/src/procproperties.cpp
+index d97ce92..00fdfb0 100644
+--- a/src/procproperties.cpp
++++ b/src/procproperties.cpp
+@@ -120,10 +120,10 @@ fill_proc_properties (GtkWidget *tree, ProcInfo *info)
+     int HZ;
+     int mib[] = { CTL_KERN, KERN_CLOCKRATE };
+ 
+-    if (sysctl (mib, nitems(mib), &cinf, &size, NULL, 0) == -1)
++    if (sysctl (mib, 2, &cinf, &size, NULL, 0) == -1)
+         HZ = 100;
+     else
+-        HZ = cinf.hz;
++        HZ = (cinf.stathz ? cinf.stathz : cinf.hz);
+ #endif
+ 
+     proc_arg proc_props[] = {
