@@ -68,6 +68,7 @@ F2FSORIG:=f2fs-tools_$(shell echo $(f2fs-tools_VERSION) | cut -d- -f1).orig.tar.
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 FBTERMUP:=nfbterm-$(shell echo $(fbterm_VERSION) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_VERSION) | cut -d- -f1).orig.tar.gz
+FBVORIG:=fbv_$(shell echo $(fbv_VERSION) | cut -d- -f1).orig.tar.gz
 FONTCONFIGUP:=fontconfig-$(shell echo $(fontconfig_VERSION) | cut -d- -f1)
 FONTCONFIGORIG:=fontconfig_$(shell echo $(fontconfig_VERSION) | cut -d- -f1).orig.tar.gz
 FREETYPEUP:=freetype-$(shell echo $(freetype_VERSION) | cut -d- -f1) \
@@ -159,7 +160,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) $(YELP) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
-	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) \
+	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) $(FBV) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) $(IBUS) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) \
@@ -167,8 +168,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
 	$(EVINCE) $(POPPLER)
-UDEBS:=$(FBV) $(BASEINSTALLER) $(FIRMWAREALL)
-DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) \
+UDEBS:=$(BASEINSTALLER) $(FIRMWAREALL)
+DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL)
 
@@ -255,9 +256,11 @@ $(LINUXTOOLS): $(SPREZZ)/linux-tools/debian/changelog
 	tar cjf $(LINUXTOOLSORIG) $@ --exclude-vcs --exclude=debian
 
 .PHONY: fbv
-fbv:$(FBV).udeb
+fbv:$(FBV)_$(ARCH).deb
 $(FBV): $(SPREZZ)/fbv/debian/changelog
 	git clone git://repo.or.cz/fbv.git $@
+	tar czf $(FBVORIG) $@
+	cp -r $(<D) $@/
 
 .PHONY: apitrace
 apitrace:$(APITRACE)_$(ARCH).deb
