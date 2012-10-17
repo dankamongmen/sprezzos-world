@@ -1,0 +1,107 @@
+#!/usr/bin/make -f
+# Copyright © 2002,2003 Colin Walters <walters@verbum.org>
+# Copyright © 2003 Daniel Stone <daniels@debian.org>
+# Copyright © 2006 Sjoerd Simons <sjoerd@debian.org>
+# Copyright © 2011 Michael Biebl <biebl@debian.org>
+
+include /usr/share/dpkg/default.mk
+
+%:
+	dh $@ --builddirectory=build --with autoreconf --parallel
+
+libdbusN := $(shell sed -rn 's/Package:[[:space:]]*(libdbus-[0-9-]+)[[:space:]]*$$/\1/p' debian/control | head -n 1)
+libdbus_soname := $(patsubst libdbus-1-%,libdbus-1.so.%,$(libdbusN))
+
+LDFLAGS += -Wl,--as-needed
+
+common_configure_flags := \
+		--disable-silent-rules \
+		--disable-libaudit \
+		--enable-installed-tests \
+		--libexecdir=\$${prefix}/lib/dbus-1.0 \
+		--with-systemdsystemunitdir=/lib/systemd/system \
+		$(NULL)
+
+override_dh_auto_configure:
+	dh_auto_configure \
+		-- \
+		$(common_configure_flags) \
+		--enable-xml-docs \
+		--enable-doxygen-docs \
+		--libdir=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		$(NULL)
+	dh_auto_configure \
+		--builddirectory=build-debug \
+		-- \
+		$(common_configure_flags) \
+		--disable-xml-docs \
+		--disable-doxygen-docs \
+		--enable-asserts \
+		--enable-checks \
+		--enable-tests \
+		--enable-verbose-mode \
+		--prefix=/usr/lib/$(DEB_HOST_MULTIARCH)/dbus-1.0/debug-build \
+		--libdir='$${prefix}/lib' \
+		$(NULL)
+
+override_dh_auto_build:
+	dh_auto_build
+	dh_auto_build --builddirectory=build-debug
+
+# tests need more environmental setup at the moment
+override_dh_auto_test:
+	:
+
+override_dh_auto_install:
+	dh_auto_install
+	make -C build-debug install-exec DESTDIR=$(CURDIR)/debian/tmp
+
+override_dh_link:
+	dh_link -plibdbus-1-dev lib/$(DEB_HOST_MULTIARCH)/$$(basename $$(readlink debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libdbus-1.so)) usr/lib/$(DEB_HOST_MULTIARCH)/libdbus-1.so
+	dh_link --remaining-packages
+
+# if bootstrapping (without dbus-glib), no tests will get installed - create
+# the directory in case that's happened, so the .install file doesn't need
+# modification
+override_dh_install:
+	install -d debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/dbus-1.0/test
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libdbus-1.la
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/dbus-1.0/debug-build/lib/libdbus-1.la
+	dh_install -p$(libdbusN) \
+		"usr/lib/$(DEB_HOST_MULTIARCH)/$(libdbus_soname)*" \
+		lib/$(DEB_HOST_MULTIARCH)
+	dh_install --remaining-packages --list-missing
+	install -m 644 -D debian/dbus-Xsession debian/dbus-x11/etc/X11/Xsession.d/75dbus_dbus-launch
+
+override_dh_installinit:
+	dh_installinit -pdbus -r -- start 12 2 3 4 5 .
+
+# we don't want docs for the debug symbols, just symlink to the library docs
+override_dh_installdocs:
+	dh_installdocs -pdbus-1-dbg --link-doc=$(libdbusN)
+	dh_installdocs --remaining-packages --all AUTHORS NEWS README
+
+override_dh_strip:
+	dh_strip --dbg-package=dbus-1-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs -V -Ndbus-1-dbg
+
+override_dh_autoreconf:
+	cp INSTALL INSTALL.orig
+	dh_autoreconf
+	mv INSTALL.orig INSTALL
+
+override_dh_autoreconf_clean:
+	cp INSTALL INSTALL.orig
+	dh_autoreconf_clean
+	mv INSTALL.orig INSTALL
+
+override_dh_auto_clean:
+	dh_auto_clean
+	dh_auto_clean --builddirectory=build-debug
+	rm -f build/test/data/valid-config-files/session.conf
+	rm -f build/test/data/valid-config-files/system.conf
+	rm -f build-debug/test/data/valid-config-files/session.conf
+	rm -f build-debug/test/data/valid-config-files/system.conf
+	rm -f dbus.devhelp
