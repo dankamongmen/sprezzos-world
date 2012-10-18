@@ -874,7 +874,7 @@ $(CLUTTERGST): $(SPREZZ)/clutter-gst/debian/changelog $(CLUTTERGSTORIG)
 
 FETCHED:=$(FETCHED) $(CLUTTERGTKUP).tar.xz
 $(CLUTTERGTKUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter-gtk/1.3/$@
+	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter-gtk/1.4/$@
 
 $(CLUTTERGTKORIG): $(CLUTTERGTKUP).tar.xz
 	ln -sf $< $@
