@@ -12,7 +12,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 
 # These spur generation of definition files in sprezzos-world from
 # debian/changelog files in packaging/*.
-PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg-turbo lvm2 \
+PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
@@ -156,7 +156,7 @@ YELPUP:=yelp-$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1)
 YELPORIG:=yelp_$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
-	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEGTURBO) $(OMPHALOS) $(SUDO) \
+	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) $(YELP) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
@@ -372,8 +372,8 @@ libjpeg-turbo-1.2.1.tar.gz:
 	wget -nc -O$@ http://sourceforge.net/projects/libjpeg-turbo/files/1.2.1/libjpeg-turbo-1.2.1.tar.gz/download
 
 .PHONY: libjpeg-turbo
-libjpeg-turbo:$(LIBJPEGTURBO)_$(ARCH).deb
-$(LIBJPEGTURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.tar.gz
+libjpeg-turbo:$(LIBJPEG8TURBO)_$(ARCH).deb
+$(LIBJPEG8TURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.tar.gz
 	mkdir $@
 	tar xzvf libjpeg-turbo-1.2.1.tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
