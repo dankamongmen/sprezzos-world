@@ -1,0 +1,283 @@
+Author: Paolo Bacchilega <paobac@src.gnome.org>
+Description: fix photo comments loss when upgrading from 2.10
+Bug: http://bugzilla.gnome.org/show_bug.cgi?id=626893
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=593813
+Comment: Patch backported by David Paleino <dapal@debian.org>, using the
+ following git commits:
+ - http://git.gnome.org/browse/gthumb/commit/?id=b80580d3341d2b050bf59fdc42973ed28e93bc54
+ - http://git.gnome.org/browse/gthumb/commit/?id=08fcb249ec7e6f2daaf99f50ece6612cfa5a272c
+ - http://git.gnome.org/browse/gthumb/commit/?id=66bc3971668f06970594c55c777b5f628882c4e9
+
+---
+ extensions/exiv2_tools/exiv2-utils.cpp               |   99 +++++++++++++------
+ extensions/exiv2_tools/gth-metadata-provider-exiv2.c |   23 +++-
+ extensions/exiv2_tools/main.c                        |   14 ++
+ po/POTFILES.skip                                     |    2 
+ 4 files changed, 107 insertions(+), 31 deletions(-)
+
+--- gthumb.orig/extensions/exiv2_tools/exiv2-utils.cpp
++++ gthumb/extensions/exiv2_tools/exiv2-utils.cpp
+@@ -57,6 +57,14 @@ const char *_DATE_TAG_NAMES[] = {
+ 	NULL
+ };
+ 
++const char *_LAST_DATE_TAG_NAMES[] = {
++	"Exif::Image::DateTime",
++	"Xmp::exif::DateTime",
++	"Xmp::xmp::ModifyDate",
++	"Xmp::xmp::MetadataDate",
++	NULL
++};
++
+ const char *_ORIGINAL_DATE_TAG_NAMES[] = {
+ 	"Exif::Photo::DateTimeOriginal",
+ 	"Xmp::exif::DateTimeOriginal",
+@@ -132,11 +140,11 @@ const char *_ORIENTATION_TAG_NAMES[] = {
+ };
+ 
+ const char *_DESCRIPTION_TAG_NAMES[] = {
++	"Iptc::Application2::Caption",
++	"Xmp::dc::description",
+ 	"Exif::Photo::UserComment",
+ 	"Exif::Image::ImageDescription",
+-	"Xmp::dc::description",
+ 	"Xmp::tiff::ImageDescription",
+-	"Iptc::Application2::Caption",
+ 	"Iptc::Application2::Headline",
+ 	NULL
+ };
+@@ -263,24 +271,15 @@ set_file_info (GFileInfo  *info,
+ 
+ 
+ static void
+-set_attribute_from_tagset (GFileInfo  *info,
+-			   const char *attribute,
+-			   const char *tagset[])
+-{
+-	GObject *metadata;
+-	int      i;
+-	char    *key;
+-	char    *description;
+-	char    *formatted_value;
+-	char    *raw_value;
+-	char    *type_name;
+-
+-	metadata = NULL;
+-	for (i = 0; tagset[i] != NULL; i++) {
+-		metadata = g_file_info_get_attribute_object (info, tagset[i]);
+-		if (metadata != NULL)
+-			break;
+-	}
++set_attribute_from_metadata (GFileInfo  *info,
++			     const char *attribute,
++			     GObject    *metadata)
++{
++	char *key;
++	char *description;
++	char *formatted_value;
++	char *raw_value;
++	char *type_name;
+ 
+ 	if (metadata == NULL)
+ 		return;
+@@ -292,6 +291,7 @@ set_attribute_from_tagset (GFileInfo  *i
+ 		      "raw", &raw_value,
+ 		      "value-type", &type_name,
+ 		      NULL);
++
+ 	set_file_info (info,
+ 		       attribute,
+ 		       description,
+@@ -303,6 +303,26 @@ set_attribute_from_tagset (GFileInfo  *i
+ 
+ 
+ static void
++set_attribute_from_tagset (GFileInfo  *info,
++			   const char *attribute,
++			   const char *tagset[])
++{
++	GObject *metadata;
++	int      i;
++
++	metadata = NULL;
++	for (i = 0; tagset[i] != NULL; i++) {
++		metadata = g_file_info_get_attribute_object (info, tagset[i]);
++		if (metadata != NULL)
++			break;
++	}
++
++	if (metadata != NULL)
++		set_attribute_from_metadata (info, attribute, metadata);
++}
++
++
++static void
+ set_string_list_attribute_from_tagset (GFileInfo  *info,
+ 				       const char *attribute,
+ 				       const char *tagset[])
+@@ -336,9 +356,32 @@ set_string_list_attribute_from_tagset (G
+ static void
+ set_attributes_from_tagsets (GFileInfo *info)
+ {
+-	set_attribute_from_tagset (info, "general::datetime", _DATE_TAG_NAMES);
++	set_attribute_from_tagset (info, "general::datetime", _LAST_DATE_TAG_NAMES);
++	if (g_file_info_get_attribute_object (info, "general::datetime") == NULL)
++		set_attribute_from_tagset (info, "general::datetime", _ORIGINAL_DATE_TAG_NAMES);
++
+ 	set_attribute_from_tagset (info, "general::description", _DESCRIPTION_TAG_NAMES);
+ 	set_attribute_from_tagset (info, "general::title", _TITLE_TAG_NAMES);
++
++	/* if iptc::caption and iptc::headline are different use iptc::headline
++	 * to set general::title, if not already set. */
++
++	if (g_file_info_get_attribute_object (info, "general::title") == NULL) {
++		GObject *iptc_caption;
++		GObject *iptc_headline;
++
++		iptc_caption = g_file_info_get_attribute_object (info, "Iptc::Application2::Caption");
++		iptc_headline = g_file_info_get_attribute_object (info, "Iptc::Application2::Headline");
++
++		if ((iptc_caption != NULL)
++		    && (iptc_headline != NULL)
++		    && (g_strcmp0 (gth_metadata_get_raw (GTH_METADATA (iptc_caption)),
++				   gth_metadata_get_raw (GTH_METADATA (iptc_headline))) != 0))
++		{
++			set_attribute_from_metadata (info, "general::title", iptc_headline);
++		}
++	}
++
+ 	set_attribute_from_tagset (info, "general::location", _LOCATION_TAG_NAMES);
+ 	set_string_list_attribute_from_tagset (info, "general::tags", _KEYWORDS_TAG_NAMES);
+ 	set_attribute_from_tagset (info, "Embedded::Photo::DateTimeOriginal", _ORIGINAL_DATE_TAG_NAMES);
+@@ -601,19 +644,19 @@ mandatory_string (Exiv2::ExifData &check
+ 
+ const char *
+ gth_main_get_metadata_type (GthMetadata *metadata,
+-			    const char  *key)
++			    const char  *attribute)
+ {
+ 	const char      *value_type;
+ 	GthMetadataInfo *metadatum_info;
+ 
+ 	value_type = gth_metadata_get_value_type (metadata);
+ 	if (g_strcmp0 (value_type, "Undefined") == 0)
+-			value_type = NULL;
++		value_type = NULL;
+ 
+ 	if (value_type != NULL)
+ 		return value_type;
+ 
+-	metadatum_info = gth_main_get_metadata_info (key);
++	metadatum_info = gth_main_get_metadata_info (attribute);
+ 	if (metadatum_info != NULL)
+ 		value_type = metadatum_info->type;
+ 
+@@ -655,9 +698,9 @@ exiv2_write_metadata_private (Exiv2::Ima
+ 			 */
+ 
+ 			const char *raw_value = gth_metadata_get_raw (metadatum);
+-			const char *value_type = gth_main_get_metadata_type (metadatum, key);
++			const char *value_type = gth_main_get_metadata_type (metadatum, attributes[i]);
+ 
+-			if ((raw_value != NULL) && (strcmp (raw_value, "") != 0) &&  (value_type != NULL)) {
++			if ((raw_value != NULL) && (strcmp (raw_value, "") != 0) && (value_type != NULL)) {
+ 				Exiv2::Value::AutoPtr value = Exiv2::Value::create (Exiv2::TypeInfo::typeId (value_type));
+ 				value->read (raw_value);
+ 				Exiv2::ExifKey exif_key(key);
+@@ -750,7 +793,7 @@ exiv2_write_metadata_private (Exiv2::Ima
+ 
+ 		try {
+ 			const char *raw_value = gth_metadata_get_raw (metadatum);
+-			const char *value_type = gth_main_get_metadata_type (metadatum, key);
++			const char *value_type = gth_main_get_metadata_type (metadatum, attributes[i]);
+ 
+ 			if ((raw_value != NULL) && (strcmp (raw_value, "") != 0) &&  (value_type != NULL)) {
+ 				/* See the exif data code above for an explanation. */
+@@ -786,7 +829,7 @@ exiv2_write_metadata_private (Exiv2::Ima
+ 
+ 		try {
+ 			const char *raw_value = gth_metadata_get_raw (metadatum);
+-			const char *value_type = gth_main_get_metadata_type (metadatum, key);
++			const char *value_type = gth_main_get_metadata_type (metadatum, attributes[i]);
+ 
+ 			if ((raw_value != NULL) && (strcmp (raw_value, "") != 0) &&  (value_type != NULL)) {
+ 				/* See the exif data code above for an explanation. */
+--- gthumb.orig/extensions/exiv2_tools/gth-metadata-provider-exiv2.c
++++ gthumb/extensions/exiv2_tools/gth-metadata-provider-exiv2.c
+@@ -114,9 +114,9 @@ gth_metadata_provider_exiv2_read (GthMet
+ 
+ 
+ static void
+-gth_metadata_provider_exiv2_write (GthMetadataProvider *self,
+-				   GthFileData         *file_data,
+-				   const char          *attributes)
++gth_metadata_provider_exiv2_write (GthMetadataProvider   *self,
++				   GthFileData           *file_data,
++				   const char            *attributes)
+ {
+ 	void    *buffer = NULL;
+ 	gsize    size;
+@@ -134,8 +134,25 @@ gth_metadata_provider_exiv2_write (GthMe
+ 
+ 	metadata = g_file_info_get_attribute_object (file_data->info, "general::description");
+ 	if (metadata != NULL) {
++		const char *tags_to_remove[] = {
++			"Exif::Image::ImageDescription",
++			"Xmp::tiff::ImageDescription",
++			"Iptc::Application2::Headline",
++			NULL
++		};
++		int i;
++
++		for (i = 0; tags_to_remove[i] != NULL; i++)
++			g_file_info_remove_attribute (file_data->info, tags_to_remove[i]);
++
+ 		g_file_info_set_attribute_object (file_data->info, "Exif::Photo::UserComment", metadata);
+ 		g_file_info_set_attribute_object (file_data->info, "Xmp::dc::description", metadata);
++		g_file_info_set_attribute_object (file_data->info, "Iptc::Application2::Caption", metadata);
++	}
++
++	metadata = g_file_info_get_attribute_object (file_data->info, "general::title");
++	if (metadata != NULL) {
++		g_file_info_set_attribute_object (file_data->info, "Xmp::dc::title", metadata);
+ 		g_file_info_set_attribute_object (file_data->info, "Iptc::Application2::Headline", metadata);
+ 	}
+ 
+--- gthumb.orig/extensions/exiv2_tools/main.c
++++ gthumb/extensions/exiv2_tools/main.c
+@@ -46,6 +46,10 @@ GthMetadataCategory exiv2_metadata_categ
+ 
+ 
+ GthMetadataInfo exiv2_metadata_info[] = {
++
++	/* Specify the type of a field to allow to create it if it's not
++	 * already present in the image. */
++
+ 	{ "Exif::Image::Make", NULL, "Exif::General", 1, NULL, GTH_METADATA_ALLOW_EVERYWHERE },
+ 	{ "Exif::Image::Model", NULL, "Exif::General", 2, NULL, GTH_METADATA_ALLOW_EVERYWHERE },
+ 	{ "Exif::Image::Software", NULL, "Exif::General", 3, NULL, GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
+@@ -142,6 +146,16 @@ GthMetadataInfo exiv2_metadata_info[] =
+ 
+ 	{ "Exif::Photo::MakerNote", NULL, "Exif::Other", 0, NULL, GTH_METADATA_ALLOW_NOWHERE },
+ 
++	{ "Xmp::dc::description", NULL, "Xmp::Embedded", 0, "XmpText", GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
++	{ "Xmp::dc::title", NULL, "Xmp::Embedded", 0, "XmpText", GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
++	{ "Xmp::iptc::Location", NULL, "Xmp::Embedded", 0, "XmpText", GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
++	{ "Xmp::iptc::Keywords", NULL, "Xmp::Embedded", 0, "XmpBag", GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
++
++	{ "Iptc::Application2::Headline", NULL, "Iptc", 0, "String", GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
++	{ "Iptc::Application2::Caption", NULL, "Iptc", 0, "String", GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
++	{ "Iptc::Application2::LocationName", NULL, "Iptc", 0, "String", GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
++	{ "Iptc::Application2::Keywords", NULL, "Iptc", 0, "String", GTH_METADATA_ALLOW_IN_PROPERTIES_VIEW },
++
+ 	{ NULL, NULL, NULL, 0, NULL, 0 }
+ };
+ 
+--- gthumb.orig/po/POTFILES.skip
++++ gthumb/po/POTFILES.skip
+@@ -23,3 +23,5 @@ extensions/webalbums/albumtheme.c
+ 
+ .pc/19-backport_data_migration.patch/data/gthumb.schemas.in
+ .pc/19-backport_data_migration.patch/gthumb/main.c
++.pc/20-backport_comments_loss_fix.patch/extensions/exiv2_tools/exiv2-utils.cpp
++.pc/20-backport_comments_loss_fix.patch/extensions/exiv2_tools/main.c
