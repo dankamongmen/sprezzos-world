@@ -1,0 +1,130 @@
+#!/usr/bin/make -f
+
+SYS := $(shell dpkg-architecture -qDEB_HOST_GNU_SYSTEM)
+ifeq ($(SYS), gnu )
+	WITH_UUDEV := --without-uu
+else
+	WITH_UUDEV := --with-uu
+endif
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# These additional compiler flags should bring up warnings about common
+# sources of errors.
+export CFLAGS += -Wall -g -Wformat=2 -Wunused -Wundef -Wextra -Wswitch-enum \
+    -Wpointer-arith -Wnested-externs -Wbad-function-cast -Wcast-qual \
+    -Wcast-align -Wshadow
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+    CFLAGS += -O0
+else
+    CFLAGS += -O2
+endif
+
+export DEB_BUILD_HARDENING=1
+
+include /usr/share/dpatch/dpatch.make
+
+slrn_dir = $(CURDIR)/debian/slrn
+slrnpull_dir = $(CURDIR)/debian/slrnpull
+tmp_dir = $(CURDIR)/debian/tmp
+
+build: build-stamp
+build-stamp: patch-stamp
+	dh_testdir
+	./configure \
+		--with-slrnpull=/var/spool/slrnpull \
+		--with-gnutls \
+		--enable-inews --enable-spool \
+		--enable-setgid-code \
+		--prefix=/usr \
+		--mandir=/usr/share/man \
+		--sysconfdir=/etc/news \
+		--with-server-file=/etc/news/server \
+		--with-canlock \
+		--without-x \
+		$(WITH_UUDEV) \
+		--with-slanglib=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		--with-slanginc=/usr/include \
+		|| { rc=$$?; cat config.log; exit $$rc; }
+
+	$(MAKE) -C src CONFDIR=/etc/news slrn
+	$(MAKE) CANLOCK_LIB= UUDEVIEW_LIB= CONFDIR=/etc/news slrnpull
+	touch build-stamp
+
+clean: unpatch
+	dh_testdir
+	if [ -e Makefile ]; then $(MAKE) distclean; fi
+	dh_clean build-stamp debian/installed-files
+
+# Build architecture-dependent files here.
+binary-arch: build
+	dh_testdir
+	dh_testroot
+	dh_clean
+
+	$(MAKE) install DESTDIR=$(tmp_dir)
+	dh_install
+	chrpath --delete $(slrn_dir)/usr/bin/slrn
+
+	#
+	# slrn
+	#
+	cp $(tmp_dir)/usr/share/doc/slrn/help.txt \
+	  $(slrn_dir)/etc/news/slrn-help.txt
+
+	chmod +x $(slrn_dir)/usr/share/slrn/contrib/*
+
+	dh_link -pslrn var/lib/slrn/newsgroups.dsc \
+	  usr/share/slrn/newsgroups.dsc
+
+	dh_installchangelogs -k changes.txt
+	dh_installcron
+	dh_installdebconf
+	dh_installdirs
+	dh_installdocs
+	dh_installexamples
+	dh_installlogrotate
+	dh_installman
+	dh_installmenu
+	dh_lintian
+
+	chmod +x $(slrnpull_dir)/usr/share/doc/slrnpull/examples/slrnpull.sh
+
+	find $(slrn_dir) $(slrnpull_dir) -not -type d -printf '%P\n' \
+	  | sort > debian/installed-files
+
+	find $(tmp_dir) -not -type d -printf '%P\n' \
+	  | sed --file=debian/install-list-filter.sed \
+	  | sort \
+	  | diff -u debian/installed-files - | sed 1,2d \
+	  | (! grep ^+)
+
+	dh_strip
+	dh_compress
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+
+	chmod +x $(slrn_dir)/etc/ppp/ip-up.d/slrn \
+	  $(slrn_dir)/etc/network/if-up.d/slrn \
+	  $(slrnpull_dir)/etc/ppp/ip-up.d/slrnpull \
+	  $(slrnpull_dir)/etc/network/if-up.d/slrnpull
+	dh_fixperms
+	chown news.news $(slrn_dir)/etc/news $(slrn_dir)/var/lib/slrn
+	# The perms on these directories are set so that files in them
+	# are owned by group news, but the directories are only writable
+	# by user news. out.going is g+w,+t since users write there.
+	chown -R news.news $(slrnpull_dir)/var/spool/slrnpull
+	chmod g+ws,+t $(slrnpull_dir)/var/spool/slrnpull/out.going \
+	  $(slrnpull_dir)/var/spool/slrnpull/out.going/rejects
+	chmod g+ws,o+w,+t $(slrnpull_dir)/var/spool/slrnpull/requests
+
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-independent files here.
+binary-indep:
+
+binary: binary-indep binary-arch
+.PHONY: binary binary-indep binary-arch build clean
