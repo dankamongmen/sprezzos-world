@@ -7,6 +7,5 @@ install:
 	install -d $(DESTDIR)/sbin
 	cp -rv etc/* $(DESTDIR)/etc
 	cp -rv lib/firmware/* $(DESTDIR)/$(FIRMWARE)
-	cp -rv usr/bin/* $(DESTDIR)/bin
 	cp -rv usr/sbin/* $(DESTDIR)/sbin
 	cp -rv usr/share/* $(DESTDIR)/usr/share
