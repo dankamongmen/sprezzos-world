@@ -23,7 +23,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
-	gnome-power-manager evince poppler gnome-media
+	gnome-power-manager evince poppler gnome-media compiz
 
 SPREZZ:=packaging
 
@@ -58,6 +58,7 @@ CLUTTERGSTUP:=clutter-gst-$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | c
 CLUTTERGSTORIG:=clutter-gst_$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CLUTTERGTKUP:=clutter-gtk-$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1)
 CLUTTERGTKORIG:=clutter-gtk_$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+COMPIZUP:=compiz-$(shell echo $(compiz_VERSION) | cut -d= -f2- | cut -d- -f1)
 CURLUP:=curl-$(shell echo $(curl_VERSION) | cut -d= -f2- | cut -d- -f1)
 CURLORIG:=curl_$(shell echo $(curl_VERSION) | cut -d- -f1).orig.tar.bz2
 EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
@@ -170,7 +171,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
-	$(EVINCE) $(POPPLER)
+	$(EVINCE) $(POPPLER) $(COMPIZ)
 UDEBS:=$(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -319,6 +320,14 @@ $(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROORIG)
 	mkdir $@
 	tar xJvf $(CAIROUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
+
+.PHONY: compiz
+compiz:$(COMPIZ)_$(ARCH).deb
+$(COMPIZ): $(SPREZZ)/compiz/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf compiz-$(compiz_UPVER).tar.bz2 --strip-components=1 -C $@
 
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
@@ -1108,7 +1117,7 @@ clean:
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE)
-	rm -rf $(POPPLER) $(GNOMEMEDIA)
+	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ)
 
 clobber:
 	rm -rf $(FETCHED)
