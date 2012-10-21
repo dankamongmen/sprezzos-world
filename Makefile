@@ -1066,8 +1066,8 @@ $(ADOBEUP):
 	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/$@
 
 .PHONY: adobe
-adobe:$(ADOBE)_$(ARCH).deb
-$(ADOBE): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(ADOBEUP)
+adobe:$(FONTSADOBESOURCESANSPRO)_$(ARCH).deb
+$(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(ADOBEUP)
 	unzip $(ADOBEUP)
 	mv $(basename $(ADOBEUP)) $@
 	cp -r $(<D) $@/
