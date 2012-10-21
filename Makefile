@@ -24,7 +24,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
-	gobject-introspection gnomecatalog kismet wireshark gnome-sushi
+	gobject-introspection gnomecatalog kismet wireshark gnome-sushi \
+	libatasmart
 
 SPREZZ:=packaging
 
@@ -169,12 +170,13 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) \
-	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI)
+	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
+	$(LIBATASMART)
 UDEBS:=$(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
-	$(WPA)
+	$(WPA) $(LIBATASMART)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -383,6 +385,14 @@ $(KISMET): $(SPREZZ)/kismet/debian/changelog
 	cp -r $(<D) $@/
 	{ cd $@ && TARBALL=`uscan --force-download --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && tar xzvf $$TARBALL --strip-components=1 -C $@ ; }
+
+.PHONY: libatasmart
+libatasmart:$(LIBATASMART)_$(ARCH).deb
+$(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf libatasmart_$(libatasmart_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: vte
 vte:$(VTE)_$(ARCH).deb
@@ -1197,7 +1207,7 @@ clean:
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
-	rm -rf $(GNOMESUSHI)
+	rm -rf $(GNOMESUSHI) $(LIBATASMART)
 
 clobber:
 	rm -rf $(FETCHED)
