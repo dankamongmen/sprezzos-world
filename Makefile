@@ -347,6 +347,14 @@ $(FBSET): $(SPREZZ)/fbset/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf fbset-$(fbset_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: freeglut
+freeglut:$(FREEfreeglut)_$(ARCH).deb
+$(FREEfreeglut): $(SPREZZ)/freeglut/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf freeglut_$(freeglut_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
 .PHONY: gcrypt
 gcrypt:$(GCRYPT)_$(ARCH).deb
 $(GCRYPT): $(SPREZZ)/gcrypt/debian/changelog
@@ -370,14 +378,6 @@ $(GLU): $(SPREZZ)/glu/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf glu_$(glu_UPVER).orig.tar.bz2 --strip-components=1 -C $@
-
-.PHONY: glut
-glut:$(GLUT)_$(ARCH).deb
-$(GLUT): $(SPREZZ)/glut/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download
-	tar xjvf glut_$(glut_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: gnome-media
 gnome-media:$(GNOMEMEDIA)_$(ARCH).deb
