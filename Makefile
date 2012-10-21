@@ -343,13 +343,21 @@ $(GLIB): $(SPREZZ)/glib/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf glib-$(glib_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: gnome-media
+gnome-media:$(GNOMEMEDIA)_$(ARCH).deb
+$(GNOMEMEDIA): $(SPREZZ)/gnome-media/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-media_$(gnome-media_UPVER).orig.tar.xz --strip-components=1 -C $@
+
 .PHONY: gnomecatalog
 gnomecatalog:$(GNOMECATALOG)_$(ARCH).deb
 $(GNOMECATALOG): $(SPREZZ)/gnomecatalog/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf gnomecatalog-$(gnomecatalog_UPVER).tar.xz --strip-components=1 -C $@
+	tar xjvf gnomecatalog_$(gnomecatalog_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: gobject-introspection
 gobject-introspection:$(GOBJECTINTROSPECTION)_$(ARCH).deb
