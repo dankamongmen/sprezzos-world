@@ -344,7 +344,7 @@ $(GCRYPT): $(SPREZZ)/gcrypt/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf gcrypt-$(gcrypt_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xjvf libgcrypt11_$(gcrypt_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: glib
 glib:$(GLIB)_$(ARCH).deb
