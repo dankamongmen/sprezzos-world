@@ -14,7 +14,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 # debian/changelog files in packaging/*.
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi \
-	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
+	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo wpa \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus \
@@ -373,7 +373,7 @@ $(VTE): $(SPREZZ)/vte/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf vte-$(vte_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf vte_$(vte_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: wireless-tools
 wireless-tools:$(WIRELESSTOOLS)_$(ARCH).deb
@@ -382,6 +382,14 @@ $(WIRELESSTOOLS): $(SPREZZ)/wireless-tools/debian/changelog
 	cp -r $(<D) $@/
 	wget http://www.hpl.hp.com/personal/Jean_Tourrilhes/Linux/wireless_tools.30.pre9.tar.gz
 	tar xzvf wireless-tools-$(wireless-tools_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: wpa
+wpa:$(WPA)_$(ARCH).deb
+$(WPA): $(SPREZZ)/wpa/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf wpa_$(wpa_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
@@ -1156,7 +1164,7 @@ clean:
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK) $(YELP)
-	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
+	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(WPA)
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
