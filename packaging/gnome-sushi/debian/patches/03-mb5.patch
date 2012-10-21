@@ -1,0 +1,116 @@
+Description: Use libmusicbrainz5
+Based on http://git.gnome.org/browse/sushi/commit/?id=9afbcc1ed
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=677235
+Index: sushi-0.4.1/configure.ac
+===================================================================
+--- sushi-0.4.1.orig/configure.ac	2012-06-19 21:43:43.733177991 +0200
++++ sushi-0.4.1/configure.ac	2012-06-19 21:43:43.749178148 +0200
+@@ -66,7 +66,7 @@
+                   gstreamer-0.10
+                   gstreamer-pbutils-0.10
+                   gstreamer-tag-0.10
+-                  libmusicbrainz3
++                  libmusicbrainz5
+                   evince-document-3.0
+                   evince-view-3.0
+                   gtksourceview-3.0
+Index: sushi-0.4.1/src/libsushi/sushi-cover-art.c
+===================================================================
+--- sushi-0.4.1.orig/src/libsushi/sushi-cover-art.c	2012-04-16 17:15:30.000000000 +0200
++++ sushi-0.4.1/src/libsushi/sushi-cover-art.c	2012-06-19 21:43:43.749178148 +0200
+@@ -27,7 +27,7 @@
+ 
+ #include "sushi-cover-art.h"
+ 
+-#include <musicbrainz3/mb_c.h>
++#include <musicbrainz5/mb5_c.h>
+ #include <gdk-pixbuf/gdk-pixbuf.h>
+ 
+ G_DEFINE_TYPE (SushiCoverArtFetcher, sushi_cover_art_fetcher, G_TYPE_OBJECT);
+@@ -212,43 +212,51 @@
+                gpointer user_data)
+ {
+   FetchUriJob *job = user_data;
+-  MbQuery query;
+-  MbReleaseFilter filter;
+-  MbRelease release;
+-  MbResultList results;
+-  gint results_len = 0, idx;
++  Mb5Metadata metadata;
++  Mb5Query query;
++  Mb5Release release;
++  Mb5ReleaseList release_list;
+   gchar *retval = NULL;
++  gchar **param_names = NULL;
++  gchar **param_values = NULL;
+ 
+-  query = mb_query_new (NULL, NULL);
++  query = mb5_query_new ("sushi", NULL, 0);
+ 
+-  filter = mb_release_filter_new ();
+-  filter = mb_release_filter_title (filter, job->album);
+-  filter = mb_release_filter_artist_name (filter, job->artist);
++  param_names = g_new (gchar*, 3);
++  param_values = g_new (gchar*, 3);
+ 
+-  results = mb_query_get_releases (query, filter);
+-  mb_query_free (query);
+-  mb_release_filter_free (filter);
++  param_names[0] = g_strdup ("query");
++  param_values[0] = g_strdup_printf ("artist:\"%s\" AND release:\"%s\"", job->artist, job->album);
+ 
+-  if (results)
+-    results_len = mb_result_list_get_size (results);
++  param_names[1] = g_strdup ("limit");
++  param_values[1] = g_strdup ("1");
+ 
+-  for (idx = 0; idx < results_len; idx++) {
+-    gchar asin[255];
++  param_names[2] = NULL;
++  param_values[2] = NULL;
+ 
+-    release = mb_result_list_get_release (results, idx);
+-    mb_release_get_asin (release, asin, 255);
++  metadata = mb5_query_query (query, "release", "", "",
++                              2, param_names, param_values);
+ 
+-    mb_release_free (release);
++  mb5_query_delete (query);
+ 
+-    if (asin != NULL &&
++  if (metadata) {
++    release_list = mb5_metadata_get_releaselist (metadata);
++    int i;
++    int release_list_length = mb5_release_list_size (release_list);
++    for (i = 0; i < release_list_length; i++) {
++      gchar asin[255];
++
++      release = mb5_release_list_item (release_list, i);
++      mb5_release_get_asin (release, asin, 255);
++
++      if (asin != NULL &&
+         asin[0] != '\0') {
+-      retval = g_strdup (asin);
+-      break;
++        retval = g_strdup (asin);
++        break;
++      }
+     }
+   }
+-
+-  if (results)
+-    mb_result_list_free (results);
++  mb5_metadata_delete (metadata);
+ 
+   if (retval == NULL) {
+     /* FIXME: do we need a better error? */
+@@ -264,7 +272,8 @@
+   g_io_scheduler_job_send_to_mainloop_async (sched_job,
+                                              fetch_uri_job_callback,
+                                              job, NULL);
+-
++  g_strfreev (param_names);
++  g_strfreev (param_values);
+   return FALSE;
+ }
+ 
