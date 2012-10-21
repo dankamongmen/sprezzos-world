@@ -24,7 +24,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
-	gobject-introspection
+	gobject-introspection gnomecatalog
 
 SPREZZ:=packaging
 
@@ -169,7 +169,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) \
-	$(METAGNOME)
+	$(METAGNOME) $(GNOMECATALOG)
 UDEBS:=$(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -342,6 +342,14 @@ $(GLIB): $(SPREZZ)/glib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf glib-$(glib_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gnomecatalog
+gnomecatalog:$(GNOMECATALOG)_$(ARCH).deb
+$(GNOMECATALOG): $(SPREZZ)/gnomecatalog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnomecatalog-$(gnomecatalog_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gobject-introspection
 gobject-introspection:$(GOBJECTINTROSPECTION)_$(ARCH).deb
@@ -1137,7 +1145,7 @@ clean:
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET)
-	rm -rf $(GOBJECTINTROSPECTION)
+	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG)
 
 clobber:
 	rm -rf $(FETCHED)
