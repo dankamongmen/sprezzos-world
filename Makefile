@@ -458,7 +458,7 @@ $(X11PROTOGL): $(SPREZZ)/x11proto-gl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf x11proto-gl_$(x11proto-gl_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	tar xjvf glproto-$(x11proto-gl_UPVER).tar.bz2 --strip-components=1 -C $@
 
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
