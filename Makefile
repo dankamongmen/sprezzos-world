@@ -40,7 +40,6 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | cut -d- -f1 \
 	 ) > $@
 
-ADOBEUP:=SourceSansPro_FontsOnly-1.036.zip
 APTITUDEORIG:=aptitude_$(shell echo $(aptitude_VERSION) | cut -d- -f1).orig.tar.bz2
 ATSPI2ATKUP:=at-spi2-atk-$(shell echo $(atk-bridge_VERSION) | cut -d- -f1)
 ATSPI2ATKORIG:=at-spi2-atk_$(shell echo $(atk-bridge_VERSION) | cut -d- -f1).orig.tar.xz
@@ -1061,16 +1060,13 @@ $(CONPALETTE): $(SPREZZ)/conpalette/debian/changelog $(CONPAL).tar.gz
 	mv $(CONPAL) $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(ADOBEUP)
-$(ADOBEUP):
-	wget -nc -O$@ http://sourceforge.net/projects/sourcesans.adobe/files/$@
-
 .PHONY: adobe
 adobe:$(FONTSADOBESOURCESANSPRO)_$(ARCH).deb
-$(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog $(ADOBEUP)
-	unzip $(ADOBEUP)
-	mv $(basename $(ADOBEUP)) $@
+$(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
+	mkdir -p $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	unzip SourceSansPro_FontsOnly-$(fonts-adobe-sourcesanspro_UPVER).zip -d $@
 
 # Native packages (those containing their own source)
 .PHONY: base-files
