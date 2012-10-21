@@ -25,7 +25,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
-	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr glu glut
+	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU \
+	freeglut
 
 SPREZZ:=packaging
 
@@ -172,7 +173,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
-	$(GLU) $(GLUT)
+	$(GLU) $(FREEGLUT)
 UDEBS:=$(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -348,8 +349,8 @@ $(FBSET): $(SPREZZ)/fbset/debian/changelog
 	tar xzvf fbset-$(fbset_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: freeglut
-freeglut:$(FREEfreeglut)_$(ARCH).deb
-$(FREEfreeglut): $(SPREZZ)/freeglut/debian/changelog
+freeglut:$(FREEGLUT)_$(ARCH).deb
+$(FREEGLUT): $(SPREZZ)/freeglut/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
@@ -371,13 +372,13 @@ $(GLIB): $(SPREZZ)/glib/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf glib-$(glib_UPVER).tar.xz --strip-components=1 -C $@
 
-.PHONY: glu
-glu:$(GLU)_$(ARCH).deb
-$(GLU): $(SPREZZ)/glu/debian/changelog
+.PHONY: GLU
+GLU:$(GLU)_$(ARCH).deb
+$(GLU): $(SPREZZ)/GLU/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf glu_$(glu_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	tar xjvf glu_$(GLU_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: gnome-media
 gnome-media:$(GNOMEMEDIA)_$(ARCH).deb
@@ -1265,7 +1266,7 @@ clean:
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO)
-	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(GLUT)
+	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT)
 
 clobber:
 	rm -rf $(FETCHED)
