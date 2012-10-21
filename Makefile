@@ -336,7 +336,7 @@ $(DRI2PROTO): $(SPREZZ)/dri2proto/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf dri2proto_$(dri2proto_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xjvf dri2proto-$(dri2proto_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: fbset
 fbset:$(FBSET)_$(ARCH).deb
