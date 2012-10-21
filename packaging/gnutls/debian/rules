@@ -5,16 +5,23 @@ include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/autotools.mk
 
 DEB_CONFIGURE_EXTRA_FLAGS = --enable-ld-version-script --enable-cxx \
-	--without-lzo --disable-guile \
-	--cache-file=$(CURDIR)/config.cache \
+	--enable-guile --enable-gtk-doc \
+	--with-guile-site-dir=/usr/share/guile/site \
+	--disable-libdane --without-tpm \
 	--with-packager=Debian \
 	--with-packager-bug-reports=http://bugs.debian.org/ \
 	--with-packager-version="$(DEB_VERSION)" \
 	--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH)
 DEB_MAKE_CHECK_TARGET = check
-DEB_DH_MAKESHLIBS_ARGS_libgnutls26 := -V 'libgnutls26 (>= 2.12.17-0)'
-DEB_DH_MAKESHLIBS_ARGS_libgnutlsxx27 := -V 'libgnutlsxx27 (>= 2.12.17-0)'
+DEB_DH_MAKESHLIBS_ARGS_libgnutls28 := -V 'libgnutls28 (>= 3.1.3-0)'
+DEB_DH_MAKESHLIBS_ARGS_libgnutlsxx28 := -V 'libgnutlsxx28 (>= 3.1.3-0)'
+DEB_DH_MAKESHLIBS_ARGS_guile-gnutls := -Xguile/1.8/guile-gnutls-v-2.so
 DEB_COMPRESS_EXCLUDE := gnutls.pdf
+
+# workaround for guile testsuite failure.
+ifneq (,$(filter $(DEB_BUILD_ARCH),armel armhf mipsel))
+	DEB_CONFIGURE_EXTRA_FLAGS += --disable-largefile
+endif
 
 # pre-clean rule: save gnutls.pdf since it is expensive to regenerate.
 # See README.source
@@ -26,13 +33,18 @@ cleanbuilddir/gnutls-doc::
 clean::
 	mkdir -p m4
 
-	-rm -rf autom4te.cache
+	-rm -rf autom4te.cache config.log
 
 	-rm -f tests/stamp-tests
 	# stupid conflicts
-	-rm -f doc/*.info* lib/po/libgnutls26.pot
+	-rm -f doc/*.info* lib/po/libgnutls28.pot
 	# restore gnutls.pdf
 	if [ -e doc/gnutls.pdf.debbackup ] && [ ! -e doc/gnutls.pdf ] ; then mv doc/gnutls.pdf.debbackup doc/gnutls.pdf ; fi
+	# force regeneration of autogen-ed files.
+	for i in `grep -l AutoGen-ed src/*.c` ; do \
+		t=`basename $$i .c` ;\
+		rm -v $$i src/$$t.h;\
+		done
 
 # additional comands for build rule
 build/gnutls-doc::
@@ -50,13 +62,21 @@ binary-install/gnutls-doc::
 	cd ../.. && \
 	dh_link -pgnutls-doc
 
+binary-install/libgnutlsxx28::
+	rm -vrf debian/libgnutlsxx28/usr/share/doc/libgnutlsxx28
+	dh_link -plibgnutlsxx28 usr/share/doc/libgnutls28 \
+		usr/share/doc/libgnutlsxx28
+
+# See #658110
+binary-install/guile-gnutls::
+	mv -v debian/guile-gnutls/usr/lib/*/guile debian/guile-gnutls/usr/lib \
+		&&\
+		rmdir -v --ignore-fail-on-non-empty \
+			debian/guile-gnutls/usr/lib/*-*
+	sed -i -e 's_usr/lib/[^/]*/guile/_usr/lib/guile/_' \
+		debian/guile-gnutls/usr/share/guile/site/gnutls.scm
+
 common-install-arch::
-	find debian/tmp/usr/lib/* -name '*.so.*.*' -type f -exec \
+	find debian/*/usr/lib/* -name '*.so.*.*' -type f -exec \
 		chrpath -d {} +
-	if ! test -e debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libgnutls26 ; \
-		then \
-		install -d -m755 \
-			debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libgnutls26 &&\
-		mv -v debian/tmp/usr/bin/* \
-			debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libgnutls26 ;\
-		fi
+	rm -vf debian/*/usr/lib/*/libgnutls-openssl*
