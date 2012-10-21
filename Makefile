@@ -25,7 +25,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
-	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr
+	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr glu glut
 
 SPREZZ:=packaging
 
@@ -172,6 +172,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
+	$(GLU) $(GLUT)
 UDEBS:=$(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -361,6 +362,22 @@ $(GLIB): $(SPREZZ)/glib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf glib-$(glib_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: glu
+glu:$(GLU)_$(ARCH).deb
+$(GLU): $(SPREZZ)/glu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf glu_$(glu_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
+.PHONY: glut
+glut:$(GLUT)_$(ARCH).deb
+$(GLUT): $(SPREZZ)/glut/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf glut_$(glut_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: gnome-media
 gnome-media:$(GNOMEMEDIA)_$(ARCH).deb
@@ -1248,7 +1265,7 @@ clean:
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO)
-	rm -rf $(X11PROTOGL) $(X11PROTORANDR)
+	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(GLUT)
 
 clobber:
 	rm -rf $(FETCHED)
