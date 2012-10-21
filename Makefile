@@ -436,6 +436,14 @@ $(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf libatasmart_$(libatasmart_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: util-linux
+util-linux:$(UTILLINUX)_$(ARCH).deb
+$(UTILLINUX): $(SPREZZ)/util-linux/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf util-linux-$(util-linux_UPVER).tar.bz2 --strip-components=1 -C $@
+
 .PHONY: vte
 vte:$(VTE)_$(ARCH).deb
 $(VTE): $(SPREZZ)/vte/debian/changelog
@@ -523,17 +531,6 @@ fbi:$(FBI)_$(ARCH).deb
 $(FBI): $(SPREZZ)/fbi/debian/changelog $(FBIUP).tar.gz
 	mkdir $@
 	tar xzvf $(FBIUP).tar.gz --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) util-linux_2.20.1.tar.gz
-util-linux-2.20.1.tar.gz:
-	wget -nc -O$@ ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.20/$@
-
-.PHONY: util-linux
-util-linux:$(UTILLINUX)_$(ARCH).deb
-$(UTILLINUX): $(SPREZZ)/util-linux/debian/changelog util-linux-2.20.1.tar.gz
-	mkdir $@
-	tar xzvf util-linux-2.20.1.tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) libjpeg-turbo-1.2.1.tar.gz
