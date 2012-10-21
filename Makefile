@@ -340,7 +340,7 @@ $(GLIB): $(SPREZZ)/glib/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf glib-$(glib_UPVER) --strip-components=1 -C $@
+	tar xJvf glib-$(glib_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gobject-introspection
 gobject-introspection:$(GOBJECTINTROSPECTION)_$(ARCH).deb
