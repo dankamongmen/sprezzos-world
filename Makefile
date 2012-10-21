@@ -78,8 +78,6 @@ FREETYPEUP:=freetype-$(shell echo $(freetype_VERSION) | cut -d- -f1) \
 	freetype-doc-$(shell echo $(freetype_VERSION) | cut -d- -f1) \
 	ft2demos-$(shell echo $(freetype_VERSION) | cut -d- -f1)
 FREETYPEORIG:=freetype_$(shell echo $(freetype_VERSION) | cut -d- -f1).orig.tar.gz
-GLIBUP:=glib-$(shell echo $(glib_VERSION) | cut -d- -f1)
-GLIBORIG:=glib2.0_$(shell echo $(glib_VERSION) | cut -d- -f1).orig.tar.xz
 GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1)
 GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1).orig.tar.xz
 GNOMECONTACTSUP:=gnome-contacts-$(shell echo $(gnome-contacts_VERSION) | cut -d- -f1)
@@ -336,6 +334,14 @@ $(FBSET): $(SPREZZ)/fbset/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf fbset-$(fbset_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: glib
+glib:$(GLIB)_$(ARCH).deb
+$(GLIB): $(SPREZZ)/glib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf glib-$(glib_UPVER) --strip-components=1 -C $@
+
 .PHONY: gobject-introspection
 gobject-introspection:$(GOBJECTINTROSPECTION)_$(ARCH).deb
 $(GOBJECTINTROSPECTION): $(SPREZZ)/gobject-introspection/debian/changelog
@@ -459,20 +465,6 @@ freetype:$(FREETYPE)_$(ARCH).deb
 $(FREETYPE): $(SPREZZ)/freetype/debian/changelog $(FREETYPEORIG)
 	mkdir $@
 	tar xzvf $(FREETYPEORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GLIBUP).tar.xz
-$(GLIBUP).tar.xz:
-	wget -nc -O$@ http://ftp.acc.umu.se/pub/gnome/sources/glib/2.33/$@
-
-$(GLIBORIG): $(GLIBUP).tar.xz
-	ln -s $< $@
-
-.PHONY: glib
-glib:$(GLIB)_$(ARCH).deb
-$(GLIB): $(SPREZZ)/glib/debian/changelog $(GLIBORIG)
-	mkdir $@
-	tar xJvf $(GLIBORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GDKPIXBUFUP).tar.xz
