@@ -16,7 +16,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
-	netbase firmware-all gtk3 libdrm mesa pulseaudio socat \
+	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools vte \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
@@ -169,7 +169,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) \
-	$(METAGNOME) $(GNOMECATALOG)
+	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS)
 UDEBS:=$(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -375,7 +375,15 @@ $(VTE): $(SPREZZ)/vte/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf vte-$(vte_UPVER).tar.xz --strip-components=1 -C $@
 
-fETCHED:=$(FETCHED) $(CURLUP).tar.bz2
+.PHONY: wireless-tools
+wireless-tools:$(WIRELESSTOOLS)_$(ARCH).deb
+$(WIRELESSTOOLS): $(SPREZZ)/wireless-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	wget http://www.hpl.hp.com/personal/Jean_Tourrilhes/Linux/wireless_tools.30.pre9.tar.gz
+	tar xzvf wireless-tools-$(wireless-tools_UPVER).tar.gz --strip-components=1 -C $@
+
+FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
 	wget -nc -O$@ http://curl.haxx.se/download/$@
 
@@ -1152,7 +1160,7 @@ clean:
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
-	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET)
+	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG)
 
 clobber:
