@@ -373,7 +373,7 @@ kismet:$(KISMET)_$(ARCH).deb
 $(KISMET): $(SPREZZ)/kismet/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	{ cd $@ && TARBALL=`uscan --force-download --dehs | xml sel -t -v //target` && \
+	{ cd $@ && TARBALL=`uscan --force-download --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && tar xzvf $$TARBALL --strip-components=1 -C $@ ; }
 
 .PHONY: vte
