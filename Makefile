@@ -26,7 +26,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU \
-	freeglut
+	freeglut libwnck
 
 SPREZZ:=packaging
 
@@ -173,7 +173,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
-	$(GLU) $(FREEGLUT)
+	$(GLU) $(FREEGLUT) $(LIBWNCK)
 UDEBS:=$(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -435,6 +435,14 @@ $(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf libatasmart_$(libatasmart_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: libwnck
+libwnck:$(LIBWNCK)_$(ARCH).deb
+$(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf libwnck-$(libwnck_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: util-linux
 util-linux:$(UTILLINUX)_$(ARCH).deb
@@ -1263,7 +1271,7 @@ clean:
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO)
-	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT)
+	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK)
 
 clobber:
 	rm -rf $(FETCHED)
