@@ -18,7 +18,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase firmware-all gtk3 libdrm mesa pulseaudio socat \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus \
-	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools \
+	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools vte \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
@@ -157,7 +157,7 @@ YELPUP:=yelp-$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1)
 YELPORIG:=yelp_$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
-	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) \
+	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) $(YELP) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) \
@@ -350,7 +350,15 @@ $(GOBJECTINTROSPECTION): $(SPREZZ)/gobject-introspection/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf gobject-introspection-$(gobject-introspection_UPVER).tar.xz --strip-components=1 -C $@
 
-FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
+.PHONY: vte
+vte:$(VTE)_$(ARCH).deb
+$(VTE): $(SPREZZ)/vte/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf vte-$(vte_UPVER).tar.xz --strip-components=1 -C $@
+
+fETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
 	wget -nc -O$@ http://curl.haxx.se/download/$@
 
@@ -1120,7 +1128,7 @@ clean:
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON)
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS)
-	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE)
+	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET)
 	rm -rf $(GOBJECTINTROSPECTION)
 
