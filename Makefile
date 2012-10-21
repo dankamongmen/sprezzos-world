@@ -452,6 +452,14 @@ $(WPA): $(SPREZZ)/wpa/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf wpa_$(wpa_UPVER).orig.tar.gz --strip-components=1 -C $@
 
+.PHONY: x11proto-gl
+x11proto-gl:$(X11PROTOGL)_$(ARCH).deb
+$(X11PROTOGL): $(SPREZZ)/x11proto-gl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf x11proto-gl_$(dri2proto_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
 	wget -nc -O$@ http://curl.haxx.se/download/$@
