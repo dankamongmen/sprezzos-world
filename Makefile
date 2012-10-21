@@ -23,7 +23,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
-	gnome-power-manager evince poppler gnome-media compiz fbset \
+	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
 	gobject-introspection
 
 SPREZZ:=packaging
@@ -168,7 +168,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
-	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION)
+	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) \
+	$(METAGNOME)
 UDEBS:=$(FIRMWAREALL)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1082,6 +1083,12 @@ $(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
 base-files:$(BASEFILES)_$(ARCH).deb
 $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
 	cp -r $(<D)/.. $@
+
+.PHONY: meta-gnome
+meta-gnome:$(METAGNOME)_$(ARCH).deb
+$(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
+	cp -r $(<D)/.. $@
+	tar cJf meta-gnome_$(meta-gnome_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
 .PHONY: console-setup
 console-setup:$(CONSOLESETUP)_$(ARCH).deb
