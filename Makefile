@@ -399,6 +399,8 @@ $(WIRESHARK): $(SPREZZ)/wireshark/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf wireshark_$(wireshark_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: wpa
 wpa:$(WPA)_$(ARCH).deb
