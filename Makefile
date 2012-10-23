@@ -27,7 +27,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
-	libx86
+	libx86 sick-beard
 
 SPREZZ:=packaging
 
@@ -104,6 +104,7 @@ GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-sche
 SPLORIG:=spl_$(shell echo $(spl_VERSION) | cut -d- -f1).orig.tar.xz
 ZFSORIG:=zfs_$(shell echo $(zfs_VERSION) | cut -d- -f1).orig.tar.xz
 GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.bz2
+SICKBEARDORIG:=sick-beard_$(shell echo $(sick-beard_VERSION) | cut -d- -f1).orig.tar.xz
 GRUBUP:=grub-$(shell echo $(grub2_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
 GTK3ORIG:=gtk+3.0_$(shell echo $(gtk3_VERSION) | cut -d- -f1).orig.tar.xz
@@ -174,7 +175,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
-	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86)
+	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
+	$(SICKBEARD)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -219,6 +221,13 @@ $(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
 	rm -rfv $@/debian
 	tar cjf $(APTITUDEORIG) $@ --exclude-vcs
 	cp -rv $(<D) $@/
+
+.PHONY: sick-beard
+sick-beard: $(SICKBEARD)_$(ARCH).deb
+$(SICKBEARD): $(SPREZZ)/sick-beard/debian/changelog
+	git clone git://github.com/dankamongmen/sick-beard.git $@
+	tar cJf $(SICKBEARDORIG) $@ --exclude-vcs
+	cp -r $(<D) $@/
 
 .PHONY: xmlstarlet
 xmlstarlet:$(XMLSTARLET)_$(ARCH).deb
@@ -1341,6 +1350,7 @@ clean:
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(UDISKS)
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
+	rm -rf $(SICKBEARD)
 
 clobber:
 	rm -rf $(FETCHED)
