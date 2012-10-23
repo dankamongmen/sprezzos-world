@@ -12,7 +12,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 
 # These spur generation of definition files in sprezzos-world from
 # debian/changelog files in packaging/*.
-PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
+PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3 \
 	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo wpa \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
@@ -169,7 +169,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) $(KISMET) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
-	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) \
+	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) $(GDM3) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
@@ -371,6 +371,14 @@ $(GCRYPT): $(SPREZZ)/gcrypt/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf libgcrypt11_$(gcrypt_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
+.PHONY: gdm3
+gdm3:$(GDM3)_$(ARCH).deb
+$(GDM3): $(SPREZZ)/gdm3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gdm3_$(gdm3_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: glib
 glib:$(GLIB)_$(ARCH).deb
@@ -1292,7 +1300,7 @@ clean:
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS) $(DCONF)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO)
-	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK)
+	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS)
 
 clobber:
