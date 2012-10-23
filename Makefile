@@ -25,7 +25,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
-	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU \
+	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	freeglut libwnck
 
 SPREZZ:=packaging
@@ -174,7 +174,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK)
-UDEBS:=$(FIRMWAREALL)
+UDEBS:=$(FIRMWAREALL) $(ANNA)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
@@ -1211,6 +1211,11 @@ $(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
 	unzip SourceSansPro_FontsOnly-$(fonts-adobe-sourcesanspro_UPVER).zip -d $@
 
 # Native packages (those containing their own source)
+.PHONY: anna
+anna:$(ANNA)_$(ARCH).deb
+$(ANNA): $(SPREZZ)/anna/debian/changelog
+	cp -r $(<D)/.. $@
+
 .PHONY: base-files
 base-files:$(BASEFILES)_$(ARCH).deb
 $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
@@ -1265,7 +1270,7 @@ clean:
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK) $(YELP)
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(WPA)
-	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE)
+	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE) $(ANNA)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GCOVR)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS)
