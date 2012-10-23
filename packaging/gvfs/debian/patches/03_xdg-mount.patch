@@ -1,0 +1,159 @@
+Note: Since we --disable-hal these days, this patch is only useful on 
+non-Linux architectures.
+
+Index: b/monitor/hal/ghaldrive.c
+===================================================================
+--- a/monitor/hal/ghaldrive.c	2010-05-31 10:31:50.106446532 +0200
++++ b/monitor/hal/ghaldrive.c	2010-05-31 10:32:10.522446609 +0200
+@@ -545,9 +545,19 @@
+   if (WEXITSTATUS (status) != 0)
+     {
+       GError *error;
+-      error = g_error_new_literal (G_IO_ERROR, 
+-                                   G_IO_ERROR_FAILED_HANDLED,
+-                                   "You are not supposed to show G_IO_ERROR_FAILED_HANDLED in the UI");
++      if (WEXITSTATUS (status) == 7)
++        {
++          /* Special error code from xdg-mount */
++          error = g_error_new_literal (G_IO_ERROR,
++                                       G_IO_ERROR_FAILED,
++                                       "Mount helper program cannot be found");
++        }
++      else
++        {
++          error = g_error_new_literal (G_IO_ERROR,
++                                       G_IO_ERROR_FAILED_HANDLED,
++                                       "You are not supposed to show G_IO_ERROR_FAILED_HANDLED in the UI");
++        }
+       simple = g_simple_async_result_new_from_error (data->object,
+                                                      data->callback,
+                                                      data->user_data,
+@@ -577,9 +587,9 @@
+   SpawnOp *data;
+   GPid child_pid;
+   GError *error;
+-  char *argv[] = {"gnome-mount", "-e", "-b", "-d", NULL, NULL};
++  char *argv[] = {"xdg-mount", "-e", "-d", NULL, NULL};
+ 
+-  argv[4] = g_strdup (hal_drive->device_path);
++  argv[3] = g_strdup (hal_drive->device_path);
+   
+   data = g_new0 (SpawnOp, 1);
+   data->object = g_object_ref (drive);
+@@ -612,7 +622,7 @@
+   else
+     g_child_watch_add (child_pid, spawn_cb, data);
+ 
+-  g_free (argv[4]);
++  g_free (argv[3]);
+ }
+ 
+ 
+Index: b/monitor/hal/ghalmount.c
+===================================================================
+--- a/monitor/hal/ghalmount.c	2010-05-31 10:31:49.982446557 +0200
++++ b/monitor/hal/ghalmount.c	2010-05-31 10:32:10.522446609 +0200
+@@ -786,30 +786,31 @@
+ 
+   if (WEXITSTATUS (status) != 0)
+     {
++      GError *error;
+       if (data->using_legacy)
+         {
+-          GError *error;
+           error = g_error_new_literal (G_IO_ERROR, 
+                                        G_IO_ERROR_FAILED,
+                                        data->error_string->str);
+-          simple = g_simple_async_result_new_from_error (data->object,
+-                                                         data->callback,
+-                                                         data->user_data,
+-                                                         error);
+-          g_error_free (error);
++        }
++      else if (WEXITSTATUS (status) == 7)
++        {
++          /* Special exit code from xdg-mount */
++          error = g_error_new_literal (G_IO_ERROR,
++                                       G_IO_ERROR_FAILED,
++                                       "Mount helper program cannot be found");
+         }
+       else
+         {
+-          GError *error;
+           error = g_error_new_literal (G_IO_ERROR, 
+                                        G_IO_ERROR_FAILED_HANDLED,
+                                        "You are not supposed to show G_IO_ERROR_FAILED_HANDLED in the UI");
+-          simple = g_simple_async_result_new_from_error (data->object,
+-                                                         data->callback,
+-                                                         data->user_data,
+-                                                         error);
+-          g_error_free (error);
+         }
++      simple = g_simple_async_result_new_from_error (data->object,
++                                                     data->callback,
++                                                     data->user_data,
++                                                     error);
++      g_error_free (error);
+     }
+   else
+     {
+@@ -923,7 +924,7 @@
+                                     gpointer             user_data)
+ {
+   GHalMount *hal_mount = G_HAL_MOUNT (mount);
+-  char *argv[] = {"gnome-mount", "-u", "-b", "-d", NULL, NULL};
++  char *argv[] = {"xdg-mount", "-u", "-d", NULL, NULL};
+   gboolean using_legacy = FALSE;
+   char *d, *m;
+ 
+@@ -931,7 +932,7 @@
+   m = g_strdup (hal_mount->mount_path);
+   
+   if (hal_mount->device != NULL)
+-    argv[4] = d;
++    argv[3] = d;
+   else
+     {
+       using_legacy = TRUE;
+Index: b/monitor/hal/ghalvolume.c
+===================================================================
+--- a/monitor/hal/ghalvolume.c	2010-05-31 10:31:50.042446637 +0200
++++ b/monitor/hal/ghalvolume.c	2010-05-31 10:32:10.866444321 +0200
+@@ -702,9 +702,19 @@
+   if (WEXITSTATUS (status) != 0)
+     {
+       GError *error;
+-      error = g_error_new_literal (G_IO_ERROR, 
+-                                   G_IO_ERROR_FAILED_HANDLED,
+-                                   "You are not supposed to show G_IO_ERROR_FAILED_HANDLED in the UI");
++      if (WEXITSTATUS (status) == 7)
++        {
++          /* Special exit code from xdg-mount */
++          error = g_error_new_literal (G_IO_ERROR,
++                                       G_IO_ERROR_FAILED,
++                                       "Mount helper program cannot be found");
++        }
++      else
++        {
++          error = g_error_new_literal (G_IO_ERROR,
++                                       G_IO_ERROR_FAILED_HANDLED,
++                                       "You are not supposed to show G_IO_ERROR_FAILED_HANDLED in the UI");
++        }
+       simple = g_simple_async_result_new_from_error (data->object,
+                                                      data->callback,
+                                                      data->user_data,
+@@ -816,11 +826,11 @@
+     }
+   else
+     {
+-      char *argv[] = {"gnome-mount", "-b", "-d", NULL, NULL, NULL};
+-      argv[3] = hal_volume->device_path;
++      char *argv[] = {"xdg-mount", "-d", NULL, NULL, NULL};
++      argv[2] = hal_volume->device_path;
+       /* ask for no dialogs if mount_operation is NULL */
+       if (mount_operation == NULL)
+-        argv[4] = "-n";
++        argv[3] = "-n";
+       spawn_do (volume, cancellable, callback, user_data, argv);
+     }
+ }
