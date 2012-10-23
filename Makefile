@@ -27,7 +27,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
-	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool
+	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
+	gnome-themes-standard
 
 SPREZZ:=packaging
 
@@ -176,7 +177,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
-	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
+	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
+	$(GNOMETHEMESSTANDARD)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -454,6 +456,14 @@ $(GNOMESUSHI): $(SPREZZ)/gnome-sushi/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-sushi_$(gnome-sushi_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-themes-standard
+gnome-themes-standard:$(GNOMETHEMESSTANDARD)_$(ARCH).deb
+$(GNOMETHEMESSTANDARD): $(SPREZZ)/gnome-themes-standard/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-themes-standard_$(gnome-themes-standard_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-user-docs
 gnome-user-docs:$(GNOMEUSERDOCS)_$(ARCH).deb
@@ -1375,6 +1385,7 @@ clean:
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
+	rm -rf $(GNOMETHEMESSTANDARD)
 
 clobber:
 	rm -rf $(FETCHED)
