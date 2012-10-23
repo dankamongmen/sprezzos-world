@@ -354,7 +354,7 @@ $(FREEGLUT): $(SPREZZ)/freeglut/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf freeglut_$(freeglut_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	tar xzvf freeglut_$(freeglut_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: gcrypt
 gcrypt:$(GCRYPT)_$(ARCH).deb
