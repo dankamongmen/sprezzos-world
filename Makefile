@@ -483,7 +483,7 @@ $(LIBX86): $(SPREZZ)/libx86/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf libx86-$(libx86_UPVER).tar.gz --strip-components=1 -C $@
+	tar xjvf libx86-$(libx86_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: pidgin
 pidgin:$(PIDGIN)_$(ARCH).deb
