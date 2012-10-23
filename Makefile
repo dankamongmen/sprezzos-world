@@ -202,22 +202,23 @@ world: $(DEBS) $(UDEBS)
 growlight: $(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone git://github.com/dankamongmen/growlight.git $@
-	tar cjf $(GROWLIGHTORIG) $@ --exclude-vcs --exclude=debian
+	tar cjf $(GROWLIGHTORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: omphalos
 omphalos:$(OMPHALOS)_$(ARCH).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone git://github.com/dankamongmen/omphalos.git $@
-	tar cjf $(OMPHALOSORIG) $@ --exclude-vcs --exclude=debian
+	tar cjf $(OMPHALOSORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: aptitude
 aptitude: $(APTITUDE)_$(ARCH).deb
 $(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
 	git clone git://git.debian.org/git/aptitude/aptitude.git $@
-	tar cjf $(APTITUDEORIG) $@ --exclude-vcs --exclude=debian
-	cp -r $(<D) $@/
+	rm -rfv $@/debian
+	tar cjf $(APTITUDEORIG) $@ --exclude-vcs
+	cp -rv $(<D) $@/
 
 .PHONY: xmlstarlet
 xmlstarlet:$(XMLSTARLET)_$(ARCH).deb
