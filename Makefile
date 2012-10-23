@@ -25,8 +25,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
-	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
-	freeglut libwnck d-conf gnome-user-docs abcde pidgin
+	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
+	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna
 
 SPREZZ:=packaging
 
