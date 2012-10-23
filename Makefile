@@ -174,7 +174,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN)
-UDEBS:=$(FIRMWAREALL) $(ANNA)
+UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
@@ -1260,7 +1260,7 @@ $(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
 
 # Native packages (those containing their own source)
 .PHONY: anna
-anna:$(ANNA)_$(ARCH).deb
+anna:$(ANNA)_$(ARCH).udeb
 $(ANNA): $(SPREZZ)/anna/debian/changelog
 	cp -r $(<D)/.. $@
 
@@ -1278,6 +1278,11 @@ $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
 .PHONY: console-setup
 console-setup:$(CONSOLESETUP)_$(ARCH).deb
 $(CONSOLESETUP): $(SPREZZ)/console-setup/debian/changelog
+	cp -r $(<D)/.. $@
+
+.PHONY: libdebian-installer
+libdebian-installer:$(LIBDEBIANINSTALLER)_$(ARCH).udeb
+$(LIBDEBIANINSTALLER): $(SPREZZ)/libdebian-installer/debian/changelog
 	cp -r $(<D)/.. $@
 
 .PHONY: netbase
@@ -1325,7 +1330,7 @@ clean:
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(UDISKS)
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
-	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN)
+	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER)
 
 clobber:
 	rm -rf $(FETCHED)
