@@ -19,7 +19,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools vte \
-	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs \
+	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs gvfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
@@ -168,7 +168,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) $(WPA) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) $(FBV) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) $(IBUS) \
-	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
+	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) $(GVFS) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) $(KISMET) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) $(UDISKS) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
@@ -496,6 +496,14 @@ $(GOBJECTINTROSPECTION): $(SPREZZ)/gobject-introspection/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gobject-introspection-$(gobject-introspection_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gvfs
+gvfs:$(GVFS)_$(ARCH).deb
+$(GVFS): $(SPREZZ)/gvfs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gvfs-$(gvfs_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: kismet
 kismet:$(KISMET)_$(ARCH).deb
@@ -1380,7 +1388,7 @@ clean:
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GCOVR)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS) $(DCONF)
-	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
+	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK) $(GVFS)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(UDISKS)
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
