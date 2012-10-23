@@ -1,0 +1,113 @@
+From 9aca432753e8e4fbaacf09b47bdf374765397232 Mon Sep 17 00:00:00 2001
+From: Michael Biebl <biebl@debian.org>
+Date: Thu, 15 Oct 2009 14:26:17 +0200
+Subject: [PATCH 1/2] Stop probing device-mapper devices
+
+Use DM_NAME and DM_UUID which are already setup by the dmsetup udev
+rules.
+See http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=545032
+
+diff --git a/data/80-udisks.rules b/data/80-udisks.rules
+index d1351f3..2a1e06d 100644
+--- a/data/80-udisks.rules
++++ b/data/80-udisks.rules
+@@ -51,15 +51,6 @@ KERNEL=="dm-*", ACTION!="change", GOTO="udisks_end"
+ ENV{DM_UDEV_DISABLE_OTHER_RULES_FLAG}=="1", GOTO="udisks_end"
+ ENV{DM_UDEV_DISABLE_DISK_RULES_FLAG}=="1", GOTO="udisks_end"
+ 
+-# import UDISKS_DM_* and UDISKS_LVM2_* properties - the long-term plan is to make the lvm2 and
+-# device-mapper packages provide this information
+-#
+-KERNEL=="dm-*", IMPORT{program}="udisks-dm-export %M %m"
+-
+-# Make udevd synthesize a 'change' uevent when last opener of a rw-fd closes the fd - this
+-# should be part of the device-mapper rules
+-KERNEL=="dm-*", OPTIONS+="watch"
+-
+ ##############################################################################################################
+ # Probe LVM2 Physical Volumes - this will eventually be part of the LVM2 package
+ 
+@@ -91,23 +82,6 @@ LABEL="probe_parttable_end"
+ 
+ ##############################################################################################################
+ 
+-# pick up device-mapper data; this REALLY should be done by rules installed
+-# by the device-mapper package
+-#
+-KERNEL!="dm-*", GOTO="device_mapper_end"
+-ACTION!="change", GOTO="device_mapper_end"
+-
+-ENV{UDISKS_DM_TARGET_TYPES}=="|*error*", GOTO="device_mapper_end"
+-
+-# avoid probing if it has already been done earlier
+-#
+-ENV{ID_FS_USAGE}!="", GOTO="device_mapper_end"
+-IMPORT{program}="/sbin/blkid -o udev -p $tempnode"
+-
+-LABEL="device_mapper_end"
+-
+-##############################################################################################################
+-
+ # pick up data from MD components; this REALLY should be done by rules installed
+ # by mdadm or the kernel package
+ #
+diff --git a/src/device.c b/src/device.c
+index 0bb6ec5..ee44009 100644
+--- a/src/device.c
++++ b/src/device.c
+@@ -3107,37 +3107,34 @@ static gboolean
+ update_info_luks_cleartext (Device *device)
+ {
+   uid_t unlocked_by_uid;
+-  const gchar *dkd_dm_name;
+-  const gchar *dkd_dm_target_types;
++  const gchar *dm_name;
++  const gchar *dm_uuid;
+   gboolean ret;
+ 
+   ret = FALSE;
+ 
+-  dkd_dm_name = g_udev_device_get_property (device->priv->d, "DM_NAME");
+-  dkd_dm_target_types = g_udev_device_get_property (device->priv->d, "UDISKS_DM_TARGETS_TYPE");
+-  if (dkd_dm_name != NULL && g_strcmp0 (dkd_dm_target_types, "crypt") == 0 && device->priv->slaves_objpath->len == 1)
++  dm_name = g_udev_device_get_property (device->priv->d, "DM_NAME");
++  dm_uuid = g_udev_device_get_property (device->priv->d, "DM_UUID");
++  if (dm_name != NULL && dm_uuid != NULL &&
++      (g_str_has_prefix (dm_uuid, "CRYPT-LUKS1-") ||
++       g_regex_match_simple ("^CRYPT-[0-9a-f-]+$", dm_uuid, 0, 0)) &&
++      device->priv->slaves_objpath->len == 1)
+     {
+ 
+       /* TODO: might be racing with setting is_drive earlier */
+       device_set_device_is_drive (device, FALSE);
+ 
+-      if (g_str_has_prefix (dkd_dm_name, "temporary-cryptsetup-"))
+-        {
+-          /* ignore temporary devices created by /sbin/cryptsetup */
+-          goto out;
+-        }
+-
+       device_set_device_is_luks_cleartext (device, TRUE);
+ 
+       device_set_luks_cleartext_slave (device, ((gchar **) device->priv->slaves_objpath->pdata)[0]);
+ 
+-      if (luks_get_uid_from_dm_name (dkd_dm_name, &unlocked_by_uid))
++      if (luks_get_uid_from_dm_name (dm_name, &unlocked_by_uid))
+         {
+           device_set_luks_cleartext_unlocked_by_uid (device, unlocked_by_uid);
+         }
+ 
+       /* TODO: export this at some point */
+-      device_set_dm_name (device, dkd_dm_name);
++      device_set_dm_name (device, dm_name);
+     }
+   else
+     {
+@@ -3147,7 +3144,6 @@ update_info_luks_cleartext (Device *device)
+ 
+   ret = TRUE;
+ 
+- out:
+   return ret;
+ }
+ 
