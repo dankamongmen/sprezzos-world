@@ -26,7 +26,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 \
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
-	freeglut libwnck
+	freeglut libwnck d-conf
 
 SPREZZ:=packaging
 
@@ -160,7 +160,7 @@ YELPORIG:=yelp_$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1).orig.t
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
-	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) \
+	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) $(DCONF) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) $(YELP) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) $(WPA) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) $(FBV) \
@@ -331,6 +331,14 @@ $(COMPIZ): $(SPREZZ)/compiz/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf compiz-$(compiz_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: d-conf
+d-conf:$(DCONF)_$(ARCH).deb
+$(DCONF): $(SPREZZ)/d-conf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf dconf-$(d-conf_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: dri2proto
 dri2proto:$(DRI2PROTO)_$(ARCH).deb
@@ -1273,7 +1281,7 @@ clean:
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE) $(ANNA)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GCOVR)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
-	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS)
+	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS) $(DCONF)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO)
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK)
