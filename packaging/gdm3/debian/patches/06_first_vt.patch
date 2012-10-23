@@ -1,0 +1,232 @@
+It's almost the same tty manager of gdm 2.20, except we don't support Sun VTs,
+only Linux and FreeBSD.
+--- a/daemon/gdm-server.c
++++ b/daemon/gdm-server.c
+@@ -767,6 +767,213 @@
+         return ret;
+ }
+ 
++#include <sys/ioctl.h>
++#include <sys/stat.h>
++#if defined (__linux__)
++#define GDM_USE_SYS_VT
++#define GDMCONSOLEDEVICE "/dev/tty0"
++#include <sys/vt.h>
++#elif defined (__FreeBSD__) || defined (__FreeBSD_kernel__)
++#define GDM_USE_CONSIO_VT
++#define GDMCONSOLEDEVICE "/dev/ttyv0"
++#include <sys/consio.h>
++
++static const char*
++__itovty (int val)
++{
++	static char str[8];
++	char* next = str + sizeof (str) - 1;
++
++	*next = '\0';
++	do {
++		*--next = "0123456789abcdefghigklmnopqrstuv"[val % 32];
++	} while (val /= 32);
++
++	return next;
++}
++#elif defined __GNU__
++#define GDM_USE_HURD_VT
++#else /* __linux__ */
++#error Platform not supported
++#endif
++
++
++#ifndef GDM_USE_HURD_VT
++static gchar *
++gdm_get_vt_device (int vtno)
++{
++   gchar *vtname = NULL;
++
++#if defined (GDM_USE_SYS_VT)
++     vtname = g_strdup_printf ("/dev/tty%d", vtno);
++#elif defined (GDM_USE_CONSIO_VT)
++     vtname = g_strdup_printf ("/dev/ttyv%s", __itovty (vtno - 1));
++#endif
++
++   return vtname;
++}
++
++static int
++open_vt (int vtno)
++{
++	char *vtname = NULL;
++	int fd = -1;
++
++	vtname = gdm_get_vt_device (vtno);
++
++	do {
++		errno = 0;
++		fd = open (vtname, O_RDWR
++#ifdef O_NOCTTY
++			   |O_NOCTTY
++#endif
++			   , 0);
++	} while G_UNLIKELY (errno == EINTR);
++
++	g_free (vtname);
++
++	return fd;
++}
++
++static int
++get_first_vt (void)
++{
++        int first_vt;
++        if (!gdm_settings_direct_get_int (GDM_KEY_FIRST_VT,
++                                          &first_vt))
++                first_vt = 1;
++        return first_vt;
++}
++#endif /* GDM_USE_HURD_VT */
++
++#if defined (GDM_USE_SYS_VT)
++
++static int
++get_free_vt (void)
++{
++        int fd, fdv;
++        int vtno;
++        unsigned short vtmask;
++        struct vt_stat vtstat;
++
++        do {
++                errno = 0;
++                fd = open (GDMCONSOLEDEVICE,
++                           O_WRONLY
++#ifdef O_NOCTTY
++                           |O_NOCTTY
++#endif
++                           , 0);
++        } while G_UNLIKELY (errno == EINTR);
++        if (fd < 0)
++                return -1;
++
++        if (ioctl (fd, VT_GETSTATE, &vtstat) < 0) {
++                VE_IGNORE_EINTR (close (fd));
++                return -1;
++        }
++
++        for (vtno = get_first_vt (), vtmask = 1 << vtno; vtstat.v_state & vtmask; vtno++, vtmask <<= 1);
++        if (!vtmask) {
++                VE_IGNORE_EINTR (close (fd));
++                return -1;
++        }
++
++        fdv = open_vt (vtno);
++        if (fdv < 0) {
++                VE_IGNORE_EINTR (close (fd));
++                return -1;
++        }
++        VE_IGNORE_EINTR (close (fdv));
++        VE_IGNORE_EINTR (close (fd));
++        return vtno;
++}
++
++#elif defined (GDM_USE_CONSIO_VT)
++
++static int
++get_free_vt (void)
++{
++        int fd, fdv;
++        int vtno;
++        GList *to_close_vts = NULL, *li;
++
++        do {
++                errno = 0;
++                fd = open (GDMCONSOLEDEVICE,
++                           O_WRONLY
++#ifdef O_NOCTTY
++                           |O_NOCTTY
++#endif
++                           , 0);
++        } while G_UNLIKELY (errno == EINTR);
++        if (fd < 0)
++                return -1;
++
++        if ((ioctl (fd, VT_OPENQRY, &vtno) < 0) || (vtno == -1)) {
++                VE_IGNORE_EINTR (close (fd));
++                return -1;
++        }
++
++        fdv = open_vt (vtno);
++        if (fdv < 0) {
++                VE_IGNORE_EINTR (close (fd));
++                return -1;
++        }
++
++        while (vtno < get_first_vt ()) {
++                int oldvt = vtno;
++                to_close_vts = g_list_prepend (to_close_vts,
++                                               GINT_TO_POINTER (fdv));
++
++                if (ioctl (fd, VT_OPENQRY, &vtno) == -1) {
++                        vtno = -1;
++                        break;
++                }
++
++                if (oldvt == vtno) {
++                        vtno = -1;
++                        break;
++                }
++
++                fdv = open_vt (vtno);
++                if (fdv < 0) {
++                        vtno = -1;
++                        break;
++                }
++        }
++
++        for (li = to_close_vts; li != NULL; li = li->next) {
++                VE_IGNORE_EINTR (close (GPOINTER_TO_INT (li->data)));
++        }
++        VE_IGNORE_EINTR (close (fdv));
++        VE_IGNORE_EINTR (close (fd));
++        return vtno;
++}
++
++#elif defined (GDM_USE_HURD_VT)
++
++static int
++get_free_vt (void)
++{
++        return -1;
++}
++
++#endif
++
++static char *
++gdm_get_empty_vt_argument (void)
++{
++        int vt = -1;
++
++        vt = get_free_vt ();
++
++        if (vt < 0)
++                return NULL;
++        else
++                return g_strdup_printf ("vt%d", vt);
++}
++
+ /**
+  * gdm_server_start:
+  * @disp: Pointer to a GdmDisplay structure
+--- a/data/gdm.schemas.in.in
++++ b/data/gdm.schemas.in.in
+@@ -52,6 +52,11 @@
+       <signature>b</signature>
+       <default>false</default>
+     </schema>
++    <schema>
++      <key>daemon/FirstVT</key>
++      <signature>i</signature>
++      <default>7</default>
++    </schema>
+ 
+     <schema>
+       <key>debug/Enable</key>

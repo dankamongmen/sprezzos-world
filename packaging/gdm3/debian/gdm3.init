@@ -1,0 +1,116 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          gdm3
+# Should-Start:      console-screen dbus network-manager
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: GNOME Display Manager
+# Description:       Debian init script for the GNOME Display Manager
+### END INIT INFO
+#
+# Author:       Ryan Murray <rmurray@debian.org>
+#
+set -e
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=/usr/sbin/gdm3
+
+test -x $DAEMON || exit 0
+
+if [ -r /etc/default/locale ]; then
+  . /etc/default/locale
+  export LANG LANGUAGE
+fi
+
+. /lib/lsb/init-functions
+
+# To start gdm even if it is not the default display manager, change
+# HEED_DEFAULT_DISPLAY_MANAGER to "false."
+HEED_DEFAULT_DISPLAY_MANAGER=true
+DEFAULT_DISPLAY_MANAGER_FILE=/etc/X11/default-display-manager
+
+gen_config() {
+  # GSettings configuration uses dconf update to generate a gdm profile
+  if [ -d /var/lib/gdm3 ]; then
+    needed=no
+    if [ -f /var/lib/gdm3/dconf/db/gdm ]; then
+      for f in \
+          /usr/share/gdm/dconf /usr/share/gdm/dconf/*-settings \
+          /usr/share/gdm/dconf/locks /usr/share/gdm/dconf/locks/*-locks \
+          /etc/gdm3/greeter.gsettings; do
+        if [ "$f" -nt /var/lib/gdm3/dconf/db/gdm ]; then
+          needed=yes
+          break
+        fi
+      done
+    else
+      needed=yes
+    fi
+    if [ "$needed" = yes ]; then
+      rm -rf /var/lib/gdm3/dconf
+      mkdir -p /var/lib/gdm3/dconf/profile /var/lib/gdm3/dconf/db/gdm.d/locks
+      ln -s /usr/share/gdm/dconf-profile /var/lib/gdm3/dconf/profile/gdm
+      ln -s /usr/share/gdm/dconf/*-settings /var/lib/gdm3/dconf/db/gdm.d/
+      ln -s /usr/share/gdm/dconf/locks/*-locks /var/lib/gdm3/dconf/db/gdm.d/locks/
+      # The configuration file in /etc uses org.gnome.blah gsettings syntax.
+      # Convert it to org/gnome/blah dconf syntax.
+      awk '/\[.*\]/ { gsub("\\.","/"); } ! /^#/ { print;}' \
+        /etc/gdm3/greeter.gsettings > /var/lib/gdm3/dconf/db/gdm.d/90-debian-settings
+      dconf update /var/lib/gdm3/dconf/db 2> /dev/null
+    fi
+  fi
+}
+
+case "$1" in
+  start)
+        CONFIGURED_DAEMON=$(basename "$(cat $DEFAULT_DISPLAY_MANAGER_FILE 2> /dev/null)")
+        if grep -wqs text /proc/cmdline; then
+            log_warning_msg "Not starting GNOME Display Manager; found 'text' in kernel commandline."
+        elif [ -e "$DEFAULT_DISPLAY_MANAGER_FILE" ] && \
+           [ "$HEED_DEFAULT_DISPLAY_MANAGER" = "true" ] && \
+           [ "$CONFIGURED_DAEMON" != gdm3 ] ; then
+                log_action_msg "Not starting GNOME Display Manager; it is not the default display manager"
+        else
+                log_daemon_msg "Starting GNOME Display Manager" "gdm3"
+                gen_config
+                rm -f /var/lib/gdm/.ICEauthority
+                start-stop-daemon --start --quiet --pidfile /var/run/gdm3.pid \
+			--background --exec $DAEMON || log_end_msg 1
+                log_end_msg 0
+        fi
+  ;;
+  stop)
+        log_daemon_msg "Stopping GNOME Display Manager" "gdm3"
+        set +e
+        start-stop-daemon --stop --quiet --pidfile /var/run/gdm3.pid \
+                --name gdm3 --retry 5
+        set -e
+        log_end_msg $?
+  ;;
+  reload)
+        log_daemon_msg "Scheduling reload of GNOME Display Manager configuration" "gdm3"
+        set +e
+        gen_config
+        start-stop-daemon --stop --signal HUP --quiet --pidfile \
+                /var/run/gdm3.pid --name gdm3
+        start-stop-daemon --stop --signal HUP --quiet --name dconf-service \
+                --user Debian-gdm --oknodo
+        set -e
+        log_end_msg $?
+  ;;
+  status)
+        status_of_proc -p "$PIDFILE" "$DAEMON" gdm3 && exit 0 || exit $?
+  ;;
+  restart|force-reload)
+        $0 stop
+        $0 start
+  ;;
+  *)
+        echo "Usage: /etc/init.d/gdm3 {start|stop|restart|reload|force-reload|status}"
+        exit 1
+  ;;
+esac
+
+exit 0

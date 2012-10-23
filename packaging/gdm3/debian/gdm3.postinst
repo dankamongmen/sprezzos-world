@@ -1,0 +1,97 @@
+#!/bin/sh
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+THIS_PACKAGE=gdm3
+DEFAULT_DISPLAY_MANAGER_FILE=/etc/X11/default-display-manager
+
+# creating Debian-gdm group if it isn't already there
+if ! getent group Debian-gdm >/dev/null; then
+        addgroup --system --force-badname --quiet Debian-gdm
+fi
+
+# creating Debian-gdm user if it isn't already there
+if ! getent passwd Debian-gdm >/dev/null; then
+        adduser --system --force-badname --quiet \
+            --ingroup Debian-gdm \
+            --home /var/lib/gdm3 --no-create-home \
+            --shell /bin/false \
+            Debian-gdm
+        usermod -c "Gnome Display Manager" Debian-gdm
+fi
+
+# debconf is not a registry, so we only fiddle with the default file if it
+# does not exist
+if [ ! -e $DEFAULT_DISPLAY_MANAGER_FILE ]; then
+  if db_get shared/default-x-display-manager; then
+    # workaround debconf passthru bug (#379198)
+    if [ -z "$RET" ]; then
+      $RET="$THIS_PACKAGE"
+    fi
+    if [ "$THIS_PACKAGE" != "$RET" ]; then
+      echo "Please be sure to run \"dpkg --configure $RET\"."
+    fi
+    if db_get "$RET"/daemon_name; then
+      echo "$RET" > $DEFAULT_DISPLAY_MANAGER_FILE
+    fi
+  fi
+fi
+# debconf hangs if gdm3 gets started below without this
+db_stop || true
+
+# update-rc.d levels
+S=30
+K=01
+
+if [ "$1" = configure ] && dpkg --compare-versions "$2" lt-nl "3.2"; then
+  # Remove 3.0 gsettings configuration - now we use dconf
+  rm -f /var/lib/gdm3/gschemas.compiled
+fi
+
+if [ "$1" = configure ] && dpkg --compare-versions "$2" lt-nl "3.4" \
+	&& [ -d /var/lib/gdm3 ]; then
+  # Remove anything GConf related
+  (
+    cd /var/lib/gdm3
+    rm -rf .gconf .gconf.mandatory .gconf.path .gconfd
+  )
+fi
+
+chown -R Debian-gdm:Debian-gdm /var/lib/gdm3
+
+if [ ! -f /etc/pam.d/gdm-launch-environment ]; then
+    ln -s gdm3-autologin /etc/pam.d/gdm-launch-environment
+fi
+
+if [ -L /etc/pam.d/gdm-welcome ]; then
+    rm -f /etc/pam.d/gdm-welcome
+fi
+
+#DEBHELPER#
+
+if [ -f /var/run/gdm.pid ]; then
+  # We are probably upgrading from the old GDM version
+  old_pid=$(cat /var/run/gdm.pid)
+  if [ -L /proc/"$old_pid"/exe ] && [ $(readlink /proc/"$old_pid"/exe | awk '{print $1}') = /usr/sbin/gdm ]; then
+    # Paint me ugly: when you reload GDM 2.20, it will re-execute itself
+    # when possible. This means we need a temporary /usr/sbin/gdm that
+    # will delete itself (so that the old /etc/init.d/gdm becomes again
+    # a no-op).
+    cat > /usr/sbin/gdm << EOF
+#! /bin/sh
+rm -f /usr/sbin/gdm
+exec /usr/sbin/gdm3 "\$@"
+EOF
+    chmod 755 /usr/sbin/gdm
+    kill -s USR1 "$old_pid" || true
+  fi
+fi
+
+if [ -x /etc/init.d/gdm3 ]; then
+  update-rc.d gdm3 defaults $S $K >/dev/null 2>&1
+  invoke-rc.d gdm3 reload || true
+fi
+
+exit 0
