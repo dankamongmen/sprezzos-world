@@ -26,7 +26,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
-	freeglut libwnck d-conf gnome-user-docs abcde
+	freeglut libwnck d-conf gnome-user-docs abcde pidgin
 
 SPREZZ:=packaging
 
@@ -173,7 +173,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
-	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE)
+	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN)
 UDEBS:=$(FIRMWAREALL) $(ANNA)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -475,6 +475,14 @@ $(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf libwnck-$(libwnck_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: pidgin
+pidgin:$(PIDGIN)_$(ARCH).deb
+$(PIDGIN): $(SPREZZ)/pidgin/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf pidgin-$(pidgin_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: util-linux
 util-linux:$(UTILLINUX)_$(ARCH).deb
@@ -1317,7 +1325,7 @@ clean:
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(UDISKS)
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
-	rm -rf $(GNOMEUSERDOCS) $(ABCDE)
+	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN)
 
 clobber:
 	rm -rf $(FETCHED)
