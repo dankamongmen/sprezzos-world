@@ -378,7 +378,7 @@ $(GDM3): $(SPREZZ)/gdm3/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf gdm3_$(gdm3_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf gdm_$(gdm3_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: glib
 glib:$(GLIB)_$(ARCH).deb
