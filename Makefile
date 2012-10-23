@@ -330,7 +330,7 @@ $(ABCDE): $(SPREZZ)/abcde/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf abcde-$(abcde_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xzvf abcde-$(abcde_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: compiz
 compiz:$(COMPIZ)_$(ARCH).deb
