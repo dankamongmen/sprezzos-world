@@ -324,6 +324,14 @@ $(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROORIG)
 	tar xJvf $(CAIROUP).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+.PHONY: abcde
+abcde:$(ABCDE)_$(ARCH).deb
+$(ABCDE): $(SPREZZ)/abcde/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf abcde-$(abcde_UPVER).tar.bz2 --strip-components=1 -C $@
+
 .PHONY: compiz
 compiz:$(COMPIZ)_$(ARCH).deb
 $(COMPIZ): $(SPREZZ)/compiz/debian/changelog
