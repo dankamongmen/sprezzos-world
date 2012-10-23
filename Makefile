@@ -27,7 +27,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
-	libx86 sick-beard
+	libx86 Sick-Beard
 
 SPREZZ:=packaging
 
@@ -104,7 +104,7 @@ GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-sche
 SPLORIG:=spl_$(shell echo $(spl_VERSION) | cut -d- -f1).orig.tar.xz
 ZFSORIG:=zfs_$(shell echo $(zfs_VERSION) | cut -d- -f1).orig.tar.xz
 GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.bz2
-SICKBEARDORIG:=sick-beard_$(shell echo $(sick-beard_VERSION) | cut -d- -f1).orig.tar.xz
+SICKBEARDORIG:=Sick-Beard_$(shell echo $(Sick-Beard_VERSION) | cut -d- -f1).orig.tar.xz
 GRUBUP:=grub-$(shell echo $(grub2_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
 GTK3ORIG:=gtk+3.0_$(shell echo $(gtk3_VERSION) | cut -d- -f1).orig.tar.xz
@@ -222,10 +222,10 @@ $(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
 	tar cjf $(APTITUDEORIG) $@ --exclude-vcs
 	cp -rv $(<D) $@/
 
-.PHONY: sick-beard
-sick-beard: $(SICKBEARD)_$(ARCH).deb
-$(SICKBEARD): $(SPREZZ)/sick-beard/debian/changelog
-	git clone git://github.com/dankamongmen/sick-beard.git $@
+.PHONY: Sick-Beard
+Sick-Beard: $(SICKBEARD)_$(ARCH).deb
+$(SICKBEARD): $(SPREZZ)/Sick-Beard/debian/changelog
+	git clone git://github.com/midgetspy/Sick-Beard.git $@
 	tar cJf $(SICKBEARDORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
