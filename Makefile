@@ -27,7 +27,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
-	libx86 Sick-Beard gnome-font-viewer gnome-screenshot
+	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool
 
 SPREZZ:=packaging
 
@@ -176,7 +176,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
-	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT)
+	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -438,6 +438,14 @@ $(GNOMESCREENSHOT): $(SPREZZ)/gnome-screenshot/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-screenshot_$(gnome-screenshot_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-search-tool
+gnome-search-tool:$(GNOMESEARCHTOOL)_$(ARCH).deb
+$(GNOMESEARCHTOOL): $(SPREZZ)/gnome-search-tool/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-search-tool_$(gnome-search-tool_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-sushi
 gnome-sushi:$(GNOMESUSHI)_$(ARCH).deb
@@ -1366,7 +1374,7 @@ clean:
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(UDISKS)
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
-	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT)
+	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
 
 clobber:
 	rm -rf $(FETCHED)
