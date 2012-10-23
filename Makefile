@@ -13,7 +13,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 # These spur generation of definition files in sprezzos-world from
 # debian/changelog files in packaging/*.
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3 \
-	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi \
+	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi udisks \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo wpa \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
 	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools \
@@ -167,7 +167,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) $(IBUS) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) \
 	$(GSETTINGSDESKTOPSCHEMAS) $(LESS) $(ZFS) $(SPL) $(EOG) $(ATK) $(KISMET) \
-	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) \
+	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) $(UDISKS) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) $(GDM3) \
 	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
@@ -525,6 +525,14 @@ $(X11PROTORANDR): $(SPREZZ)/x11proto-randr/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf randrproto-$(x11proto-randr_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: udisks
+udisks:$(UDISKS)_$(ARCH).deb
+$(UDISKS): $(SPREZZ)/udisks/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf udisks_$(udisks_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
@@ -1299,7 +1307,7 @@ clean:
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
 	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS) $(DCONF)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK)
-	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO)
+	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(UDISKS)
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS)
 
