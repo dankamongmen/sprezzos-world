@@ -28,7 +28,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
-	gnome-themes-standard
+	gnome-themes-standard usbview
 
 SPREZZ:=packaging
 
@@ -158,6 +158,8 @@ PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_VERSION) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 SOCATUP:=socat-$(shell echo $(socat_VERSION) | cut -d- -f1 | tr \~ -)
 SOCATORIG:=socat_$(shell echo $(socat_VERSION) | cut -d- -f1).orig.tar.bz2
+USBVIEWUP:=usbview-$(shell echo $(usbview_VERSION) | cut -d= -f2- | cut -d- -f1)
+USBVIEWORIG:=usbview_$(shell echo $(usbview_VERSION) | cut -d- -f1).orig.tar.gz
 YELPUP:=yelp-$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1)
 YELPORIG:=yelp_$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 
@@ -178,7 +180,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
-	$(GNOMETHEMESSTANDARD)
+	$(GNOMETHEMESSTANDARD) $(USBVIEW)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -322,6 +324,20 @@ linux-latest:$(LINUXLATEST)_$(ARCH).deb
 $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
 	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
 	cp -r $(<D)/.. $@
+
+FETCHED:=$(FETCHED) $(USBVIEWUP).tar.gz
+$(USBVIEWUP).tar.gz:
+	wget -nc -O$@ http://www.kroah.com/linux/usb/$@
+
+$(USBVIEWORIG): $(USBVIEWUP).tar.gz
+	ln -s $< $@
+
+.PHONY: usbview
+usbview:$(USBVIEW)_$(ARCH).deb
+$(USBVIEW): $(SPREZZ)/usbview/debian/changelog $(USBVIEWORIG)
+	mkdir $@
+	tar xzvf $(USBVIEWUP).tar.gz --strip-components=1 -C $@
+	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(CAIROUP).tar.xz
 $(CAIROUP).tar.xz:
