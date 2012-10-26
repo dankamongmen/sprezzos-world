@@ -28,7 +28,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
-	gnome-themes-standard usbview
+	gnome-themes-standard usbview mcelog
 
 SPREZZ:=packaging
 
@@ -104,7 +104,7 @@ GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schema
 GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1).orig.tar.xz
 SPLORIG:=spl_$(shell echo $(spl_VERSION) | cut -d- -f1).orig.tar.xz
 ZFSORIG:=zfs_$(shell echo $(zfs_VERSION) | cut -d- -f1).orig.tar.xz
-GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.bz2
+GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.xz
 SICKBEARDORIG:=sick-beard_$(shell echo $(Sick-Beard_VERSION) | cut -d- -f1).orig.tar.xz
 GRUBUP:=grub-$(shell echo $(grub2_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
 GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
@@ -129,12 +129,12 @@ LIBXMLUP:=libxml2-$(shell echo $(libxml_VERSION) | cut -d- -f1 | cut -d. -f-3 | 
 LIBXMLORIG:=$(shell echo $(LIBXMLUP) | tr - _).orig.tar.gz
 LIBXSLTUP:=libxslt-$(shell echo $(libxslt_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBXSLTORIG:=$(shell echo $(LIBXSLTUP) | tr - _).orig.tar.gz
-
 LIGHTDMUP:=lightdm_$(shell echo $(lightdm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIGHTDMORIG:=$(shell echo $(LIGHTDMUP) | tr - _).orig.tar.gz
 LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_VERSION) | cut -d- -f1).orig.tar.bz2
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+MCELOGORIG:=mcelog_$(shell echo $(mcelog_VERSION) | cut -d- -f1).orig.tar.xz
 MESAUP:=MesaLib-$(shell echo $(mesa_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MESAORIG:=mesa_$(shell echo $(mesa_VERSION) | cut -d- -f1).orig.tar.bz2
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
@@ -144,7 +144,7 @@ NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_VERSION) | cut -d-
 NFSUTILSUP:=nfs-utils-$(shell echo $(nfs-utils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 NFSUTILSORIG:=nfs-$(shell echo $(NFSUTILSUP) | cut -d- -f2- | tr - _).orig.tar.bz2
 NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
-OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.bz2
+OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.xz
 XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
 OPENCVUP:=OpenCV-$(shell echo $(opencv_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 OPENCVORIG:=opencv_$(shell echo $(opencv_VERSION) | tr : . | cut -d- -f1).orig.tar.bz2
@@ -180,7 +180,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
-	$(GNOMETHEMESSTANDARD) $(USBVIEW)
+	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -208,14 +208,21 @@ world: $(DEBS) $(UDEBS)
 growlight: $(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	git clone git://github.com/dankamongmen/growlight.git $@
-	tar cjf $(GROWLIGHTORIG) $@ --exclude-vcs
+	tar cJf $(GROWLIGHTORIG) $@ --exclude-vcs
+	cp -r $(<D) $@/
+
+.PHONY: mcelog
+mcelog:$(MCELOG)_$(ARCH).deb
+$(MCELOG): $(SPREZZ)/mcelog/debian/changelog
+	git clone git://git.kernel.org/pub/scm/utils/cpu/mce/mcelog.git $@
+	tar cJf $(MCELOGORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: omphalos
 omphalos:$(OMPHALOS)_$(ARCH).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone git://github.com/dankamongmen/omphalos.git $@
-	tar cjf $(OMPHALOSORIG) $@ --exclude-vcs
+	tar cJf $(OMPHALOSORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: aptitude
@@ -1409,7 +1416,7 @@ clean:
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
-	rm -rf $(GNOMETHEMESSTANDARD)
+	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG)
 
 clobber:
 	rm -rf $(FETCHED)
