@@ -28,7 +28,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
-	gnome-themes-standard usbview mcelog
+	gnome-themes-standard usbview mcelog libjpeg
 
 SPREZZ:=packaging
 
@@ -180,12 +180,12 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
-	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG)
+	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
-	$(WPA) $(LIBATASMART) $(LIBX86)
+	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -543,6 +543,14 @@ $(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf libatasmart_$(libatasmart_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: libjpeg
+libjpeg:$(LIBJPEG)_$(ARCH).deb
+$(LIBJPEG): $(SPREZZ)/libjpeg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf libjpeg8_$(libjpeg_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: libwnck
 libwnck:$(LIBWNCK)_$(ARCH).deb
@@ -1416,7 +1424,7 @@ clean:
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
-	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG)
+	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG)
 
 clobber:
 	rm -rf $(FETCHED)
