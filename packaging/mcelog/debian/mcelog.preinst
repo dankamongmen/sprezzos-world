@@ -1,0 +1,50 @@
+#!/bin/sh
+set -e
+
+# From http://wiki.debian.org/DpkgConffileHandling
+# Remove a no-longer used conffile
+rm_conffile() {
+    local PKGNAME="$1"
+    local CONFFILE="$2"
+
+    [ -e "$CONFFILE" ] || return 0
+
+    local md5sum="$(md5sum $CONFFILE | sed -e 's/ .*//')"
+    local old_md5sum="$(dpkg-query -W -f='${Conffiles}' $PKGNAME | \
+            sed -n -e "\' $CONFFILE ' { s/ obsolete$//; s/.* //; p }")"
+    if [ "$md5sum" != "$old_md5sum" ]; then
+        echo "Obsolete conffile $CONFFILE has been modified by you."
+        echo "Saving as $CONFFILE.dpkg-bak ..."
+        mv -f "$CONFFILE" "$CONFFILE".dpkg-bak
+    else
+        echo "Removing obsolete conffile $CONFFILE ..."
+        rm -f "$CONFFILE"
+    fi
+}
+
+if [ "$1" = install ] || [ "$1" = upgrade ]; then
+    # Cleanup files related to cron-mode
+    if dpkg --compare-versions "$2" le "0.9~pre1-1"; then
+        rm_conffile mcelog /etc/logrotate.d/mcelog
+
+	rm_conffile mcelog /etc/cron.d/mcelog
+	if [ -e /etc/cron.d/mcelog ]; then
+	    # Disable the crontab to avoid annoying messages
+	    touch /etc/mcelog-disabled
+	else
+	    # Cleanup now-useless file
+	    rm -f /etc/mcelog-disabled
+	fi
+    fi
+
+    # Move /etc/mcelog.conf to /etc/mcelog/mcelog.conf
+    if dpkg --compare-versions "$2" lt "1.0~pre1-1"; then
+        if [ -e /etc/mcelog.conf ] && [ ! -e /etc/mcelog/mcelog.conf ]; then
+            [ -d /etc/mcelog ] || mkdir -p /etc/mcelog
+            mv /etc/mcelog.conf /etc/mcelog/mcelog.conf
+        fi
+    fi
+fi
+
+#DEBHELPER#
+

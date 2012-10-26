@@ -1,0 +1,179 @@
+#! /bin/sh
+#
+### BEGIN INIT INFO
+# Provides:          mcelog
+# Required-Start:    $syslog $local_fs $remote_fs
+# Required-Stop:     $remote_fs
+# Should-Start:      
+# Should-Stop:       
+# Default-Start:     2 3 4 5
+# Default-Stop:      
+# Short-Description: Machine Check Exceptions (MCE) collector & decoder
+# Description:       Machine Check Exceptions are raised by the CPU whenever
+#                    it encounters an hardware error. mcelog collects and
+#                    decodes Machine Check Exceptions as they happen. 
+### END INIT INFO
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=/usr/sbin/mcelog
+NAME=mcelog
+DESC="Machine Check Exceptions decoder"
+TRIGGER=/sys/devices/system/machinecheck/machinecheck0/trigger
+
+RUN_MODE=daemon
+
+test -x $DAEMON || exit 0
+
+if [ ! -r /dev/mcelog ]; then
+    echo "/dev/mcelog not active"
+    exit 0
+fi
+
+[ -r /etc/default/mcelog ] && . /etc/default/mcelog
+
+set -e
+
+# Trigger functions
+start_trigger()
+{
+    if start-stop-daemon --stop --test --quiet --exec $DAEMON; then
+	echo "WARNING: mcelog daemon running, not setting up MCE trigger"
+	exit 1
+    fi
+
+    echo -n "Setting up Machine Check Exceptions trigger..."
+    if [ -e $TRIGGER ]; then
+	echo $DAEMON > $TRIGGER
+    else
+	echo " not supported on this machine."
+	exit 0
+    fi
+    echo " done."
+
+    echo -n "Running $DESC..."
+    $DAEMON
+    echo " done."
+}
+
+stop_trigger()
+{
+    echo -n "Clearing Machine Check Exceptions trigger..."
+    if [ -e $TRIGGER ]; then
+	echo "" > $TRIGGER
+    else
+	echo " not supported on this machine."
+	exit 0
+    fi
+    echo " done."
+}
+
+trigger_status()
+{
+    if [ "$(cat $TRIGGER)" = $DAEMON ]; then
+	echo "Machine Check Exceptions collected by mcelog."
+	exit 0
+    else
+	if [ ! -e $TRIGGER ]; then
+	    echo "Machine Check Exceptions not collected by mcelog; trigger mode not supported."
+	else
+	    echo "Machine Check Exceptions not collected by mcelog."
+	fi
+	exit 1
+    fi
+}
+
+# Daemon functions
+start_daemon()
+{
+    # Check & clear mcelog trigger
+    if [ -e $TRIGGER ] && [ "$(cat $TRIGGER)" = $DAEMON ]; then
+	echo "" > $TRIGGER
+    fi
+
+    echo -n "Starting $DESC: "
+    start-stop-daemon --start --quiet --exec $DAEMON -- --daemon $DAEMON_OPTS
+    echo "$NAME."
+}
+
+stop_daemon()
+{
+    echo -n "Stopping $DESC: "
+    start-stop-daemon --stop --oknodo --quiet --exec $DAEMON
+    echo "$NAME."
+}
+
+restart_daemon()
+{
+    echo -n "Restarting $DESC: "
+
+    # Check & clear mcelog trigger
+    if [ -e $TRIGGER ] && [ "$(cat $TRIGGER)" = $DAEMON ]; then
+	echo "" > $TRIGGER
+    fi
+
+    start-stop-daemon --stop --oknodo --quiet --exec $DAEMON
+    sleep 1
+    start-stop-daemon --start --quiet --exec $DAEMON -- --daemon $DAEMON_OPTS
+
+    echo "$NAME."
+}
+
+daemon_status()
+{
+    echo -n "$NAME is "
+
+    if start-stop-daemon --stop --test --quiet --exec $DAEMON; then
+	echo "running."
+    else
+	echo "not running."
+	exit 1
+    fi
+}
+
+
+case "$1" in
+  start)
+	if [ "$RUN_MODE" = "trigger" ]; then
+	    start_trigger
+	else
+	    start_daemon
+	fi
+	;;
+  stop)
+	if [ "$RUN_MODE" = "trigger" ]; then
+	    stop_trigger
+	else
+	    stop_daemon
+	fi
+	;;
+  restart)
+	if [ "$RUN_MODE" = "trigger" ]; then
+	    start_trigger
+	else
+	    restart_daemon
+	fi
+	;;
+  force-reload)
+	if [ "$RUN_MODE" = "trigger" ]; then
+	    [ -e $TRIGGER ] && [ "$(cat $TRIGGER)" = $DAEMON ] && $0 restart || exit 0
+	else
+	    start-stop-daemon --stop --test --quiet --exec $DAEMON \
+		&& restart_daemon \
+		|| exit 0
+	fi
+	;;
+  status)
+	if [ "$RUN_MODE" = "trigger" ]; then
+	    trigger_status
+	else
+	    daemon_status
+	fi
+	;;
+  *)
+	N=/etc/init.d/$NAME
+	echo "Usage: $N {start|stop|restart|force-reload}" >&2
+	exit 1
+	;;
+esac
+
+exit 0

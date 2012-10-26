@@ -1,0 +1,130 @@
+Description: Use 64bit types for memory addresses
+ mcelog reads 64-bit addresses from the MCE, but passes them around with
+ type unsigned long, which causes mcelog --dmi to give incorrect
+ results on 32-bit systems with more than 4 GiB of RAM.
+Origin: other, http://bugs.debian.org/cgi-bin/bugreport.cgi?msg=5;bug=437022
+Bug-Debian: http://bugs.debian.org/437022
+Author: Anders Kaseorg <andersk@MIT.EDU>
+Author: Julien BLACHE <jblache@debian.org>
+
+Index: mcelog-1.0~pre3-72-gcbd4da4/dimm.c
+===================================================================
+--- mcelog-1.0~pre3-72-gcbd4da4.orig/dimm.c	2011-07-20 18:44:28.505446683 +0200
++++ mcelog-1.0~pre3-72-gcbd4da4/dimm.c	2011-07-20 18:44:29.961434285 +0200
+@@ -351,14 +351,14 @@
+ 		Eprintf("Cannot run error trigger %s for %s\n", trigger, loc);
+ 	open_dimm_db(NULL);
+ }
+-void new_error(unsigned long addr, unsigned long max_error, char *trigger)
++void new_error(unsigned long long addr, unsigned long max_error, char *trigger)
+ {
+ 	struct dmi_memdev **devs;
+ 	int i;
+ 
+ 	devs = dmi_find_addr(addr);
+ 	if (devs[0] == NULL) {
+-		Wprintf("No memory found for address %lx\n", addr);
++		Wprintf("No memory found for address %Lx\n", addr);
+ 		exit(1);
+ 	}
+ 	for (i = 0; devs[i]; i++) {
+@@ -366,7 +366,7 @@
+ 		char *loc = dmi_getstring(&d->header, d->device_locator);
+ 		struct group *g = find_entry(dimm_db, NULL, "Locator", loc);
+ 		if (!g) { // shouldn't happen
+-			Eprintf("No record found for %lx\n", addr);
++			Eprintf("No record found for %Lx\n", addr);
+ 			return;
+ 		}
+ 		unsigned long val = inc_val(g, "corrected errors");
+Index: mcelog-1.0~pre3-72-gcbd4da4/dimm.h
+===================================================================
+--- mcelog-1.0~pre3-72-gcbd4da4.orig/dimm.h	2011-07-20 18:44:28.521446547 +0200
++++ mcelog-1.0~pre3-72-gcbd4da4/dimm.h	2011-07-20 18:44:29.969434217 +0200
+@@ -1,6 +1,6 @@
+ void close_dimm_db(void);
+ int open_dimm_db(char *fn);
+-void new_error(unsigned long addr, unsigned long max_error, char *trigger);
++void new_error(unsigned long long addr, unsigned long max_error, char *trigger);
+ void reset_dimm(char *locator);
+ void gc_dimms(void);
+ void dump_all_dimms(void);
+Index: mcelog-1.0~pre3-72-gcbd4da4/dmi.c
+===================================================================
+--- mcelog-1.0~pre3-72-gcbd4da4.orig/dmi.c	2011-07-20 18:44:28.541446377 +0200
++++ mcelog-1.0~pre3-72-gcbd4da4/dmi.c	2011-07-20 18:44:29.989434047 +0200
+@@ -331,7 +331,7 @@
+ 			Wprintf("%s ", type_details[i]);
+ }
+ 
+-static void dump_memdev(struct dmi_memdev *md, unsigned long addr)
++static void dump_memdev(struct dmi_memdev *md, unsigned long long addr)
+ {
+ 	char tmp[20];
+ 	char unit[10];
+@@ -340,7 +340,7 @@
+ 	if (md->header.length < 
+ 			offsetof(struct dmi_memdev, manufacturer)) { 
+ 		if (verbose > 0)
+-			printf("Memory device for address %lx too short %u\n",
++			printf("Memory device for address %llx too short %u\n",
+ 			       addr, md->header.length);
+ 		return;
+ 	}	
+@@ -532,7 +532,7 @@
+ 			DMIGET(dmi_dimms[i],device_set));
+ }
+ 
+-struct dmi_memdev **dmi_find_addr(unsigned long addr)
++struct dmi_memdev **dmi_find_addr(unsigned long long addr)
+ {
+ 	struct dmi_memdev **devs; 
+ 	int i, k;
+@@ -576,7 +576,7 @@
+ 	return devs;
+ }
+ 
+-void dmi_decodeaddr(unsigned long addr)
++void dmi_decodeaddr(unsigned long long addr)
+ {
+ 	struct dmi_memdev **devs = dmi_find_addr(addr);
+ 	if (devs[0]) { 
+@@ -585,7 +585,7 @@
+ 		for (i = 0; devs[i]; i++) 
+ 			dump_memdev(devs[i], addr);
+ 	} else { 
+-		Wprintf("No DIMM found for %lx in SMBIOS\n", addr);
++		Wprintf("No DIMM found for %llx in SMBIOS\n", addr);
+ 	}
+ 	free(devs);
+ } 
+Index: mcelog-1.0~pre3-72-gcbd4da4/dmi.h
+===================================================================
+--- mcelog-1.0~pre3-72-gcbd4da4.orig/dmi.h	2011-07-20 18:44:28.561446205 +0200
++++ mcelog-1.0~pre3-72-gcbd4da4/dmi.h	2011-07-20 18:44:30.005433911 +0200
+@@ -62,10 +62,10 @@
+ }  __attribute__((packed));
+ 
+ int opendmi(void);
+-void dmi_decodeaddr(unsigned long addr);
++void dmi_decodeaddr(unsigned long long addr);
+ int dmi_sanity_check(void);
+ unsigned dmi_dimm_size(unsigned short size, char *unit);
+-struct dmi_memdev **dmi_find_addr(unsigned long addr);
++struct dmi_memdev **dmi_find_addr(unsigned long long addr);
+ void dmi_set_verbosity(int v);
+ 
+ char *dmi_getstring(struct dmi_entry *e, unsigned number);
+Index: mcelog-1.0~pre3-72-gcbd4da4/mcelog.c
+===================================================================
+--- mcelog-1.0~pre3-72-gcbd4da4.orig/mcelog.c	2011-07-20 18:44:28.581446035 +0200
++++ mcelog-1.0~pre3-72-gcbd4da4/mcelog.c	2011-07-20 18:44:30.021433775 +0200
+@@ -127,7 +127,7 @@
+ 	}
+ } 
+ 
+-static void resolveaddr(unsigned long addr)
++static void resolveaddr(unsigned long long addr)
+ {
+ 	if (addr && do_dmi && dmi_forced)
+ 		dmi_decodeaddr(addr);
