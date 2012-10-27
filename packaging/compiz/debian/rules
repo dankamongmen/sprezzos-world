@@ -3,79 +3,33 @@
 
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
-export COMPIZ_DEB_BUILD=1
-DEB_HOST_ARCH := $(shell dpkg-architecture -qDEB_HOST_ARCH)
-gles2_architectures := armel armhf
 
-CORE_ABIVERSION := $(shell sed -rn 's/^\#define[[:space:]]+CORE_ABIVERSION[[:space:]]+//p' include/core/abiversion.h )
+CORE_ABIVERSION := $(shell sed -rn 's/^\#define[[:space:]]+CORE_ABIVERSION[[:space:]]+//p' include/core/core.h )
 
-DEFAULT_PLUGINS = "ccp"
+DEFAULT_PLUGINS = "core bailer detection composite opengl decor mousepoll vpswitch regex animation snap expo move compiztoolbox place grid gnomecompat wall ezoom workarounds staticswitcher resize fade scale session"
 
-override_dh_quilt_patch:
-	dh_quilt_patch
-	if test -r debian/patches/series.$(DEB_HOST_ARCH); then \
-	  pc=".pc.$(DEB_HOST_ARCH)"; \
-	  test -d "$(CURDIR)/$$pc" || mkdir "$(CURDIR)/$$pc"; \
-	  cp debian/patches/series.$(DEB_HOST_ARCH) $(CURDIR)/$$pc/series; \
-	  cd $(CURDIR); \
-	  QUILT_PC="$$pc" quilt upgrade || true; \
-	  QUILT_PC="$$pc" QUILT_PATCHES="debian/patches/" quilt push -a || true; \
-	fi; \
+%:
+	dh $@
 
-override_dh_quilt_unpatch:
-	if test -r debian/patches/series.$(DEB_HOST_ARCH); then \
-	  pc=".pc.$(DEB_HOST_ARCH)"; \
-	  cd $(CURDIR); \
-	  QUILT_PC="$$pc" QUILT_PATCHES="debian/patches/" quilt pop -a || true; \
-	fi; \
-	dh_quilt_unpatch
+clean:
+	dh clean
+	# upstream build leaves this around
+	rm -f po/compiz.pot
 
 override_dh_auto_configure:
 	# currently, segfault if CMAKE_BUILD_TYPE=Release
-	LDFLAGS=$(shell echo $$LDFLAGS | sed -e 's/\-Wl,-Bsymbolic-functions //')
-ifeq ($(DEB_HOST_ARCH),$(findstring $(DEB_HOST_ARCH), $(gles2_architectures)))
-	dh_auto_configure -- -DCOMPIZ_BUILD_WITH_RPATH=FALSE -DCOMPIZ_DEFAULT_PLUGINS=\"$(DEFAULT_PLUGINS)\" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCOMPIZ_PACKAGING_ENABLED=TRUE -DUSE_GSETTINGS=ON -DCOMPIZ_DISABLE_GS_SCHEMAS_INSTALL=OFF -DCOMPIZ_DISABLE_PLUGIN_KDE=ON -DCOMPIZ_BUILD_TESTING=OFF -DUSE_KDE4=OFF -DUSE_GCONF=OFF -DBUILD_GLES=ON
-else
-	dh_auto_configure -- -DCOMPIZ_BUILD_WITH_RPATH=FALSE -DCOMPIZ_DEFAULT_PLUGINS=\"$(DEFAULT_PLUGINS)\" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCOMPIZ_PACKAGING_ENABLED=TRUE -DUSE_GSETTINGS=ON -DCOMPIZ_DISABLE_GS_SCHEMAS_INSTALL=OFF -DCOMPIZ_DISABLE_PLUGIN_KDE=ON -DCOMPIZ_BUILD_TESTING=OFF -DUSE_KDE4=OFF -DUSE_GCONF=OFF
-endif
+	dh_auto_configure -- -DCOMPIZ_BUILD_WITH_RPATH=FALSE -DCOMPIZ_DEFAULT_PLUGINS=\"$(DEFAULT_PLUGINS)\" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCOMPIZ_PACKAGING_ENABLED=TRUE
 
 override_dh_install:
 	# cmake findcompiz_install use COMPIZ_DESTDIR and using COMPIZ_DESTDIR and
 	# DESTDIR together is completely broken upstream
 	# So, doing the same in debian/rules to find a way to install things in the
 	# right place, sorry for the kittens
-ifeq ($(DEB_HOST_ARCH),$(findstring $(DEB_HOST_ARCH), $(gles2_architectures)))
 	cmake_dir=`cmake --system-information 2> /dev/null | grep "^CMAKE_ROOT " | sed -e 's/.*"\(.*\)"/\1/'` && \
-	mkdir -p debian/tmp$${cmake_dir}/Modules && \
-	mkdir -p debian/compiz-dev$${cmake_dir}/Modules && \
-	cp cmake/FindCompiz.cmake debian/tmp$${cmake_dir}/Modules && cp cmake/FindOpenGLES2.cmake debian/compiz-dev$${cmake_dir}/Modules
-else
-	cmake_dir=`cmake --system-information 2> /dev/null | grep "^CMAKE_ROOT " | sed -e 's/.*"\(.*\)"/\1/'` && \
-	mkdir -p debian/tmp$${cmake_dir}/Modules && \
-	cp cmake/FindCompiz.cmake debian/tmp$${cmake_dir}/Modules
-endif
-
-	# remove .a files
-	rm -f debian/tmp/usr/lib/*.a
-
-	# remove gconf schema files
-	#rm -rf debian/tmp/usr/share/gconf/schemas/
-
-	# ugly hack to install xml files
-	mkdir -p debian/tmp/usr/share/gnome-control-center/keybindings
-	find */gtk/gnome -name *.xml | xargs cp -at debian/tmp/usr/share/gnome-control-center/keybindings/
+	mkdir -p debian/tmp$${cmake_dir}/Modules && cp cmake/FindCompiz.cmake debian/tmp$${cmake_dir}/Modules
 
 	dh_install --fail-missing
 
-	# remove the compizconfig dev file from compiz-dev
-	rm debian/compiz-dev/usr/share/compiz/cmake/LibCompizConfigCommon.cmake
-
 override_dh_gencontrol:
 	dh_gencontrol -- -Vcoreabiversion=$(CORE_ABIVERSION)
-
-override_dh_auto_test:
-	#dh_auto_test
-
-%:
-	dh $@ --parallel --with quilt,python2 --no-guessing-versions,migrations,translations
 

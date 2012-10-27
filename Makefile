@@ -23,12 +23,12 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
-	gnome-power-manager evince poppler gnome-media compiz fbset meta-gnome \
+	gnome-power-manager evince poppler gnome-media compiz9 fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
-	gnome-themes-standard usbview mcelog libjpeg
+	gnome-themes-standard usbview mcelog libjpeg compiz
 
 SPREZZ:=packaging
 
@@ -175,12 +175,12 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GNOMECONTROLCENTER) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(CHEESE) $(UDISKS) \
 	$(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(INSTALLATIONREPORT) $(CLUTTER) \
 	$(APTITUDE) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GNOMECONTACTS) $(GDM3) \
-	$(EVINCE) $(POPPLER) $(COMPIZ) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
+	$(EVINCE) $(POPPLER) $(COMPIZ9) $(FBSET) $(GOBJECTINTROSPECTION) $(GCOVR) \
 	$(METAGNOME) $(GNOMECATALOG) $(WIRELESSTOOLS) $(WIRESHARK) $(GNOMESUSHI) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
-	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG)
+	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -375,6 +375,14 @@ $(COMPIZ): $(SPREZZ)/compiz/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf compiz-$(compiz_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: compiz9
+compiz9:$(COMPIZ9)_$(ARCH).deb
+$(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf compiz-$(compiz9_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: d-conf
 d-conf:$(DCONF)_$(ARCH).deb
@@ -1418,13 +1426,13 @@ clean:
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE) $(ANNA)
 	rm -rf $(INSTALLATIONREPORT) $(GNOMESHELL) $(GNOMESHELLEXTENSIONS) $(GCOVR)
 	rm -rf $(GNOMECONTACTS) $(CLUTTER) $(GNOMEPOWERMANAGER) $(EVINCE) $(VTE)
-	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ) $(FBSET) $(WIRELESSTOOLS) $(DCONF)
+	rm -rf $(POPPLER) $(GNOMEMEDIA) $(COMPIZ9) $(FBSET) $(WIRELESSTOOLS) $(DCONF)
 	rm -rf $(GOBJECTINTROSPECTION) $(GNOMECATALOG) $(KISMET) $(WIRESHARK) $(GVFS)
 	rm -rf $(GNOMESUSHI) $(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(UDISKS)
 	rm -rf $(X11PROTOGL) $(X11PROTORANDR) $(GLU) $(FREEGLUT) $(LIBWNCK) $(GDM3)
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
-	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG)
+	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG) $(COMPIZ)
 
 clobber:
 	rm -rf $(FETCHED)
