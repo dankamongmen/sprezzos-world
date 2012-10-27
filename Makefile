@@ -28,7 +28,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
-	gnome-themes-standard usbview mcelog libjpeg compiz
+	gnome-themes-standard usbview mcelog libjpeg compiz openldap
 
 SPREZZ:=packaging
 
@@ -180,7 +180,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
-	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ)
+	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) \
+	$(OPENLDAP)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -575,6 +576,14 @@ $(LIBX86): $(SPREZZ)/libx86/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf libx86_$(libx86_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: openldap
+openldap:$(OPENLDAP)_$(ARCH).deb
+$(OPENLDAP): $(SPREZZ)/openldap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf openldap_$(openldap_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: pidgin
 pidgin:$(PIDGIN)_$(ARCH).deb
@@ -1416,7 +1425,7 @@ clean:
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT) $(GTK+3)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
 	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS) $(IBUS)
-	rm -rf $(BASEFILES) $(NETBASE) $(FIRMWAREALL) $(FBI)
+	rm -rf $(BASEFILES) $(NETBASE) $(FIRMWAREALL) $(FBI) $(OPENLDAP)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE)
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
