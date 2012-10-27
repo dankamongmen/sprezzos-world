@@ -1,0 +1,90 @@
+#! /bin/sh 
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+# This will be replaced with debian/slapd.scripts-common which includes
+# various helper functions and $OLD_VERSION and $SLAPD_CONF
+#SCRIPTSCOMMON#
+
+postinst_initial_configuration() {					# {{{
+# Configure slapd for the first time (when first installed)
+# Usage: postinst_initial_configuration
+
+	if manual_configuration_wanted; then
+		echo "  Omitting slapd configuration as requested." >&2
+	else
+		crypt_admin_pass
+		create_new_configuration
+		configure_v2_protocol_support
+	fi
+}
+
+# }}}
+postinst_upgrade_configuration() {					# {{{
+# Handle upgrading slapd from some older version
+# Usage: postinst_upgrade_configuration
+
+	# Better back up the config file in any case
+	echo -n "  Backing up $SLAPD_CONF in `database_dumping_destdir`... " >&2
+	backup_config_once
+	echo done. >&2
+
+	# Check if the database format has changed.
+	if database_format_changed; then
+
+		# During upgrading we have to load the old data
+		move_incompatible_databases_away
+		load_databases
+	fi
+
+	# Move to slapd.d configuration style.
+	migrate_to_slapd_d_style
+
+	# One-time upgrade fix for olcAccess on cn=Subschema
+	if previous_version_older 2.4.23-5 && previous_version_newer 2.4.23-3 \
+	   && [ -e "$SLAPD_CONF/cn=config/olcDatabase={-1}frontend.ldif" ] \
+	   && ! grep -i 'olcAccess:.*subschema' "$SLAPD_CONF/cn=config/olcDatabase={-1}frontend.ldif"
+	then
+		sed -i '/olcAccess: {0}/a\
+olcAccess: {1}to dn.exact="" by * read\
+olcAccess: {2}to dn.base="cn=Subschema" by * read' "${SLAPD_CONF}/cn=config/olcDatabase={-1}frontend.ldif"
+	fi
+
+	# Enable LDAP protocol v2 support if needed.
+	configure_v2_protocol_support
+
+	# Update permissions of all database directories and /var/run/slapd
+	update_databases_permissions
+	update_permissions /var/run/slapd
+
+	# Versions prior to 2.4.7-1 could create a slapd.conf that wasn't
+	# readable by the openldap user.
+	update_permissions "${SLAPD_CONF}"
+}
+
+# }}}
+
+# Create a new user.  Don't create the user, however, if the local
+# administrator has already customized slapd to run as a different user.
+if [ "$MODE" = "configure" ] || [ "$MODE" = "reconfigure" ] ; then
+	if [ "openldap" = "$SLAPD_USER" ] ; then
+		create_new_user
+	fi
+fi
+
+# Configuration.
+if is_initial_configuration "$@"; then
+	postinst_initial_configuration
+else
+	postinst_upgrade_configuration
+fi
+
+db_stop || true
+
+#DEBHELPER#
+
+exit 0
+
+# vim: set sw=8 foldmethod=marker: 

@@ -1,0 +1,202 @@
+Notes about Debian's slapd package
+----------------------------------
+
+  Please see the bottom of this file for the ways in which the Debian
+  OpenLDAP packages differ from the upstream OpenLDAP releases.  Please
+  report any bugs that may be related to those changes to Debian via
+  reportbug and not to upstream; upstream is not responsible for changes
+  made in the Debian package.
+
+The OpenLDAP configuration
+
+  Since version 2.4.23-3 the configuration of OpenLDAP has been changed to
+  /etc/ldap/slapd.d by default.  The OpenLDAP packages in Debian provide an
+  automatic migration to the new configuration style. With the new
+  configuration style it is possible to change values on the fly without
+  restarting slapd.  Changes are made through the use of ldif files and
+  ldap{add,modify}.  In Debian you can use the following command to search
+  the configuration:
+
+      ldapsearch -Y EXTERNAL -H ldapi:/// -b "cn=config"
+
+  To modify configuration use the command:
+
+      ldapmodify -Y EXTERNAL -H ldapi:/// -f <file.ldif>
+
+  For configuration options see the several manpages that exist or the
+  documentation provided upstream.
+
+Using BDB/HDB Backends
+
+  HDB is the recommended database backend.  It's the same as BDB but
+  allows some additional operations.
+   
+  slapd BDB and HDB backends rely on libdb to store data on your disks.
+  libdb uses a configuration file to tune database specific
+  parameters. This file is called DB_CONFIG, and should be created in each
+  directory containing one of your ldap databases, usually /var/lib/ldap.
+
+  It is VERY IMPORTANT to correctly setup a DB_CONFIG file.  It is not
+  just a matter of performance: depending on the version of slapd and
+  libdb being used, your slapd may just hang and stop answering queries.
+
+  To correctly set up your DB_CONFIG file, please refer to
+  README.DB_CONFIG.gz in this directory.
+
+BerkeleyDB Version
+
+  slapd has been built against version 4.8.30 of BerkeleyDB. This version is
+  supported by the upstream developers.
+
+  slapd will automatically handle database recovery, so you generally do
+  not need the BerkeleyDB utilities.  However, if you want to perform
+  other operations directly on the raw database without using the slapd
+  tools, install db4.8-util and use those BerkeleyDB utilities. Utilities
+  from other db*-util packages will not work correctly and may render the
+  database unusable by slapd.
+
+Logging
+
+  slapd logs to the facility local4. If you want to direct slapd's logs to
+  a separate log file, add a line like:
+
+      local4.debug     /var/log/slapd.log
+
+  to /etc/syslog.conf. You may also want to add ";local4.none" to the
+  catch-all entry that logs to /var/log/messages so that it doesn't
+  continue to receive slapd logs.
+
+SASL Configuration
+
+  To enable GSSAPI (Kerberos) authentication to slapd, install either the
+  libsasl2-modules-gssapi-mit or libsasl2-modules-gssapi-heimdal packages
+  depending on which Kerberos implementation you want to use.
+
+  SASL configuration files may be placed either in /usr/lib/sasl2 (the
+  standard path, but not a great place for configuration files) or in
+  /etc/ldap/sasl2.  A SASL configuration file should be named after the
+  program that will use it.  So, for instance, to configure SASL for
+  slapd, create a file named slapd.conf in /etc/ldap/sasl2 or in
+  /usr/lib/sasl2.
+
+TCP Wrappers
+
+  The Debian slapd package is compiled with TCP wrappers.  This means that
+  you are able to restrict access to the LDAP server using /etc/hosts.deny
+  or /etc/hosts.allow.
+
+Running slapd under a Different UID/GID
+   
+  By default, slapd runs as openldap in the openldap group.  Keeping the
+  default is easiest.  If for some reason you need to run slapd as a
+  different user:
+
+  - Create the user/group for slapd -- usually:
+
+      adduser --system --group <group> --disabled-login <user>
+
+  - Stop slapd:
+
+      /etc/init.d/slapd stop
+
+  - Tell slapd to run under a different UID by editing /etc/default/slapd
+    and setting SLAPD_USER and SLAPD_GROUP.  (For example,
+    SLAPD_USER="ldap", SLAPD_GROUP="ldap")
+
+  - Tell linux slapd can access all database files -- usually:
+
+      chown -R <user>:<group> /var/lib/ldap
+
+  - Tell linux slapd can access configuration files -- usually:
+
+      chgrp <group> /etc/ldap/slapd.conf
+      chmod 0640 /etc/ldap/slapd.conf
+
+  - Tell linux slapd can access /var/run/slapd and write a PID file:
+
+       chgrp <group> /var/run/slapd
+       chmod 0770 /var/run/slapd
+
+  - Start slapd -- /etc/init.d/slapd start
+
+  Once you have done so, remember to always run any utilities that access
+  or update the database (such as slapadd) as the same user that slapd is
+  running as.  If you forget, you will need to redo the chown noted above.
+
+If slapd Depends on Other Service
+
+  In the event that you are running slapd with a different back-end module
+  that depends on other programs (such as an SQL database) you may need to
+  adjust the runlevels of slapd to start after the SQL database.
+
+Creating NSS Flat Files from LDAP
+
+  If you have need to create passwd/shadow/etc files from an LDAP
+  directory there is now a script included with these Debian packages
+  which may help you.  The script is in /usr/share/slapd/ and is named
+  ldiftopasswd.  In general you should be able to do:
+
+      ldapsearch | ldiftopasswd
+
+  and it will generate the files for you.  You will need appropriate
+  privileges, of course, and appropriate arguments to ldapsearch.
+
+Modifications Compared to Upstream
+
+  Compared to stock OpenLDAP as shipped by the OpenLDAP project, the
+  Debian packages make the following modifications.  If you see any
+  problems caused by or related to these modifications, please report them
+  via the Debian bug tracking system using reportbug, not to the OpenLDAP
+  project.
+
+  * The only LDAP library installed is libldap_r, which in the upstream
+    release is only used for slapd, and libldap is a symlink to it.  This
+    library has thread safety for use with slapd, but that thread safety
+    is not checked for any application other than slapd by upstream.
+    Upstream does not support using libldap_r for programs other than
+    slapd.  The current library installation strategy in the Debian
+    packages is an attempt to deal with problems caused by symbol
+    conflicts between libldap and libldap_r when both are pulled in by the
+    same process (most commonly by libnss-ldap) and the number of packages
+    that use libldap in threaded code expecting thread safety.
+
+  * libldap and libber have symbol versioning added to prevent problems
+    during partial upgrades from older versions of the libraries.
+
+  * slapindex has been patched to warn when run as root and the man page
+    has been patched to notify users that slapindex should be run as the
+    user slapd runs as.  There is some upstream discussion of a better
+    fix.
+
+  * slapd is configured to look in /etc/ldap/sasl2 in addition to
+    /usr/lib/sasl2 for SASL configuration files.
+
+  * libldap has been patched to work around what may be a bug in GnuTLS in
+    calculating the length of subjectAltName in TLS certificates.  See
+    <http://bugs.debian.org/465197>.
+
+  * The libldap library is patched to add two functions used by
+    evolution-exchange for NTLM authentication to Active Directory.  See
+    <http://bugs.debian.org/457374>.
+
+  * Several paths have been adjusted to fit Debian file permissions and
+    for Filesystem Hierarchy Standard compliance, namely:
+    - The ldapi socket is in /var/run/slapd
+    - The slapi error log has been moved to /var/log/slapi-errors
+    - The slapd database location is /var/lib/ldap
+
+  In addition, upstream patches from CVS may be applied to fix bugs in the
+  current release and will not be noted here unless they're not expected
+  to be in the next release.
+
+  Finally, note that the Debian OpenLDAP packages have been compiled
+  against GnuTLS instead of OpenSSL to avoid licensing problems for
+  GPL-covered packages that use the LDAP libraries.  This is a supported
+  configuration, but it's not widely used outside of Debian.
+
+  For the exact patches applied to the upstream source and references to
+  the relevant upstream ITS numbers, Debian bugs, and upstream
+  synchronization status, see the debian/patches directory in the
+  openldap source package.
+
+ -- Russ Allbery <rra@debian.org>, Thu, 14 Feb 2008 18:47:07 -0800

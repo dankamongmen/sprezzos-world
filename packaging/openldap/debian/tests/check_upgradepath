@@ -1,0 +1,173 @@
+#! /bin/sh
+
+set -e
+
+# WARNING: This script is obsolete and will require a fair bit of work to get
+# working again.  It assumes woody, uses debconf questions that don't exist
+# any more, and probably doesn't check everything that you would want to
+# check.  Preserved just because I haven't done the work to see if puiparts
+# can now do the same thing in a cleaner way.
+
+# Setup
+: ${chroot_dir:=../chroot}
+: ${debmirror:=http://ftp.de.debian.org/debian}
+: ${proxy:=http://proxy.galaxy:3128/}
+unset LC_ALL
+unset LC_CTYPE
+unset LC_MESSAGES
+# XXX: comment out when testing new versions. Needed so libc6 does not
+# ask for restarting services.
+export DEBIAN_FRONTEND=noninteractive
+
+woodytar=$chroot_dir/woody_base.tar.gz
+
+# List our packages
+list_packages() {
+	local p ver
+	ver=`dpkg-parsechangelog|sed -ne 's/^Version: //p'`
+	for p in `dh_listpackages`; do
+		(cd .. && echo ${p}_$ver*deb)
+	done
+}
+
+# Run a command inside the chroot
+
+in_target() {
+	chroot $chroot_dir/woody "$@"
+}
+
+# Set a debconf variable inside the chroot
+
+debconf_set() {
+	local name=$1
+	shift
+	cat >>$chroot_dir/woody/var/cache/debconf/config.dat <<EOF
+Name: $name
+Template: $name
+Flags: seen
+Value: $@
+
+EOF
+}
+
+# Setup a woody chroot
+
+setup_chroot() {
+	# Kill an existing chroot
+	rm -Rf $chroot_dir/woody
+
+	# If there is a tar archive with a base system we use it
+	if [ -e $woodytar ]; then
+		mkdir $chroot_dir/woody
+		echo -n "Unpacking system from $woodytar"
+		tar -C $chroot_dir/woody -xzf $woodytar
+		echo "done."
+	# Otherwise we need to create a new base system and save it
+	# to a tar for the next time
+	else
+		debootstrap woody $chroot_dir/woody $debmirror | \
+		  shtool prop -p "Creating base system from $debmirror"
+		tar -C $chroot_dir/woody -czvf $woodytar . | \
+			shtool prop -p "Saving system to $woodytar"
+	fi
+
+	# Install a suitable apt configuration
+	echo "deb $debmirror woody main" \
+		> $chroot_dir/woody/etc/apt/sources.list
+	echo "Acquire::HTTP::Proxy \"$proxy\";" \
+		> $chroot_dir/woody/etc/apt/apt.conf
+	in_target apt-get update
+	in_target mount -t proc none /proc
+
+	# We don't want any debconf interaction
+	#debconf_set debconf/frontend Noninteractive
+}
+
+# These are our example configurations for testing the upgrade
+
+conf_domain_or_host() {
+	debconf_set slapd/fill_method auto
+	debconf_set slapd/suffix_type "domain or host"
+	debconf_set slapd/domain "some.example.net"
+	debconf_set slapd/replicate false
+	debconf_set shared/organization Some Organization
+}
+
+
+check_domain_or_host() {
+	sleep 2  # wait for slapd to startup
+	in_target ldapsearch -h localhost -b dc=some,dc=example,dc=net -x \
+		objectclass=\*
+}
+
+conf_location() {
+	debconf_set slapd/fill_method auto
+	debconf_set slapd/suffix_type "location"
+	debconf_set shared/locale/countrycode de
+	debconf_set shared/organization "Sample Organization"
+	debconf_set slapd/replicate false
+	debconf_set shared/organization Some Organization
+}
+
+check_location() {
+	sleep 2  # wait for slapd to startup
+	in_target ldapsearch -h localhost -b "o=Some Organization, c=de" \
+		-x objectclass=\*
+}
+# Install slapd inside the chroot
+
+install_slapd() {
+	in_target apt-get -y install slapd ldap-utils
+}
+
+# Do an upgrade of our packages inside the chroot
+
+upgrade() {
+	# Link our packages into the chroot
+	for p in `list_packages`; do 
+		ln ../$p $chroot_dir/woody/root/
+	done
+
+	# Create a packages file
+	(cd $chroot_dir/woody/root && dpkg-scanpackages . /dev/null >Packages)
+
+	# Switch to unstable
+	echo "deb $debmirror unstable main" \
+		> $chroot_dir/woody/etc/apt/sources.list
+	echo "deb file:/root ./" >> $chroot_dir/woody/etc/apt/sources.list
+
+	# Update package lists
+	in_target apt-get update
+
+	# Tell our scripts to fix the config
+	debconf_set slapd/fix_directory true
+	debconf_set slapd/password1 foobar
+	debconf_set slapd/allow_ldap_v2
+
+	# Do an upgrade of our packages
+	in_target apt-get install -y `dh_listpackages`
+}
+
+# Checks if upgrading a woody system with slapd configured with the
+# command given works.
+
+check_upgrade() {
+	setup_chroot
+	conf_$1
+	debconf_set slapd/password1 foobar
+	debconf_set slapd/password2 foobar
+	install_slapd
+	check_$1
+	upgrade
+	check_$1
+	in_target /etc/init.d/slapd stop
+	in_target umount /proc
+}
+
+# Try upgrading our example setups
+
+for i in location domain_or_host; do
+	check_upgrade $i
+done
+
+echo "SUCCESS testing upgrading from woody"

@@ -1,0 +1,195 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          slapd
+# Required-Start:    $remote_fs $network $syslog
+# Required-Stop:     $remote_fs $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: OpenLDAP standalone server (Lightweight Directory Access Protocol)
+### END INIT INFO
+
+# Specify path variable
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+
+. /lib/lsb/init-functions
+
+# Kill me on all errors
+set -e
+
+# Set the paths to slapd as a variable so that someone who really
+# wants to can override the path in /etc/default/slapd.
+SLAPD=/usr/sbin/slapd
+
+# Stop processing if slapd is not there
+[ -x $SLAPD ] || exit 0
+
+# debconf may have this file descriptor open and it makes things work a bit
+# more reliably if we redirect it as a matter of course.  db_stop will take
+# care of this, but this won't hurt.
+exec 3>/dev/null
+
+# Source the init script configuration
+if [ -f "/etc/default/slapd" ]; then
+	. /etc/default/slapd
+fi
+
+# Load the default location of the slapd config file
+if [ -z "$SLAPD_CONF" ]; then
+	if [ -e /etc/ldap/slapd.d ]; then
+		SLAPD_CONF=/etc/ldap/slapd.d
+	else
+		SLAPD_CONF=/etc/ldap/slapd.conf
+	fi
+fi
+
+# Stop processing if the config file is not there
+if [ ! -r "$SLAPD_CONF" ]; then
+  log_warning_msg "No configuration file was found for slapd at $SLAPD_CONF."
+  # if there is no config at all, we should assume slapd is not running
+  # and exit 0 on stop so that unconfigured packages can be removed.
+  [ "x$1" = xstop ] && exit 0 || exit 1
+fi
+
+# extend options depending on config type
+if [ -f "$SLAPD_CONF" ]; then
+	SLAPD_OPTIONS="-f $SLAPD_CONF $SLAPD_OPTIONS"
+elif [ -d "$SLAPD_CONF" ] ; then
+	SLAPD_OPTIONS="-F $SLAPD_CONF $SLAPD_OPTIONS"
+fi
+
+# Find out the name of slapd's pid file
+if [ -z "$SLAPD_PIDFILE" ]; then
+	# If using old one-file configuration scheme
+	if [ -f "$SLAPD_CONF" ] ; then
+		SLAPD_PIDFILE=`sed -ne 's/^pidfile[[:space:]]\+\(.\+\)/\1/p' \
+			"$SLAPD_CONF"`
+	# Else, if using new directory configuration scheme
+	elif [ -d "$SLAPD_CONF" ] ; then
+		SLAPD_PIDFILE=`sed -ne \
+			's/^olcPidFile:[[:space:]]\+\(.\+\)[[:space:]]*/\1/p' \
+			"$SLAPD_CONF"/'cn=config.ldif'`
+	fi
+fi
+
+# XXX: Breaks upgrading if there is no pidfile (invoke-rc.d stop will fail)
+# -- Torsten
+if [ -z "$SLAPD_PIDFILE" ]; then
+	log_failure_msg "The pidfile for slapd has not been specified"
+	exit 1
+fi
+
+# Make sure the pidfile directory exists with correct permissions
+piddir=`dirname "$SLAPD_PIDFILE"`
+if [ ! -d "$piddir" ]; then
+	mkdir -p "$piddir"
+	[ -z "$SLAPD_USER" ] || chown -R "$SLAPD_USER" "$piddir"
+	[ -z "$SLAPD_GROUP" ] || chgrp -R "$SLAPD_GROUP" "$piddir"
+fi
+
+# Pass the user and group to run under to slapd
+if [ "$SLAPD_USER" ]; then
+	SLAPD_OPTIONS="-u $SLAPD_USER $SLAPD_OPTIONS"
+fi
+
+if [ "$SLAPD_GROUP" ]; then
+	SLAPD_OPTIONS="-g $SLAPD_GROUP $SLAPD_OPTIONS"
+fi
+
+# Check whether we were configured to not start the services.
+check_for_no_start() {
+	if [ -n "$SLAPD_NO_START" ]; then
+		echo 'Not starting slapd: SLAPD_NO_START set in /etc/default/slapd' >&2
+		exit 0
+	fi
+	if [ -n "$SLAPD_SENTINEL_FILE" ] && [ -e "$SLAPD_SENTINEL_FILE" ]; then
+		echo "Not starting slapd: $SLAPD_SENTINEL_FILE exists" >&2
+		exit 0
+	fi
+}
+
+# Tell the user that something went wrong and give some hints for
+# resolving the problem.
+report_failure() {
+	log_end_msg 1
+	if [ -n "$reason" ]; then
+		log_failure_msg "$reason"
+	else
+		log_failure_msg "The operation failed but no output was produced."
+
+		if [ -n "$SLAPD_OPTIONS" -o \
+		     -n "$SLAPD_SERVICES" ]; then
+			if [ -z "$SLAPD_SERVICES" ]; then
+				if [ -n "$SLAPD_OPTIONS" ]; then
+					log_failure_msg "Command line used: slapd $SLAPD_OPTIONS"
+				fi
+			else
+				log_failure_msg "Command line used: slapd -h '$SLAPD_SERVICES' $SLAPD_OPTIONS"
+			fi
+		fi
+	fi
+}
+
+# Start the slapd daemon and capture the error message if any to 
+# $reason.
+start_slapd() {
+	if [ -z "$SLAPD_SERVICES" ]; then
+		reason="`start-stop-daemon --start --quiet --oknodo \
+			--pidfile "$SLAPD_PIDFILE" \
+			--exec $SLAPD -- $SLAPD_OPTIONS 2>&1`"
+	else
+		reason="`start-stop-daemon --start --quiet --oknodo \
+			--pidfile "$SLAPD_PIDFILE" \
+			--exec $SLAPD -- -h "$SLAPD_SERVICES" $SLAPD_OPTIONS 2>&1`"
+	fi
+
+	# Backward compatibility with OpenLDAP 2.1 client libraries.
+	if [ ! -h /var/run/ldapi ] && [ ! -e /var/run/ldapi ] ; then
+		ln -s slapd/ldapi /var/run/ldapi
+	fi
+}
+
+# Stop the slapd daemon and capture the error message (if any) to
+# $reason.
+stop_slapd() {
+	reason="`start-stop-daemon --stop --quiet --oknodo --retry TERM/10 \
+		--pidfile "$SLAPD_PIDFILE" \
+		--exec $SLAPD 2>&1`"
+}
+
+# Start the OpenLDAP daemons
+start_ldap() {
+	trap 'report_failure' 0
+	log_daemon_msg "Starting OpenLDAP" "slapd"
+	start_slapd
+	trap "-" 0
+	log_end_msg 0
+}
+
+# Stop the OpenLDAP daemons
+stop_ldap() {
+	trap 'report_failure' 0
+	log_daemon_msg "Stopping OpenLDAP" "slapd"
+	stop_slapd
+	trap "-" 0
+	log_end_msg 0
+}
+
+case "$1" in
+  start)
+	check_for_no_start
+  	start_ldap ;;
+  stop)
+  	stop_ldap ;;
+  restart|force-reload)
+	check_for_no_start
+  	stop_ldap
+	start_ldap
+	;;
+  status)
+	status_of_proc -p $SLAPD_PIDFILE $SLAPD slapd
+	;;
+  *)
+  	echo "Usage: $0 {start|stop|restart|force-reload|status}"
+	exit 1
+	;;
+esac
