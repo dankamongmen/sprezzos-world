@@ -1,0 +1,174 @@
+#!/usr/bin/make -f
+
+# Set this variable if you're building packages outside of Debian and don't
+# want the checks for DFSG-freeness.
+#DFSG_NONFREE = 1
+
+export DEB_CFLAGS_MAINT_APPEND := -Wall -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE
+export DEB_BUILD_MAINT_OPTIONS := hardening=+pie,+bindnow
+
+# Workaround for bad glibc behavior when resolving localhost
+export RESOLV_MULTI = off
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+CONFIG		= $(shell grep -v "^\#" debian/configure.options)
+ifneq ($(DEB_HOST_ARCH_OS),linux)
+	CONFIG += --disable-mdb
+endif
+
+installdir	:= $(CURDIR)/debian/tmp
+builddir	:= $(CURDIR)/debian/build
+slapddir	:= $(CURDIR)/debian/slapd/usr/sbin
+
+MAKEVARS	:= STRIP=
+
+# These variables are used only by get-orig-source, which will normally only
+# be run by maintainers.
+VERSION = 2.4.28
+URL     = http://www.openldap.org/software/download/OpenLDAP/openldap-release/
+
+# Download the upstream source and make changes as required for DFSG reasons.
+# Assumes wget is available, as this is generally only used by the package
+# maintainers.
+get-orig-source:
+	@if [ ! -d "debian/schema" ] ; then \
+	    echo 'Run this from the top directory of the Debian source' >&2; \
+	    exit 1; \
+	fi
+	wget $(URL)/openldap-$(VERSION).tgz
+	tar xzf openldap-$(VERSION).tgz
+	rm -r openldap-$(VERSION)/doc/drafts
+	rm -r openldap-$(VERSION)/doc/rfc
+	set -e; for schema in debian/schema/*.schema debian/schema/*.ldif ; do \
+	    file=`basename "$$schema"`; \
+	    rm openldap-$(VERSION)/servers/slapd/schema/$$file; \
+	done
+	mv openldap-$(VERSION) openldap_$(VERSION).orig
+	tar cf openldap_$(VERSION).orig.tar openldap_$(VERSION).orig
+	rm -r openldap_$(VERSION).orig
+	gzip -9 openldap_$(VERSION).orig.tar
+
+%:
+	dh $@ --with quilt,autoreconf --builddirectory=$(builddir)
+
+override_dh_auto_configure:
+	# Check if we include the RFCs, Internet-Drafts, or upstream schemas
+	# with RFC text (which are non DFSG-free).  You can set DFSG_NONFREE
+	# to build the packages from the unchanged upstream sources but Debian
+	# can not ship the RFCs in main so this test is here to make sure it
+	# does not get in by accident again. -- Torsten
+	if [ -z "$(DFSG_NONFREE)" ]; then \
+	    if [ -e doc/drafts ] || [ -e doc/rfc ]; then exit 1; fi; \
+	    if [ -e servers/slapd/schema/core.schema ] \
+	       && grep -q 'RFC 4519 definition' servers/slapd/schema/core.schema; \
+	    then \
+		exit 1; \
+	    fi; \
+	fi
+
+	# Copy our stripped schema versions into where upstream expects them.
+	if [ -z "$(DFSG_NONFREE)" ]; then \
+		cp debian/schema/*.schema debian/schema/*.ldif \
+			servers/slapd/schema/; \
+	fi
+
+	dh_auto_configure -- $(CONFIG)
+
+override_dh_auto_build:
+	dh_auto_build -- $(MAKEVARS)
+	$(MAKE) -C contrib/slapd-modules/smbk5pwd
+	$(MAKE) -C contrib/slapd-modules/autogroup
+
+override_dh_auto_install:
+	dh_auto_install -- $(MAKEVARS)
+	$(MAKE) -C contrib/slapd-modules/smbk5pwd install DESTDIR=$(installdir)
+	$(MAKE) -C contrib/slapd-modules/autogroup install DESTDIR=$(installdir)
+
+	# Empty the dependency_libs file in the .la files.
+	for F in $(installdir)/usr/lib/ldap/*.la; do \
+		sed -i "s/^dependency_libs=.*/dependency_libs=''/" $$F; \
+	done
+	
+	# Check all built libraries for unresolved symbols except for the
+	# libslapi library.  It is a special case since the SLAPI interface
+	# depends on symbols defined in slapd itself.  Those symbols will
+	# remain unresolved until the plugin is loaded into slapd.
+	for F in $(installdir)/usr/lib/$(DEB_HOST_MULTIARCH)/*.so.*.*.*; do \
+	    if echo "$$F" | grep -q libslapi ; then \
+	        continue; \
+	    fi; \
+	    if LD_LIBRARY_PATH=$(installdir)/usr/lib/$(DEB_HOST_MULTIARCH) ldd -d -r $$F 2>&1 | grep '^undefined symbol:'; then \
+	        echo; \
+	        echo "library $$F has undefined references.  Please fix this before continuing."; \
+		exit 1; \
+	    fi; \
+	done
+
+	# Upstream installs schema files in mode 0444 - policy wants 0644
+	find $(installdir)/etc -type f|xargs chmod 0644
+	# Upstream manpages are section 8C but installed as section 8
+	find $(installdir)/usr/share/man -name \*.8 \
+		| xargs perl -pi -e 's#(\.TH \w+ 8)C#$$1#'
+
+override_dh_install:
+	dh_install
+	rm -rf $(CURDIR)/debian/slapd/usr/lib/ldap/smbk5pwd*
+	chmod 0755 $(CURDIR)/debian/slapd/usr/share/slapd/ldiftopasswd
+
+override_dh_installinit:
+	dh_installinit -- "defaults 19 80"
+
+override_dh_strip:
+	dh_strip -plibldap-2.4-2 --dbg-package=libldap-2.4-2-dbg
+	dh_strip -pslapd --dbg-package=slapd-dbg
+	dh_strip -Nlibldap-2.4-2 -Nslapd
+	# hardlink these so not confined by apparmor; do this here and not
+	# in dh_link so that dh_strip doesn't get confused and put the wrong
+	# binary in the debug package.
+	for f in slapacl slapadd slapauth slapcat slapdn slapindex slappasswd slaptest slapschema ; do \
+	    ln -f $(slapddir)/slapd $(slapddir)/$$f ; \
+	done
+
+override_dh_link:
+	for pkg in libldap2-dev libldap-2.4-2; do \
+		sed -e"s/\$${DEB_HOST_MULTIARCH}/$(DEB_HOST_MULTIARCH)/g" < debian/$$pkg.links.in > debian/$$pkg.links; \
+	done
+	dh_link
+
+override_dh_makeshlibs:
+	# ideally we would do this and not have any libldap-2.4.so.2 links
+	# at all, but that requires adjusting the build scripts first to
+	# link against libldap_r, otherwise dh_shlibdeps fails
+	#dh_makeshlibs -plibldap-2.4-2 -V 'libldap-2.4-2 (>= 2.4.7)'
+	echo "slapd:Provides=$$(objdump -p debian/slapd/usr/lib/$(DEB_HOST_MULTIARCH)/libslapi-*.so.* \
+		| sed -ne '/SONAME/ { s/[[:space:]]*SONAME[[:space:]]*//; \
+		                      s/\.so\./-/; p; q }' \
+	)" >> debian/slapd.substvars
+	dh_makeshlibs -pslapd -X/usr/lib/ldap/ -V "$$(sed -ne's/slapd:Provides=//p' debian/slapd.substvars)"
+
+override_dh_installdeb:
+	dh_installdeb
+	perl -w debian/dh_installscripts-common -p slapd
+
+override_dh_auto_clean:
+	dh_auto_clean
+	# Update translation templates for debconf
+	debconf-updatepo
+	# Remove our stripped schema from the upstream source area.
+	if [ -z "$(DFSG_NONFREE)" ]; then \
+	    set -e; for s in debian/schema/*.schema debian/schema/*.ldif; do \
+	        rm -f servers/slapd/schema/`basename $$s`; \
+	    done; \
+	fi
+
+	# Clean the contrib directory
+	rm -rf contrib/slapd-modules/smbk5pwd/.libs \
+		contrib/slapd-modules/smbk5pwd/smbk5pwd.lo \
+		contrib/slapd-modules/smbk5pwd/smbk5pwd.la \
+		contrib/slapd-modules/smbk5pwd/smbk5pwd.o
+	rm -rf contrib/slapd-modules/autogroup/.libs \
+		contrib/slapd-modules/autogroup/autogroup.lo \
+		contrib/slapd-modules/autogroup/autogroup.la \
+		contrib/slapd-modules/autogroup/autogroup.o

@@ -1,0 +1,174 @@
+#!/usr/bin/perl -w
+#
+#
+# Comments on usage from the email we received:
+# I showed a friend the following script. He said I should submit it for
+# inclusion in openldap, because it might useful for others. 
+#
+# The attached perl script, when used like
+#
+# ldapsearch | ldiftopasswd
+#
+# will automatically:
+#
+# 1. create /etc/passwd, /etc/shadow, /etc/group, and /etc/gshadow
+#
+# 2. append /etc/passwd.top, /etc/shadow.top, /etc/group.top, and /etc/gshadow.top to respective files.
+#
+# 3. use data from ldap to create the files (note: gshadow isn't really
+# supported, because I don't use it, nor could I find any
+# documentation. Adding support for other files should be easy).
+#
+# (of course you need access to all fields including the password field
+# for this, so use correct parameters to ldapsearch).
+#
+# This could be useful for instance on laptop computers where you don't
+# want to run a slave slapd server for some reason (perhaps memory
+# constraints).
+# ----------------------------------------
+use strict;
+use Getopt::Long;
+use MIME::Base64;
+use IO::File;
+
+my $passwdfile="/etc/passwd";
+my $shadowfile="/etc/shadow";
+my $groupfile="/etc/group";
+my $gshadowfile="/etc/gshadow";
+my $help;
+GetOptions (
+		'--passwd=s',\$passwdfile,
+		'--shadow=s',\$shadowfile,
+		'--group=s',\$groupfile,
+		'--gshadow=s',\$gshadowfile,
+		'--help',\$help,
+            ) or die "Bad options\n";
+
+if ($help or $#ARGV != -1) {
+  print STDERR "usage: $0 [etcfile=filename] [--help]\n";
+  exit 255;
+}
+
+sub start_file($) {
+  my ($file) = @_;
+  my $outhandle = new IO::File;
+  $outhandle->open(">$file") or die "Cannot open $file for writing";
+
+  open(TMP,"<$file.top") or die "cannot open $file.top for reading";
+  while (<TMP>) { $outhandle->print($_); }
+  close(TMP) or die "cannot close $file for reading";
+
+  return($outhandle);
+}
+
+my $PASSWD  = start_file($passwdfile);
+my $SHADOW  = start_file($shadowfile);
+my $GROUP   = start_file($groupfile);
+my $GSHADOW = start_file($gshadowfile);
+
+sub dopasswd($) {
+      my ($record) = @_;
+      my $userPassword="*";
+
+      $PASSWD->print(
+      	$record->{"uid"},":",
+	"x",":",
+      	$record->{"uidNumber"},":",
+      	$record->{"gidNumber"},":",
+      	$record->{"gecos"},":",
+      	$record->{"homeDirectory"},":",
+      	$record->{"loginShell"},"\n");
+
+      if (defined($record->{"userPassword"}) &&
+          $record->{"userPassword"} =~ /^{(crypt)}(.*)$/)
+        { $userPassword = $2; }
+
+      $SHADOW->print(
+      	$record->{"uid"},":",
+      	$userPassword,":",
+	$record->{"shadowLastChange"} || "10706",":",
+      	$record->{"shadowMin"} || "0",":",
+      	$record->{"shadowMax"} || "99999",":",
+      	$record->{"shadowWarning"} || "7",":",
+      	$record->{"shadowInactive"} || "",":",
+      	$record->{"shadowExpire"} || "",":",
+	"","\n");
+}
+
+sub dogroup($) {
+      my ($record) = @_;
+      my $userPassword="*";
+
+      my $members="";
+      if (defined($record->{"memberUid"})) {
+        $members = join(",",@{$record->{"memberUid"}});
+      }
+
+      $GROUP->print(
+      	$record->{"cn"},":",
+	"x",":",
+      	$record->{"gidNumber"},":",
+      	$members,"\n");
+
+      if (defined($record->{"userPassword"}) &&
+          $record->{"userPassword"} =~ /^{(crypt)}(.*)$/)
+        { $userPassword = $2; }
+
+# !FIXME!
+#      $GSHADOW->print
+#      	$record->{"cn"},":",
+#	"*",":",
+#	"",":",
+#	"","\n";
+}
+
+
+my %record;
+my $user=0;
+my $group=0;
+
+while (<>) {
+  if (/^$/) {
+    if ($user) {
+      dopasswd(\%record);
+    }
+    if ($group) {
+      dogroup(\%record);
+    }
+
+    $user = $group = 0;
+    %record=();
+  }
+  elsif (/^objectClass: posixAccount$/) {
+    $user = 1;
+  }
+  elsif (/^objectClass: posixGroup$/) {
+    $group = 1;
+  }
+  elsif (/^(uid|uidNumber|gidNumber|gecos|homeDirectory|loginShell): (.*)$/) {
+    if (!defined($record{$1})) { $record{$1} = $2; }
+  }
+  elsif (/^(userPassword|shadowLastChange|shadowMin|shadowMax|shadowWarning|shadowInactive|shadowExpire): (.*)$/) {
+    if (!defined($record{$1})) { $record{$1} = $2; }
+  }
+  elsif (/^(cn): (.*)$/) {
+    if (!defined($record{$1})) { $record{$1} = $2; }
+  }
+  elsif (/^(uniqueMember): (.*)$/) {
+    push @{$record{$1}},$2;
+    if ($2 =~ /uid=([a-zA-Z]*),/) {
+	    push @{$record{"memberUid"}},$1;
+    }
+  }
+  elsif (/^(memberUid): (.*)$/) {
+    push @{$record{$1}},$2;
+  }
+  elsif (/^(userPassword):: (.*)$/) {
+    $record{$1} = decode_base64($2);
+  }
+}
+
+$PASSWD->close  or die "Cannot close $passwdfile for writing";
+$SHADOW->close  or die "Cannot close $shadowfile for writing";
+$GROUP->close   or die "Cannot close $groupfile for writing";
+$GSHADOW->close or die "Cannot close $gshadowfile for writing";

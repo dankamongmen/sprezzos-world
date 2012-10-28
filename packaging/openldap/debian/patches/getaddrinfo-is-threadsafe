@@ -1,0 +1,43 @@
+Author: Steve Langasek <vorlon@debian.org>
+
+OpenLDAP upstream conservatively assumes that certain resolver functions
+(getaddrinfo, getnameinfo, res_query, dn_expand) are not re-entrant; but we
+know that the glibc implementations of these functions are thread-safe, so
+we should bypass the use of this mutex.  This fixes a locking problem when
+an application uses libldap and libnss-ldap is also used for hosts
+resolution.
+
+Closes Debian bug #340601.
+
+Not suitable for forwarding upstream; might be made suitable by adding a
+configure-time check for glibc and disabling the mutex only on known
+thread-safe implementations.
+
+--- a/libraries/libldap/os-ip.c
++++ b/libraries/libldap/os-ip.c
+@@ -592,13 +592,7 @@
+ 	hints.ai_socktype = socktype;
+ 	snprintf(serv, sizeof serv, "%d", port );
+ 
+-	/* most getaddrinfo(3) use non-threadsafe resolver libraries */
+-	LDAP_MUTEX_LOCK(&ldap_int_resolv_mutex);
+-
+ 	err = getaddrinfo( host, serv, &hints, &res );
+-
+-	LDAP_MUTEX_UNLOCK(&ldap_int_resolv_mutex);
+-
+ 	if ( err != 0 ) {
+ 		osip_debug(ld, "ldap_connect_to_host: getaddrinfo failed: %s\n",
+ 			AC_GAI_STRERROR(err), 0, 0);
+--- a/libraries/libldap/util-int.c
++++ b/libraries/libldap/util-int.c
+@@ -426,9 +426,7 @@
+ 	int rc;
+ #if defined( HAVE_GETNAMEINFO )
+ 
+-	LDAP_MUTEX_LOCK( &ldap_int_resolv_mutex );
+ 	rc = getnameinfo( sa, len, name, namelen, NULL, 0, 0 );
+-	LDAP_MUTEX_UNLOCK( &ldap_int_resolv_mutex );
+ 	if ( rc ) *err = (char *)AC_GAI_STRERROR( rc );
+ 	return rc;
+ 

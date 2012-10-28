@@ -1,0 +1,98 @@
+#! /usr/bin/perl -w
+
+use Net::LDAP;
+use Data::Dumper;
+
+$host = "localhost";			# LDAP server
+$basedn = "dc=galaxy";			# Base DN
+$admindn = "cn=admin, $basedn";		# Admin entry
+$adminpass = "foo";			# Password
+$group = $ARGV[0] || "People";
+
+$ldap = Net::LDAP->new("$host", onerror => "die");
+$ldap->bind($admindn, password => $adminpass);
+
+sub create_group {
+	$results = $ldap->search(base => "$basedn", 
+		filter => "ou=$group", scope => "one");
+	unless ($results->count > 0) {
+		$ldap->add("ou=$group, $basedn", attr => [
+			  ou => "$group", 
+			  objectClass => [ "top", "organizationalUnit" ]
+			]);
+	}
+}
+
+sub invent_name {
+	our @words;
+	unless (@words) {
+		open WORDS, "/usr/share/dict/british-english-large";
+		@words = grep /^[A-Z]\w{0,11}$/, <WORDS>;
+		map { chomp } @words;
+		close WORDS;
+	}
+
+	my $index = int(rand(@words));
+	$index = int(rand(@words)) while not defined $words[$index];
+	my $word = $words[$index];
+	delete $words[$index];
+	return $word;
+}
+
+sub invent_names {
+	our @names;
+
+	foreach (1..1000) {
+		push @names, { cn => invent_name, sn => invent_name };
+	}
+}
+
+sub create_entries {
+	foreach my $name (@names) {
+		create_account(%$name);
+	}
+}
+
+sub create_account {
+	our $uid; 
+	$uid = 1000 if not defined $uid;
+
+	my %id = @_;
+	my $login = $id{cn};
+	$login =~ tr/A-Z/a-z/;
+	$ldap->add("uid=$login, ou=$group, $basedn", attr => [
+		%id, 
+		objectClass => [ "top", "person", "posixAccount" ], 
+		uid => $login, 
+		uidNumber => $uid++, 
+		gidNumber => 1000, 
+		homeDirectory => "/home/$login" ]);
+}
+
+sub delete_entries {
+	foreach my $name (@names) {
+		delete_account(%$name);
+	}
+}
+
+sub delete_account {
+	my %id = @_;
+	my $login = $id{cn};
+	$login =~ tr/A-Z/a-z/;
+	$ldap->delete("uid=$login, ou=$group, $basedn");
+}
+
+sub search_entries {
+	foreach (1..10000) {
+		my $num = int(rand(@names));
+		$login = $names[$num]->{cn};
+		$login =~ tr/A-Z/a-z/;
+		$ldap->search(base => "$basedn", filter => "uid=$login");
+	}
+}
+
+create_group;
+invent_names;
+create_entries;
+search_entries;
+delete_entries;
