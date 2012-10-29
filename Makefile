@@ -658,7 +658,7 @@ $(GMAKE): $(SPREZZ)/gmake/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf make-$(make_UPVER).tar.gz --strip-components=1 -C $@
+	tar xzvf make-$(gmake_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: openldap
 openldap:$(OPENLDAP)_$(ARCH).deb
