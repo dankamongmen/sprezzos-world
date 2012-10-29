@@ -1,0 +1,211 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_BUILD_ARCH      ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEB_HOST_ARCH_BITS  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_BITS)
+
+GTK_VERSIONS = 2.0 3.0
+
+CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
+CFLAGS += -Wall -Wl,--as-needed
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS)
+
+# Sacrifice speed in order to make it more likely resource limits
+# won't be hit.
+ifeq ($(DEB_HOST_ARCH_BITS),32)
+	LDFLAGS += -Wl,--no-keep-memory
+endif
+
+ifeq (armhf,$(filter $(DEB_BUILD_ARCH),armhf))
+	CFLAGS += -O1
+endif
+
+ifeq ($(DEB_BUILD_ARCH),alpha)
+        LDFLAGS += -Wl,--no-relax
+endif
+
+ifneq (,$(findstring $(DEB_BUILD_ARCH),mips mipsel s390 s390x))
+	CFLAGS := $(CFLAGS:-g=)
+endif
+
+# FIXME: parallel builds are currently not 100% working, so disable
+#ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+#	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+#	MAKEARGUMENTS += -j$(NUMJOBS)
+#endif
+
+clean:
+	dh_testdir
+	dh_testroot
+
+	rm -f build-stamp install-stamp
+	rm -rf build-*
+	rm -rf debian/tmp-*
+	rm -f Source/WebKit/gtk/docs/version.xml
+
+	set -e; for file in config.guess config.sub; do \
+		sed -i '2!b;/^exec "/ d' Source/autotools/$$file ; \
+	done
+
+	dh_clean
+
+build: build-arch build-indep
+
+build-indep:
+
+build-arch: build-stamp
+
+build-stamp:
+	dh_testdir
+
+	set -e; for file in config.guess config.sub; do \
+		sed -i '2!b;/^#/ i\exec "/usr/share/misc/'$$file'" "$$@"' Source/autotools/$$file ; \
+	done
+
+	# FIXME: upstream is broken when running pot-update, is why we
+	# create the po directory manually here
+	set -e; for version in $(GTK_VERSIONS); do \
+		if [ ! -d build-$${version} ]; then \
+			mkdir build-$${version}; \
+			mkdir -p build-$${version}/Source/WebKit/gtk/po/; \
+		fi; \
+		cd build-$${version}; \
+		env -u AR_FLAGS \
+		CFLAGS="$(CFLAGS)" \
+		CXXFLAGS="$(CFLAGS)" \
+		CPPFLAGS="$(CPPFLAGS)" \
+		LDFLAGS="$(LDFLAGS)" \
+		CC="gcc" \
+		CXX="g++" \
+		../configure --prefix=/usr \
+			--disable-silent-rules \
+			--host=$(DEB_HOST_GNU_TYPE) \
+			--build=$(DEB_BUILD_GNU_TYPE) \
+			--with-gtk=$${version} \
+			--enable-gtk-doc \
+			--enable-introspection \
+			--enable-geolocation; \
+		cd ..; \
+	done
+
+	set -e; for version in $(GTK_VERSIONS); do \
+		$(MAKE) $(MAKEARGUMENTS) -C build-$${version}; \
+	done
+
+	touch $@
+
+install: install-stamp
+
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+
+	dh_prep
+
+ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
+	$(MAKE) -C build-2.0 install DESTDIR="$(CURDIR)"/debian/tmp-2.0
+	[ ! -d debian/tmp-2.0/usr/lib/webkitgtk-1.0-0/libexec ] && install -d -m 755 debian/tmp-2.0/usr/lib/webkitgtk-1.0-0/libexec || true
+	build-2.0/libtool --mode=install install -m 755 build-2.0/Programs/GtkLauncher "$(CURDIR)"/debian/tmp-2.0/usr/lib/webkitgtk-1.0-0/libexec/GtkLauncher
+	chrpath -d debian/tmp-2.0/usr/lib/webkitgtk-1.0-0/libexec/GtkLauncher
+
+	install -d -m 755 debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html
+	install -m 644 build-2.0/Documentation/webkitgtk/html/* \
+		debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
+endif
+
+ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
+	$(MAKE) -C build-3.0 install DESTDIR="$(CURDIR)"/debian/tmp-3.0
+	[ ! -d debian/tmp-3.0/usr/lib/webkitgtk-3.0-0/libexec ] && install -d -m 755 debian/tmp-3.0/usr/lib/webkitgtk-3.0-0/libexec || true
+	build-3.0/libtool --mode=install install -m 755 build-3.0/Programs/GtkLauncher "$(CURDIR)"/debian/tmp-3.0/usr/lib/webkitgtk-3.0-0/libexec/GtkLauncher
+	chrpath -d debian/tmp-3.0/usr/lib/webkitgtk-3.0-0/libexec/GtkLauncher
+
+	install -d -m 755 debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html
+	install -m 644 build-3.0/Documentation/webkitgtk/html/* \
+		debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html/
+endif
+
+	touch $@
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -i
+	dh_installchangelogs -i
+ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
+	dh_install -plibwebkitgtk-1.0-common --sourcedir=debian/tmp-2.0
+endif
+ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
+	dh_install -plibwebkitgtk-3.0-common --sourcedir=debian/tmp-3.0
+endif
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -a
+	dh_installchangelogs -a
+ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
+	dh_install -plibjavascriptcoregtk-1.0-0 --sourcedir=debian/tmp-2.0
+	dh_install -plibjavascriptcoregtk-1.0-dev --sourcedir=debian/tmp-2.0
+	dh_install -plibjavascriptcoregtk-1.0-0-dbg --sourcedir=debian/tmp-2.0
+	dh_install -pgir1.2-javascriptcoregtk-1.0 --sourcedir=debian/tmp-2.0
+	dh_install -plibwebkitgtk-1.0-0 --sourcedir=debian/tmp-2.0
+	dh_install -plibwebkitgtk-dev --sourcedir=debian/tmp-2.0
+	dh_install -plibwebkitgtk-1.0-0-dbg --sourcedir=debian/tmp-2.0
+	dh_install -pgir1.2-webkit-1.0 --sourcedir=debian/tmp-2.0
+endif
+ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
+	dh_install -plibjavascriptcoregtk-3.0-0 --sourcedir=debian/tmp-3.0
+	dh_install -plibjavascriptcoregtk-3.0-dev --sourcedir=debian/tmp-3.0
+	dh_install -plibjavascriptcoregtk-3.0-0-dbg --sourcedir=debian/tmp-3.0
+	dh_install -pgir1.2-javascriptcoregtk-3.0 --sourcedir=debian/tmp-3.0
+	dh_install -plibwebkitgtk-3.0-0 --sourcedir=debian/tmp-3.0
+	dh_install -plibwebkitgtk-3.0-dev --sourcedir=debian/tmp-3.0
+	dh_install -plibwebkitgtk-3.0-0-dbg --sourcedir=debian/tmp-3.0
+	dh_install -pgir1.2-webkit-3.0 --sourcedir=debian/tmp-3.0
+endif
+	dh_link -a
+ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
+	dh_strip -plibjavascriptcoregtk-1.0-0 --dbg-package=libjavascriptcoregtk-1.0-0-dbg
+	dh_strip -plibwebkitgtk-1.0-0 --dbg-package=libwebkitgtk-1.0-0-dbg
+endif
+ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
+	dh_strip -plibjavascriptcoregtk-3.0-0 --dbg-package=libjavascriptcoregtk-3.0-0-dbg
+	dh_strip -plibwebkitgtk-3.0-0 --dbg-package=libwebkitgtk-3.0-0-dbg
+endif
+	dh_compress -a
+	dh_fixperms -a
+ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
+	dh_makeshlibs -plibjavascriptcoregtk-1.0-0 -V 'libjavascriptcoregtk-1.0-0 (>= 1.5.1)' -- -c4
+	dh_makeshlibs -plibwebkitgtk-1.0-0 -V 'libwebkitgtk-1.0-0 (>= 1.3.9)' -- -c4
+	dh_girepository --package=gir1.2-javascriptcoregtk-1.0
+	dh_girepository --package=gir1.2-webkit-1.0
+endif
+ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
+	dh_makeshlibs -plibjavascriptcoregtk-3.0-0 -V 'libjavascriptcoregtk-3.0-0 (>= 1.5.1)' -- -c4
+	dh_makeshlibs -plibwebkitgtk-3.0-0 -V 'libwebkitgtk-3.0-0 (>= 1.3.9)' -- -c4
+	dh_girepository --package=gir1.2-javascriptcoregtk-3.0
+	dh_girepository --package=gir1.2-webkit-3.0
+endif
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+
+.PHONY: build clean install binary binary-indep binary-arch
