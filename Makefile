@@ -22,7 +22,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs gvfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
-	installation-report gnome-shell gnome-shell-extensions gnome-contacts \
+	installation-report gnome-shell gnome-shell-extensions gnome-contacts icu \
 	gnome-power-manager evince poppler gnome-media compiz9 fbset meta-gnome \
 	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
@@ -165,7 +165,7 @@ USBVIEWORIG:=usbview_$(shell echo $(usbview_VERSION) | cut -d- -f1).orig.tar.gz
 YELPUP:=yelp-$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1)
 YELPORIG:=yelp_$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 
-DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
+DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(ICU) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) $(DCONF) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) $(YELP) \
@@ -586,6 +586,14 @@ $(GVFS): $(SPREZZ)/gvfs/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gvfs-$(gvfs_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: icu
+icu:$(ICU)_$(ARCH).deb
+$(ICU): $(SPREZZ)/icu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf icu-$(icu_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: inkscape
 inkscape:$(INKSCAPE)_$(ARCH).deb
@@ -1510,7 +1518,7 @@ $(YELP): $(SPREZZ)/yelp/debian/changelog $(YELPORIG)
 
 clean:
 	rm -rf sprezzos-world $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
-	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV) $(LVM2) $(CAIRO)
+	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV) $(LVM2) $(CAIRO) $(ICU)
 	rm -rf $(ADOBE) $(FBTERM) $(CONPALETTE) $(APITRACE) $(SUDO) $(LIBPNG)
 	rm -rf $(DEBS) $(UDEBS) $(LIBJPEGTURBO) $(STRACE) $(SPLITVT) $(GTK+3)
 	rm -rf $(LINUXLATEST) $(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(SYSTEMD)
