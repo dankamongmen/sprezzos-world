@@ -28,7 +28,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
-	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets
+	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
+	gnome-orca
 
 SPREZZ:=packaging
 
@@ -472,6 +473,14 @@ $(GNOMEMEDIA): $(SPREZZ)/gnome-media/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-media_$(gnome-media_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-orca
+gnome-orca:$(GNOMEORCA)_$(ARCH).deb
+$(GNOMEORCA): $(SPREZZ)/gnome-orca/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-orca_$(gnome-orca_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-screenshot
 gnome-screenshot:$(GNOMESCREENSHOT)_$(ARCH).deb
@@ -1458,6 +1467,7 @@ clean:
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
 	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(SCREENLETS)
+	rm -rf $(GNOMEORCA)
 
 clobber:
 	rm -rf $(FETCHED)
