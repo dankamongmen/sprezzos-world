@@ -29,7 +29,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
-	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant
+	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r
 
 SPREZZ:=packaging
 
@@ -145,6 +145,7 @@ NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_VERSION) | cut -d-
 NFSUTILSUP:=nfs-utils-$(shell echo $(nfs-utils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 NFSUTILSORIG:=nfs-$(shell echo $(NFSUTILSUP) | cut -d- -f2- | tr - _).orig.tar.bz2
 NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
+FREI0RORIG:=frei0r-$(shell echo $(frei0r_VERSION) | cut -d- -f1).orig.tar.xz
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.xz
 XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
 OPENCVUP:=OpenCV-$(shell echo $(opencv_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -183,7 +184,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
 	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
-	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT)
+	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -226,6 +227,13 @@ omphalos:$(OMPHALOS)_$(ARCH).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	git clone git://github.com/dankamongmen/omphalos.git $@
 	tar cJf $(OMPHALOSORIG) $@ --exclude-vcs
+	cp -r $(<D) $@/
+
+.PHONY: frei0r
+frei0r:$(FREI0R)_$(ARCH).deb
+$(FREI0R): $(SPREZZ)/frei0r/debian/changelog
+	git clone git://code.dyne.org/frei0r.git $@
+	tar cJf $(FREI0RORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: aptitude
@@ -1525,7 +1533,7 @@ clean:
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
 	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(SCREENLETS)
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
-	rm -rf $(LIBSOUP) $(ENCHANT)
+	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R)
 
 clobber:
 	rm -rf $(FETCHED)
