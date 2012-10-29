@@ -617,7 +617,7 @@ $(LIBSOUP): $(SPREZZ)/libsoup/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf libsoup_$(libsoup_UPVER).orig.tar.xz --strip-components=1 -C $@
+	tar xJvf libsoup2.4_$(libsoup_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: libwnck
 libwnck:$(LIBWNCK)_$(ARCH).deb
