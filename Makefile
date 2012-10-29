@@ -29,7 +29,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
-	gnome-orca
+	gnome-orca at-spi
 
 SPREZZ:=packaging
 
@@ -182,7 +182,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
 	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
-	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA)
+	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -369,6 +369,14 @@ $(ABCDE): $(SPREZZ)/abcde/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf abcde-$(abcde_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: at-spi
+at-spi:$(ATSPI)_$(ARCH).deb
+$(ATSPI): $(SPREZZ)/at-spi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf at-spi2-core-$(at-spi_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: boost
 boost:$(BOOST)_$(ARCH).deb
@@ -1467,7 +1475,7 @@ clean:
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
 	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(SCREENLETS)
-	rm -rf $(GNOMEORCA)
+	rm -rf $(GNOMEORCA) $(ATSPI)
 
 clobber:
 	rm -rf $(FETCHED)
