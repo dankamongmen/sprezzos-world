@@ -374,8 +374,8 @@ boost:$(BOOST)_$(ARCH).deb
 $(BOOST): $(SPREZZ)/boost/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download
-	tar xjvf boost-$(boost_UPVER).tar.bz2 --strip-components=1 -C $@
+	{ cd $@ && TARBALL=`uscan --no-symlink --force-download --dehs | xmlstarlet sel -t -v //target` && \
+	  cd - && ln -sf $$TARBALL boost-build_2.0.m10.orig.tar.bz2 && tar xjvf $$TARBALL --strip-components=1 -C $@ ; }
 
 .PHONY: compiz
 compiz:$(COMPIZ)_$(ARCH).deb
