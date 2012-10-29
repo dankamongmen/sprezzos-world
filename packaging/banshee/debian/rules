@@ -1,0 +1,112 @@
+#!/usr/bin/make -f
+
+LDFLAGS += -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+
+BANSHEE_API_VERSION = $(shell grep API_VERSION= configure | cut -f2 -d=)
+BANSHEE_ASM_VERSION = $(shell grep ASM_VERSION= configure | cut -f2 -d=)
+
+CONFFLAGS = \
+	--libdir=/usr/lib \
+	--disable-static \
+	--disable-tests \
+	--with-vendor-build-id="`lsb_release -ds`" \
+	--disable-clutter \
+	--disable-gst-sharp \
+	--enable-user-help \
+	--enable-docs \
+	--enable-youtube \
+	--enable-gio \
+	--enable-gio-hardware \
+	--disable-moonlight \
+	--enable-upnp \
+	--enable-gnome \
+	--enable-schemas-install \
+	--enable-mtp \
+	--enable-appledevice \
+	--enable-daap \
+	--disable-remote-audio \
+	--disable-torrent \
+	--enable-meego \
+	--enable-gapless-playback \
+	--enable-webkit \
+	--enable-release \
+	--disable-shave \
+	MCS=/usr/bin/mono-csc LDFLAGS="$(LDFLAGS)"
+
+ifeq ($(shell dpkg-vendor --query vendor), Ubuntu)
+CONFFLAGS += \
+	--disable-boo \
+	--disable-karma \
+	--enable-soundmenu \
+	--enable-ubuntuone
+else
+CONFFLAGS += \
+	--enable-boo \
+	--enable-karma \
+	--disable-soundmenu \
+	--disable-ubuntuone
+endif
+
+ifeq ($(shell dpkg-architecture -ilinux-any && echo yes), yes)
+CONFFLAGS += --enable-gio-hardware
+else
+CONFFLAGS += --disable-gio-hardware
+endif
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CONFFLAGS)
+
+# disable tests
+override_dh_auto_test:
+
+# dump debugging symbols in banshee-dbg
+override_dh_strip:
+	dh_strip --dbg-package=banshee-dbg
+
+override_dh_clistrip:
+	dh_clistrip --dbg-package=banshee-dbg
+
+# disable dh_makeclilibs for weird signed libraries
+override_dh_makeclilibs:
+
+override_dh_clideps:
+	dh_clideps					\
+		--exclude-moduleref=libmeego-panel	\
+		--exclude-moduleref=winmm		\
+		--exclude-moduleref=libbanshee		\
+		--exclude-moduleref=libbnpx11
+
+override_dh_install:
+	# make sure we don't include a generated MIME database
+	find debian/tmp/usr/share/mime/ -mindepth 1 -maxdepth 1 -not -name packages -print0 | xargs -0 rm -rf
+	# strip la files
+	find debian/tmp -name '*.la' -delete
+	rm -f debian/tmp/usr/share/applications/mimeinfo.cache
+	dh_install
+	# Remove MeeGo stuff from banshee binary package
+	rm -r debian/banshee/usr/share/mutter-meego/ \
+	      debian/banshee/usr/lib/banshee/MeeGo.exe \
+	      debian/banshee/usr/lib/banshee/Extensions/Banshee.MeeGo.dll* \
+	      debian/banshee/usr/share/dbus-1/services/com.meego*
+ifeq ($(shell dpkg-vendor --query vendor), Ubuntu)
+	# Remove U1MS and Sound Menu stuff from banshee
+	rm -r debian/banshee/usr/lib/banshee/Extensions/Banshee.SoundMenu.* \
+	      debian/banshee/usr/lib/banshee/Extensions/Banshee.UbuntuOneMusicStore.*
+	cd po; intltool-update --pot
+
+	for d in $$(find debian/ -type f \( -name "*.desktop" -o -name "*.directory" \) ); do \
+	    sed -ri '/^(Name|GenericName|Comment|X-GNOME-FullName)\[/d' $$d; \
+	    echo "X-Ubuntu-Gettext-Domain=banshee" >> $$d; \
+	done
+endif
+
+override_dh_gencontrol:
+	dh_gencontrol -- \
+		-V"banshee:API=$(BANSHEE_API_VERSION)" \
+		-V"banshee:ASM=$(BANSHEE_ASM_VERSION)"
+
+override_dh_autoreconf:
+	NOCONFIGURE=1 dh_autoreconf --as-needed ./autogen.sh --
+
+%:
+	dh $@ --with=cli,autoreconf
