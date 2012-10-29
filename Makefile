@@ -29,7 +29,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
-	gnome-orca at-spi banshee inkscape shotwell webkit libsoup
+	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant
 
 SPREZZ:=packaging
 
@@ -183,7 +183,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
 	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
-	$(SHOTWELL) $(WEBKIT) $(LIBSOUP)
+	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -426,6 +426,14 @@ $(DRI2PROTO): $(SPREZZ)/dri2proto/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf dri2proto-$(dri2proto_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: enchant
+enchant:$(ENCHANT)_$(ARCH).deb
+$(ENCHANT): $(SPREZZ)/enchant/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf enchant-$(enchant_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: fbset
 fbset:$(FBSET)_$(ARCH).deb
@@ -1517,7 +1525,7 @@ clean:
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
 	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(SCREENLETS)
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
-	rm -rf $(LIBSOUP)
+	rm -rf $(LIBSOUP) $(ENCHANT)
 
 clobber:
 	rm -rf $(FETCHED)
