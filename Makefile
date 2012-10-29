@@ -29,7 +29,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
-	gnome-orca at-spi
+	gnome-orca at-spi banshee inkscape
 
 SPREZZ:=packaging
 
@@ -182,7 +182,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) \
 	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
-	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI)
+	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -378,6 +378,14 @@ $(ATSPI): $(SPREZZ)/at-spi/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf at-spi2-core-$(at-spi_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: banshee
+banshee:$(BANSHEE)_$(ARCH).deb
+$(BANSHEE): $(SPREZZ)/banshee/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf banshee-$(banshee_UPVER).tar.xz --strip-components=1 -C $@
+
 .PHONY: boost
 boost:$(BOOST)_$(ARCH).deb
 $(BOOST): $(SPREZZ)/boost/debian/changelog
@@ -561,6 +569,14 @@ $(GVFS): $(SPREZZ)/gvfs/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gvfs-$(gvfs_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: inkscape
+inkscape:$(INKSCAPE)_$(ARCH).deb
+$(INKSCAPE): $(SPREZZ)/inkscape/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf inkscape-$(inkscape_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: kismet
 kismet:$(KISMET)_$(ARCH).deb
@@ -1475,7 +1491,7 @@ clean:
 	rm -rf $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBDEBIANINSTALLER) $(LIBX86)
 	rm -rf $(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL)
 	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(SCREENLETS)
-	rm -rf $(GNOMEORCA) $(ATSPI)
+	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE)
 
 clobber:
 	rm -rf $(FETCHED)
