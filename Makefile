@@ -732,7 +732,7 @@ $(PIXMAN): $(SPREZZ)/pixman/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf pixman-$(pixman_UPVER).tar.xz --strip-components=1 -C $@
+	tar xzvf pixman-$(pixman_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
