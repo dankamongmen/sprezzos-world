@@ -30,7 +30,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
-	gmake packagekit gnome-dictionary gnome-color-manager mash
+	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl
 
 SPREZZ:=packaging
 
@@ -186,7 +186,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
-	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER)
+	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -806,6 +806,14 @@ $(UDISKS): $(SPREZZ)/udisks/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf udisks_$(udisks_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: yelp-xsl
+yelp-xsl:$(YELPXSL)_$(ARCH).deb
+$(YELPXSL): $(SPREZZ)/yelp-xsl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf yelp-xsl-$(yelp-xsl_UPVER).tar.xz --strip-components=1 -C $@
 
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
@@ -1592,7 +1600,7 @@ clean:
 	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(SCREENLETS)
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
-	rm -rf $(GNOMECOLORMANAGER)
+	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL)
 
 clobber:
 	rm -rf $(FETCHED)
