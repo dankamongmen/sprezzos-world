@@ -483,7 +483,7 @@ $(GIT): $(SPREZZ)/git/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf git-$(git_UPVER).tar.xz --strip-components=1 -C $@
+	tar xzvf git-$(git_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: glib
 glib:$(GLIB)_$(ARCH).deb
