@@ -1,0 +1,121 @@
+From 0c968436ec848d6b88e9c508ad17d52868a4f064 Mon Sep 17 00:00:00 2001
+From: Jonathan Nieder <jrnieder@gmail.com>
+Date: Fri, 17 Jun 2011 05:26:05 -0500
+Subject: [PATCH 09/12] daemon: check for errors retrieving IP address
+
+To retrieve a canonical IP address for possible use in a
+--interpolated-path=%IP string, the git daemon calls inet_ntop to fill
+a buffer of size HOST_NAME_MAX+1, ignoring errors, and copies the
+result.  If the address has length > HOST_NAME_MAX (which was as low
+as 8 in ancient times) then inet_ntop could error out, leading the git
+daemon to copy uninitialized data.
+
+This probably never happens in practice because modern systems allow
+such long hostnames as 64 chars (POSIX requires at least 255) or have
+no compile-time maximum at all and let git fall back to a buffer size
+of 256.  But it is more comforting not to rely on that.  So:
+
+ - in "ipv4" code, which uses inet_ntop, use a buffer size of 64 (long
+   enough to hold an ipv6 address if needed).
+
+ - in ipv6 code, use the "getnameinfo" function that is already being
+   used to convert addresses to text in error messages.  It uses a
+   buffer of length NI_MAXHOST.
+
+ - check for errors and make dns_ip_address() and git_locate_host()
+   return NULL when they occur.  strbuf_expand_dict_cb treats NULL as
+   an empty substitution string.
+
+As a nice side effect, the fallback definition of HOST_NAME_MAX for
+platforms that don't define it is no longer needed.
+
+Signed-off-by: Jonathan Nieder <jrnieder@gmail.com>
+---
+ dns-ipv4.h |   11 +++++------
+ dns-ipv6.c |   16 ++++++++--------
+ tcp.c      |    6 ++++--
+ 3 files changed, 17 insertions(+), 16 deletions(-)
+
+diff --git a/dns-ipv4.h b/dns-ipv4.h
+index c63558b..6f70d63 100644
+--- a/dns-ipv4.h
++++ b/dns-ipv4.h
+@@ -1,9 +1,7 @@
+ #ifndef DNS_IPV4_H
+ #define DNS_IPV4_H
+ 
+-#ifndef HOST_NAME_MAX
+-#define HOST_NAME_MAX 256
+-#endif
++#define ADDRBUFLEN 64	/* 46 for an ipv6 address, plus a little extra */
+ 
+ struct ipv4_address {
+ 	char **ap;
+@@ -37,9 +35,10 @@ static inline const char *dns_name(const resolved_address *addr)
+ static inline char *dns_ip_address(const resolved_address *addr,
+ 					const resolver_result *ai)
+ {
+-	char addrbuf[HOST_NAME_MAX + 1];
+-	inet_ntop(ai->he->h_addrtype, &addr->sa.sin_addr,
+-		  addrbuf, sizeof(addrbuf));
++	char addrbuf[ADDRBUFLEN];
++	if (!inet_ntop(ai->he->h_addrtype, &addr->sa.sin_addr,
++		  addrbuf, sizeof(addrbuf)))
++		return NULL;
+ 	return xstrdup(addrbuf);
+ }
+ 
+diff --git a/dns-ipv6.c b/dns-ipv6.c
+index 2129136..0b0e060 100644
+--- a/dns-ipv6.c
++++ b/dns-ipv6.c
+@@ -1,8 +1,9 @@
+ #include "cache.h"
+ #include "dns-ipv6.h"
+ 
+-#ifndef HOST_NAME_MAX
+-#define HOST_NAME_MAX 256
++/* from RFC 2553 */
++#ifndef NI_MAXHOST
++#define NI_MAXHOST 1025
+ #endif
+ 
+ const char *dns_name(const resolved_address *i)
+@@ -19,12 +20,11 @@ const char *dns_name(const resolved_address *i)
+ char *dns_ip_address(const resolved_address *i, const resolver_result *ai0)
+ {
+ 	const struct addrinfo *ai = *i;
+-	char addrbuf[HOST_NAME_MAX + 1];
+-	struct sockaddr_in *sin_addr;
+-
+-	sin_addr = (void *)ai->ai_addr;
+-	inet_ntop(AF_INET, &sin_addr->sin_addr, addrbuf, sizeof(addrbuf));
+-	return xstrdup(addrbuf);
++	char addr[NI_MAXHOST];
++	if (getnameinfo(ai->ai_addr, ai->ai_addrlen, addr, sizeof(addr),
++			NULL, 0, NI_NUMERICHOST))
++		return NULL;
++	return xstrdup(addr);
+ }
+ 
+ int dns_resolve(const char *host, const char *port, int flags,
+diff --git a/tcp.c b/tcp.c
+index 4239daf..83f0313 100644
+--- a/tcp.c
++++ b/tcp.c
+@@ -56,8 +56,10 @@ void git_locate_host(const char *hostname, char **ip_address,
+ 		*ip_address = dns_ip_address(&i, &ai);
+ 
+ 		free(*canon_hostname);
+-		*canon_hostname = xstrdup(dns_canonname(i, ai) ?
+-					dns_canonname(i, ai) : *ip_address);
++		*canon_hostname =
++			dns_canonname(i, ai) ? xstrdup(dns_canonname(i, ai)) :
++			*ip_address ? xstrdup(*ip_address) :
++			NULL;
+ 		break;
+ 	}
+ 
+-- 
+1.7.10
+

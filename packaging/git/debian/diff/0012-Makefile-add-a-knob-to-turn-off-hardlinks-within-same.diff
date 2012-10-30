@@ -1,0 +1,85 @@
+From 06e677d2db434aa3d11b14a7a8bf6c48c8caf4ac Mon Sep 17 00:00:00 2001
+From: Jonathan Nieder <jrnieder@gmail.com>
+Date: Wed, 12 Oct 2011 03:38:42 -0500
+Subject: [PATCH 12/12] Makefile: add a knob to turn off hardlinks within same
+ directory
+
+The git builtins in $(gitexecdir) are implemented as hard links to a
+single git binary by default, so even the overhead of symlink
+resolution is not needed to run them.  However, the trick can be
+harmful, in two cases:
+
+ - on Windows, some tools to estimate directory size hugely
+   overestimate the size of git (each hardlink counts as taking up the
+   same amount of space as git.exe)
+
+ - various filesystems have limits on the number of hardlinks that
+   can be made to a particular file --- Linux's LINK_MAX is 127,
+   _POSIX_LINK_MAX is 8, and btrfs has a limit of 4096 /
+   ($len_filename + 8) or so links to a given inode in a single
+   directory.
+
+Normally that second case is not a problem (when ln fails, "make
+install" falls back to "ln -s"), but if git is tar'ed up on one
+filesystem and then extracted on a more limited one, it can result in
+"Too many links" errors.
+
+Nowadays people are encouraged to (and typically do) run builtins
+using the "git" command name directly rather than those dashed forms
+in scripts, making the use of hardlinks for the dashed forms a
+somewhat pointless optimization.  Introduce a new knob to allow people
+to turn it off with a simple "make install NO_HARDLINKS=YesPlease".
+
+Typically someone using this setting would want to set
+NO_CROSS_DIRECTORY_HARDLINKS, too, but that is not enforced, so you
+can make $(bindir)/git and $(gitexecdir)/git into hardlinks to the
+same inode and still make sure your tarball avoids the btrfs limits if
+you want.
+
+Requested-by: Bastian Blank <waldi@debian.org>
+Signed-off-by: Jonathan Nieder <jrnieder@gmail.com>
+---
+ Makefile |    7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index 51b8e48..1e518f5 100644
+--- a/Makefile
++++ b/Makefile
+@@ -251,6 +251,10 @@ all::
+ # Define NO_CROSS_DIRECTORY_HARDLINKS if you plan to distribute the installed
+ # programs as a tar, where bin/ and libexec/ might be on different file systems.
+ #
++# Define NO_HARDLINKS if you plan to distribute the installed programs as a tar
++# that might be extracted on a filesystem like btrfs that does not cope well
++# with many links to one inode in one directory.
++#
+ # Define USE_NED_ALLOCATOR if you want to replace the platforms default
+ # memory allocators with the nedmalloc allocator written by Niall Douglas.
+ #
+@@ -2552,12 +2556,14 @@ endif
+ 	} && \
+ 	for p in $(filter $(install_bindir_programs),$(BUILT_INS)); do \
+ 		$(RM) "$$bindir/$$p" && \
++		test -z "$(NO_HARDLINKS)" && \
+ 		ln "$$bindir/git$X" "$$bindir/$$p" 2>/dev/null || \
+ 		ln -s "git$X" "$$bindir/$$p" 2>/dev/null || \
+ 		cp "$$bindir/git$X" "$$bindir/$$p" || exit; \
+ 	done && \
+ 	for p in $(BUILT_INS); do \
+ 		$(RM) "$$execdir/$$p" && \
++		test -z "$(NO_HARDLINKS)" && \
+ 		ln "$$execdir/git$X" "$$execdir/$$p" 2>/dev/null || \
+ 		ln -s "git$X" "$$execdir/$$p" 2>/dev/null || \
+ 		cp "$$execdir/git$X" "$$execdir/$$p" || exit; \
+@@ -2565,6 +2571,7 @@ endif
+ 	remote_curl_aliases="$(REMOTE_CURL_ALIASES)" && \
+ 	for p in $$remote_curl_aliases; do \
+ 		$(RM) "$$execdir/$$p" && \
++		test -z "$(NO_HARDLINKS)" && \
+ 		ln "$$execdir/git-remote-http$X" "$$execdir/$$p" 2>/dev/null || \
+ 		ln -s "git-remote-http$X" "$$execdir/$$p" 2>/dev/null || \
+ 		cp "$$execdir/git-remote-http$X" "$$execdir/$$p" || exit; \
+-- 
+1.7.10
+

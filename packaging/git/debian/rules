@@ -1,0 +1,305 @@
+#!/usr/bin/make -f
+
+ARCH ?=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+BUILD_DOCS =$(shell if type asciidoc >/dev/null 2>&1; then echo 1; fi)
+
+CC =gcc
+CPPFLAGS :=$(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS :=-Wall $(shell dpkg-buildflags --get CFLAGS) $(CPPFLAGS)
+LDFLAGS :=$(shell dpkg-buildflags --get LDFLAGS)
+STRIP =strip
+TEST =test
+OPTS =NO_OPENSSL=1 prefix=/usr gitexecdir=/usr/lib/git-core \
+  mandir=/usr/share/man htmldir=/usr/share/doc/git/html \
+  INSTALLDIRS=vendor \
+  NO_PYTHON=1 \
+  USE_SRV_RR=1 \
+  THREADED_DELTA_SEARCH=1 \
+  NO_CROSS_DIRECTORY_HARDLINKS=1 NO_HARDLINKS=1 \
+  DEFAULT_PAGER=pager DEFAULT_EDITOR=editor \
+  CC='$(CC)' CFLAGS='$(CFLAGS)' LDFLAGS='$(LDFLAGS)'
+DOC_OPTS =prefix=/usr htmldir=/usr/share/doc/git/html \
+  ASCIIDOC8=1 ASCIIDOC_NO_ROFF=1
+
+ifneq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+  STRIP =: strip
+endif
+ifneq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+  TEST =
+endif
+
+TMP =$(shell pwd)/tmp
+GIT =$(shell pwd)/debian/git
+
+patch: deb-checkdir patch-stamp
+patch-stamp:
+	for i in `ls -1 debian/diff/*.diff debian/diff/*.patch \
+	    2>/dev/null || :`; do \
+	  patch -p1 -N -r- <$$i || test $$? = 1 || exit 1; \
+	done
+	touch patch-stamp
+
+build: build-arch build-indep
+
+build-arch: deb-checkdir build-arch-stamp
+build-arch-stamp: patch-stamp
+	-$(CC) -v
+	DESTDIR='$(GIT)' $(MAKE) all $(OPTS)
+	test -z '$(TEST)' || \
+	  DESTDIR='$(GIT)' $(MAKE) $(TEST) $(OPTS) || \
+	  GIT_TEST_OPTS=--verbose DESTDIR='$(GIT)' $(MAKE) $(TEST) $(OPTS)
+	touch build-arch-stamp
+
+build-indep: deb-checkdir build-indep-stamp
+build-indep-stamp: patch-stamp build-arch-stamp
+	: 'Work around bug #478524'
+	set -e; if test '$(BUILD_DOCS)' = 1; \
+	then \
+		$(MAKE) -CDocumentation man html $(DOC_OPTS); \
+	fi
+	touch build-indep-stamp
+
+clean: deb-checkdir
+	$(MAKE) clean $(OPTS)
+	! test -e patch-stamp || \
+	  for i in `ls -1r debian/diff/*.diff debian/diff/*.patch \
+	      2>/dev/null || :`; do \
+	    patch -p1 -NR -r- <$$i || test $$? = 1 || exit 1; \
+	  done
+	rm -rf '$(TMP)'
+	rm -f patch-stamp build-arch-stamp build-indep-stamp
+	rm -rf '$(GIT)' '$(GIT)'-doc '$(GIT)'-arch '$(GIT)'-cvs
+	rm -rf '$(GIT)'-svn '$(GIT)'-email '$(GIT)'-el
+	rm -rf '$(GIT)'-daemon-run '$(GIT)'-daemon-sysvinit '$(GIT)'-gui
+	rm -rf '$(GIT)'k '$(GIT)'web '$(GIT)'-all '$(GIT)'-man '$(GIT)'-core
+	rm -f debian/files debian/substvars changelog
+
+install: install-arch install-indep
+install-arch: deb-checkdir deb-checkuid build-arch-stamp
+	# git
+	rm -rf '$(GIT)'
+	install -d -m0755 '$(GIT)'/usr/bin
+	DESTDIR='$(GIT)' $(MAKE) install $(OPTS)
+	install -d -m0755 '$(GIT)'/var/cache/git
+	rm -f '$(GIT)'/usr/share/perl5/Error.pm
+	rm -rf '$(GIT)'/usr/share/man
+	chmod 644 '$(GIT)'/usr/share/perl5/Git.pm
+	: 'Disable preliminary German translation.'
+	rm -rf '$(GIT)'/usr/share/locale/de
+	# don't include arch, cvs, svn, email, gui tools, and gitk program
+	for i in git-archimport git-cvs git-svn git-send-email \
+	 git-gui git-citool; do \
+	  rm -f '$(GIT)'/usr/lib/git-core/$$i*; \
+	done
+	rm -f '$(GIT)'/usr/bin/git-cvsserver
+	rm -f '$(GIT)'/usr/bin/gitk
+	for i in '$(GIT)'/usr/bin/* '$(GIT)'/usr/lib/git-core/*; do \
+	  test -d $$i || \
+	  test "`head -c2 $$i`" = '#!' || \
+	  test "`head -c2 $$i`" = '# ' || \
+	  $(STRIP) -R .comment -R .note $$i; \
+	done
+	# don't include git-gui's lib
+	rm -rf '$(GIT)'/usr/share/git-gui/
+	# don't include gitk's lib
+	rm -rf '$(GIT)'/usr/share/gitk/
+	# bash completion
+	install -d -m0755 '$(GIT)'/etc/bash_completion.d
+	install -m0644 contrib/completion/git-completion.bash \
+	  '$(GIT)'/etc/bash_completion.d/git
+	# gitweb
+	install -d -m0755 '$(GIT)'/usr/share/gitweb
+	ln -s gitweb.cgi '$(GIT)'/usr/share/gitweb/index.cgi
+	# contrib hooks
+	install -d -m0755 '$(GIT)'/usr/share/git-core/contrib/hooks
+	install -m0644 contrib/hooks/* \
+	  '$(GIT)'/usr/share/git-core/contrib/hooks/
+	# contrib
+	install -d -m0755 '$(GIT)'/usr/share/doc/git
+	cp -R contrib '$(GIT)'/usr/share/doc/git/
+	rm -rf '$(GIT)'/usr/share/doc/git/contrib/completion
+	rm -rf '$(GIT)'/usr/share/doc/git/contrib/emacs
+	find '$(GIT)'/usr/share/doc/git/contrib -type f | xargs chmod 0644
+	find '$(GIT)'/usr/share/doc/git/contrib -type d | xargs chmod 0755
+	  # remove contrib hooks, they are now installed in
+	  # /usr/share/git-core/contrib, keep symlink for backward compatibility
+	rm -rf '$(GIT)'/usr/share/doc/git/contrib/hooks
+	ln -s ../../../git-core/contrib/hooks \
+	  '$(GIT)'/usr/share/doc/git/contrib/
+	find '$(GIT)'/usr/share/doc/git/ -name .gitignore | xargs rm -f
+	# upstream changelog
+	test -r changelog || ln -s debian/changelog.upstream changelog
+
+install-indep:
+	: 'Work around bug #478524'
+	set -e; if test '$(BUILD_DOCS)' = 1; \
+	then \
+		$(MAKE) -f debian/rules install-indep-real; \
+	fi
+install-indep-real: build-arch-stamp build-indep-stamp
+	rm -rf '$(TMP)'
+	install -d -m0755 '$(TMP)'
+	DESTDIR='$(TMP)' $(MAKE) install install-doc $(OPTS)
+	$(MAKE) -CDocumentation install-webdoc WEBDOC_DEST='$(TMP)'/html \
+	  2>/dev/null
+	# RelNotes are shipped in git
+	rm -rf '$(TMP)'/html/RelNotes
+	# git-man
+	rm -rf '$(GIT)'-man
+	install -d -m0755 '$(GIT)'-man/usr/share/man/man3
+	DESTDIR='$(GIT)'-man $(MAKE) install-doc $(OPTS)
+	install -m 0644 '$(TMP)'/usr/share/man/man3/Git.3pm \
+	  '$(GIT)'-man/usr/share/man/man3/Git.3pm
+	rm -f '$(GIT)'-man/usr/share/man/man3/private-Error.3pm
+	# don't include arch, cvs, svn, email, gui, and gitk man pages
+	for i in git-archimport git-cvs git-svn git-send-email gitk \
+	 git-gui git-citool; do \
+	  rm -f '$(GIT)'-man/usr/share/man/man1/$$i*; \
+	done
+	chmod 0644 '$(GIT)'-man/usr/share/man/man?/*.[0-9]*
+	gzip -9 '$(GIT)'-man/usr/share/man/man?/*.[0-9]*
+	# git-doc
+	rm -rf '$(GIT)'-doc
+	install -d -m0755 '$(GIT)'-doc/usr/share/doc/git
+	ln -s ../git-doc '$(GIT)'-doc/usr/share/doc/git/html
+	# git-cvs, git-svn
+	for i in cvs svn; do \
+	  rm -rf '$(GIT)'-$$i && \
+	  install -d -m0755 '$(GIT)'-$$i/usr/lib/git-core && \
+	  install -m0755 '$(TMP)'/usr/lib/git-core/git-$$i* \
+	    '$(GIT)'-$$i/usr/lib/git-core/ && \
+	  install -d -m0755 '$(GIT)'-$$i/usr/share/man/man1 && \
+	  install -m0644 '$(TMP)'/usr/share/man/man1/git-$$i* \
+	    '$(GIT)'-$$i/usr/share/man/man1/ && \
+	  gzip -9 '$(GIT)'-$$i/usr/share/man/man1/*.1 || exit 1; \
+	done
+	# git-cvs
+	install -d -m0755 '$(GIT)'-cvs/usr/bin
+	install -m0755 '$(TMP)'/usr/bin/git-cvsserver '$(GIT)'-cvs/usr/bin/
+	# git-arch
+	rm -rf '$(GIT)'-arch
+	install -d -m0755 '$(GIT)'-arch/usr/lib/git-core
+	install -m0755 '$(TMP)'/usr/lib/git-core/git-archimport \
+	  '$(GIT)'-arch/usr/lib/git-core/
+	install -d -m0755 '$(GIT)'-arch/usr/share/man/man1
+	install -m0644 '$(TMP)'/usr/share/man/man1/git-archimport.1 \
+	  '$(GIT)'-arch/usr/share/man/man1/
+	gzip -9 '$(GIT)'-arch/usr/share/man/man1/*.1
+	# git-email
+	rm -rf '$(GIT)'-email
+	install -d -m0755 '$(GIT)'-email/usr/lib/git-core
+	install -m0755 '$(TMP)'/usr/lib/git-core/git-send-email \
+	  '$(GIT)'-email/usr/lib/git-core/
+	install -d -m0755 '$(GIT)'-email/usr/share/man/man1
+	install -m0644 '$(TMP)'/usr/share/man/man1/git-send-email.1 \
+	  '$(GIT)'-email/usr/share/man/man1/
+	gzip -9 '$(GIT)'-email/usr/share/man/man1/*.1
+	# git-daemon-run
+	rm -rf '$(GIT)'-daemon-run
+	install -d -m0755 '$(GIT)'-daemon-run/etc/sv/git-daemon/log
+	install -m0755 debian/git-daemon/run \
+	  '$(GIT)'-daemon-run/etc/sv/git-daemon/run
+	install -m0755 debian/git-daemon/log/run \
+	  '$(GIT)'-daemon-run/etc/sv/git-daemon/log/run
+	# git-daemon-sysvinit
+	rm -rf '$(GIT)'-daemon-sysvinit
+	install -d -m0755 '$(GIT)'-daemon-sysvinit/etc/init.d
+	install -m0755 debian/git-daemon.init \
+	  '$(GIT)'-daemon-sysvinit/etc/init.d/git-daemon
+	install -d -m0755 '$(GIT)'-daemon-sysvinit/etc/default
+	install -m0644 debian/git-daemon.default \
+	  '$(GIT)'-daemon-sysvinit/etc/default/git-daemon
+	install -d -m0755 '$(GIT)'-daemon-sysvinit/usr/share/git-core/sysvinit
+	>'$(GIT)'-daemon-sysvinit/usr/share/git-core/sysvinit/sentinel
+	chmod 0644 \
+	  '$(GIT)'-daemon-sysvinit/usr/share/git-core/sysvinit/sentinel
+	# git-el
+	rm -rf '$(GIT)'-el
+	install -m0644 -D debian/git-el.emacsen-startup \
+	  '$(GIT)'-el/etc/emacs/site-start.d/50git-core.el
+	install -m0755 -D debian/git-el.emacsen-install \
+	  '$(GIT)'-el/usr/lib/emacsen-common/packages/install/git
+	install -m0755 -D debian/git-el.emacsen-remove \
+	  '$(GIT)'-el/usr/lib/emacsen-common/packages/remove/git
+	install -d -m0755 '$(GIT)'-el/usr/share/git-core/emacs
+	install -m0644 contrib/emacs/git-blame.el \
+	  '$(GIT)'-el/usr/share/git-core/emacs/git-blame.el
+	install -m0644 contrib/emacs/git.el \
+	  '$(GIT)'-el/usr/share/git-core/emacs/git.el
+	install -d -m0755 '$(GIT)'-el/usr/share/doc/git-el
+	ln -s ../git/README.emacs \
+	  '$(GIT)'-el/usr/share/doc/git-el/README.Debian
+	install -d -m0755 '$(GIT)'-el/usr/share/doc/git/contrib
+	ln -s ../../../git-core/emacs \
+	  '$(GIT)'-el/usr/share/doc/git/contrib/emacs
+	# git-gui
+	rm -rf '$(GIT)'-gui
+	install -d -m0755 '$(GIT)'-gui/usr/lib/git-core
+	install -m0755 '$(TMP)'/usr/lib/git-core/git-gui \
+	  '$(GIT)'-gui/usr/lib/git-core/
+	install -m0755 '$(TMP)'/usr/lib/git-core/git-gui--askpass \
+	  '$(GIT)'-gui/usr/lib/git-core/
+	install -m0755 '$(TMP)'/usr/lib/git-core/git-citool \
+	  '$(GIT)'-gui/usr/lib/git-core/
+	install -d -m0755 '$(GIT)'-gui/usr/share/man/man1
+	for i in gui citool; do \
+	  install -m0644 '$(TMP)'/usr/share/man/man1/git-$$i* \
+	    '$(GIT)'-gui/usr/share/man/man1/; \
+	done
+	gzip -9 '$(GIT)'-gui/usr/share/man/man1/*.1
+	install -d -m0755 '$(GIT)'-gui/usr/share/git-gui
+	cp -a '$(TMP)'/usr/share/git-gui/lib '$(GIT)'-gui/usr/share/git-gui/
+	# gitk
+	rm -rf '$(GIT)'k
+	install -d -m0755 '$(GIT)'k/usr/bin
+	install -m0755 '$(TMP)'/usr/bin/gitk \
+	  '$(GIT)'k/usr/bin/gitk
+	install -d -m0755 '$(GIT)'k/usr/share/man/man1
+	install -m0644 '$(TMP)'/usr/share/man/man1/gitk.1 \
+	  '$(GIT)'k/usr/share/man/man1/
+	gzip -9 '$(GIT)'k/usr/share/man/man1/*.1
+	install -d -m0755 '$(GIT)'k/usr/share/gitk
+	cp -a '$(TMP)'/usr/share/gitk/lib '$(GIT)'k/usr/share/gitk/
+	# gitweb
+	rm -rf '$(GIT)'web
+	install -d -m0755 '$(GIT)'web/usr/lib/cgi-bin
+	ln -s ../../share/gitweb/gitweb.cgi \
+	  '$(GIT)'web/usr/lib/cgi-bin/gitweb.cgi
+	install -d -m0755 '$(GIT)'web/etc
+	install -m0644 debian/gitweb.conf '$(GIT)'web/etc/gitweb.conf
+	install -d -m0755 '$(GIT)'web/etc/apache2/conf.d
+	install -m0644 debian/gitweb.apache2.conf \
+	  '$(GIT)'web/etc/apache2/conf.d/gitweb
+	# git-all
+	rm -rf '$(GIT)'-all
+	install -d -m0755 '$(GIT)'-all
+	# git-core
+	rm -rf '$(GIT)'-core
+	install -d -m0755 '$(GIT)'-core/usr/share/doc
+	ln -s git '$(GIT)'-core/usr/share/doc/git-core
+	# upstream changelog
+	test -r changelog || ln -s debian/changelog.upstream changelog
+
+binary: binary-arch binary-indep
+binary-arch: install-arch git.deb
+	rm -f debian/substvars
+	dpkg-shlibdeps '$(GIT)'/usr/bin/* '$(GIT)'/usr/lib/git-core/*
+	dpkg-gencontrol -isp -pgit -P'$(GIT)'
+	dpkg -b '$(GIT)' ..
+binary-indep: install-indep git-doc.deb git-arch.deb git-cvs.deb git-svn.deb \
+	  git-daemon-run.deb git-daemon-sysvinit.deb \
+	  git-email.deb git-gui.deb gitk.deb gitweb.deb \
+	  git-all.deb git-el.deb git-man.deb git-core.deb-DEBIAN
+	rm -f debian/substvars
+	for i in -doc -arch -cvs -svn -daemon-run -daemon-sysvinit \
+	 -email -gui k web -all -core -el -man; do \
+	  dpkg-gencontrol -isp -pgit$$i -P'$(GIT)'$$i && \
+	  dpkg -b '$(GIT)'$$i .. || exit 1; \
+	done
+
+.PHONY: patch clean
+.PHONY: build build-arch build-indep
+.PHONY: install install-arch install-indep install-indep-real
+.PHONY: binary binary-arch binary-indep
+
+include debian/implicit

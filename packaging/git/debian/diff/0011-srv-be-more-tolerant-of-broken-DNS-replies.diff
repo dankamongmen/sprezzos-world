@@ -1,0 +1,122 @@
+From eb8dc7c34c58f8c2bec2a89e930069af07822de4 Mon Sep 17 00:00:00 2001
+From: Jonathan Nieder <jrnieder@gmail.com>
+Date: Fri, 13 Jan 2012 15:51:12 -0600
+Subject: [PATCH 11/12] srv: be more tolerant of broken DNS replies
+
+At a hotel with a very broken Wi-Fi setup, Richard found his copy
+of git unable to cope:
+
+	% git clone git://git.kitenet.net/mr
+	Cloning into 'mr'...
+	error: cannot initialize DNS parser: Message too long
+	fatal: Unable to look up git.kitenet.net
+
+Other programs gave some warnings but otherwise worked fine.  From a
+packet capture, it seems that the response to a SRV query for
+_git._tcp.git.kitenet.net in this setup was a single A resource record
+pointing to the link-local address 169.254.1.1, followed by two
+trailing bytes: c0 1a.  The trailing bytes cause the underlying parser
+to fail.
+
+It would not be good to silently tolerate this and similar kinds of
+brokenness, but working around it would help people on affected
+systems to recover.  Luckily RFC2782 gives us enough leeway to act as
+we please for this particular kind of error, so give a warning and
+fall back to an A/AAAA query (which should work).
+
+Similarly, if we receive non-SRV RRs in response to a SRV query,
+RFC2782 does not say to error out, so in the spirit of graceful
+degradation let's warn and skip those records.
+
+Reported-by: Richard Hartmann <richih.mailinglist@gmail.com>
+Signed-off-by: Jonathan Nieder <jrnieder@gmail.com>
+---
+ srv.c |   40 ++++++++++++++++++++++++++--------------
+ 1 file changed, 26 insertions(+), 14 deletions(-)
+
+diff --git a/srv.c b/srv.c
+index 2716206..829ef76 100644
+--- a/srv.c
++++ b/srv.c
+@@ -83,7 +83,6 @@ static int srv_parse(ns_msg *msg, struct parsed_srv_rr **res)
+ {
+ 	struct parsed_srv_rr *rrs = NULL;
+ 	int nr_parsed = 0;
+-	int cnames = 0;
+ 	int i, n;
+ 
+ 	n = ns_msg_count(*msg, ns_s_an);
+@@ -98,30 +97,33 @@ static int srv_parse(ns_msg *msg, struct parsed_srv_rr **res)
+ 		if (ns_rr_type(rr) != ns_t_cname)
+ 			break;
+ 	}
+-	cnames = i;
+-	n -= cnames;
+ 
+-	rrs = xmalloc(n * sizeof(*rrs));
+-	for (i = 0; i < n; i++) {
++	rrs = xmalloc((n - i) * sizeof(*rrs));
++	for (; i < n; i++) {
+ 		ns_rr rr;
+ 
+-		if (ns_parserr(msg, ns_s_an, cnames + i, &rr)) {
++		if (ns_parserr(msg, ns_s_an, i, &rr)) {
+ 			error("cannot parse DNS RR: %s", strerror(errno));
+ 			goto fail;
+ 		}
+ 		if (ns_rr_type(rr) != ns_t_srv) {
+-			error("expected SRV RR, found RR type %d",
++			/*
++			 * Maybe the server is playing tricks and returned
++			 * an A record.  Let it pass and if we don't get
++			 * any SRV RRs, we can fall back to an A lookup.
++			 */
++			warning("expected SRV RR, found RR type %d",
+ 						(int) ns_rr_type(rr));
+-			goto fail;
++			continue;
+ 		}
+-		if (srv_parse_rr(msg, &rr, rrs + i))
++		if (srv_parse_rr(msg, &rr, rrs + nr_parsed))
+ 			/* srv_parse_rr writes a message */
+ 			goto fail;
+ 		nr_parsed++;
+ 	}
+ 
+ 	*res = rrs;
+-	return n;
++	return nr_parsed;
+ fail:
+ 	for (i = 0; i < nr_parsed; i++)
+ 		free(rrs[i].target);
+@@ -274,13 +276,23 @@ int get_srv(const char *host, struct host **hosts)
+ 	if (len < 0)
+ 		goto out;
+ 
+-	/* If a SRV RR cannot be parsed, give up. */
+-	ret = -1;
+-
++	/*
++	 * If the reply to a SRV query is malformed, fall back to an
++	 * A query.
++	 *
++	 * The RFC2782 usage rules don't say anything about this, but
++	 * in practice, it seems that some firewalls or DNS servers
++	 * (think: captive portal) handle A queries sensibly and
++	 * provide malformed replies in response to SRV queries.
++	 */
+ 	if (ns_initparse(buf, len, &msg)) {
+-		error("cannot initialize DNS parser: %s", strerror(errno));
++		warning("cannot parse SRV response: %s", strerror(errno));
+ 		goto out;
+ 	}
++
++	/* If a SRV RR cannot be parsed, give up. */
++	ret = -1;
++
+ 	n = srv_parse(&msg, &rrs);
+ 	if (n < 0)
+ 		/* srv_parse writes a message */
+-- 
+1.7.10
+
