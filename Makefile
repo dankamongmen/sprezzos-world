@@ -30,7 +30,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool \
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
-	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus
+	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
+	pixman
 
 SPREZZ:=packaging
 
@@ -186,7 +187,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
-	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL)
+	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -724,6 +725,14 @@ $(PIDGIN): $(SPREZZ)/pidgin/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf pidgin-$(pidgin_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: pixman
+pixman:$(PIXMAN)_$(ARCH).deb
+$(PIXMAN): $(SPREZZ)/pixman/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf pixman-$(pixman_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
@@ -1608,7 +1617,7 @@ clean:
 	rm -rf $(GNOMETHEMESSTANDARD) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(SCREENLETS)
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
-	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL)
+	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN)
 
 clobber:
 	rm -rf $(FETCHED)
