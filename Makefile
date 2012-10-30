@@ -683,7 +683,7 @@ $(MASH): $(SPREZZ)/mash/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf mash-$(mash_UPVER).tar.xz --strip-components=1 -C $@
+	tar xzvf mash_$(mash_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: openldap
 openldap:$(OPENLDAP)_$(ARCH).deb
