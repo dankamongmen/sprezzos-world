@@ -31,7 +31,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
-	pixman gnome-disk-utility
+	pixman gnome-disk-utility gnome-doc-utils
 
 SPREZZ:=packaging
 
@@ -188,7 +188,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) \
-	$(GNOMEDISKUTILITY)
+	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -534,6 +534,14 @@ $(GNOMEDISKUTILITY): $(SPREZZ)/gnome-disk-utility/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-disk-utility_$(gnome-disk-utility_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-doc-utils
+gnome-doc-utils:$(GNOMEDOCUTILS)_$(ARCH).deb
+$(GNOMEDOCUTILS): $(SPREZZ)/gnome-doc-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-doc-utils_$(gnome-doc-utils_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-font-viewer
 gnome-font-viewer:$(GNOMEFONTVIEWER)_$(ARCH).deb
@@ -1627,6 +1635,7 @@ clean:
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY)
+	rm -rf $(GNOMEDOCUTILS)
 
 clobber:
 	rm -rf $(FETCHED)
