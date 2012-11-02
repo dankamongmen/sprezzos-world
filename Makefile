@@ -831,7 +831,7 @@ $(UDISKS): $(SPREZZ)/udisks/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf udisks_$(udisks_UPVER).orig.tar.gz --strip-components=1 -C $@
+	tar xjvf udisks_$(udisks_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: yelp-xsl
 yelp-xsl:$(YELPXSL)_$(ARCH).deb
