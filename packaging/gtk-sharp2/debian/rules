@@ -1,0 +1,123 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+export GCONF_DISABLE_MAKEFILE_SCHEMA_INSTALL=1
+export MONO_SHARED_DIR=$(CURDIR)
+
+CFLAGS ?= -O2 -Wall -g
+LDFLAGS += -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+
+API_VERSION = 2.12.10-1ubuntu1
+
+UPVERSION = $(shell dpkg-parsechangelog | grep ^Vers | cut -d\  -f2 | sed 's,-.*,,')
+NEXT_UPVERSION = $(shell perl -e '$$_=pop; s/(\d+)$$/$$1+1/e; print' $(UPVERSION))
+
+MAKEFILE = $(firstword $(MAKEFILE_LIST))
+DEBIAN_DIR = $(dir $(MAKEFILE))
+SOURCE_DIR = $(DEBIAN_DIR)/..
+
+DEB_VERSION = $(shell dpkg-parsechangelog -l$(DEBIAN_DIR)/changelog | grep ^Version | cut -d" " -f2)
+DEB_SOURCE_NAME = $(shell dpkg-parsechangelog -l$(DEBIAN_DIR)/changelog | grep ^Source | cut -d" " -f2)
+VERSION = $(shell echo $(DEB_VERSION) | cut -d"-" -f1 | sed 's/+dfsg.*//')
+
+get-orig-source:
+	uscan \
+		--package $(DEB_SOURCE_NAME) \
+		--watchfile $(DEBIAN_DIR)/watch \
+		--upstream-version $(VERSION) \
+		--download-version $(VERSION) \
+		--destdir . \
+		--force-download \
+		--rename
+
+config: config-stamp
+config-stamp:
+	dh_testdir
+	dh_autoreconf --as-needed
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure --prefix=/usr RUNTIME=/usr/bin/cli CSC=/usr/bin/mono-csc MONO_CAIRO_LIBS=-r:Mono.Cairo MONO_CAIRO_CFLAGS=" "
+	touch config-stamp
+
+build-indep: build-indep-stamp
+build-indep-stamp: config-stamp
+	dh_testdir
+	$(MAKE) RUNTIME=/usr/bin/cli
+	# generate Gtk#2 docs (for monodoc)
+	cd doc/ && $(MAKE) assemble
+	touch build-indep-stamp
+
+build-arch: build-arch-stamp
+build-arch-stamp: config-stamp
+	dh_testdir
+	$(MAKE) RUNTIME=/usr/bin/cli
+	touch build-arch-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	[ ! -f Makefile ] || $(MAKE) distclean RUNTIME=/usr/bin/cli
+	rm -f config-stamp build-indep-stamp build-arch-stamp
+	rm -rf $(MONO_SHARED_DIR)/.wapi
+	dh_autoreconf_clean
+	dh_clean
+
+install:
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp RUNTIME=/usr/bin/cli
+
+binary-indep: build-indep install
+	dh_testdir
+	dh_testroot
+	dh_installdirs -i
+	dh_movefiles -i
+	dh_link -i
+	# we must install arch dep and indep here! dh_clideps will get problems otherwise
+	dh_install
+	install -m755 $(CURDIR)/debian/list-examples $(CURDIR)/debian/gtk-sharp2-examples/usr/bin/gtk-sharp2-examples-list
+	dh_installchangelogs -i ChangeLog
+	dh_installdocs -i
+	dh_installman -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_clifixperms -i
+	dh_clistrip -i
+	dh_cligacpolicy -i
+	dh_makeclilibs -m $(API_VERSION)
+	dh_installcligac -i
+	dh_clideps -i -d
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build-arch install
+	dh_testdir
+	dh_testroot
+	dh_movefiles -a
+	dh_link -a
+	# we must install arch dep and indep here! dh_clideps will get problems otherwise
+	dh_install
+	dh_installchangelogs -a ChangeLog
+	dh_installdocs -a
+	dh_installman -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_clifixperms -a
+	dh_clistrip -a
+	dh_cligacpolicy -a
+	dh_makeclilibs -m $(API_VERSION)
+	dh_installcligac -a
+	dh_clideps -a -d
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+build: build-indep build-arch
+binary: binary-indep binary-arch
+
+.PHONY: config build-indep build-arch clean binary-indep binary-arch build binary
