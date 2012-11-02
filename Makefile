@@ -31,7 +31,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
-	pixman gnome-disk-utility gnome-doc-utils
+	pixman gnome-disk-utility gnome-doc-utils libvirt
 
 SPREZZ:=packaging
 
@@ -187,7 +187,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
-	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) \
+	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -686,6 +686,14 @@ $(LIBSOUP): $(SPREZZ)/libsoup/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf libsoup2.4_$(libsoup_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: libvirt
+libvirt:$(LIBVIRT)_$(ARCH).deb
+$(LIBVIRT): $(SPREZZ)/libvirt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf libvirt-$(libvirt_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: libwnck
 libwnck:$(LIBWNCK)_$(ARCH).deb
@@ -1635,7 +1643,7 @@ clean:
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY)
-	rm -rf $(GNOMEDOCUTILS)
+	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT)
 
 clobber:
 	rm -rf $(FETCHED)
