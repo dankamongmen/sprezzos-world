@@ -1,0 +1,332 @@
+#!/usr/bin/make -f
+
+# Debian GNOME Maintainers
+DISABLE_UPDATE_UPLOADERS := 1
+include /usr/share/gnome-pkg-tools/1/rules/uploaders.mk
+include /usr/share/gnome-pkg-tools/1/rules/gnome-get-source.mk
+
+GNOME_MODULE := gtk+
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+STAMP_DIR := debian/stampdir
+
+PATCH_DIR := debian/patches
+
+# rules in this debian/rules Makefile can be built concurrently as well as
+# upstream rules in Makefile; all $(MAKE) invocations will inherit this flag,
+# if you recurse into debian/rules ($(MAKE)
+# -f debian/rules in rules), you need to pass a flag to avoid adding "-jX" when
+# the childs encounters this line
+DEB_BUILD_OPTIONS_PARALLEL ?= $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+PARALLEL_FLAGS += $(if $(DEB_BUILD_OPTIONS_PARALLEL),-j$(DEB_BUILD_OPTIONS_PARALLEL))
+
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_ARCH_OS   ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_BUILD_GNU_CPU  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_CPU)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+DEB_BUILD_OPTIONS += multiarch
+# relative libdir
+ifneq (,$(findstring multiarch,$(DEB_BUILD_OPTIONS)))
+LIBDIR := usr/lib/$(DEB_HOST_MULTIARCH)
+else
+LIBDIR := usr/lib
+endif
+
+# ppc64 support; see #386815
+ifeq ($(DEB_HOST_GNU_CPU),powerpc64)
+	CFLAGS += -mminimal-toc
+endif
+
+# default CFLAGS; these can be expanded with $(call flavor_get, )
+CFLAGS += -Wall -g -O$(if $(findstring noopt,$(DEB_BUILD_OPTIONS)),0,2)
+
+# default LDFLAGS; these can be expanded with $(call flavor_get, )
+# currently fails in the cups gtkprint backend
+#LDFLAGS += -Wl,-z,defs
+
+DEBVERSION := $(shell dpkg-parsechangelog | sed -n -e 's/^Version: //p')
+VERSION := $(shell echo $(DEBVERSION) | sed -e 's/-[^-]*$$//')
+APIVER := 2.0
+SONAME := 0
+SHVER := 2.24.0
+
+# earliest version that this release has backwards binary compatibility for
+GTK_BINARY_VERSION := 2.10.0
+
+# Gtk binary version virtual Provide
+GTK_BINVER_DEP := gtk$(APIVER)-binver-$(GTK_BINARY_VERSION)
+
+# relative base directory for all types of modules
+MODULES_BASE_PATH := $(LIBDIR)/gtk-$(APIVER)/$(GTK_BINARY_VERSION)
+OLD_MODULES_BASE_PATH := usr/lib/gtk-$(APIVER)/$(GTK_BINARY_VERSION)
+
+# package names
+SHARED_PKG := libgtk$(APIVER)-$(SONAME)
+COMMON_PKG := libgtk$(APIVER)-common
+DEV_PKG := libgtk$(APIVER)-dev
+UDEB_PKG := $(SHARED_PKG)-udeb
+DOC_PKG := libgtk$(APIVER)-doc
+BIN_PKG := libgtk$(APIVER)-bin
+DEBUG_PKG := $(SHARED_PKG)-dbg
+EXAMPLES_PKG := gtk$(APIVER)-examples
+PIXBUF_PKG := gtk2-engines-pixbuf
+
+# package groups, used in rule dependencies and in cleanup
+BINARY_INDEP_PKGS := $(COMMON_PKG) $(DOC_PKG) libgail-doc
+BINARY_ARCH_PKGS := $(SHARED_PKG) $(BIN_PKG) $(UDEB_PKG) $(DEV_PKG) $(DEBUG_PKG) $(EXAMPLES_PKG) $(PIXBUF_PKG) gir1.2-gtk-2.0 libgail18 libgail-dbg libgail-dev libgail-common
+ALL_PKGS := $(BINARY_INDEP_PKGS) $(BINARY_ARCH_PKGS)
+
+# list of flavors we build; each gets a builddir, a configure pass (configure
+# args are defined below), a build pass, and an install pass (in two steps)
+# Note: the shared flavor is required
+FLAVORS := shared shared_udeb static
+
+# current flavor we're building; this is only expanded in flavor specific
+# targets
+current_flavor = $*
+
+# macro to get a value for the current flavor we're building; for example
+# when building the shared flavor, $(call flavor_get,CFLAGS) will expand to
+# shared_CFLAGS if it's set or to CFLAGS otherwise; pay attention to not adding
+# superflous spaces when for the arguments of $(call ); only some vars can
+# be expanded in this way though
+flavor_get = $(or $($(current_flavor)_$(1)),$($(1)))
+
+# build dir for the current flavor; this is only expanded in flavor specific
+# targets
+builddir = $(buildbasedir)/$(current_flavor)
+buildbasedir = $(CURDIR)/debian/build
+
+# install dir for the current flavor; this is only expanded in flavor specific
+# targets
+installdir = $(installbasedir)/$(current_flavor)
+installbasedir = $(CURDIR)/debian/install
+
+# configure flags
+configure_flags := \
+			--prefix=/usr \
+			--libdir=/$(LIBDIR) \
+			--mandir=\$${prefix}/share/man \
+			--infodir=\$${prefix}/share/info \
+			--sysconfdir=/etc \
+			--enable-test-print-backend \
+			--enable-introspection=no \
+			--with-xinput=yes \
+			--build=$(DEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	configure_flags += --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+shared_configure_flags := $(configure_flags) \
+			--enable-shared \
+			--enable-introspection=yes \
+			--disable-static
+shared_udeb_configure_flags := $(shared_configure_flags) \
+			--disable-xcomposite \
+			--disable-xdamage \
+			--disable-xfixes \
+			--disable-xrandr
+static_configure_flags := $(configure_flags) \
+			--with-included-loaders=yes \
+			--disable-modules \
+			--disable-shared \
+			--enable-static
+
+# optional optimized flavor for some arches
+OPTLIBDIR :=
+# sample code
+#ifneq ($(filter $(DEB_HOST_ARCH), armel),)
+#FLAVORS += opt
+#OPTLIBDIR := $(LIBDIR)/vfp
+#opt_CFLAGS += $(CFLAGS) -mfpu=vfp -mfloat-abi=softfp
+#opt_configure_flags := $(or $(shared_configure_flags),$(configure_flags))
+#endif
+
+# list of flavors to run the test suite on
+CHECK_FLAVORS := $(filter opt shared static, $(FLAVORS))
+
+DH_INSTALLDOCS_FILES := NEWS README AUTHORS
+
+# macro computing the list of 'debian/<pkg>.*" files which have a corresponding
+# ".in" file; pass the list of packages in $(1)
+dh_subst_files = $(patsubst %.in,%,$(wildcard $(addprefix debian/, $(addsuffix *.in, $(1)))))
+
+# Gruik gruik generation of .devhelp files for the FAQ and tutorial
+debian/gtk-%.devhelp: docs/%/html/index.html
+	gawk -f debian/gruik2devhelp.awk -v name=gtk-$* $< > $@
+devhelpfiles: debian/gtk-faq.devhelp debian/gtk-tutorial.devhelp
+
+debian/dh_gtkmodules.1: debian/dh_gtkmodules
+	cd debian && pod2man -c "Gtk" -r "$(DEBVERSION)" dh_gtkmodules dh_gtkmodules.1
+
+patch: $(STAMP_DIR)/patch-stamp
+
+$(STAMP_DIR)/patch-stamp:
+	dh_testdir
+	mkdir $(STAMP_DIR)
+	mkdir -p m4
+	cp /usr/share/gtk-doc/data/gtk-doc.make .
+	dh_autoreconf
+	touch $@
+
+$(STAMP_DIR)/configure-stamp-%: $(STAMP_DIR)/patch-stamp
+	dh_testdir
+	mkdir -p $(builddir)
+	cd $(builddir) && \
+		CFLAGS="$(call flavor_get,CFLAGS)" \
+		LDFLAGS="$(call flavor_get,LDFLAGS)" \
+			$(CURDIR)/configure $(call flavor_get,configure_flags)
+	touch $@
+
+configure: $(addprefix $(STAMP_DIR)/configure-stamp-, $(FLAVORS))
+
+$(STAMP_DIR)/build-stamp-%: $(STAMP_DIR)/configure-stamp-%
+	dh_testdir
+	LD_LIBRARY_PATH=$(builddir)/gtk/.libs:$(builddir)/gdk/.libs:$(LD_LIBRARY_PATH) \
+		$(MAKE) $(PARALLEL_FLAGS) -C $(builddir)
+	touch $@
+
+build: $(addprefix $(STAMP_DIR)/build-stamp-, $(FLAVORS))
+
+$(STAMP_DIR)/check-stamp-%: $(STAMP_DIR)/build-stamp-%
+	dh_testdir
+	# setting LD_LIBRARY_PATH for "make check" might be needed in the
+	# future, but doesn't seem necessary right now
+	#LD_LIBRARY_PATH=$(builddir)/gtk/.libs:$(builddir)/gdk/.libs:$(LD_LIBRARY_PATH)
+	# testsuite failures are ignored
+	-$(MAKE) -C $(builddir) check
+	touch $@
+
+check: $(addprefix $(STAMP_DIR)/check-stamp-, $(CHECK_FLAVORS))
+
+$(STAMP_DIR)/install-stamp-%: $(STAMP_DIR)/build-stamp-%
+	mkdir -p $(installdir)
+	$(MAKE) -C $(builddir) install \
+		DESTDIR=$(installdir)
+	touch $@
+
+install: $(addprefix $(STAMP_DIR)/install-stamp-, $(FLAVORS))
+
+# gross kludge to force control generation with the %.in target
+clean::
+	touch debian/control.in
+
+debian/%: debian/%.in
+	dh_testdir
+	sed \
+		-e "s#@SONAME@#$(SONAME)#g" \
+		-e "s#@APIVER@#$(APIVER)#g" \
+		-e "s#@VERSION@#$(VERSION)#g" \
+		-e "s#@GTK_BINVER_DEP@#$(GTK_BINVER_DEP)#g" \
+		-e "s#@SHARED_PKG@#$(SHARED_PKG)#g" \
+		-e "s#@COMMON_PKG@#$(COMMON_PKG)#g" \
+		-e "s#@DEV_PKG@#$(DEV_PKG)#g" \
+		-e "s#@UDEB_PKG@#$(UDEB_PKG)#g" \
+		-e "s#@DOC_PKG@#$(DOC_PKG)#g" \
+		-e "s#@BIN_PKG@#$(BIN_PKG)#g" \
+		-e "s#@DEBUG_PKG@#$(DEBUG_PKG)#g" \
+		-e "s#@EXAMPLES_PKG@#$(EXAMPLES_PKG)#g" \
+		-e "s#@PIXBUF_PKG@#$(PIXBUF_PKG)#g" \
+		-e "s#@GNOME_TEAM@#$(UPLOADERS)#g" \
+		-e "s#@GTK_BINARY_VERSION@#$(GTK_BINARY_VERSION)#g" \
+		-e "s#@LIBDIR@#$(LIBDIR)#g" \
+		-e 's#@OPTLIBDIR@#$(OPTLIBDIR)#g' \
+		-e "s#@MODULES_BASE_PATH@#$(MODULES_BASE_PATH)#g" \
+		-e "s#@OLD_MODULES_BASE_PATH@#$(OLD_MODULES_BASE_PATH)#g" \
+		$@.in \
+		$(wildcard $(if $(filter opt,$(FLAVORS)),$@.opt)) \
+		> $@
+
+clean:: debian/control
+	dh_testdir
+	dh_testroot
+	# remove install and build dirs
+	rm -rf $(installbasedir)
+	rm -rf $(buildbasedir)
+	dh_autoreconf_clean
+	rm -f gtk-doc.make
+	rm -f debian/*.devhelp
+	-rm -rf $(STAMP_DIR)
+	-rm -f $(call dh_subst_files,$(ALL_PKGS))
+	-rm -f debian/dh_gtkmodules debian/dh_gtkmodules.1
+	dh_clean
+
+maybe_check = $(if $(findstring nocheck,$(DEB_BUILD_OPTIONS)),,check)
+
+binary-indep: build $(maybe_check) install $(call dh_subst_files,$(BINARY_INDEP_PKGS)) devhelpfiles
+	dh_testdir
+	dh_testroot
+	dh_install -i
+	# changelog.gz symlinks will be overwritten by dh_link
+	dh_installchangelogs -i ChangeLog
+	# do not merge the calls: dh_installdocs will only install some files
+	# in the first package
+	dh_installdocs -p$(COMMON_PKG) $(DH_INSTALLDOCS_FILES)
+	dh_installdocs -p$(DOC_PKG) $(DH_INSTALLDOCS_FILES)
+	# install copyright in all packages; the -p is for the special behavior
+	# of dh_installdocs (ship README.Debian etc. in the first package)
+	dh_installdocs -p$(COMMON_PKG) -i
+	dh_installman -i
+	dh_link -i
+	dh_compress -i -X.sgml -X.devhelp
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i -- -Zxz
+
+binary-arch: build $(maybe_check) install $(call dh_subst_files,$(BINARY_ARCH_PKGS)) debian/dh_gtkmodules debian/dh_gtkmodules.1
+	dh_testdir
+	dh_testroot
+	dh_install -s
+	# changelog.gz symlinks will be overwritten by dh_link
+	dh_installchangelogs -s ChangeLog
+	# do not merge the calls: dh_installdocs only installs in the first pkg
+	dh_installdocs -p$(EXAMPLES_PKG) $(DH_INSTALLDOCS_FILES)
+	dh_installdocs -p$(PIXBUF_PKG) $(DH_INSTALLDOCS_FILES)
+	# install copyright in all packages; the -p is for the special behavior
+	# of dh_installdocs (ship README.Debian etc. in the first package)
+	dh_installdocs -p$(PIXBUF_PKG) -s
+	dh_installman -s
+	dh_installexamples -s
+	dh_link -s
+	dh_strip -s --dbg-package=$(DEBUG_PKG) -N$(UDEB_PKG) -Nlibgail18 -Nlibgail-common
+	dh_strip -plibgail18 -plibgail-common --dbg-package=libgail-dbg
+	dh_strip -p$(UDEB_PKG)
+	dh_compress -s -X.sgml -X.devhelp
+	dh_fixperms -s -X$(LIBDIR)/$(SHARED_PKG)
+	dh_makeshlibs -p$(SHARED_PKG) \
+		-X$(MODULES_BASE_PATH) \
+		-V"$(SHARED_PKG) (>= $(SHVER))" \
+		--add-udeb=$(UDEB_PKG) \
+		-- -c4
+	dh_makeshlibs -plibgail18 \
+		-X$(MODULES_BASE_PATH) \
+		-V"libgail18 (>= $(SHVER)), libgail-common (>= $(SHVER))" \
+		-- -c4
+	dh_girepository -pgir1.2-gtk-2.0
+	dh_installdeb -s
+	# override shlibs for libraries from this source before computing
+	# dependencies of packages generated from this source; we already have
+	# inter-dependencies expressed manually in the control file, we do not
+	# need the shlibs to add duplicates
+	cat debian/*/DEBIAN/shlibs | \
+		sed -n -r -e 's/(([^ ]+: )?([^ ]+) ([^ ]+)) .*/\1/p' \
+			> debian/shlibs.local
+	dh_shlibdeps
+	-rm -f debian/shlibs.local
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s -- -Zxz
+
+list-missing:
+	perl -w debian/dh_listmissing.pl $(foreach f,$(FLAVORS),$(subst $(CURDIR)/,,$(installbasedir))/$(f)) 2>&1 | \
+	    egrep -v '(\.la|$(LIBDIR)/gtk-2.0/$(GTK_BINARY_VERSION)/[^/]+/[^/]+\.a) has been installed' >&2
+
+binary: binary-indep binary-arch
+.PHONY: patch configure build check install clean binary-indep binary-arch list-missing binary devhelpfiles
