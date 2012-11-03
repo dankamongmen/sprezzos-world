@@ -632,8 +632,8 @@ $(GOBJECTINTROSPECTION): $(SPREZZ)/gobject-introspection/debian/changelog
 	tar xJvf gobject-introspection-$(gobject-introspection_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gphoto2
-gphoto2:$(gphoto22)_$(ARCH).deb
-$(gphoto22): $(SPREZZ)/gphoto2/debian/changelog
+gphoto2:$(GPHOTO2)_$(ARCH).deb
+$(GPHOTO2): $(SPREZZ)/gphoto2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
