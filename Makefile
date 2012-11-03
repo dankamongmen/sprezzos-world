@@ -31,7 +31,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
-	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug
+	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2
 
 SPREZZ:=packaging
 
@@ -188,7 +188,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
-	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG)
+	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -630,6 +630,14 @@ $(GOBJECTINTROSPECTION): $(SPREZZ)/gobject-introspection/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gobject-introspection-$(gobject-introspection_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gphoto2
+gphoto2:$(gphoto22)_$(ARCH).deb
+$(gphoto22): $(SPREZZ)/gphoto2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gphoto2-$(gphoto2_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gvfs
 gvfs:$(GVFS)_$(ARCH).deb
@@ -1659,7 +1667,7 @@ clean:
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY) $(NETCF)
-	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG)
+	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2)
 
 clobber:
 	rm -rf $(FETCHED)
