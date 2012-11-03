@@ -73,8 +73,6 @@ EOGUP:=eog-$(shell echo $(eog_VERSION) | cut -d: -f2- | cut -d- -f1)
 EOGORIG:=eog_$(shell echo $(eog_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 EVINCEUP:=evince-$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1)
 EVINCEORIG:=evince_$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-F2FSUP:=f2fs-tools-$(shell echo $(f2fs-tools_VERSION) | cut -d- -f1)
-F2FSORIG:=f2fs-tools_$(shell echo $(f2fs-tools_VERSION) | cut -d- -f1).orig.tar.gz
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
 FBTERMUP:=nfbterm-$(shell echo $(fbterm_VERSION) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_VERSION) | cut -d- -f1).orig.tar.gz
@@ -454,6 +452,14 @@ $(ENCHANT): $(SPREZZ)/enchant/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf enchant-$(enchant_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: f2fs-tools
+f2fs-tools:$(F2FSTOOLS)_$(ARCH).deb
+$(F2FSTOOLS): $(SPREZZ)/f2fs-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf f2fs-tools-$(f2fs-tools_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: fbset
 fbset:$(FBSET)_$(ARCH).deb
@@ -951,20 +957,6 @@ fbterm:$(FBTERM)_$(ARCH).deb
 $(FBTERM): $(SPREZZ)/fbterm/debian/changelog $(FBTERMORIG)
 	mkdir $@
 	tar xzvf $(FBTERMORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(F2FSUP).tar.gz
-$(F2FSUP).tar.gz:
-	wget -nc -O$@ http://sourceforge.net/projects/f2fs-tools/files/$@
-
-$(F2FSORIG): $(F2FSUP).tar.gz
-	ln -s $< $@
-
-.PHONY: f2fstools
-f2fstools:$(F2FSTOOLS)_$(ARCH).deb
-$(F2FSTOOLS): $(SPREZZ)/f2fs-tools/debian/changelog $(F2FSORIG)
-	mkdir $@
-	tar xzvf $(F2FSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(FONTCONFIGUP).tar.gz
