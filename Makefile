@@ -15,7 +15,7 @@ DEBEMAIL:=nick.black@sprezzatech.com
 PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3 \
 	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi udisks \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo wpa git \
-	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files \
+	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files gtk2 \
 	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools vte \
@@ -112,8 +112,6 @@ GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-sche
 SPLORIG:=spl_$(shell echo $(spl_VERSION) | cut -d- -f1).orig.tar.xz
 ZFSORIG:=zfs_$(shell echo $(zfs_VERSION) | cut -d- -f1).orig.tar.xz
 GRUBUP:=grub-$(shell echo $(grub2_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
-GTK3UP:=gtk+-$(shell echo $(gtk3_VERSION) | cut -d= -f2 | cut -d- -f1)
-GTK3ORIG:=gtk+3.0_$(shell echo $(gtk3_VERSION) | cut -d- -f1).orig.tar.xz
 HARFBUZZUP:=harfbuzz-$(shell echo $(harfbuzz_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 HARFBUZZORIG:=harfbuzz_$(shell echo $(harfbuzz_VERSION) | cut -d- -f1).orig.tar.gz
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -190,7 +188,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
-	$(NVIDIACUDATOOLKIT) $(RAZORQT)
+	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -650,6 +648,22 @@ $(GPHOTO2): $(SPREZZ)/gphoto2/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf gphoto2-$(gphoto2_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: gtk2
+gtk2:$(GTK2)_$(ARCH).deb
+$(GTK2): $(SPREZZ)/gtk2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gtk+-$(gtk2_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gtk3
+gtk3:$(GTK3)_$(ARCH).deb
+$(GTK3): $(SPREZZ)/gtk3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gtk+3-$(gtk3_UPVER).tar.xz --strip-components=1 -C $@
+
 .PHONY: gvfs
 gvfs:$(GVFS)_$(ARCH).deb
 $(GVFS): $(SPREZZ)/gvfs/debian/changelog
@@ -1020,20 +1034,6 @@ gdk-pixbuf:$(GDKPIXBUF)_$(ARCH).deb
 $(GDKPIXBUF): $(SPREZZ)/gdk-pixbuf/debian/changelog $(GDKPIXBUFORIG)
 	mkdir $@
 	tar xJvf $(GDKPIXBUFORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GTK3UP).tar.xz
-$(GTK3UP).tar.xz:
-	wget -nc -O$@ http://ftp.acc.umu.se/pub/GNOME/sources/gtk+/3.6/$(GTK3UP).tar.xz
-
-$(GTK3ORIG): $(GTK3UP).tar.xz
-	ln -s $< $@
-
-.PHONY: gtk3
-gtk3:$(GTK3)_$(ARCH).deb
-$(GTK3): $(SPREZZ)/gtk3/debian/changelog $(GTK3ORIG)
-	mkdir $@
-	tar xJvf $(GTK3ORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(HARFBUZZUP).tar.gz
@@ -1670,7 +1670,7 @@ clean:
 	rm -rf $(LIBRSVG) $(GRUB2) $(XMLSTARLET) $(OPENSSH) $(HFSUTILS) $(IBUS)
 	rm -rf $(BASEFILES) $(NETBASE) $(FIRMWAREALL) $(FBI) $(OPENLDAP) $(BOOST)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE) $(GMAKE)
-	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL)
+	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL) $(GTK2)
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK) $(YELP)
