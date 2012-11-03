@@ -637,7 +637,7 @@ $(GPHOTO2): $(SPREZZ)/gphoto2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf gphoto2-$(gphoto2_UPVER).tar.xz --strip-components=1 -C $@
+	tar xzvf gphoto2-$(gphoto2_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: gvfs
 gvfs:$(GVFS)_$(ARCH).deb
