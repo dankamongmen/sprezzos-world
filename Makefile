@@ -31,7 +31,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
-	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 \
+	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
 	libgphoto2 nvidia-cuda-toolkit
 
 SPREZZ:=packaging
@@ -190,7 +190,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
-	$(NVIDIACUDATOOLKIT)
+	$(NVIDIACUDATOOLKIT) $(RAZORQT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -801,6 +801,14 @@ $(PIXMAN): $(SPREZZ)/pixman/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf pixman-$(pixman_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: razorqt
+razorqt:$(RAZORQT)_$(ARCH).deb
+$(RAZORQT): $(SPREZZ)/razorqt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf razorqt-$(razorqt_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: reportbug
 reportbug:$(REPORTBUG)_$(ARCH).deb
@@ -1681,7 +1689,7 @@ clean:
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY) $(NETCF)
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
-	rm -rf $(NVIDIACUDATOOLKIT)
+	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT)
 
 clobber:
 	rm -rf $(FETCHED)
