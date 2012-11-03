@@ -680,8 +680,8 @@ $(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
 	tar xJvf libatasmart_$(libatasmart_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: libgphoto2
-libgphoto2:$(LIBlibgphoto2)_$(ARCH).deb
-$(LIBlibgphoto2): $(SPREZZ)/libgphoto2/debian/changelog
+libgphoto2:$(LIBGPHOTO2)_$(ARCH).deb
+$(LIBGPHOTO2): $(SPREZZ)/libgphoto2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
