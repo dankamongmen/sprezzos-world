@@ -1,0 +1,162 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+DEB_HOST_ARCH		?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_MULTIARCH	?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+is_Ubuntu		?= $(shell dpkg-vendor --derives-from Ubuntu && echo Ubuntu)
+
+include debian/rules.defs
+CUDA_VERSION_TOOLKIT	:= $(shell dpkg-parsechangelog | sed -nr '/^Version:/s/Version: (.*:)?(.*)-(.*)/\2/p')
+CUDA_VERSION_MAJOR	?= $(word 1,$(subst ., ,$(CUDA_VERSION_TOOLKIT)))
+CUDA_VERSION_MINOR	?= $(word 2,$(subst ., ,$(CUDA_VERSION_TOOLKIT)))
+MULTIARCH		?=
+version_toolkit	 = $(CUDA_VERSION_TOOLKIT)
+version_driver	 = $(CUDA_VERSION_DRIVER)
+filename_i386	 = $(CUDA_FILENAME_X86)
+filename_amd64	 = $(CUDA_FILENAME_X86_64)
+filename	 = $(filename_$(DEB_HOST_ARCH))
+download_url	 = $(if $(CUDA_BETA),$(CUDA_DOWNLOAD_URL_BETA),$(CUDA_DOWNLOAD_URL))
+
+package_libcuda1		?= $(or \
+	$(if $(is_Ubuntu),nvidia-current (>= $${nvidia:MinVersion}) | nvidia-current-updates (>= $${nvidia:MinVersion})), \
+	libcuda1 (>= $${nvidia:MinVersion}))
+package_nvidia-libopencl1	?= $(or \
+	$(if $(is_Ubuntu),nvidia-current | nvidia-current-updates), \
+	nvidia-libopencl1)
+
+# system libdir
+libdir			 = usr/lib$(if $(MULTIARCH),/$(DEB_HOST_MULTIARCH))
+
+TEMPLATES	:= $(wildcard debian/*.in)
+AUTOGEN         += $(patsubst %.in,%,$(TEMPLATES))
+AUTOKEEP	 = debian/watch
+AUTOCLEAN	 = $(filter-out $(AUTOKEEP),$(AUTOGEN))
+
+
+.PHONY: autogen prepare
+autogen: $(AUTOGEN)
+prepare: autogen unpack-stamp compare-copyright-license
+
+
+unpack-stamp:
+	dh_testdir
+	# unpack
+ifeq ($(DEB_HOST_ARCH),i386)
+	sh ${filename_i386} --noexec --keep --target nvidia-cuda-i386
+else
+	sh ${filename_amd64} --noexec --keep --target nvidia-cuda-amd64
+endif
+	ln -s nvidia-cuda-$(DEB_HOST_ARCH) nvidia-cuda
+ifeq ($(DEB_HOST_ARCH),amd64)
+	# fixup lib{,32,64} directory layout
+	mv nvidia-cuda-amd64/lib nvidia-cuda-amd64/lib32
+	mv nvidia-cuda-amd64/lib64 nvidia-cuda-amd64/lib
+	mv nvidia-cuda-amd64/extras/CUPTI/lib nvidia-cuda-amd64/extras/CUPTI/lib32
+	mv nvidia-cuda-amd64/extras/CUPTI/lib64 nvidia-cuda-amd64/extras/CUPTI/lib
+endif
+	# fixup permissions
+	chmod -x nvidia-cuda-*/nvvm/*.h
+	touch $@
+
+# Reformat the EULA to the format needed for debian/copyright.
+nvidia-cuda/doc/EULA.txt: unpack-stamp
+EULA.txt: nvidia-cuda/doc/EULA.txt
+	cat $<  | fromdos | fromdos | expand \
+		| iconv -f CP1255 -t latin1//TRANSLIT \
+		| fold -s -w 76 \
+		| sed -r ':a; /(MacOS|dylib) +$$/N; s/\n//; ta' \
+		| sed -e 's/ *$$//;s/^$$/./;s/^/ /;' \
+		> $@
+
+# Compare the license in debian/copyright with the EULA shipped in the archive.
+compare-copyright-license: EULA.txt
+	sed -e '1,/^License: other-NVIDIA-CUDA-TOOLKIT/d; /^$$/,$$d; /^ .$$/d' debian/copyright > copyright.tmp
+	sed -e '/^ .$$/d' EULA.txt > EULA.tmp
+	diff -w copyright.tmp EULA.tmp
+	rm -f copyright.tmp EULA.tmp
+
+
+.PHONY: binary binary-arch binary-indep build clean install
+binary binary-arch binary-indep build clean install:
+	dh $@
+
+
+override_dh_auto_configure: $(AUTOGEN) unpack-stamp
+
+override_dh_auto_install:
+	mkdir debian/tmp
+	cp -al nvidia-cuda-$(DEB_HOST_ARCH) debian/tmp/usr
+	chmod -x debian/tmp/usr/libnvvp/*.xpm
+	chmod -x debian/tmp/usr/libnsight/*.xpm
+	chmod -x debian/tmp/usr/bin/crt/link.stub
+	# reduce 'dh_install --list-missing' noise
+	rm -rf debian/tmp/usr/include/thrust
+	rm -rf debian/tmp/usr/jre
+	rm -rf debian/tmp/usr/lib32
+
+override_dh_install:
+	dh_install --list-missing
+	rm -rf debian/nvidia-visual-profiler/usr/share/nvidia-visual-profiler/plugins/org.eclipse.equinox.launcher.gtk.linux.*
+	rm -rf debian/nvidia-nsight/usr/share/nvidia-nsight/plugins/org.eclipse.equinox.launcher.gtk.linux.*
+
+# running dh_strip is not permitted by the NVIDIA license
+override_dh_strip:
+
+override_dh_compress:
+	dh_compress -X.c -X.h -Xindex.hh
+
+override_dh_gencontrol:
+	dh_gencontrol -- \
+		-V'package:libcuda1=$(package_libcuda1)' \
+		-V'package:nvidia-libopencl1=$(package_nvidia-libopencl1)' \
+		-V'cuda:SoVersion=$(CUDA_SOVERSION)' \
+		-V'nvidia:MinVersion=$(version_driver)'
+
+override_dh_auto_clean:
+	$(RM) -r nvidia-cuda nvidia-cuda-i386 nvidia-cuda-amd64
+	$(RM) EULA.txt EULA.tmp copyright.tmp
+
+override_dh_clean:
+	dh_clean
+	$(RM) $(AUTOCLEAN)
+	$(MAKE) -f debian/rules $(AUTOKEEP)
+
+
+# Generating control files
+%:: %.in debian/rules debian/rules.defs
+	perl -p \
+	-e 's{#VERSION_TOOLKIT#}{$(version_toolkit)}g;' \
+	-e 's{#CUDA_DOWNLOAD_URL#}{$(download_url)}g;' \
+	-e 's{#LIBDIR#}{$(libdir)}g;' \
+	< $< > $@
+
+############################################################################
+
+.PHONY: get-orig-source
+get-orig-source:
+	rm -rf get-orig-source || true
+	mkdir get-orig-source
+	ln -v ../.cache/*$(CUDA_VERSION_TOOLKIT_FILENAME)*$(CUDA_TOOLKIT_DISTRIBUTION)*.run get-orig-source/ || true
+	uscan --no-symlink --download-current-version --destdir get-orig-source
+	test $$(ls get-orig-source/* | wc -l) = 2  # we need exactly 2 downloaded files
+	@set -e -x ; \
+	    cd get-orig-source ; \
+	    newversion=$$(ls cuda*_*_linux_32_ubuntu*.run | sed -e 's/.*_\([0-9.]*\)_linux.*\.run/\1/') ; \
+	    mkdir nvidia-cuda-toolkit-$${newversion}.orig ; \
+	    for file in cuda*_*_linux_*_ubuntu*.run ; do \
+	    	sh "$$file" --noexec --keep --target tmp ; \
+		if [ -d tmp/run_files ]; then \
+		    mv tmp/run_files/cudatoolkit*.run nvidia-cuda-toolkit-$${newversion}.orig/ ; \
+		else \
+		    mv "$$file" nvidia-cuda-toolkit-$${newversion}.orig/ ; \
+		fi ; \
+		rm -rf tmp ; \
+	    done ; \
+	    chmod 0755 nvidia-cuda-toolkit-$${newversion}.orig/* ; \
+	    tar cfvz ../nvidia-cuda-toolkit_$${newversion}.orig.tar.gz \
+		--owner=root --group=src \
+		nvidia-cuda-toolkit-$${newversion}.orig
+	rm -rf get-orig-source
+
