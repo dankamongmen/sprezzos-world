@@ -31,7 +31,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
-	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2
+	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 libgphoto2
 
 SPREZZ:=packaging
 
@@ -188,7 +188,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
-	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2)
+	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -678,6 +678,14 @@ $(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf libatasmart_$(libatasmart_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: libgphoto2
+libgphoto2:$(LIBlibgphoto2)_$(ARCH).deb
+$(LIBlibgphoto2): $(SPREZZ)/libgphoto2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf libgphoto2-$(libgphoto2_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: libjpeg
 libjpeg:$(LIBJPEG)_$(ARCH).deb
@@ -1667,7 +1675,7 @@ clean:
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY) $(NETCF)
-	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2)
+	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 
 clobber:
 	rm -rf $(FETCHED)
