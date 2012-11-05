@@ -32,7 +32,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
-	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer
+	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity
 
 SPREZZ:=packaging
 
@@ -189,7 +189,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
 	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE) $(ZEROFREE) \
-	$(GSTREAMER)
+	$(GSTREAMER) $(ZENITY)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -969,6 +969,14 @@ $(ZEROFREE): $(SPREZZ)/zerofree/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf zerofree-$(zerofree_UPVER).tgz --strip-components=1 -C $@
 
+.PHONY: zenity
+zenity:$(ZENITY)_$(ARCH).deb
+$(ZENITY): $(SPREZZ)/zenity/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf zenity-$(zenity_UPVER).tar.xz --strip-components=1 -C $@
+
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
 	wget -nc -O$@ http://curl.haxx.se/download/$@
@@ -1729,6 +1737,7 @@ clean:
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY) $(NETCF)
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER)
+	rm -rf $(ZENITY)
 
 clobber:
 	rm -rf $(FETCHED)
