@@ -803,8 +803,8 @@ pcre:$(PCRE)_$(ARCH).deb
 $(PCRE): $(SPREZZ)/pcre/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download
-	tar xzvf pcre_$(pcre_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	{ cd $@ && TARBALL=`uscan --no-symlink --force-download --dehs | xmlstarlet sel -t -v //upstream-url` && \
+	  cd - && ln -sf `basename $$TARBALL` pcre-$(pcre_UPVER).orig.zip && unzip `basename $$TARBALL` -d $@ ; }
 
 .PHONY: packagekit
 packagekit:$(PACKAGEKIT)_$(ARCH).deb
