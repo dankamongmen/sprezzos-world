@@ -1,0 +1,254 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/utils.mk
+-include /usr/share/cdbs/1/rules/autoreconf.mk
+include /usr/share/gnome-pkg-tools/1/rules/clean-la.mk
+
+export HOME=$(CURDIR)/fake-home
+
+# make autoreconf not call libtoolize since we ship a patch for ltmain.sh
+export LIBTOOLIZE=true
+# make autoreconf not call autopoint since we ship a patch for po/Makefile.in.in
+export AUTOPOINT=true
+
+CFLAGS += -Wno-error
+CXXFLAGS += -Wno-error
+LDFLAGS += -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+DEB_MAKE_CHECK_TARGET = check || true
+
+# debian package version
+version=$(shell dpkg-parsechangelog | grep ^Version: | cut -d ' ' -f 2)
+# upstream version
+gst_version=$(shell echo $(version) | cut -d '-' -f 1)
+gst_major=1
+gst_minor=0
+gst_abi=$(gst_major).$(gst_minor)
+gst_pkgname=gstreamer$(gst_abi)
+gst_lib_prefix=libgstreamer$(gst_abi)
+# gstreamer library package names
+gst_lib=$(gst_lib_prefix)-0
+gst_lib_dev=$(gst_lib_prefix)-dev
+# gstreamer shlibs
+gst_shlibs_dep="$(gst_lib) (>= $(gst_version))"
+
+# debug package
+DEB_DH_STRIP_ARGS := --dbg-package=$(gst_lib)-dbg
+
+DEB_COMPRESS_EXCLUDE = .sgml .devhelp .ps .pdf
+
+DEB_INSTALL_DOCS_$(gst_lib)-dbg += common/gst.supp
+
+# disable all CPU specific optimizations in commands launched by this Makefile
+# using liboil; this is to work around liboil related build failures which
+# are not specially interesting to catch on buildds as these might run very
+# specific hardware
+OIL_CPU_FLAGS=0
+export OIL_CPU_FLAGS
+
+PKGFILES=\
+	debian/$(gst_lib).install \
+	debian/$(gst_lib).symbols \
+	debian/$(gst_lib_dev).install \
+	debian/$(gst_lib_dev).preinst \
+	debian/$(gst_lib_dev).postrm \
+	debian/$(gst_pkgname)-doc.install \
+	debian/$(gst_pkgname)-doc.links \
+	debian/$(gst_pkgname)-doc.lintian \
+	debian/$(gst_pkgname)-tools.install \
+	debian/$(gst_pkgname)-tools.links \
+	debian/$(gst_pkgname)-tools.manpages \
+	debian/gir1.2-gstreamer-$(gst_abi).install
+
+# Let's decide the package name and url depending on the distribution
+DISTRO = "$(shell dpkg-vendor --query vendor)"
+
+GST_PACKAGE_NAME := "GStreamer (unknown Debian derivative)"
+GST_PACKAGE_ORIGIN="http://packages.qa.debian.org/gstreamer$(gst_abi)"
+
+ifeq ($(DISTRO),"Debian")
+GST_PACKAGE_NAME := "GStreamer (Debian)"
+GST_PACKAGE_ORIGIN="http://packages.qa.debian.org/gstreamer$(gst_abi)"
+endif
+
+ifeq ($(DISTRO),"Ubuntu")
+GST_PACKAGE_NAME := "GStreamer (Ubuntu)"
+GST_PACKAGE_ORIGIN="https://launchpad.net/distros/ubuntu/+source/gstreamer$(gst_abi)"
+endif
+
+debian/control:: debian/control.in debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_VERSION@/$(gst_version)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' | \
+		sed 's/@GST_LIB@/$(gst_lib)/g' | \
+		sed 's/@GST_LIB_DEV@/$(gst_lib_dev)/g' \
+		> $@
+
+debian/$(gst_lib).dirs: debian/libgstreamer.dirs debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+debian/$(gst_lib).install: debian/libgstreamer.install debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+debian/$(gst_lib).symbols: debian/libgstreamer.symbols debian/rules
+	rm -f $@
+	cp -v $< $@
+
+debian/gir1.2-gstreamer-$(gst_abi).install: debian/gir1.2-gstreamer.install debian/rules
+	rm -f $@
+	cp -v $< $@
+
+debian/$(gst_lib_dev).install: debian/libgstreamer-dev.install debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+debian/$(gst_lib_dev).preinst: debian/libgstreamer-dev.preinst debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_LIB_DEV@/$(gst_lib_dev)/g' \
+		> $@
+
+debian/$(gst_lib_dev).postrm: debian/libgstreamer-dev.postrm debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_LIB_DEV@/$(gst_lib_dev)/g' \
+		> $@
+
+debian/$(gst_pkgname)-doc.install: debian/gstreamer-doc.install debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+debian/$(gst_pkgname)-doc.links: debian/gstreamer-doc.links debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+debian/$(gst_pkgname)-doc.lintian: debian/gstreamer-doc.lintian debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+debian/$(gst_pkgname)-tools.install: debian/gstreamer-tools-abi.install debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+debian/$(gst_pkgname)-tools.links: debian/gstreamer-tools-abi.links debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+debian/$(gst_pkgname)-tools.manpages: debian/gstreamer-tools-abi.manpages debian/rules
+	rm -f $@
+	cat $< | \
+		sed 's/@GST_ABI@/$(gst_abi)/g' | \
+		sed 's/@GST_PKGNAME@/$(gst_pkgname)/g' | \
+		sed 's/@GST_LIB_PREFIX@/$(gst_lib_prefix)/g' \
+		> $@
+
+maint: debian/control
+
+pre-build:: $(PKGFILES)
+
+clean::
+	for f in $(PKGFILES); do \
+		rm -f $$f; \
+	done
+	-rm -f debian/shlibs.local
+	-rm -rf $(CURDIR)/fake-home
+
+common_conf_flags = \
+	--disable-failing-tests \
+	--disable-examples \
+	--enable-DEBUG \
+	--enable-debug \
+	--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+	--libexecdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH)/gstreamer$(gst_abi) \
+	--with-package-name=$(GST_PACKAGE_NAME) \
+	--with-package-origin=$(GST_PACKAGE_ORIGIN)
+
+indep_conf_flags = \
+	--with-html-dir=\$${prefix}/share/doc/$(gst_pkgname)-doc
+
+# only build the docs if gtk-doc-tools is installed, i.e. binary-indep is
+# called
+ifeq ($(shell test "`dpkg -l gtk-doc-tools | grep ^ii`" && echo binary-indep),binary-indep)
+indep_conf_flags += --enable-gtk-doc --enable-docbook
+endif
+
+DEB_CONFIGURE_EXTRA_FLAGS := $(common_conf_flags) $(indep_conf_flags)
+
+common-install-indep::
+	# move around the doc dirs
+	mkdir -p debian/tmp/usr/share/doc/$(gst_pkgname)-doc
+	-cp -r debian/tmp/usr/share/doc/gstreamer-$(gst_abi)/pwg \
+	   debian/tmp/usr/share/doc/gstreamer-$(gst_abi)/manual \
+	   debian/tmp/usr/share/doc/gstreamer-$(gst_abi)/faq \
+	   debian/tmp/usr/share/doc/$(gst_pkgname)-doc
+
+	# -doc lintian overrides
+	mkdir -p debian/$(gst_pkgname)-doc/usr/share/lintian/overrides/
+	cp -a debian/$(gst_pkgname)-doc.lintian debian/$(gst_pkgname)-doc/usr/share/lintian/overrides/$(gst_pkgname)-doc
+
+DEB_DH_MAKESHLIBS_ARGS_$(gst_lib) += -X "/usr/lib/$(DEB_HOST_MULTIARCH)/gstreamer-$(gst_abi)" -V $(gst_shlibs_dep) -- -c4
+DEB_INSTALL_DOCS_ALL += debian/README.Debian NEWS
+DEB_SHLIBDEPS_INCLUDE += debian/$(gst_lib)/usr/lib/$(DEB_HOST_MULTIARCH)
+
+# override shlibs for libraries from this source before computing dependencies
+# of packages generated from this source; we already have inter-dependencies
+# expressed manually in the control file, we do not need the shlibs to add
+# duplicates
+# (this rule runs just before the dh_shlibdeps)
+common-binary-fixup-arch::
+	mkdir -p $(CURDIR)/fake-home
+	HOME=$(CURDIR)/fake-home \
+	dh_girepository -pgir1.2-gstreamer-$(gst_abi)
+	rm -rf $(CURDIR)/fake-home
+	-rm -f debian/shlibs.local
+	cat debian/*/DEBIAN/shlibs | \
+		sed -n -r -e 's/(([^ ]+: )?([^ ]+) ([^ ]+)) .*/\1/p' \
+			> debian/shlibs.local
+
+# (this rules runs just after the dh_shlibdeps)
+common-binary-predeb-arch::
+	-rm -f debian/shlibs.local
+
+install/$(gst_lib_dev)::
+	gcc -o debian/tmp/usr/bin/gst-codec-info-1.0 debian/gst-codec-info.c $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) `pkg-config --libs --cflags glib-2.0 gthread-2.0 gmodule-no-export-2.0 gobject-2.0` debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libgstreamer-1.0.so -Idebian/tmp/usr/include/gstreamer-1.0
+	perldoc -o man debian/dh_gstscancodecs > debian/tmp/usr/share/man/man1/dh_gstscancodecs.1
+
+.PHONY: maint
