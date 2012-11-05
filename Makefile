@@ -16,7 +16,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi udisks \
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo wpa git \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files gtk2 \
-	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools \
+	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools vim \
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools vte \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs gvfs \
@@ -188,7 +188,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
-	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2)
+	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -855,6 +855,14 @@ $(UTILLINUX): $(SPREZZ)/util-linux/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf util-linux-$(util-linux_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: vim
+vim:$(VIM)_$(ARCH).deb
+$(VIM): $(SPREZZ)/vim/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	{ cd $@ && TARBALL=`uscan --force-download --dehs | xmlstarlet sel -t -v //target` && \
+	  cd - && tar xjvf $$TARBALL --strip-components=1 -C $@ ; }
 
 .PHONY: vte
 vte:$(VTE)_$(ARCH).deb
@@ -1671,7 +1679,7 @@ clean:
 	rm -rf $(BASEFILES) $(NETBASE) $(FIRMWAREALL) $(FBI) $(OPENLDAP) $(BOOST)
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE) $(GMAKE)
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL) $(GTK2)
-	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS)
+	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS) $(VIM)
 	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK) $(YELP)
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(WPA)
