@@ -958,7 +958,7 @@ $(ZEROFREE): $(SPREZZ)/zerofree/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf zerofree_$(zerofree_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	tar xzvf zerofree-$(zerofree_UPVER).tgz --strip-components=1 -C $@
 
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
