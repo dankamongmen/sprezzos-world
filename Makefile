@@ -17,7 +17,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo wpa git \
 	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files gtk2 \
 	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools vim \
-	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus \
+	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus lsb \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools vte \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs gvfs \
 	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
@@ -170,7 +170,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
 	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) $(DCONF) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) $(YELP) $(DBUS) \
-	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) $(WPA) \
+	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) $(WPA) $(LSB) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) $(FBV) $(GIT) \
 	$(FREETYPE) $(PANGO) $(GDKPIXBUF) $(GLIB) $(HARFBUZZ) $(CURL) $(IBUS) $(GMAKE) \
 	$(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(LINUXTOOLS) $(LIGHTDM) $(OPENCV) $(GVFS) \
@@ -345,6 +345,12 @@ $(INSTALLATIONREPORT): $(SPREZZ)/installation-report/debian/changelog
 .PHONY: linux-latest
 linux-latest:$(LINUXLATEST)_$(ARCH).deb
 $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
+	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
+	cp -r $(<D)/.. $@
+
+.PHONY: lsb
+lsb:$(LSB)_$(ARCH).deb
+$(LSB): $(SPREZZ)/lsb/debian/changelog
 	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
 	cp -r $(<D)/.. $@
 
@@ -1680,7 +1686,7 @@ clean:
 	rm -rf $(LIBDRM) $(MESA) $(PULSEAUDIO) $(SOCAT) $(EGLIBC) $(FREETYPE) $(GMAKE)
 	rm -rf $(PANGO) $(GDKPIXBUF) $(FONTCONFIG) $(GLIB) $(HARFBUZZ) $(CURL) $(GTK2)
 	rm -rf $(LIBXSLT) $(LIBXML) $(CONSOLESETUP) $(F2FSTOOLS) $(LINUXTOOLS) $(VIM)
-	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP)
+	rm -rf $(LIGHTDM) $(OPENCV) $(GSETTINGSDESKTOPSCHEMAS) $(GNOMEDESKTOP) $(LSB)
 	rm -rf $(LESS) $(SPL) $(ZFS) $(GNOMECONTROLCENTER) $(EOG) $(ATK) $(YELP)
 	rm -rf $(APTITUDE) $(ATSPI2ATK) $(NAUTILUS) $(GNOMESETTINGSDAEMON) $(WPA)
 	rm -rf $(CHEESE) $(CLUTTERGST) $(CLUTTERGTK) $(BRASERO) $(APTITUDE) $(ANNA)

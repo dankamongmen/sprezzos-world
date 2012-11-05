@@ -1,0 +1,49 @@
+#!/usr/bin/python
+
+import sys, re, os, initdutils
+
+if len(sys.argv) > 1:
+    initfile = sys.argv[1]
+    # If the absolute path isn't specified, assume it's relative to
+    # cwd; if that doesn't exist, try /etc/init.d
+    ap = os.path.abspath(initfile)
+    if os.path.exists(ap):
+        initfile = ap
+    else:
+        initfile = os.path.join('/etc/init.d', initfile)
+else:
+    print >> sys.stderr, 'Usage: %s /etc/init.d/<init-script>' % sys.argv[0]
+    sys.exit(1)
+
+headers = initdutils.scan_initfile(initfile)
+
+provides = headers.get('Provides')
+if provides:
+    facilities = initdutils.load_facilities()
+    depends = initdutils.load_depends()
+
+    for facility in provides:
+        if facility in facilities:
+            entries = {}
+            for entry in facilities[facility].items():
+                if entry[0] != initfile:
+                    entries[entry[0]] = entry[1]
+            facilities[facility] = entries
+
+    for (initscript, needed) in depends.iteritems():
+        for facility in needed:
+            if facility[0] == "$":
+                continue
+            if not facilities.get(facility) and facility in provides:
+                print >> sys.stderr, 'Unable to remove %s: %s needs %s\n' % (
+                    initfile, initscript, facility)
+                sys.exit(1)
+
+    if initfile in depends:
+        del depends[initfile]
+        initdutils.save_depends(depends)
+
+    initdutils.save_facilities(facilities)
+
+initfile = initfile.replace('/etc/init.d/', '')
+os.system('/usr/sbin/update-rc.d -f %s remove' % initfile)

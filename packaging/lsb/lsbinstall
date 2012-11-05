@@ -1,0 +1,271 @@
+#!/usr/bin/python
+
+import sys
+import os
+import shutil
+import socket
+import commands
+from tempfile import NamedTemporaryFile
+from initdutils import load_lsbinstall_info, save_lsbinstall_info
+
+# These keep getting revised... *sigh*
+objecttypes = (
+    #'init',
+    'profile',
+    'service',
+    'inet', # XXX - reenable when implemented
+    #'crontab',
+    #'man'
+    )
+
+def installed_message(objectname):
+    print objectname, 'is installed'
+
+def handle_generic_install(options, args, location, showinstloc=False):
+    filename = args[0]
+    basename = os.path.basename(filename)
+    instloc = os.path.join(location, basename)
+    package = args.package
+
+    filemap = load_lsbinstall_info()
+    fileinfo = filemap.get((package, filename))
+    
+    if options.check:
+        if fileinfo and os.path.exists(fileinfo):
+            installed_message(fileinfo)
+            return
+        else:
+            sys.exit(1)
+    elif options.remove:
+        if os.path.exists(fileinfo):
+            try:
+                os.unlink(fileinfo)
+            except (IOError, OSError, os.error), why:
+                print >> sys.stderr, 'Removal of %s failed: %s' % (
+                    instloc, str(why))
+                sys.exit(1)
+
+        # Remove it from the database, even if it was previously removed
+        del filemap[(package, filename)]
+        save_lsbinstall_info(filemap)
+        return
+
+    if os.path.exists(instloc) and options.package:
+        instloc = os.path.join(location, '%s.%s' % (options.package, basename))
+
+    if os.path.exists(instloc):
+        print >> sys.stderr, 'Unable to install %s: %s exists' % (
+            filename, instloc)
+        sys.exit(1)
+
+    if not os.path.exists(location):
+        try:
+            os.makedirs(location)
+        except (IOError, OSError, os.error), why:
+            print >> sys.stderr, 'Unable to create %s to install %s: %s' % (
+                location, filename, str(why))
+            sys.exit(1)
+        
+    try:
+        shutil.copy2(filename, instloc)
+    except (IOError, os.error), why:
+        print >> sys.stderr, 'Installation of %s as %s failed: %s' % (
+            filename, instloc, str(why))
+        sys.exit(1)
+        
+    if showinstloc:
+        print instloc
+
+    filemap[(package, filename)] = instloc
+    save_lsbinstall_info(filemap)
+
+def handle_service(options, args):
+    # LSB says we don't actually have to remove these things...
+    if options.remove:
+        sys.exit(0)
+
+    pkg = options.package or '<unknown package>'
+
+    try:
+        pproto = args[0]
+        port, proto = pproto.split('/', 1)
+        port = int(port)
+    except:
+        print >> sys.stderr, 'You must specify a port/protocol pair as the first argument.'
+        sys.exit(2)
+
+    if options.check:
+        try:
+            serv = socket.getservbyport(port, proto)
+        except socket.error:
+            sys.exit(1)
+
+        print '%d/%s corresponds to service %s' % (port, proto, serv)
+        return
+
+    sname = args[1]
+    saliases = args[2:]
+
+    try:
+        serv = socket.getservbyport(port, proto)
+    except socket.error:
+        serv = None
+
+    if serv:
+        # Editing existing service
+        fpin = open('/etc/services')
+        fpout = NamedTemporaryFile('w', prefix='services-', dir='/etc')
+        newfname = fpout.name
+
+        for line in fpin:
+            line = line.rstrip()
+            if not line.startswith('#'):
+                lcomment = ''
+                if '#' in line:
+                    line, lcomment = line.split('#', 1)
+                
+                bits = line.split(None, 2)
+                lname, lpproto = bits[:2]
+                laliases = []
+                if len(bits) > 2:
+                    laliases = bits[2].split()
+
+                lport, lproto = lpproto.split('/')
+                lport = int(lport)
+
+                if lport == port and lproto == proto:
+                    # We've found the right line
+                    if name != lname:
+                        aliases += [name]
+
+                    for a in aliases:
+                        if a != lname and a not in laliases:
+                            laliases += [a]
+                elif name == lname or name in laliases:
+                    # name shows up, but in wrong protocol/port
+                    print >> sys.stderr, 'Conflict between specified addition and /etc/services; aborting.'
+                    fpout.close()
+                    os.unlink(newfname)
+                    sys.exit(1)
+
+                endbits = ''
+                if laliases:
+                    endbits = ' '.join(laliases) + ' '
+                if lcomment:
+                    endbits += '#'+lcomment
+                    
+                line = '%15s %15s %s' % lname, lpproto, endbits
+                line = line.rstrip()
+
+            print >> fpout, line
+        
+        fpin.close()
+        fpout.close()
+        # Make sure /etc/services is always available
+        shutil.copy2('/etc/services', '/etc/services~')
+        os.rename(newfname, '/etc/services')
+        return
+
+    fp = open('/etc/services', 'a')
+    print >> fp, '%15s %15s %s # Added by lsbinstall for %s' % (
+        sname, pproto, ' '.join(saliases), pkg)
+    fp.close()
+
+def handle_inet(options, args, parser):
+    cmd = 'update-inetd --group LSB '
+
+    alist = list(args[0].split(':'))
+    if len(alist) < 2:
+        parser.error("The operand must include a service and protocol.")
+        return
+    
+    if not alist[1]:
+        alist[1] = 'tcp'
+    
+    if options.remove:
+        parts = r'%s\s+.*\s+%s\s+.*' % (re.escape(alist[0], alist[1]))
+        cmd += '--remove '+commands.mkarg(parts)
+    elif options.check:
+        return
+    else:
+        if len(alist) != 6:
+            parser.error('The operand must have six colon-separated arguments.')
+            return
+        newalist = [alist[0], alist[2], alist[1]] + alist[3:]
+        cmd += '--add '+commands.mkarg('\t'.join(newalist))
+
+    os.system(cmd)
+    pass
+
+def handle_man(options, args):
+    # Try to figure out the man page section
+    section = 1
+    
+    location = '/usr/local/share/man/man%d/' % section
+
+    handle_generic_install(options, args, location)
+
+
+def main():
+    from optparse import OptionParser
+
+    parser = OptionParser('usage: %prog [-r|-c] -t TYPE arguments...')
+    parser.add_option('-c', '--check', dest="check", default=False,
+                      action="store_true", help='check whether or not an '
+                      'object of this type is already installed')
+    parser.add_option('-r', '--remove', action="store_true",
+                      dest="remove", default=False,
+                      help='remove the named object')
+    parser.add_option('-t', '--type', dest="type", type='choice',
+                      default=None, choices=objecttypes,
+                      help='type of object to be '
+                      'installed: one of %s' % ', '.join(objecttypes) )
+    parser.add_option('-p', '--package', dest="package", default=None,
+                      help='LSB package to operate on')
+
+    (options, args) = parser.parse_args()
+
+    if len(args) < 1:
+        parser.error('You must specify at least one argument.')
+    elif (options.remove or options.check) and len(args) > 1:
+        parser.error('You may only specify one argument with --check or '
+                     '--remove.')
+
+    if not options.type:
+        parser.error('You must specify an object type.')
+
+    if not options.package and options.type not in ['service']:
+        parser.error('You must specify a package with %s objects.' %
+                     options.type)
+
+    if options.type == 'init':
+        if len(args) > 1:
+            parser.error('Only one argument supported for %s' % options.type)
+        handle_generic_install(options, args, '/etc/init.d', showinstloc=True)
+    elif options.type == 'profile':
+        if len(args) > 1:
+            parser.error('Only one argument supported for %s' % options.type)
+        # profile.d does nothing on Debian... sigh
+        handle_generic_install(options, args, '/etc/profile.d')
+    elif options.type == 'service':
+        if len(args) < 2 and not (options.remove or options.check):
+            parser.error('You must specify at least two arguments when adding a service entry.')
+        elif len(args) != 1 and (options.remove or options.check):
+            parser.error('You must specify one argument when removing or checking a service entry.')
+        handle_service(options, args)
+    elif options.type == 'inet':
+        handle_inet(options, args, parser)
+    elif options.type == 'crontab':
+        if len(args) > 1:
+            parser.error('Only one argument supported for %s' % options.type)
+        handle_generic_install(options, args, '/etc/cron.d')
+    elif options.type == 'man':
+        if len(args) > 1:
+            parser.error('Only one argument supported for %s' % options.type)
+        handle_man(options, args)
+    else:
+        print >> sys.stderr, 'Unsupported type %s' % options.type
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
