@@ -32,7 +32,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
-	libgphoto2 nvidia-cuda-toolkit
+	libgphoto2 nvidia-cuda-toolkit pcre
 
 SPREZZ:=packaging
 
@@ -188,12 +188,12 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
-	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM)
+	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
-	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG)
+	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG) $(PCRE)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -797,6 +797,14 @@ $(OPENLDAP): $(SPREZZ)/openldap/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf openldap_$(openldap_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: pcre
+pcre:$(PCRE)_$(ARCH).deb
+$(PCRE): $(SPREZZ)/pcre/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf pcre_$(pcre_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: packagekit
 packagekit:$(PACKAGEKIT)_$(ARCH).deb
@@ -1703,7 +1711,7 @@ clean:
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY) $(NETCF)
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
-	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT)
+	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE)
 
 clobber:
 	rm -rf $(FETCHED)
