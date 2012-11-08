@@ -33,7 +33,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey \
-	metacity
+	metacity grilo
 
 SPREZZ:=packaging
 
@@ -102,8 +102,6 @@ GNOMEMEDIAUP:=gnome-media-$(shell echo $(gnome-media_VERSION) | cut -d- -f1)
 GNOMEMEDIAORIG:=gnome-media_$(shell echo $(gnome-media_VERSION) | cut -d- -f1).orig.tar.xz
 GNOMEPOWERMANAGERUP:=gnome-power-manager-$(shell echo $(gnome-power-manager_VERSION) | cut -d: -f2- | cut -d- -f1)
 GNOMEPOWERMANAGERORIG:=gnome-power-manager_$(shell echo $(gnome-power-manager_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-GNOMESETTINGSDAEMONUP:=gnome-settings-daemon-$(shell echo $(gnome-settings-daemon_VERSION) | cut -d: -f2- | cut -d- -f1)
-GNOMESETTINGSDAEMONORIG:=gnome-settings-daemon_$(shell echo $(gnome-settings-daemon_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GNOMESHELLUP:=gnome-shell-$(shell echo $(gnome-shell_VERSION) | cut -d: -f2- | cut -d- -f1)
 GNOMESHELLORIG:=gnome-shell_$(shell echo $(gnome-shell_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GNOMESHELLEXTENSIONSUP:=gnome-shell-extensions-$(shell echo $(gnome-shell-extensions_VERSION) | cut -d: -f2- | cut -d- -f1)
@@ -608,6 +606,14 @@ $(GNOMESEARCHTOOL): $(SPREZZ)/gnome-search-tool/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf gnome-search-tool_$(gnome-search-tool_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: gnome-settings-daemon
+gnome-settings-daemon:$(GNOMESETTINGSDAEMON)_$(ARCH).deb
+$(GNOMESETTINGSDAEMON): $(SPREZZ)/gnome-settings-daemon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-settings-daemon_$(gnome-settings-daemon_UPVER).orig.tar.xz --strip-components=1 -C $@
+
 .PHONY: gnome-sushi
 gnome-sushi:$(GNOMESUSHI)_$(ARCH).deb
 $(GNOMESUSHI): $(SPREZZ)/gnome-sushi/debian/changelog
@@ -663,6 +669,14 @@ $(GPHOTO2): $(SPREZZ)/gphoto2/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf gphoto2-$(gphoto2_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: grilo
+grilo:$(GRILO)_$(ARCH).deb
+$(GRILO): $(SPREZZ)/grilo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf grilo-$(grilo_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gstreamer
 gstreamer:$(GSTREAMER)_$(ARCH).deb
@@ -1580,20 +1594,6 @@ $(GSETTINGSDESKTOPSCHEMAS): $(SPREZZ)/gsettings-desktop-schemas/debian/changelog
 	tar xJvf $(GSETSCHEMASORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(GNOMESETTINGSDAEMONUP).tar.xz
-$(GNOMESETTINGSDAEMONUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-settings-daemon/3.6/$@
-
-$(GNOMESETTINGSDAEMONORIG): $(GNOMESETTINGSDAEMONUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gnome-settings-daemon
-gnome-settings-daemon:$(GNOMESETTINGSDAEMON)_$(ARCH).deb
-$(GNOMESETTINGSDAEMON): $(SPREZZ)/gnome-settings-daemon/debian/changelog $(GNOMESETTINGSDAEMONORIG)
-	mkdir -p $@
-	tar xJvf $(GNOMESETTINGSDAEMONORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
 FETCHED:=$(FETCHED) $(GNOMESHELLUP).tar.xz
 $(GNOMESHELLUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-shell/3.6/$@
@@ -1754,7 +1754,7 @@ clean:
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY) $(NETCF)
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER)
-	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY)
+	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO)
 
 clobber:
 	rm -rf $(FETCHED)
