@@ -33,7 +33,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey \
-	metacity grilo
+	metacity grilo lcms2 colord
 
 SPREZZ:=packaging
 
@@ -187,8 +187,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
-	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE) $(ZEROFREE) \
-	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY)
+	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE) $(ZEROFREE) $(LCMS) \
+	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -421,6 +421,14 @@ $(BOOST): $(SPREZZ)/boost/debian/changelog
 	cp -r $(<D) $@/
 	{ cd $@ && TARBALL=`uscan --no-symlink --force-download --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && ln -sf $$TARBALL boost-build_2.0.m10.orig.tar.bz2 && tar xjvf $$TARBALL --strip-components=1 -C $@ ; }
+
+.PHONY: colord
+colord:$(COLORD)_$(ARCH).deb
+$(COLORD): $(SPREZZ)/colord/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf colord-$(colord_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: compiz
 compiz:$(COMPIZ)_$(ARCH).deb
@@ -733,6 +741,14 @@ $(KISMET): $(SPREZZ)/kismet/debian/changelog
 	cp -r $(<D) $@/
 	{ cd $@ && TARBALL=`uscan --force-download --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && tar xzvf $$TARBALL --strip-components=1 -C $@ ; }
+
+.PHONY: lcms2
+lcms2:$(LCMS2)_$(ARCH).deb
+$(LCMS2): $(SPREZZ)/lcms2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf lcms2-$(lcms2_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: libatasmart
 libatasmart:$(LIBATASMART)_$(ARCH).deb
@@ -1754,7 +1770,7 @@ clean:
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY) $(NETCF)
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER)
-	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO)
+	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO) $(LCMS2) $(COLORD)
 
 clobber:
 	rm -rf $(FETCHED)
