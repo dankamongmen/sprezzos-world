@@ -428,7 +428,8 @@ $(COLORD): $(SPREZZ)/colord/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf colord-$(colord_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf colord-gtk-$(colord_UPVER).tar.xz --strip-components=1 -C $@
+	ln -s colord-gtk-$(colord_UPVER).tar.xz colord_$(colord_UPVER).orig.tar.xz
 
 .PHONY: compiz
 compiz:$(COMPIZ)_$(ARCH).deb
@@ -748,7 +749,7 @@ $(LCMS2): $(SPREZZ)/lcms2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf lcms2-$(lcms2_UPVER).tar.xz --strip-components=1 -C $@
+	tar xzvf lcms2-$(lcms2_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: libatasmart
 libatasmart:$(LIBATASMART)_$(ARCH).deb
