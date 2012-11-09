@@ -431,8 +431,8 @@ $(COLORD): $(SPREZZ)/colord/debian/changelog
 	tar xJvf colord-$(colord_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: colord-gtk
-colord-gtk:$(colord-gtkGTK)_$(ARCH).deb
-$(colord-gtkGTK): $(SPREZZ)/colord-gtk/debian/changelog
+colord-gtk:$(COLORDGTK)_$(ARCH).deb
+$(COLORDGTK): $(SPREZZ)/colord-gtk/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
