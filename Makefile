@@ -34,7 +34,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey \
 	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment \
-	libeina
+	eina
 
 SPREZZ:=packaging
 
@@ -190,7 +190,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
 	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE) $(ZEROFREE) $(LCMS) \
 	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD) $(COLORDGTK) \
-	$(TELEPATHYGLIB) $(ENLIGHTENMENT) $(LIBEINA)
+	$(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -776,13 +776,13 @@ $(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf libatasmart_$(libatasmart_UPVER).orig.tar.xz --strip-components=1 -C $@
 
-.PHONY: libeina
-libeina:$(LIBEINA)_$(ARCH).deb
-$(LIBEINA): $(SPREZZ)/libeina/debian/changelog
+.PHONY: eina
+eina:$(EINA)_$(ARCH).deb
+$(EINA): $(SPREZZ)/eina/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf libeina_$(libeina_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	tar xjvf eina_$(eina_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: libgphoto2
 libgphoto2:$(LIBGPHOTO2)_$(ARCH).deb
@@ -1805,7 +1805,7 @@ clean:
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER)
 	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO) $(LCMS2) $(COLORD)
-	rm -rf $(COLORDGTK) $(TELEPATHYGLIB) $(ENLIGHTENMENT) $(LIBEINA)
+	rm -rf $(COLORDGTK) $(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA)
 
 clobber:
 	rm -rf $(FETCHED)
