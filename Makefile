@@ -33,7 +33,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey \
-	metacity grilo lcms2 colord
+	metacity grilo lcms2 colord colord-gtk
 
 SPREZZ:=packaging
 
@@ -188,7 +188,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
 	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE) $(ZEROFREE) $(LCMS) \
-	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD)
+	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD) $(COLORDGTK)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -429,6 +429,14 @@ $(COLORD): $(SPREZZ)/colord/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf colord-$(colord_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: colord-gtk
+colord-gtk:$(colord-gtkGTK)_$(ARCH).deb
+$(colord-gtkGTK): $(SPREZZ)/colord-gtk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf colord-gtk-$(colord-gtk_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: compiz
 compiz:$(COMPIZ)_$(ARCH).deb
@@ -1771,6 +1779,7 @@ clean:
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER)
 	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO) $(LCMS2) $(COLORD)
+	rm -rf $(COLORDGTK)
 
 clobber:
 	rm -rf $(FETCHED)
