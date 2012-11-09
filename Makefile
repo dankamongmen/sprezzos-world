@@ -33,7 +33,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey \
-	metacity grilo lcms2 colord colord-gtk telepathy-glib
+	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment
 
 SPREZZ:=packaging
 
@@ -189,7 +189,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
 	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE) $(ZEROFREE) $(LCMS) \
 	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD) $(COLORDGTK) \
-	$(TELEPATHYGLIB)
+	$(TELEPATHYGLIB) $(ENLIGHTENMENT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -486,6 +486,14 @@ $(ENCHANT): $(SPREZZ)/enchant/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf enchant-$(enchant_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: enlightenment
+enlightenment:$(ENLIGHTENMENT)_$(ARCH).deb
+$(ENLIGHTENMENT): $(SPREZZ)/enlightenment/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf enlightenment-$(enlightenment_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: f2fs-tools
 f2fs-tools:$(F2FSTOOLS)_$(ARCH).deb
@@ -1788,7 +1796,7 @@ clean:
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER)
 	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO) $(LCMS2) $(COLORD)
-	rm -rf $(COLORDGTK) $(TELEPATHYGLIB)
+	rm -rf $(COLORDGTK) $(TELEPATHYGLIB) $(ENLIGHTENMENT)
 
 clobber:
 	rm -rf $(FETCHED)
