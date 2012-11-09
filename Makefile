@@ -33,7 +33,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey \
-	metacity grilo lcms2 colord colord-gtk
+	metacity grilo lcms2 colord colord-gtk telepathy-glib
 
 SPREZZ:=packaging
 
@@ -188,7 +188,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
 	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE) $(ZEROFREE) $(LCMS) \
-	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD) $(COLORDGTK)
+	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD) $(COLORDGTK) \
+	$(TELEPATHYGLIB)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -933,6 +934,14 @@ $(UTILLINUX): $(SPREZZ)/util-linux/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf util-linux-$(util-linux_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: telepathy-glib
+telepathy-glib:$(TELEPATHYGLIB)_$(ARCH).deb
+$(TELEPATHYGLIB): $(SPREZZ)/telepathy-glib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf telepathy-glib-$(telepathy-glib_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: vim
 vim:$(VIM)_$(ARCH).deb
@@ -1779,7 +1788,7 @@ clean:
 	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER)
 	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO) $(LCMS2) $(COLORD)
-	rm -rf $(COLORDGTK)
+	rm -rf $(COLORDGTK) $(TELEPATHYGLIB)
 
 clobber:
 	rm -rf $(FETCHED)
