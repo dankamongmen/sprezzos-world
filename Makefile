@@ -34,7 +34,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey eio \
 	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment eet \
-	eina evas ecore exactimage
+	eina evas ecore exactimage edje efreet
 
 SPREZZ:=packaging
 
@@ -191,7 +191,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NVIDIACUDATOOLKIT) $(RAZORQT) $(GTK2) $(VIM) $(PCRE) $(ZEROFREE) $(LCMS) \
 	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD) $(COLORDGTK) $(EVAS) \
 	$(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA) $(EET) $(ECORE) $(EXACTIMAGE) \
-	$(EIO)
+	$(EIO) $(EDJE) $(EFREET)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -785,6 +785,14 @@ $(ECORE): $(SPREZZ)/ecore/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf ecore_$(ecore_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
+.PHONY: edje
+edje:$(EDJE)_$(ARCH).deb
+$(EDJE): $(SPREZZ)/edje/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf edje_$(edje_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
 .PHONY: eet
 eet:$(EET)_$(ARCH).deb
 $(EET): $(SPREZZ)/eet/debian/changelog
@@ -792,6 +800,14 @@ $(EET): $(SPREZZ)/eet/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf eet_$(eet_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
+.PHONY: efreet
+efreet:$(EFREET)_$(ARCH).deb
+$(EFREET): $(SPREZZ)/efreet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf efreet_$(efreet_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: eina
 eina:$(EINA)_$(ARCH).deb
@@ -1847,7 +1863,7 @@ clean:
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER)
 	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO) $(LCMS2) $(COLORD) $(ECORE)
 	rm -rf $(COLORDGTK) $(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA) $(EET) $(EVAS)
-	rm -rf $(EXACTIMAGE)
+	rm -rf $(EXACTIMAGE) $(EDJE) $(EFREET)
 
 clobber:
 	rm -rf $(FETCHED)
