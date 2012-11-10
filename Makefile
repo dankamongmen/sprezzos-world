@@ -1083,6 +1083,14 @@ $(SHOTWELL): $(SPREZZ)/shotwell/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf shotwell_$(shotwell_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: systemd
+systemd:$(SYSTEMD)_$(ARCH).deb
+$(SYSTEMD): $(SPREZZ)/systemd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf systemd_$(systemd_UPVER).orig.tar.xz --strip-components=1 -C $@
+
 .PHONY: util-linux
 util-linux:$(UTILLINUX)_$(ARCH).deb
 $(UTILLINUX): $(SPREZZ)/util-linux/debian/changelog
@@ -1573,17 +1581,6 @@ ibus:$(IBUS)_$(ARCH).deb
 $(IBUS): $(SPREZZ)/ibus/debian/changelog $(IBUSORIG)
 	mkdir -p $@
 	tar xzvf $(IBUSORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) http://www.freedesktop.org/software/systemd/systemd-189.tar.xz
-$(SYSTEMD).tar.xz:
-	wget -nc -O$@ http://www.freedesktop.org/software/systemd/systemd-189.tar.xz
-
-.PHONY: systemd
-systemd:$(SYSTEMD)_$(ARCH).deb
-$(SYSTEMD): $(SPREZZ)/systemd/debian/changelog $(SYSTEMD).tar.xz
-	mkdir -p $@
-	tar xJvf $(SYSTEMD).tar.xz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) App-ConPalette-0.1.5.tar.gz
