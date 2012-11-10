@@ -35,7 +35,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey eio \
 	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment eet \
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
-	emotion elementary ethumb
+	emotion elementary ethumb cogl
 
 SPREZZ:=packaging
 
@@ -62,8 +62,6 @@ ATSPI2ATKUP:=at-spi2-atk-$(shell echo $(atk-bridge_VERSION) | cut -d- -f1)
 ATSPI2ATKORIG:=at-spi2-atk_$(shell echo $(atk-bridge_VERSION) | cut -d- -f1).orig.tar.xz
 ATKUP:=atk-$(shell echo $(atk_VERSION) | cut -d- -f1)
 ATKORIG:=atk1.0_$(shell echo $(atk_VERSION) | cut -d- -f1).orig.tar.xz
-CAIROUP:=cairo-$(shell echo $(cairo_VERSION) | cut -d= -f2- | cut -d- -f1)
-CAIROORIG:=cairo_$(shell echo $(cairo_VERSION) | cut -d- -f1).orig.tar.xz
 BRASEROUP:=brasero-$(shell echo $(brasero_VERSION) | cut -d: -f2- | cut -d- -f1)
 BRASEROORIG:=brasero_$(shell echo $(brasero_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CHEESEUP:=cheese-$(shell echo $(cheese_VERSION) | cut -d: -f2- | cut -d- -f1)
@@ -193,7 +191,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD) $(COLORDGTK) $(EVAS) \
 	$(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA) $(EET) $(ECORE) $(EXACTIMAGE) \
 	$(EIO) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL) $(VIRTUALBOX) \
-	$(EMOTION) $(ELEMENTARY) $(ETHUMB)
+	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -373,20 +371,6 @@ $(USBVIEW): $(SPREZZ)/usbview/debian/changelog $(USBVIEWORIG)
 	tar xzvf $(USBVIEWUP).tar.gz --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(CAIROUP).tar.xz
-$(CAIROUP).tar.xz:
-	wget -nc -O$@ http://cairographics.org/releases/$@
-
-$(CAIROORIG): $(CAIROUP).tar.xz
-	ln -s $< $@
-
-.PHONY: cairo
-cairo:$(CAIRO)_$(ARCH).deb
-$(CAIRO): $(SPREZZ)/cairo/debian/changelog $(CAIROORIG)
-	mkdir $@
-	tar xJvf $(CAIROUP).tar.xz --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
 .PHONY: abcde
 abcde:$(ABCDE)_$(ARCH).deb
 $(ABCDE): $(SPREZZ)/abcde/debian/changelog
@@ -426,6 +410,22 @@ $(BOOST): $(SPREZZ)/boost/debian/changelog
 	cp -r $(<D) $@/
 	{ cd $@ && TARBALL=`uscan --no-symlink --force-download --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && ln -sf $$TARBALL boost-build_2.0.m10.orig.tar.bz2 && tar xjvf $$TARBALL --strip-components=1 -C $@ ; }
+
+.PHONY: cairo
+cairo:$(CAIRO)_$(ARCH).deb
+$(CAIRO): $(SPREZZ)/cairo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf cairo-$(cairo_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: cogl
+cogl:$(COGL)_$(ARCH).deb
+$(COGL): $(SPREZZ)/cogl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf cogl-$(cogl_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: colord
 colord:$(COLORD)_$(ARCH).deb
@@ -1930,7 +1930,7 @@ clean:
 	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO) $(LCMS2) $(COLORD) $(ECORE)
 	rm -rf $(COLORDGTK) $(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA) $(EET) $(EVAS)
 	rm -rf $(EXACTIMAGE) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL)
-	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB)
+	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL)
 
 clobber:
 	rm -rf $(FETCHED)
