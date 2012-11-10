@@ -1,0 +1,69 @@
+#!/bin/sh -e
+
+umask 0022
+ACTION="$1"
+VERSION="$2"
+MPDCONF="/etc/mpd.conf"
+PIDFILE=$(sed -n 's/^[[:space:]]*pid_file[[:space:]]*"\?\([^"]*\)\"\?/\1/p' $MPDCONF)
+
+if [ "$ACTION" != "configure" ]; then
+    echo "action: $ACTION not supported"
+    exit 0
+fi
+
+do_mpd_adduser () {
+    if ! getent passwd mpd >/dev/null; then
+        adduser --quiet --ingroup audio --system --no-create-home \
+            --home /var/lib/mpd mpd
+    fi
+}
+
+do_mpd_perms () {
+    for i in /var/log/mpd /var/lib/mpd /var/lib/mpd/playlists /var/run/mpd; do
+        if ! dpkg-statoverride --list --quiet "$i" >/dev/null; then
+            dpkg-statoverride --force --quiet --update \
+                --add mpd audio 0755 "$i"
+        fi
+    done
+}
+
+do_mpd_conf () {
+    if ! dpkg-statoverride --list --quiet "$MPDCONF" >/dev/null; then
+        dpkg-statoverride --force --quiet --update \
+            --add mpd audio 0640 "$MPDCONF"
+    fi
+}
+
+do_mpd_init () {
+		  if [ -x /etc/init.d/mpd ]; then
+					 # Start after ALSA/icecast/etc and stop before them
+					 update-rc.d mpd defaults 30 14 >/dev/null
+					 # check for a deprecated option
+					 if [ -f /etc/mpd.conf ] && grep -q '^\s*error_file\s*=' /etc/mpd.conf
+					 then
+								echo "Your configuration file contains the deprecated option error_file" 
+								echo "mpd won't start until you migrated your configuration"
+					 else
+								if [ -x /usr/sbin/invoke-rc.d ]; then
+										  invoke-rc.d mpd "$@"
+								else
+										  /etc/init.d/mpd "$@"
+								fi
+					 fi
+		  fi
+}
+
+do_mpd_restart () {
+    if [ -e "$PIDFILE" ]; then
+        do_mpd_init restart
+    else
+        do_mpd_init start
+    fi
+}
+
+do_mpd_adduser
+do_mpd_perms
+do_mpd_conf
+do_mpd_restart
+
+#DEBHELPER#
