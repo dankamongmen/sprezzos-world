@@ -1,0 +1,276 @@
+#!/usr/bin/make -f
+
+# Name of the source packages
+psource:=virtualbox-source
+gsource:=virtualbox-guest-source
+pdkms:=virtualbox-dkms
+gdkms:=virtualbox-guest-dkms
+
+# The short upstream name
+sname:=virtualbox
+sxname:=virtualbox-qt
+gname:=virtualbox-guest
+uname:=virtualbox-guest-utils
+uxname:=virtualbox-guest-x11
+fname:=virtualbox-fuse
+
+INSTALL_PATH:=/usr/lib/virtualbox
+MAKE:=kmk
+
+upstreamversion := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
+
+pkgs_xzcompress = $(shell dh_listpackages | grep -v -e ose -e source)
+
+DIST_NAME := $(shell lsb_release -si)
+DIST_RELEASE := $(DIST_NAME)/$(shell lsb_release -sc)
+
+XSERVER_VERSION = 17
+XORG_PKG_ABI = 3
+
+ifeq ($(DIST_RELEASE),Debian/squeeze)
+	XORG_PKG_ABI = 2
+endif
+
+ifeq ($(DIST_RELEASE),Ubuntu/maverick)
+	XORG_PKG_ABI = 2
+endif
+
+ifeq ($(DIST_RELEASE),Ubuntu/lucid)
+	XORG_PKG_ABI = 1
+endif
+
+
+ifeq ($(XORG_PKG_ABI),3)
+	VIDEODEP = $(shell cat /usr/share/xserver-xorg/videodrvdep 2>/dev/null)
+
+	SERVER_DEPENDS = $(VIDEODEP)
+	VIDDRIVER_PROVIDES = xorg-driver-video
+
+	ifeq ($(strip $(VIDEODEP)),)
+		XORG_PKG_ABI_ERROR = VIDEODEP is empty
+	endif
+endif
+ifeq ($(XORG_PKG_ABI),2)
+	VIDEODEP = $(shell cat /usr/share/xserver-xorg/videodrvdep 2>/dev/null)
+	VIDEOABI = $(shell cat /usr/share/xserver-xorg/videoabiver 2>/dev/null)
+
+	SERVER_DEPENDS = $(VIDEODEP)
+	VIDDRIVER_PROVIDES = xserver-xorg-video-$(VIDEOABI)
+
+	ifeq ($(strip $(VIDEODEP)),)
+		XORG_PKG_ABI_ERROR = VIDEODEP is empty
+	endif
+	ifeq ($(strip $(VIDEOABI)),)
+		XORG_PKG_ABI_ERROR = VIDEOABI is empty
+	endif
+endif
+ifeq ($(XORG_PKG_ABI),1)
+	SERVERMINVERS = $(shell cat /usr/share/xserver-xorg/serverminver 2>/dev/null)
+	VIDEOABI = $(shell cat /usr/share/xserver-xorg/videoabiver 2>/dev/null)
+
+	SERVER_DEPENDS = xserver-xorg-core (>= $(SERVERMINVERS))
+	VIDDRIVER_PROVIDES = xserver-xorg-video-$(VIDEOABI)
+
+	ifeq ($(strip $(SERVERMINVERS)),)
+		XORG_PKG_ABI_ERROR = SERVERMINVERS is empty
+	endif
+	ifeq ($(strip $(VIDEOABI)),)
+		XORG_PKG_ABI_ERROR = VIDEOABI is empty
+	endif
+endif
+
+
+
+%:
+	dh $@ --with python2,dkms
+
+override_dh_auto_configure:
+	@echo Building for $(DIST_RELEASE)
+
+ifdef XORG_PKG_ABI_ERROR
+	@echo 'error: $(XORG_PKG_ABI_ERROR)'
+	@exit 1
+endif
+
+	mkdir -p out
+	./configure \
+	    --ose \
+	    --odir=$(abspath out) \
+	    --with-linux="/usr" \
+	    --disable-kmods \
+	    --enable-webservice \
+	    --enable-vde \
+	    --enable-vnc
+
+override_dh_auto_build:
+	# Building package
+	. out/env.sh && $(MAKE) \
+	    AUTOCFG=$(abspath out/AutoConfig.kmk) \
+	    LOCALCFG=$(abspath debian/LocalConfig.kmk) \
+	    PATH_OUT=$(abspath out) \
+	    TOOL_YASM_AS=yasm \
+	    XSERVER_VERSION=$(XSERVER_VERSION) \
+	    VBOX_BUILD_PUBLISHER=_$(DIST_NAME) \
+	    VBOX_WITH_REGISTRATION_REQUEST= \
+	    VBOX_WITH_UPDATE_REQUEST= \
+	    KBUILD_VERBOSE=2
+
+	mkdir -p out/vdfuse
+	gcc debian/vdfuse/vdfuse.c -o out/vdfuse/vdfuse -pipe -g -Wl,--as-needed -Wl,--rpath,$(INSTALL_PATH) -Wall \
+	    $(shell pkg-config --cflags --libs fuse) -Iinclude $(addprefix out/bin/, \
+	    VBoxDD.so VBoxDD2.so VBoxDDU.so VBoxVMM.so VBoxREM.so VBoxRT.so)
+
+	xsltproc --nonet --stringparam section.autolabel 1 \
+	    -o debian/README.Debian.html \
+	    /usr/share/xml/docbook/stylesheet/nwalsh/html/docbook.xsl \
+	    debian/virtualbox.files/README.Debian.xml
+
+	chmod 755 debian/lynx-dump-postprocess
+	export LC_ALL=C; lynx -force_html -dump debian/README.Debian.html | \
+	    ./debian/lynx-dump-postprocess > debian/virtualbox.README.Debian.tmp
+	mv debian/virtualbox.README.Debian.tmp debian/virtualbox.README.Debian
+
+override_dh_auto_install:
+	dh_auto_install
+
+	export VBOX_INSTALL_PATH=$(INSTALL_PATH) && \
+	    cd out/bin/sdk/installer && \
+	    python ./vboxapisetup.py install --root $(CURDIR)/debian/$(sname)
+
+	sed -e 's/CVERSION/$(upstreamversion)/g' < debian/$(gdkms).links.in > debian/$(gdkms).links
+	sed -e 's/CVERSION/$(upstreamversion)/g' < debian/$(pdkms).links.in > debian/$(pdkms).links
+
+	# Build install files for the dkms'ified sources
+	sed -e 's/CVERSION/$(upstreamversion)/g' < debian/$(pdkms).install.in > debian/$(pdkms).install
+	sed -e 's/CVERSION/$(upstreamversion)/g' < debian/$(gdkms).install.in > debian/$(gdkms).install
+
+	echo "xserver:Depends=$(SERVER_DEPENDS)" >> debian/$(uxname).substvars
+	echo "xviddriver:Provides=$(VIDDRIVER_PROVIDES)" >> debian/$(uxname).substvars
+	echo "xinpdriver:Provides=$(INPDRIVER_PROVIDES)" >> debian/$(uxname).substvars
+
+ifeq ($(DIST_NAME),Ubuntu)
+	echo "modaliases=vboxguest(pci:v000080EEd0000CAFEsv00000000sd00000000bc*sc*i*)" >> debian/$(gdkms).substvars
+endif
+
+override_dh_install:
+	dh_install -p$(sname) -X out/bin/VBoxDbg.so
+	dh_install --remaining-packages
+
+	convert debian/$(sxname)/usr/share/icons/hicolor/32x32/apps/virtualbox.png \
+	    debian/$(sxname)/usr/share/pixmaps/virtualbox.xpm
+
+ifeq ($(DIST_NAME),Ubuntu)
+	install -m 644 -p -D debian/apport-hook.py \
+	    debian/$(sname)/usr/share/apport/package-hooks/source_$(sname).py
+	install -m 644 -p -D debian/apport-hook.py \
+	    debian/$(gdkms)/usr/share/apport/package-hooks/$(gdkms).py
+endif
+
+override_dh_link:
+	dh_link
+	dh_link -p$(uxname) --ignore debian/$(uxname).links \
+	    /usr/lib/VBoxOGL.so $(shell pkg-config --variable dridriverdir dri)/vboxvideo_dri.so
+
+override_dh_fixperms:
+	dh_fixperms
+
+	chmod +s debian/$(sname)$(INSTALL_PATH)/VBoxSDL
+	chmod +s debian/$(sname)$(INSTALL_PATH)/VBoxHeadless
+	chmod +s debian/$(sname)$(INSTALL_PATH)/VBoxNetDHCP
+	chmod +s debian/$(sname)$(INSTALL_PATH)/VBoxNetAdpCtl
+	chmod +s debian/$(sxname)$(INSTALL_PATH)/VirtualBox
+
+	chmod 644 debian/$(sname)$(INSTALL_PATH)/*.gc
+	chmod 644 debian/$(sname)$(INSTALL_PATH)/*.r0
+
+	chmod 644 debian/$(sname)$(INSTALL_PATH)/sdk/bindings/xpcom/python/xpcom/*.py
+	chmod 644 debian/$(sname)$(INSTALL_PATH)/sdk/bindings/xpcom/python/xpcom/server/*.py
+	chmod 644 debian/$(sname)$(INSTALL_PATH)/sdk/bindings/xpcom/python/xpcom/client/*.py
+	chmod 644 debian/$(sname)$(INSTALL_PATH)/sdk/bindings/xpcom/java/vboxjxpcom.jar
+
+	chmod 755 debian/$(uxname)/usr/share/virtualbox/x11config.pl
+	chmod 755 debian/$(sname)/usr/share/virtualbox/VBox.sh
+
+# check if arch-all packages are being built
+ifneq (,$(filter $(psource), $(shell dh_listpackages)))
+	# These files have incorrect permissions, fixing it.
+	chmod 755 debian/$(psource)/usr/src/modules/$(sname)/debian/rules
+	chmod 755 debian/$(gsource)/usr/src/modules/$(gname)/debian/rules
+
+	# this needs all prior work to be finished
+	cd debian/$(psource)/usr/src && \
+	    tar -cjf $(sname).tar.bz2 modules && \
+	    rm -rf modules
+	cd debian/$(gsource)/usr/src && \
+	    tar -cjf $(gname).tar.bz2 modules && \
+	    rm -rf modules
+
+	chmod 644 debian/$(psource)/usr/src/$(sname).tar.bz2
+	chmod 644 debian/$(gsource)/usr/src/$(gname).tar.bz2
+endif
+
+override_dh_installinit:
+	dh_installinit --no-start
+
+override_dh_dkms:
+	dh_dkms -V $(upstreamversion)
+
+override_dh_strip:
+	dh_strip --dbg-package=$(sname)-dbg
+
+	# strip files not handled by dh_strip
+ifeq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
+	set -e && for file in debian/$(sname)/usr/lib/virtualbox/*.gc debian/$(sname)/usr/lib/virtualbox/*.r0; do \
+	    strip --strip-debug --remove-section=.comment --remove-section=.note $${file}; \
+	done
+endif
+
+override_dh_shlibdeps:
+	dh_shlibdeps -p$(sname) -X debian/$(sname)$(INSTALL_PATH)/VBoxTestOGL -- \
+	    -dRecommends debian/$(sname)$(INSTALL_PATH)/VBoxTestOGL -dDepends
+	dh_shlibdeps --remaining-packages
+
+override_dh_compress:
+	dh_compress -X.pdf
+
+override_dh_builddeb:
+	dh_builddeb $(foreach pkg,$(pkgs_xzcompress),-p$(pkg)) -- -Zxz
+	dh_builddeb --remaining-packages
+
+override_dh_auto_clean:
+	dh_auto_clean
+
+	# Cleaning package
+	rm -rf out
+	rm -f build-stamp
+	rm -f debian/virtualbox.README.Debian debian/README.Debian.html
+	rm -f debian/$(pdkms).install
+	rm -f debian/$(gdkms).install
+	rm -f debian/$(pdkms).links
+	rm -f debian/$(gdkms).links
+
+	find . -name "*.pyc" -exec rm -f {} \;
+
+#Rebuild the orig.tar.gz
+dfsg-free: clean
+	rm -rf ./kBuild
+	rm -rf ./tools
+	rm -rf ./src/VBox/Additions/os2
+	rm -rf ./src/VBox/Additions/WINNT
+	rm -f ./src/VBox/HostDrivers/Support/darwin/load.sh
+	rm -f ./include/VBox/VBoxGuest.inc
+	rm -f ./include/VBox/VBoxGuest16.h
+	rm -f ./include/VBox/VBoxGuest.mac
+	rm -f ./src/libs/xpcom18a4/xpcom/MoreFiles/FSCopyObject.c
+	rm -f ./src/libs/xpcom18a4/xpcom/MoreFiles/FSCopyObject.h
+	rm -rf ./src/libs/libpng*
+	rm -rf ./src/libs/libxml2*
+	rm -rf ./src/libs/libxslt*
+	rm -rf ./src/libs/zlib*
+	rm -rf ./src/VBox/Additions/linux/selinux-fedora
+	find src/VBox/Additions/x11/x11include -mindepth 1 -maxdepth 1 \
+	    -type d ! -name '*mesa-*' -exec rm -rf {} \;
+	cd ..; mv $(CURDIR) virtualbox-$(upstreamversion)-dfsg; \
+	    tar --exclude .svn --exclude '.git*' --exclude debian \
+	        -cJf virtualbox_$(upstreamversion)-dfsg.orig.tar.xz \
+	        virtualbox-$(upstreamversion)-dfsg

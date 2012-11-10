@@ -1,0 +1,46 @@
+#!/bin/sh
+
+set -e
+
+#DEBHELPER#
+
+mv_conffile() {
+	local OLDCONFFILE="$1"
+	local NEWCONFFILE="$2"
+
+	[ -e "$OLDCONFFILE" ] || return 0
+
+	echo "Preserving user changes to $NEWCONFFILE ..."
+	mv -f "$NEWCONFFILE" "$NEWCONFFILE".dpkg-new
+	mv -f "$OLDCONFFILE" "$NEWCONFFILE"
+}
+
+if [ "$1" = configure ]; then
+	if [ -e /etc/default/virtualbox-ose ]; then
+		mv_conffile /etc/default/virtualbox-ose /etc/default/virtualbox
+		sed -i 's/^# Defaults for virtualbox-ose initscript$/# Defaults for virtualbox initscript/g' /etc/default/virtualbox
+		sed -i 's/^# sourced by \/etc\/init\.d\/virtualbox-ose$/# sourced by \/etc\/init.d\/virtualbox/g' /etc/default/virtualbox
+		sed -i 's/^# installed at \/etc\/default\/virtualbox-ose by the maintainer scripts$/# installed at \/etc\/default\/virtualbox by the maintainer scripts/g' /etc/default/virtualbox
+		sed -i 's/^# Set this to 1 if you would like the virtualbox-ose modules to be loaded by/# Set this to 1 if you would like the virtualbox modules to be loaded by/g' /etc/default/virtualbox
+	fi
+
+	if [ -z `getent group vboxusers` ]; then
+		addgroup --system --quiet vboxusers
+	fi
+
+	# Build usb device tree
+	for i in /sys/bus/usb/devices/*; do
+		if test -r "$i/dev"; then
+			dev="`cat "$i/dev" 2> /dev/null || true`"
+			major="`expr "$dev" : '\(.*\):' 2> /dev/null || true`"
+			minor="`expr "$dev" : '.*:\(.*\)' 2> /dev/null || true`"
+			class="`cat $i/bDeviceClass 2> /dev/null || true`"
+			/usr/share/virtualbox/VBoxCreateUSBNode.sh "$major" "$minor" "$class" vboxusers 2>/dev/null || true
+		fi
+	done
+
+	# only restart if VirtualBox isn't running
+	if test -x /etc/init.d/virtualbox && ! pidof VBoxSVC > /dev/null; then
+		invoke-rc.d virtualbox restart || true
+	fi
+fi

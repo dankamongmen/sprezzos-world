@@ -1,0 +1,245 @@
+#! /bin/sh
+# Sun VirtualBox
+# Linux kernel module init script
+
+#
+# Copyright (C) 2006-2009 Sun Microsystems, Inc.
+#
+# This file is part of VirtualBox Open Source Edition (OSE), as
+# available from http://www.virtualbox.org. This file is free software;
+# you can redistribute it and/or modify it under the terms of the GNU
+# General Public License (GPL) as published by the Free Software
+# Foundation, in version 2 as it comes in the "COPYING" file of the
+# VirtualBox OSE distribution. VirtualBox OSE is distributed in the
+# hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+#
+
+# chkconfig: 35 30 70
+# description: VirtualBox Linux kernel module
+#
+### BEGIN INIT INFO
+# Provides:       vboxdrv virtualbox
+# Required-Start: $remote_fs $network
+# Required-Stop:  $remote_fs
+# Default-Start:  2 3 4 5
+# Default-Stop:   0 1 6
+# Short-Description: VirtualBox Linux kernel module
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+test -d /usr/share/doc/virtualbox -a -x /usr/bin/VBoxHeadless || exit 0
+
+# Include virtualbox defaults if available
+[ -r /etc/default/virtualbox ] && . /etc/default/virtualbox
+
+# set list of all active users if asked to do so
+if [ "$SHUTDOWN_USERS" = "all" ]; then
+	SHUTDOWN_USERS=""
+	for i in /tmp/.vbox-*-ipc; do
+		SHUTDOWN_USERS="$SHUTDOWN_USERS $(echo $i|cut -d'-' -f2)"
+	done
+fi
+
+if [ "$LOAD_VBOXDRV_MODULE" != 1 ]; then
+	log_success_msg "virtualbox disabled; edit /etc/default/virtualbox"
+	exit 0
+fi
+
+running()
+{
+    lsmod | grep -q "$1[^_-]"
+}
+
+start()
+{
+	log_begin_msg "Starting VirtualBox kernel modules"
+	
+	if ! running vboxdrv; then
+		if ! modprobe vboxdrv > /dev/null 2>&1; then
+			if ! find /lib/modules/`uname -r` -name "vboxdrv\.*" 2>/dev/null|grep -q vboxdrv; then
+				log_failure_msg "No suitable module for running kernel found"
+			else
+				log_failure_msg "modprobe vboxdrv failed. Please use 'dmesg' to find out why"
+			fi
+			log_end_msg 1
+			return 1
+		fi
+	fi
+	
+	if ! running vboxnetflt; then
+		if ! modprobe vboxnetflt > /dev/null 2>&1; then
+			if ! find /lib/modules/`uname -r` -name "vboxnetflt\.*" 2>/dev/null|grep -q vboxnetflt; then
+				log_failure_msg "No suitable vboxnetflt module for running kernel found"
+			else
+				log_failure_msg "modprobe vboxnetflt failed. Please use 'dmesg' to find out why"
+			fi
+			log_end_msg 1
+			return 1
+		fi
+	fi
+	
+	if ! running vboxnetadp; then
+		if ! modprobe vboxnetadp > /dev/null 2>&1; then
+			if ! find /lib/modules/`uname -r` -name "vboxnetadp\.*" 2>/dev/null|grep -q vboxnetadp; then
+				log_failure_msg "No suitable vboxnetadp module for running kernel found"
+			else
+				log_failure_msg "modprobe vboxnetadp failed. Please use 'dmesg' to find out why"
+			fi
+			log_end_msg 1
+			return 1
+		fi
+	fi
+	
+	if ! running vboxpci; then
+		if ! modprobe vboxpci > /dev/null 2>&1; then
+			if ! find /lib/modules/`uname -r` -name "vboxpci\.*" 2>/dev/null|grep -q vboxpci; then
+				log_failure_msg "No suitable vboxpci module for running kernel found"
+			else
+				log_failure_msg "modprobe vboxpci failed. Please use 'dmesg' to find out why"
+			fi
+			log_end_msg 1
+			return 1
+		fi
+	fi
+	
+	log_end_msg 0
+}
+
+stop()
+{
+	log_begin_msg "Stopping VirtualBox kernel modules"
+	
+	if running vboxnetadp; then
+		if ! rmmod vboxnetadp 2>/dev/null; then
+			log_failure_msg "Cannot unload module vboxnetadp"
+			log_end_msg 1
+			return 1
+		fi
+	fi
+	
+	if running vboxnetflt; then
+		if ! rmmod vboxnetflt 2>/dev/null; then
+			log_failure_msg "Cannot unload module vboxnetflt"
+			log_end_msg 1
+			return 1
+		fi
+	fi
+	
+	if running vboxpci; then
+		if ! rmmod vboxpci 2>/dev/null; then
+			log_failure_msg "Cannot unload module vboxpci"
+			log_end_msg 1
+			return 1
+		fi
+	fi
+	
+	if running vboxdrv; then
+		if ! rmmod vboxdrv 2>/dev/null; then
+			log_failure_msg "Cannot unload module vboxdrv"
+			log_end_msg 1
+			return 1
+		fi
+	fi
+	
+	log_end_msg 0
+}
+
+# enter the following variables in /etc/default/virtualbox:
+#   SHUTDOWN_USERS="foo bar"  
+#     check for running VMs of user foo and user bar
+#   SHUTDOWN=poweroff
+#   SHUTDOWN=acpibutton
+#   SHUTDOWN=savestate
+#     select one of these shutdown methods for running VMs
+stop_vms()
+{
+	if ! pidof VBoxSVC > /dev/null; then
+		return 0
+	fi
+	
+	wait=0
+	
+	for i in $SHUTDOWN_USERS; do
+		if [ -d /tmp/.vbox-$i-ipc ]; then
+			export VBOX_IPC_SOCKETID="$i"
+			VMS=`VBoxManage --nologo list runningvms 2>/dev/null`
+			if [ $? -eq 0 -a -n "$VMS" ]; then
+				VMS=`echo "$VMS" | sed -e 's/^".*".*{\(.*\)}/\1/'`
+				if [ "$SHUTDOWN" = "poweroff" ]; then
+					log_action_msg "Powering off remaining VMs from user $i"
+					for v in $VMS; do
+						VBoxManage --nologo controlvm $v poweroff
+						wait=10
+					done
+				elif [ "$SHUTDOWN" = "acpibutton" ]; then
+					log_action_msg "Sending ACPI power button event to remaining VMs from user $i"
+					for v in $VMS; do
+						VBoxManage --nologo controlvm $v acpipowerbutton
+						wait=30
+					done
+				elif [ "$SHUTDOWN" = "savestate" ]; then
+					log_action_msg "Saving state of remaining VMs from user $i"
+					for v in $VMS; do
+						VBoxManage --nologo controlvm $v savestate
+						wait=30
+					done
+				fi
+			fi
+		fi
+	done
+	
+	# wait for some seconds when doing ACPI shutdown
+	if [ "$wait" -ne 0 ]; then
+		log_action_begin_msg "Waiting for $wait seconds for VM shutdown"
+		sleep $wait
+		log_action_end_msg 0
+	fi
+	return 0
+}
+
+dmnstatus()
+{
+	if running vboxdrv && running vboxnetflt && running vboxnetadp && running vboxpci; then
+		echo "VirtualBox kernel modules are loaded."
+		
+		for i in $SHUTDOWN_USERS; do
+			if [ -d /tmp/.vbox-$i-ipc ]; then
+				export VBOX_IPC_SOCKETID="$i"
+				VMS=`VBoxManage --nologo list runningvms 2>/dev/null`
+				if [ $? -eq 0 -a -n "$VMS" ]; then
+					VMS=`echo "$VMS" | sed -e 's/^".*".*{\(.*\)}/\1/'`
+					echo "The following VMs are currently running:"
+					for v in $VMS; do
+						echo "  $v"
+					done
+				fi
+			fi
+		done
+		return 0
+	else
+		echo "VirtualBox kernel module is not loaded."
+		return 3
+	fi
+}
+
+case "$1" in
+start)
+	start
+	;;
+stop)
+	stop_vms && stop
+	;;
+stop_vms)
+	stop_vms
+	;;
+restart|force-reload)
+	stop_vms && stop && start
+	;;
+status)
+	dmnstatus
+	;;
+*)
+	echo "Usage: $0 {start|stop|stop_vms|restart|force-reload|status}"
+	exit 1
+esac
