@@ -35,7 +35,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey eio \
 	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment eet \
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
-	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp
+	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders
 
 SPREZZ:=packaging
 
@@ -191,7 +191,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GSTREAMER) $(ZENITY) $(AUTOKEY) $(METACITY) $(COLORD) $(COLORDGTK) $(EVAS) \
 	$(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA) $(EET) $(ECORE) $(EXACTIMAGE) \
 	$(EIO) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL) $(VIRTUALBOX) \
-	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP)
+	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
+	$(EVASGENERICLOADERS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -890,6 +891,14 @@ $(EVAS): $(SPREZZ)/evas/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf evas_$(evas_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
+.PHONY: evas-generic-loaders
+evas-generic-loaders:$(EVASGENERICLOADERS)_$(ARCH).deb
+$(EVASGENERICLOADERS): $(SPREZZ)/evas-generic-loaders/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf evas-generic-loaders_$(evas-generic-loaders_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: exactimage
 exactimage:$(EXACTIMAGE)_$(ARCH).deb
@@ -1960,7 +1969,7 @@ clean:
 	rm -rf $(COLORDGTK) $(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA) $(EET) $(EVAS)
 	rm -rf $(EXACTIMAGE) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL)
 	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD)
-	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP)
+	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS)
 
 clobber:
 	rm -rf $(FETCHED)
