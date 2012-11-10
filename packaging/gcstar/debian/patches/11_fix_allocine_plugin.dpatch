@@ -1,0 +1,245 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 11_fix_allocine_plugin.dpatch by Clément Hermann (nodens) <clement.hermann@free.fr>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description.
+
+@DPATCH@
+diff -urNad gcstar-1.4.3~/lib/gcstar/GCPlugins/GCfilms/GCAllocine.pm gcstar-1.4.3/lib/gcstar/GCPlugins/GCfilms/GCAllocine.pm
+--- gcstar-1.4.3~/lib/gcstar/GCPlugins/GCfilms/GCAllocine.pm	2008-08-15 13:55:14.000000000 +0200
++++ gcstar-1.4.3/lib/gcstar/GCPlugins/GCfilms/GCAllocine.pm	2009-03-01 01:35:05.622195296 +0100
+@@ -2,7 +2,7 @@
+ 
+ ###################################################
+ #
+-#  Copyright 2005-2007 Tian
++#  Copyright 2005-2009 Tian
+ #
+ #  This file is part of GCstar.
+ #
+@@ -54,11 +54,16 @@
+         }
+         else
+         {
+-            if ($tagname eq "h4")
++            if ($tagname eq "h3")
+             {
+                 $self->{insideActors} = 0;
+                 $self->{insideDirector} = 0;
+-                if ($attr->{style} =~ /color:#D20000/)
++                $self->{insideCast}=0;
++                $self->{insideCastLine}=0;
++                $self->{insideRole}=0;
++                $self->{insideActor}=0;
++                $self->{insideDate}=0;
++                if ($attr->{style} =~ /color:\s*#D20000/)
+                 {
+                     $self->{insideAge} = 1;
+                 }
+@@ -70,7 +75,11 @@
+             elsif ($tagname eq "img")
+             {
+                 my $src = $attr->{src};
+-                if (!$self->{curInfo}->{image})
++                if($self->{insidePressRating} == 1 && $attr->{class}=~/etoile_(\d)/){
++                    $self->{curInfo}->{ratingpress}=2+2*$1;
++                    $self->{insidePressRating} = 0;
++                }
++                elsif (!$self->{curInfo}->{image})
+                 {
+                     if ($src =~ /\/nmedia\//)
+                     {
+@@ -78,9 +87,9 @@
+                         {
+                             my $pageUrl = $self->{loadedUrl};
+                             $pageUrl =~ s/fichefilm_/galerievignette_/;
+-                            my $page = $self->loadPage($pageUrl);
++                            my $page = $self->loadPage($pageUrl, 0, 1);
+                             $page =~ m/<img id='imgNormal' class='photo' src='(.*?)'/ms;
+-                            $src = $1;
++                            $src = $1 if $1;
+                         }
+                        $self->{curInfo}->{image} = $src;
+                     }
+@@ -90,6 +99,23 @@
+                     }
+                }
+            }
++           elsif (($tagname eq "table") && ($attr->{cast} eq "1"))
++           {
++               $self->{insideCast}=1;
++           }
++           elsif (($tagname eq "tr") && ($self->{insideCast}))
++           {
++               $self->{insideCastLine}=1;
++           }
++           elsif (($tagname eq "h5") && ($self->{insideCastLine}))
++           {
++               $self->{insideRole}=1;
++           }
++           elsif (($tagname eq "a") && ($self->{insideCastLine}))
++           {
++               $self->{insideRole}=0;
++               $self->{insideActor}=1;
++           }
+            elsif ($tagname eq "br")
+            {
+                if ($self->{insideSynopsis})
+@@ -109,6 +135,24 @@
+         {
+             $self->{insideSynopsis} = 0;
+         }
++       elsif (($tagname eq "td") && ($self->{isInfo}))
++       {
++           #work around bad date for last search result
++           $self->{isInfo}=0;
++       }
++       elsif (($tagname eq "td") && ($self->{insideCastLine}))
++       {
++           $self->{insideRole}=0;
++           $self->{insideActor}=0;
++       }
++       elsif (($tagname eq "tr") && ($self->{insideCastLine}))
++       {
++           $self->{insideCastLine}=0;
++       }
++       elsif (($tagname eq "table") && ($self->{insideCast}))
++       {
++           $self->{insideCast}=0;
++       }
+     }
+ 
+     sub text
+@@ -153,21 +197,46 @@
+                 $origtext =~ s/[\r\n]//g;
+                 $self->{curInfo}->{title} = $origtext if length($origtext) > 2;
+             }
+-            if ($self->{inside}->{h3})
++            if ($self->{inside}->{h2})
+             {
+-                $self->{insideSynopsis} = 1 if $origtext =~ /Synopsis/
++                $self->{insideSynopsis} = 1 if $origtext =~ /Synopsis/;
+             }
+-            if ($self->{inside}->{h4})
+-            {
+-                if ($self->{insideSynopsis})
++            if ($self->{inside}->{h4}){
++                if ($self->{insideActors})
+                 {
+                     $self->{curInfo}->{synopsis} .= $origtext;
+                 }
+-                elsif ($self->{insideActors})
++                elsif ($self->{insideSynopsis})
++                {
++                    $self->{curInfo}->{synopsis} .= $origtext;
++                }
++                elsif ( $origtext =~ /^Saga /)
+                 {
++                    $origtext =~ s/Saga //;
++                    $self->{curInfo}->{serie}=$origtext;
++                }
++            }
++            elsif ($self->{inside}->{h3})
++            {
++                if ($self->{insideActors})
++                {
++                    #Actors from fichefilm page
+                     $self->{curInfo}->{actors} .= $origtext;
+                     $self->{curInfo}->{actors} =~ s/^\s*//;
+                 }
++                elsif ($self->{insideRole})
++                {
++                    #Roles from casting page
++                    push @{$self->{curInfo}->{actors}}, [$origtext,$origtext] 
++                    if ($self->{actorsCounter} <= $GCPlugins::GCfilms::GCfilmsCommon::MAX_ACTORS);
++                }
++                elsif ($self->{insideActor})
++                {
++                    #Actors from casting page
++                    $self->{curInfo}->{actors}->[$self->{actorsCounter}]->[0]=$origtext
++                    if ($self->{actorsCounter} <= $GCPlugins::GCfilms::GCfilmsCommon::MAX_ACTORS);
++                    $self->{actorsCounter}++;
++                }
+                 elsif ($self->{insideDirector})
+                 {
+                     $self->{curInfo}->{director} .= $origtext;
+@@ -177,6 +246,18 @@
+                     $origtext =~ s/.*?([0-9]+).*/$1/;
+                     $self->{curInfo}->{age} = $origtext;
+                 }
++                elsif ($self->{insideDate})
++                {
++                    $origtext =~ s/^[\s\n]*//;
++                    $origtext =~ s/\s*$//;
++                    $self->{curInfo}->{date} = $origtext;
++                    $self->{insideDate}=0;
++                }
++                elsif (( $origtext =~ /^Date de sortie/ )
++                    && ( !$self->{curInfo}->{date} ) )
++                {
++                    $self->{insideDate}=1;
++                }
+                 elsif ( $origtext =~ /^Genre/ )
+                 {
+                     $origtext =~ s/^Genre : //;
+@@ -193,14 +274,6 @@
+                     $origtext =~ s/^Durée : (.*)?/$1/;
+                     $self->{curInfo}->{time} = $origtext;
+                 }
+-                elsif (( $origtext =~ /Date de sortie/ )
+-                    && ( !$self->{curInfo}->{date} ) )
+-                {
+-                    $origtext =~ s/Date de sortie : (.*)/$1/;
+-                    $origtext =~ s/^[\s\n]*//;
+-                    $origtext =~ s/\s*$//;
+-                    $self->{curInfo}->{date} = $origtext;
+-                }
+                 elsif ( $origtext =~ /^Titre original/ )
+                 {
+                     $origtext =~ s/^Titre original : .*?/$1/;
+@@ -208,13 +281,18 @@
+                 }
+                 elsif (($origtext =~ /^Avec/ ) && (! $self->{curInfo}->{actors}))
+                 {
++                    #Detecting actors from fichefilm page
+                     $self->{insideActors} = 1;
+                 }
+                 elsif ( $origtext =~ /^Réalisé par/ )
+                 {
+                     $self->{insideDirector} = 1;
+                 }
+-           }
++            }
++            elsif ( $origtext =~ /^Presse$/ )
++            {
++               $self->{insidePressRating} = 1;
++            }
+         }
+     }
+ 
+@@ -235,6 +313,7 @@
+         $self->{isMovie} = 0;
+         $self->{curName} = undef;
+         $self->{curUrl} = undef;
++        $self->{actorsCounter}=0;
+ 
+         bless ($self, $class);
+         return $self;
+@@ -252,8 +331,15 @@
+ 
+         if (!$self->{parsingList})
+         {
+-            # Remove link "Plus" in list of actors
+-            $html =~ s|<a href="/film/casting_gen_cfilm=.*?>.*?</a>||gi;
++            #Remplacing actor list with cast page list
++            my $pageUrl = $self->{loadedUrl};
++            $pageUrl =~ s/fichefilm_/casting_/;
++            my $page = $self->loadPage($pageUrl, 0, 1);
++            if($page =~ m|<h2[^>]*>Acteurs</h2><hr /></td></tr>(.*?)</table>|ms)
++            {
++                my $src = $1;
++                $html =~ s|Avec.*Plus\.\.\.</a>|<table cast=1>$src</table>|i;
++            }
+         }
+         
+         return $html;
