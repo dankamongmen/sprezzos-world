@@ -539,7 +539,7 @@ $(GCSTAR): $(SPREZZ)/gcstar/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf gcstar_$(gcstar_UPVER).tar.gz --strip-components=1 -C $@
+	tar xzvf gcstar-$(gcstar_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: gdm3
 gdm3:$(GDM3)_$(ARCH).deb
