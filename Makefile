@@ -532,6 +532,14 @@ $(GCRYPT): $(SPREZZ)/gcrypt/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf libgcrypt11_$(gcrypt_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
+.PHONY: gcstar
+gcstar:$(GCSTAR)_$(ARCH).deb
+$(GCSTAR): $(SPREZZ)/gcstar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf gcstar_$(gcstar_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: gdm3
 gdm3:$(GDM3)_$(ARCH).deb
 $(GDM3): $(SPREZZ)/gdm3/debian/changelog
