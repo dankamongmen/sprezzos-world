@@ -144,9 +144,6 @@ MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 NAUTILUSUP:=nautilus-$(shell echo $(nautilus_VERSION) | cut -d: -f2- | cut -d- -f1)
 NAUTILUSORIG:=nautilus_$(shell echo $(nautilus_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_VERSION) | cut -d- -f1).orig.tar.xz
-NFSUTILSUP:=nfs-utils-$(shell echo $(nfs-utils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-NFSUTILSORIG:=nfs-$(shell echo $(NFSUTILSUP) | cut -d- -f2- | tr - _).orig.tar.bz2
-NFSUTILS:=$(shell echo $(nfs-utils_VERSION) | tr : .)
 FREI0RORIG:=frei0r_$(shell echo $(frei0r_VERSION) | cut -d- -f1).orig.tar.xz
 XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
 OPENCVUP:=OpenCV-$(shell echo $(opencv_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -1037,6 +1034,14 @@ $(NETCF): $(SPREZZ)/netcf/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf netcf_$(netcf_UPVER).orig.tar.gz --strip-components=1 -C $@
 
+.PHONY: nfs-utils
+nfs-utils:$(NFSUTILS)_$(ARCH).deb
+$(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf nfs-utils_$(nfs-utils_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
 .PHONY: nvidia-cuda-toolkit
 nvidia-cuda-toolkit:$(NVIDIACUDATOOLKIT)_$(ARCH).deb
 $(NVIDIACUDATOOLKIT): $(SPREZZ)/nvidia-cuda-toolkit/debian/changelog
@@ -1453,20 +1458,6 @@ mesa:$(MESA)_$(ARCH).deb
 $(MESA): $(SPREZZ)/mesa/debian/changelog $(MESAORIG)
 	mkdir $@
 	tar xjvf $(MESAORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(NFSUTILSUP).tar.bz2
-$(NFSUTILSUP).tar.bz2:
-	wget -nc -O$@ http://sourceforge.net/projects/nfs/files/nfs-utils/1.2.6/$@
-
-$(NFSUTILSORIG): $(NFSUTILSUP).tar.bz2
-	ln -s $< $@
-
-.PHONY: nfs-utils
-nfs-utils:$(NFSUTILS)_$(ARCH).deb
-$(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog $(NFSUTILSORIG)
-	mkdir -p $@
-	tar xjvf $(NFSUTILSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(ATSPI2ATKUP).tar.xz
@@ -1987,6 +1978,7 @@ clean:
 	rm -rf $(EXACTIMAGE) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL)
 	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD)
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
+	rm -rf $(NFSUTILS)
 
 clobber:
 	rm -rf $(FETCHED)
