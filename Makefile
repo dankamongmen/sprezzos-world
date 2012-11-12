@@ -38,7 +38,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
-	gnome-keyring reaver wifite aacplusenc faac
+	gnome-keyring reaver wifite aacplusenc faac handbrake
 
 SPREZZ:=packaging
 
@@ -193,7 +193,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
-	$(FAAC)
+	$(FAAC) $(HANDBRAKE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -852,6 +852,14 @@ $(GVFS): $(SPREZZ)/gvfs/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gvfs-$(gvfs_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: handbrake
+handbrake:$(HANDBRAKE)_$(ARCH).deb
+$(HANDBRAKE): $(SPREZZ)/handbrake/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf handbrake-$(handbrake_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: icu
 icu:$(ICU)_$(ARCH).deb
@@ -2138,7 +2146,7 @@ clean:
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
 	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
-	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC)
+	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE)
 
 clobber:
 	rm -rf $(FETCHED)
