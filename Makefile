@@ -408,7 +408,7 @@ $(BAOBAB): $(SPREZZ)/baobab/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf baobab-$(banshee_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf baobab-$(baobab_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: boost
 boost:$(BOOST)_$(ARCH).deb
