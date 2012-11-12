@@ -37,7 +37,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
-	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto
+	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput
 
 SPREZZ:=packaging
 
@@ -191,7 +191,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
-	$(XCBPROTO)
+	$(XCBPROTO) $(XINPUT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1333,6 +1333,14 @@ $(XCBPROTO): $(SPREZZ)/xcb-proto/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf xcb-proto_$(xcb-proto_UPVER).orig.tar.gz --strip-components=1 -C $@
 
+.PHONY: xinput
+xinput:$(XINPUT)_$(ARCH).deb
+$(XINPUT): $(SPREZZ)/xinput/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xinput_$(xinput_UPVER).orig.tar.gz --strip-components=1 -C $@
+
 .PHONY: udisks
 udisks:$(UDISKS)_$(ARCH).deb
 $(UDISKS): $(SPREZZ)/udisks/debian/changelog
@@ -2079,7 +2087,7 @@ clean:
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
-	rm -rf $(LIBXCB) $(XCBPROTO)
+	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT)
 
 clobber:
 	rm -rf $(FETCHED)
