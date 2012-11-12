@@ -539,8 +539,8 @@ $(GCSTAR): $(SPREZZ)/gcstar/debian/changelog
 	tar xzvf gcstar-$(gcstar_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: gdl
-gdl:$(gdl)_$(ARCH).deb
-$(gdl): $(SPREZZ)/gdl/debian/changelog
+gdl:$(GDL)_$(ARCH).deb
+$(GDL): $(SPREZZ)/gdl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
