@@ -586,6 +586,14 @@ $(GDM3): $(SPREZZ)/gdm3/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf gdm-$(gdm3_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: ghex
+ghex:$(GHEX)_$(ARCH).deb
+$(GHEX): $(SPREZZ)/ghex/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf ghex-$(ghex_UPVER).tar.xz --strip-components=1 -C $@
+
 .PHONY: git
 git:$(GIT)_$(ARCH).deb
 $(GIT): $(SPREZZ)/git/debian/changelog
