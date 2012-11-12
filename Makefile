@@ -36,7 +36,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment eet gdl \
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
-	gcstar gperf
+	gcstar gperf evolution evolution-data-server
 
 SPREZZ:=packaging
 
@@ -497,6 +497,22 @@ $(ENLIGHTENMENT): $(SPREZZ)/enlightenment/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf enlightenment-$(enlightenment_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: evolution
+evolution:$(EVOLUTION)_$(ARCH).deb
+$(EVOLUTION): $(SPREZZ)/evolution/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf evolution-$(evolution_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: evolution-data-server
+evolution-data-server:$(EVOLUTIONDATASERVER)_$(ARCH).deb
+$(EVOLUTIONDATASERVER): $(SPREZZ)/evolution-data-server/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf evolution-data-server-$(evolution-data-server_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: f2fs-tools
 f2fs-tools:$(F2FSTOOLS)_$(ARCH).deb
@@ -1986,7 +2002,7 @@ clean:
 	rm -rf $(EXACTIMAGE) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL)
 	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(GDL)
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
-	rm -rf $(NFSUTILS)
+	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER)
 
 clobber:
 	rm -rf $(FETCHED)
