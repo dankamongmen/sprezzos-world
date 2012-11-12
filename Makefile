@@ -37,7 +37,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
-	libsynthesis simple-scan
+	libsynthesis simple-scan eog-plugins
 
 SPREZZ:=packaging
 
@@ -78,8 +78,6 @@ CURLUP:=curl-$(shell echo $(curl_VERSION) | cut -d= -f2- | cut -d- -f1)
 CURLORIG:=curl_$(shell echo $(curl_VERSION) | cut -d- -f1).orig.tar.bz2
 EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
 EGLIBCORIG:=eglibc_$(shell echo $(eglibc_VERSION) | cut -d- -f1).orig.tar.gz
-EOGUP:=eog-$(shell echo $(eog_VERSION) | cut -d: -f2- | cut -d- -f1)
-EOGORIG:=eog_$(shell echo $(eog_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 EVINCEUP:=evince-$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1)
 EVINCEORIG:=evince_$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
@@ -192,7 +190,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EIO) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL) $(VIRTUALBOX) \
 	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
-	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN)
+	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -515,6 +513,22 @@ $(ENLIGHTENMENT): $(SPREZZ)/enlightenment/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf enlightenment-$(enlightenment_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: eog
+eog:$(EOG)_$(ARCH).deb
+$(EOG): $(SPREZZ)/eog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf eog_$(eog_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: eog-plugins
+eog-plugins:$(EOGPLUGINS)_$(ARCH).deb
+$(EOGPLUGINS): $(SPREZZ)/eog-plugins/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf eog-plugins_$(eog-plugins_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: evolution
 evolution:$(EVOLUTION)_$(ARCH).deb
@@ -1576,20 +1590,6 @@ $(NAUTILUS): $(SPREZZ)/nautilus/debian/changelog $(NAUTILUSORIG)
 	tar xJvf $(NAUTILUSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(EOGUP).tar.xz
-$(EOGUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/eog/3.6/$@
-
-$(EOGORIG): $(EOGUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: eog
-eog:$(EOG)_$(ARCH).deb
-$(EOG): $(SPREZZ)/eog/debian/changelog $(EOGORIG)
-	mkdir -p $@
-	tar xJvf $(EOGORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
 FETCHED:=$(FETCHED) $(EVINCEUP).tar.xz
 $(EVINCEUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/evince/3.6/$@
@@ -2053,7 +2053,7 @@ clean:
 	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(GDL)
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
-	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN)
+	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS)
 
 clobber:
 	rm -rf $(FETCHED)
