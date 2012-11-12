@@ -1,0 +1,38 @@
+#!/bin/sh -e
+
+make_extra_nodes() {
+  [ -e /etc/udev/links.conf ] || return 0
+  grep '^[^#]' /etc/udev/links.conf | \
+  while read type name arg1; do
+    [ "$type" -a "$name" -a ! -e "/dev/$name" -a ! -L "/dev/$name" ] ||continue
+    case "$type" in
+      L) ln -s $arg1 /dev/$name ;;
+      D) mkdir -p /dev/$name ;;
+      M) mknod -m 600 /dev/$name $arg1 ;;
+      *) echo "links.conf: unparseable line ($type $name $arg1)" ;;
+    esac
+  done
+}
+
+echo > /sys/kernel/uevent_helper
+
+if ! grep -E -q "^[^[:space:]]+ /dev (dev)?tmpfs" /proc/mounts; then
+  mount -n -o mode=0755 -t tmpfs tmpfs /dev
+fi
+make_extra_nodes
+
+udevd --daemon --resolve-names=never
+
+udevadm trigger --action=add
+
+mount /dev/pts
+
+udevadm settle || true
+
+if [ -d /sys/bus/scsi ]; then
+    modprobe -q scsi_wait_scan && modprobe -r scsi_wait_scan || true
+    udevadm settle || true
+fi
+
+exit 0
+
