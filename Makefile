@@ -996,13 +996,13 @@ $(LIBSOUP): $(SPREZZ)/libsoup/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf libsoup2.4_$(libsoup_UPVER).orig.tar.xz --strip-components=1 -C $@
 
-.PHONY: synthesis
-synthesis:$(LIBSYNTHESIS)_$(ARCH).deb
-$(LIBSYNTHESIS): $(SPREZZ)/synthesis/debian/changelog
+.PHONY: libsynthesis
+libsynthesis:$(LIBSYNTHESIS)_$(ARCH).deb
+$(LIBSYNTHESIS): $(SPREZZ)/libsynthesis/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf synthesis_$(synthesis_UPVER).orig.tar.gz --strip-components=1 -C $@
+	tar xzvf libsynthesis_$(synthesis_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: libvirt
 libvirt:$(LIBVIRT)_$(ARCH).deb
