@@ -38,7 +38,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
-	gnome-keyring
+	gnome-keyring reaver
 
 SPREZZ:=packaging
 
@@ -192,7 +192,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
-	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR)
+	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1196,6 +1196,14 @@ $(RAZORQT): $(SPREZZ)/razorqt/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf razorqt-$(razorqt_UPVER).tar.bz2 --strip-components=1 -C $@
 
+.PHONY: reaver
+reaver:$(REAVER)_$(ARCH).deb
+$(REAVER): $(SPREZZ)/reaver/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf reaver-$(reaver_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: reportbug
 reportbug:$(REPORTBUG)_$(ARCH).deb
 $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
@@ -2104,7 +2112,7 @@ clean:
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
-	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR)
+	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
 
 clobber:
 	rm -rf $(FETCHED)
