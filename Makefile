@@ -37,7 +37,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
-	libsynthesis
+	libsynthesis simple-scan
 
 SPREZZ:=packaging
 
@@ -192,7 +192,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EIO) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL) $(VIRTUALBOX) \
 	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
-	$(SYNCEVOLUTION) $(LIBSYNTHESIS)
+	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1180,6 +1180,14 @@ $(SHOTWELL): $(SPREZZ)/shotwell/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf shotwell_$(shotwell_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: simple-scan
+simple-scan:$(SIMPLESCAN)_$(ARCH).deb
+$(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf simple-scan_$(simple-scan_UPVER).orig.tar.gz --strip-components=1 -C $@
+
 .PHONY: syncevolution
 syncevolution:$(SYNCEVOLUTION)_$(ARCH).deb
 $(SYNCEVOLUTION): $(SPREZZ)/syncevolution/debian/changelog
@@ -2045,7 +2053,7 @@ clean:
 	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(GDL)
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
-	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS)
+	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN)
 
 clobber:
 	rm -rf $(FETCHED)
