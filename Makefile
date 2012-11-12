@@ -38,7 +38,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
-	gnome-keyring reaver wifite
+	gnome-keyring reaver wifite aacplusenc
 
 SPREZZ:=packaging
 
@@ -192,7 +192,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
-	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE)
+	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -379,6 +379,14 @@ $(ABCDE): $(SPREZZ)/abcde/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf abcde-$(abcde_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: aacplusenc
+aacplusenc:$(AACPLUSENC)_$(ARCH).deb
+$(AACPLUSENC): $(SPREZZ)/aacplusenc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf aacplusenc_$(aacplusenc_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: at-spi
 at-spi:$(ATSPI)_$(ARCH).deb
@@ -2121,7 +2129,7 @@ clean:
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
 	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
-	rm -rf $(WIFITE)
+	rm -rf $(WIFITE) $(AACPLUSENC)
 
 clobber:
 	rm -rf $(FETCHED)
