@@ -859,7 +859,7 @@ $(HANDBRAKE): $(SPREZZ)/handbrake/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf handbrake-$(handbrake_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xjvf HandBrake-$(handbrake_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: icu
 icu:$(ICU)_$(ARCH).deb
