@@ -36,7 +36,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment eet gdl \
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
-	gcstar gperf evolution evolution-data-server calibre baobab ghex
+	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution
 
 SPREZZ:=packaging
 
@@ -190,7 +190,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA) $(EET) $(ECORE) $(EXACTIMAGE) $(GDL) \
 	$(EIO) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL) $(VIRTUALBOX) \
 	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
-	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX)
+	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
+	$(SYNCEVOLUTION)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1170,6 +1171,14 @@ $(SHOTWELL): $(SPREZZ)/shotwell/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf shotwell_$(shotwell_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: syncevolution
+syncevolution:$(SYNCEVOLUTION)_$(ARCH).deb
+$(SYNCEVOLUTION): $(SPREZZ)/syncevolution/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf syncevolution_$(syncevolution_UPVER).orig.tar.gz --strip-components=1 -C $@
+
 .PHONY: systemd
 systemd:$(SYSTEMD)_$(ARCH).deb
 $(SYSTEMD): $(SPREZZ)/systemd/debian/changelog
@@ -2027,6 +2036,7 @@ clean:
 	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(GDL)
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
+	rm -rf $(SYNCEVOLUTION)
 
 clobber:
 	rm -rf $(FETCHED)
