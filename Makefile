@@ -37,7 +37,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
-	libsynthesis simple-scan eog-plugins
+	libsynthesis simple-scan eog-plugins vinagre
 
 SPREZZ:=packaging
 
@@ -1242,6 +1242,14 @@ $(VIM): $(SPREZZ)/vim/debian/changelog
 	{ cd $@ && TARBALL=`uscan --force-download --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && tar xjvf $$TARBALL --strip-components=1 -C $@ ; }
 
+.PHONY: vinagre
+vinagre:$(VINAGRE)_$(ARCH).deb
+$(VINAGRE): $(SPREZZ)/vinagre/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf vinagre_$(vinagre_UPVER).orig.tar.xz --strip-components=1 -C $@
+
 .PHONY: virtualbox
 virtualbox:$(VIRTUALBOX)_$(ARCH).deb
 $(VIRTUALBOX): $(SPREZZ)/virtualbox/debian/changelog
@@ -2053,7 +2061,7 @@ clean:
 	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(GDL)
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
-	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS)
+	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
 
 clobber:
 	rm -rf $(FETCHED)
