@@ -1048,7 +1048,7 @@ $(LIBXCB): $(SPREZZ)/libxcb/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf libxcb_$(libxCB_UPVER).orig.tar.gz --strip-components=1 -C $@
+	tar xzvf libxcb_$(libxcb_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: gmake
 gmake:$(GMAKE)_$(ARCH).deb
