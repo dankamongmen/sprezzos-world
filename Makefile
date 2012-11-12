@@ -36,7 +36,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment eet gdl \
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
-	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution
+	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
+	libsynthesis
 
 SPREZZ:=packaging
 
@@ -191,7 +192,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EIO) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL) $(VIRTUALBOX) \
 	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
-	$(SYNCEVOLUTION)
+	$(SYNCEVOLUTION) $(LIBSYNTHESIS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -994,6 +995,14 @@ $(LIBSOUP): $(SPREZZ)/libsoup/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf libsoup2.4_$(libsoup_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: synthesis
+synthesis:$(LIBSYNTHESIS)_$(ARCH).deb
+$(LIBSYNTHESIS): $(SPREZZ)/synthesis/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf synthesis_$(synthesis_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: libvirt
 libvirt:$(LIBVIRT)_$(ARCH).deb
@@ -2036,7 +2045,7 @@ clean:
 	rm -rf $(VIRTUALBOX) $(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(GDL)
 	rm -rf $(MUTTER) $(LFTP) $(NCMPCPP) $(EVASGENERICLOADERS) $(GCSTAR) $(GPERF)
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
-	rm -rf $(SYNCEVOLUTION)
+	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS)
 
 clobber:
 	rm -rf $(FETCHED)
