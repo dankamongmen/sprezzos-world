@@ -38,7 +38,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
-	gnome-keyring reaver wifite aacplusenc faac handbrake
+	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes
 
 SPREZZ:=packaging
 
@@ -193,7 +193,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
-	$(FAAC) $(HANDBRAKE)
+	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -756,6 +756,14 @@ $(GNOMESUSHI): $(SPREZZ)/gnome-sushi/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-sushi_$(gnome-sushi_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-themes
+gnome-themes:$(GNOMETHEMES)_$(ARCH).deb
+$(GNOMETHEMES): $(SPREZZ)/gnome-themes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf gnome-themes_$(gnome-themes_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: gnome-themes-standard
 gnome-themes-standard:$(GNOMETHEMESSTANDARD)_$(ARCH).deb
@@ -2146,7 +2154,7 @@ clean:
 	rm -rf $(NFSUTILS) $(EVOLUTION) $(EVOLUTIONDATASERVER) $(CALIBRE) $(BAOBAB)
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
 	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
-	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE)
+	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES)
 
 clobber:
 	rm -rf $(FETCHED)
