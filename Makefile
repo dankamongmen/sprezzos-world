@@ -39,7 +39,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes \
-	gnome-session
+	gnome-session gnome-bluetooth
 
 SPREZZ:=packaging
 
@@ -194,7 +194,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
-	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION)
+	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -661,6 +661,14 @@ $(GLU): $(SPREZZ)/GLU/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf glu_$(GLU_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
+.PHONY: gnome-bluetooth
+gnome-bluetooth:$(GNOMEBLUETOOTH)_$(ARCH).deb
+$(GNOMEBLUETOOTH): $(SPREZZ)/gnome-bluetooth/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-bluetooth_$(gnome-bluetooth_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-color-manager
 gnome-color-manager:$(GNOMECOLORMANAGER)_$(ARCH).deb
@@ -2164,7 +2172,7 @@ clean:
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
 	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES)
-	rm -rf $(GNOMESESSION)
+	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH)
 
 clobber:
 	rm -rf $(FETCHED)
