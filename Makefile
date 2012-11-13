@@ -748,7 +748,7 @@ $(GNOMESESSION): $(SPREZZ)/gnome-session/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf gnome-session_$(gnome-session_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	tar xJvf gnome-session_$(gnome-session_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-settings-daemon
 gnome-settings-daemon:$(GNOMESETTINGSDAEMON)_$(ARCH).deb
