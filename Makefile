@@ -38,7 +38,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
-	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes
+	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes \
+	gnome-session
 
 SPREZZ:=packaging
 
@@ -193,7 +194,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
-	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES)
+	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -740,6 +741,14 @@ $(GNOMESEARCHTOOL): $(SPREZZ)/gnome-search-tool/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-search-tool_$(gnome-search-tool_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-session
+gnome-session:$(GNOMESESSION)_$(ARCH).deb
+$(GNOMESESSION): $(SPREZZ)/gnome-session/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf gnome-session_$(gnome-session_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: gnome-settings-daemon
 gnome-settings-daemon:$(GNOMESETTINGSDAEMON)_$(ARCH).deb
@@ -2155,6 +2164,7 @@ clean:
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
 	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES)
+	rm -rf $(GNOMESESSION)
 
 clobber:
 	rm -rf $(FETCHED)
