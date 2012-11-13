@@ -726,8 +726,8 @@ $(GNOMEKEYRING): $(SPREZZ)/gnome-keyring/debian/changelog
 	tar xJvf gnome-keyring_$(gnome-keyring_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: libgnome-keyring
-libgnome-keyring:$(LIBlibgnomeKEYRING)_$(ARCH).deb
-$(LIBlibgnomeKEYRING): $(SPREZZ)/libgnome-keyring/debian/changelog
+libgnome-keyring:$(LIBGNOMEKEYRING)_$(ARCH).deb
+$(LIBGNOMEKEYRING): $(SPREZZ)/libgnome-keyring/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
