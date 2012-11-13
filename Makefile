@@ -39,7 +39,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
-	gnome-session gnome-bluetooth nautilus-sendto
+	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring
 
 SPREZZ:=packaging
 
@@ -193,7 +193,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) \
-	$(NAUTILUSSENDTO)
+	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -724,6 +724,14 @@ $(GNOMEKEYRING): $(SPREZZ)/gnome-keyring/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-keyring_$(gnome-keyring_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: libgnome-keyring
+libgnome-keyring:$(LIBlibgnomeKEYRING)_$(ARCH).deb
+$(LIBlibgnomeKEYRING): $(SPREZZ)/libgnome-keyring/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf libgnome-keyring_$(libgnome-keyring_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-media
 gnome-media:$(GNOMEMEDIA)_$(ARCH).deb
@@ -2181,7 +2189,7 @@ clean:
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
 	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(BLUEZ)
-	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO)
+	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 
 clobber:
 	rm -rf $(FETCHED)
