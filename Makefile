@@ -39,7 +39,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
-	gnome-session gnome-bluetooth
+	gnome-session gnome-bluetooth nautilus-sendto
 
 SPREZZ:=packaging
 
@@ -142,8 +142,6 @@ MCELOGORIG:=mcelog_$(shell echo $(mcelog_VERSION) | cut -d- -f1).orig.tar.xz
 MESAUP:=MesaLib-$(shell echo $(mesa_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MESAORIG:=mesa_$(shell echo $(mesa_VERSION) | cut -d- -f1).orig.tar.bz2
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
-NAUTILUSUP:=nautilus-$(shell echo $(nautilus_VERSION) | cut -d: -f2- | cut -d- -f1)
-NAUTILUSORIG:=nautilus_$(shell echo $(nautilus_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_VERSION) | cut -d- -f1).orig.tar.xz
 FREI0RORIG:=frei0r_$(shell echo $(frei0r_VERSION) | cut -d- -f1).orig.tar.xz
 XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
@@ -194,7 +192,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) $(BLUEZ) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
-	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH)
+	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) \
+	$(NAUTILUSSENDTO)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1174,6 +1173,22 @@ $(MUTTER): $(SPREZZ)/mutter/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf mutter_$(mutter_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: nautilus
+nautilus:$(NAUTILUS)_$(ARCH).deb
+$(NAUTILUS): $(SPREZZ)/nautilus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf nautilus_$(nautilus_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: nautilus-sendto
+nautilus-sendto:$(NAUTILUSSENDTO)_$(ARCH).deb
+$(NAUTILUSSENDTO): $(SPREZZ)/nautilus-sendto/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf nautilus-sendto_$(nautilus-sendto_UPVER).orig.tar.xz --strip-components=1 -C $@
+
 .PHONY: ncmpcpp
 ncmpcpp:$(NCMPCPP)_$(ARCH).deb
 $(NCMPCPP): $(SPREZZ)/ncmpcpp/debian/changelog
@@ -1700,20 +1715,6 @@ $(ATK): $(SPREZZ)/atk/debian/changelog $(ATKORIG)
 	tar xJvf $(ATKORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(NAUTILUSUP).tar.xz
-$(NAUTILUSUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/nautilus/3.6/$@
-
-$(NAUTILUSORIG): $(NAUTILUSUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: nautilus
-nautilus:$(NAUTILUS)_$(ARCH).deb
-$(NAUTILUS): $(SPREZZ)/nautilus/debian/changelog $(NAUTILUSORIG)
-	mkdir -p $@
-	tar xJvf $(NAUTILUSORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
 FETCHED:=$(FETCHED) $(EVINCEUP).tar.xz
 $(EVINCEUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/evince/3.6/$@
@@ -2180,7 +2181,7 @@ clean:
 	rm -rf $(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(VINAGRE)
 	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER)
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(BLUEZ)
-	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH)
+	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO)
 
 clobber:
 	rm -rf $(FETCHED)
