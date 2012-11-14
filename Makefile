@@ -40,7 +40,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
 	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 \
-	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf
+	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml
 
 SPREZZ:=packaging
 
@@ -195,7 +195,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) $(EXO) \
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
-	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
+	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -879,6 +879,14 @@ $(GSTREAMER): $(SPREZZ)/gstreamer/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf gstreamer-$(gstreamer_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: gtkhtml
+gtkhtml:$(GTKHTML)_$(ARCH).deb
+$(GTKHTML): $(SPREZZ)/gtkhtml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gtkhtml4.0-$(gtkhtml_UPVER).tar.xz --strip-components=1 -C $@
+
 .PHONY: gtk2
 gtk2:$(GTK2)_$(ARCH).deb
 $(GTK2): $(SPREZZ)/gtk2/debian/changelog
@@ -893,7 +901,7 @@ $(GTK3): $(SPREZZ)/gtk3/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf gtk+3-$(gtk3_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf gtk+-$(gtk3_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gvfs
 gvfs:$(GVFS)_$(ARCH).deb
@@ -2249,6 +2257,7 @@ clean:
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(BLUEZ)
 	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
+	rm -rf $(GTKHTML)
 
 clobber:
 	rm -rf $(FETCHED)
