@@ -41,7 +41,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
 	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 \
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml \
-	gnome-online-accounts pygobject
+	gnome-online-accounts pygobject yelp-tools
 
 SPREZZ:=packaging
 
@@ -161,8 +161,6 @@ SOCATUP:=socat-$(shell echo $(socat_VERSION) | cut -d- -f1 | tr \~ -)
 SOCATORIG:=socat_$(shell echo $(socat_VERSION) | cut -d- -f1).orig.tar.bz2
 USBVIEWUP:=usbview-$(shell echo $(usbview_VERSION) | cut -d= -f2- | cut -d- -f1)
 USBVIEWORIG:=usbview_$(shell echo $(usbview_VERSION) | cut -d- -f1).orig.tar.gz
-YELPUP:=yelp-$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1)
-YELPORIG:=yelp_$(shell echo $(yelp_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(ICU) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
@@ -197,7 +195,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) $(EXO) \
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
-	$(PYGOBJECT)
+	$(PYGOBJECT) $(YELPTOOL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1547,6 +1545,22 @@ $(UDISKS): $(SPREZZ)/udisks/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf udisks_$(udisks_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
+.PHONY: yelp
+yelp:$(YELP)_$(ARCH).deb
+$(YELP): $(SPREZZ)/yelp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf yelp-$(yelp_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: yelp-tools
+yelp-tools:$(YELPTOOLS)_$(ARCH).deb
+$(YELPTOOLS): $(SPREZZ)/yelp-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf yelp-tools-$(yelp-tools_UPVER).tar.xz --strip-components=1 -C $@
+
 .PHONY: yelp-xsl
 yelp-xsl:$(YELPXSL)_$(ARCH).deb
 $(YELPXSL): $(SPREZZ)/yelp-xsl/debian/changelog
@@ -2221,20 +2235,6 @@ firmware-all:$(FIRMWAREALL)_$(ARCH).deb
 $(FIRMWAREALL): $(SPREZZ)/firmware-all/debian/changelog
 	cp -r $(<D)/.. $@
 
-FETCHED:=$(FETCHED) $(YELPUP).tar.xz
-$(YELPUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/yelp/3.6/$@
-
-$(YELPORIG): $(YELPUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: yelp
-yelp:$(YELP)_$(ARCH).deb
-$(YELP): $(SPREZZ)/yelp/debian/changelog $(YELPORIG)
-	mkdir -p $@
-	tar xJvf $(YELPORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
 clean:
 	rm -rf sprezzos-world $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
 	rm -rf $(GRUBTHEME) $(OMPHALOS) $(GROWLIGHT) $(FBV) $(LVM2) $(CAIRO) $(ICU)
@@ -2275,7 +2275,7 @@ clean:
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(BLUEZ)
 	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
-	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT)
+	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS)
 
 clobber:
 	rm -rf $(FETCHED)
