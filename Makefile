@@ -40,7 +40,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
 	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 \
-	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml
+	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml \
+	gnome-online-accounts
 
 SPREZZ:=packaging
 
@@ -195,7 +196,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) $(EXO) \
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
-	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML)
+	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -742,6 +743,14 @@ $(GNOMEMEDIA): $(SPREZZ)/gnome-media/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-media_$(gnome-media_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-online-accounts
+gnome-online-accounts:$(GNOMEONLINEACCOUNTS)_$(ARCH).deb
+$(GNOMEONLINEACCOUNTS): $(SPREZZ)/gnome-online-accounts/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-online-accounts_$(gnome-online-accounts_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-orca
 gnome-orca:$(GNOMEORCA)_$(ARCH).deb
@@ -2257,7 +2266,7 @@ clean:
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(BLUEZ)
 	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
-	rm -rf $(GTKHTML)
+	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS)
 
 clobber:
 	rm -rf $(FETCHED)
