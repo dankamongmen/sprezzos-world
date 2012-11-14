@@ -41,7 +41,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
 	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 rtmpdump \
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml \
-	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras
+	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus
 
 SPREZZ:=packaging
 
@@ -195,7 +195,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) $(EXO) \
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
-	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP)
+	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -750,6 +750,14 @@ $(GNOMEMEDIA): $(SPREZZ)/gnome-media/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-media_$(gnome-media_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-menus
+gnome-menus:$(GNOMEMENUS)_$(ARCH).deb
+$(GNOMEMENUS): $(SPREZZ)/gnome-menus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-menus_$(gnome-menus_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-online-accounts
 gnome-online-accounts:$(GNOMEONLINEACCOUNTS)_$(ARCH).deb
@@ -2292,7 +2300,7 @@ clean:
 	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
 	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
-	rm -rf $(GNOMEICONTHEMEEXTRAS)
+	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS)
 
 clobber:
 	rm -rf $(FETCHED)
