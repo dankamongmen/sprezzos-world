@@ -39,7 +39,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
-	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 \
+	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 rtmpdump \
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml \
 	gnome-online-accounts pygobject yelp-tools
 
@@ -195,7 +195,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) $(EXO) \
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
-	$(PYGOBJECT) $(YELPTOOL)
+	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1343,6 +1343,14 @@ $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf reportbug-$(reportbug_UPVER).tar.bz2 --strip-components=1 -C $@
 
+.PHONY: rtmpdump
+rtmpdump:$(RTMPDUMP)_$(ARCH).deb
+$(RTMPDUMP): $(SPREZZ)/rtmpdump/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf rtmpdump-$(rtmpdump_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
 $(SCREENLETS): $(SPREZZ)/screenlets/debian/changelog
@@ -2275,7 +2283,7 @@ clean:
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(BLUEZ)
 	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
-	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS)
+	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
 
 clobber:
 	rm -rf $(FETCHED)
