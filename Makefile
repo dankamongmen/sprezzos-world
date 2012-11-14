@@ -39,7 +39,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
 	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
-	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2
+	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 \
+	gnome-terminal
 
 SPREZZ:=packaging
 
@@ -193,7 +194,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) \
-	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2)
+	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -788,6 +789,14 @@ $(GNOMESUSHI): $(SPREZZ)/gnome-sushi/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-sushi_$(gnome-sushi_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-terminal
+gnome-terminal:$(GNOMETERMINAL)_$(ARCH).deb
+$(GNOMETERMINAL): $(SPREZZ)/gnome-terminal/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-terminal_$(gnome-terminal_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-themes
 gnome-themes:$(GNOMETHEMES)_$(ARCH).deb
@@ -2198,6 +2207,7 @@ clean:
 	rm -rf $(LIBXCB) $(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(MP4V2)
 	rm -rf $(WIFITE) $(AACPLUSENC) $(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(BLUEZ)
 	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
+	rm -rf $(GNOMETERMINAL)
 
 clobber:
 	rm -rf $(FETCHED)
