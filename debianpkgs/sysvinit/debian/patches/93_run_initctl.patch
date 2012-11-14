@@ -1,0 +1,151 @@
+--- a/doc/Install
++++ b/doc/Install
+@@ -48,7 +48,7 @@
+ manual page on shutdown to find out more about this.
+ 
+ Running from a read-only file system (CDROM?):
+-o All communication to init goes through the FIFO /dev/initctl.
++o All communication to init goes through the FIFO /run/initctl.
+   There should be no problem using a read-only root file system
+   IF you use a Linux kernel > 1.3.66. Older kernels don't allow
+   writing to a FIFO on a read-only file system.
+--- a/man/init.8
++++ b/man/init.8
+@@ -144,7 +144,7 @@
+ the letter \fBF\fP.
+ .PP
+ Usage of \fBSIGPWR\fP and \fB/etc/powerstatus\fP is discouraged. Someone
+-wanting to interact with \fBinit\fP should use the \fB/dev/initctl\fP
++wanting to interact with \fBinit\fP should use the \fB/run/initctl\fP
+ control channel - see the source code of the \fBsysvinit\fP package
+ for more documentation about this.
+ .PP
+@@ -248,7 +248,7 @@
+ the current runlevel.
+ .PP
+ .SH INTERFACE
+-Init listens on a \fIfifo\fP in /dev, \fI/dev/initctl\fP, for messages.
++Init listens on a \fIfifo\fP in /run, \fI/run/initctl\fP, for messages.
+ \fBTelinit\fP uses this to communicate with init. The interface is not
+ very well documented or finished. Those interested should study the
+ \fIinitreq.h\fP file in the \fIsrc/\fP subdirectory of the \fBinit\fP
+@@ -262,7 +262,7 @@
+ .TP 0.5i
+ .B SIGUSR1
+ On receipt of this signals, init closes and re-opens its control fifo,
+-\fB/dev/initctl\fP. Useful for bootscripts when /dev is remounted.
++\fB/run/initctl\fP.
+ .TP 0.5i
+ .B SIGINT
+ Normally the kernel sends this signal to init when CTRL-ALT-DEL is
+@@ -287,7 +287,7 @@
+ /dev/console
+ /var/run/utmp
+ /var/log/wtmp
+-/dev/initctl
++/run/initctl
+ .fi
+ .\"}}}
+ .\"{{{  Warnings
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -181,8 +181,8 @@
+ 		#
+ 		# This part is skipped on Debian systems, the
+ 		# debian.preinst script takes care of it.
+-		@if [ ! -p /dev/initctl ]; then \
+-		 echo "Creating /dev/initctl"; \
+-		 rm -f /dev/initctl; \
+-		 mknod -m 600 /dev/initctl p; fi
++		@if [ ! -p /run/initctl ]; then \
++		 echo "Creating /run/initctl"; \
++		 rm -f /run/initctl; \
++		 mknod -m 600 /run/initctl p; fi
+ endif
+--- a/src/init.c
++++ b/src/init.c
+@@ -129,7 +129,7 @@
+ int maxproclen;			/* Maximal length of argv[0] with \0 */
+ struct utmp utproto;		/* Only used for sizeof(utproto.ut_id) */
+ char *console_dev;		/* Console device. */
+-int pipe_fd = -1;		/* /dev/initctl */
++int pipe_fd = -1;		/* /run/initctl */
+ int did_boot = 0;		/* Did we already do BOOT* stuff? */
+ int main(int, char **);
+ 
+@@ -2174,13 +2174,13 @@
+   int			quit = 0;
+ 
+   /*
+-   *	First, try to create /dev/initctl if not present.
++   *	First, try to create /run/initctl if not present.
+    */
+   if (stat(INIT_FIFO, &st2) < 0 && errno == ENOENT)
+ 	(void)mkfifo(INIT_FIFO, 0600);
+ 
+   /*
+-   *	If /dev/initctl is open, stat the file to see if it
++   *	If /run/initctl is open, stat the file to see if it
+    *	is still the _same_ inode.
+    */
+   if (pipe_fd >= 0) {
+@@ -2194,7 +2194,7 @@
+   }
+ 
+   /*
+-   *	Now finally try to open /dev/initctl
++   *	Now finally try to open /run/initctl
+    */
+   if (pipe_fd < 0) {
+ 	if ((pipe_fd = open(INIT_FIFO, O_RDWR|O_NONBLOCK)) >= 0) {
+@@ -2500,7 +2500,7 @@
+   }
+   if (ISMEMBER(got_signals, SIGUSR1)) {
+ 	/*
+-	 *	SIGUSR1 means close and reopen /dev/initctl
++	 *	SIGUSR1 means close and reopen /run/initctl
+ 	 */
+ 	INITDBG(L_VB, "got SIGUSR1");
+ 	close(pipe_fd);
+@@ -2736,7 +2736,7 @@
+ 	chdir("/");
+ 
+ 	/* Open the fifo and write a command. */
+-	/* Make sure we don't hang on opening /dev/initctl */
++	/* Make sure we don't hang on opening /run/initctl */
+ 	SETSIG(sa, SIGALRM, signal_handler, 0);
+ 	alarm(3);
+ 	if ((fd = open(INIT_FIFO, O_WRONLY)) >= 0) {
+--- a/src/initreq.h
++++ b/src/initreq.h
+@@ -1,5 +1,5 @@
+ /*
+- * initreq.h	Interface to talk to init through /dev/initctl.
++ * initreq.h	Interface to talk to init through /run/initctl.
+  *
+  *		Copyright (C) 1995-2004 Miquel van Smoorenburg
+  *
+@@ -25,11 +25,7 @@
+ 
+ #include <sys/param.h>
+ 
+-#if defined(__FreeBSD_kernel__)
+-#  define INIT_FIFO  "/etc/.initctl"
+-#else
+-#  define INIT_FIFO  "/dev/initctl"
+-#endif
++#define INIT_FIFO  "/run/initctl"
+ 
+ #define INIT_MAGIC 0x03091969
+ #define INIT_CMD_START		0
+--- a/src/shutdown.c
++++ b/src/shutdown.c
+@@ -173,7 +173,7 @@
+ 
+         /*
+ 	 *	Open the fifo and write the command.
+-         *	Make sure we don't hang on opening /dev/initctl
++         *	Make sure we don't hang on opening /run/initctl
+ 	 */
+ 	memset(&sa, 0, sizeof(sa));
+ 	sa.sa_handler = alrm_handler;
