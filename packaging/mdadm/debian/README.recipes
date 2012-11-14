@@ -1,0 +1,149 @@
+mdadm recipes
+=============
+
+The following examples/recipes may help you with your mdadm experience. I'll
+leave it as an exercise to use the correct device names and parameters in each
+case. You can find pointers to additional documentation in the README.Debian
+file.
+
+Enjoy. Submissions welcome.
+
+The latest version of this document is available here:
+  http://git.debian.org/?p=pkg-mdadm/mdadm.git;a=blob;f=debian/README.recipes;hb=HEAD
+
+0. create a new array
+~~~~~~~~~~~~~~~~~~~~~
+    mdadm --create -l1 -n2 -x1 /dev/md0 /dev/sd[abc]1   # RAID 1, 1 spare
+    mdadm --create -l5 -n3 -x1 /dev/md0 /dev/sd[abcd]1  # RAID 5, 1 spare
+    mdadm --create -l6 -n4 -x1 /dev/md0 /dev/sd[abcde]1 # RAID 6, 1 spare
+
+1. create a degraded array
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+    mdadm --create -l5 -n3 /dev/md0 /dev/sda1 missing /dev/sdb1
+    mdadm --create -l6 -n4 /dev/md0 /dev/sda1 missing /dev/sdb1 missing
+
+2. assemble an existing array
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    mdadm --assemble --auto=yes /dev/md0 /dev/sd[abc]1
+
+    # if the array is degraded, it won't be started. use --run:
+    mdadm --assemble --auto=yes --run /dev/md0 /dev/sd[ab]1
+
+    # or start it by hand:
+    mdadm --run /dev/md0
+
+3. assemble all arrays in /etc/mdadm/mdadm.conf
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    mdadm --assemble --auto=yes --scan
+
+4. assemble a dirty degraded array
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    mdadm --assemble --auto=yes --force /dev/md0 /dev/sd[ab]1
+    mdadm --run /dev/md0
+
+4b. assemble a dirty degraded array at boot-time
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    If the array is started at boot time by the kernel (partition type 0xfd),
+    you can force-assemble it by passing the kernel boot parameter
+
+      md-mod.start_dirty_degraded=1
+
+5. stop arrays
+~~~~~~~~~~~~~~
+    mdadm --stop /dev/md0
+
+    # to stop all arrays in /etc/mdadm/mdadm.conf
+    mdadm --stop --scan
+
+6. hot-add components
+~~~~~~~~~~~~~~~~~~~~~
+    # on the running array:
+    mdadm --add /dev/md0 /dev/sdc1
+    # if you add more components than the array was setup with, additional
+    # components will be spares
+
+7. hot-remove components
+~~~~~~~~~~~~~~~~~~~~~~~~
+    # on the running array:
+    mdadm --fail /dev/md0 /dev/sdb1
+    # if you have configured spares, watch /proc/mdstat how it fills in
+    mdadm --remove /dev/md0 /dev/sdb1
+
+8. hot-grow a RAID1 by adding new components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # on the running array, in either order:
+    mdadm --grow -n3 /dev/md0
+    mdadm --add /dev/md0 /dev/sdc1
+    # note: without growing first, additional devices become spares and are
+    # *not* synchronised after the add.
+
+9. hot-shrink a RAID1 by removing components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    mdadm --fail /dev/md0 /dev/sdc1
+    mdadm --remove /dev/md0 /dev/sdc1
+    mdadm --grow -n2 /dev/md0
+
+10. convert existing filesystem to RAID 1
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # The idea is to create a degraded RAID 1 on the second partition, move
+    # data, then hot add the first. This seems safer to me than simply to
+    # force-add a superblock to the existing filesystem.
+    #
+    # Assume /dev/sda1 holds the data (and let's assume it's mounted on
+    # /home) and /dev/sdb1 is empty and of the same size...
+    #
+    mdadm --create /dev/md0 -l1 -n2 /dev/sdb1 missing
+    mkfs -t <type> /dev/md0
+    mount /dev/md0 /mnt
+    tar -cf- -C /home . | tar -xf- -C /mnt -p
+    # consider verifying the data
+    umount /home
+    umount /mnt
+    mount /dev/md0 /home    # also change /etc/fstab
+    mdadm --add /dev/md0 /dev/sda1
+
+    Warren Togami has a document explaining how to convert a filesystem on
+    a remote system via SSH: http://togami.com/~warren/guides/remoteraidcrazies/
+
+10b. convert existing filesystem to RAID 1 in-place
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    In-place conversion of /dev/sda1 to /dev/md0 is effectively
+      mdadm --create /dev/md0 -l1 -n2 /dev/sda1 missing
+    however, do NOT do this, as you risk filesystem corruption.
+
+    If you need to do this, first unmount and shrink the filesystem by
+    a megabyte (if supported). Then run the above command, then (optionally)
+    again grow the filesystem as much as possible.
+
+    Do make sure you have backups. If you do not yet, consider method (10)
+    instead (and make backups anyway!).
+
+11. convert existing filesystem to RAID 5/6
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # See (10) for the basics.
+    mdadm --create /dev/md0 -l5 -n3 /dev/sdb1 /dev/sdc1 missing
+    #mdadm --create /dev/md0 -l6 -n4 /dev/sdb1 /dev/sdc1 /dev/sdd1 missing
+    mkfs -t <type> /dev/md0
+    mount /dev/md0 /mnt
+    tar -cf- -C /home . | tar -xf- -C /mnt -p
+    # consider verifying the data
+    umount /home
+    umount /mnt
+    mount /dev/md0 /home    # also change /etc/fstab
+    mdadm --add /dev/md0 /dev/sda1
+
+12. change the preferred minor of an MD array (RAID)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # you need to manually assemble the array to change the preferred minor
+    # if you manually assemble, the superblock will be updated to reflect
+    # the preferred minor as you indicate with the assembly.
+    # for example, to set the preferred minor to 4:
+    mdadm --assemble /dev/md4 /dev/sd[abc]1
+
+    # this only works on 2.6 kernels, and only for RAID levels of 1 and above.
+    # for other MD arrays, you need to specify --update explicitly:
+    mdadm --assemble --update=super-minor /dev/md4 /dev/sd[abc]1
+
+    # see also item 12 in the FAQ contained with the Debian package.
+
+ -- martin f. krafft <madduck@debian.org>  Fri, 06 Oct 2006 15:39:58 +0200

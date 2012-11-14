@@ -1,0 +1,586 @@
+Frequently asked questions -- Debian mdadm
+==========================================
+
+Also see /usr/share/doc/mdadm/README.recipes.gz .
+
+The latest version of this FAQ is available here:
+  http://git.debian.org/?p=pkg-mdadm/mdadm.git;a=blob;f=debian/FAQ;hb=HEAD
+
+0. What does MD stand for?
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+  MD is an abbreviation for "multiple device" (also often called "multi-
+  disk"). The Linux MD implementation implements various strategies for
+  combining multiple physical devices into single logical ones. The most
+  common use case is commonly known as "Software RAID". Linux supports RAID
+  levels 1, 4, 5, 6, and 10, as well as the "pseudo-redundant" RAID level 0.
+  In addition, the MD implementation covers linear and multipath
+  configurations.
+
+  Most people refer to MD as RAID. Since the original name of the RAID
+  configuration software is "md"adm, I chose to use MD consistently instead.
+
+1. How do I overwrite ("zero") the superblock?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  mdadm --zero-superblock /dev/mdX
+
+  Note that this is a destructive operation. It does not actually delete any
+  data, but the device will have lost its "authority". You cannot assemble the
+  array with it anymore, and if you add the device to another array, the
+  synchronisation process *will* *overwrite* all data on the device.
+
+  Nevertheless, sometimes it is necessary to zero the superblock:
+
+  - If you are reusing a disk that has been part of an array with an different
+    superblock version and/or location. In this case you zero the superblock
+    before you assemble the array, or add the device to an array.
+
+  - If you are trying to prevent a device from being recognised as part of an
+    array. Say for instance you are trying to change an array spanning sd[ab]1
+    to sd[bc]1 (maybe because sda is failing or too slow), then automatic
+    (scan) assembly will still recognise sda1 as a valid device. You can limit
+    the devices to scan with the DEVICE keyword in the configuration file, but
+    this may not be what you want. Instead, zeroing the superblock will
+    (permanently) prevent a device from being considered as part of an array.
+
+2. How do I change the preferred minor of an MD array (RAID)?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  See item 12 in /usr/share/doc/mdadm/README.recipes.gz and read the mdadm
+  manpage (search for 'preferred').
+
+3. How does mdadm determine which /dev/mdX or /dev/md/X to use?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  The logic used by mdadm to determine the device node name in the mdadm
+  --examine output (which is used to generate mdadm.conf) depends on several
+  factors. Here's how mdadm determines it:
+
+  It first checks the superblock version of a given array (or each array in
+  turn when iterating all of them). Run
+
+    mdadm --detail /dev/mdX | sed -ne 's,.*Version : ,,p'
+
+  to determine the superblock version of a running array, or
+
+    mdadm --examine /dev/sdXY | sed -ne 's,.*Version : ,,p'
+
+  to determine the superblock version from a component device of an array.
+
+  Version 0 superblocks (00.90.XX)
+  ''''''''''''''''''''''''''''''''
+    You need to know the preferred minor number stored in the superblock,
+    so run either of
+
+      mdadm --detail /dev/mdX | sed -ne 's,.*Preferred Minor : ,,p'
+      mdadm --examine /dev/sdXY | sed -ne 's,.*Preferred Minor : ,,p'
+
+    Let's call the resulting number MINOR. Also see FAQ 2 further up.
+
+    Given MINOR, mdadm will output /dev/md<MINOR> if the device node
+    /dev/md<MINOR> exists.
+    Otherwise, it outputs /dev/md/<MINOR>
+
+  Version 1 superblocks (01.XX.XX)
+  ''''''''''''''''''''''''''''''''
+    Version 1 superblocks actually seem to ignore preferred minors and instead
+    use the value of the name field in the superblock. Unless specified
+    explicitly during creation (-N|--name) the name is determined from the
+    device name used, using the following regexp: 's,/dev/md/?(.*),$1,', thus:
+
+      /dev/md0     -> 0
+      /dev/md/0    -> 0
+      /dev/md_d0   -> _d0 (d0 in later versions)
+      /dev/md/d0   -> d0
+      /dev/md/name -> name
+      (/dev/name does not seem to work)
+
+    mdadm will append the name to '/dev/md/', so it will always output device
+    names under the /dev/md/ directory. Newer versions can create a symlink
+    from /dev/mdX. See the symlinks option in mdadm.con(5) and mdadm(8).
+
+    If you want to change the name, you can do so during assembly:
+
+      mdadm -A -U name -N newname /dev/mdX /dev/sd[abc]X
+
+    I know this all sounds inconsistent and upstream has some work to do.
+    We're on it.
+
+4. Which RAID level should I use?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Please read /usr/share/doc/mdadm/RAID5_versus_RAID10.txt.gz .
+
+  Many people seem to prefer RAID4/5/6 because it makes more efficient use of
+  space. For example, if you have disks of size X, then in order to get 2X
+  storage, you need 3 disks for RAID5, but 4 if you use RAID10 or RAID1+0 (or
+  RAID6).
+
+  This gain in usable space comes at a price: performance; RAID1/10 can be up
+  to four times faster than RAID4/5/6.
+
+  At the same time, however, RAID4/5/6 provide somewhat better redundancy in
+  the event of two failing disks. In a RAID10 configuration, if one disk is
+  already dead, the RAID can only survive if any of the two disks in the other
+  RAID1 array fails, but not if the second disk in the degraded RAID1 array
+  fails (see next item, 4b). A RAID6 across four disks can cope with any two
+  disks failing. However, RAID6 is noticeably slower than RAID5. RAID5 and
+  RAID4 do not differ much, but can only handle single-disk failures.
+
+  If you can afford the extra disks (storage *is* cheap these days), I suggest
+  RAID1/10 over RAID4/5/6. If you don't care about performance but need as
+  much space as possible, go with RAID4/5/6, but make sure to have backups.
+  Heck, make sure to have backups whatever you do.
+
+  Let it be said, however, that I thoroughly regret putting my primary
+  workstation on RAID5. Anything disk-intensive brings the system to its
+  knees; I will have to migrate to RAID10 at one point.
+
+4b. Can a 4-disk RAID10 survive two disk failures?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  I am assuming that you are talking about a setup with two copies of each
+  block, so --layout=near2/far2/offset2:
+
+  In two thirds of the cases, yes[0], and it does not matter which layout you
+  use. When you assemble 4 disks into a RAID10, you essentially stripe a RAID0
+  across two RAID1, so the four disks A,B,C,D become two pairs: A,B and C,D.
+  If A fails, the RAID10 can only survive if the second failing disk is either
+  C or D; If B fails, your array is dead.
+
+  Thus, if you see a disk failing, replace it as soon as possible!
+
+  If you need to handle two failing disks out of a set of four, you have to
+  use RAID6, or store more than two copies of each block (see the --layout
+  option in the mdadm(8) manpage).
+
+  See also question 18 further down.
+
+  0. it's actually (n-2)/(n-1), where n is the number of disks. I am not
+     a mathematician, see http://aput.net/~jheiss/raid10/, which gives the
+     chance of *failure* as 1/(n-1), so the chance of success is 1-1/(n-1), or
+     (n-2)/(n-1), or 2/3 in the four disk example.
+     (Thanks to Per Olofsson for clarifying this in #493577).
+
+5. How to convert RAID5 to RAID10?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  To convert RAID5 to RAID10, you need a spare disk (either a spare, forth
+  disk in the array, or a new one). Then you remove the spare and one of the
+  three disks from the RAID5, create a degraded RAID10 across them, create
+  the filesystem and copy the data (or do a raw copy), then add the other two
+  disks to the new RAID10. However, mdadm cannot assemble a RAID10 with 50%
+  missing devices the way you might like it:
+
+    mdadm --create -l 10 -n4 -pn2 /dev/md1 /dev/sd[cd] missing missing
+
+  For reasons that may be answered by question 20 further down, mdadm actually
+  cares about the order of devices you give it. If you intersperse the missing
+  keywords with the physical drives, it should work:
+
+    mdadm --create -l 10 -n4 -pn2 /dev/md1 /dev/sdc missing /dev/sdd missing
+
+  or even
+
+    mdadm --create -l 10 -n4 -pn2 /dev/md1 missing /dev/sd[cd] missing
+
+  Also see item (4b) further up, and this thread:
+    http://marc.theaimsgroup.com/?l=linux-raid&m=116004333406395&w=2
+
+6. What is the difference between RAID1+0 and RAID10?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  RAID1+0 is a form of RAID in which a RAID0 is striped across two RAID1
+  arrays. To assemble it, you create two RAID1 arrays and then create a RAID0
+  array with the two md arrays.
+
+  The Linux kernel provides the RAID10 level to do pretty much exactly the
+  same for you, but with greater flexibility (and somewhat improved
+  performance). While RAID1+0 makes sense with 4 disks, RAID10 can be
+  configured to work with only 3 disks. Also, RAID10 has a little less
+  overhead than RAID1+0, which has data pass the md layer twice.
+
+  I prefer RAID10 over RAID1+0.
+
+6b. What's the difference between RAID1+0 and RAID0+1?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  In short: RAID1+0 concatenates two mirrored arrays while RAID0+1 mirrors two
+  concatenated arrays. However, the two are also often switched.
+
+  The linux MD driver supports RAID10, which is equivalent to the above
+  RAID1+0 definition.
+
+  RAID1+0/10 has a greater chance to survive two disk failures, its
+  performance suffers less when in degraded state, and it resyncs faster after
+  replacing a failed disk.
+
+  See http://aput.net/~jheiss/raid10/ for more details.
+
+7. Which RAID10 layout scheme should I use
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  RAID10 gives you the choice between three ways of laying out the blocks on
+  the disk. Assuming a simple 4 drive setup with 2 copies of each block, then
+  if A,B,C are data blocks, a,b their parts, and 1,2 denote their copies, the
+  following would be a classic RAID1+0 where 1,2 and 3,4 are RAID0 pairs
+  combined into a RAID1:
+
+  near=2 would be (this is the classic RAID1+0)
+
+    hdd1  Aa1 Ba1 Ca1
+    hdd2  Aa2 Ba2 Ca2
+    hdd3  Ab1 Bb1 Cb1
+    hdd4  Ab2 Bb2 Cb2
+
+  offset=2 would be
+
+    hdd1  Aa1 Bb2 Ca1 Db2
+    hdd2  Ab1 Aa2 Cb1 Ca2
+    hdd3  Ba1 Ab2 Da1 Cb2
+    hdd4  Bb1 Ba2 Db1 Da2
+
+  far=2 would be
+
+    hdd1  Aa1 Ca1  .... Bb2 Db2
+    hdd2  Ab1 Cb1  .... Aa2 Ca2
+    hdd3  Ba1 Da1  .... Ab2 Cb2
+    hdd4  Bb1 Db1  .... Ba2 Da2
+
+  Where the second set start half-way through the drives.
+
+  The advantage of far= is that you can easily spread a long sequential read
+  across the drives.  The cost is more seeking for writes. offset= can
+  possibly get similar benefits with large enough chunk size. Neither upstream
+  nor the package maintainer have tried to understand all the implications of
+  that layout. It was added simply because it is a supported layout in DDF and
+  DDF support is a goal.
+
+8. (One of) my RAID arrays is busy and cannot be stopped. What gives?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  It is perfectly normal for mdadm to report the array with the root
+  filesystem to be busy on shutdown. The reason for this is that the root
+  filesystem must be mounted to be able to stop the array (or otherwise
+  /sbin/mdadm does not exist), but to stop the array, the root filesystem
+  cannot be mounted. Catch 22. The kernel actually stops the array just before
+  halting, so it's all well.
+
+  If mdadm cannot stop other arrays on your system, check that these arrays
+  aren't used anymore. Common causes for busy/locked arrays are:
+
+    * The array contains a mounted filesystem (check the `mount' output)
+    * The array is used as a swap backend (check /proc/swaps)
+    * The array is used by the device-mapper (check with `dmsetup')
+      * LVM
+      * dm-crypt
+      * EVMS
+    * The array contains a swap partition used for suspend-to-ram
+      (check /etc/initramfs-tools/conf.d/resume)
+    * The array is used by a process (check with `lsof')
+
+9. Should I use RAID0 (or linear)?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  No. Unless you know what you're doing and keep backups, or use it for data
+  that can be lost.
+
+9b. Why not?
+~~~~~~~~~~~~
+  RAID0 has zero redundancy. If you stripe a RAID0 across X disks, you
+  increase the likelyhood of complete loss of the filesystem by a factor of X.
+
+  The same applies to LVM by the way.
+
+  If you want/must used LVM or RAID0, stripe it across RAID1 arrays
+  (RAID10/RAID1+0, or LVM on RAID1), and keep backups!
+
+10. Can I cancel a running array check (checkarray)?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  See the -x option in the `/usr/share/mdadm/checkarray --help` output.
+
+11. mdadm warns about duplicate/similar superblocks; what gives?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  In certain configurations, especially if your last partition extends all the
+  way to the end of the disk, mdadm may display a warning like:
+
+    mdadm: WARNING /dev/hdc3 and /dev/hdc appear to have very similar
+    superblocks. If they are really different, please --zero the superblock on
+    one. If they are the same or overlap, please remove one from the DEVICE
+    list in mdadm.conf.
+
+  There are two ways to solve this:
+
+  (a) recreate the arrays with version-1 superblocks, which is not always an
+      option -- you cannot yet upgrade version-0 to version-1 superblocks for
+      existing arrays.
+
+  (b) instead of 'DEVICE partitions', list exactly those devices that are
+      components of MD arrays on your system. So in the above example:
+
+        - DEVICE partitions
+        + DEVICE /dev/hd[ab]* /dev/hdc[123]
+
+12. mdadm -E / mkconf report different arrays with the same device
+    name / minor number. What gives?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  In almost all cases, mdadm updates the super-minor field in an array's
+  superblock when assembling the array. It does *not* do this for RAID0
+  arrays. Thus, you may end up seeing something like this when you run
+  mdadm -E or mkconf:
+
+    ARRAY /dev/md0 level=raid0 num-devices=2 UUID=abcd...
+    ARRAY /dev/md0 level=raid1 num-devices=2 UUID=dcba...
+
+  Note how the two arrays have different UUIDs but both appear as /dev/md0.
+
+  The solution in this case is to explicitly tell mdadm to update the
+  superblock of the RAID0 array. Assuming that the RAID0 array in the above
+  example should really be /dev/md1:
+
+    mdadm --stop /dev/md1
+    mdadm --assemble --update=super-minor --uuid=abcd... /dev/md1
+
+  See question 2 of this FAQ, and also http://bugs.debian.org/386315 and
+  recipe #12 in README.recipes .
+
+13. Can a MD array be partitioned?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Since kernel 2.6.28, MD arrays can be partitioned like any other block
+  device.
+
+  Prior to 2.6.28, for a MD array to be able to hold partitions, it must be
+  created as a "partitionable array", using the configuration auto=part on the
+  command line or in the configuration file, or by using the standard naming
+  scheme (md_d* or md/d*) for partitionable arrays:
+
+    mdadm --create --auto=yes ... /dev/md_d0 ...
+    # see mdadm(8) manpage about the values of the --auto keyword
+
+14. When would I partition an array?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  This answer by Doug Ledford is shamelessly adapted from [0] (with
+  permission):
+
+    First, not all MD types make sense to be split up, e.g. multipath. For
+    those types, when a disk fails, the *entire* disk is considered to have
+    failed, but with different arrays you won't switch over to the next path
+    until each MD array has attempted to access the bad path. This can have
+    obvious bad consequences for certain array types that do automatic
+    failover from one port to another (you can end up getting the array in
+    a loop of switching ports repeatedly to satisfy the fact that one array
+    failed over during a path down, then the path came back up, and another
+    array stayed on the old path because it didn't send any commands during
+    the path down time period).
+
+    Second, convenience. Assume you have a 6 disk RAID5 array. If a disk
+    fails and you are using a partitioned MD array, then all the partitions on
+    the disk will already be handled without using that disk. No need to
+    manually fail any still active array members from other arrays.
+
+    Third, safety. Again with the raid5 array. If you use multiple arrays on
+    a single disk, and that disk fails, but it only failed on one array, then
+    you now need to manually fail that disk from the other arrays before
+    shutting down or hot swapping the disk. Generally speaking, that's not
+    a big deal, but people do occasionally have fat finger syndrome and this
+    is a good opportunity for someone to accidentally fail the wrong disk, and
+    when you then go to remove the disk you create a two disk failure instead
+    of one and now you are in real trouble.
+
+    Forth, to respond to what you wrote about independent of each other --
+    part of the reason why you partition. I would argue that's not true. If
+    your goal is to salvage as much use from a failing disk as possible, then
+    OK. But, generally speaking, people that have something of value on their
+    disks don't want to salvage any part of a failing disk, they want that
+    disk gone and replaced immediately. There simply is little to no value in
+    an already malfunctioning disk. They're too cheap and the data stored on
+    them too valuable to risk loosing something in an effort to further
+    utilize broken hardware. This of course is written with the understanding
+    that the latest MD RAID code will do read error rewrites to compensate for
+    minor disk issues, so anything that will throw a disk out of an array is
+    more than just a minor sector glitch.
+
+  0. http://marc.theaimsgroup.com/?l=linux-raid&m=116117813315590&w=2
+
+15. How can I start a dirty degraded array?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  A degraded array (e.g. a RAID5 with only two disks) that has not been
+  properly stopped cannot be assembled just like that; mdadm will refuse and
+  complain about a "dirty degraded array", for good reasons.
+
+  The solution might be to force-assemble it, and then to start it. Please see
+  recipes 4 and 4b of /usr/share/doc/mdadm/README.recipes.gz and make sure you
+  know what you're doing.
+
+16. How can I influence the speed with which an array is resynchronised?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  For each array, the MD subsystem exports parameters governing the
+  synchronisation speed via sysfs. The values are in kB/sec.
+
+    /sys/block/mdX/md/sync_speed     -- the current speed
+    /sys/block/mdX/md/sync_speed_max -- the maximum speed
+    /sys/block/mdX/md/sync_speed_min -- the guaranteed minimum speed
+
+17. When I create a new array, why does it resynchronise at first?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  See the mdadm(8) manpage:
+    When creating a RAID5 array, mdadm will automatically create a degraded
+    array with an extra spare drive. This is because building the spare into
+    a degraded array is in general faster than resyncing the parity on
+    a non-degraded, but not clean, array. This feature can be over-ridden with
+    the --force option.
+
+  This also applies to RAID levels 4 and 6.
+
+  It does not make much sense for RAID levels 1 and 10 and can thus be
+  overridden with the --force and --assume-clean options, but it is not
+  recommended. Read the manpage.
+
+18. How many failed disks can a RAID10 handle?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  (see also question 4b)
+
+  The following table shows how many disks you can lose and still have an
+  operational array. In some cases, you *can* lose more than the given number
+  of disks, but there is no guarantee that the array survives. Thus, the
+  following is the guaranteed number of failed disks a RAID10 array survives
+  and the maximum number of failed disks the array can (but is not guaranteed
+  to) handle, given the number of disks used and the number of data block
+  copies. Note that 2 copies means original + 1 copy. Thus, if you only have
+  one copy (the original), you cannot handle any failures.
+
+                  1            2            3            4    (# of copies)
+        1        0/0          0/0          0/0          0/0
+        2        0/0          1/1          1/1          1/1
+        3        0/0          1/1          2/2          2/2
+        4        0/0          1/2          2/2          3/3
+        5        0/0          1/2          2/2          3/3
+        6        0/0          1/3          2/3          3/3
+        7        0/0          1/3          2/3          3/3
+        8        0/0          1/4          2/3          3/4
+  (# of disks)
+
+  Note: I have not really verified the above information. Please don't count
+  on it. If a disk fails, replace it as soon as possible. Corrections welcome.
+
+19. What should I do if a disk fails?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Replace it as soon as possible:
+
+    mdadm --remove /dev/md0 /dev/sda1
+    halt
+    <replace disk and start the machine>
+    mdadm --add /dev/md0 /dev/sda1
+
+20. So how do I find out which other disk(s) can fail without killing the
+    array?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Did you read the previous question and its answer?
+
+  For cases when you have two copies of each block, the question is easily
+  answered by looking at the output of /proc/mdstat. For instance on a four
+  disk array:
+
+    md3 : active raid10 sdg7[3] sde7[0] sdh7[2] sdf7[1]
+
+  you know that sde7/sdf7 form one pair and sdg7/sgh7 the other.
+
+  If sdh now fails, this will become
+
+    md3 : active raid10 sdg7[3] sde7[0] sdh7[4](F) sdf7[1]
+
+  So now the second pair is broken; the array could take another failure in
+  the first pair, but if sdg now also fails, you're history.
+
+  Now go and read question 19.
+
+  For cases with more copies per block, it becomes more complicated. Let's
+  think of a seven disk array with three copies:
+
+    md5 : active raid10 sdg7[6] sde7[4] sdb7[5] sdf7[2] sda7[3] sdc7[1] sdd7[0]
+
+  Each mirror now has 7/3 = 2.33 disks to it, so in order to determine groups,
+  you need to round up. Note how the disks are arranged in increasing order of
+  their indices (the number in brackes in /proc/mdstat):
+
+  disk:     -sdd7-  -sdc7-  -sdf7-  -sda7-  -sde7-  -sdb7-  -sdg7-
+  group:    [      one       ][      two       ][     three      ]
+
+  Basically this means that after two disk failed, you need to make sure that
+  the third failed disk doesn't destroy all copies of any given block. And
+  that's not always easy as it depends on the layout chosen: whether the
+  blocks are near (same offset within each group), far (spread apart in a way
+  to maximise the mean distance), or offset (offset by size/n within each
+  block).
+
+  I'll leave it up to you to figure things out. Now go read question 19.
+
+21. Why does the kernel speak of 'resync' when using checkarray?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Please see README.checkarray and
+  http://www.mail-archive.com/linux-raid@vger.kernel.org/msg04835.html .
+
+  In short: it's a bug. checkarray is actually not a resync, but the kernel
+  does not distinguish between them.
+
+22. Can I prioritise the sync process and sync certain arrays before others?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Upon start, md will resynchronise any unclean arrays, starting in somewhat
+  random order. Sometimes it's desirable to sync e.g. /dev/md3 first (because
+  it's the most important), but while /dev/md1 is synchronising, /dev/md3 will
+  be DELAYED (see /proc/mdstat; only if they share the same physical
+  components.
+
+  It is possible to delay the synchronisation via /sys:
+
+    echo idle >/sys/block/md1/md/sync_action
+
+  This will cause md1 to go idle and md to synchronise md3 (or whatever is
+  queued next; repeat the above for other devices if necessary). md will also
+  realise that md1 is still not in sync and queue it for resynchronisation,
+  so it will sync automatically when its turn has come.
+
+23. mdadm's init script fails because it cannot find any arrays. What gives?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  If you don't have any arrays on your system, then mdadm's init script will
+  fail to assemble them and print a warning. If you don't like that, disable
+  AUTOSTART in /etc/default/mdadm.
+
+24. What happened to mdrun? How do I replace it?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  mdrun used to be the sledgehammer approach to assembling arrays. It has
+  accumulated several problems over the years (e.g. #354705) and thus has been
+  deprecated and removed with the 2.6.7-2 version of this package.
+
+  If you are still using mdrun, please ensure that you have a valid
+  /etc/mdadm/mdadm.conf file (run /usr/share/mdadm/mkconf --generate to get
+  one), and run
+
+    mdadm --assemble --scan --auto=yes
+
+  instead of mdrun.
+
+  Or make use of /usr/share/mdadm/startall .
+
+25. Why are my arrays marked auto-read-only in /proc/mdstat?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Arrays are kept read-only until the first write occurs. This allows md to
+  skip lengthy resynchronisation for arrays that have not been properly shut
+  down, but which also not have changed.
+
+26. Why doesn't mdadm find arrays specified in the config file and causes the
+    boot to fail?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  My boot process dies at an early stage and drops me into the busybox shell.
+  The last relevant output seems to be from mdadm and is something like
+
+    "/dev/md2 does not exist"
+
+  or
+
+    "No devices listed in conf file found"
+
+  Why does mdadm break my system?
+
+  Short answer: It doesn't, the underlying devices aren't yet available yet
+  when mdadm runs during the early boot process.
+
+  Long answer: It doesn't. but the drivers of those devices incorrectly
+  communicate to the kernel that the devices are ready, when in fact they are
+  not. I consider this a bug in those drivers. Please consider reporting it.
+
+  Workaround: there is nothing mdadm can or will do against this. Fortunately
+  though, initramfs provides a method, documented at
+  http://wiki.debian.org/InitramfsDebug. Please append rootdelay=10 to the
+  kernel command line and try if the boot now works.
+
+ -- martin f. krafft <madduck@debian.org>  Wed, 13 May 2009 09:59:53 +0200
