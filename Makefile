@@ -41,7 +41,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
 	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 rtmpdump \
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml \
-	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus
+	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
+	gnome-icon-theme gnome-icon-theme-symbolic
 
 SPREZZ:=packaging
 
@@ -195,7 +196,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) $(EXO) \
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
-	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS)
+	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) \
+	$(GNOMEICONTHEME)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -719,6 +721,14 @@ $(GNOMEFONTVIEWER): $(SPREZZ)/gnome-font-viewer/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf gnome-font-viewer_$(gnome-font-viewer_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: gnome-icon-theme
+gnome-icon-theme:$(GNOMEICONTHEME)_$(ARCH).deb
+$(GNOMEICONTHEME): $(SPREZZ)/gnome-icon-theme/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-icon-theme_$(gnome-icon-theme_UPVER).orig.tar.xz --strip-components=1 -C $@
+
 .PHONY: gnome-icon-theme-extras
 gnome-icon-theme-extras:$(GNOMEICONTHEMEEXTRAS)_$(ARCH).deb
 $(GNOMEICONTHEMEEXTRAS): $(SPREZZ)/gnome-icon-theme-extras/debian/changelog
@@ -726,6 +736,14 @@ $(GNOMEICONTHEMEEXTRAS): $(SPREZZ)/gnome-icon-theme-extras/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-icon-theme-extras_$(gnome-icon-theme-extras_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-icon-theme-symbolic
+gnome-icon-theme-symbolic:$(GNOMEICONTHEMESYMBOLIC)_$(ARCH).deb
+$(GNOMEICONTHEMESYMBOLIC): $(SPREZZ)/gnome-icon-theme-symbolic/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-icon-theme-symbolic_$(gnome-icon-theme-symbolic_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-keyring
 gnome-keyring:$(GNOMEKEYRING)_$(ARCH).deb
@@ -2300,7 +2318,7 @@ clean:
 	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
 	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
-	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS)
+	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) $(GNOMEICONTHEME)
 
 clobber:
 	rm -rf $(FETCHED)
