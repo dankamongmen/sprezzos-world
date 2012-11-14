@@ -1133,7 +1133,7 @@ $(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf libwnck-$(libwnck_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf libwnck3-$(libwnck_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: libx86
 libx86:$(LIBX86)_$(ARCH).deb
