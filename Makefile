@@ -32,7 +32,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
 	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
 	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
-	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey eio \
+	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey eio exo \
 	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment eet gdl \
 	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
 	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
@@ -193,7 +193,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) $(BLUEZ) \
 	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
-	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) \
+	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) $(EXO) \
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -1078,6 +1078,14 @@ $(EXACTIMAGE): $(SPREZZ)/exactimage/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf exactimage_$(exactimage_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
+.PHONY: exo
+exo:$(EXO)_$(ARCH).deb
+$(EXO): $(SPREZZ)/exo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf exo-$(exo_UPVER).tar.bz2 --strip-components=1 -C $@
+
 .PHONY: libgphoto2
 libgphoto2:$(LIBGPHOTO2)_$(ARCH).deb
 $(LIBGPHOTO2): $(SPREZZ)/libgphoto2/debian/changelog
@@ -1470,7 +1478,7 @@ $(XFCE4TERMINAL): $(SPREZZ)/xfce4-terminal/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf xfce4-terminal_$(xfce4-terminal_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+	tar xjvf Terminal-$(xfce4-terminal_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: xinput
 xinput:$(XINPUT)_$(ARCH).deb
@@ -2203,7 +2211,7 @@ clean:
 	rm -rf $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(SHOTWELL) $(WEBKIT)
 	rm -rf $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(GNOMEDICTIONARY)
 	rm -rf $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(GNOMEDISKUTILITY) $(NETCF)
-	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2)
+	rm -rf $(GNOMEDOCUTILS) $(LIBVIRT) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) $(EXO)
 	rm -rf $(NVIDIACUDATOOLKIT) $(RAZORQT) $(PCRE) $(ZEROFREE) $(GSTREAMER) $(GHEX)
 	rm -rf $(ZENITY) $(AUTOKEY) $(METACITY) $(GRILO) $(LCMS2) $(COLORD) $(ECORE)
 	rm -rf $(COLORDGTK) $(TELEPATHYGLIB) $(ENLIGHTENMENT) $(EINA) $(EET) $(EVAS)
