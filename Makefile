@@ -41,7 +41,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez \
 	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 rtmpdump \
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml \
-	gnome-online-accounts pygobject yelp-tools
+	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras
 
 SPREZZ:=packaging
 
@@ -718,6 +718,14 @@ $(GNOMEFONTVIEWER): $(SPREZZ)/gnome-font-viewer/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-font-viewer_$(gnome-font-viewer_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-icon-theme-extras
+gnome-icon-theme-extras:$(GNOMEICONTHEMEEXTRAS)_$(ARCH).deb
+$(GNOMEICONTHEMEEXTRAS): $(SPREZZ)/gnome-icon-theme-extras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-icon-theme-extras_$(gnome-icon-theme-extras_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-keyring
 gnome-keyring:$(GNOMEKEYRING)_$(ARCH).deb
@@ -2284,6 +2292,7 @@ clean:
 	rm -rf $(GNOMESESSION) $(GNOMEBLUETOOTH) $(NAUTILUSSENDTO) $(LIBGNOMEKEYRING)
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
 	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
+	rm -rf $(GNOMEICONTHEMEEXTRAS)
 
 clobber:
 	rm -rf $(FETCHED)
