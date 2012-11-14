@@ -1,0 +1,141 @@
+<html><head><title>HTB FAQ</title></head>
+<body>
+<h1><center>HTB FAQ</center></h1>
+<center><address>
+Martin Devera aka devik (devik@cdi.cz)<br>
+Last updated: 7.7.2003
+</address></center>
+<br>
+<b>How to set single HTB up for more interfaces or for incoming packets</b>
+<p>
+You need IMQ for this because all qdisc can handle only outgoing
+traffic on single interface. See 
+<a href="http://www.linuximq.net/">http://www.linuximq.net/</a>.
+<p>
+<b>When HTB is used on machine with Apache (FTP, Samba, ...) server running
+   then downloading from it can't be limited precisely</b>
+<p>
+Try to add PFIFO with limit 10 under HTB classes. When you use default
+(much larger PFIFO) or SFQ then TCP stack will back off itself as it
+see too large memory used for outgoing packets. You can also play
+with /proc/sys/net/ipv4/tcp_wmem.
+<p>
+<b>"HTB: mindelay=500, report it please !" messages in syslog</b>
+<p>
+This means that all indicated that some class should be ready
+soon but when we looked for it we haven't found one which will
+be ready in 5 seconds.
+<br>
+After this message you can see lines like
+<pre>
+kernel: htb*g j=154480191
+kernel: htb*r7 m=0
+kernel: htb*r6 m=0
+kernel: htb*r5 m=0
+kernel: htb*r4 m=0
+kernel: htb*r3 m=0
+kernel: htb*r2 m=0
+kernel: htb*r1 m=0
+kernel: htb*r0 m=0
+kernel: htb*c20110 m=2 t=636487 c=17888 pq=0 df=483328 ql=0 pa=0 f:
+kernel: htb*c20220 m=1 t=-59999999 c=42404 pq=154487461 df=450560 ql=14 pa=40 f:
+kernel: htb*c20001 m=2 t=5131 c=6439 pq=0 df=8192 ql=0 pa=0 f:
+</pre>
+If you decide to treat is as real bug then I'll need all of these. They
+are logged under kernel.debug facility so often you need to add it so
+your syslog.conf. These "htb*" are dump of internal state of all classes.
+c20110 means class 2:110. *r lines are states of row activity bitsmasks.
+*c indicates stet of all classes. You are interested in classes
+with m=1 resp. m=0. These will become ready after time -c resp. -t whatever
+is negative and smaller.
+It is 59999999 us for class 2:110 above which is 59sec. It is way too much
+and HTB will spill that error because it is &gt; 5 sec.
+<p>
+<i>So what is the problem ?</i> Probably you have too small rate or ceil
+for such class - you should use at least 4kbit for realiable operation
+of HTB - it leads to max 3sec of delay for 1500 byte packets which seems
+as reasonable value.
+<br>
+Also try <a href=v3/htb_3.7_delay_bug.patch>this</a> patch against 2.4.20.
+(works against older too with one reject). It increases timeout to
+10secs and makes errors more readable. 
+<i>I'm interested in your experiences (good or bad) with the patch !</i>
+<br>
+If you think it is not the case and you still get weird errors, contact
+me with syslog data above and output of commands
+<pre>
+tc -s -d qdisc
+tc -s -d class show dev your_htb_device1_here
+tc -s -d class show dev your_htb_device2_here
+...
+</pre>
+
+<p>
+<b>Why HTB sharing setup works with eth0 but on lo (loopback) 
+	it exhibits weird rates ?
+</b>
+<p>Try to execute 
+<pre>
+ifconfig lo mtu 1500
+</pre>
+or use parameter mtu 16400 on "tc qdisc add" line. It is because
+HTB reserves rate table for 1500 bytes long packets and loopback
+uses 16384 as default.
+<p>
+<b>What's difference between kbps and kbit ?
+</b>
+<p>
+1kbps=8kbit. Don't forget it !
+<p>
+<b>What if sum of child rates is smaller than parent rate ?
+</b>
+<p>
+It is like if you create unused child with remaining rate - the
+rate difference is divided between other children.
+<p>
+<b>What if sum of child rates is greater than parent rate ?
+</b>
+<p>
+Then interesting things can happen. Total rate delivered
+by children can be higher that parent's rate (thus its rate
+is not respected). However when sum of actual child rates are
+under parent's rate then borrowing will occur like in regular case.
+<p>
+I use setup with 4 classes, parent has rate=ceil=6kbps, child
+"mail" has rate=1kbps ceil=4kbps, "web" has rate=ceil=15kbps
+and "other" has rate=2kbps ceil=4kbps.
+HTB is attached to an PPP interface with compressed multilink pair
+of modems which can go from 6kbps to cca 16kbps (depends on compresability
+of data). When "web" traffic is present it can go as high as compression
+allows while still allowing mail 1kbps and other 2kbps.
+<br>
+When "web" traffic is smaller than 6kbps then "mail" and "other" 
+can borrow more bw up to 4k each.
+Parent's class it not set to 18k because then "mail" and "other"
+could get as much as 8k which is more that link's minimum and
+would saturate the link. Thus I set parent to 6k so that 
+"mail"+"other" are limited to 6k while "web" can go over.
+<p>
+You can do similar setup by using one more class and deeper hierarchy
+but this is just to show you the possibility.
+<p>
+<b>"RTNETLINK answers: Invalid argument" and tc parameters are correct
+</b>
+<p>
+Probably you use tc tool not suited for HTB in kernel. Reread
+main HTB page section Downloads.
+<p>
+<b>All packets are dropped when "default" is set to nonleaf
+</b>
+<p>
+Yes. Default kwyword must point to leaf or be 0 (so unclassified
+packets go thru directly). If you want to "direct" other packets
+to non-leaf do it by catch all filter with the largest "pref".
+<p>
+<b>What tool was used to create graphs in HTB manual ?
+</b>
+<p>
+It is proprietary tool called ethloop 
+(<a href=http://luxik.cdi.cz/~devik/qos/ethloop/>luxik.cdi.cz/~devik/qos/ethloop/</a>).
+
+</body></html>
