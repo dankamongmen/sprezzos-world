@@ -1667,7 +1667,7 @@ $(XINPUT): $(SPREZZ)/xinput/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf xinput_$(xinput_UPVER).orig.tar.gz --strip-components=1 -C $@
+	tar xzvf xinput-$(xinput_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: xorg-xserver
 xorg-xserver:$(XORGXSERVER)_$(ARCH).deb
@@ -1675,7 +1675,7 @@ $(XORGXSERVER): $(SPREZZ)/xorg-xserver/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf xorg-xserver_$(xorg-xserver_UPVER).orig.tar.gz --strip-components=1 -C $@
+	tar xzvf xorg-server-$(xorg-xserver_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: udisks
 udisks:$(UDISKS)_$(ARCH).deb
