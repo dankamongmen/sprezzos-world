@@ -43,7 +43,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml iproute \
 	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
-	ratpoison ghostscript jbig2dec cups
+	ratpoison ghostscript jbig2dec cups libgd2 xserver-xorg
 
 SPREZZ:=packaging
 
@@ -199,7 +199,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
 	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) \
 	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) \
-	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS)
+	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XSERVERXORG)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1203,6 +1203,14 @@ $(EXO): $(SPREZZ)/exo/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf exo-$(exo_UPVER).tar.bz2 --strip-components=1 -C $@
 
+.PHONY: libgd2
+libgd2:$(LIBGD2)_$(ARCH).deb
+$(LIBGD2): $(SPREZZ)/libgd2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf libgd2-$(libgd2_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: libgphoto2
 libgphoto2:$(LIBGPHOTO2)_$(ARCH).deb
 $(LIBGPHOTO2): $(SPREZZ)/libgphoto2/debian/changelog
@@ -1660,6 +1668,14 @@ $(XINPUT): $(SPREZZ)/xinput/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf xinput_$(xinput_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: xserver-xorg
+xserver-xorg:$(XSERVERXORG)_$(ARCH).deb
+$(XSERVERXORG): $(SPREZZ)/xserver-xorg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xserver-xorg_$(xserver-xorg_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: udisks
 udisks:$(UDISKS)_$(ARCH).deb
@@ -2410,7 +2426,7 @@ clean:
 	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
 	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) $(GNOMEICONTHEME)
 	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(GIMP) $(ZSH) $(BASH) $(RATPOISON)
-	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS)
+	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER)
 
 clobber:
 	rm -rf $(FETCHED)
