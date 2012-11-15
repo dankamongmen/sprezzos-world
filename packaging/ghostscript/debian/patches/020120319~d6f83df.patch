@@ -1,0 +1,93 @@
+Description: work-around bugs in Brother printer CCITTFaxDecode filter
+ ps2write - work-around bugs in Brother printer CCITTFaxDecode filter
+ .
+ Raised on irc by Till Kamppeter, see Ubuntu bug :
+ .
+ https://bugs.launchpad.net/ubuntu/+source/cups/+bug/955553
+.
+ After much work by Chris Liddell and Bruce Stough it transpires that at
+ least some Brother printers have a bug in their CCITTFaxDecode filter,
+ especially with small amounts of data.
+ .
+ Since the ps2write otuput for bitmapped glyhs (which is required when
+ the input is a CIDFont) always uses the CCITTFax filter, this led to
+ corrupted output from the Brother (Note this is a bug in the *printer*
+ not ps2write)
+ .
+ This patch adds a new command line parameter 'NoT3CCITT' which disables
+ compression of bitmapped glyphs. It should only be used with printers
+ which have a problem with CCITTFax data, and in that case should also
+ be used with the EncodeMonoImages switch to disable compression of
+ monochrome images. Eg:
+ .
+ -dNoT3CCITT -dEncodeMonoImages=false
+Origin: http://git.ghostscript.com/?p=ghostpdl.git;a=commit;h=d6f83d
+Author: Ken Sharp <ken.sharp@artifex.com>
+Forwarded: yes
+Bug-Debian: http://bugs.debian.org/664966
+Last-Update: 2012-03-22
+
+--- a/base/gdevpdfb.c
++++ b/base/gdevpdfb.c
+@@ -293,16 +293,18 @@
+      * that would need to be passed.
+      */
+     if (pres) {
+-        /*
+-         * Always use CCITTFax 2-D for character bitmaps.  It takes less
+-         * space to invert the data with Decode than to set BlackIs1.
+-         */
+-        float d0 = image.Decode[0];
++        if (!pdev->NoT3CCITT) {
++            /*
++             * Always use CCITTFax 2-D for character bitmaps.  It takes less
++             * space to invert the data with Decode than to set BlackIs1.
++             */
++            float d0 = image.Decode[0];
+ 
+-        image.Decode[0] = image.Decode[1];
+-        image.Decode[1] = d0;
+-        psdf_CFE_binary(&writer.binary[0], image.Width, image.Height, true);
+-        invert ^= 0xff;
++            image.Decode[0] = image.Decode[1];
++            image.Decode[1] = d0;
++            psdf_CFE_binary(&writer.binary[0], image.Width, image.Height, true);
++            invert ^= 0xff;
++        }
+     } else {
+         /* Use the Distiller compression parameters. */
+         pdev->ParamCompatibilityLevel = pdev->CompatibilityLevel;
+--- a/base/gdevpdfb.h
++++ b/base/gdevpdfb.h
+@@ -266,5 +266,6 @@
+  PDF_FOR_OPDFREAD,		/* AllowPSRepeatFunctions */
+  true,				/* IsDistiller (true even for ps2write!) */
+  !PDF_FOR_OPDFREAD,		/* PreserveSMask */
+- !PDF_FOR_OPDFREAD		/* PreserveTrMode */
++ !PDF_FOR_OPDFREAD,		/* PreserveTrMode */
++ false                          /* NoT3CCITT */
+ };
+--- a/base/gdevpdfp.c
++++ b/base/gdevpdfp.c
+@@ -121,6 +121,7 @@
+     pi("IsDistiller", gs_param_type_bool, IsDistiller),
+     pi("PreserveSMask", gs_param_type_bool, PreserveSMask),
+     pi("PreserveTrMode", gs_param_type_bool, PreserveTrMode),
++    pi("NoT3CCITT", gs_param_type_bool, NoT3CCITT),
+ #undef pi
+     gs_param_item_end
+ };
+--- a/base/gdevpdfx.h
++++ b/base/gdevpdfx.h
+@@ -704,6 +704,11 @@
+     bool IsDistiller;
+     bool PreserveSMask;
+     bool PreserveTrMode;
++    bool NoT3CCITT;                 /* A bug in Brother printers causes CCITTFaxDecode
++                                     * to fail, especially with small amounts of data.
++                                     * This parameter is present only to allow
++                                     * ps2write output to work on those pritners.
++                                     */
+ };
+ 
+ #define is_in_page(pdev)\

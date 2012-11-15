@@ -43,7 +43,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml iproute \
 	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
-	ratpoison
+	ratpoison ghostscript
 
 SPREZZ:=packaging
 
@@ -199,7 +199,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
 	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) \
 	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) \
-	$(RATPOISON)
+	$(RATPOISON) $(GHOSTSCRIPT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -674,6 +674,14 @@ $(GHEX): $(SPREZZ)/ghex/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf ghex-$(ghex_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: ghostscript
+ghostscript:$(GHOSTSCRIPT)_$(ARCH).deb
+$(GHOSTSCRIPT): $(SPREZZ)/ghostscript/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf ghostscript-$(ghostscript_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: gimp
 gimp:$(GIMP)_$(ARCH).deb
@@ -2386,6 +2394,7 @@ clean:
 	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
 	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) $(GNOMEICONTHEME)
 	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(GIMP) $(ZSH) $(BASH) $(RATPOISON)
+	rm -rf $(GHOSTSCRIPT)
 
 clobber:
 	rm -rf $(FETCHED)
