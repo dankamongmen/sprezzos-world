@@ -1,0 +1,367 @@
+#!/usr/bin/make -f
+# debian/rules for the Debian xorg-server package.
+# Copyright © 2004 Scott James Remnant <scott@netsplit.com>
+# Copyright © 2005 Daniel Stone <daniel@fooishbar.org>
+# Copyright © 2005 David Nusinow <dnusinow@debian.org>
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# Set up the $(STAMP_DIR) directory, and use it for quilt' stamp:
+STAMP_DIR     := stampdir
+QUILT_STAMPFN := $(STAMP_DIR)/patch
+$(STAMP_DIR)/stampdir:
+	mkdir $(STAMP_DIR)
+	>$@
+
+include /usr/share/quilt/quilt.make
+
+# we don't have a good way to check for dpkg-dev version, so use presence of
+# buildflags.mk as a substitute.
+ifneq (,$(wildcard /usr/share/dpkg/buildflags.mk))
+vars = $(shell DEB_BUILD_MAINT_OPTIONS="hardening=+pie" DEB_LDFLAGS_MAINT_APPEND="-Wl,-Bsymbolic" DEB_CPPFLAGS_MAINT_APPEND="-DPRE_RELEASE=0" dpkg-buildflags --export=configure)
+else
+CFLAGS = -Wall -g
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+CPPFLAGS = -DPRE_RELEASE=0
+vars = CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)"
+endif
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH_OS   ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build=$(DEB_HOST_GNU_TYPE)
+else
+	confflags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+# udeb is arch-dependent...
+ifneq (, $(filter %-udeb, $(shell dh_listpackages -s)))
+	udeb = yes
+endif
+
+# ...but let's support disabling it to speed up debug builds:
+ifneq (,$(filter noudeb,$(DEB_BUILD_OPTIONS)))
+	udeb =
+	DH_INSTALL_OPTIONS = -Nxserver-xorg-core-udeb
+endif
+
+
+ifeq ($(DEB_HOST_ARCH_OS), linux)
+	build_xfbdev = --enable-xfbdev
+	selinux = --enable-xselinux
+else
+	build_xfbdev = --disable-xfbdev
+	selinux = --disable-xselinux
+endif
+
+ifeq ($(DEB_HOST_ARCH_OS), hurd)
+	dri = --disable-dri --disable-dri2
+else
+	dri = --enable-dri --enable-dri2
+endif
+
+config_backend = --disable-config-dbus
+ifeq ($(DEB_HOST_ARCH_OS), linux)
+	config_backend += --enable-config-udev --disable-config-hal
+else ifeq ($(DEB_HOST_ARCH_OS), kfreebsd)
+	config_backend += --disable-config-udev
+	config_backend_main += --enable-config-hal
+	config_backend_udeb += --disable-config-hal
+else # hurd
+	config_backend += --disable-config-udev --disable-config-hal
+endif
+
+ifneq (,$(filter nocheck, $(DEB_BUILD_OPTIONS)))
+	config_tests = --disable-unit-tests
+else
+	config_tests = --enable-unit-tests
+endif
+
+INSTALL=/usr/bin/install
+
+VENDOR = $(shell lsb_release -i -s)
+
+SOURCE_NAME    :=  xorg-server
+SOURCE_VERSION := $(shell dpkg-parsechangelog | awk -F': ' '/^Version: / {print $$2}')
+BUILDER        := $(shell dpkg-parsechangelog | awk -F': ' '/^Maintainer: / {print $$2}')
+
+# disable-static is so we don't get libfoo.a for modules.  now if only we could
+# kill the .las.
+confflags += \
+	     --disable-silent-rules \
+	     --disable-static \
+	     --without-dtrace \
+	     --disable-strict-compilation \
+	     --disable-debug \
+	     $(config_tests) \
+	     --with-int10=x86emu \
+	     --with-os-vendor="$(VENDOR)" \
+	     --with-builderstring="$(SOURCE_NAME) $(SOURCE_VERSION) ($(BUILDER))" \
+	     --with-xkb-path=/usr/share/X11/xkb \
+	     --with-xkb-output=/var/lib/xkb \
+	     --disable-builddocs \
+	     --disable-install-libxf86config \
+	     --enable-mitshm \
+	     --enable-xres \
+	     --disable-xcsecurity \
+	     --disable-xcalibrate \
+	     --disable-tslib \
+	     --enable-dbe \
+	     --disable-xf86bigfont \
+	     --enable-dpms \
+	     $(config_backend) \
+	     --enable-xorg \
+	     --disable-xquartz \
+	     --disable-xwin \
+	     --disable-xfake \
+	     --disable-install-setuid
+
+confflags_main = \
+	--with-default-font-path="/usr/share/fonts/X11/misc,/usr/share/fonts/X11/cyrillic,/usr/share/fonts/X11/100dpi/:unscaled,/usr/share/fonts/X11/75dpi/:unscaled,/usr/share/fonts/X11/Type1,/usr/share/fonts/X11/100dpi,/usr/share/fonts/X11/75dpi,/var/lib/defoma/x-ttcidfont-conf.d/dirs/TrueType,built-ins" \
+	--enable-aiglx \
+	--enable-glx-tls \
+	--enable-registry \
+	--enable-composite \
+	--enable-record \
+	--enable-xv \
+	--enable-xvmc \
+	--enable-dga \
+	--enable-screensaver \
+	--enable-xdmcp \
+	--enable-xdm-auth-1 \
+	--enable-glx \
+	$(dri) \
+	--enable-xinerama \
+	--enable-xf86vidmode \
+	--enable-xace \
+	$(selinux) \
+	--enable-xfree86-utils \
+	--enable-dmx \
+	--enable-xvfb \
+	--enable-xnest \
+	--enable-kdrive \
+	--enable-xephyr \
+	$(build_xfbdev) \
+	--with-sha1=libgcrypt \
+	--enable-xcsecurity \
+	$(config_backend_main) \
+	$(void)
+
+confflags_udeb = \
+	--with-default-font-path="built-ins" \
+	--disable-aiglx \
+	--disable-glx-tls \
+	--disable-registry \
+	--disable-composite \
+	--disable-record \
+	--disable-xv \
+	--disable-xvmc \
+	--enable-dga \
+	--disable-screensaver \
+	--disable-xdmcp \
+	--disable-xdm-auth-1 \
+	--disable-glx \
+	--disable-dri \
+	--disable-dri2 \
+	--disable-xinerama \
+	--disable-xf86vidmode \
+	--disable-xace \
+	--disable-xselinux \
+	--disable-xfree86-utils \
+	--disable-dmx \
+	--disable-xvfb \
+	--disable-xnest \
+	--disable-kdrive \
+	--disable-xephyr \
+	--disable-xfbdev \
+	--with-sha1=nettle \
+	$(config_backend_udeb) \
+	$(void)
+
+$(QUILT_STAMPFN): $(STAMP_DIR)/stampdir
+
+$(STAMP_DIR)/autoreconf: $(STAMP_DIR)/stampdir $(QUILT_STAMPFN)
+	dh_testdir
+	autoreconf -vfi
+	>$@
+
+$(STAMP_DIR)/configure-%: $(STAMP_DIR)/autoreconf
+	dh_testdir
+	mkdir -p build-$*
+	cd build-$* && \
+	../configure \
+	  --prefix=/usr \
+	  --mandir=\$${prefix}/share/man \
+	  --infodir=\$${prefix}/share/info \
+	  --sysconfdir=/etc \
+	  --localstatedir=/var \
+	  $(confflags) \
+	  $(confflags_$*) \
+	  $(vars)
+	>$@
+
+$(STAMP_DIR)/build-%: $(STAMP_DIR)/configure-%
+	dh_testdir
+	cd build-$* && $(MAKE)
+	>$@
+
+$(STAMP_DIR)/tests-%: $(STAMP_DIR)/build-%
+	cd build-$* && $(MAKE) check
+	>$@
+
+build: $(STAMP_DIR)/build-main
+build: $(STAMP_DIR)/tests-main
+ifeq ($(udeb), yes)
+build: $(STAMP_DIR)/build-udeb
+build: $(STAMP_DIR)/tests-udeb
+endif
+build-arch: build
+build-indep: build
+
+clean: unpatch abibumpcheck
+	dh_testdir
+
+	rm -rf $(STAMP_DIR)
+	rm -f config.cache config.log config.status
+	rm -f */config.cache */config.log */config.status
+	rm -f conftest* */conftest*
+	rm -rf autom4te.cache */autom4te.cache
+	rm -rf build-*
+	rm -f compile config.guess config.sub configure depcomp install-sh
+	rm -f ltmain.sh missing INSTALL aclocal.m4 ylwrap
+	rm -f include/do-not-use-config.h.in
+	rm -f m4/lt*.m4 m4/libtool.m4
+	find -name Makefile.in -delete
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	cd build-main && $(MAKE) DESTDIR=$(CURDIR)/debian/tmp/main install
+ifeq ($(udeb), yes)
+	cd build-udeb && $(MAKE) DESTDIR=$(CURDIR)/debian/tmp/udeb install
+endif
+
+	# oh, yuck.
+	find debian/tmp/*/usr/lib/xorg -type f -name '*.la' | \
+	  xargs rm -f
+
+	# remove modules not needed in d-i
+	rm -rf debian/tmp/udeb/usr/lib/xorg/modules/multimedia
+	rm -f debian/tmp/udeb/usr/lib/xorg/modules/libxaa.so
+	rm -f debian/tmp/udeb/usr/lib/xorg/modules/libexa.so
+	rm -f debian/tmp/udeb/usr/lib/xorg/modules/libwfb.so
+	rm -f debian/tmp/udeb/usr/lib/xorg/modules/libxf8_16bpp.so
+
+	install -m 755 debian/local/xvfb-run debian/tmp/main/usr/bin
+	install debian/local/xvfb-run.1 debian/tmp/main/usr/share/man/man1
+ifneq ($(DEB_HOST_ARCH_OS), linux)
+	install -d debian/tmp/main/usr/share/X11/xorg.conf.d
+	install -m 644 debian/local/10-*.conf debian/tmp/main/usr/share/X11/xorg.conf.d
+ifeq ($(udeb), yes)
+	install -d debian/tmp/udeb/usr/share/X11/xorg.conf.d
+	install -m 644 debian/local/10-*.conf debian/tmp/udeb/usr/share/X11/xorg.conf.d
+endif
+endif
+
+# stub to start building deb files, used by binary-indep and binary-arch
+binary-initial:
+	dh_testdir
+	dh_testroot
+
+# stub to build deb files, used by binary-indep and binary-arch
+binary-deb:
+	dh_lintian
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Only read the first line, the rest of the file is used to determine
+# when the minimal version as to be bumped:
+SERVERMINVER = debian/serverminver
+serverminver = $(shell head -1 $(SERVERMINVER))
+
+.PHONY: abibumpcheck
+abibumpcheck: debian/serverminver
+	@echo Checking for the need of an ABI bump
+	# Build an updated version of the file:
+	head -1 $(SERVERMINVER) > $(SERVERMINVER).new
+	perl -ne 'print "$$1:$$2.$$3\n" if /^#define\s+(ABI_(?:VIDEODRV|XINPUT)_VERSION)\s+SET_ABI_VERSION\(\s*(\d+)\s*,\s*(\d+)\s*\)/' hw/xfree86/common/xf86Module.h|sort >> $(SERVERMINVER).new
+	# Compare both files:
+	@if ! cmp --quiet $(SERVERMINVER) $(SERVERMINVER).new; then \
+	echo "serverminver bump required, ABI changed!";\
+	diff -u $(SERVERMINVER) $(SERVERMINVER).new; \
+	exit 1; \
+	else \
+	echo "ABI unchanged"; \
+	rm -f $(SERVERMINVER).new; \
+	fi
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-initial
+
+	dh_installdocs -s
+	dh_installchangelogs -s
+	dh_install $(DH_INSTALL_OPTIONS) -s --sourcedir=debian/tmp --list-missing
+	$(INSTALL) -d $(CURDIR)/debian/xserver-xorg-dev/usr/share/xserver-xorg
+	# Extract only the major ABI version:
+	abi_videodrv=`PKG_CONFIG_PATH=debian/tmp/main/usr/lib/pkgconfig pkg-config --variable=abi_videodrv xorg-server|cut -d . -f 1`; \
+	echo videoabi=xorg-video-abi-$$abi_videodrv > debian/xserver-xorg-core.substvars && \
+	echo "xorg-video-abi-$$abi_videodrv, xserver-xorg-core (>= $(serverminver))" > debian/xserver-xorg-dev/usr/share/xserver-xorg/videodrvdep
+	abi_xinput=`PKG_CONFIG_PATH=debian/tmp/main/usr/lib/pkgconfig pkg-config --variable=abi_xinput xorg-server|cut -d . -f 1`; \
+	echo inputabi=xorg-input-abi-$$abi_xinput >> debian/xserver-xorg-core.substvars && \
+	echo "xorg-input-abi-$$abi_xinput, xserver-xorg-core (>= $(serverminver))" > debian/xserver-xorg-dev/usr/share/xserver-xorg/xinputdep
+
+	# The udeb uses the same substvars:
+	cp debian/xserver-xorg-core.substvars debian/xserver-xorg-core-udeb.substvars
+
+	$(INSTALL) -m 755 -d debian/xserver-xorg-core/usr/share/bug/xserver-xorg-core
+	$(INSTALL) -m 755 debian/xserver-xorg-core.bug.script debian/xserver-xorg-core/usr/share/bug/xserver-xorg-core/script
+ifeq ($(DEB_HOST_ARCH_OS), linux)
+	install -d debian/xserver-xorg-core/lib/udev/rules.d
+	install -m 644 debian/local/64-xorg-xkb.rules debian/xserver-xorg-core/lib/udev/rules.d
+ifeq ($(udeb), yes)
+	install -d debian/xserver-xorg-core-udeb/lib/udev/rules.d
+	install -m 644 debian/local/64-xorg-xkb.rules debian/xserver-xorg-core-udeb/lib/udev/rules.d
+endif
+endif
+	dh_installdebconf -s
+	dh_installman -s
+	dh_link -s
+	dh_strip -pxserver-xorg-core --dbg-package=xserver-xorg-core-dbg
+	dh_strip -s -Nxserver-xorg-core -Nxserver-xorg-core-dbg
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-deb
+
+
+# Build architecture-independent files here
+binary-indep: build install
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-initial
+	dh_install -i --sourcedir=debian/tmp
+	dh_installdocs -i
+	dh_installchangelogs -i ChangeLog
+
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-deb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
