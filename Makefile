@@ -529,7 +529,7 @@ $(CUPS): $(SPREZZ)/cups/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf cups-$(cups_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xjvf cups-$(cups_UPVER)-source.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: d-conf
 d-conf:$(DCONF)_$(ARCH).deb
