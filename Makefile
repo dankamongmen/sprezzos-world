@@ -43,7 +43,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml iproute \
 	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
-	ratpoison ghostscript
+	ratpoison ghostscript jbig2dec
 
 SPREZZ:=packaging
 
@@ -199,7 +199,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
 	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) \
 	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) \
-	$(RATPOISON) $(GHOSTSCRIPT)
+	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1034,6 +1034,14 @@ $(INKSCAPE): $(SPREZZ)/inkscape/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf inkscape-$(inkscape_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: jbig2dec
+jbig2dec:$(JBIG2DEC)_$(ARCH).deb
+$(JBIG2DEC): $(SPREZZ)/jbig2dec/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf jbig2dec-$(jbig2dec_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: kismet
 kismet:$(KISMET)_$(ARCH).deb
@@ -2394,7 +2402,7 @@ clean:
 	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
 	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) $(GNOMEICONTHEME)
 	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(GIMP) $(ZSH) $(BASH) $(RATPOISON)
-	rm -rf $(GHOSTSCRIPT)
+	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC)
 
 clobber:
 	rm -rf $(FETCHED)
