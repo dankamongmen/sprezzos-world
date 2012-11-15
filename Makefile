@@ -401,7 +401,7 @@ $(ANJUTA): $(SPREZZ)/anjuta/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf anjuta_$(anjuta_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf anjuta-$(anjuta_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: audit
 audit:$(AUDIT)_$(ARCH).deb
