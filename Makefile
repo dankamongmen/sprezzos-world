@@ -1409,7 +1409,7 @@ $(PIDGIN): $(SPREZZ)/pidgin/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf pidgin-$(pidgin_UPVER).tar.xz --strip-components=1 -C $@
+	tar xjvf pidgin-$(pidgin_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: pixman
 pixman:$(PIXMAN)_$(ARCH).deb
