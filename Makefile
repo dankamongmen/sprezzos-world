@@ -1038,10 +1038,10 @@ $(INKSCAPE): $(SPREZZ)/inkscape/debian/changelog
 .PHONY: jbig2dec
 jbig2dec:$(JBIG2DEC)_$(ARCH).deb
 $(JBIG2DEC): $(SPREZZ)/jbig2dec/debian/changelog
-	mkdir $@
+	git clone git://github.com/dankamongmen/jbig2dec.git $@
+	tar cJf jbig2dec-$(jbig2dec_UPVER).tar.xz $@ --exclude-vcs
+	ln -s jbig2dec-$(jbig2dec_UPVER).tar.xz jbig2dec_$(jbig2dec_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download
-	tar xJvf jbig2dec-$(jbig2dec_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: kismet
 kismet:$(KISMET)_$(ARCH).deb
