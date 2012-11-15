@@ -42,7 +42,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 rtmpdump \
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml iproute \
 	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
-	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp
+	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash
 
 SPREZZ:=packaging
 
@@ -197,7 +197,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
 	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) \
-	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA)
+	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -440,6 +440,14 @@ $(BAOBAB): $(SPREZZ)/baobab/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf baobab-$(baobab_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: bash
+bash:$(BASH)_$(ARCH).deb
+$(BASH): $(SPREZZ)/bash/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf bash-$(bash_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: bluez
 bluez:$(BLUEZ)_$(ARCH).deb
@@ -1667,6 +1675,14 @@ $(ZENITY): $(SPREZZ)/zenity/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf zenity-$(zenity_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: zsh
+zsh:$(ZSH)_$(ARCH).deb
+$(ZSH): $(SPREZZ)/zsh/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf zsh-$(zsh_UPVER).tar.xz --strip-components=1 -C $@
+
 FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
 $(CURLUP).tar.bz2:
 	wget -nc -O$@ http://curl.haxx.se/download/$@
@@ -2359,7 +2375,7 @@ clean:
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
 	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
 	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) $(GNOMEICONTHEME)
-	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(GIMP)
+	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(GIMP) $(ZSH) $(BASH)
 
 clobber:
 	rm -rf $(FETCHED)
