@@ -1,0 +1,119 @@
+			     BASH PATCH REPORT
+			     =================
+
+Bash-Release:	4.2
+Patch-ID:	bash42-025
+
+Bug-Reported-by:	Bill Gradwohl <bill@ycc.com>
+Bug-Reference-ID:	<CAFyvKis-UfuOWr5THBRKh=vYHDoKEEgdW8hN1RviTuYQ00Lu5A@mail.gmail.com>
+Bug-Reference-URL:	http://lists.gnu.org/archive/html/help-bash/2012-03/msg00078.html
+
+Bug-Description:
+
+When used in a shell function, `declare -g -a array=(compound assignment)'
+creates a local variable instead of a global one.
+
+Patch (apply with `patch -p0'):
+
+Index: b/bash/command.h
+===================================================================
+--- a/bash/command.h
++++ b/bash/command.h
+@@ -97,6 +97,7 @@
+ #define W_HASCTLESC	0x200000	/* word contains literal CTLESC characters */
+ #define W_ASSIGNASSOC	0x400000	/* word looks like associative array assignment */
+ #define W_ARRAYIND	0x800000	/* word is an array index being expanded */
++#define W_ASSNGLOBAL	0x1000000	/* word is a global assignment to declare (declare/typeset -g) */
+ 
+ /* Possible values for subshell_environment */
+ #define SUBSHELL_ASYNC	0x01	/* subshell caused by `command &' */
+Index: b/bash/execute_cmd.c
+===================================================================
+--- a/bash/execute_cmd.c
++++ b/bash/execute_cmd.c
+@@ -3580,13 +3580,13 @@
+ {
+   WORD_LIST *w;
+   struct builtin *b;
+-  int assoc;
++  int assoc, global;
+ 
+   if (words == 0)
+     return;
+ 
+   b = 0;
+-  assoc = 0;
++  assoc = global = 0;
+ 
+   for (w = words; w; w = w->next)
+     if (w->word->flags & W_ASSIGNMENT)
+@@ -3603,12 +3603,17 @@
+ #if defined (ARRAY_VARS)
+ 	if (assoc)
+ 	  w->word->flags |= W_ASSIGNASSOC;
++	if (global)
++	  w->word->flags |= W_ASSNGLOBAL;
+ #endif
+       }
+ #if defined (ARRAY_VARS)
+     /* Note that we saw an associative array option to a builtin that takes
+        assignment statements.  This is a bit of a kludge. */
+-    else if (w->word->word[0] == '-' && strchr (w->word->word, 'A'))
++    else if (w->word->word[0] == '-' && (strchr (w->word->word+1, 'A') || strchr (w->word->word+1, 'g')))
++#else
++    else if (w->word->word[0] == '-' && strchr (w->word->word+1, 'g'))
++#endif
+       {
+ 	if (b == 0)
+ 	  {
+@@ -3618,10 +3623,11 @@
+ 	    else if (b && (b->flags & ASSIGNMENT_BUILTIN))
+ 	      words->word->flags |= W_ASSNBLTIN;
+ 	  }
+-	if (words->word->flags & W_ASSNBLTIN)
++	if ((words->word->flags & W_ASSNBLTIN) && strchr (w->word->word+1, 'A'))
+ 	  assoc = 1;
++	if ((words->word->flags & W_ASSNBLTIN) && strchr (w->word->word+1, 'g'))
++	  global = 1;
+       }
+-#endif
+ }
+ 
+ /* Return 1 if the file found by searching $PATH for PATHNAME, defaulting
+Index: b/bash/patchlevel.h
+===================================================================
+--- a/bash/patchlevel.h
++++ b/bash/patchlevel.h
+@@ -25,6 +25,6 @@
+    regexp `^#define[ 	]*PATCHLEVEL', since that's what support/mkversion.sh
+    looks for to find the patch level (for the sccs version string). */
+ 
+-#define PATCHLEVEL 24
++#define PATCHLEVEL 25
+ 
+ #endif /* _PATCHLEVEL_H_ */
+Index: b/bash/subst.c
+===================================================================
+--- a/bash/subst.c
++++ b/bash/subst.c
+@@ -366,6 +366,11 @@
+       f &= ~W_ASSNBLTIN;
+       fprintf (stderr, "W_ASSNBLTIN%s", f ? "|" : "");
+     }
++  if (f & W_ASSNGLOBAL)
++    {
++      f &= ~W_ASSNGLOBAL;
++      fprintf (stderr, "W_ASSNGLOBAL%s", f ? "|" : "");
++    }
+   if (f & W_COMPASSIGN)
+     {
+       f &= ~W_COMPASSIGN;
+@@ -2803,7 +2808,7 @@
+     }
+   else if (assign_list)
+     {
+-      if (word->flags & W_ASSIGNARG)
++      if ((word->flags & W_ASSIGNARG) && (word->flags & W_ASSNGLOBAL) == 0)
+ 	aflags |= ASS_MKLOCAL;
+       if (word->flags & W_ASSIGNASSOC)
+ 	aflags |= ASS_MKASSOC;

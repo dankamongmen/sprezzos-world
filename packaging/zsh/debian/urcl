@@ -1,0 +1,102 @@
+#!/bin/sh
+#
+# Seems like `git-dch' doesn't work well with non-linear histories. With
+# pkg-zsh we do have merges everytime an upstream release is done. That's
+# where "Upstream Release ChangeLog" comes into play. It takes a set of
+# commit hashes and produces an initial changelog update for those
+# situations in which an upstream release tag was merged. After that,
+# the situation can be reduced to a linear history again and `git-dch'
+# will do just fine.
+#
+# This script is pretty dumb, so some manual adjustments might be needed
+# for "debian/changelog".
+
+if [ $# = 0 ]; then
+    printf 'usage: urcl [OPTIONS] <COMMITHASH(s)...>\n\n'
+    printf 'Options:\n\n'
+    printf '    -n="..."   Full name to be used for the changelog entry. (Defaults\n'
+    printf '               to "$DEBFULLNAME".)\n'
+    printf '    -m="..."   Email address for the changelog entry. (Defaults to\n'
+    printf '               "$DEBEMAIL".)\n'
+    printf '    -p="..."   Package name to use. (Defaults to "$PACKAGE".)\n'
+    printf '    -v="..."   Version number to use. (Defaults to "$VERSION".)\n'
+    printf '\n'
+    exit 0
+fi
+
+case "$1" in
+    -*) isopt=1;;
+    *) isopt=0;;
+esac
+
+while [ "$#" -gt 0 ] && [ "$isopt" = 1 ]; do
+    case "$1" in
+        -n=*) who="${1#-n=}" ;;
+        -m=*) ewho="${1#-m=}" ;;
+        -p=*) PACKAGE="${1#-p=}" ;;
+        -v=*) VERSION="${1#-v=}" ;;
+        -*)
+            printf 'Unknown option `%s'\''\n.' "$1"
+            ;;
+    esac
+    shift
+    case "$1" in
+        -*) isopt=1;;
+        *) isopt=0;;
+    esac
+done
+
+if [ x"$who" = x ]; then
+    if [ x"$DEBFULLNAME" = x ]; then
+        printf '`$DEBFULLNAME'\'' is empty use -n=...\n'
+        exit 1
+    fi
+    who=$DEBFULLNAME
+fi
+if [ x"$ewho" = x ]; then
+    if [ x"$DEBEMAIL" = x ]; then
+        printf '`$DEBEMAIL'\'' is empty use -m=...\n'
+        exit 1
+    fi
+    ewho=$DEBEMAIL
+fi
+
+if [ x"$PACKAGE" = x ]; then
+    printf '`$PACKAGE'\'' is empty use -p=...\n'
+    exit 1
+fi
+
+if [ x"$VERSION" = x ]; then
+    printf '`$VERSION'\'' is empty use -v=...\n'
+    exit 1
+fi
+
+DATE=$(date -R)
+
+ours="debian/changelog.urcl"
+theirs="debian/changelog.old"
+cl="debian/changelog"
+
+xecho () {
+    printf '%s\n' "$@" >> "$ours"
+}
+
+rm -f "$ours" "$theirs"
+
+xecho "$PACKAGE ($VERSION) UNRELEASED; urgency=low"
+xecho
+
+for rev; do
+    data=$(git log -1 --abbrev=8 --pretty=format:'  * [%h] %s' "$rev")
+    [ $? = 0 ] && xecho "$data"
+done
+
+xecho
+xecho " -- ${who} <${ewho}>  $DATE"
+xecho
+
+cp "$cl" "$theirs"
+cat "$ours" > "$cl"
+cat "$theirs" >> "$cl"
+rm -f "$ours" "$theirs"
+${VISUAL:-${EDITOR:-vi}} "$cl"
