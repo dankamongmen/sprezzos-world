@@ -1211,7 +1211,7 @@ $(LIBCAP2): $(SPREZZ)/libcap2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf libcap2-$(libcap2_UPVER).tar.gz --strip-components=1 -C $@
+	tar xjvf libcap2-$(libcap2_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: libexif
 libexif:$(LIBEXIF)_$(ARCH).deb
