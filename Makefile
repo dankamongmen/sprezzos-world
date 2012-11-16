@@ -43,7 +43,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml iproute \
 	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
-	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif
+	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif numactl
 
 SPREZZ:=packaging
 
@@ -200,7 +200,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) \
 	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) \
 	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) \
-	$(LIBEXIF)
+	$(LIBEXIF) $(NUMACTL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1388,6 +1388,14 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf nfs-utils_$(nfs-utils_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
+.PHONY: numactl
+numactl:$(NUMACTL)_$(ARCH).deb
+$(NUMACTL): $(SPREZZ)/numactl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf numactl-$(numactl_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: nvidia-cuda-toolkit
 nvidia-cuda-toolkit:$(NVIDIACUDATOOLKIT)_$(ARCH).deb
 $(NVIDIACUDATOOLKIT): $(SPREZZ)/nvidia-cuda-toolkit/debian/changelog
@@ -2436,6 +2444,7 @@ clean:
 	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) $(GNOMEICONTHEME)
 	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(GIMP) $(ZSH) $(BASH) $(RATPOISON)
 	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) $(LIBEXIF)
+	rm -rf $(NUMACTL)
 
 clobber:
 	rm -rf $(FETCHED)
