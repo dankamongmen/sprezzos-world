@@ -150,8 +150,6 @@ MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_VERSION) | cut -d- -f1).orig.tar.xz
 FREI0RORIG:=frei0r_$(shell echo $(frei0r_VERSION) | cut -d- -f1).orig.tar.xz
 XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
-OPENCVUP:=OpenCV-$(shell echo $(opencv_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-OPENCVORIG:=opencv_$(shell echo $(opencv_VERSION) | tr : . | cut -d- -f1).orig.tar.bz2
 OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
 OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 PANGOUP:=pango-$(shell echo $(pango_VERSION) | cut -d- -f1)
@@ -1429,6 +1427,14 @@ $(NVIDIACUDATOOLKIT): $(SPREZZ)/nvidia-cuda-toolkit/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf nvidia-cuda-toolkit-$(nvidia-cuda-toolkit_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: opencv
+opencv:$(OPENCV)_$(ARCH).deb
+$(OPENCV): $(SPREZZ)/opencv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf opencv-$(opencv_UPVER).tar.bz2 --strip-components=1 -C $@
+
 .PHONY: openldap
 openldap:$(OPENLDAP)_$(ARCH).deb
 $(OPENLDAP): $(SPREZZ)/openldap/debian/changelog
@@ -2334,20 +2340,6 @@ gnome-shell-extensions:$(GNOMESHELLEXTENSIONS)_$(ARCH).deb
 $(GNOMESHELLEXTENSIONS): $(SPREZZ)/gnome-shell-extensions/debian/changelog $(GNOMESHELLEXTENSIONSORIG)
 	mkdir -p $@
 	tar xJvf $(GNOMESHELLEXTENSIONSORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(OPENCVUP).tar.bz2
-$(OPENCVUP).tar.bz2:
-	wget -nc -O$@ http://sourceforge.net/projects/opencvlibrary/files/opencv-unix/2.4.2/$@
-
-$(OPENCVORIG): $(OPENCVUP).tar.bz2
-	ln -sf $< $@
-
-.PHONY: opencv
-opencv:$(OPENCV)_$(ARCH).deb
-$(OPENCV): $(SPREZZ)/opencv/debian/changelog $(OPENCVORIG)
-	mkdir -p $@
-	tar xjvf $(OPENCVORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIGHTDMUP).orig.tar.gz
