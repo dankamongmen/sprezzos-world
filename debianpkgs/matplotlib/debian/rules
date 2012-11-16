@@ -1,0 +1,215 @@
+#!/usr/bin/make -f
+
+PY2VERS := $(shell pyversions -v -r debian/control)
+PY3VERS := $(shell py3versions -v -r debian/control)
+DEFPY := $(shell pyversions -v -d)
+PY_PLATFORM := $(shell python -c 'from distutils.util import get_platform; print get_platform()')
+pd := python-matplotlib-doc
+p := python-matplotlib
+p3 := python3-matplotlib
+pdata := python-matplotlib-data
+pdbg := python-matplotlib-dbg
+p3dbg := python3-matplotlib-dbg
+
+# build
+build: build-arch build-indep
+
+build-indep: build-indep-stamp
+build-indep-stamp: $(DEFPY:%=build-%-stamp)
+	dh_testdir
+
+	# build the doc
+	-( cd doc ; MPLCONFIGDIR=. MATPLOTLIBDATA=../lib/matplotlib/mpl-data/ \
+		PYTHONPATH=../build/lib.$(PY_PLATFORM)-$(DEFPY) ./make.py --small all )
+
+	touch $@
+
+build-arch: $(PY2VERS:%=build-%-stamp) $(PY3VERS:%=build-%-stamp)
+
+build-%-stamp:
+	dh_testdir
+
+	cp -f debian/setup.cfg setup.cfg
+	python$* ./setup.py build $(PY_BUILD_FLAGS)
+	python$*-dbg ./setup.py build $(PY_BUILD_FLAGS)
+
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	echo "backend      : TkAgg" > matplotlibrc
+	-PYTHONPATH=$(shell python$* -c "from distutils.command.build import build ; \
+	                                from distutils.core import Distribution ; \
+					b = build(Distribution()) ; \
+					b.finalize_options() ; \
+					print(b.build_platlib)") \
+	MATPLOTLIBDATA=$(CURDIR)/lib/matplotlib/mpl-data/ \
+	MPLCONFIGDIR=. \
+		xvfb-run python$* -c "import matplotlib as m ; m.test(verbosity=1)"
+
+	-PYTHONPATH=$(shell python$*-dbg -c "from distutils.command.build import build ; \
+	                                    from distutils.core import Distribution ; \
+					    b = build(Distribution()) ; \
+					    b.finalize_options() ; \
+					    print(b.build_platlib)") \
+	MATPLOTLIBDATA=$(CURDIR)/lib/matplotlib/mpl-data/ \
+	MPLCONFIGDIR=. \
+		xvfb-run python$*-dbg -c "import matplotlib as m ; m.test(verbosity=1)"
+	rm -f matplotlibrc
+endif
+
+	touch $@
+
+
+# clean
+clean:
+	dh_testdir
+	dh_testroot
+	
+	for i in $(PY2VERS) $(PY3VERS); do \
+		python$(i) ./setup.py clean --all; \
+		python$(i)-dbg ./setup.py clean --all; \
+	done
+
+	# clean the doc
+	-( cd doc ; ./make.py clean )
+
+	# workaround for cleaning the doc ("doc/make.py clean" only runs useless svn-clean)
+	rm -rf doc/build doc/examples
+	rm -f doc/mpl_examples/api/*.png
+	rm -f doc/mpl_examples/pylab_examples/*.png
+	rm -f doc/mpl_examples/pylab_examples/*.pdf
+	rm -f doc/mpl_examples/units/*.png
+	rm -f doc/pyplots/tex_demo.png
+	rm -f doc/_static/matplotlibrc
+	rm -f doc/_templates/gallery.html
+
+	find . -name '*.pyc' -exec rm {} \;
+
+	dh_clean lib/matplotlib/mpl-data/matplotlib.conf \
+		lib/matplotlib/mpl-data/matplotlibrc setup.cfg
+	rm -rf build
+	rm -rf lib/matplotlib.egg-info
+
+	# restore "pristine" doc/matplotlibrc
+	sed -i '/^examples\./d' $(CURDIR)/doc/matplotlibrc
+
+# install
+install-arch: build-arch $(PY2VERS:%=install-%-stamp) $(PY3VERS:%=install-py3-%-stamp)
+	dh_testdir
+	dh_testroot
+	dh_numpy
+	dh_numpy3
+
+install-%-stamp: build-%-stamp
+	dh_testdir
+	dh_testroot
+
+	python$* ./setup.py install_lib \
+		-d $(CURDIR)/debian/$(p)/usr/lib/python$*/site-packages/ --no-compile
+	python$* ./setupegg.py install_egg_info \
+		-d $(CURDIR)/debian/$(p)/usr/lib/python$*/site-packages/
+	python$*-dbg ./setup.py install_lib \
+		-d $(CURDIR)/debian/$(pdbg)/usr/lib/python$*/site-packages/ --no-compile
+
+	find debian/$(pdbg) ! -type d ! -name '*.so' | xargs rm -f
+	find debian/$(pdbg) -depth -empty -exec rmdir {} \;
+
+	# don't install baseline_images, needed for tests only, but huge
+	rm -rf $(CURDIR)/debian/$(p)/usr/lib/python$*/*-packages/matplotlib/tests/baseline_images/
+
+	rm -rf $(CURDIR)/debian/$(p)/usr/lib/python$*/site-packages/matplotlib/mpl-data/
+	rm -rf $(CURDIR)/debian/$(p)/usr/lib/python$*/site-packages/matplotlib/backends/Matplotlib.nib/
+
+	rm -rf $(CURDIR)/debian/$(pdbg)/usr/lib/python$*/site-packages/matplotlib/mpl-data/
+	rm -rf $(CURDIR)/debian/$(pdbg)/usr/lib/python$*/site-packages/matplotlib/backends/Matplotlib.nib/
+
+	touch $@
+
+install-py3-%-stamp: build-%-stamp
+	dh_testdir
+	dh_testroot
+
+	python$* ./setup.py install_lib \
+		-d $(CURDIR)/debian/$(p3)/usr/lib/python3/dist-packages/ --no-compile
+	python$* ./setup.py install_egg_info \
+		-d $(CURDIR)/debian/$(p3)/usr/lib/python3/dist-packages/
+	python$*-dbg ./setup.py install_lib \
+		-d $(CURDIR)/debian/$(p3dbg)/usr/lib/python3/dist-packages/ --no-compile
+
+	find debian/$(p3dbg) ! -type d ! -name '*.so' | xargs rm -f
+	find debian/$(p3dbg) -depth -empty -exec rmdir {} \;
+
+	# don't install baseline_images, needed for tests only, but huge
+	rm -rf $(CURDIR)/debian/$(p3)/usr/lib/python3/*-packages/matplotlib/tests/baseline_images/
+
+	rm -rf $(CURDIR)/debian/$(p3)/usr/lib/python3/dist-packages/matplotlib/mpl-data/
+	rm -rf $(CURDIR)/debian/$(p3)/usr/lib/python3/dist-packages/matplotlib/backends/Matplotlib.nib/
+
+	rm -rf $(CURDIR)/debian/$(p3dbg)/usr/lib/python3/dist-packages/matplotlib/mpl-data/
+	rm -rf $(CURDIR)/debian/$(p3dbg)/usr/lib/python3/dist-packages/matplotlib/backends/Matplotlib.nib/
+
+	touch $@
+
+install-indep: build-indep
+	dh_testdir -i
+	dh_testroot -i
+	dh_prep
+	dh_install -p $(pdata)
+	rm -fr $(CURDIR)/debian/$(pdata)/usr/share/matplotlib/mpl-data/fonts/ttf/Vera*.ttf
+	rm -fr $(CURDIR)/debian/$(pdata)/usr/share/matplotlib/mpl-data/fonts/ttf/*.TXT
+	rm -fr $(CURDIR)/debian/$(pdata)/usr/share/matplotlib/mpl-data/fonts/ttf/local.conf
+	rm -fr $(CURDIR)/debian/$(pdata)/usr/share/matplotlib/mpl-data/fonts/pdfcorefonts/readme.txt
+	chmod 644 $(CURDIR)/debian/$(pdata)/usr/share/matplotlib/mpl-data/images/*.svg
+	# link to fonts in ttf-lyx
+	for font in cmex10.ttf cmmi10.ttf cmr10.ttf cmsy10.ttf ; \
+	do \
+	    ln -sf /usr/share/fonts/truetype/lyx/$$font $(CURDIR)/debian/$(pdata)/usr/share/matplotlib/mpl-data/fonts/ttf/$$font; \
+	done
+
+# binary
+binary-indep: build-indep install-indep
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs -i CHANGELOG
+	dh_installdocs -p$(pd) -i doc/build/html/ doc/build/latex/Matplotlib.pdf
+	# remove pyc file from doc
+	find $(CURDIR)/debian/$(pd)/ -type f -name '*.pyc' | xargs rm -f
+	dh_installexamples -p$(pd) -i examples/*
+	dh_compress -i -Xexamples -Xexamples/data -Xpdf -X.js -Xobjects.inv
+	dh_link -i
+	dh_sphinxdoc
+	dh_lintian -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build-arch install-arch
+	dh_testdir -a
+	dh_testroot -a
+	dh_installchangelogs -a CHANGELOG
+	dh_installdocs -p$(p) -a README.txt TODO
+	# make python scripts starting with '#!' executable
+	for i in `find debian -mindepth 2 -type f ! -perm 755`; do \
+		if head -1 $$i | grep -q '^#!'; then \
+			chmod 755 $$i; \
+			echo "made executable: $$i"; \
+		fi; \
+	done
+	dh_pysupport -a
+	dh_python3 -a
+	dh_link -a
+	dh_lintian -a
+	dh_strip -a -p$(p) --dbg-package=$(pdbg)
+	dh_strip -a -p$(p3) --dbg-package=$(p3dbg)
+	# fix python-debug-in-wrong-location lintian warning
+	cd debian/*-dbg/usr/lib/debug/usr/lib && mv pyshared pymodules
+	dh_compress -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
