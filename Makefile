@@ -47,7 +47,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
-	x11proto-xinerama
+	x11proto-xinerama wayland
 
 SPREZZ:=packaging
 
@@ -206,7 +206,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
 	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
 	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
-	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA)
+	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1650,6 +1650,14 @@ $(VTE): $(SPREZZ)/vte/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf vte_$(vte_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: wayland
+wayland:$(WAYLAND)_$(ARCH).deb
+$(WAYLAND): $(SPREZZ)/wayland/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf wayland_$(wayland_UPVER).orig.tar.gz --strip-components=1 -C $@
+
 .PHONY: webkit
 webkit:$(WEBKIT)_$(ARCH).deb
 $(WEBKIT): $(SPREZZ)/webkit/debian/changelog
@@ -2608,7 +2616,7 @@ clean:
 	rm -rf $(ALACARTE) $(X11PROTOFONTS) $(X11PROTOXEXT) $(X11PROTOCORE) $(BISON)
 	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
 	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO)
-	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA)
+	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND)
 
 clobber:
 	rm -rf $(FETCHED)
