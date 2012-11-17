@@ -45,7 +45,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
 	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif numactl \
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
-	x11proto-core x11proto-damage bison
+	x11proto-core x11proto-damage x11proto-fixes bison
 
 SPREZZ:=packaging
 
@@ -202,7 +202,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) \
 	$(LIBEXIF) $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) \
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
-	$(BISON) $(X11PROTODAMAGE)
+	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1704,6 +1704,14 @@ $(X11PROTODAMAGE): $(SPREZZ)/x11proto-damage/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf damageproto-$(x11proto-damage_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: x11proto-fixes
+x11proto-fixes:$(X11PROTOFIXES)_$(ARCH).deb
+$(X11PROTOFIXES): $(SPREZZ)/x11proto-fixes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf fixesproto-$(x11proto-fixes_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: x11proto-fonts
 x11proto-fonts:$(X11PROTOFONTS)_$(ARCH).deb
 $(X11PROTOFONTS): $(SPREZZ)/x11proto-fonts/debian/changelog
@@ -2530,7 +2538,7 @@ clean:
 	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) $(LIBEXIF)
 	rm -rf $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) $(FILEROLLER)
 	rm -rf $(ALACARTE) $(X11PROTOFONTS) $(X11PROTOXEXT) $(X11PROTOCORE) $(BISON)
-	rm -rf $(X11PROTODAMAGE)
+	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES)
 
 clobber:
 	rm -rf $(FETCHED)
