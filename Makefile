@@ -46,7 +46,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif numactl \
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison \
-	x11proto-record x11proto-render x11proto-resource
+	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
+	x11proto-xinerama
 
 SPREZZ:=packaging
 
@@ -204,7 +205,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBEXIF) $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) \
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
 	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
-	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE)
+	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
+	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1778,6 +1780,22 @@ $(X11PROTORESOURCE): $(SPREZZ)/x11proto-resource/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf resourceproto-$(x11proto-resource_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: x11proto-scrnsaver
+x11proto-scrnsaver:$(X11PROTOSCRNSAVER)_$(ARCH).deb
+$(X11PROTOSCRNSAVER): $(SPREZZ)/x11proto-scrnsaver/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf scrnsaverproto-$(x11proto-scrnsaver_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-video
+x11proto-video:$(X11PROTOVIDEO)_$(ARCH).deb
+$(X11PROTOVIDEO): $(SPREZZ)/x11proto-video/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf videoproto-$(x11proto-video_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: x11proto-xext
 x11proto-xext:$(X11PROTOXEXT)_$(ARCH).deb
 $(X11PROTOXEXT): $(SPREZZ)/x11proto-xext/debian/changelog
@@ -1785,6 +1803,14 @@ $(X11PROTOXEXT): $(SPREZZ)/x11proto-xext/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf xextproto-$(x11proto-xext_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-xinerama
+x11proto-xinerama:$(X11PROTOXINERAMA)_$(ARCH).deb
+$(X11PROTOXINERAMA): $(SPREZZ)/x11proto-xinerama/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xineramaproto-$(x11proto-xinerama_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: xcb-proto
 xcb-proto:$(XCBPROTO)_$(ARCH).deb
@@ -2581,7 +2607,8 @@ clean:
 	rm -rf $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) $(FILEROLLER)
 	rm -rf $(ALACARTE) $(X11PROTOFONTS) $(X11PROTOXEXT) $(X11PROTOCORE) $(BISON)
 	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
-	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE)
+	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO)
+	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA)
 
 clobber:
 	rm -rf $(FETCHED)
