@@ -44,7 +44,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
 	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif numactl \
-	libcap2 devhelp libsecret cinnamon file-roller alacarte
+	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
+	x11proto-core bison
 
 SPREZZ:=packaging
 
@@ -200,7 +201,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) \
 	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) \
 	$(LIBEXIF) $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) \
-	$(FILEROLLER) $(ALACARTE)
+	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
+	$(BISON)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -459,6 +461,14 @@ $(BASH): $(SPREZZ)/bash/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf bash-$(bash_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: bison
+bison:$(BISON)_$(ARCH).deb
+$(BISON): $(SPREZZ)/bison/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf bison-$(bison_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: bluez
 bluez:$(BLUEZ)_$(ARCH).deb
@@ -1678,6 +1688,22 @@ $(WPA): $(SPREZZ)/wpa/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf wpa_$(wpa_UPVER).orig.tar.gz --strip-components=1 -C $@
 
+.PHONY: x11proto-core
+x11proto-core:$(X11PROTOCORE)_$(ARCH).deb
+$(X11PROTOCORE): $(SPREZZ)/x11proto-core/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xproto-$(x11proto-core_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-fonts
+x11proto-fonts:$(X11PROTOFONTS)_$(ARCH).deb
+$(X11PROTOFONTS): $(SPREZZ)/x11proto-fonts/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf fontsproto-$(x11proto-fonts_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: x11proto-gl
 x11proto-gl:$(X11PROTOGL)_$(ARCH).deb
 $(X11PROTOGL): $(SPREZZ)/x11proto-gl/debian/changelog
@@ -1693,6 +1719,14 @@ $(X11PROTORANDR): $(SPREZZ)/x11proto-randr/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf randrproto-$(x11proto-randr_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: x11proto-xext
+x11proto-xext:$(X11PROTOXEXT)_$(ARCH).deb
+$(X11PROTOXEXT): $(SPREZZ)/x11proto-xext/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xextproto-$(x11proto-xext_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: xcb-proto
 xcb-proto:$(XCBPROTO)_$(ARCH).deb
@@ -2487,7 +2521,7 @@ clean:
 	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(GIMP) $(ZSH) $(BASH) $(RATPOISON)
 	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) $(LIBEXIF)
 	rm -rf $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) $(FILEROLLER)
-	rm -rf $(ALACARTE)
+	rm -rf $(ALACARTE) $(X11PROTOFONTS) $(X11PROTOXEXT) $(X11PROTOCORE) $(BISON)
 
 clobber:
 	rm -rf $(FETCHED)
