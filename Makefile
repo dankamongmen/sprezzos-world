@@ -45,7 +45,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
 	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif numactl \
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
-	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison
+	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison \
+	x11proto-record x11proto-render x11proto-resource
 
 SPREZZ:=packaging
 
@@ -202,7 +203,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) \
 	$(LIBEXIF) $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) \
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
-	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
+	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
+	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1752,6 +1754,30 @@ $(X11PROTORANDR): $(SPREZZ)/x11proto-randr/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf randrproto-$(x11proto-randr_UPVER).tar.bz2 --strip-components=1 -C $@
 
+.PHONY: x11proto-record
+x11proto-record:$(X11PROTORECORD)_$(ARCH).deb
+$(X11PROTORECORD): $(SPREZZ)/x11proto-record/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf recordproto-$(x11proto-record_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-render
+x11proto-render:$(X11PROTORENDER)_$(ARCH).deb
+$(X11PROTORENDER): $(SPREZZ)/x11proto-render/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf renderproto-$(x11proto-render_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-resource
+x11proto-resource:$(X11PROTORESOURCE)_$(ARCH).deb
+$(X11PROTORESOURCE): $(SPREZZ)/x11proto-resource/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf resourceproto-$(x11proto-resource_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: x11proto-xext
 x11proto-xext:$(X11PROTOXEXT)_$(ARCH).deb
 $(X11PROTOXEXT): $(SPREZZ)/x11proto-xext/debian/changelog
@@ -2555,6 +2581,7 @@ clean:
 	rm -rf $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) $(FILEROLLER)
 	rm -rf $(ALACARTE) $(X11PROTOFONTS) $(X11PROTOXEXT) $(X11PROTOCORE) $(BISON)
 	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
+	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE)
 
 clobber:
 	rm -rf $(FETCHED)
