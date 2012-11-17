@@ -45,7 +45,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
 	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif numactl \
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
-	x11proto-core x11proto-damage x11proto-fixes bison
+	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison
 
 SPREZZ:=packaging
 
@@ -202,7 +202,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) \
 	$(LIBEXIF) $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) \
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
-	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES)
+	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1728,6 +1728,22 @@ $(X11PROTOGL): $(SPREZZ)/x11proto-gl/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf glproto-$(x11proto-gl_UPVER).tar.bz2 --strip-components=1 -C $@
 
+.PHONY: x11proto-input
+x11proto-input:$(X11PROTOINPUT)_$(ARCH).deb
+$(X11PROTOINPUT): $(SPREZZ)/x11proto-input/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf inputproto-$(x11proto-input_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-kb
+x11proto-kb:$(X11PROTOKB)_$(ARCH).deb
+$(X11PROTOKB): $(SPREZZ)/x11proto-kb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf kbproto-$(x11proto-kb_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: x11proto-randr
 x11proto-randr:$(X11PROTORANDR)_$(ARCH).deb
 $(X11PROTORANDR): $(SPREZZ)/x11proto-randr/debian/changelog
@@ -2538,7 +2554,7 @@ clean:
 	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) $(LIBEXIF)
 	rm -rf $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) $(FILEROLLER)
 	rm -rf $(ALACARTE) $(X11PROTOFONTS) $(X11PROTOXEXT) $(X11PROTOCORE) $(BISON)
-	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES)
+	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
 
 clobber:
 	rm -rf $(FETCHED)
