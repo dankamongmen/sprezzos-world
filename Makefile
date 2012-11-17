@@ -1656,7 +1656,7 @@ $(WAYLAND): $(SPREZZ)/wayland/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf wayland_$(wayland_UPVER).orig.tar.gz --strip-components=1 -C $@
+	tar xJvf wayland-$(wayland_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: webkit
 webkit:$(WEBKIT)_$(ARCH).deb
