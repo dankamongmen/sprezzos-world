@@ -45,7 +45,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
 	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif numactl \
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
-	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison \
+	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison procps \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri \
 	x11proto-xf86vidmode libtasn
@@ -203,7 +203,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
 	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
 	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
-	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) \
+	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) $(PROCPS) \
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -1527,6 +1527,14 @@ $(PIXMAN): $(SPREZZ)/pixman/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf pixman-$(pixman_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: procps
+procps:$(PROCPS)_$(ARCH).deb
+$(PROCPS): $(SPREZZ)/procps/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf procps-$(procps_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: pygobject
 pygobject:$(PYGOBJECT)_$(ARCH).deb
