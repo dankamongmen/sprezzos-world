@@ -1,0 +1,214 @@
+#!/usr/bin/make -f
+
+include /usr/share/quilt/quilt.make
+QUILT = QUILT_PATCHES=$(QUILT_PATCH_DIR) quilt --quiltrc /dev/null
+
+###################### user serviceable parts ######################
+
+###
+# build a separate mutt-patched package?
+BUILD_PATCHED := yes
+###
+# header cache backend
+# HCACHE_DB := bdb
+# HCACHE_DB := gdbm
+# HCACHE_DB := qdbm
+HCACHE_DB := tokyocabinet
+###
+# GPGME backend
+GPGME := --enable-gpgme
+###
+
+###################### variables ######################
+
+ifneq ($(BUILD_PATCHED),yes)
+export DH_OPTIONS := -Nmutt-patched
+endif
+
+# Configure arguments
+
+ifeq ($(HCACHE_DB),bdb)
+    hcache_db := --without-gdbm --without-qdbm --without-tokyocabinet
+endif
+ifeq ($(HCACHE_DB),gdbm)
+    hcache_db := --without-qdbm --without-bdb --without-tokyocabinet
+endif
+ifeq ($(HCACHE_DB),qdbm)
+    hcache_db := --without-gdbm --without-bdb --without-tokyocabinet
+endif
+ifeq ($(HCACHE_DB),tokyocabinet)
+    hcache_db := --without-gdbm --without-bdb --without-qdbm
+    ifeq ($(shell dpkg --print-architecture),hurd-i386)
+	hcache_db := --without-bdb --without-qdbm
+    endif
+endif
+
+confflags =	--prefix=/usr			\
+		--sysconfdir=/etc		\
+		--mandir=/usr/share/man		\
+		--with-sharedir=/usr/share/mutt	\
+		--with-docdir=/usr/share/doc	\
+		--with-mailpath=/var/mail	\
+						\
+		--disable-dependency-tracking	\
+						\
+		--enable-compressed		\
+		--enable-debug			\
+		--enable-fcntl			\
+		--enable-hcache			\
+		$(GPGME)			\
+		--enable-imap			\
+		--enable-smtp			\
+		--enable-inodesort		\
+		--enable-pop			\
+						\
+		--with-curses			\
+		--with-gnutls			\
+		--with-gss			\
+		--with-idn			\
+		--with-mixmaster		\
+		--with-sasl			\
+						\
+		$(hcache_db)
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+confflags += --build $(DEB_BUILD_GNU_TYPE)
+# Only specify --host when cross-compiling
+ifneq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+    confflags += --host $(DEB_HOST_GNU_TYPE)
+endif
+
+# CFLAGS
+CFLAGS = `dpkg-buildflags --get CFLAGS`
+CFLAGS += -Wall
+LDFLAGS = `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS = `dpkg-buildflags --get CPPFLAGS`
+CPPFLAGS += -I/usr/include/qdbm
+
+# Directory to make the build on
+objdir = $(CURDIR)/obj-$(DEB_HOST_GNU_TYPE)
+
+###################### main ######################
+
+$(objdir)-patched/build-stamp: $(QUILT_STAMPFN)
+	dh_testdir
+	dh_clean
+	-mkdir $(objdir)-patched
+	
+ifeq ($(BUILD_PATCHED),yes)
+	###################### building mutt-patched ######################
+	$(QUILT) applied > PATCHES
+	autoreconf --install --include=m4
+	cd $(objdir)-patched && \
+	env CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CPPFLAGS="$(CPPFLAGS)" \
+	../configure $(confflags)
+	
+	echo '#include "config-debian.h"' >> $(objdir)-patched/config.h
+	
+	# we should just "make mutt" here, but that doesn't work yet
+	cd $(objdir)-patched && $(MAKE) CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
+endif
+	
+	touch $@
+
+build build-arch: $(objdir)/build-stamp
+$(objdir)/build-stamp: $(objdir)-patched/build-stamp
+	###################### building mutt ######################
+	$(QUILT) pop mutt.org
+	$(QUILT) applied > PATCHES
+	
+	autoreconf --install --include=m4
+	-mkdir $(objdir)
+	cd $(objdir) && \
+	env CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)"  \
+	../configure $(confflags)
+	
+	echo '#include "config-debian.h"' >>$(objdir)/config.h
+	
+	cd $(objdir) && $(MAKE) CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
+	
+	touch $@
+
+install: build
+	###################### install ######################
+	dh_testdir
+	dh_testroot
+	dh_prep
+	cd $(objdir) && $(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	
+	cd debian/tmp/usr/share/doc && \
+	rm -rf samples/iconv samples/ca-bundle.crt && \
+	mv NEWS NEWS.old && \
+	cp $(CURDIR)/UPDATING NEWS
+	
+	chmod +x debian/extra/lib/*
+	chmod +x debian/header.awk
+	debian/header.awk debian/patches/features/* \
+		debian/patches/mutt-patched/* > debian/tmp/README.Patches
+	
+	( sed -e '/## More settings/,$$d' $(objdir)/doc/Muttrc || exit 1 ; \
+	  cat debian/extra/rc/Muttrc.foot ) > debian/tmp/Muttrc
+	
+	( echo "# GnuPG configuration"; \
+	  grep '^set' contrib/gpg.rc; \
+	  echo ) > debian/tmp/gpg.rc
+	
+	dh_install
+	
+	# prepare files for update-alternatives
+	mv debian/mutt/usr/bin/mutt debian/mutt/usr/bin/mutt-org
+ifeq ($(BUILD_PATCHED),yes)
+	install -D $(objdir)-patched/mutt debian/mutt-patched/usr/bin/mutt-patched
+endif
+	
+	# reportbug driver
+	dh_installdirs
+	install -m644 debian/bug/control $(CURDIR)/debian/mutt/usr/share/bug/mutt
+	install       debian/bug/script  $(CURDIR)/debian/mutt/usr/share/bug/mutt
+
+binary binary-arch: install
+	###################### binary ######################
+	dh_installman
+	dh_installmenu
+	dh_installmime
+	dh_installdocs
+	dh_installexamples
+	dh_installchangelogs ChangeLog
+	-dh_lintian
+	
+	dh_strip --dbg-package=mutt-dbg
+	rm -rf $(CURDIR)/debian/mutt-dbg/usr/share/doc/mutt-dbg \
+		$(CURDIR)/debian/mutt-patched/usr/share/doc/mutt-patched
+	
+	dh_link
+	dh_compress --exclude usr/share/doc/mutt/README.Patches
+	dh_fixperms --exclude usr/bin/mutt_dotlock
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -- -Zxz
+
+build-indep binary-indep:
+	@echo "Nothing to do."
+
+clean: unpatch
+	###################### clean ######################
+	dh_testdir
+	dh_testroot
+	
+	# please dpkg-source
+	rm -f po/*.gmo
+	echo -n > PATCHES
+	
+	# remove build trees
+	rm -rf $(objdir) $(objdir)-patched
+	
+	# remove autotool-generated files so they don't show up in the diff.gz
+	rm -f configure config.h.in
+	rm -f Makefile.in contrib/Makefile.in imap/Makefile.in doc/Makefile.in m4/Makefile.in
+	
+	dh_clean
+
+.PHONY: configure build build-arch build-indep clean install binary binary-arch binary-indep patch

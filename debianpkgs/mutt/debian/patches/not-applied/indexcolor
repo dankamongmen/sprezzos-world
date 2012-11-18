@@ -1,0 +1,670 @@
+# vim:ft=diff:
+This is the indexcolor patch by Christian Aichinger <Greek0@gmx.net>.
+
+This patch enables different colorings for different parts of the index
+display. For example you can choose one color for the subject, another one for
+the author, and a third one for the flags.
+
+* Patch last synced with upstream:
+  - Date: 2007-02-15
+  - File: http://greek0.net/mutt.html
+          http://greek0.net/patches/mutt-1.5.12-indexcolor-3+cb.diff
+
+* Changes made:
+  - Repatch for 1.5.13.
+  - Remove trailing whitespace.
+
+== END PATCH
+Index: mutt/color.c
+===================================================================
+--- mutt.orig/color.c	2007-02-15 21:26:09.140472816 +0100
++++ mutt/color.c	2007-02-15 21:26:47.860586464 +0100
+@@ -35,6 +35,8 @@ int ColorDefs[MT_COLOR_MAX];
+ COLOR_LINE *ColorHdrList = NULL;
+ COLOR_LINE *ColorBodyList = NULL;
+ COLOR_LINE *ColorIndexList = NULL;
++COLOR_LINE *ColorIndexSubjectList = NULL;
++COLOR_LINE *ColorIndexAuthorList = NULL;
+ 
+ /* local to this file */
+ static int ColorQuoteSize;
+@@ -93,6 +95,14 @@ static struct mapping_t Fields[] =
+   { "bold",		MT_COLOR_BOLD },
+   { "underline",	MT_COLOR_UNDERLINE },
+   { "index",		MT_COLOR_INDEX },
++  { "index_subject",	MT_COLOR_INDEX_SUBJECT },
++  { "index_author",	MT_COLOR_INDEX_AUTHOR },
++  { "index_collapsed",	MT_COLOR_INDEX_COLLAPSED },
++  { "index_date",	MT_COLOR_INDEX_DATE },
++  { "index_flags",	MT_COLOR_INDEX_FLAGS },
++  { "index_label",	MT_COLOR_INDEX_LABEL },
++  { "index_number",	MT_COLOR_INDEX_NUMBER },
++  { "index_size",	MT_COLOR_INDEX_SIZE },
+   { NULL,		0 }
+ };
+ 
+@@ -364,12 +374,55 @@ int mutt_parse_unmono (BUFFER *buf, BUFF
+   return _mutt_parse_uncolor(buf, s, data, err, 0);
+ }
+ 
++static void
++mutt_do_uncolor (BUFFER *buf, BUFFER *s, COLOR_LINE **ColorList,
++    			int *do_cache, int parse_uncolor)
++{
++  COLOR_LINE *tmp, *last = NULL;
++
++  do
++  {
++    mutt_extract_token (buf, s, 0);
++    if (!mutt_strcmp ("*", buf->data))
++    {
++      for (tmp = *ColorList; tmp; )
++      {
++        if (!*do_cache)
++	  *do_cache = 1;
++	last = tmp;
++	tmp = tmp->next;
++	mutt_free_color_line(&last, parse_uncolor);
++      }
++      *ColorList = NULL;
++    }
++    else
++    {
++      for (last = NULL, tmp = *ColorList; tmp; last = tmp, tmp = tmp->next)
++      {
++	if (!mutt_strcmp (buf->data, tmp->pattern))
++	{
++          if (!*do_cache)
++	    *do_cache = 1;
++	  dprint(1,(debugfile,"Freeing pattern \"%s\" from ColorList\n",
++	                       tmp->pattern));
++	  if (last)
++	    last->next = tmp->next;
++	  else
++	    *ColorList = tmp->next;
++	  mutt_free_color_line(&tmp, parse_uncolor);
++	  break;
++	}
++      }
++    }
++  }
++  while (MoreArgs (s));
++}
++
+ static int 
+ _mutt_parse_uncolor (BUFFER *buf, BUFFER *s, unsigned long data, BUFFER *err, 
+ 			 short parse_uncolor)
+ {
+   int object = 0, do_cache = 0;
+-  COLOR_LINE *tmp, *last = NULL;
+ 
+   mutt_extract_token (buf, s, 0);
+ 
+@@ -379,6 +432,13 @@ _mutt_parse_uncolor (BUFFER *buf, BUFFER
+     return (-1);
+   }
+ 
++  if (object > MT_COLOR_INDEX_AUTHOR) /* uncolor index column */
++  {
++    ColorDefs[object] = 0;
++    set_option (OPTFORCEREDRAWINDEX);
++    return (0);
++  }
++
+   if (mutt_strncmp (buf->data, "index", 5) != 0)
+   {
+     snprintf (err->data, err->dsize,
+@@ -416,44 +476,12 @@ _mutt_parse_uncolor (BUFFER *buf, BUFFER
+     return 0;
+   }
+      
+-  
+-  do
+-  {
+-    mutt_extract_token (buf, s, 0);
+-    if (!mutt_strcmp ("*", buf->data))
+-    {
+-      for (tmp = ColorIndexList; tmp; )
+-      {
+-        if (!do_cache)
+-	  do_cache = 1;
+-	last = tmp;
+-	tmp = tmp->next;
+-	mutt_free_color_line(&last, parse_uncolor);
+-      }
+-      ColorIndexList = NULL;
+-    }
+-    else
+-    {
+-      for (last = NULL, tmp = ColorIndexList; tmp; last = tmp, tmp = tmp->next)
+-      {
+-	if (!mutt_strcmp (buf->data, tmp->pattern))
+-	{
+-          if (!do_cache)
+-	    do_cache = 1;
+-	  dprint(1,(debugfile,"Freeing pattern \"%s\" from ColorIndexList\n",
+-	                       tmp->pattern));
+-	  if (last)
+-	    last->next = tmp->next;
+-	  else
+-	    ColorIndexList = tmp->next;
+-	  mutt_free_color_line(&tmp, parse_uncolor);
+-	  break;
+-	}
+-      }
+-    }
+-  }
+-  while (MoreArgs (s));
+-
++  if (object == MT_COLOR_INDEX)
++    mutt_do_uncolor(buf, s, &ColorIndexList, &do_cache, parse_uncolor);
++  if (object == MT_COLOR_INDEX_SUBJECT)
++    mutt_do_uncolor(buf, s, &ColorIndexSubjectList, &do_cache, parse_uncolor);
++  if (object == MT_COLOR_INDEX_AUTHOR)
++    mutt_do_uncolor(buf, s, &ColorIndexAuthorList, &do_cache, parse_uncolor);
+ 
+   if (do_cache && !option (OPTNOCURSES))
+   {
+@@ -693,7 +721,7 @@ _mutt_parse_color (BUFFER *buf, BUFFER *
+ 
+   /* extract a regular expression if needed */
+   
+-  if (object == MT_COLOR_HEADER || object == MT_COLOR_BODY || object == MT_COLOR_INDEX)
++  if (object == MT_COLOR_HEADER || object == MT_COLOR_BODY || object == MT_COLOR_INDEX || object == MT_COLOR_INDEX_SUBJECT || object == MT_COLOR_INDEX_AUTHOR)
+   {
+     if (!MoreArgs (s))
+     {
+@@ -737,6 +765,18 @@ _mutt_parse_color (BUFFER *buf, BUFFER *
+     r = add_pattern (&ColorIndexList, buf->data, 1, fg, bg, attr, err, 1);
+     set_option (OPTFORCEREDRAWINDEX);
+   }
++  else if (object == MT_COLOR_INDEX_SUBJECT)
++  {
++    r = add_pattern (&ColorIndexSubjectList, buf->data,
++		     1, fg, bg, attr, err, 1);
++    set_option (OPTFORCEREDRAWINDEX);
++  }
++  else if (object == MT_COLOR_INDEX_AUTHOR)
++  {
++    r = add_pattern (&ColorIndexAuthorList, buf->data,
++		     1, fg, bg, attr, err, 1);
++    set_option (OPTFORCEREDRAWINDEX);
++  }
+   else if (object == MT_COLOR_QUOTED)
+   {
+     if (q_level >= ColorQuoteSize)
+@@ -762,7 +802,11 @@ _mutt_parse_color (BUFFER *buf, BUFFER *
+       ColorQuote[q_level] = fgbgattr_to_color(fg, bg, attr);
+   }
+   else
++  {
+     ColorDefs[object] = fgbgattr_to_color(fg, bg, attr);
++    if (object > MT_COLOR_INDEX_AUTHOR)
++      set_option (OPTFORCEREDRAWINDEX);
++  }
+ 
+ #ifdef HAVE_COLOR
+ # ifdef HAVE_BKGDSET
+Index: mutt/curs_lib.c
+===================================================================
+--- mutt.orig/curs_lib.c	2007-02-15 21:26:09.183466280 +0100
++++ mutt/curs_lib.c	2007-02-15 21:26:15.898445448 +0100
+@@ -648,6 +648,7 @@ void mutt_format_string (char *dest, siz
+   size_t k, k2;
+   char scratch[MB_LEN_MAX];
+   mbstate_t mbstate1, mbstate2;
++  int escaped = 0;
+ 
+   memset(&mbstate1, 0, sizeof (mbstate1));
+   memset(&mbstate2, 0, sizeof (mbstate2));
+@@ -663,7 +664,15 @@ void mutt_format_string (char *dest, siz
+       k = (k == (size_t)(-1)) ? 1 : n;
+       wc = replacement_char ();
+     }
+-    if (arboreal && wc < M_TREE_MAX)
++    if (escaped) {
++      escaped = 0;
++      w = 0;
++    }
++    else if (arboreal && wc == M_SPECIAL_INDEX) {
++      escaped = 1;
++      w = 0;
++    }
++    else if (arboreal && wc < M_TREE_MAX)
+       w = 1; /* hack */
+     else
+     {
+Index: mutt/hdrline.c
+===================================================================
+--- mutt.orig/hdrline.c	2007-02-15 21:26:09.226459744 +0100
++++ mutt/hdrline.c	2007-02-15 21:26:15.899445296 +0100
+@@ -99,6 +99,34 @@ static int first_mailing_list (char *buf
+   return 0;
+ }
+ 
++/* Takes the color to embed, the buffer to manipulate and the buffer length as
++ * arguments.
++ * Returns the number of chars written. */
++static size_t add_index_color(char *buf, size_t buflen,
++    			   format_flag flags, char color)
++{
++  int len;
++
++  /* only add color markers if we are operating on main index entries. */
++  if (!(flags & M_FORMAT_INDEX))
++    return 0;
++
++  if (color == MT_COLOR_INDEX) { /* buf might be uninitialized other cases */
++    len = mutt_strlen(buf);
++    buf += len;
++    buflen -= len;
++  }
++
++  if (buflen < 2)
++    return 0;
++
++  buf[0] = M_SPECIAL_INDEX;
++  buf[1] = color;
++  buf[2] = '\0';
++
++  return 2;
++}
++
+ static void make_from (ENVELOPE *hdr, char *buf, size_t len, int do_lists)
+ {
+   int me;
+@@ -251,6 +279,7 @@ hdr_format_str (char *dest,
+ #define THREAD_NEW (threads && hdr->collapsed && hdr->num_hidden > 1 && mutt_thread_contains_unread (ctx, hdr) == 1)
+ #define THREAD_OLD (threads && hdr->collapsed && hdr->num_hidden > 1 && mutt_thread_contains_unread (ctx, hdr) == 2)
+   size_t len;
++  size_t colorlen;
+ 
+   hdr = hfi->hdr;
+   ctx = hfi->ctx;
+@@ -302,12 +331,17 @@ hdr_format_str (char *dest,
+       break;
+     
+     case 'c':
++      colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_SIZE);
+       mutt_pretty_size (buf2, sizeof (buf2), (long) hdr->content->length);
+-      mutt_format_s (dest, destlen, prefix, buf2);
++      mutt_format_s (dest+colorlen, destlen-colorlen, prefix, buf2);
++      add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
+       break;
+ 
+     case 'C':
+-      snprintf (fmt, sizeof (fmt), "%%%sd", prefix);
++      colorlen = add_index_color(fmt, sizeof(fmt), flags, MT_COLOR_INDEX_NUMBER);
++      snprintf (fmt+colorlen, sizeof(fmt)-colorlen, "%%%sd", prefix);
++      add_index_color(fmt+colorlen, sizeof(fmt)-colorlen, flags, MT_COLOR_INDEX);
++
+       snprintf (dest, destlen, fmt, hdr->msgno + 1);
+       break;
+ 
+@@ -406,7 +440,10 @@ hdr_format_str (char *dest,
+ 	if (do_locales)
+ 	  setlocale (LC_TIME, "C");
+ 
+-	mutt_format_s (dest, destlen, prefix, buf2);
++	colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_DATE);
++	mutt_format_s (dest+colorlen, destlen-colorlen, prefix, buf2);
++	add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
++
+ 	if (len > 0 && op != 'd' && op != 'D') /* Skip ending op */
+ 	  src = cp + 1;
+       }
+@@ -436,8 +473,10 @@ hdr_format_str (char *dest,
+     case 'F':
+       if (!optional)
+       {
++	colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_AUTHOR);
+         make_from (hdr->env, buf2, sizeof (buf2), 0);
+-	mutt_format_s (dest, destlen, prefix, buf2);
++	mutt_format_s (dest+colorlen, destlen-colorlen, prefix, buf2);
++	add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
+       }
+       else if (mutt_addr_is_user (hdr->env->from))
+         optional = 0;
+@@ -463,7 +502,9 @@ hdr_format_str (char *dest,
+       if (!optional)
+       {
+ 	snprintf (fmt, sizeof (fmt), "%%%sd", prefix);
+-	snprintf (dest, destlen, fmt, (int) hdr->lines);
++	colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_SIZE);
++	snprintf (dest+colorlen, destlen-colorlen, fmt, (int) hdr->lines);
++	add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
+       }
+       else if (hdr->lines <= 0)
+         optional = 0;
+@@ -472,8 +513,10 @@ hdr_format_str (char *dest,
+     case 'L':
+       if (!optional)
+       {
++	colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_AUTHOR);
+ 	make_from (hdr->env, buf2, sizeof (buf2), 1);
+-	mutt_format_s (dest, destlen, prefix, buf2);
++	mutt_format_s (dest+colorlen, destlen-colorlen, prefix, buf2);
++	add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
+       }
+       else if (!check_for_mailing_list (hdr->env->to, NULL, NULL, 0) &&
+ 	       !check_for_mailing_list (hdr->env->cc, NULL, NULL, 0))
+@@ -528,10 +571,16 @@ hdr_format_str (char *dest,
+       snprintf (fmt, sizeof (fmt), "%%%sd", prefix);
+       if (!optional)
+       {
+-	if (threads && is_index && hdr->collapsed && hdr->num_hidden > 1)
+-	  snprintf (dest, destlen, fmt, hdr->num_hidden);
+-	else if (is_index && threads)
+-	  mutt_format_s (dest, destlen, prefix, " ");
++	colorlen = add_index_color(dest, destlen, flags,
++				   MT_COLOR_INDEX_COLLAPSED);
++	if (threads && is_index && hdr->collapsed && hdr->num_hidden > 1) {
++	  snprintf (dest+colorlen, destlen-colorlen, fmt, hdr->num_hidden);
++	  add_index_color(dest, destlen-colorlen, flags, MT_COLOR_INDEX);
++	}
++	else if (is_index && threads) {
++	  mutt_format_s (dest+colorlen, destlen-colorlen, prefix, " ");
++	  add_index_color(dest, destlen-colorlen, flags, MT_COLOR_INDEX);
++	}
+ 	else
+ 	  *dest = '\0';
+       }
+@@ -548,15 +597,23 @@ hdr_format_str (char *dest,
+       {
+ 	if (flags & M_FORMAT_FORCESUBJ)
+ 	{
+-	  mutt_format_s (dest, destlen, "", NONULL (hdr->env->subject));
++	  colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_SUBJECT);
++	  mutt_format_s (dest+colorlen, destlen-colorlen, "",
++	      NONULL (hdr->env->subject));
++	  add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
++
+ 	  snprintf (buf2, sizeof (buf2), "%s%s", hdr->tree, dest);
+ 	  mutt_format_s_tree (dest, destlen, prefix, buf2);
+ 	}
+ 	else
+ 	  mutt_format_s_tree (dest, destlen, prefix, hdr->tree);
+       }
+-      else
+-	mutt_format_s (dest, destlen, prefix, NONULL (hdr->env->subject));
++      else {
++	colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_SUBJECT);
++	mutt_format_s (dest+colorlen, destlen-colorlen, prefix,
++	    NONULL (hdr->env->subject));
++	add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
++      }
+       break;
+ 
+     case 'S':
+@@ -652,7 +709,9 @@ hdr_format_str (char *dest,
+ 		hdr->tagged ? '*' :
+ 		(hdr->flagged ? '!' :
+ 		 (Tochars && ((i = mutt_user_is_recipient (hdr)) < mutt_strlen (Tochars)) ? Tochars[i] : ' ')));
+-      mutt_format_s (dest, destlen, prefix, buf2);
++      colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_FLAGS);
++      mutt_format_s (dest+colorlen, destlen-colorlen, prefix, buf2);
++      add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
+       break;
+ 
+     case 'X':
+@@ -672,7 +731,9 @@ hdr_format_str (char *dest,
+        if (optional)
+ 	 optional = hdr->env->x_label ? 1 : 0;
+ 
+-       mutt_format_s (dest, destlen, prefix, NONULL (hdr->env->x_label));
++       colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_LABEL);
++       mutt_format_s (dest+colorlen, destlen-colorlen, prefix, NONULL (hdr->env->x_label));
++       add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
+        break;
+  
+     case 'Y':
+@@ -698,10 +759,12 @@ hdr_format_str (char *dest,
+       if (optional)
+ 	optional = i;
+ 
++      colorlen = add_index_color(dest, destlen, flags, MT_COLOR_INDEX_LABEL);
+       if (i)
+-        mutt_format_s (dest, destlen, prefix, NONULL (hdr->env->x_label));
++        mutt_format_s (dest+colorlen, destlen-colorlen, prefix, NONULL (hdr->env->x_label));
+       else
+-        mutt_format_s (dest, destlen, prefix, "");
++        mutt_format_s (dest+colorlen, destlen-colorlen, prefix, "");
++      add_index_color(dest+colorlen, destlen-colorlen, flags, MT_COLOR_INDEX);
+ 
+       break;
+ 
+Index: mutt/menu.c
+===================================================================
+--- mutt.orig/menu.c	2007-02-15 21:26:09.270453056 +0100
++++ mutt/menu.c	2007-02-15 21:26:15.900445144 +0100
+@@ -36,7 +36,30 @@ extern int Charset_is_utf8; /* FIXME: ba
+ 
+ extern size_t UngetCount;
+ 
+-static void print_enriched_string (int attr, unsigned char *s, int do_color)
++static int get_color(int index, int type) {
++  COLOR_LINE *color;
++  HEADER *hdr = Context->hdrs[index];
++
++  switch (type) {
++    case MT_COLOR_INDEX_SUBJECT:
++      color = ColorIndexSubjectList;
++      break;
++    case MT_COLOR_INDEX_AUTHOR:
++      color = ColorIndexAuthorList;
++      break;
++    default:
++      return ColorDefs[type];
++  }
++
++  for (; color; color = color->next)
++    if (mutt_pattern_exec (color->color_pattern, M_MATCH_FULL_ADDRESS,
++	Context, hdr))
++      return color->pair;
++
++  return 0;
++}
++
++static void print_enriched_string (int index, int attr, unsigned char *s, int do_color)
+ {
+   wchar_t wc;
+   size_t k;
+@@ -133,6 +156,18 @@ static void print_enriched_string (int a
+       }
+       if (do_color) attrset(attr);
+     }
++    else if(*s == M_SPECIAL_INDEX)
++    {
++      s++;
++      if (do_color) {
++	if (*s == MT_COLOR_INDEX)
++	  attrset(attr);
++	else
++	  attron(get_color(index, *s));
++      }
++      s++;
++      n -= 2;
++    }
+     else if ((k = mbrtowc (&wc, (char *)s, n, &mbstate)) > 0)
+     {
+       addnstr ((char *)s, k);
+@@ -235,7 +270,7 @@ void menu_redraw_index (MUTTMENU *menu)
+ 	  addstr ("   ");
+ 	}
+ 
+-        print_enriched_string (menu->color(i), (unsigned char *) buf, 1);
++        print_enriched_string (i, menu->color(i), (unsigned char *) buf, 1);
+         SETCOLOR (MT_COLOR_NORMAL);          
+       }
+       else
+@@ -249,7 +284,7 @@ void menu_redraw_index (MUTTMENU *menu)
+ 	}
+ 
+ 	CLEARLINE (i - menu->top + menu->offset);
+-	print_enriched_string (menu->color(i), (unsigned char *) buf, i != menu->current);
++	print_enriched_string (i, menu->color(i), (unsigned char *) buf, i != menu->current);
+         SETCOLOR (MT_COLOR_NORMAL);
+         BKGDSET (MT_COLOR_NORMAL);
+       }
+@@ -286,7 +321,7 @@ void menu_redraw_motion (MUTTMENU *menu)
+       menu_make_entry (buf, sizeof (buf), menu, menu->oldcurrent);
+       menu_pad_string (buf, sizeof (buf));
+       move (menu->oldcurrent + menu->offset - menu->top, 3);
+-      print_enriched_string (menu->color(menu->oldcurrent), (unsigned char *) buf, 1);
++      print_enriched_string (menu->oldcurrent, menu->color(menu->oldcurrent), (unsigned char *) buf, 1);
+       SETCOLOR (MT_COLOR_NORMAL);
+     }
+ 
+@@ -304,7 +339,7 @@ void menu_redraw_motion (MUTTMENU *menu)
+     clrtoeol ();
+     menu_make_entry (buf, sizeof (buf), menu, menu->oldcurrent);
+     menu_pad_string (buf, sizeof (buf));
+-    print_enriched_string (menu->color(menu->oldcurrent), (unsigned char *) buf, 1);
++    print_enriched_string (menu->oldcurrent, menu->color(menu->oldcurrent), (unsigned char *) buf, 1);
+ 
+     /* now draw the new one to reflect the change */
+     menu_make_entry (buf, sizeof (buf), menu, menu->current);
+@@ -313,7 +348,7 @@ void menu_redraw_motion (MUTTMENU *menu)
+     ADDCOLOR (MT_COLOR_INDICATOR);
+     BKGDSET (MT_COLOR_INDICATOR);
+     CLEARLINE (menu->current - menu->top + menu->offset);
+-    print_enriched_string (menu->color(menu->current), (unsigned char *) buf, 0);
++    print_enriched_string (menu->current, menu->color(menu->current), (unsigned char *) buf, 0);
+     SETCOLOR (MT_COLOR_NORMAL);
+     BKGDSET (MT_COLOR_NORMAL);
+   }
+@@ -339,7 +374,7 @@ void menu_redraw_current (MUTTMENU *menu
+     attrset (attr);
+     addch (' ');
+     menu_pad_string (buf, sizeof (buf));
+-    print_enriched_string (menu->color(menu->current), (unsigned char *) buf, 1);
++    print_enriched_string (menu->current, menu->color(menu->current), (unsigned char *) buf, 1);
+     SETCOLOR (MT_COLOR_NORMAL);
+   }
+   else
+@@ -348,7 +383,7 @@ void menu_redraw_current (MUTTMENU *menu
+     ADDCOLOR (MT_COLOR_INDICATOR);
+     BKGDSET (MT_COLOR_INDICATOR);
+     clrtoeol ();
+-    print_enriched_string (menu->color(menu->current), (unsigned char *) buf, 0);
++    print_enriched_string (menu->current, menu->color(menu->current), (unsigned char *) buf, 0);
+     SETCOLOR (MT_COLOR_NORMAL);
+     BKGDSET (MT_COLOR_NORMAL);
+   }
+Index: mutt/mutt_curses.h
+===================================================================
+--- mutt.orig/mutt_curses.h	2007-02-15 21:26:09.314446368 +0100
++++ mutt/mutt_curses.h	2007-02-15 21:26:15.900445144 +0100
+@@ -126,6 +126,16 @@ enum
+   MT_COLOR_BOLD,
+   MT_COLOR_UNDERLINE,
+   MT_COLOR_INDEX,
++  /* please no non-MT_COLOR_INDEX objects after this point */
++  MT_COLOR_INDEX_SUBJECT,
++  MT_COLOR_INDEX_AUTHOR,
++  /* below only index coloring stuff that doesn't have a colorline! */
++  MT_COLOR_INDEX_COLLAPSED,
++  MT_COLOR_INDEX_DATE,
++  MT_COLOR_INDEX_FLAGS,
++  MT_COLOR_INDEX_LABEL,
++  MT_COLOR_INDEX_NUMBER,
++  MT_COLOR_INDEX_SIZE,
+   MT_COLOR_MAX
+ };
+ 
+@@ -165,6 +175,8 @@ extern int ColorDefs[];
+ extern COLOR_LINE *ColorHdrList;
+ extern COLOR_LINE *ColorBodyList;
+ extern COLOR_LINE *ColorIndexList;
++extern COLOR_LINE *ColorIndexSubjectList;
++extern COLOR_LINE *ColorIndexAuthorList;
+ 
+ void ci_init_color (void);
+ void ci_start_color (void);
+Index: mutt/mutt.h
+===================================================================
+--- mutt.orig/mutt.h	2007-02-15 21:26:09.358439680 +0100
++++ mutt/mutt.h	2007-02-15 21:26:15.901444992 +0100
+@@ -176,6 +176,8 @@ typedef enum
+ #define M_TREE_MISSING		13
+ #define M_TREE_MAX		14
+ 
++#define M_SPECIAL_INDEX		M_TREE_MAX
++
+ #define M_THREAD_COLLAPSE	(1<<0)
+ #define M_THREAD_UNCOLLAPSE	(1<<1)
+ #define M_THREAD_GET_HIDDEN	(1<<2)
+Index: mutt/doc/manual.xml.head
+===================================================================
+--- mutt.orig/doc/manual.xml.head	2007-02-15 21:26:09.446426304 +0100
++++ mutt/doc/manual.xml.head	2007-02-15 21:26:15.903444688 +0100
+@@ -1837,8 +1837,8 @@ silently truncated at the screen width, 
+ <para>
+ <literallayout>
+ Usage: <literal>color</literal> <emphasis>object</emphasis> <emphasis>foreground</emphasis> <emphasis>background</emphasis> &lsqb; <emphasis>regexp</emphasis> &rsqb;
+-Usage: <literal>color</literal> index <emphasis>foreground</emphasis> <emphasis>background</emphasis> <emphasis>pattern</emphasis>
+-Usage: <literal>uncolor</literal> index <emphasis>pattern</emphasis> &lsqb; <emphasis>pattern</emphasis> ...  &rsqb;
++Usage: <literal>color</literal> <emphasis>index-object</emphasis> <emphasis>foreground</emphasis> <emphasis>background</emphasis> <emphasis>pattern</emphasis>
++  Usage: <literal>uncolor</literal> <emphasis>index-object</emphasis> <emphasis>pattern</emphasis> &lsqb; <emphasis>pattern</emphasis> ...  &rsqb;
+ </literallayout>
+ </para>
+ 
+@@ -1901,6 +1901,54 @@ index (match <emphasis>pattern</emphasis
+ <listitem>
+ 
+ <para>
++index_author (color of the author name in the index, uses <emphasis>pattern</emphasis>)
++</para>
++</listitem>
++<listitem>
++
++<para>
++index_collapsed (the number of messages in a collapsed thread in the index)
++</para>
++</listitem>
++<listitem>
++
++<para>
++index_date (color of the date field in the index)
++</para>
++</listitem>
++<listitem>
++
++<para>
++index_flags (color of the message flags in the index)
++</para>
++</listitem>
++<listitem>
++
++<para>
++index_label (color of the message label in the index)
++</para>
++</listitem>
++<listitem>
++
++<para>
++index_number (color of the message number in the index)
++</para>
++</listitem>
++<listitem>
++
++<para>
++index_size (color of the message size and line number in the index)
++</para>
++</listitem>
++<listitem>
++
++<para>
++index_subject (color of the subject in the index, uses <emphasis>pattern</emphasis>)
++</para>
++</listitem>
++<listitem>
++
++<para>
+ indicator (arrow or bar used to indicate the current item in a menu)
+ </para>
+ </listitem>
+--- a/PATCHES
++++ b/PATCHES
+@@ -0,0 +1 @@
++patch-1.5.13.greek0.indexcolor-3+cb

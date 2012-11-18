@@ -1,0 +1,308 @@
+# vim:ft=diff:
+This is the xface (w3mface) patch by TAKAHASHI Tamotsu
+<ttakah@lapis.plala.or.jp>.
+
+Needs w3m-img, compface, and netpbm installed.
+
+* Homepage: http://www.df7cb.de/projects/mutt/x-face/
+
+* Changes made:
+  - Remove LIBEXECDIR definition to avoid needing rerunning automake,
+    hardcode /usr/lib/w3m/w3mimgdisplay.
+
+== END PATCH
+Index: xface/globals.h
+===================================================================
+--- xface.orig/globals.h	2007-02-15 20:28:46.961763520 +0100
++++ xface/globals.h	2007-02-15 20:28:56.069378952 +0100
+@@ -146,6 +146,11 @@ WHERE const char *ReleaseDate;
+ 
+ WHERE HASH *Groups;
+ 
++WHERE char *UncompFace;
++WHERE char *IconToPbm;
++WHERE char *W3mImgDisplay;
++WHERE char *W3mOpt;
++
+ WHERE LIST *AutoViewList INITVAL(0);
+ WHERE LIST *AlternativeOrderList INITVAL(0);
+ WHERE LIST *AttachAllow INITVAL(0);
+Index: xface/hcache.c
+===================================================================
+--- xface.orig/hcache.c	2007-02-15 20:28:46.968762456 +0100
++++ xface/hcache.c	2007-02-15 20:28:56.069378952 +0100
+@@ -401,6 +401,7 @@ dump_envelope(ENVELOPE * e, unsigned cha
+   d = dump_char(e->message_id, d, off);
+   d = dump_char(e->supersedes, d, off);
+   d = dump_char(e->date, d, off);
++  d = dump_char(e->x_face, d, off);
+   d = dump_char(e->x_label, d, off);
+ 
+   d = dump_buffer(e->spam, d, off);
+@@ -438,6 +439,7 @@ restore_envelope(ENVELOPE * e, const uns
+   restore_char(&e->message_id, d, off);
+   restore_char(&e->supersedes, d, off);
+   restore_char(&e->date, d, off);
++  restore_char(&e->x_face, d, off);
+   restore_char(&e->x_label, d, off);
+ 
+   restore_buffer(&e->spam, d, off);
+Index: xface/init.h
+===================================================================
+--- xface.orig/init.h	2007-02-15 20:28:46.976761240 +0100
++++ xface/init.h	2007-02-15 20:29:15.382442920 +0100
+@@ -2941,6 +2941,31 @@ struct option_t MuttVars[] = {
+   ** Controls whether mutt writes out the Bcc header when preparing
+   ** messages to be sent.  Exim users may wish to unset this.
+   */
++  { "xface",		DT_BOOL, R_NONE, OPTXFACE, 0 },
++  /*
++  ** .pp
++  ** Controls whether mutt displays X-Faces.
++  */
++  { "xface_icontopbm",	DT_PATH, R_NONE, UL &IconToPbm, UL "icontopbm" },
++  /*
++  ** .pp
++  ** Specify the path to ``icontopbm'' program.
++  */
++  { "xface_uncompface",	DT_PATH, R_NONE, UL &UncompFace, UL "uncompface" },
++  /*
++  ** .pp
++  ** Specify the path to ``uncompface'' program.
++  */
++  { "xface_w3mimgdisplay",DT_PATH, R_NONE, UL &W3mImgDisplay, UL "/usr/lib/w3m/w3mimgdisplay" },
++  /*
++  ** .pp
++  ** Specify the path to ``w3mimgdisplay'' program.
++  */
++  { "xface_w3mimgdisplay_options",DT_STR, R_NONE, UL &W3mOpt, UL "-x 5 -y 5" },
++  /*
++  ** .pp
++  ** Specify options for ``w3mimgdisplay'' program.
++  */
+   /*--*/
+   { NULL }
+ };
+Index: xface/mutt.h
+===================================================================
+--- xface.orig/mutt.h	2007-02-15 20:28:46.983760176 +0100
++++ xface/mutt.h	2007-02-15 20:28:56.071378648 +0100
+@@ -450,6 +450,7 @@ enum
+   OPTWRAP,
+   OPTWRAPSEARCH,
+   OPTWRITEBCC,		/* write out a bcc header? */
++  OPTXFACE,
+   OPTXMAILER,
+ 
+   OPTCRYPTUSEGPGME,
+@@ -587,6 +588,7 @@ typedef struct envelope
+   char *message_id;
+   char *supersedes;
+   char *date;
++  char *x_face;			/* X-Face header content */
+   char *x_label;
+   BUFFER *spam;
+   LIST *references;		/* message references (in reverse order) */
+Index: xface/muttlib.c
+===================================================================
+--- xface.orig/muttlib.c	2007-02-15 20:28:46.991758960 +0100
++++ xface/muttlib.c	2007-02-15 20:28:56.072378496 +0100
+@@ -670,6 +670,7 @@ void mutt_free_envelope (ENVELOPE **p)
+   FREE (&(*p)->message_id);
+   FREE (&(*p)->supersedes);
+   FREE (&(*p)->date);
++  FREE (&(*p)->x_face);
+   FREE (&(*p)->x_label);
+ 
+   mutt_buffer_free (&(*p)->spam);
+Index: xface/pager.c
+===================================================================
+--- xface.orig/pager.c	2007-02-15 20:28:47.000757592 +0100
++++ xface/pager.c	2007-02-15 20:28:56.072378496 +0100
+@@ -1479,6 +1479,89 @@ upNLines (int nlines, struct line_t *inf
+   return cur;
+ }
+ 
++static int
++display_xface (HEADER *hdr)
++{
++  char facefile[_POSIX_PATH_MAX + 1];
++  char command[LONG_STRING];
++  char *facedata;
++  FILE *fpin = NULL, *fpout = NULL;
++  pid_t pid;
++
++  /* everything ready? */
++  if (!UncompFace	|| !(*UncompFace) ||
++      !IconToPbm	|| !(*IconToPbm) ||
++      !W3mImgDisplay	|| !(*W3mImgDisplay) ||
++      !hdr || !hdr->env || !hdr->env->x_face)
++    return 0;
++
++  /* test w3mimgdisplay */
++  snprintf (command, sizeof (command), "%s -test >/dev/null", W3mImgDisplay);
++  if (mutt_system (command) == -1)
++    return 0;
++
++  /* prepare facedata */
++  facedata = hdr->env->x_face;
++
++  /* convert facedata to imagedata
++   * and store imagedata in facefile
++   */
++  mutt_mktemp (facefile);
++  if ((fpout = safe_fopen (facefile, "w")) == NULL)
++  {
++    mutt_error (_("Could not create temporary file!"));
++    return 0;
++  }
++  snprintf (command, sizeof (command),
++	    "( echo '/* Width=48, Height=48 */'; %s ) | %s",
++	    UncompFace, IconToPbm);
++  pid = mutt_create_filter_fd
++	  (command, &fpin, NULL, NULL, -1, fileno (fpout), -1);
++  if (pid < 0)
++  {
++    mutt_perror (_("face filter"));
++    safe_fclose (&fpout);
++    mutt_unlink (facefile);
++    return 0;
++  }
++  /* pass facedata to converters */
++  fputs (facedata, fpin);
++  if (safe_fclose (&fpin) != 0 && errno != EPIPE)
++  {
++    if (fpout != NULL)
++    {
++      mutt_wait_filter (pid);
++      safe_fclose (&fpout);
++    }
++    mutt_unlink (facefile);
++    return 0;
++  }
++  if (fpout != NULL)
++    mutt_wait_filter (pid);
++  safe_fclose (&fpout);
++
++  /*
++   * w3mimgdisplay
++   */
++  snprintf (command, sizeof (command),
++	    "%s %s", W3mImgDisplay, NONULL (W3mOpt));
++  pid = mutt_create_filter_fd
++	  (command, &fpin, NULL, NULL, -1, -1, -1);
++  if (pid < 0)
++  {
++    mutt_perror ("w3mdisp");
++    mutt_unlink (facefile);
++    return 0;
++  }
++  /* pass facefile to w3mimgdisplay */
++  fprintf (fpin, "2;3;\n0;1;0;0;48;48;0;0;48;48;%s\n4;\n3;\n", facefile);
++  if (safe_fclose (&fpin) != 0 && errno != EPIPE)
++    mutt_perror ("w3mdisp");
++  mutt_wait_filter (pid);
++  mutt_unlink (facefile);
++  return 0;
++}
++
+ static struct mapping_t PagerHelp[] = {
+   { N_("Exit"),	OP_EXIT },
+   { N_("PrevPg"), OP_PREV_PAGE },
+@@ -1514,6 +1597,7 @@ mutt_pager (const char *banner, const ch
+   int lines = 0, curline = 0, topline = 0, oldtopline = 0, err, first = 1;
+   int r = -1;
+   int redraw = REDRAW_FULL;
++  int xface = 0;
+   FILE *fp = NULL;
+   LOFF_T last_pos = 0, last_offset = 0;
+   int old_smart_wrap, old_markers;
+@@ -1593,6 +1677,8 @@ mutt_pager (const char *banner, const ch
+     
+     if (redraw & REDRAW_FULL)
+     {
++      xface = 1; /* display xface later */
++
+       SETCOLOR (MT_COLOR_NORMAL);
+       /* clear() doesn't optimize screen redraws */
+       move (0, 0);
+@@ -1794,6 +1880,11 @@ mutt_pager (const char *banner, const ch
+     } else move (statusoffset, COLS-1);
+     mutt_refresh ();
+ 
++    /* X-Face */
++    if (option (OPTXFACE) && xface && IsHeader (extra))
++      display_xface (extra->hdr);
++    xface = 0;
++
+     if (IsHeader (extra) && OldHdr == extra->hdr && TopLine != topline
+         && lineInfo[curline].offset < sb.st_size-1)
+     {
+Index: xface/parse.c
+===================================================================
+--- xface.orig/parse.c	2007-02-15 20:28:47.007756528 +0100
++++ xface/parse.c	2007-02-15 20:28:56.073378344 +0100
+@@ -43,6 +43,7 @@ char *mutt_read_rfc822_line (FILE *f, ch
+   char *buf = line;
+   char ch;
+   size_t offset = 0;
++  int xface = 0;
+ 
+   FOREVER
+   {
+@@ -53,6 +54,9 @@ char *mutt_read_rfc822_line (FILE *f, ch
+       return (line);
+     }
+ 
++    if (ascii_strcasecmp (buf, "x-face:") == 0)
++      xface = 1;
++
+     buf += strlen (buf) - 1;
+     if (*buf == '\n')
+     {
+@@ -71,9 +75,12 @@ char *mutt_read_rfc822_line (FILE *f, ch
+       /* eat tabs and spaces from the beginning of the continuation line */
+       while ((ch = fgetc (f)) == ' ' || ch == '\t')
+ 	;
+-      ungetc (ch, f);
+-      *++buf = ' '; /* string is still terminated because we removed
+-		       at least one whitespace char above */
++      if (!xface)
++      {
++	ungetc (ch, f);
++	*++buf = ' '; /* string is still terminated because we removed
++			 at least one whitespace char above */
++      }
+     }
+ 
+     buf++;
+@@ -1244,6 +1251,11 @@ int mutt_parse_rfc822_line (ENVELOPE *e,
+       e->x_label = safe_strdup(p);
+       matched = 1;
+     }
++    else if (ascii_strcasecmp (line+1, "-face") == 0)
++    {
++      e->x_face = safe_strdup (p);
++      matched = 1;
++    }
+     
+     default:
+     break;
+Index: xface/sendlib.c
+===================================================================
+--- xface.orig/sendlib.c	2007-02-15 20:28:47.017755008 +0100
++++ xface/sendlib.c	2007-02-15 20:28:56.074378192 +0100
+@@ -1829,6 +1829,9 @@ int mutt_write_rfc822_header (FILE *fp, 
+     }
+   }
+ 
++  if (env->x_face)
++    fprintf (fp, "X-Face: %s\n", env->x_face);
++
+   if (mode == 0 && !privacy && option (OPTXMAILER) && !has_agent)
+   {
+     /* Add a vanity header */
+--- a/PATCHES
++++ b/PATCHES
+@@ -0,0 +1 @@
++patch-1.5.13.tamo.w3mface.2
