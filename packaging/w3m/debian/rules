@@ -1,0 +1,109 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+dpkg_buildflags = DEB_BUILD_MAINT_OPTIONS=$(DEB_BUILD_MAINT_OPTIONS) dpkg-buildflags
+CFLAGS=$(shell $(dpkg_buildflags) --get CFLAGS)
+CPPFLAGS=$(shell $(dpkg_buildflags) --get CPPFLAGS)
+LDFLAGS=$(shell $(dpkg_buildflags) --get LDFLAGS)
+
+ifeq ($(DEB_BUILD_ARCH_OS),linux)
+  DEVS=x11,fb+s
+else
+  DEVS=x11
+endif
+
+confargs := --prefix=/usr --sysconfdir=/etc --libexecdir=/usr/lib \
+	--mandir=/usr/share/man \
+	--with-gc --with-ssl \
+	--with-imagelib=imlib2 \
+	--with-migemo="migemo -t egrep /usr/share/migemo/migemo-dict" \
+	--with-editor=/usr/bin/sensible-editor \
+	--enable-gopher \
+	--enable-image=$(DEVS) \
+	--enable-m17n --enable-unicode --enable-nls
+
+builddir := .
+
+build-indep:
+
+build-arch: build-stamp
+build-stamp:
+	dh_testdir
+	cd $(builddir) && dh_autotools-dev_updateconfig
+	cd $(builddir) && CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure $(confargs)
+	cd $(builddir) && LC_ALL=C $(MAKE) OPTS="-Wall -g -DDEBIAN"
+	cd $(builddir)/po && LC_ALL=C $(MAKE) update-gmo
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	if test -f $(builddir)/Makefile; then cd $(builddir) && $(MAKE) distclean; fi
+	cd $(builddir) && dh_autotools-dev_restoreconfig
+	rm -f $(builddir)/po/*.gmo
+	rm -f $(builddir)/po/stamp-po
+	rm -f extract-stamp patch-stamp configure-stamp build-stamp install-stamp
+	dh_clean
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	cd $(builddir) && $(MAKE) install DESTDIR=$(CURDIR)/debian/w3m INSTALL_W3MIMGDISPLAY="install -g video -m 2755"
+	install -m 644 debian/w3mconfig $(CURDIR)/debian/w3m/etc/w3m/config
+	install -m 644 debian/mailcap $(CURDIR)/debian/w3m/etc/w3m/mailcap
+	mv -f debian/w3m/usr/lib/w3m/w3mimgdisplay debian/w3m-img/usr/lib/w3m/w3mimgdisplay
+	touch install-stamp
+
+binary-indep:
+
+binary-arch: install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdocs -a
+	-rm -f debian/w3m/usr/share/doc/w3m/README.cygwin
+	-mv -f debian/w3m/usr/share/doc/w3m/README.img debian/w3m-img/usr/share/doc/w3m-img/README.img
+	cp -a $(builddir)/doc-jp/* debian/w3m/usr/share/doc/w3m/ja/
+	-mv -f debian/w3m/usr/share/doc/w3m/ja/README.img debian/w3m-img/usr/share/doc/w3m-img/README.img.ja
+	-rm -f debian/w3m/usr/share/doc/w3m/ja/w3m.1
+	-rm -f debian/w3m/usr/share/doc/w3m/ja/README.cygwin
+	-rm -rf debian/w3m/usr/share/doc/w3m/ja/CVS
+	dh_installexamples -a
+	cp -a $(builddir)/Bonus/* debian/w3m/usr/share/doc/w3m/examples/Bonus/
+	-rm -rf debian/w3m/usr/share/doc/w3m/examples/Bonus/CVS
+	cd debian/w3m/usr/share/doc/w3m/examples/Bonus && find . -type f -print | \
+	while read f; do \
+		mv -f $$f $$f.tmp; \
+		LC_ALL=C sed -e 's:/usr/local/bin/:/usr/bin/:' \
+			-e 's:/bin/env:/usr/bin/env:' \
+			$$f.tmp > $$f; \
+		rm -f $$f.tmp; \
+	done
+	cd debian/w3m/usr/share/doc/w3m && \
+		mv ja/keymap.* ja/examples; mv ja/menu.* ja/examples
+	dh_installmenu
+	dh_installmime
+#	dh_installman
+	dh_installchangelogs -a $(builddir)/ChangeLog
+	dh_strip -a
+	dh_compress -a
+	dh_lintian -a
+	dh_fixperms -a -Xw3mimgdisplay
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+#	dh_makeshlibs -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+source diff:                                                                  
+	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false
+
+build: build-indep build-arch
+binary: binary-indep binary-arch
+.PHONY: build-indep build-arch build install clean binary-indep binary-arch binary
