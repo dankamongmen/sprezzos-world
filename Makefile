@@ -1858,7 +1858,7 @@ $(LIBXRENDER): $(SPREZZ)/libxrender/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf libxrender-$(libxrender_UPVER).tar.gz --strip-components=1 -C $@
+	tar xzvf libXrender-$(libxrender_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: xfce4-terminal
 xfce4-terminal:$(XFCE4TERMINAL)_$(ARCH).deb
