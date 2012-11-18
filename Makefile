@@ -47,7 +47,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison procps \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
-	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri \
+	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt \
 	x11proto-xf86vidmode libtasn
 
 SPREZZ:=packaging
@@ -204,7 +204,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
 	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
 	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) $(PROCPS) \
-	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
+	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) $(MUTT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1415,6 +1415,14 @@ $(MPD): $(SPREZZ)/mpd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf mpd_$(mpd_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: mutt
+mutt:$(MUTT)_$(ARCH).deb
+$(MUTT): $(SPREZZ)/mutt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf mutt-$(mutt_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: mutter
 mutter:$(MUTTER)_$(ARCH).deb
@@ -2652,6 +2660,7 @@ clean:
 	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO)
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
+	rm -rf $(MUTT)
 
 clobber:
 	rm -rf $(FETCHED)
