@@ -428,6 +428,20 @@ $(AUDIT): $(SPREZZ)/audit/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf audit-$(audit_UPVER).tar.gz --strip-components=1 -C $@
 
+#FETCHED:=$(FETCHED) $(ATSPI2ATKUP).tar.xz
+#$(ATSPI2ATKUP).tar.xz:
+#	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/at-spi2-atk/2.6/$@
+#
+#$(ATSPI2ATKORIG): $(ATSPI2ATKUP).tar.xz
+#	ln -sf $< $@
+#
+#.PHONY: atk-bridge
+#atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
+#$(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog $(ATSPI2ATKORIG)
+#	mkdir -p $@
+#	tar xJvf $(ATSPI2ATKORIG) --strip-components=1 -C $@
+#	cp -r $(<D) $@/
+#
 .PHONY: at-spi
 at-spi:$(ATSPI)_$(ARCH).deb
 $(ATSPI): $(SPREZZ)/at-spi/debian/changelog
@@ -2172,20 +2186,6 @@ mesa:$(MESA)_$(ARCH).deb
 $(MESA): $(SPREZZ)/mesa/debian/changelog $(MESAORIG)
 	mkdir $@
 	tar xjvf $(MESAORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(ATSPI2ATKUP).tar.xz
-$(ATSPI2ATKUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/at-spi2-atk/2.6/$@
-
-$(ATSPI2ATKORIG): $(ATSPI2ATKUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: atk-bridge
-atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
-$(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog $(ATSPI2ATKORIG)
-	mkdir -p $@
-	tar xJvf $(ATSPI2ATKORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(ATKUP).tar.xz
