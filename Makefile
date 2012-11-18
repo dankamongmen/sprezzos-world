@@ -48,7 +48,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri \
-	x11proto-xf86vidmode
+	x11proto-xf86vidmode libtasn1-3
 
 SPREZZ:=packaging
 
@@ -71,8 +71,6 @@ OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.
 SICKBEARDORIG:=sick-beard_$(shell echo $(Sick-Beard_VERSION) | cut -d- -f1).orig.tar.xz
 
 APTITUDEORIG:=aptitude_$(shell echo $(aptitude_VERSION) | cut -d- -f1).orig.tar.bz2
-ATSPI2ATKUP:=at-spi2-atk-$(shell echo $(atk-bridge_VERSION) | cut -d- -f1)
-ATSPI2ATKORIG:=at-spi2-atk_$(shell echo $(atk-bridge_VERSION) | cut -d- -f1).orig.tar.xz
 ATKUP:=atk-$(shell echo $(atk_VERSION) | cut -d- -f1)
 ATKORIG:=atk1.0_$(shell echo $(atk_VERSION) | cut -d- -f1).orig.tar.xz
 BRASEROUP:=brasero-$(shell echo $(brasero_VERSION) | cut -d: -f2- | cut -d- -f1)
@@ -208,7 +206,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
 	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
 	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) \
-	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE)
+	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN13)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -428,20 +426,6 @@ $(AUDIT): $(SPREZZ)/audit/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf audit-$(audit_UPVER).tar.gz --strip-components=1 -C $@
 
-#FETCHED:=$(FETCHED) $(ATSPI2ATKUP).tar.xz
-#$(ATSPI2ATKUP).tar.xz:
-#	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/at-spi2-atk/2.6/$@
-#
-#$(ATSPI2ATKORIG): $(ATSPI2ATKUP).tar.xz
-#	ln -sf $< $@
-#
-#.PHONY: atk-bridge
-#atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
-#$(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog $(ATSPI2ATKORIG)
-#	mkdir -p $@
-#	tar xJvf $(ATSPI2ATKORIG) --strip-components=1 -C $@
-#	cp -r $(<D) $@/
-#
 .PHONY: at-spi
 at-spi:$(ATSPI)_$(ARCH).deb
 $(ATSPI): $(SPREZZ)/at-spi/debian/changelog
@@ -1329,6 +1313,14 @@ $(LIBSYNTHESIS): $(SPREZZ)/libsynthesis/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf libsynthesis_$(synthesis_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: libtasn1-3
+libtasn1-3:$(LIBTASN13)_$(ARCH).deb
+$(LIBTASN13): $(SPREZZ)/libtasn1-3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf libtasn1-3-$(libtasn13_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: libvirt
 libvirt:$(LIBVIRT)_$(ARCH).deb
@@ -2651,7 +2643,7 @@ clean:
 	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
 	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO)
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
-	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE)
+	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN13)
 
 clobber:
 	rm -rf $(FETCHED)
