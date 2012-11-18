@@ -47,7 +47,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
-	x11proto-xinerama wayland libxrender
+	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri \
+	x11proto-xf86vidmode
 
 SPREZZ:=packaging
 
@@ -206,7 +207,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
 	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
 	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
-	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
+	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) \
+	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1812,6 +1814,30 @@ $(X11PROTOXEXT): $(SPREZZ)/x11proto-xext/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf xextproto-$(x11proto-xext_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: x11proto-xf86dga
+x11proto-xf86dga:$(X11PROTOXF86DGA)_$(ARCH).deb
+$(X11PROTOXF86DGA): $(SPREZZ)/x11proto-xf86dga/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xf86dgaproto-$(x11proto-xf86dga_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-xf86dri
+x11proto-xf86dri:$(X11PROTOXF86DRI)_$(ARCH).deb
+$(X11PROTOXF86DRI): $(SPREZZ)/x11proto-xf86dri/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xf86driproto-$(x11proto-xf86dri_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-xf86vidmode
+x11proto-xf86vidmode:$(X11PROTOXF86VIDMODE)_$(ARCH).deb
+$(X11PROTOXF86VIDMODE): $(SPREZZ)/x11proto-xf86vidmode/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xf86vidmodeproto-$(x11proto-xf86vidmode_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: x11proto-xinerama
 x11proto-xinerama:$(X11PROTOXINERAMA)_$(ARCH).deb
 $(X11PROTOXINERAMA): $(SPREZZ)/x11proto-xinerama/debian/changelog
@@ -2625,6 +2651,7 @@ clean:
 	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
 	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO)
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
+	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE)
 
 clobber:
 	rm -rf $(FETCHED)
