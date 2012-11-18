@@ -47,7 +47,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
-	x11proto-xinerama wayland
+	x11proto-xinerama wayland libxrender
 
 SPREZZ:=packaging
 
@@ -206,7 +206,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
 	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
 	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
-	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND)
+	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1852,6 +1852,14 @@ $(LIBXFCE4UTIL): $(SPREZZ)/libxfce4util/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf libxfce4util-$(libxfce4util_UPVER).tar.bz2 --strip-components=1 -C $@
 
+.PHONY: libxrender
+libxrender:$(LIBXRENDER)_$(ARCH).deb
+$(LIBXRENDER): $(SPREZZ)/libxrender/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf libxrender-$(libxrender_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: xfce4-terminal
 xfce4-terminal:$(XFCE4TERMINAL)_$(ARCH).deb
 $(XFCE4TERMINAL): $(SPREZZ)/xfce4-terminal/debian/changelog
@@ -2616,7 +2624,7 @@ clean:
 	rm -rf $(ALACARTE) $(X11PROTOFONTS) $(X11PROTOXEXT) $(X11PROTOCORE) $(BISON)
 	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB)
 	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO)
-	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND)
+	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 
 clobber:
 	rm -rf $(FETCHED)
