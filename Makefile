@@ -146,8 +146,6 @@ LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_VERSION) | cut -d- -f1).o
 LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
 LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MCELOGORIG:=mcelog_$(shell echo $(mcelog_VERSION) | cut -d- -f1).orig.tar.xz
-MESAUP:=MesaLib-$(shell echo $(mesa_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-MESAORIG:=mesa_$(shell echo $(mesa_VERSION) | cut -d- -f1).orig.tar.bz2
 MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
 NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_VERSION) | cut -d- -f1).orig.tar.xz
 FREI0RORIG:=frei0r_$(shell echo $(frei0r_VERSION) | cut -d- -f1).orig.tar.xz
@@ -1394,6 +1392,14 @@ $(METACITY): $(SPREZZ)/metacity/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf metacity_$(metacity_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: mesa
+mesa:$(MESA)_$(ARCH).deb
+$(MESA): $(SPREZZ)/mesa/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf mesa_$(mesa_UPVER).orig.tar.gz --strip-components=1 -C $@
+
 .PHONY: mp4v2
 mp4v2:$(MP4V2)_$(ARCH).deb
 $(MP4V2): $(SPREZZ)/mp4v2/debian/changelog
@@ -2173,20 +2179,6 @@ $(LIBPNG): $(SPREZZ)/libpng/debian/changelog $(LIBPNGORIG)
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
 sudo-1.8.5p3.tar.gz:
 	wget -nc -O$@ http://www.gratisoft.us/sudo/dist/sudo-1.8.5p3.tar.gz
-
-FETCHED:=$(FETCHED) $(MESAUP).tar.bz2
-$(MESAUP).tar.bz2:
-	wget -nc -O$@ ftp://ftp.freedesktop.org/pub/mesa/$(shell echo $(mesa_VERSION) | cut -d- -f1)/$(MESAUP).tar.bz2
-
-$(MESAORIG): $(MESAUP).tar.bz2
-	ln -s $< $@
-
-.PHONY: mesa
-mesa:$(MESA)_$(ARCH).deb
-$(MESA): $(SPREZZ)/mesa/debian/changelog $(MESAORIG)
-	mkdir $@
-	tar xjvf $(MESAORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(ATKUP).tar.xz
 $(ATKUP).tar.xz:
