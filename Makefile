@@ -48,7 +48,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison procps \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt \
-	x11proto-xf86vidmode libtasn tracker
+	x11proto-xf86vidmode libtasn tracker wget
 
 SPREZZ:=packaging
 
@@ -205,12 +205,12 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
 	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) $(PROCPS) \
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) \
-	$(MUTT) $(TRACKER)
+	$(MUTT) $(TRACKER) $(WGET)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
-	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG) $(PCRE)
+	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG) $(PCRE) $(WGET)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -1713,6 +1713,14 @@ $(WEBKIT): $(SPREZZ)/webkit/debian/changelog
 	cd $@ && uscan --force-download
 	tar xJvf webkit_$(webkit_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: wget
+wget:$(WGET)_$(ARCH).deb
+$(WGET): $(SPREZZ)/wget/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf wget_$(wget_UPVER).orig.tar.gz --strip-components=1 -C $@
+
 .PHONY: wifite
 wifite:$(WIFITE)_$(ARCH).deb
 $(WIFITE): $(SPREZZ)/wifite/debian/changelog
@@ -2669,7 +2677,7 @@ clean:
 	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO)
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
-	rm -rf $(MUTT) $(TRACKER)
+	rm -rf $(MUTT) $(TRACKER) $(WGET)
 
 clobber:
 	rm -rf $(FETCHED)
