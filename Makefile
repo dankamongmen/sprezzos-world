@@ -83,8 +83,6 @@ CLUTTERGSTUP:=clutter-gst-$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | c
 CLUTTERGSTORIG:=clutter-gst_$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CLUTTERGTKUP:=clutter-gtk-$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1)
 CLUTTERGTKORIG:=clutter-gtk_$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CURLUP:=curl-$(shell echo $(curl_VERSION) | cut -d= -f2- | cut -d- -f1)
-CURLORIG:=curl_$(shell echo $(curl_VERSION) | cut -d- -f1).orig.tar.bz2
 EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
 EGLIBCORIG:=eglibc_$(shell echo $(eglibc_VERSION) | cut -d- -f1).orig.tar.gz
 EVINCEUP:=evince-$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1)
@@ -560,6 +558,14 @@ $(CUPS): $(SPREZZ)/cups/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf cups-$(cups_UPVER)-source.tar.bz2 --strip-components=1 -C $@
+
+.PHONY: curl
+curl:$(CURL)_$(ARCH).deb
+$(CURL): $(SPREZZ)/curl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf curl-$(curl_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: d-conf
 d-conf:$(DCONF)_$(ARCH).deb
@@ -2018,20 +2024,6 @@ $(ZSH): $(SPREZZ)/zsh/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf zsh-$(zsh_UPVER).tar.bz2 --strip-components=1 -C $@
-
-FETCHED:=$(FETCHED) $(CURLUP).tar.bz2
-$(CURLUP).tar.bz2:
-	wget -nc -O$@ http://curl.haxx.se/download/$@
-
-$(CURLORIG): $(CURLUP).tar.bz2
-	ln -s $< $@
-
-.PHONY: curl
-curl:$(CURL)_$(ARCH).deb
-$(CURL): $(SPREZZ)/curl/debian/changelog $(CURLORIG)
-	mkdir $@
-	tar xjvf $(CURLUP).tar.bz2 --strip-components=1 -C $@
-	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(EGLIBCUP).tar.gz
 $(EGLIBCUP).tar.gz:
