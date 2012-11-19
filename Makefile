@@ -1978,13 +1978,13 @@ $(XORGXSERVER): $(SPREZZ)/xorg-xserver/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf xorg-server-$(xorg-xserver_UPVER).tar.gz --strip-components=1 -C $@
 
-.PHONY: xorg-xserver
-xorg-xserver:$(XSERVERXORGVIDEOMODESETTING)_$(ARCH).deb
-$(XSERVERXORGVIDEOMODESETTING): $(SPREZZ)/xorg-xserver/debian/changelog
+.PHONY: xserver-xorg-video-modesetting
+xserver-xorg-video-modesetting:$(XSERVERXORGVIDEOMODESETTING)_$(ARCH).deb
+$(XSERVERXORGVIDEOMODESETTING): $(SPREZZ)/xserver-xorg-video-modesetting/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf xserver-xorg-video-modesetting-$(xorg-xserver_UPVER).tar.gz --strip-components=1 -C $@
+	tar xzvf xf86-video-modesetting-$(xserver-xorg-video-modesetting_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: udisks
 udisks:$(UDISKS)_$(ARCH).deb

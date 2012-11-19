@@ -1,0 +1,116 @@
+Screen Information
+------------------
+See the copyright file for information about where to get screen, licensing,
+and other assorted information.
+
+
+Debian Modifications
+--------------------
+  * added Debian package maintenance files
+  * Use /var/run/screen as socket directory
+  * Make it set-gid "utmp" instead of setuid root
+
+
+Debian Screen Q&A
+-----------------
+
+Q: screen always complains about the permissions of /var/run/screen.
+   What's wrong?
+
+A: Simplified, the binary ensures that $SCREENDIR has just enough permission
+   bits enabled so that each user can create and access his socket directory.
+   This means:
+
+   /usr/bin/screen setuid root -> /var/run/screen 0755
+   /usr/bin/screen setgid utmp -> /var/run/screen 0775
+   /usr/bin/screen without setid bits -> /var/run/screen 0777
+
+   These cases are all handled by the init script. However, the actual test
+   is a bit more complicated. And as the variable names are all quite self-
+   explanatory, just have a look at the C code itself:
+
+]   n = (eff_uid == 0 && (real_uid || (st.st_mode & 0775) != 0775)) ? 0755 :
+]       (eff_gid == (int)st.st_gid && eff_gid != real_gid) ? 0775 :
+]       0777;
+]   if (((int)st.st_mode & 0777) != n)
+]     Panic(0, "Directory '%s' must have mode %03o.", SockDir, n);
+
+   If the invoking user has primary group utmp, the above assumption will fail.
+   The same holds if the underlying file system is mounted 'nosuid'. In these
+   cases you have to adapt the init script yourself.
+
+
+Q: shift+page up in xterm/gnome-terminal/konsole used to let me scroll back a
+   bit, but now it doesn't. How can I make it work with scrollback?
+
+A: It doesn't scrollback consistently because screen (the program) displays in
+   xterm's alternate screen buffer.
+
+   To have screen use xterm's normal screen buffer (which includes scrollback),
+   you can add the following to your .screenrc:
+
+   termcapinfo xterm|xterms|xs|rxvt ti@:te@
+
+
+Q: Screen sets my xterm titlebar. I don't like this, how do I make it stop?
+
+A: The titlebar setting is set in the /etc/screenrc by telling screen that some
+   of the GUI terminals have a hardstatus line and that it can be set by
+   sending the xterm escape sequences that set the title/icon.
+
+   # Set the hardstatus prop on gui terms to set the titlebar/icon title
+   termcapinfo xterm*|rxvt*|kterm*|Eterm* hs:ts=\E]0;:fs=\007:ds=\E]0;\007
+
+   You can override this on a system wide basis by commenting out this line in
+   the /etc/screenrc or you can override it in your personal screenrc by adding
+   the following line:
+
+   hardstatus alwaysmessage
+
+
+Q: Why do I get #!$@#$@!% trailing spaces when I cut and paste from mutt
+   running within screen?
+Q: Why does the statusbar in my irc client extend to the end of the screen
+   in xterm but not in screen?
+
+A: This has to do with handling of the bce terminal attribute, or lack
+   thereof by default in screen. You can enable bce on a per-user basis by
+   adding the following to your .screenrc:
+
+   defbce on
+   term screen-bce
+
+   NOTE: if you do this your TERM will be screen-bce. When you login to
+         other machines they may not have a screen-bce terminal type, so you
+         will see errors. To fix this you must put the terminfo for screen-bce
+         on that remote machine. The screen terminfo is found in
+         /usr/share/doc/screen/terminfo/screeninfo.src and you can compile it
+         on the remote machine using tic(1).
+
+
+Q: Screen doesn't notice when I resize the term - what's wrong?
+
+A: Firstly look for the same question in FAQ.gz. If the problem persists:
+   There have been reports of sshd instances blocking SIGWINCH (presumably
+   restarted from aptitude and thus inheriting its signal mask) which therefore
+   also prohibit remote screen sessions from ever seeing the signal. Have a
+   look at the old bugreport <http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=392302>
+   for means to determine whether you are affected. (You might have to restart
+   sshd with a crontab entry or similar magic if ssh is your only way to access
+   the box.)
+
+
+Q: Multiuser mode is not working - how can I enable it?
+
+A: Screen has to be setuid root to accomplish this. (Note the security implications
+   this has! Also bear in mind that setuid programs remove some variables from their
+   environment for exactly this reason - see ld.so(1).) If you still want to enable
+   the feature, you may do so with the following commands:
+
+] dpkg-statoverride --update --add root utmp 4755 /usr/bin/screen
+] chmod 0755 /var/run/screen
+
+   dpkg-statoverride will make sure that the modified permissions remain in effect
+   even if a new version of the screen package is installed. /var/run/screen will
+   be automatically recreated with the proper permissions if the directory lives
+   on volatile storage (doesn't persist between subsequent reboots).

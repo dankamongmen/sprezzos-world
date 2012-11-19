@@ -1,0 +1,151 @@
+Author: Julien Cristau <jcristau@debian.org>
+Debian-Bug: #644788
+
+Author: Axel Beckert <abe@debian.org>
+Debian-Bug: #684342
+
+The following patch, while not all that pretty, seems to allow me to
+attach to a screen started with either the squeeze or sid version.
+I'm sure there's corner cases, but.
+
+Cheers,
+Julien
+
+Index: screen/screen.h
+===================================================================
+--- screen.orig/screen.h	2012-08-09 01:01:28.000000000 +0200
++++ screen/screen.h	2012-08-09 01:01:28.000000000 +0200
+@@ -240,6 +240,57 @@ struct msg
+     } m;
+ };
+ 
++struct old_msg
++{
++  int protocol_revision;	/* reduce harm done by incompatible messages */
++  int type;
++  char m_tty[MAXPATHLEN];	/* ttyname */
++  union
++    {
++      struct
++	{
++	  int lflag;
++	  int aflag;
++	  int flowflag;
++	  int hheight;		/* size of scrollback buffer */
++	  int nargs;
++	  char line[MAXPATHLEN];
++	  char dir[MAXPATHLEN];
++	  char screenterm[20];	/* is screen really "screen" ? */
++	}
++      create;
++      struct
++	{
++	  char auser[20 + 1];	/* username */
++	  int apid;		/* pid of frontend */
++	  int adaptflag;	/* adapt window size? */
++	  int lines, columns;	/* display size */
++	  char preselect[20];
++	  int esc;		/* his new escape character unless -1 */
++	  int meta_esc;		/* his new meta esc character unless -1 */
++	  char envterm[20 + 1];	/* terminal type */
++	  int encoding;		/* encoding of display */
++	}
++      attach;
++      struct
++	{
++	  char duser[20 + 1];	/* username */
++	  int dpid;		/* pid of frontend */
++	}
++      detach;
++      struct
++	{
++	  char auser[20 + 1];	/* username */
++	  int nargs;
++	  char cmd[MAXPATHLEN];	/* command */
++	  int apid;		/* pid of frontend */
++	  char preselect[20];
++	}
++      command;
++      char message[MAXPATHLEN * 2];
++    } m;
++};
++
+ /*
+  * And the signals the attacher receives from the backend
+  */
+Index: screen/socket.c
+===================================================================
+--- screen.orig/socket.c	2012-08-09 01:01:28.000000000 +0200
++++ screen/socket.c	2012-08-09 01:01:29.000000000 +0200
+@@ -1067,7 +1067,9 @@ ReceiveMsg()
+     }
+   if (left > 0)
+     {
+-      if (left != sizeof(m))
++      if (left == sizeof(struct msg) - sizeof(struct old_msg))
++        ;/* old format message, ignore */
++      else if (left != sizeof(m))
+         Msg(0, "Message %d of %d bytes too small", left, (int)sizeof(m));
+       else
+ 	debug("No data on socket.\n");
+Index: screen/attacher.c
+===================================================================
+--- screen.orig/attacher.c	2012-08-09 01:01:28.000000000 +0200
++++ screen/attacher.c	2012-08-09 01:32:08.000000000 +0200
+@@ -133,6 +133,48 @@ struct msg *m;
+   return 0;
+ }
+ 
++int
++WriteOldMessage(struct msg *m)
++{
++  sleep(1); /* give the server some time to reopen the pipe */
++  if (m->type == MSG_ATTACH && (m->m.attach.detachfirst == MSG_ATTACH ||
++				m->m.attach.detachfirst == MSG_DETACH ||
++				m->m.attach.detachfirst == MSG_POW_DETACH))
++    {
++      struct old_msg old_m;
++      int s;
++      int r, l = sizeof(old_m);
++
++      s = MakeClientSocket(0);
++      if (s < 0)
++	return 0;
++      old_m.protocol_revision = (('m'<<24) | ('s'<<16) | ('g'<<8) | 0);
++      old_m.type = m->type;
++      memcpy(old_m.m_tty, m->m_tty, sizeof(old_m.m_tty));
++      memcpy(old_m.m.attach.auser, m->m.attach.auser, sizeof(old_m.m.attach.auser));
++      old_m.m.attach.apid = m->m.attach.apid;
++      old_m.m.attach.adaptflag = m->m.attach.adaptflag;
++      old_m.m.attach.lines = m->m.attach.lines;
++      old_m.m.attach.columns = m->m.attach.columns;
++      memcpy(old_m.m.attach.preselect, m->m.attach.preselect, sizeof(old_m.m.attach.preselect));
++      old_m.m.attach.esc = m->m.attach.esc;
++      old_m.m.attach.meta_esc = m->m.attach.meta_esc;
++      memcpy(old_m.m.attach.envterm, m->m.attach.envterm, sizeof(old_m.m.attach.envterm));
++      old_m.m.attach.encoding = m->m.attach.encoding;
++      while(l > 0)
++        {
++          r = write(s, (char *)&old_m + (sizeof(struct old_msg) - l), l);
++          if (r == -1 && errno == EINTR)
++    	continue;
++          if (r == -1 || r == 0)
++    	return -1;
++          l -= r;
++        }
++      close(s);
++    }
++  return 0;
++}
++
+ 
+ int
+ Attach(how)
+@@ -397,6 +439,7 @@ int how;
+   if (WriteMessage(lasts, &m))
+     Panic(errno, "WriteMessage");
+   close(lasts);
++  WriteOldMessage(&m);
+   debug1("Attach(%d): sent\n", m.type);
+ #ifdef MULTIUSER
+   if (multi && (how == MSG_ATTACH || how == MSG_CONT))

@@ -1,0 +1,329 @@
+Author: <hesso@pool.math.tu-berlin.de>
+Description: Add lookup code for the creation time of each session. Requires
+digging in /proc/$pid and /proc/uptime, though, so it's definitely
+no candidate for the Beautiful C contest.
+Affects screen's behaviour in the following situations:
+* 'screen -ls' lists available sessions sorted chronologically
+* 'screen -RR' now picks the youngest session instead of an
+arbitrary one
+Index: screen/doc/screen.1
+===================================================================
+--- screen.orig/doc/screen.1	2012-03-20 22:41:13.000000000 +0100
++++ screen/doc/screen.1	2012-03-20 22:41:52.000000000 +0100
+@@ -242,7 +242,7 @@
+ .IR screen ,
+ but prints a list of
+ .I pid.tty.host
+-strings identifying your
++strings and creation timestamps identifying your
+ .I screen
+ sessions.
+ Sessions marked `detached' can be resumed with \*Qscreen \-r\*U. Those marked
+@@ -340,7 +340,7 @@
+ sessions in another user's directory. This requires setuid-root.
+ .TP 5
+ .B \-R
+-attempts to resume the first detached
++attempts to resume the youngest (in terms of creation time) detached
+ .I screen
+ session it finds.  If successful, all other command-line options are ignored.
+ If no detached session exists, starts a new session using the specified
+@@ -350,6 +350,8 @@
+ .I screen
+ is run as a login-shell (actually screen uses \*Q\-xRR\*U in that case).
+ For combinations with the \fB\-d\fP/\fB\-D\fP option see there.
++.B Note:
++Time-based session selection is a Debian addition.
+ .TP 5
+ .BI "\-s " program 
+ sets the default shell to the program specified, instead of the value
+Index: screen/doc/screen.texinfo
+===================================================================
+--- screen.orig/doc/screen.texinfo	2012-03-20 22:41:10.000000000 +0100
++++ screen/doc/screen.texinfo	2012-03-20 22:41:52.000000000 +0100
+@@ -318,7 +318,8 @@
+ @itemx -list [@var{match}]
+ Do not start @code{screen}, but instead print a list of session
+ identification strings (usually of the form @var{pid.tty.host};
+-@pxref{Session Name}).  Sessions marked @samp{detached} can be resumed
++@pxref{Session Name}) and the corresponding creation timestamps.
++Sessions marked @samp{detached} can be resumed
+ with @code{screen -r}.  Those marked @samp{attached} are running and
+ have a controlling terminal.  If the session runs in multiuser mode,
+ it is marked @samp{multi}.  Sessions marked as @samp{unreachable} either
+@@ -404,14 +405,15 @@
+ sessions in another user's directory. This requires setuid-root.
+ 
+ @item -R
+-Resume the first appropriate detached @code{screen} session.  If
+-successful, all other command-line options are ignored.  If no detached
++Resume the most-recently created appropriate detached @code{screen} session.
++If successful, all other command-line options are ignored.  If no detached
+ session exists, start a new session using the specified options, just as
+ if @samp{-R} had not been specified.  This option is set by default if
+ screen is run as a login-shell (actually screen uses @samp{-xRR} in
+ that case).
+ For combinations with the 
+ @samp{-D}/@samp{-d} option see there.
++@samp{Note:} Time-based session selection is a Debian addition.
+ 
+ @item -s @var{program}
+ Set the default shell to be @var{program}.  By default, @code{screen}
+Index: screen/extern.h
+===================================================================
+--- screen.orig/extern.h	2012-03-20 22:41:13.000000000 +0100
++++ screen/extern.h	2012-03-20 22:41:52.000000000 +0100
+@@ -390,6 +390,8 @@
+ #else
+ extern int   xsnprintf __P(());
+ #endif
++extern time_t SessionCreationTime __P((const char *));
++extern time_t GetUptime __P((void));
+ 
+ 
+ /* acl.c */
+Index: screen/misc.c
+===================================================================
+--- screen.orig/misc.c	2012-03-20 22:14:48.000000000 +0100
++++ screen/misc.c	2012-03-20 22:41:52.000000000 +0100
+@@ -29,6 +29,7 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>	/* mkdir() declaration */
+ #include <signal.h>
++#include <fcntl.h>
+ 
+ #include "config.h"
+ #include "screen.h"
+@@ -769,3 +770,40 @@
+ }
+ 
+ #endif
++
++time_t SessionCreationTime(const char *fifo) {
++  char ppath[20];
++  int pfd;
++  char pdata[512];
++  char *jiffies;
++
++  int pid = atoi(fifo);
++  if (pid <= 0) return 0;
++  sprintf(ppath, "/proc/%u/stat", pid);
++  pfd = open(ppath, O_RDONLY);
++  if (pfd < 0) return 0;
++  while (1) {
++    int R=0, RR;
++    RR = read(pfd, pdata + R, 512-R);
++    if (RR < 0) {close(pfd); return 0;}
++    else if (RR == 0) break;
++  }
++  close(pfd);
++
++  for (pfd=21, jiffies=pdata; pfd; --pfd) {
++    jiffies = strchr(jiffies, ' ');
++    if (!jiffies) break; else ++jiffies;
++  }
++  if (!jiffies) return 0;
++
++  return atol(jiffies) / 100;
++}
++
++time_t GetUptime(void) {
++  char uptimestr[32];
++  int fd = open("/proc/uptime", O_RDONLY);
++  if (fd < 0) return 0;
++  (void)read(fd, uptimestr, 32);
++  close(fd);
++  return atol(uptimestr);
++}
+Index: screen/socket.c
+===================================================================
+--- screen.orig/socket.c	2012-03-20 22:41:12.000000000 +0100
++++ screen/socket.c	2012-03-20 22:41:52.000000000 +0100
+@@ -125,16 +125,18 @@
+   int sdirlen;
+   int  matchlen = 0;
+   char *name, *n;
+-  int firsts = -1, sockfd;
+-  char *firstn = NULL;
++  int sockfd = -1;
+   int nfound = 0, ngood = 0, ndead = 0, nwipe = 0, npriv = 0;
+   int nperfect = 0;
++  time_t sysboot = time(NULL) - GetUptime();
+   struct sent
+     {
+       struct sent *next;
+       int mode;
+       char *name;
+-    } *slist, **slisttail, *sent, *nsent;
++      time_t created;
++      int good;
++    } *slist, **slisttail, *sent, *nsent, *schosen = NULL;
+ 
+   if (match)
+     {
+@@ -161,7 +163,6 @@
+     Panic(errno, "Cannot opendir %s", SockPath);
+ 
+   slist = 0;
+-  slisttail = &slist;
+   while ((dp = readdir(dirp)))
+     {
+       int cmatch = 0;
+@@ -173,7 +174,7 @@
+ 	{
+ 	  n = name;
+ 	  /* if we don't want to match digits. Skip them */
+-	  if ((*match <= '0' || *match > '9') && (*n > '0' && *n <= '9'))
++	  if ((*match < '0' || *match > '9') && (*n >= '0' && *n <= '9'))
+ 	    {
+ 	      while (*n >= '0' && *n <= '9')
+ 		n++;
+@@ -252,12 +253,24 @@
+       debug("  store it.\n");
+       if ((sent = (struct sent *)malloc(sizeof(struct sent))) == 0)
+ 	continue;
+-      sent->next = 0;
+       sent->name = SaveStr(name);
+       sent->mode = mode;
++      sent->created = sysboot + SessionCreationTime(name);
++      sent->good = 0;
++
++      for (slisttail = &slist; *slisttail; slisttail = &((*slisttail)->next))
++	{
++	  if ((*slisttail)->created < sent->created) break;
++	}
++
++      sent->next = *slisttail;
+       *slisttail = sent;
+-      slisttail = &sent->next;
+       nfound++;
++      if (sockfd >= 0)
++	{
++	  close(sockfd);
++	  sockfd = -1;
++	}
+       sockfd = MakeClientSocket(0);
+ #ifdef USE_SETEUID
+       /* MakeClientSocket sets ids back to eff */
+@@ -316,6 +329,7 @@
+ 	  (!dflag && !rflag && !xflag))
+ 	{
+ 	  close(sockfd);
++	  sockfd = -1;
+ 	  debug("  no!\n");
+ 	  npriv++;		/* a good socket that was not for us */
+ 	  continue;
+@@ -323,19 +337,8 @@
+       ngood++;
+       if (cmatch)
+ 	nperfect++;
+-      if (fdp && (firsts == -1 || (cmatch && nperfect == 1)))
+-	{
+-	  if (firsts != -1)
+-	    close(firsts);
+-	  firsts = sockfd;
+-	  firstn = sent->name;
+-	  debug("  taken.\n");
+-	}
+-      else
+-        {
+-	  debug("  discarded.\n");
+-	  close(sockfd);
+-	}
++      sent->good = 1;
++      debug("  added to list.\n");
+     }
+   (void)closedir(dirp);
+   if (!lsflag && nperfect == 1)
+@@ -356,34 +359,42 @@
+ 	}
+       for (sent = slist; sent; sent = sent->next)
+ 	{
++	  char timestr[64];
++	  if (sent->created == 0)
++	    {
++	      sprintf(timestr, "???");
++	    } else {
++	      strftime(timestr, 64, "%x %X", localtime(&sent->created));
++	    }
++	  printf("\t%s\t(%s)", sent->name, timestr);
+ 	  switch (sent->mode)
+ 	    {
+ 	    case 0700:
+-	      printf("\t%s\t(Attached)\n", sent->name);
++	      printf("\t(Attached)\n");
+ 	      break;
+ 	    case 0600:
+-	      printf("\t%s\t(Detached)\n", sent->name);
++	      printf("\t(Detached)\n");
+ 	      break;
+ #ifdef MULTIUSER
+ 	    case 0701:
+-	      printf("\t%s\t(Multi, attached)\n", sent->name);
++	      printf("\t(Multi, attached)\n");
+ 	      break;
+ 	    case 0601:
+-	      printf("\t%s\t(Multi, detached)\n", sent->name);
++	      printf("\t(Multi, detached)\n");
+ 	      break;
+ #endif
+ 	    case -1:
+ 	      /* No trigraphs here! */
+-	      printf("\t%s\t(Dead ?%c?)\n", sent->name, '?');
++	      printf("\t(Dead ?%c?)\n", '?');
+ 	      break;
+ 	    case -2:
+-	      printf("\t%s\t(Removed)\n", sent->name);
++	      printf("\t(Removed)\n");
+ 	      break;
+ 	    case -3:
+-	      printf("\t%s\t(Remote or dead)\n", sent->name);
++	      printf("\t(Remote or dead)\n");
+ 	      break;
+ 	    case -4:
+-	      printf("\t%s\t(Private)\n", sent->name);
++	      printf("\t(Private)\n");
+ 	      break;
+ 	    }
+ 	}
+@@ -396,13 +407,37 @@
+       else
+         Msg(0, m, ndead > 1 ? "s" : "", ndead > 1 ? "" : "es");	/* other args for nethack */
+     }
+-  if (firsts != -1)
++  for (sent = slist; sent; sent = sent->next)
+     {
+-      sprintf(SockPath + sdirlen, "/%s", firstn);
+-      *fdp = firsts;
++      if (sent->good)
++	{
++	  schosen = sent;
++	  break;
++	}
++    }
++  if (schosen && fdp)
++    {
++      if (sockfd >= 0 && !strcmp(SockPath + sdirlen + 1, schosen->name))
++	{
++	  *fdp = sockfd;
++	  sockfd = -1;
++	}
++      else
++	{
++	  sprintf(SockPath + sdirlen, "/%s", schosen->name);
++	  *fdp = MakeClientSocket(0);
++#ifdef USE_SETEUID
++	  xseteuid(real_uid);
++	  xsetegid(real_gid);
++#endif
++	}
+     }
+   else
+     SockPath[sdirlen] = 0;
++  if (sockfd >= 0)
++    {
++      close(sockfd);
++    }
+   for (sent = slist; sent; sent = nsent)
+     {
+       nsent = sent->next;

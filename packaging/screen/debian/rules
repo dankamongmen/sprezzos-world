@@ -1,0 +1,105 @@
+#!/usr/bin/make -f
+#
+# Copyright (C) 1997 joost witteveen <joost@rulcmc.leidenuniv.nl>
+# Copyright (C) 1997-2001 Juan Cespedes <cespedes@debian.org>
+# Copyright (C) 2001 Adam Lazur <zal@debian.org>
+
+# Uncomment me to turn on debugging
+#export DH_VERBOSE=1
+
+package := screen
+ROOT := $(CURDIR)/debian/$(package)
+# statically define this... sucko
+TTYGROUP := 5
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+ifeq ($(findstring noopt,$(DEB_BUILD_OPTIONS)),noopt)
+CC_OPTFLAGS := -O0 -g3
+else
+CC_OPTFLAGS := -O2 -g
+endif
+
+clean:
+	dh_testdir
+	dh_testroot
+	test ! -s doc/Makefile || $(MAKE) -C doc realclean
+	test ! -s Makefile || ! grep -q clean Makefile || $(MAKE) realclean
+	dh_autoreconf_clean
+	dh_clean config.log config.status Makefile
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	dh_autoreconf
+	./configure --prefix=/usr \
+		    $(shell dpkg-buildflags --export=configure) \
+		    --infodir='$$(prefix)/share/info' \
+		    --mandir='$$(prefix)/share/man' \
+		    --with-socket-dir=/var/run/screen \
+		    --enable-pam \
+		    --with-pty-mode=0620 \
+		    --with-pty-group=${TTYGROUP} \
+		    --enable-rxvt_osc \
+		    --with-sys-screenrc=/etc/screenrc \
+		    --enable-colors256 \
+		    --enable-telnet \
+		    --enable-use-locale
+
+	# Assert the use of fifos instead of sockets
+	grep -q "define.*NAMEDPIPE.*1" config.h || echo "#define NAMEDPIPE 1" >> config.h
+	touch $@
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE) CFLAGS+='$(CC_OPTFLAGS) -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers'
+	$(MAKE) CFLAGS+='$(CC_OPTFLAGS) -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers' -C doc
+	touch $@
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean
+	dh_installdirs
+	# can't call the normal install target b/c it installs the info files
+	# and other crud
+	$(MAKE) prefix=$(ROOT)/usr SCREENENCODINGS='$$(prefix)/share/screen/utf8encodings' installdirs install_bin
+	# install the debian screenrc to etc
+	install -m 644 debian/screenrc $(ROOT)/etc
+	# hack around the fact that the install target makes screen a symlink to screen-$$(VERSION)
+	rm -f $(ROOT)/usr/bin/screen
+	mv -f $(ROOT)/usr/bin/screen* $(ROOT)/usr/bin/screen
+	# make it setgid utmp
+	chown root:utmp $(ROOT)/usr/bin/screen
+	chmod 2755 $(ROOT)/usr/bin/screen
+	touch $@
+
+binary: binary-arch
+binary-indep: install
+binary-arch: install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	cp debian/README.terminfo $(ROOT)/usr/share/doc/screen/terminfo/
+	dh_installexamples
+	dh_installman || true
+	dh_installinfo
+	dh_installdebconf
+	dh_installchangelogs -k patchlevel.h
+	dh_installinit --no-start --init-script='screen-cleanup' --update-rcd-params='start 70 S .'
+	dh_lintian
+	dh_strip
+	dh_compress
+	dh_fixperms -X/usr/bin/screen
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+.PHONY: configure build clean binary-indep binary-arch binary install
