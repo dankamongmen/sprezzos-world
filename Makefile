@@ -565,7 +565,7 @@ $(CURL): $(SPREZZ)/curl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xjvf curl-$(curl_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xzvf curl-$(curl_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: d-conf
 d-conf:$(DCONF)_$(ARCH).deb
