@@ -1501,8 +1501,8 @@ $(NVIDIAKERNELDKMS): $(SPREZZ)/nvidia-kernel-dkms/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	mv ../NVIDIA-Linux-*.run .
-	tar czvf ../nvidia-graphics-drivers_310.19.orig.tar.gz -C.. nvidia-kernel-dkms_310.19-SprezzOS1/ --exclude=debian
+	mv NVIDIA-Linux-*.run $@
+	tar czvf nvidia-graphics-drivers_310.19.orig.tar.gz $@ --exclude-vcs --exclude=debian
 
 .PHONY: opencv
 opencv:$(OPENCV)_$(ARCH).deb
