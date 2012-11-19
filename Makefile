@@ -48,7 +48,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison procps \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt \
-	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms
+	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting
 
 SPREZZ:=packaging
 
@@ -203,7 +203,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO) \
 	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) $(PROCPS) \
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) \
-	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS)
+	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1978,6 +1978,14 @@ $(XORGXSERVER): $(SPREZZ)/xorg-xserver/debian/changelog
 	cd $@ && uscan --force-download
 	tar xzvf xorg-server-$(xorg-xserver_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: xorg-xserver
+xorg-xserver:$(XSERVERXORGVIDEOMODESETTING)_$(ARCH).deb
+$(XSERVERXORGVIDEOMODESETTING): $(SPREZZ)/xorg-xserver/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf xserver-xorg-video-modesetting-$(xorg-xserver_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: udisks
 udisks:$(UDISKS)_$(ARCH).deb
 $(UDISKS): $(SPREZZ)/udisks/debian/changelog
@@ -2678,7 +2686,7 @@ clean:
 	rm -rf $(X11PROTORECORD) $(X11PROTORENDER) $(X11PROTORESOURCE) $(X11PROTOVIDEO)
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
-	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS)
+	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
 
 clobber:
 	rm -rf $(FETCHED)
