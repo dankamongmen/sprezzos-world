@@ -1,0 +1,205 @@
+#!/usr/bin/make -f
+# debian/rules for the Debian GNU Libtool package.
+# Copyright © 2003, 2004 Scott James Remnant <scott@netsplit.com>
+
+# Uncomment this to turn on verbose mode. 
+#export DH_VERBOSE=1
+
+DEBIAN_REVISION=$(strip $(shell dpkg-parsechangelog | awk -F: '/^Version:/ {print $$NF}'))
+
+# libltdl needs to conform to policy
+CFLAGS = -Wall -g
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+# Build libltdl the right way (tm)
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build=$(DEB_HOST_GNU_TYPE)
+	make_check = yes
+else
+	confflags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+	make_check = no
+endif
+
+ifneq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	make_check = no
+endif
+
+# Takes too long
+#ifeq (m68k, $(DEB_HOST_ARCH))
+#	make_check = no
+#endif
+
+clean: 
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp config-stamp
+	dh_clean
+
+	[ ! -f Makefile ] || $(MAKE) -k distclean
+	-rm config.log
+	-rm -f *demo*.tar.gz
+	find . -name 'stamp-*' | xargs rm -f
+	find . -name 'configure' | xargs rm -f
+	rm -f *.in */*.in
+	rm -f *.m4 */*.m4
+	find tests -name '*.in' -o -name '*.m4' | xargs rm -f
+	find libltdl/config -type f -a ! -name '*.m4sh' -a ! -name 'mkstamp' | xargs rm -f
+	rm -f libltdl/Makefile.am
+	rm -f libltdl/m4/ltversion.m4
+	rm -f COPYING INSTALL commit tests-failed
+	rm -f doc/libtool.info-1 doc/libtool.info-2
+	rm -f tests/testsuite
+	rm -f doc/version.texi doc/notes.txt doc/stamp-vti doc/libtool.info
+# Undo the version change if there is any.
+	sed -i -e 's/@VERSION@.*/@VERSION@/' libtoolize.m4sh
+	sed -i -e 's/^\(#.*@VERSION@\).*/\1/' libltdl/config/ltmain.m4sh
+	sed -i -e 's/^VERSION.*/VERSION=@VERSION@/' libltdl/config/ltmain.m4sh
+
+config: config-stamp
+Makefile: config-stamp
+config-stamp:
+	dh_testdir
+
+#	These go into the libtool-doc `examples' directory.
+#	Create them while we still have a clean source tree
+	for demo in cdemo demo depdemo f77demo fcdemo mdemo mdemo2 pdemo tagdemo; do \
+	    GZIP=--best tar zcf ./$$demo.tar.gz tests/$$demo; \
+	done
+
+	sed -i -e 's/^#.*progname.*@VERSION@$$/& Debian-$(DEBIAN_REVISION)/' libtoolize.m4sh
+	sed -i -e 's/^#.*progname.*@VERSION@$$/& Debian-$(DEBIAN_REVISION)/' libltdl/config/ltmain.m4sh
+	sed -i -e 's/^VERSION.*/VERSION="@VERSION@ Debian-$(DEBIAN_REVISION)"/' libltdl/config/ltmain.m4sh
+	./bootstrap
+	CONFIG_SHELL=/bin/bash /bin/bash ./configure --prefix=/usr --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) $(confflags) CFLAGS="$(CFLAGS)"
+	touch config-stamp
+
+
+build: build-stamp
+build-stamp: config-stamp
+	dh_testdir
+
+#	Fix some permissions
+	chmod a+x tests/mdemo2-*.test
+
+	$(MAKE)
+
+#	The system libtool script in Debian must be able to support
+#	invoking gcc as cc
+	echo '# ### BEGIN LIBTOOL TAG CONFIG: BINCC' >> libtool
+	sed -n -e '/^# ### BEGIN LIBTOOL CONFIG/,/^# ### END LIBTOOL CONFIG/p' < libtool \
+		| grep -B 2 -A 1 -e '^LTCC=' -e '^CC=' \
+		| sed '/^--/d;s/gcc/cc/g' >> libtool
+	echo '# ### END LIBTOOL TAG CONFIG: BINCC' >> libtool
+	echo >> libtool
+
+#	The system libtool script in Debian must be able to support
+#	invoking g++ both by the g++ and c++ names.
+	sed -n -e '/^# ### BEGIN LIBTOOL TAG CONFIG: CXX$$/,/^# ### END LIBTOOL TAG CONFIG: CXX$$/p' < libtool \
+		| sed -e 's/CONFIG: CXX/CONFIG: BINCXX/g' \
+		      -e 's/g++/c++/g' >> libtool
+	echo >> libtool
+
+#	Add our BINCC and BINCXX tags
+	sed -e 's/^\(available_tags\)=\"\(.*\)\"/\1=\"\2 BINCC BINCXX\"/' \
+		< libtool > libtool.tags
+	mv libtool.tags libtool
+
+#	Don't hardcode gcc path information, and don't use nostdlib
+	sed -e 's/^\(predep_objects\)=.*/\1=""/' \
+	    -e 's/^\(postdep_objects\)=.*/\1=""/' \
+	    -e 's/^\(compiler_lib_search_path\)=.*/\1=""/' \
+	    -e 's:^\(sys_lib_search_path_spec\)=.*:\1="/lib/ /usr/lib/ /usr/X11R6/lib/ /usr/local/lib/":' \
+	    -e 's/^\(archive_cmds=\".*\) -nostdlib /\1 /' \
+	    -e 's/^\(archive_expsym_cmds=\".*\) -nostdlib /\1 /' \
+	    < libtool > libtool.gcc-indep
+	mv libtool.gcc-indep libtool
+
+#	Make libtool executable again
+	chmod 755 libtool
+
+#	This generated HTML page goes into libtool-doc.
+	cd doc && makeinfo libtool.texi
+	cd doc && texi2html -monolithic libtool.texi
+
+
+ifeq ($(make_check), yes)
+#	Now make sure it works
+	-$(MAKE) check || touch tests-failed
+	-cat test-suite.log
+	-cat tests/testsuite.log
+	@test ! -f tests-failed
+endif
+
+	touch build-stamp
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	$(MAKE) prefix=`pwd`/debian/tmp/usr install
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+
+	dh_movefiles -i
+
+	dh_installdocs -i
+	dh_installinfo -plibtool-doc
+	dh_installexamples -i
+	dh_installchangelogs -i ChangeLog
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir -a
+	dh_testroot -a
+
+	dh_movefiles -a -Nlibtool
+	dh_movefiles -plibtool
+
+	# Create symlinks to the one in autotools-dev
+	rm -f debian/libtool/usr/share/libtool/config/config.guess
+	ln -s ../../misc/config.guess debian/libtool/usr/share/libtool/config
+	rm -f debian/libtool/usr/share/libtool/config/config.sub
+	ln -s ../../misc/config.sub debian/libtool/usr/share/libtool/config
+
+	dh_installdocs -plibtool
+	dh_installdocs -plibltdl7
+	mkdir -p debian/libltdl-dev/usr/share/doc
+	cd debian/libltdl-dev/usr/share/doc && ln -sf libltdl7 libltdl-dev
+	dh_installchangelogs -plibtool ChangeLog
+	dh_installchangelogs -plibltdl7 ChangeLog
+	dh_strip -a
+	dh_link -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a -V
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean config patch unpatch binary-indep binary-arch binary install
