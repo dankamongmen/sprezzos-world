@@ -2314,8 +2314,9 @@ $(SOCAT): $(SPREZZ)/socat/debian/changelog $(SOCATORIG)
 subversion:$(SUBVERSION)_$(ARCH).deb
 $(SUBVERSION): $(SPREZZ)/subversion/debian/changelog
 	mkdir $@
-	tar xzvf subversion-$(SUBVERSIONUPVER) --strip-components=1 -C $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf subversion-$(subversion_UPVER) --strip-components=1 -C $@
 
 .PHONY: sudo
 sudo:$(SUDO)_$(ARCH).deb
