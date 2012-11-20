@@ -1,0 +1,420 @@
+#!/usr/bin/make -f
+
+# DEB_BUILD_OPTIONS supported:
+#   noopt       Compile with gcc -O0 rather than -O2
+#   nostrip     Do not strip binaries and libraries
+#   debug       Enable additional debug support
+#   nocheck     Skip test suites (synonym 'notest')
+#   with-javahl, no-javahl |
+#   with-apache, no-apache | enable/disable certain packages
+#   with-ruby, no-ruby     |
+
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+export DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# Fully functional Java support is still a bit spotty on some Debian
+# architectures.  DISABLE_JAVAHL_ARCHS overrides ENABLE_JAVAHL=yes.
+# Note: the Build-Depends line in debian/control must be kept in sync
+# with DISABLE_JAVAHL_ARCHS.
+
+ENABLE_JAVAHL        := yes
+DISABLE_JAVAHL_ARCHS := alpha arm hppa m68k mips mipsel hurd-i386
+ifneq (,$(filter $(DEB_HOST_ARCH), $(DISABLE_JAVAHL_ARCHS)))
+  ENABLE_JAVAHL :=
+endif
+
+# We may need to disable libapache2-svn and/or libsvn-ruby*.
+ENABLE_APACHE        := yes
+ENABLE_RUBY          := yes
+
+DEB_BUILDDIR     := BUILD
+MAKE_B           := $(MAKE) -C $(DEB_BUILDDIR)
+
+export LANG := C
+export HOME := $(DEB_BUILDDIR)/dummy_home
+
+include /usr/share/quilt/quilt.make
+
+# ENABLE_FOO -> DEB_OPT_WITH_FOO=1
+# DEB_BUILD_OPTIONS='foo bar' -> DEB_OPT_FOO=1, DEB_OPT_BAR=1
+# DEB_BUILD_OPTIONS='no-foo' -> DEB_OPT_WITH_FOO=""
+$(foreach o, JAVAHL APACHE RUBY, $(if $(filter y yes 1,$(ENABLE_$o)), \
+    $(eval DEB_OPT_WITH_$o := 1),$(eval DEB_OPT_WITH_$o :=)))
+d_b_o:=$(shell echo "$$DEB_BUILD_OPTIONS" | tr 'a-z-,' 'A-Z_ ')
+$(foreach o, $(d_b_o), \
+  $(if $(findstring =,$o), $(eval DEB_OPT_$o), $(eval DEB_OPT_$o := 1)))
+$(foreach o, $(filter NO_%,$(d_b_o)), $(eval DEB_OPT_$(subst NO_,WITH_,$o) :=))
+$(if $(DEB_OPT_PARALLEL),$(eval MAKEFLAGS += -j$(DEB_OPT_PARALLEL)))
+
+# How to fix "#!/usr/bin/env " lines:  $(call fix_shebangs_in, /your/dir)
+fix_shebangs_in = \
+	find $1 -type f | xargs -r egrep -m1 -c '^\#! ?/' | sed -n 's/:1//p' |\
+	xargs -r sed -i -e 's:^\#! */usr/bin/env perl.*:\#!/usr/bin/perl -w:' \
+			-e 's:^\#! */usr/bin/env pyth.*:\#!/usr/bin/python:' \
+			-e 's:^\#! */usr/bin/env ruby.*:\#!/usr/bin/$(RUBY):'
+
+PERL_DIR := $(DEB_BUILDDIR)/subversion/bindings/swig/perl/native
+PY_DIR := $(DEB_BUILDDIR)/subversion/bindings/swig/python
+PYVERSIONS := $(shell pyversions -vi)
+
+allpy = \
+	set -e; for v in $(PYVERSIONS); do \
+		$(RM) $(PY_DIR); \
+		ln -fs python$$v $(PY_DIR); \
+		pylib=$$(python$$v -c 'from distutils import sysconfig; print sysconfig.get_python_lib()'); \
+		$1; \
+	done
+
+libdir := /usr/lib/$(DEB_HOST_MULTIARCH)
+confflags := \
+		--prefix=/usr \
+		--libdir=$(libdir) \
+		--mandir=\$${prefix}/share/man \
+		--with-custom-libtool=libtool \
+		--with-apr=/usr \
+		--with-apr-util=/usr \
+		--with-neon=/usr \
+		--with-serf=/usr \
+		--with-berkeley-db=:::db \
+		--with-sasl=/usr \
+		--with-editor=/usr/bin/editor \
+		--with-ruby-sitedir=/usr/lib/ruby \
+		--with-swig=/usr \
+		--with-kwallet \
+		--with-gnome-keyring
+
+ifdef DEB_OPT_DEBUG
+  confflags+= --enable-debug 
+endif
+export EXTRA_CFLAGS := -O2
+ifdef DEB_OPT_NOOPT
+  EXTRA_CFLAGS := -O0
+endif
+
+export DH_OPTIONS
+ifdef DEB_OPT_WITH_JAVAHL
+  # jikes 1.22 cannot compile javahl.
+  confflags += --enable-javahl --without-jikes \
+               --with-jdk=/usr/lib/jvm/java-gcj \
+               --with-junit=/usr/share/java/junit.jar
+else
+  DH_OPTIONS += -Nlibsvn-java
+  confflags += --disable-javahl
+endif
+
+ifdef DEB_OPT_WITH_APACHE
+  confflags += --with-apxs=/usr/bin/apxs2 --disable-mod-activation
+else
+  confflags += --without-apxs
+  DH_OPTIONS += -Nlibapache2-svn
+endif
+
+ifdef DEB_OPT_WITH_RUBY
+  RUBY := ruby1.8
+  rb_defs := SWIG_RB_SITE_LIB_DIR=$(shell $(RUBY) -rrbconfig -e "print RbConfig::CONFIG['vendordir']")
+  rb_defs += SWIG_RB_SITE_ARCH_DIR=$(shell $(RUBY) -rrbconfig -e "print RbConfig::CONFIG['vendorarchdir']")
+else
+  DH_OPTIONS += -Nruby-svn -Nlibsvn-ruby -Nlibsvn-ruby1.8
+  RUBY := fooby
+endif
+
+
+# Set autoconf cross-compile mode correctly.
+# Also disable testsuite if cross-compiling.
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+  DEB_OPT_NOCHECK := 1
+endif
+
+
+# I'm not trying to be difficult: this check exists because building as
+# root really _does_ fail.  The failure mode as of 1.4.0 is test 17
+# from switch_tests.py.  Upstream response is "so don't build as root".
+# (fakeroot does not fail, as it does not wrap the access(2) syscall.)
+#
+# We run this code from build-arch, since that's what actually fails as
+# root, but also from autogen, since that will halt the build earlier.
+define DONT_BE_ROOT
+	@if [ $$(id -u) = 0 ] && [ -z "$(FAKEROOTKEY)" ]; then \
+		echo >&2 "***"; \
+		echo >&2 "*** Building as root is not supported ***"; \
+		false; \
+	fi
+endef
+
+debian/stamp-autogen: $(QUILT_STAMPFN)
+	$(DONT_BE_ROOT)
+	./autogen.sh
+	touch $@
+
+debian/stamp-configure: $(QUILT_STAMPFN) debian/stamp-autogen
+	dh_testdir
+
+	test -e patches || ln -s debian/patches patches
+	mkdir -p $(DEB_BUILDDIR) $(HOME)
+	cd $(DEB_BUILDDIR) && \
+		PYTHON=/usr/bin/python RUBY=/usr/bin/$(RUBY) \
+		$(CURDIR)/configure $(confflags)
+
+	# Subversion upstream ships with Swig 1.3.25 pregenerated
+	# files, which may interact badly with the build if Debian swig
+	# is not version 1.3.25 - particularly with swig 1.3.24.
+	# Thus we unconditionally delete the pregenerated files.
+	+$(MAKE_B) extraclean-swig
+	for v in $(PYVERSIONS); do \
+		cp -la $(PY_DIR) $(PY_DIR)$$v; \
+	done
+	$(RM) -r $(PY_DIR)
+
+	touch $@
+
+build: debian/stamp-build-arch debian/stamp-build-indep
+
+check_defs := CLEANUP=1 LC_ALL=C
+check_swig := check-swig-py check-swig-pl $(if $(DEB_OPT_WITH_RUBY),check-swig-rb)
+check_all := $(check_swig) $(if $(DEB_OPT_WITH_JAVAHL),check-javahl) check
+check-help:
+	@echo "$(MAKE) $(check_all)"
+
+check check-swig-rb check-javahl: debian/stamp-build-arch
+	+$(MAKE_B) $@ $(check_defs)
+
+check-swig-pl: debian/stamp-build-arch
+	+$(MAKE_B) $@ $(check_defs)
+	$(MAKE) -C $(PERL_DIR) test LC_ALL=C
+
+check-swig-py: debian/stamp-build-arch
+	$(call allpy, \
+	  $(MAKE_B) $@ PYTHON=python$$v PYVER=$$v $(check_defs))
+
+build-arch: debian/stamp-build-arch
+debian/stamp-build-arch: debian/stamp-configure
+	dh_testdir
+	$(DONT_BE_ROOT)
+
+	# note: autogen-swig does not support -jN
+	$(call allpy, $(MAKE_B) -j1 autogen-swig)
+	+$(MAKE_B) all tools
+	# Run svn once, to make sure it populates $(HOME)/.subversion/*
+	$(DEB_BUILDDIR)/subversion/svn/svn --version > /dev/null
+	$(call allpy, \
+	  $(MAKE_B) swig-py PYTHON=python$$v PYVER=$$v \
+	            PYTHON_INCLUDES=-I/usr/include/python$$v \
+	            swig_pydir=$$pylib/libsvn swig_pydir_extra=$$pylib/svn)
+	# note: swig-pl seems to have trouble with -jN
+	+$(MAKE_B) -j1 swig-pl
+	$(MAKE) -C $(PERL_DIR) all \
+		OPTIMIZE="-g -Wall $(EXTRA_CFLAGS)"
+ifdef DEB_OPT_WITH_RUBY
+	+$(MAKE_B) swig-rb $(rb_defs)
+endif
+ifdef DEB_OPT_WITH_JAVAHL
+	+$(MAKE_B) -j1 javahl
+endif
+	touch $@
+
+ifndef DEB_OPT_NOCHECK
+	@echo "###################################################"
+	@echo "Running testsuite - may take a while.  To disable,"
+	@echo "use DEB_BUILD_OPTIONS=nocheck or edit debian/rules."
+	@echo
+	$(MAKE) -f debian/rules $(check_swig)
+
+  ifdef DEB_OPT_WITH_JAVAHL
+	# This fails on current free JVMs, according to Blair Zajac.
+	# Thus the "-" prefix, to ignore failure, for now.
+	-$(MAKE) -f debian/rules check-javahl
+  endif
+
+	# Run 'check' last, as it takes longest.  'cat tests.log' is for
+	# obtaining diagnostics from buildd logs.
+	@if ! $(MAKE) -f debian/rules check; then \
+	  echo "###################################################"; \
+	  echo "Testsuite failed, 'tests.log' follows:"; echo; \
+	  cat $(DEB_BUILDDIR)/tests.log; \
+	  exit 1; \
+	fi
+endif
+	touch $@
+
+build-indep: debian/stamp-build-indep
+debian/stamp-build-indep: debian/stamp-configure
+	+$(MAKE_B) doc-api
+	touch $@
+
+clean: unpatch
+	dh_testdir
+	dh_clean
+	$(RM) patches
+	! [ -f $(DEB_BUILDDIR)/Makefile ] || $(MAKE_B) extraclean-swig distclean
+	$(RM) -r $(DEB_BUILDDIR)
+	$(RM) -r subversion/bindings/swig/ruby/test/.test-result
+	$(RM) build-outputs.mk gen-make.opts subversion/svn_private_config.h.in
+	$(RM) build/transform_libtool_scripts.sh
+	find -name \*.pyc -exec $(RM) {} +
+	# these are (re)generated by autogen.sh
+	$(RM) subversion/bindings/swig/proxy/*.swg
+	$(RM) configure build/ltmain.sh build/libtool.m4 build/lt*.m4
+	$(RM) build/config.sub build/config.guess
+	$(RM) debian/stamp-*
+
+debian/stamp-install-indep: debian/stamp-build-indep
+	dh_prep -i
+	dh_installdirs -i
+
+ifdef DEB_OPT_WITH_JAVAHL
+	$(MAKE_B) install-javahl-java \
+		DESTDIR=$(CURDIR)/debian/tmp \
+		javahl_javadir=/usr/share/java \
+		javahl_javahdir=/usr/include/svn-javahl
+endif
+
+	dh_install -i
+
+	mkdir -p debian/libsvn-doc/usr/share/doc/libsvn1
+	mkdir -p debian/libsvn-doc/usr/share/doc/libsvn-doc
+	cp -a $(DEB_BUILDDIR)/doc/doxygen/html \
+		debian/libsvn-doc/usr/share/doc/libsvn1/
+	$(RM) debian/libsvn-doc/usr/share/doc/libsvn1/html/jquery.js
+	ln -s ../libsvn1/html debian/libsvn-doc/usr/share/doc/libsvn-doc/
+	mkdir debian/libsvn-doc/usr/share/doc/libsvn1/examples
+	ln -s ../libsvn1/examples debian/libsvn-doc/usr/share/doc/libsvn-doc/
+
+	# Install files for 'subversion-tools' package.
+	install $(DEB_BUILDDIR)/tools/backup/hot-backup.py \
+		debian/subversion-tools/usr/bin/svn-hot-backup
+
+	rm debian/subversion-tools/usr/share/subversion/hook-scripts/*.in
+	rm -r debian/subversion-tools/usr/share/subversion/hook-scripts/mailer/tests
+ifndef DEB_OPT_WITH_RUBY
+	rm debian/subversion-tools/usr/share/subversion/hook-scripts/*.rb
+endif
+
+	# Fix some scripts not to use #!/usr/bin/env.
+	$(call fix_shebangs_in, debian/*/usr/bin \
+		debian/subversion-tools/usr/share/subversion/hook-scripts)
+	cd debian/subversion-tools/usr/share/subversion/hook-scripts; \
+		chmod 0755 commit-email.pl commit-access-control.pl \
+			   mailer/mailer.py verify-po.py svnperms.py;
+
+	# Remove suffixes from binaries in /usr/bin
+	prename 's/\.(sh|pl|rb|py)$$//' debian/*/usr/bin/*
+
+	pod2man -c 'User Commands' -r "" debian/contrib/svn-clean \
+		$(DEB_BUILDDIR)/svn-clean.1
+
+	touch $@
+
+debian/stamp-install-arch: debian/stamp-build-arch
+	dh_prep -s
+	dh_installdirs -s
+
+	$(MAKE_B) local-install install-tools \
+		DESTDIR=$(CURDIR)/debian/tmp toolsdir=/usr/bin
+	sed -i 's:/usr/lib/\([^/]*/\)?lib\([^ ]*\).la:-l\1:g' debian/tmp/usr/lib/*/*.la
+
+	$(call allpy, \
+	  $(MAKE_B) install-swig-py DESTDIR=$(CURDIR)/debian/tmp \
+	            PYTHON=python$$v PYVER=$$v \
+	            swig_pydir=$$pylib/libsvn swig_pydir_extra=$$pylib/svn)
+	$(RM) debian/tmp/usr/lib/python*/*-packages/libsvn/*.la
+	$(RM) debian/tmp/usr/lib/python*/*-packages/libsvn/*.a
+
+ifdef DEB_OPT_WITH_JAVAHL
+	$(MAKE_B) install-javahl \
+		DESTDIR=$(CURDIR)/debian/tmp \
+		javahl_javadir=/usr/share/java \
+		javahl_javahdir=/usr/include/svn-javahl
+endif
+
+	$(MAKE_B) install-swig-pl-lib \
+		DESTDIR=$(CURDIR)/debian/tmp
+	$(MAKE) -C $(PERL_DIR) install \
+		MAN3EXT=3perl DESTDIR=$(CURDIR)/debian/tmp
+
+ifdef DEB_OPT_WITH_RUBY
+	$(MAKE_B) install-swig-rb $(rb_defs) \
+		DESTDIR=$(CURDIR)/debian/tmp
+	find debian/tmp/usr/lib/ruby \( -name \*.a -o -name \*.la \) -exec $(RM) {} +
+endif
+
+	cd debian/tmp/$(libdir); for lib in ra fs auth swig; do \
+	    $(RM) libsvn_$${lib}_*.so libsvn_$${lib}_*.la; \
+	done
+	cd debian/tmp/$(libdir); $(RM) libsvn_swig*.a libsvnjavahl.a libsvnjavahl.la
+	# Intermediate hack, until we can remove the rest of the .la files.
+	sed -i  "/dependency_libs/s/=.*/=''/" debian/tmp/$(libdir)/*.la
+	dh_install -s
+ifdef DEB_OPT_WITH_JAVAHL
+	mkdir -p debian/libsvn-java/$(libdir)
+	mv debian/libsvn-java/usr/lib/jni debian/libsvn-java/$(libdir)/
+endif
+	ln -s libsvn_ra_neon-1.so.1 debian/libsvn1/$(libdir)/libsvn_ra_dav-1.so.1
+
+	install -m644 tools/client-side/bash_completion \
+		debian/subversion/etc/bash_completion.d/subversion
+
+ifdef DEB_OPT_WITH_APACHE
+	install subversion/mod_authz_svn/INSTALL \
+		debian/libapache2-svn/usr/share/doc/libapache2-svn/INSTALL.authz
+endif
+
+	cp tools/examples/svnshell.py debian/python-subversion/usr/bin/svnshell
+	$(call fix_shebangs_in, debian/python-subversion/usr/bin/svnshell)
+
+	touch $@
+
+binary-indep: debian/stamp-install-indep
+	dh_testdir
+	dh_testroot
+	dh_link -i
+	dh_installdocs -i
+	dh_installexamples -i
+	$(call fix_shebangs_in, debian/*/usr/share/doc/*/examples)
+	dh_installman -i
+	dh_installchangelogs -i CHANGES
+	dh_lintian -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_perl -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: debian/stamp-install-arch
+	dh_testdir
+	dh_testroot
+	dh_link -s
+	dh_installdocs -s
+	dh_installexamples -s
+	$(call fix_shebangs_in, debian/*/usr/share/doc/*/examples)
+	dh_installchangelogs -s CHANGES
+	dh_lintian -s
+	dh_fixperms -s
+	dh_strip -s
+	dh_compress -s
+
+	# dh_makeshlibs (1) creates shlibs/symbols files and (2) generates
+	# calls to 'ldconfig' in postinst/postrm.  We want (1) only for
+	# libsvn1, but (2) for the swig packages too.
+	dh_makeshlibs -s -Xjava -X_auth_ -X_ra_neon -X_ra_serf -X_ra_local -X_fs_
+	$(RM) debian/libsvn-*/DEBIAN/shlibs debian/python-subversion/DEBIAN/shlibs
+	$(RM) debian/libsvn-*/DEBIAN/symbols debian/python-subversion/DEBIAN/symbols
+	dh_perl -s
+	dh_python2 -s
+	dh_installdeb -s
+	dh_shlibdeps -s -X_auth_
+	sed -i 's:libsvn-private\(, *\)\?::' debian/*.substvars
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-indep binary-arch
+
+.PHONY: build build-arch build-indep binary binary-arch binary-indep
+.PHONY: clean check-help $(check_all)

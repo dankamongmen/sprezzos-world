@@ -1,0 +1,108 @@
+apache_module_dependency: Dynamically bind two mod_dav_svn functions in
+mod_authz_svn, so that it works even if mod_authz_svn is loaded first.
+
+This is related to splitting mod_authz_svn out of dav_svn.load into its
+own authz_svn.load.  Since a2enmod does not reorder modules based on
+dependencies, mod_authz_svn is loaded first.
+
+--- a/subversion/include/mod_dav_svn.h
++++ b/subversion/include/mod_dav_svn.h
+@@ -25,6 +25,7 @@
+ 
+ #include <httpd.h>
+ #include <mod_dav.h>
++#include <apr_optional.h>
+ 
+ 
+ #ifdef __cplusplus
+@@ -75,6 +76,15 @@ AP_MODULE_DECLARE(dav_error *) dav_svn_s
+                                                  const char **repos_name,
+                                                  const char **relative_path,
+                                                  const char **repos_path);
++APR_DECLARE_OPTIONAL_FN(dav_error *, dav_svn_split_uri,
++                        (request_rec *r,
++                         const char *uri,
++                         const char *root_path,
++                         const char **cleaned_uri,
++                         int *trailing_slash,
++                         const char **repos_name,
++                         const char **relative_path,
++                         const char **repos_path));
+ 
+ 
+ /* Given an apache request R and a ROOT_PATH to the svn location
+@@ -83,6 +93,10 @@ AP_MODULE_DECLARE(dav_error *) dav_svn_s
+ AP_MODULE_DECLARE(dav_error *) dav_svn_get_repos_path(request_rec *r,
+                                                       const char *root_path,
+                                                       const char **repos_path);
++APR_DECLARE_OPTIONAL_FN(dav_error *, dav_svn_get_repos_path,
++                        (request_rec *r,
++                         const char *root_path,
++                         const char **repos_path));
+ 
+ #ifdef __cplusplus
+ }
+--- a/subversion/mod_authz_svn/mod_authz_svn.c
++++ b/subversion/mod_authz_svn/mod_authz_svn.c
+@@ -17,7 +17,7 @@
+  * ====================================================================
+  */
+ 
+-
++#define DAV_SVN_LOAD_OPTIONAL 1
+ 
+ #include <httpd.h>
+ #include <http_config.h>
+@@ -50,6 +50,13 @@ typedef struct {
+   const char *force_username_case;
+ } authz_svn_config_rec;
+ 
++#if DAV_SVN_LOAD_OPTIONAL
++static APR_OPTIONAL_FN_TYPE(dav_svn_get_repos_path) *get_repos_path;
++static APR_OPTIONAL_FN_TYPE(dav_svn_split_uri) *split_uri;
++#define dav_svn_get_repos_path get_repos_path
++#define dav_svn_split_uri split_uri
++#endif
++
+ /*
+  * Configuration
+  */
+@@ -665,6 +672,16 @@ auth_checker(request_rec *r)
+   return OK;
+ }
+ 
++#if DAV_SVN_LOAD_OPTIONAL
++#undef dav_svn_get_repos_path
++#undef dav_svn_split_uri
++static void import_dav_svn(void)
++{
++  get_repos_path = APR_RETRIEVE_OPTIONAL_FN(dav_svn_get_repos_path);
++  split_uri = APR_RETRIEVE_OPTIONAL_FN(dav_svn_split_uri);
++}
++#endif
++
+ /*
+  * Module flesh
+  */
+@@ -685,6 +702,9 @@ register_hooks(apr_pool_t *p)
+                        AUTHZ_SVN__SUBREQ_BYPASS_PROV_NAME,
+                        AUTHZ_SVN__SUBREQ_BYPASS_PROV_VER,
+                        (void*)subreq_bypass);
++#if DAV_SVN_LOAD_OPTIONAL
++  ap_hook_optional_fn_retrieve(import_dav_svn,NULL,NULL,APR_HOOK_MIDDLE);
++#endif
+ }
+ 
+ module AP_MODULE_DECLARE_DATA authz_svn_module =
+--- a/subversion/mod_dav_svn/mod_dav_svn.c
++++ b/subversion/mod_dav_svn/mod_dav_svn.c
+@@ -749,6 +749,9 @@ static dav_provider provider =
+ static void
+ register_hooks(apr_pool_t *pconf)
+ {
++  APR_REGISTER_OPTIONAL_FN(dav_svn_get_repos_path);
++  APR_REGISTER_OPTIONAL_FN(dav_svn_split_uri);
++
+   ap_hook_pre_config(init_dso, NULL, NULL, APR_HOOK_REALLY_FIRST);
+   ap_hook_post_config(init, NULL, NULL, APR_HOOK_MIDDLE);
+ 

@@ -49,7 +49,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt \
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
-	libtool
+	libtool subversion
 
 SPREZZ:=packaging
 
@@ -205,7 +205,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) $(PROCPS) \
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) \
 	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING) \
-	$(LIBTOOL)
+	$(LIBTOOL) $(SUBVERSION)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2310,6 +2310,13 @@ $(SOCAT): $(SPREZZ)/socat/debian/changelog $(SOCATORIG)
 	tar xjvf $(SOCATORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+.PHONY: subversion
+subversion:$(SUBVERSION)_$(ARCH).deb
+$(SUBVERSION): $(SPREZZ)/subversion/debian/changelog
+	mkdir $@
+	tar xzvf subversion-$(SUBVERSIONUPVER) --strip-components=1 -C $@
+	cp -r $(<D) $@/
+
 .PHONY: sudo
 sudo:$(SUDO)_$(ARCH).deb
 $(SUDO): $(SPREZZ)/sudo/debian/changelog sudo-1.8.5p3.tar.gz
@@ -2697,7 +2704,7 @@ clean:
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
-	rm -rf $(LIBTOOL)
+	rm -rf $(LIBTOOL) $(SUBVERSION)
 
 clobber:
 	rm -rf $(FETCHED)

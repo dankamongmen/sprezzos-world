@@ -1,0 +1,56 @@
+Bug #378837: Ruby testsuite: wait for svnserve to start before
+connecting to it.  This mainly affects very slow machines - observed
+on various arm and m68k builds.
+
+Thanks to Roman Zippel, Kobayashi Noritada, Wouter Verhelst and Martin
+Michlmayr.
+
+--- a/subversion/bindings/swig/ruby/test/util.rb
++++ b/subversion/bindings/swig/ruby/test/util.rb
+@@ -19,6 +19,7 @@
+ 
+ require "fileutils"
+ require "pathname"
++require "socket"
+ require "svn/util"
+ require "tmpdir"
+ 
+@@ -250,11 +251,7 @@
+                "-d", "--foreground")
+         }
+         pid, status = Process.waitpid2(@svnserve_pid, Process::WNOHANG)
+-        if status and status.exited?
+-          if $DEBUG
+-            STDERR.puts "port #{port} couldn't be used for svnserve"
+-          end
+-        else
++        if wait_until_svnserve_gets_available_at(port)
+           # svnserve started successfully.  Note port number and cease
+           # startup attempts.
+           @svnserve_port = port
+@@ -320,4 +317,25 @@
+     include Svnserve
+     extend SetupEnvironment
+   end
++
++  # Waits until svnserve gets available at port +port+, avoiding the race
++  # condition between starting up a svnserve process and trying to connect
++  # to it (Bug#378837 in Debian's BTS).
++  def wait_until_svnserve_gets_available_at(port)
++    1000.times do |n|
++      begin
++	pid, status = Process.waitpid2(@svnserve_pid, Process::WNOHANG)
++	if status and status.exited?
++	  STDERR.puts "port #{port} couldn't be used for svnserve"
++	  return false
++	end
++	TCPSocket.new(@svnserve_host, port).close
++      rescue Errno::ECONNREFUSED
++	sleep(n < 10 ? 0.2 : 0.5)
++      else
++	return true
++      end
++    end
++    raise "svnserve couldn't get available at port #{port}"
++  end
+ end
