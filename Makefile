@@ -779,7 +779,7 @@ $(GLIBNETWORKING): $(SPREZZ)/glib-networking/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf glib-networking-$(glib-networking_UPVER).tar.gz --strip-components=1 -C $@
+	tar xJvf glib-networking-$(glib-networking_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: GLU
 GLU:$(GLU)_$(ARCH).deb
