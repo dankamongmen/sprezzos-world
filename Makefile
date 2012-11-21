@@ -1582,7 +1582,7 @@ $(OPENCV): $(SPREZZ)/opencv/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf opencv-$(opencv_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xzvf OpenCV-$(opencv_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: openldap
 openldap:$(OPENLDAP)_$(ARCH).deb
