@@ -1295,7 +1295,7 @@ $(LIBIMOBILEDEVICE): $(SPREZZ)/libimobiledevice/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.gz --strip-components=1 -C $@
+	tar xjvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: libjpeg
 libjpeg:$(LIBJPEG)_$(ARCH).deb
