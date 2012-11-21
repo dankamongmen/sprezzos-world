@@ -49,7 +49,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt \
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
-	libtool subversion libimobiledevice
+	libtool subversion libimobiledevice usbmuxd
 
 SPREZZ:=packaging
 
@@ -205,7 +205,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) $(PROCPS) \
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) \
 	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING) \
-	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE)
+	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1296,6 +1296,14 @@ $(LIBIMOBILEDEVICE): $(SPREZZ)/libimobiledevice/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xjvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.bz2 --strip-components=1 -C $@
+
+.PHONY: usbmuxd
+usbmuxd:$(USBMUXD)_$(ARCH).deb
+$(USBMUXD): $(SPREZZ)/usbmuxd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xjvf usbmuxd_$(usbmuxd_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
 .PHONY: libjpeg
 libjpeg:$(LIBJPEG)_$(ARCH).deb
@@ -2713,7 +2721,7 @@ clean:
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
-	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE)
+	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD)
 
 clobber:
 	rm -rf $(FETCHED)
