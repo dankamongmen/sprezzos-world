@@ -110,10 +110,6 @@ GNOMEMEDIAUP:=gnome-media-$(shell echo $(gnome-media_VERSION) | cut -d- -f1)
 GNOMEMEDIAORIG:=gnome-media_$(shell echo $(gnome-media_VERSION) | cut -d- -f1).orig.tar.xz
 GNOMEPOWERMANAGERUP:=gnome-power-manager-$(shell echo $(gnome-power-manager_VERSION) | cut -d: -f2- | cut -d- -f1)
 GNOMEPOWERMANAGERORIG:=gnome-power-manager_$(shell echo $(gnome-power-manager_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-GNOMESHELLUP:=gnome-shell-$(shell echo $(gnome-shell_VERSION) | cut -d: -f2- | cut -d- -f1)
-GNOMESHELLORIG:=gnome-shell_$(shell echo $(gnome-shell_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-GNOMESHELLEXTENSIONSUP:=gnome-shell-extensions-$(shell echo $(gnome-shell-extensions_VERSION) | cut -d: -f2- | cut -d- -f1)
-GNOMESHELLEXTENSIONSORIG:=gnome-shell-extensions_$(shell echo $(gnome-shell-extensions_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1)
 GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1).orig.tar.xz
 SPLORIG:=spl_$(shell echo $(spl_VERSION) | cut -d- -f1).orig.tar.xz
@@ -928,6 +924,22 @@ $(GNOMESETTINGSDAEMON): $(SPREZZ)/gnome-settings-daemon/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xJvf gnome-settings-daemon_$(gnome-settings-daemon_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-shell
+gnome-shell:$(GNOMESHELL)_$(ARCH).deb
+$(GNOMESHELL): $(SPREZZ)/gnome-shell/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-shell-$(gnome-shell_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-shell-extensions
+gnome-shell-extensions:$(GNOMESHELLEXTENSIONS)_$(ARCH).deb
+$(GNOMESHELLEXTENSIONS): $(SPREZZ)/gnome-shell-extensions/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gnome-shell-extensions-$(gnome-shell-extensions_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-sushi
 gnome-sushi:$(GNOMESUSHI)_$(ARCH).deb
@@ -2565,34 +2577,6 @@ gsettings-desktop-schemas:$(GSETTINGSDESKTOPSCHEMAS)_$(ARCH).deb
 $(GSETTINGSDESKTOPSCHEMAS): $(SPREZZ)/gsettings-desktop-schemas/debian/changelog $(GSETSCHEMASORIG)
 	mkdir -p $@
 	tar xJvf $(GSETSCHEMASORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GNOMESHELLUP).tar.xz
-$(GNOMESHELLUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-shell/3.6/$@
-
-$(GNOMESHELLORIG): $(GNOMESHELLUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gnome-shell
-gnome-shell:$(GNOMESHELL)_$(ARCH).deb
-$(GNOMESHELL): $(SPREZZ)/gnome-shell/debian/changelog $(GNOMESHELLORIG)
-	mkdir -p $@
-	tar xJvf $(GNOMESHELLORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GNOMESHELLEXTENSIONSUP).tar.xz
-$(GNOMESHELLEXTENSIONSUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-shell-extensions/3.2/$@
-
-$(GNOMESHELLEXTENSIONSORIG): $(GNOMESHELLEXTENSIONSUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gnome-shell-extensions
-gnome-shell-extensions:$(GNOMESHELLEXTENSIONS)_$(ARCH).deb
-$(GNOMESHELLEXTENSIONS): $(SPREZZ)/gnome-shell-extensions/debian/changelog $(GNOMESHELLEXTENSIONSORIG)
-	mkdir -p $@
-	tar xJvf $(GNOMESHELLEXTENSIONSORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIGHTDMUP).orig.tar.gz
