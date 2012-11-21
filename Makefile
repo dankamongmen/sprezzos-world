@@ -49,7 +49,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt \
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
-	libtool subversion
+	libtool subversion libimobiledevice
 
 SPREZZ:=packaging
 
@@ -205,7 +205,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER) $(PROCPS) \
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) \
 	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING) \
-	$(LIBTOOL) $(SUBVERSION)
+	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1288,6 +1288,14 @@ $(LIBGPHOTO2): $(SPREZZ)/libgphoto2/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf libgphoto2-$(libgphoto2_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: libimobiledevice
+libimobiledevice:$(LIBIMOBILEDEVICE)_$(ARCH).deb
+$(LIBIMOBILEDEVICE): $(SPREZZ)/libimobiledevice/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: libjpeg
 libjpeg:$(LIBJPEG)_$(ARCH).deb
@@ -2705,7 +2713,7 @@ clean:
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
-	rm -rf $(LIBTOOL) $(SUBVERSION)
+	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE)
 
 clobber:
 	rm -rf $(FETCHED)
