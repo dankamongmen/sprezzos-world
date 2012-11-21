@@ -1,0 +1,148 @@
+From: Pedro Alves <pedro@codesourcery.com>
+Date: Fri, 12 Aug 2011 17:06:25 +0000 (+0000)
+Subject: 2011-08-12  Pedro Alves  <pedro@codesourcery.com>
+X-Git-Url: http://sourceware.org/git/?p=gdb.git;a=commitdiff_plain;h=60be8ffad1e2ee2398780025e5fc165ff1974dc4
+
+2011-08-12  Pedro Alves  <pedro@codesourcery.com>
+
+	PR tui/13073
+
+	* tui/tui-regs.c (tui_show_register_group): Skip registers with an
+	empty name.
+	(tui_show_register_group): Don't store a byte buffer in the data
+	element's value.
+	(tui_register_format): Skip registers with an empty name.
+	(tui_get_register): Store a struct value in the data element's
+	value field instead of a byte buffer holding the raw register
+	contents.  Account for optimized-out and unavailable registers
+	when comparing register contents.
+---
+
+Index: gdb-7.3/gdb/ChangeLog
+===================================================================
+--- gdb-7.3.orig/gdb/ChangeLog	2011-08-23 21:40:16.443403574 +0100
++++ gdb-7.3/gdb/ChangeLog	2011-08-23 21:40:55.647403545 +0100
+@@ -1,3 +1,17 @@
++2011-08-12  Pedro Alves  <pedro@codesourcery.com>
++
++	PR tui/13073
++
++	* tui/tui-regs.c (tui_show_register_group): Skip registers with an
++	empty name.
++	(tui_show_register_group): Don't store a byte buffer in the data
++	element's value.
++	(tui_register_format): Skip registers with an empty name.
++	(tui_get_register): Store a struct value in the data element's
++	value field instead of a byte buffer holding the raw register
++	contents.  Account for optimized-out and unavailable registers
++	when comparing register contents.
++
+ 2011-07-26  Joel Brobecker  <brobecker@adacore.com>
+ 
+ 	* NEWS: Change `since GDB 7.2' into `in GDB 7.3'.
+Index: gdb-7.3/gdb/tui/tui-regs.c
+===================================================================
+--- gdb-7.3.orig/gdb/tui/tui-regs.c	2011-08-23 21:40:16.451403574 +0100
++++ gdb-7.3/gdb/tui/tui-regs.c	2011-08-23 21:40:55.647403545 +0100
+@@ -230,10 +230,19 @@
+ 		+ gdbarch_num_pseudo_regs (gdbarch);
+        regnum++)
+     {
+-      /* Must be in the group and have a name.  */
+-      if (gdbarch_register_reggroup_p (gdbarch, regnum, group)
+-          && gdbarch_register_name (gdbarch, regnum) != 0)
+-        nr_regs++;
++      const char *name;
++
++      /* Must be in the group.  */
++      if (!gdbarch_register_reggroup_p (gdbarch, regnum, group))
++	continue;
++
++      /* If the register name is empty, it is undefined for this
++	 processor, so don't display anything.  */
++      name = gdbarch_register_name (gdbarch, regnum);
++      if (name == 0 || *name == '\0')
++	continue;
++
++      nr_regs++;
+     }
+ 
+   if (display_info->regs_content_count > 0 && !refresh_values_only)
+@@ -273,12 +282,15 @@
+           struct tui_data_element *data;
+           const char *name;
+ 
++          /* Must be in the group.  */
+           if (!gdbarch_register_reggroup_p (gdbarch, regnum, group))
+             continue;
+ 
+-          name = gdbarch_register_name (gdbarch, regnum);
+-          if (name == 0)
+-            continue;
++	  /* If the register name is empty, it is undefined for this
++	     processor, so don't display anything.  */
++	  name = gdbarch_register_name (gdbarch, regnum);
++	  if (name == 0 || *name == '\0')
++	    continue;
+ 
+ 	  data_item_win =
+             &display_info->regs_content[pos]->which_element.data_window;
+@@ -292,9 +304,6 @@
+                   data->name = name;
+                   data->highlight = FALSE;
+                 }
+-              if (data->value == (void*) NULL)
+-                data->value = (void*) xmalloc (MAX_REGISTER_SIZE);
+-
+               tui_get_register (frame, data, regnum, 0);
+             }
+           pos++;
+@@ -691,11 +700,9 @@
+   char *p, *s;
+ 
+   name = gdbarch_register_name (gdbarch, regnum);
+-  if (name == 0)
+-    {
+-      return;
+-    }
+-  
++  if (name == 0 || *name == '\0')
++    return;
++
+   pagination_enabled = 0;
+   old_stdout = gdb_stdout;
+   stream = tui_sfileopen (256);
+@@ -730,24 +737,23 @@
+     *changedp = FALSE;
+   if (target_has_registers)
+     {
+-      gdb_byte buf[MAX_REGISTER_SIZE];
++      struct value *old_val = data->value;
+ 
+-      get_frame_register (frame, regnum, buf);
++      data->value = get_frame_register_value (frame, regnum);
++      release_value (data->value);
+       if (changedp)
+ 	{
+ 	  struct gdbarch *gdbarch = get_frame_arch (frame);
+ 	  int size = register_size (gdbarch, regnum);
+-	  char *old = (char*) data->value;
+-	  int i;
+ 
+-	  for (i = 0; i < size; i++)
+-	    if (buf[i] != old[i])
+-	      {
+-		*changedp = TRUE;
+-		old[i] = buf[i];
+-	      }
++	  if (value_optimized_out (data->value) != value_optimized_out (old_val)
++	      || !value_available_contents_eq (data->value, 0,
++					       old_val, 0, size))
++	    *changedp = TRUE;
+ 	}
+ 
++      value_free (old_val);
++
+       /* Reformat the data content if the value changed.  */
+       if (changedp == 0 || *changedp == TRUE)
+ 	tui_register_format (frame, data, regnum);

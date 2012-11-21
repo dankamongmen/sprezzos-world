@@ -1047,7 +1047,7 @@ $(GTK3): $(SPREZZ)/gtk3/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf gtk+-$(gtk3_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf gtk+3.0-$(gtk3_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gvfs
 gvfs:$(GVFS)_$(ARCH).deb

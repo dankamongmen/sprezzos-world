@@ -1,0 +1,343 @@
+#!/usr/bin/make -f
+
+ALL_BUILDDIR := $(shell pwd)/build
+
+DEB_BUILDDIR := $(ALL_BUILDDIR)/objdir
+DEB_DH_INSTALL_SOURCEDIR := $(shell pwd)/debian/tmp
+#DEB_DH_STRIP_ARGS := --dbg-package=gdb-dbg
+
+# This implements the .deb package creation using debhelper.
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+# This implements building using a configure script and Makefile.
+include /usr/share/cdbs/1/class/autotools.mk
+
+# Override CDBS's default CFLAGS, which also includes -Wall; gdb
+# does not handle -Wunused well with -Werror, but defaults to
+# -Werror.
+CFLAGS = -g $(DEB_OPT_FLAG)
+
+# Always install into debian/tmp, even if we are only building one package.
+DEB_DESTDIR := $(shell pwd)/debian/tmp
+
+install = /usr/bin/install -p
+
+# Rather paranoid than sorry. Make the shell exit with an error if an
+# untested command fails.
+SHELL += -e
+
+DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_SYSTEM := $(shell dpkg-architecture -qDEB_HOST_GNU_SYSTEM)
+DEB_HOST_GNU_CPU := $(shell dpkg-architecture -qDEB_HOST_GNU_CPU)
+DEB_HOST_GNU_TYPE := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+# Cross configuration support.  Check for an environment variable
+# $GDB_TARGET, or a file debian/target.
+ifndef GDB_TARGET
+DEBIAN_TARGET_FILE := $(strip $(shell cat debian/target 2>/dev/null))
+ifneq ($(DEBIAN_TARGET_FILE),)
+GDB_TARGET := $(DEBIAN_TARGET_FILE)
+endif
+endif
+
+DEB_TARGET_ARCH	:= $(shell dpkg-architecture -f \
+		     -a$(GDB_TARGET) -qDEB_HOST_ARCH 2>/dev/null)
+DEB_TARGET_GNU_TYPE := $(shell dpkg-architecture -f \
+			 -a$(DEB_TARGET_ARCH) -qDEB_HOST_GNU_TYPE 2>/dev/null)
+DEB_TARGET_ALIAS ?= $(DEB_TARGET_GNU_TYPE)
+
+ifneq ($(GDB_TARGET),)
+DEB_CONFIGURE_GDB_DATADIR := "\$${prefix}/share/gdb-$(DEB_TARGET_GNU_TYPE)"
+DEB_CONFIGURE_PATH_ARGS += --with-gdb-datadir=$(DEB_CONFIGURE_GDB_DATADIR)
+endif
+
+ifeq ($(DEB_TARGET_ARCH),)
+$(error GDB_TARGET value "$(GDB_TARGET)" is not a valid Debian architecture)
+endif
+
+ifdef GDB_TARGET
+  DEB_CROSS = yes
+  # TP: Target Prefix. Used primarily as a prefix for cross tool
+  #     names (e.g. powerpc-linux-gcc).
+  # TS: Target Suffix. Used primarily at the end of cross compiler
+  #     package names (e.g. gcc-powerpc).
+  TP = $(DEB_TARGET_ALIAS)-
+  TS = -$(DEB_TARGET_ALIAS)
+  CROSS_FORCE = FORCE
+else
+ifneq (,$(filter $(DEB_HOST_ARCH),i386 powerpc sparc s390))
+  build64 = yes
+  CC64 = gcc -m64
+  CFLAGS64 = $(CFLAGS)
+  BUILDDIR64 = $(ALL_BUILDDIR)/objdir64
+  ifeq ($(DEB_HOST_ARCH),i386)
+    HOST64 = x86_64-linux-gnu
+  endif
+  ifeq ($(DEB_HOST_ARCH),powerpc)
+    HOST64 = powerpc64-linux-gnu
+  endif
+  ifeq ($(DEB_HOST_ARCH),sparc)
+    HOST64 = sparc64-linux-gnu
+  endif
+  ifeq ($(DEB_HOST_ARCH),s390)
+    HOST64 = s390x-linux-gnu
+  endif
+endif
+endif
+
+BUILDDIRMULTIARCH = $(ALL_BUILDDIR)/objdir-multiarch
+
+run_tests := yes
+
+ifneq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
+  run_tests := no
+endif
+
+ifeq (,$(findstring linux, $(DEB_HOST_GNU_SYSTEM)))
+  run_tests := no
+endif
+
+ifeq ($(DEB_HOST_GNU_CPU),ia64)
+  arch_config_args := --with-libunwind
+endif
+
+ifdef GDB_TARGET
+  run_tests := no
+
+  arch_config_args += --program-prefix=$(TP) \
+    --target=$(DEB_TARGET_ALIAS) --with-sysroot=/usr/$(DEB_TARGET_ALIAS)
+else
+  # To avoid file conflicts, only enable the global gdbinit file for native
+  # debuggers.
+  arch_config_args += --with-system-gdbinit=/etc/gdb/gdbinit
+endif
+
+INSTALL = $(install)
+export INSTALL
+
+# We pass srcdir explicitly to avoid an extra '/.' at the end of it.  That
+# causes a harmless, but ugly, testsuite failure in maint.exp.
+EXTRA_FLAGS := --disable-gdbtk --disable-shared \
+	--srcdir=$(shell pwd) --with-system-readline \
+	$(arch_config_args) --build=$(DEB_BUILD_GNU_TYPE)
+
+# Debian does not include 64-bit expat packages yet, so --with-expat
+# is here rather than in EXTRA_FLAGS.  Similarly Python.
+DEB_CONFIGURE_EXTRA_FLAGS := --host=$(DEB_HOST_GNU_TYPE) $(EXTRA_FLAGS) \
+	--enable-tui --with-expat --with-python
+
+# 64-bit flags
+DEB_CONFIGURE_FLAGS_64 := --host=$(HOST64) $(EXTRA_FLAGS) \
+	--enable-tui
+
+# multiarch targets; this is taken from the binutils-multiarch package but
+# doesn't seem like a terribly nice list; see
+# <20110117211551.GA7216@bee.dooz.org> for discussion -- locally updated
+#MULTIARCH_TARGETS := \
+#	alpha-linux-gnu \
+#	arm-linux-gnu \
+#	arm-linux-gnueabi \
+#	arm-linux-gnueabihf \
+#	hppa-linux-gnu \
+#	i686-linux-gnu \
+#	ia64-linux-gnu \
+#	m68k-linux-gnu \
+#	m68k-rtems \
+#	mips-linux-gnu \
+#	mipsel-linux-gnu \
+#	mips64-linux-gnu \
+#	mips64el-linux-gnu \
+#	powerpc-linux-gnu \
+#	powerpcspe-linux-gnu \
+#	ppc64-linux-gnu \
+#	s390-linux-gnu \
+#	s390x-linux-gnu \
+#	sh-linux-gnu \
+#	sh64-linux-gnu \
+#	sparc-linux-gnu \
+#	sparc64-linux-gnu \
+#	x86_64-linux-gnu \
+#	m32r-linux-gnu \
+#	spu
+#	--enable-targets=`set -- $(MULTIARCH_TARGETS); IFS=,; echo "$$*"`
+MULTIARCH_TARGETS := all
+# multiarch flags
+DEB_CONFIGURE_FLAGS_MULTIARCH := $(DEB_CONFIGURE_EXTRA_FLAGS) \
+	--enable-targets=$(MULTIARCH_TARGETS) \
+	--disable-sim
+
+# Minimal flags
+DEB_CONFIGURE_FLAGS_MIN := --host=$(DEB_HOST_GNU_TYPE) $(EXTRA_FLAGS) \
+	--disable-tui --without-expat --without-python
+
+# Support parallel=<n> in DEB_BUILD_OPTIONS (see #209008)
+COMMA = ,
+ifneq (,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+  NJOBS := -j $(subst parallel=,,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+endif
+
+DEB_MAKE_BUILD_TARGET = $(NJOBS) all
+distribution := $(shell lsb_release -is | tr A-Z a-z)
+
+BUILDDIRSOURCE := $(ALL_BUILDDIR)/gdb
+BUILDDIRMIN := $(ALL_BUILDDIR)/gdb-minimal
+
+post-patches::
+	if ! test -f gdb/version.in.backup; then \
+	  mv -f gdb/version.in gdb/version.in.backup; \
+	  sed -e 's/$$/-$(distribution)/' < gdb/version.in.backup > gdb/version.in; \
+	fi
+
+# This should probably be common-post-build-arch, but that runs during
+# install, under fakeroot, in CDBS 0.4.21.
+build/gdb$(TS):: check-stamp
+	$(MAKE) -C $(DEB_BUILDDIR) info
+	$(MAKE) -C $(DEB_BUILDDIR)/gdb/doc refcard.dvi refcard.ps
+
+build/gdb64:: build64-stamp
+build64-stamp:
+	mkdir -p $(BUILDDIR64)
+	cd $(BUILDDIR64) && CC="$(CC64)" CFLAGS="$(CFLAGS64)" AR=ar \
+	  $(shell pwd)/configure $(DEB_CONFIGURE_FLAGS_64)
+	cd $(BUILDDIR64) && $(DEB_MAKE_ENVVARS) $(MAKE) $(NJOBS)
+	touch $@
+
+build/gdb-multiarch:: build-multiarch-stamp
+build-multiarch-stamp:
+	mkdir -p $(BUILDDIRMULTIARCH)
+	cd $(BUILDDIRMULTIARCH) && \
+	  $(shell pwd)/configure $(DEB_CONFIGURE_FLAGS_MULTIARCH)
+	cd $(BUILDDIRMULTIARCH) && $(DEB_MAKE_ENVVARS) $(MAKE) $(NJOBS)
+	touch $@
+
+build/gdb-minimal:: build-minimal-stamp
+build-minimal-stamp:
+	mkdir -p $(BUILDDIRMIN)
+	cd $(BUILDDIRMIN) && \
+	  $(shell pwd)/configure $(DEB_CONFIGURE_FLAGS_MIN)
+	cd $(BUILDDIRMIN) && $(DEB_MAKE_ENVVARS) $(MAKE) $(NJOBS)
+	touch $@
+
+check-stamp:
+ifeq ($(run_tests),yes)
+	-ulimit -c unlimited; \
+	$(MAKE) $(NJOBS) -C $(DEB_BUILDDIR)/gdb check
+endif
+	touch $@
+
+clean::
+	rm -f check-stamp build64-stamp build-multiarch-stamp
+	rm -rf $(ALL_BUILDDIR)
+
+	if test -f gdb/version.in.backup; then \
+	  mv -f gdb/version.in.backup gdb/version.in; \
+	fi
+
+#	# For snapshots this is appropriate; careful of release tarballs
+#	# which include .gmo files.
+#	find -type f -name '*.gmo' | xargs rm -f
+
+	# Prevent gratuitous rebuilds of the BFD documentation, since it
+	# updates the copy in the source directory.
+	find bfd -name bfd.info\* | xargs --no-run-if-empty touch
+
+binary-post-install/gdb$(TS) ::
+	if [ -x debian/tmp/usr/bin/run ]; then				\
+		mv debian/tmp/usr/bin/run					\
+		  debian/gdb$(TS)/usr/bin/$(DEB_TARGET_ALIAS)-run;		\
+		mv debian/tmp/usr/share/man/man1/run.1			\
+		  debian/gdb$(TS)/usr/share/man/man1/$(DEB_TARGET_ALIAS)-run.1;	\
+	fi
+ifeq ($(run_tests),yes)
+	install -d debian/gdb$(TS)/usr/share/doc/gdb
+	install -m 644 $(DEB_BUILDDIR)/gdb/testsuite/gdb.sum \
+		debian/gdb$(TS)/usr/share/doc/gdb/check.log
+endif
+
+ifneq ($(DEB_CROSS),yes)
+	# Gcore is only useful for native GDB.
+	$(INSTALL) -m 755 -o root -g root \
+		gdb/gdb_gcore.sh debian/gdb$(TS)/usr/bin/$(TP)gcore
+
+	# Only ship a global gdbinit for the native GDB.
+	install -d debian/gdb$(TS)/etc/gdb
+	install -m 644 debian/gdbinit debian/gdb$(TS)/etc/gdb/
+endif
+
+	rm -f debian/gdb$(TS)/usr/bin/$(TP)gdbtui
+	install -m 755 debian/gdbtui debian/gdb$(TS)/usr/bin/$(TP)gdbtui
+
+binary-post-install/gdb64 ::
+	install -d debian/gdb64/usr/bin
+	install -s -m 755 $(BUILDDIR64)/gdb/gdb debian/gdb64/usr/bin/gdb64
+	dh_link -pgdb64 usr/share/man/man1/gdb.1 usr/share/man/man1/gdb64.1
+	rm -rf debian/gdb64/usr/share/doc/gdb64
+	ln -s gdb debian/gdb64/usr/share/doc/gdb64
+
+binary-post-install/gdb-multiarch ::
+	install -d debian/gdb-multiarch/usr/bin
+	install -s -m 755 $(BUILDDIRMULTIARCH)/gdb/gdb debian/gdb-multiarch/usr/bin/gdb-multiarch
+	dh_link -pgdb-multiarch usr/share/man/man1/gdb.1.gz usr/share/man/man1/gdb64.1.gz
+	rm -rf debian/gdb-multiarch/usr/share/doc/gdb-multiarch
+	ln -s gdb debian/gdb-multiarch/usr/share/doc/gdb-multiarch
+
+binary-post-install/gdb-minimal ::
+	install -d debian/gdb-minimal/usr/bin
+	$(INSTALL) -m 755 -o root -g root \
+		$(BUILDDIRMIN)/gdb/gdb debian/gdb-minimal/usr/bin/gdb
+
+	$(INSTALL) -m 755 -o root -g root \
+		gdb/gdb_gcore.sh debian/gdb-minimal/usr/bin/gcore
+
+	# Only ship a global gdbinit for the native GDB.
+	install -d debian/gdb-minimal/etc/gdb
+	install -m 644 debian/gdbinit debian/gdb-minimal/etc/gdb/
+
+binary-post-install/libgdb-dev ::
+	install -m 644 $(DEB_BUILDDIR)/gdb/libgdb.a debian/libgdb-dev/usr/lib/
+	if test -e $(DEB_BUILDDIR)/sim/*/libsim.a; then \
+	  install -m 644 $(DEB_BUILDDIR)/sim/*/libsim.a debian/libgdb-dev/usr/lib/; \
+	fi
+	rm -rf debian/libgdb-dev/usr/share/doc/libgdb-dev
+	ln -s gdb debian/libgdb-dev/usr/share/doc/libgdb-dev
+
+binary-post-install/gdb-source ::
+	install -d debian/gdb-source/usr/src
+	mkdir -p $(BUILDDIRSOURCE)
+	tar --exclude build -cf - . | (cd $(BUILDDIRSOURCE) && tar -xf -)
+	cd $(BUILDDIRSOURCE) && debian/rules clean
+	cd $(dir $(BUILDDIRSOURCE)) \
+	  && tar -cjf $(shell pwd)/debian/gdb-source/usr/src/gdb.tar.bz2 \
+	     $(notdir $(BUILDDIRSOURCE))
+	rm -rf debian/gdb-source/usr/share/doc/gdb-source
+	ln -s gdb debian/gdb-source/usr/share/doc/gdb-source
+
+debian/control:: debian/control.in $(CROSS_FORCE)
+	cat debian/control.in \
+		| sed "s/@TS@/$(TS)/g" \
+		> debian/control
+ifeq ($(DEB_CROSS),yes)
+	sed -i "/Package: gdb64/,\$$ d" -i "/Package: gdb-multiarch/,\$$ d" debian/control
+	sed "s+/gdb+/$(TP)gdb+g; s+usr/share/$(TP)gdb+usr/share/gdb$(TS)+g" \
+		debian/gdb.install > debian/gdb$(TS).install
+endif
+
+# The default changelog is the top level one, which is useless.
+DEB_INSTALL_CHANGELOGS_ALL =
+
+DEB_INSTALL_DOCS_gdb$(TS) = gdb/NEWS gdb/README gdb/doc/refcard.tex \
+	$(DEB_BUILDDIR)/gdb/doc/refcard.dvi \
+	$(DEB_BUILDDIR)/gdb/doc/refcard.ps
+DEB_INSTALL_CHANGELOGS_gdb$(TS) = gdb/ChangeLog
+ifneq ($(DEB_CROSS),yes)
+DEB_INSTALL_MANPAGES_gdb$(TS) = debian/gcore.1
+endif
+
+DEB_INSTALL_DOCS_gdbserver = gdb/gdbserver/README
+DEB_INSTALL_CHANGELOGS_gdbserver = -XChangeLog
+
+DEB_INSTALL_DOCS_gdb-minimal = $(DEB_INSTALL_DOCS_gdb$(TS))
+DEB_INSTALL_CHANGELOGS_gdb-minimal = -XChangeLog
+
+.PHONY: FORCE
+FORCE:
