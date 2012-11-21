@@ -1039,7 +1039,7 @@ $(GTK2): $(SPREZZ)/gtk2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xJvf gtk+-$(gtk2_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf gtk+2.0-$(gtk2_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gtk3
 gtk3:$(GTK3)_$(ARCH).deb
