@@ -47,7 +47,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison procps \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
-	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt \
+	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt gjs \
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
 	libtool subversion libimobiledevice usbmuxd
 
@@ -176,7 +176,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) $(NETCF) \
 	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
-	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) \
+	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(GJS) \
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
 	$(GNOMEDISKUTILITY) $(GNOMEDOCUTILS) $(REPORTBUG) $(GPHOTO2) $(LIBGPHOTO2) \
@@ -756,6 +756,14 @@ $(GIT): $(SPREZZ)/git/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
 	tar xzvf git-$(git_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: gjs
+gjs:$(GJS)_$(ARCH).deb
+$(GJS): $(SPREZZ)/gjs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xJvf gjs-$(gjs_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: glib
 glib:$(GLIB)_$(ARCH).deb
@@ -2705,7 +2713,7 @@ clean:
 	rm -rf $(X11PROTOSCRNSAVER) $(X11PROTOXINERAMA) $(WAYLAND) $(LIBXRENDER)
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
-	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD)
+	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GJS)
 
 clobber:
 	rm -rf $(FETCHED)
