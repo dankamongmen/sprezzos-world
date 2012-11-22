@@ -1550,6 +1550,14 @@ $(NCMPCPP): $(SPREZZ)/ncmpcpp/debian/changelog
 	cd $@ && uscan --force-download
 	tar xjvf ncmpcpp_$(ncmpcpp_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
+.PHONY: neon
+neon:$(NEON)_$(ARCH).deb
+$(NEON): $(SPREZZ)/neon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download
+	tar xzvf neon_$(neon_UPVER).orig.tar.gz --strip-components=1 -C $@
+
 .PHONY: netcf
 netcf:$(NETCF)_$(ARCH).deb
 $(NETCF): $(SPREZZ)/netcf/debian/changelog
@@ -2401,7 +2409,7 @@ $(SUBVERSION): $(SPREZZ)/subversion/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download
-	tar xzvf subversion-$(subversion_UPVER) --strip-components=1 -C $@
+	tar xjvf subversion-$(subversion_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: sudo
 sudo:$(SUDO)_$(ARCH).deb

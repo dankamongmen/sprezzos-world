@@ -1,0 +1,146 @@
+#!/usr/bin/make -f
+package=libneon27
+upstream-version=$(shell head -n 1 debian/changelog | sed -e 's/.*(\(\([0-9]\+:\)\?\([^-]\+\).*\).*).*/\3/' )
+
+# export DH_VERBOSE=1
+
+BUILDDIR=$(CURDIR)/debian/build-tree/
+DESTDIR=$(CURDIR)/debian/
+CONFIG_COMMON=  --enable-shared			\
+		--enable-static			\
+		--prefix=/usr			\
+		--sysconfdir=/etc		\
+		--infodir=/usr/share/info	\
+		--mandir=/usr/share/man		\
+		--enable-threadsafe-ssl=posix   \
+		--with-gssapi			\
+		--with-libxml2
+CFLAGS="-O2 -g"
+
+${BUILDDIR}/neon-openssl/config.status: configure
+	cp  /usr/share/misc/config.guess \
+	    /usr/share/misc/config.sub \
+	  ./
+	install -d $(BUILDDIR)/neon-openssl
+	cd $(BUILDDIR)/neon-openssl/ && \
+	                CFLAGS=$(CFLAGS) $(CURDIR)/configure ${CONFIG_COMMON} \
+			--with-ssl=openssl
+
+${BUILDDIR}/neon-gnutls/config.status: configure
+	cp  /usr/share/misc/config.guess \
+	    /usr/share/misc/config.sub \
+	  ./
+	install -d $(BUILDDIR)/neon-gnutls
+	cd $(BUILDDIR)/neon-gnutls/ && \
+	                CFLAGS=$(CFLAGS) $(CURDIR)/configure ${CONFIG_COMMON} \
+			--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt \
+			--with-ssl=gnutls
+
+build-arch: build
+build-indep: build
+
+build: build-openssl build-gnutls
+build-openssl: ${BUILDDIR}/neon-openssl/config.status
+	dh_testdir
+	cd $(BUILDDIR)/neon-openssl/ && $(MAKE)
+#	cd $(BUILDDIR)/neon-openssl/ && $(MAKE) check
+
+	touch build-openssl
+
+build-gnutls: ${BUILDDIR}/neon-gnutls/config.status
+	dh_testdir
+	cd $(BUILDDIR)/neon-gnutls/ && \
+		sed -i "s/-lneon/-lneon-gnutls/g" \
+		neon-config neon.pc Makefile src/Makefile test/Makefile
+	cd $(BUILDDIR)/neon-gnutls/ && \
+		sed -i "s/libneon\./libneon-gnutls\./g" \
+		neon-config neon.pc Makefile src/Makefile test/Makefile
+	cd $(BUILDDIR)/neon-gnutls/ && $(MAKE)
+#	cd $(BUILDDIR)/neon-gnutls/ && $(MAKE) check
+
+	touch build-gnutls
+
+clean:
+	dh_testdir
+	dh_testroot
+	-rm -f build-openssl build-gnutls install-openssl install-gnutls \
+	    macros/changelog.m4
+	-rm -f config.sub config.guess
+	rm -rf $(BUILDDIR)
+	[ ! -f Makefile ] || $(MAKE) distclean
+	-rm -rf Makefile src/Makefile test/Makefile config.h config.cache config.log config.status
+	-rm -rf libtool neon-config src/.libs src/*.o
+	dh_clean
+
+
+install: install-openssl install-gnutls
+
+install-openssl: build-openssl
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	cd $(BUILDDIR)/neon-openssl/ && $(MAKE) install-lib install-headers install-config install-man DESTDIR=$(DESTDIR)/$(package)
+	chrpath -d $(CURDIR)/debian/$(package)/usr/lib/libneon.so.27
+	rm -f $(CURDIR)/debian/$(package)/usr/lib/libneon.la
+	dh_movefiles -p$(package)-dev --sourcedir=debian/$(package)
+	install -d debian/$(package)-dev/usr/share/aclocal
+	cp macros/neon*.m4 \
+		debian/$(package)-dev/usr/share/aclocal/
+
+	rm -rf debian/$(package)/usr/include \
+		debian/$(package)/usr/bin \
+		debian/$(package)/usr/share/man \
+		debian/$(package)/usr/lib/pkgconfig
+
+	touch install-openssl
+
+install-gnutls: build-gnutls
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	cd $(BUILDDIR)/neon-gnutls/ && $(MAKE) install-lib install-headers install-config install-man DESTDIR=$(DESTDIR)/$(package)-gnutls
+	chrpath -d $(CURDIR)/debian/$(package)-gnutls/usr/lib/libneon-gnutls.so.27
+	rm -f $(CURDIR)/debian/$(package)-gnutls/usr/lib/libneon-gnutls.la
+	dh_movefiles -p$(package)-gnutls-dev \
+	  --sourcedir=debian/$(package)-gnutls
+	install -d debian/$(package)-gnutls-dev/usr/share/aclocal
+	cp macros/neon*.m4 \
+		debian/$(package)-gnutls-dev/usr/share/aclocal/
+
+	rm -rf debian/$(package)-gnutls/usr/include \
+		debian/$(package)-gnutls/usr/bin \
+		debian/$(package)-gnutls/usr/share/man \
+		debian/$(package)-gnutls/usr/lib/pkgconfig
+
+	touch install-gnutls
+
+
+binary-indep: build install
+	# No arch indep packages generated
+
+binary-arch: build install
+	dh_testdir -a
+	dh_testroot -a
+
+	cp macros/ChangeLog macros/changelog.m4
+	dh_installdocs -p$(package)-dev macros/changelog.m4
+	dh_installdocs -p$(package)-gnutls-dev macros/changelog.m4
+
+	dh_installchangelogs -a ChangeLog
+	dh_installdocs -a AUTHORS BUGS NEWS README THANKS TODO
+	dh_makeshlibs -p$(package) -V'$(package)'
+	dh_makeshlibs -p$(package)-gnutls -V'$(package)-gnutls'
+	dh_link
+	dh_strip -p$(package) --dbg-package=$(package)-dbg
+	dh_strip -p$(package)-gnutls --dbg-package=$(package)-gnutls-dbg
+	dh_compress -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+
+binary: binary-indep binary-arch
+.PHONY: binary clean binary-indep binary-arch binary install
