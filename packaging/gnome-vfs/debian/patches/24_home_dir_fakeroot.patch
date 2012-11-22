@@ -1,0 +1,176 @@
+Index: gnome-vfs-2.24.4/libgnomevfs/gnome-vfs-application-registry.c
+===================================================================
+--- gnome-vfs-2.24.4.orig/libgnomevfs/gnome-vfs-application-registry.c	2010-11-25 15:46:59.763441002 +1100
++++ gnome-vfs-2.24.4/libgnomevfs/gnome-vfs-application-registry.c	2010-11-25 15:47:10.953441002 +1100
+@@ -965,7 +965,7 @@
+ 						       NULL);
+ 	gnome_registry_dir.system_dir = TRUE;
+ 	
+-	user_registry_dir.dirname = g_build_filename (g_get_home_dir(),
++	user_registry_dir.dirname = g_build_filename (gnome_vfs_get_home_dir(),
+ 						      ".gnome",
+ 						      "application-info",
+ 						      NULL);
+Index: gnome-vfs-2.24.4/libgnomevfs/gnome-vfs-init.c
+===================================================================
+--- gnome-vfs-2.24.4.orig/libgnomevfs/gnome-vfs-init.c	2010-11-25 15:46:59.793441002 +1100
++++ gnome-vfs-2.24.4/libgnomevfs/gnome-vfs-init.c	2010-11-25 15:47:34.113441001 +1100
+@@ -57,37 +57,6 @@
+ 
+ static GPrivate * private_is_primary_thread;
+ 
+-static gboolean
+-ensure_dot_gnome_exists (void)
+-{
+-	gboolean retval = TRUE;
+-	gboolean create_dirs;
+-	gchar *dirname;
+-
+-	/* If the user does not have a writable HOME directory, then
+-	   avoid creating the directory. */
+-	create_dirs = (g_access (g_get_home_dir(), W_OK) == 0);
+-
+-        if (create_dirs != TRUE)
+-		return TRUE;
+-
+-	dirname = g_build_filename (g_get_home_dir (), ".gnome2", NULL);
+-
+-	if (!g_file_test (dirname, G_FILE_TEST_EXISTS)) {
+-		if (g_mkdir (dirname, S_IRWXU) != 0) {
+-			g_warning ("Unable to create ~/.gnome2 directory: %s",
+-				   g_strerror (errno));
+-			retval = FALSE;
+-		}
+-	} else if (!g_file_test (dirname, G_FILE_TEST_IS_DIR)) {
+-		g_warning ("Error: ~/.gnome2 must be a directory.");
+-		retval = FALSE;
+-	}
+-
+-	g_free (dirname);
+-	return retval;
+-}
+-
+ static void
+ gnome_vfs_thread_init (void)
+ {
+@@ -118,7 +87,8 @@
+ 	char *bogus_argv[2] = { "dummy", NULL };
+ 	*/
+ 	
+-	if (!ensure_dot_gnome_exists ()) {
++	/* The first call also checks that ~/.gnome2 is writable. */
++	if (!gnome_vfs_get_home_dir ()) {
+ 		return FALSE;
+ 	}
+ 
+Index: gnome-vfs-2.24.4/libgnomevfs/gnome-vfs-private-utils.c
+===================================================================
+--- gnome-vfs-2.24.4.orig/libgnomevfs/gnome-vfs-private-utils.c	2010-11-25 15:46:59.783441002 +1100
++++ gnome-vfs-2.24.4/libgnomevfs/gnome-vfs-private-utils.c	2010-11-25 15:47:42.053441001 +1100
+@@ -1085,3 +1085,62 @@
+ }
+ #endif
+ 
++static gboolean
++ensure_dot_gnome_exists (gchar *home_dir)
++{
++	gboolean retval = TRUE;
++	gboolean create_dirs;
++	gchar *dirname;
++
++	/* If the user does not have a writable HOME directory, then
++	   avoid creating the directory. */
++	create_dirs = (g_access (home_dir, W_OK) == 0);
++
++        if (create_dirs != TRUE)
++		return TRUE;
++
++	dirname = g_build_filename (home_dir, ".gnome2", NULL);
++
++	if (!g_file_test (dirname, G_FILE_TEST_EXISTS)) {
++		if (g_mkdir (dirname, S_IRWXU) != 0) {
++			g_warning ("Unable to create ~/.gnome2 directory: %s",
++				   g_strerror (errno));
++			retval = FALSE;
++		}
++	} else if (!g_file_test (dirname, G_FILE_TEST_IS_DIR)) {
++		g_warning ("Error: ~/.gnome2 must be a directory.");
++		retval = FALSE;
++	}
++
++	g_free (dirname);
++	return retval;
++}
++
++/**
++ * gnome_vfs_get_home_dir:
++ *
++ * If ~/.gnome2 is writable, return the home directory
++ * Otherwise, return the contents of the HOME environment variable
++ *
++ * Return value: home directory if successful, NULL otherwise.
++ * Do not free the value returned.
++ */
++const gchar *
++gnome_vfs_get_home_dir (void)
++{
++	static gchar *home = NULL;
++
++	if (home == NULL) {
++		gchar *tmp = g_get_home_dir ();
++		if (ensure_dot_gnome_exists (tmp)) {
++			home = g_strdup (tmp);
++		} else {
++			gchar *tmp2 = g_getenv ("HOME");
++			if (!g_str_equal (tmp, tmp2) && ensure_dot_gnome_exists (tmp2)) {
++				home = g_strdup (tmp2);
++			}
++		}
++	}
++
++	return home;
++}
+Index: gnome-vfs-2.24.4/libgnomevfs/gnome-vfs-private-utils.h
+===================================================================
+--- gnome-vfs-2.24.4.orig/libgnomevfs/gnome-vfs-private-utils.h	2010-11-25 15:46:59.773441002 +1100
++++ gnome-vfs-2.24.4/libgnomevfs/gnome-vfs-private-utils.h	2010-11-25 15:47:10.953441002 +1100
+@@ -124,6 +124,8 @@
+ 
+ #endif
+ 
++const gchar   *gnome_vfs_get_home_dir                     (void);
++
+ G_END_DECLS
+ 
+ #endif /* _GNOME_VFS_PRIVATE_UTILS_H */
+Index: gnome-vfs-2.24.4/modules/file-method.c
+===================================================================
+--- gnome-vfs-2.24.4.orig/modules/file-method.c	2010-11-25 15:46:59.803441002 +1100
++++ gnome-vfs-2.24.4/modules/file-method.c	2010-11-25 15:47:10.953441002 +1100
+@@ -1537,7 +1537,7 @@
+ 	GList *p;
+ 	char *buffer, *escaped_path, *escaped_mount_point;
+ 
+-	cache_file_parent = append_to_path (g_get_home_dir (), TRASH_ENTRY_CACHE_PARENT);
++	cache_file_parent = append_to_path (gnome_vfs_get_home_dir (), TRASH_ENTRY_CACHE_PARENT);
+ 	cache_file_path = append_to_path (cache_file_parent, TRASH_ENTRY_CACHE_NAME);
+ 
+ 	if (mkdir_recursive (cache_file_parent, 0777) != 0) {
+@@ -1676,7 +1676,7 @@
+ 	cached_trash_directories = NULL;
+ 
+ 	/* read in the entries from disk */
+-	cache_file_path = g_build_filename (g_get_home_dir (),
++	cache_file_path = g_build_filename (gnome_vfs_get_home_dir (),
+ 					    TRASH_ENTRY_CACHE_PARENT,
+ 					    TRASH_ENTRY_CACHE_NAME,
+ 					    NULL);
+@@ -1948,7 +1948,7 @@
+ 		return GNOME_VFS_ERROR_INVALID_URI;
+ 
+ 	/* We will need the URI and the stat structure for the home directory. */
+-	home_directory = g_get_home_dir ();
++	home_directory = gnome_vfs_get_home_dir ();
+ 
+ 	if (gnome_vfs_context_check_cancellation (context)) {
+ 		g_free (full_name_near);
