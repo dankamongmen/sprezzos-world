@@ -50,7 +50,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt gjs \
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
-	qpdf lightspark
+	qpdf lightspark ramen
 
 SPREZZ:=packaging
 
@@ -203,7 +203,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) \
 	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING) \
 	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GLIBNETWORKING) \
-	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK)
+	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -338,6 +338,13 @@ $(XBMC): $(SPREZZ)/xbmc/debian/changelog
 mplayer:$(MPLAYER)_$(ARCH).deb
 $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	svn co svn://svn.mplayerhq.hu/mplayer/trunk $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
+
+.PHONY: ramen
+ramen:$(RAMEN)_$(ARCH).deb
+$(RAMEN): $(SPREZZ)/ramen/debian/changelog
+	svn co https://ramenhdr.svn.sourceforge.net/svnroot/ramenhdr/trunk $@
 	rm -rf $@/debian
 	cp -r $(<D) $@/
 
@@ -2748,7 +2755,7 @@ clean:
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
 	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GJS) $(GLIBNETWORKING)
-	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK)
+	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN)
 
 clobber:
 	rm -rf $(FETCHED)
