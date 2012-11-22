@@ -50,7 +50,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt gjs \
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
-	qpdf lightspark ramen gnome-vfs
+	qpdf lightspark ramen gnome-vfs neon
 
 SPREZZ:=packaging
 
@@ -203,7 +203,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) \
 	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING) \
 	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GLIBNETWORKING) \
-	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS)
+	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2771,7 +2771,7 @@ clean:
 	rm -rf $(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN)
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
 	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GJS) $(GLIBNETWORKING)
-	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS)
+	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON)
 
 clobber:
 	rm -rf $(FETCHED)
