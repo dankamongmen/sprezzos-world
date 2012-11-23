@@ -1754,7 +1754,7 @@ $(PYCURL): $(SPREZZ)/pycurl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf pycurl-$(pycurl_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xzvf pycurl-$(pycurl_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: pygobject
 pygobject:$(PYGOBJECT)_$(ARCH).deb
