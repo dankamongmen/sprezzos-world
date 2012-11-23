@@ -1,0 +1,66 @@
+#!/usr/bin/make -f
+
+%:
+	dh "$@" --with sphinxdoc --with python3
+
+upstream_version ?= $(shell dpkg-parsechangelog | sed -rne 's/^Version: ([0-9.]+)(\+dfsg)?.*$$/\1/p')
+dfsg_version = $(upstream_version)+dfsg
+upstream_pkg = "pycairo"
+pkg = $(shell dpkg-parsechangelog | sed -ne 's/^Source: //p')
+
+get-orig-source:
+	uscan --rename --download-current-version --destdir=.
+	tar -xjf $(pkg)_$(upstream_version).orig.tar.bz2
+	rm -f $(pkg)_$(upstream_version).orig.tar.bz2
+	mv $(upstream_pkg)-$(upstream_version) $(pkg)_$(dfsg_version).orig
+	$(CURDIR)/debian/waf-uncompress.sh $(pkg)_$(dfsg_version).orig
+	rm $(pkg)_$(dfsg_version).orig/waf
+	rm -r $(pkg)_$(dfsg_version).orig/doc/_build
+	tar -cjf $(CURDIR)/../$(pkg)_$(dfsg_version).orig.tar.bz2 $(pkg)_$(dfsg_version).orig
+	rm -r $(pkg)_$(dfsg_version).orig
+
+override_dh_auto_configure:
+	: # configure done in the build target to build for multiple python versions
+
+override_dh_auto_build:
+	set -x; \
+	for pyversion in $(shell py3versions -vr); do \
+		echo "configuring for $$pyversion"; \
+		PYTHON=python$$pyversion python$$pyversion $(CURDIR)/waf-uncompressed configure -v -o $(CURDIR)/build$$pyversion --prefix /usr --nopyc --nopyo; \
+		echo "building for $$pyversion"; \
+		PYTHON=python$$pyversion python$$pyversion $(CURDIR)/waf-uncompressed build -v -o $(CURDIR)/build$$pyversion; \
+	done
+	mkdir -p $(CURDIR)/doc/_build/html
+	cd $(CURDIR)/doc && $(MAKE) html
+
+override_dh_auto_install:
+	for pyversion in $(shell py3versions -vr); do \
+		cp -p $(CURDIR)/build$$pyversion/.lock-wafbuild .; \
+		PYTHON=python$$pyversion python$$pyversion $(CURDIR)/waf-uncompressed install -v -o $(CURDIR)/build$$pyversion --destdir $(CURDIR)/debian/tmp; \
+	done
+
+override_dh_clean:
+	dh_clean
+	for pyversion in $(shell py3versions -vr); \
+		do rm -rf $(CURDIR)/build$$pyversion; \
+	done
+	rm -rf $(CURDIR)/.waf* $(CURDIR)/.lock* $(CURDIR)/doc/_build $(CURDIR)/test/cairo \
+		`find $(CURDIR) -name "__pycache__"` \
+		`find $(CURDIR)/waflib -name "*.pyc"` \
+		`find $(CURDIR)/examples -name "*.pdf" -o -name "*.png" -o -name "*.ps" -o -name "*.svg"`
+
+override_dh_compress:
+	dh_compress -X.js -X.inv
+
+override_dh_sphinxdoc:
+	(! test -d $(CURDIR)/debian/python3-cairo-doc || dh_sphinxdoc)
+
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+override_dh_auto_test:
+	mkdir $(CURDIR)/test/cairo
+	ln -s $(CURDIR)/src/__init__.py $(CURDIR)/test/cairo/__init__.py
+	for pyversion in $(shell py3versions -vr); \
+		do ln -sf $(CURDIR)/build$$pyversion/src/*.so $(CURDIR)/test/cairo; \
+		cd $(CURDIR)/test && python$$pyversion -m pytest; \
+	done
+endif
