@@ -1,0 +1,63 @@
+#!/bin/sh
+
+set -e
+
+# This script can be called in the following ways:
+#
+# After the package was installed:
+#	<postinst> configure <old-version>
+#
+#
+# If prerm fails during upgrade or fails on failed upgrade:
+#	<old-postinst> abort-upgrade <new-version>
+#
+# If prerm fails during deconfiguration of a package:
+#	<postinst> abort-deconfigure in-favour <new-package> <version>
+#	           removing <old-package> <version>
+#
+# If prerm fails during replacement due to conflict:
+#	<postinst> abort-remove in-favour <new-package> <version>
+
+case "$1" in
+    configure)
+
+        # Create netdev group that is used in the D-Bus policy file
+        addgroup --quiet --system netdev
+
+        if [ -x "/etc/init.d/dbus" ]; then
+            invoke-rc.d dbus force-reload || true
+        fi
+
+        # Update init script priorities
+        if dpkg --compare-versions "$2" lt "0.7.0.99-1"; then
+            for i in 0 1 6 ; do
+                if [ -e /etc/rc$i.d/K14network-manager ]; then
+                    mv /etc/rc$i.d/K14network-manager /etc/rc$i.d/K88network-manager
+                fi
+            done
+        fi
+
+        # Kill nm-system-settings service as in 0.8 it is no longer a separate process
+        if dpkg --compare-versions "$2" lt "0.7.999-1"; then
+            kill `pidof /usr/sbin/nm-system-settings` 2>/dev/null || true
+        fi
+
+        if [ -z "$2" ] || dpkg --compare-versions "$2" lt-nl "0.8.1-4"; then
+            if [ -f /etc/network/interfaces ]; then
+                echo "Disabling interfaces configured with plain DHCP in /etc/network/interfaces so that NetworkManager can take them over"
+                /usr/lib/NetworkManager/ifblacklist_migrate.sh
+            fi
+        fi
+        ;;
+
+    abort-upgrade|abort-deconfigure|abort-remove)
+        ;;
+
+    *)
+        echo "$0 called with unknown argument \`$1'" 1>&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
