@@ -1607,7 +1607,7 @@ $(NETWORKMANAGER): $(SPREZZ)/network-manager/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf network-manager-$(network-manager_UPVER).tar.xz --strip-components=1 -C $@
+	tar xJvf NetworkManager-$(network-manager_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: network-manager-applet
 network-manager-applet:$(NETWORKMANAGERAPPLET)_$(ARCH).deb
