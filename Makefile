@@ -51,6 +51,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
 	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
+	xorg
 
 SPREZZ:=packaging
 
@@ -204,7 +205,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING) \
 	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GLIBNETWORKING) \
 	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV) \
-	$(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS)
+	$(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2114,6 +2115,14 @@ $(XINPUT): $(SPREZZ)/xinput/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xinput-$(xinput_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: xorg
+xorg:$(XORG)_$(ARCH).deb
+$(XORG): $(SPREZZ)/xorg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xorg-server-$(xorg_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: xorg-xserver
 xorg-xserver:$(XORGXSERVER)_$(ARCH).deb
 $(XORGXSERVER): $(SPREZZ)/xorg-xserver/debian/changelog
@@ -2813,7 +2822,7 @@ clean:
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
 	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GJS) $(GLIBNETWORKING)
 	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
-	rm -rf $(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS)
+	rm -rf $(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG)
 
 clobber:
 	rm -rf $(FETCHED)
