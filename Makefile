@@ -50,7 +50,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt gjs \
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
-	qpdf lightspark ramen gnome-vfs neon libav
+	qpdf lightspark ramen gnome-vfs neon libav imlib
 
 SPREZZ:=packaging
 
@@ -203,7 +203,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(X11PROTOXF86DGA) $(X11PROTOXF86DRI) $(X11PROTOXF86VIDMODE) $(LIBTASN) \
 	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING) \
 	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GLIBNETWORKING) \
-	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
+	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV) \
+	$(IMLIB)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1309,6 +1310,14 @@ $(EXO): $(SPREZZ)/exo/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf exo-$(exo_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: imlib
+imlib:$(IMLIB)_$(ARCH).deb
+$(IMLIB): $(SPREZZ)/imlib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf imlib-$(imlib_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: libav
 libav:$(LIBAV)_$(ARCH).deb
@@ -2780,6 +2789,7 @@ clean:
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
 	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GJS) $(GLIBNETWORKING)
 	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
+	rm -rf $(IMLIB)
 
 clobber:
 	rm -rf $(FETCHED)
