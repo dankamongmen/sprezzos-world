@@ -1,0 +1,908 @@
+# patch by Thomas E. Dickey <dickey@invisible-island.net>
+# created  Mon Nov  1 23:11:54 UTC 2010
+# ------------------------------------------------------------------------------
+# CHANGES                                   |    9 +++-
+# PACKAGE/debian/changelog                  |    6 ++
+# PACKAGE/lynx.spec                         |    4 -
+# WWW/Library/Implementation/HTAABrow.h     |   43 ++++++++++----------
+# WWW/Library/Implementation/HTAAUtil.h     |    5 +-
+# WWW/Library/Implementation/HTFTP.c        |    4 -
+# WWW/Library/Implementation/HTFile.c       |    5 +-
+# WWW/Library/Implementation/HTFormat.h     |    8 ++-
+# WWW/Library/Implementation/HTNews.c       |    3 -
+# WWW/Library/Implementation/HTTCP.c        |    5 --
+# WWW/Library/Implementation/HTUtils.h      |   10 ++--
+# WWW/Library/Implementation/HTVMS_WaisUI.c |    6 +-
+# WWW/Library/Implementation/LYexit.h       |   22 +++++++---
+# WWW/Library/Implementation/tidy_tls.h     |    5 +-
+# WWW/Library/Implementation/www_tcp.h      |    9 ++--
+# lib/dirent.c                              |   27 +++++-------
+# lib/dirent.h                              |   59 +++++++++++++---------------
+# src/HTML.c                                |    6 +-
+# src/LYCurses.c                            |   10 +---
+# src/LYCurses.h                            |    4 -
+# src/LYForms.c                             |    4 -
+# src/LYLocal.c                             |   11 ++---
+# src/LYPrettySrc.c                         |    5 +-
+# src/LYSession.c                           |    9 ++--
+# src/LYUtils.c                             |   10 ++--
+# src/TRSTable.c                            |    5 +-
+# src/UCAuto.c                              |    4 -
+# src/UCdomap.c                             |    4 -
+# src/parsdate.h                            |    4 -
+# 29 files changed, 164 insertions(+), 142 deletions(-)
+# ------------------------------------------------------------------------------
+Index: CHANGES
+--- lynx2.8.8dev.6+/CHANGES	2010-10-04 08:19:06.000000000 +0000
++++ lynx2.8.8dev.6a/CHANGES	2010-11-01 21:30:42.000000000 +0000
+@@ -1,8 +1,15 @@
+--- $LynxId: CHANGES,v 1.508 2010/10/04 08:19:06 tom Exp $
++-- $LynxId: CHANGES,v 1.511 2010/11/01 21:30:42 tom Exp $
+ ===============================================================================
+ Changes since Lynx 2.8 release
+ ===============================================================================
+ 
++2010-11-01 (2.8.8dev.7)
++* restore \r to \n conversion in HTML_put_character(), broken in gcc warning
++  cleanup (report by FLWM) -TD
++* fix a double-free in make_argv() (report by FLWM) -TD
++* add a memset in RestoreSession(), fixes uninitialized memory reference for
++  the VLINK section -PBM
++
+ 2010-10-04 (2.8.8dev.6)
+ * amend change for Debian #514897 to exclude XML documents (Debian #592883) -TD
+ * use HTParsePort() in a few places, e.g., HTFinger.c, to allow for IPv6
+Index: PACKAGE/debian/changelog
+--- lynx2.8.8dev.6+/PACKAGE/debian/changelog	2010-09-19 16:22:57.000000000 +0000
++++ lynx2.8.8dev.6a/PACKAGE/debian/changelog	2010-11-01 21:32:09.000000000 +0000
+@@ -1,3 +1,9 @@
++lynx-dev (2.8.8dev.7) unstable; urgency=low
++
++  * changes for dev.7
++
++ -- Thomas E. Dickey <dickey@invisible-island.net>  Mon, 01 Nov 2010 17:32:06 -0400
++
+ lynx-dev (2.8.8dev.6) unstable; urgency=low
+ 
+   * add build-script for testing, adapted from Debian lynx-cur package.
+Index: PACKAGE/lynx.spec
+--- lynx2.8.8dev.6+/PACKAGE/lynx.spec	2010-09-21 23:18:23.000000000 +0000
++++ lynx2.8.8dev.6a/PACKAGE/lynx.spec	2010-11-01 21:31:25.000000000 +0000
+@@ -1,8 +1,8 @@
+-# $LynxId: lynx.spec,v 1.6 2010/09/21 23:18:23 tom Exp $
++# $LynxId: lynx.spec,v 1.7 2010/11/01 21:31:25 tom Exp $
+ Summary: A text-based Web browser
+ Name: lynx
+ Version: 2.8.8
+-Release: dev.6
++Release: dev.7
+ License: GPLv2
+ Group: Applications/Internet
+ Source: lynx%{version}%{release}.tgz
+Index: WWW/Library/Implementation/HTAABrow.h
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTAABrow.h	2010-09-25 11:42:32.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTAABrow.h	2010-10-27 00:13:53.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTAABrow.h,v 1.15 2010/09/25 11:42:32 tom Exp $
++ * $LynxId: HTAABrow.h,v 1.16 2010/10/27 00:13:53 tom Exp $
+  *
+  *                          BROWSER SIDE ACCESS AUTHORIZATION MODULE
+ 
+@@ -40,8 +40,7 @@
+ extern "C" {
+ #endif
+ /*
+-
+-Routines for Browser Side Recording of AA Info
++   Routines for Browser Side Recording of AA Info
+ 
+    Most of the browser-side AA is done by the following two functions (which are called
+    from file HTTP.c so the browsers using libwww only need to be linked with the new
+@@ -55,24 +54,26 @@
+       HTAA_shouldRetryWithAuth() determines whether to retry the request with AA or with a
+       new AA (in case username or password was misspelled).
+ 
+- *//* PUBLIC                                               HTAA_composeAuth()
+-   *
+-   *      COMPOSE THE ENTIRE AUTHORIZATION HEADER LINE IF WE
+-   *      ALREADY KNOW, THAT THE HOST MIGHT REQUIRE AUTHORIZATION
+-   *
+-   * ON ENTRY:
+-   *      hostname        is the hostname of the server.
+-   *      portnumber      is the portnumber in which the server runs.
+-   *      docname         is the pathname of the document (as in URL)
+-   *
+-   * ON EXIT:
+-   *      returns NULL, if no authorization seems to be needed, or
+-   *              if it is the entire Authorization: line, e.g.
+-   *
+-   *                 "Authorization: basic username:password"
+-   *
+-   *              As usual, this string is automatically freed.
+- */ extern char *HTAA_composeAuth(const char *hostname,
++ */
++/* PUBLIC                                               HTAA_composeAuth()
++ *
++ *      COMPOSE THE ENTIRE AUTHORIZATION HEADER LINE IF WE
++ *      ALREADY KNOW, THAT THE HOST MIGHT REQUIRE AUTHORIZATION
++ *
++ * ON ENTRY:
++ *      hostname        is the hostname of the server.
++ *      portnumber      is the portnumber in which the server runs.
++ *      docname         is the pathname of the document (as in URL)
++ *
++ * ON EXIT:
++ *      returns NULL, if no authorization seems to be needed, or
++ *              if it is the entire Authorization: line, e.g.
++ *
++ *                 "Authorization: basic username:password"
++ *
++ *              As usual, this string is automatically freed.
++ */
++    extern char *HTAA_composeAuth(const char *hostname,
+ 				  const int portnumber,
+ 				  const char *docname,
+ 				  int IsProxy);
+Index: WWW/Library/Implementation/HTAAUtil.h
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTAAUtil.h	2010-06-17 00:36:04.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTAAUtil.h	2010-10-27 00:09:52.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTAAUtil.h,v 1.12 2010/06/17 00:36:04 tom Exp $
++ * $LynxId: HTAAUtil.h,v 1.13 2010/10/27 00:09:52 tom Exp $
+  *
+  *                                            Utilities for the Authorization parts of libwww
+  *           COMMON PARTS OF AUTHORIZATION MODULE TO BOTH SERVER AND BROWSER
+@@ -48,7 +48,8 @@
+ #define MAX_FIELDNAME_LEN       16	/* @@ Longest field name in       */
+     /* protection setup file          */
+ #define MAX_PATHNAME_LEN        80	/* @@ Longest passwd/group file   */
+-/* pathname to allow               *//*
++/* pathname to allow               */
++/*
+ 
+    Datatype definitions
+ 
+Index: WWW/Library/Implementation/HTFTP.c
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTFTP.c	2010-09-25 00:05:51.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTFTP.c	2010-10-31 17:56:13.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTFTP.c,v 1.98 2010/09/25 00:05:51 tom Exp $
++ * $LynxId: HTFTP.c,v 1.99 2010/10/31 17:56:13 tom Exp $
+  *
+  *			File Transfer Protocol (FTP) Client
+  *			for a WorldWideWeb browser
+@@ -133,7 +133,7 @@
+ #elif defined(SYS_HPUX)
+ #  if defined(_XOPEN_SOURCE_EXTENDED) && defined(SO_PROTOTYPE)
+ #    define LY_SOCKLEN socklen_t
+-#  else				/* HPUX 10.20, etc. */
++#  else	/* HPUX 10.20, etc. */
+ #    define LY_SOCKLEN int
+ #  endif
+ #elif defined(SYS_TRU64)
+Index: WWW/Library/Implementation/HTFile.c
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTFile.c	2010-09-24 08:52:55.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTFile.c	2010-10-27 00:10:02.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTFile.c,v 1.126 2010/09/24 08:52:55 tom Exp $
++ * $LynxId: HTFile.c,v 1.127 2010/10/27 00:10:02 tom Exp $
+  *
+  *			File Access				HTFile.c
+  *			===========
+@@ -31,7 +31,8 @@
+ #define LONG_LIST		/* Define this for long style unix listings (ls -l),
+ 				   the actual style is configurable from lynx.cfg */
+ #endif
+-/* #define NO_PARENT_DIR_REFERENCE *//* Define this for no parent links */
++/* #define NO_PARENT_DIR_REFERENCE */
++/* Define this for no parent links */
+ #endif /* !VMS */
+ 
+ #if defined(DOSPATH)
+Index: WWW/Library/Implementation/HTFormat.h
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTFormat.h	2010-09-25 11:42:03.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTFormat.h	2010-10-27 00:13:53.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTFormat.h,v 1.32 2010/09/25 11:42:03 tom Exp $
++ * $LynxId: HTFormat.h,v 1.33 2010/10/27 00:13:53 tom Exp $
+  *
+  *                                            HTFormat: The format manager in the WWW Library
+  *                          MANAGE DIFFERENT DOCUMENT FORMATS
+@@ -44,7 +44,11 @@
+    useful for diagnostics, and for users who want to see the original, whatever
+    it is.
+ 
+-																	 *//* Internal ones *//* #define WWW_SOURCE HTAtom_for("www/source") *//* Whatever it was originally */ extern HTAtom *WWW_SOURCE;
++																	 */
++/* Internal ones */
++/* #define WWW_SOURCE HTAtom_for("www/source") */
++/* Whatever it was originally */
++    extern HTAtom *WWW_SOURCE;
+     /* calculated once, heavy used */
+ 
+ /*
+Index: WWW/Library/Implementation/HTNews.c
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTNews.c	2010-09-25 00:42:40.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTNews.c	2010-10-27 00:10:51.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTNews.c,v 1.66 2010/09/25 00:42:40 tom Exp $
++ * $LynxId: HTNews.c,v 1.67 2010/10/27 00:10:51 tom Exp $
+  *
+  *			NEWS ACCESS				HTNews.c
+  *			===========
+@@ -94,7 +94,6 @@
+ static int HTCanPost = FALSE;	/* Current POST permission */
+ static char response_text[LINE_LENGTH + 1];	/* Last response */
+ 
+-/* static HText *	HT;	*//* the new hypertext */
+ static HTStructured *target;	/* The output sink */
+ static HTStructuredClass targetClass;	/* Copy of fn addresses */
+ static HTStream *rawtarget = NULL;	/* The output sink for rawtext */
+Index: WWW/Library/Implementation/HTTCP.c
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTTCP.c	2010-09-25 11:32:53.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTTCP.c	2010-10-27 00:11:11.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTTCP.c,v 1.104 2010/09/25 11:32:53 tom Exp $
++ * $LynxId: HTTCP.c,v 1.105 2010/10/27 00:11:11 tom Exp $
+  *
+  *			Generic Communication Code		HTTCP.c
+  *			==========================
+@@ -77,9 +77,6 @@
+ unsigned long socks_bind_remoteAddr;	/* for long Rbind */
+ #endif /* SOCKS */
+ 
+-/* PUBLIC SockA HTHostAddress; *//* The internet address of the host */
+-					/* Valid after call to HTHostName() */
+-
+ /*	Encode INET status (as in sys/errno.h)			  inet_status()
+  *	------------------
+  *
+Index: WWW/Library/Implementation/HTUtils.h
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTUtils.h	2010-09-25 15:32:56.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTUtils.h	2010-10-27 00:08:52.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTUtils.h,v 1.102 2010/09/25 15:32:56 tom Exp $
++ * $LynxId: HTUtils.h,v 1.103 2010/10/27 00:08:52 tom Exp $
+  *
+  * Utility macros for the W3 code library
+  * MACROS FOR GENERAL USE
+@@ -157,12 +157,12 @@
+ #define LY_MAXPATH 256
+ #endif
+ 
+-#ifndef	GCC_NORETURN
+-#define	GCC_NORETURN		/* nothing */
++#ifndef GCC_NORETURN
++#define GCC_NORETURN		/* nothing */
+ #endif
+ 
+-#ifndef	GCC_UNUSED
+-#define	GCC_UNUSED		/* nothing */
++#ifndef GCC_UNUSED
++#define GCC_UNUSED		/* nothing */
+ #endif
+ 
+ #if defined(__GNUC__) && defined(_FORTIFY_SOURCE)
+Index: WWW/Library/Implementation/HTVMS_WaisUI.c
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/HTVMS_WaisUI.c	2010-09-25 00:32:18.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/HTVMS_WaisUI.c	2010-10-29 21:10:14.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTVMS_WaisUI.c,v 1.16 2010/09/25 00:32:18 tom Exp $
++ * $LynxId: HTVMS_WaisUI.c,v 1.17 2010/10/29 21:10:14 tom Exp $
+  *								HTVMS_WAISUI.c
+  *
+  *	Adaptation for Lynx by F.Macrides (macrides@sci.wfeb.edu)
+@@ -695,7 +695,7 @@
+ 		query->DatabaseNames = (char **) s_realloc((char *) query->DatabaseNames,
+ 							   (size_t) (sizeof(char
+ 									    *) *
+-								       (i + 2)));
++								     (i + 2)));
+ 
+ 	    query->DatabaseNames[i] = s_strdup(ptr);
+ 	    query->DatabaseNames[i + 1] = NULL;
+@@ -713,7 +713,7 @@
+ 		query->ElementSetNames = (char **) s_realloc((char *) query->ElementSetNames,
+ 							     (size_t) (sizeof(char
+ 									      *) *
+-								         (i + 2)));
++								       (i + 2)));
+ 
+ 	    query->ElementSetNames[i] = s_strdup(ptr);
+ 	    query->ElementSetNames[i + 1] = NULL;
+Index: WWW/Library/Implementation/LYexit.h
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/LYexit.h	2005-01-02 23:49:58.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/LYexit.h	2010-10-27 00:13:53.000000000 +0000
+@@ -39,15 +39,23 @@
+ #define exit(code) LYexit(code)
+ #define atexit LYatexit
+ #define ATEXITSIZE 50
++
+ /*
+  *	Data structures
+- *//*
+-   * Global variable declarations
+- *//*
+-   * Macros
+- *//*
+-   * Function declarations
+- */ extern void outofmem(const char *fname, const char *func);
++ */
++
++/*
++ * Global variable declarations
++ */
++
++/*
++ * Macros
++ */
++
++/*
++ * Function declarations
++ */
++    extern void outofmem(const char *fname, const char *func);
+     extern void reset_signals(void);
+     extern void exit_immediately(int status) GCC_NORETURN;
+     extern void LYexit(int status) GCC_NORETURN;
+Index: WWW/Library/Implementation/tidy_tls.h
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/tidy_tls.h	2008-04-27 22:50:39.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/tidy_tls.h	2010-10-27 00:07:26.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: tidy_tls.h,v 1.1 2008/04/27 22:50:39 tom Exp $
++ * $LynxId: tidy_tls.h,v 1.2 2010/10/27 00:07:26 tom Exp $
+  * Copyright 2008, Thomas E. Dickey
+  */
+ #ifndef TIDY_TLS_H
+@@ -103,7 +103,7 @@
+ /* use either SSL_VERIFY_NONE or SSL_VERIFY_PEER, the last 2 options
+  * are 'ored' with SSL_VERIFY_PEER if they are desired */
+ #define SSL_VERIFY_PEER			0x01
+-
++/* *INDENT-OFF* */
+ extern SSL *SSL_new(SSL_CTX * ctx);
+ extern SSL_CIPHER *SSL_get_current_cipher(SSL * ssl);
+ extern SSL_CTX *SSL_CTX_new(SSL_METHOD * method);
+@@ -134,5 +134,6 @@
+ extern void SSL_CTX_set_verify(SSL_CTX * ctx, int verify_mode, int (*verify_callback) (int, X509_STORE_CTX *));
+ extern void SSL_free(SSL * ssl);
+ extern void SSL_load_error_strings(void);
++/* *INDENT-ON* */
+ 
+ #endif /* TIDY_TLS_H */
+Index: WWW/Library/Implementation/www_tcp.h
+--- lynx2.8.8dev.6+/WWW/Library/Implementation/www_tcp.h	2010-09-25 16:24:45.000000000 +0000
++++ lynx2.8.8dev.6a/WWW/Library/Implementation/www_tcp.h	2010-10-31 17:56:16.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*                System dependencies in the W3 library
+- * $LynxId: www_tcp.h,v 1.45 2010/09/25 16:24:45 tom Exp $
++ * $LynxId: www_tcp.h,v 1.47 2010/10/31 17:56:16 tom Exp $
+  *
+                                    SYSTEM DEPENDENCIES
+ 
+@@ -159,7 +159,8 @@
+ /* For debugging
+ #include <assert.h>
+ #define   TOASCII(c) (assert((c)>=0 && (c)<256), un_IBM1047[c])
+-*//* for production */
++*/
++/* for production */
+ #define   TOASCII(c) (un_IBM1047[c])
+ 
+ #define FROMASCII(c) (IBM1047[c])
+@@ -746,10 +747,10 @@
+ 
+ # ifdef HAVE_LIMITS_H
+ #  include <limits.h>
+-# endif				/* HAVE_LIMITS_H */
++# endif	/* HAVE_LIMITS_H */
+ # if !defined(MAXINT) && defined(INT_MAX)
+ #  define MAXINT INT_MAX
+-# endif				/* !MAXINT && INT_MAX */
++# endif	/* !MAXINT && INT_MAX */
+ 
+ #else
+ 
+Index: lib/dirent.c
+Prereq:  1.4 
+--- lynx2.8.8dev.6+/lib/dirent.c	2009-03-11 00:31:33.000000000 +0000
++++ lynx2.8.8dev.6a/lib/dirent.c	2010-10-31 17:56:17.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: dirent.c,v 1.3 2009/03/11 00:31:33 tom Exp $
++ * $LynxId: dirent.c,v 1.4 2010/10/31 17:56:17 tom Exp $
+  *
+  * dir.c for MS-DOS by Samuel Lam <skl@van-bc.UUCP>, June/87 
+  */
+@@ -20,7 +20,6 @@
+  *    Changes made by Gordon Chaffee (chaffee@bugs-bunny.cs.berkeley.edu)
+  */
+ 
+-
+ /*Includes: 
+  *    crt 
+  */
+@@ -123,6 +122,7 @@
+ 	return NULL;
+     }
+     dirp = malloc(sizeof(DIR));
++
+     if (dirp == NULL) {
+ 	return dirp;
+     }
+@@ -153,7 +153,7 @@
+     }
+     do {
+ 	if (((dp = malloc(sizeof(struct _dircontents))) == NULL) ||
+-	     ((dp->_d_entry = malloc(strlen(s) + 1)) == NULL)) {
++	      ((dp->_d_entry = malloc(strlen(s) + 1)) == NULL)) {
+ 	    if (dp)
+ 		free(dp);
+ 	    free_dircontents(dirp->dd_contents);
+@@ -180,13 +180,13 @@
+     return opendirx(name, "*");
+ }
+ 
+-void closedir(DIR * dirp)
++void closedir(DIR *dirp)
+ {
+     free_dircontents(dirp->dd_contents);
+     free(dirp);
+ }
+ 
+-struct dirent *readdir(DIR * dirp)
++struct dirent *readdir(DIR *dirp)
+ {
+     /* static struct dirent dp; */
+     if (dirp->dd_cp == NULL)
+@@ -204,25 +204,23 @@
+     dirp->dd_cp = dirp->dd_cp->_d_next;
+     dirp->dd_loc++;
+ 
+-
+     return &dp;
+ }
+ 
+-void seekdir(DIR * dirp, long off)
++void seekdir(DIR *dirp, long off)
+ {
+     long i = off;
+     struct _dircontents *dp;
+ 
+     if (off >= 0) {
+-	for (dp = dirp->dd_contents; --i >= 0 && dp; dp = dp->_d_next);
++	for (dp = dirp->dd_contents; --i >= 0 && dp; dp = dp->_d_next) ;
+ 
+ 	dirp->dd_loc = off - (i + 1);
+ 	dirp->dd_cp = dp;
+     }
+ }
+ 
+-
+-long telldir(DIR * dirp)
++long telldir(DIR *dirp)
+ {
+     return dirp->dd_loc;
+ }
+@@ -263,14 +261,12 @@
+ }
+ /* end of getdirent() */
+ 
+-struct passwd *_cdecl
+- getpwnam(char *name)
++struct passwd *_cdecl getpwnam(char *name)
+ {
+     return NULL;
+ }
+ 
+-struct passwd *_cdecl
+- getpwuid(int uid)
++struct passwd *_cdecl getpwuid(int uid)
+ {
+     return NULL;
+ }
+@@ -280,8 +276,7 @@
+     return 0;
+ }
+ 
+-void _cdecl
+- endpwent(void)
++void _cdecl endpwent(void)
+ {
+ }
+ 
+Index: lib/dirent.h
+Prereq:  2.0 
+--- lynx2.8.8dev.6+/lib/dirent.h	1999-07-14 16:44:55.000000000 +0000
++++ lynx2.8.8dev.6a/lib/dirent.h	2010-10-31 17:56:17.000000000 +0000
+@@ -14,43 +14,40 @@
+  *  changed d_name to char * instead of array, removed non-std extensions 
+  *  
+  *  Cleanup, other hackery, Summer '92, Brian Moran , brianmo@microsoft.com 
+- */ 
++ */
+ 
+ #ifndef _DIRENT
+ #define _DIRENT
+ 
+ #include <direct.h>
+ 
+-struct dirent 
+-{ 
+-    ino_t    d_ino;                   /* a bit of a farce */ 
+-    short    d_reclen;                /* more farce */ 
+-    short    d_namlen;                /* length of d_name */ 
+-    char    *d_name;
+-}; 
+- 
+-struct _dircontents 
+-{ 
+-    char *_d_entry; 
+-    struct _dircontents *_d_next; 
+-}; 
+- 
+-typedef struct _dirdesc 
+-{ 
+-    int  dd_id;			   /* uniquely identify each open directory*/ 
+-    long dd_loc;			/* where we are in directory entry */ 
+-    struct _dircontents *dd_contents;	/* pointer to contents of dir */ 
+-    struct _dircontents *dd_cp;		/* pointer to current position */ 
+-} 
+-DIR; 
+- 
+-extern DIR *opendir(char *); 
+-extern struct dirent *readdir(DIR *); 
+-extern void seekdir(DIR *, long); 
+-extern long telldir(DIR *); 
+-extern void closedir(DIR *); 
+-#define rewinddir(dirp) seekdir(dirp, 0L) 
++struct dirent {
++    ino_t d_ino;		/* a bit of a farce */
++    short d_reclen;		/* more farce */
++    short d_namlen;		/* length of d_name */
++    char *d_name;
++};
++
++struct _dircontents {
++    char *_d_entry;
++    struct _dircontents *_d_next;
++};
++
++typedef struct _dirdesc {
++    int dd_id;			/* uniquely identify each open directory */
++    long dd_loc;		/* where we are in directory entry */
++    struct _dircontents *dd_contents;	/* pointer to contents of dir */
++    struct _dircontents *dd_cp;	/* pointer to current position */
++} DIR;
++
++extern DIR *opendir(char *);
++extern struct dirent *readdir(DIR *);
++extern void seekdir(DIR *, long);
++extern long telldir(DIR *);
++extern void closedir(DIR *);
++
++#define rewinddir(dirp) seekdir(dirp, 0L)
+ 
+ #endif /* _DIRENT */
+ 
+-/* end of dirent.h */ 
++/* end of dirent.h */
+Index: src/HTML.c
+--- lynx2.8.8dev.6+/src/HTML.c	2010-09-25 17:00:36.000000000 +0000
++++ lynx2.8.8dev.6a/src/HTML.c	2010-11-01 22:19:09.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: HTML.c,v 1.146 2010/09/25 17:00:36 tom Exp $
++ * $LynxId: HTML.c,v 1.148 2010/11/01 22:19:09 tom Exp $
+  *
+  *		Structured stream to Rich hypertext converter
+  *		============================================
+@@ -312,8 +312,10 @@
+ 	return;
+     }
+     me->lastraw = c;
+-    if (c == '\r')
++    if (c == '\r') {
+ 	c = '\n';
++	uc = UCH(c);
++    }
+ 
+     /*
+      * Handle SGML_LITTERAL tags that have HTChunk elements.  - FM
+Index: src/LYCurses.c
+--- lynx2.8.8dev.6+/src/LYCurses.c	2010-09-25 00:48:03.000000000 +0000
++++ lynx2.8.8dev.6a/src/LYCurses.c	2010-10-31 17:56:18.000000000 +0000
+@@ -1,4 +1,4 @@
+-/* $LynxId: LYCurses.c,v 1.156 2010/09/25 00:48:03 tom Exp $ */
++/* $LynxId: LYCurses.c,v 1.158 2010/10/31 17:56:18 tom Exp $ */
+ #include <HTUtils.h>
+ #include <HTAlert.h>
+ 
+@@ -1138,7 +1138,7 @@
+ 	   when the keypad is switched on, some keybindings may be overriden. */
+ 	keypad(LYwin, TRUE);
+ 	keypad_on = 1;
+-#  endif			/* HAVE_KEYPAD */
++#  endif /* HAVE_KEYPAD */
+ 
+ 	if (-1 == lynx_initialize_keymaps()) {
+ 	    endwin();
+@@ -1245,8 +1245,6 @@
+ #endif /* __DJGPP__ */
+ #endif /* not VMS */
+ 
+-/* nonl();   *//* seems to slow things down */
+-
+ #ifdef VMS
+     crmode();
+     raw();
+@@ -1488,7 +1486,7 @@
+ 
+ #ifdef __DJGPP__
+     ScreenClear();
+-#elif !defined(PDCURSES)	/* some flavor of win32?  */
++#elif !defined(PDCURSES) /* some flavor of win32?  */
+     clrscr();
+ #endif /* win32 */
+ 
+@@ -1781,7 +1779,7 @@
+ 	    wbkgd(my_subwindow, (chtype) (b | ' '));
+ 	}
+ 	LynxWChangeStyle(my_subwindow, s_menu_bg, STACK_OFF);
+-#elif defined(HAVE_GETBKGD)	/* not defined in ncurses 1.8.7 */
++#elif defined(HAVE_GETBKGD) /* not defined in ncurses 1.8.7 */
+ 	wbkgd(my_subwindow, getbkgd(LYwin));
+ #endif
+ #endif
+Index: src/LYCurses.h
+--- lynx2.8.8dev.6+/src/LYCurses.h	2010-10-04 08:56:09.000000000 +0000
++++ lynx2.8.8dev.6a/src/LYCurses.h	2010-10-31 17:56:18.000000000 +0000
+@@ -1,4 +1,4 @@
+-/* $LynxId: LYCurses.h,v 1.86 2010/10/04 08:56:09 tom Exp $ */
++/* $LynxId: LYCurses.h,v 1.87 2010/10/31 17:56:18 tom Exp $ */
+ #ifndef LYCURSES_H
+ #define LYCURSES_H
+ 
+@@ -260,7 +260,7 @@
+ #  include <LYGCurses.h>
+ #  else
+ #   include <curses.h>		/* everything else */
+-# endif				/* VMS && __GNUC__ */
++# endif	/* VMS && __GNUC__ */
+ #endif /* HAVE_CONFIG_H */
+ 
+ /*
+Index: src/LYForms.c
+--- lynx2.8.8dev.6+/src/LYForms.c	2010-09-24 09:40:44.000000000 +0000
++++ lynx2.8.8dev.6a/src/LYForms.c	2010-10-31 17:56:18.000000000 +0000
+@@ -1,4 +1,4 @@
+-/* $LynxId: LYForms.c,v 1.86 2010/09/24 09:40:44 tom Exp $ */
++/* $LynxId: LYForms.c,v 1.87 2010/10/31 17:56:18 tom Exp $ */
+ #include <HTUtils.h>
+ #include <HTCJK.h>
+ #include <HTTP.h>
+@@ -528,7 +528,7 @@
+ 		MyEdit.dirty = TRUE;
+ 	    }
+ 	} else
+-#  endif			/* NCURSES || PDCURSES */
++#  endif /* NCURSES || PDCURSES */
+ #endif /* USE_MOUSE */
+ 
+ 	{
+Index: src/LYLocal.c
+--- lynx2.8.8dev.6+/src/LYLocal.c	2010-09-25 16:26:16.000000000 +0000
++++ lynx2.8.8dev.6a/src/LYLocal.c	2010-11-01 08:46:02.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: LYLocal.c,v 1.112 2010/09/25 16:26:16 tom Exp $
++ * $LynxId: LYLocal.c,v 1.114 2010/11/01 08:46:02 tom Exp $
+  *
+  *  Routines to manipulate the local filesystem.
+  *  Written by: Rick Mallett, Carleton University
+@@ -386,6 +386,7 @@
+     va_list ap;
+ 
+     va_start(ap, command);
++    result[0] = 0;
+     StrAllocCopy(result[argc++], command);
+     do {
+ 	result[argc] = 0;
+@@ -1756,7 +1757,7 @@
+ 	    }
+ 	    return buffer;
+ 	}
+-#  endif			/* OK_GZIP */
++#  endif /* OK_GZIP */
+ 	if ((arg = match_op("UNTAR_Z", line)) != 0) {
+ #define FMT_UNTAR_Z "cd %s; %s %s |  %s %s %s"
+ 	    if ((program = HTGetProgramPath(ppZCAT)) != NULL) {
+@@ -1781,7 +1782,7 @@
+ 	    HTEndParam(&buffer, FMT_UNTAR, 4);
+ 	    return buffer;
+ 	}
+-# endif				/* !ARCHIVE_ONLY */
++# endif	/* !ARCHIVE_ONLY */
+ 
+ # ifdef OK_GZIP
+ 	if ((arg = match_op("TAR_GZ", line)) != 0) {
+@@ -1800,7 +1801,7 @@
+ 	    }
+ 	    return buffer;
+ 	}
+-# endif				/* OK_GZIP */
++# endif	/* OK_GZIP */
+ 
+ 	if ((arg = match_op("TAR_Z", line)) != 0) {
+ #define FMT_TAR_Z "cd %s; %s %s %s %s | %s >%s%s"
+@@ -1882,7 +1883,7 @@
+ 	}
+ 	return buffer;
+     }
+-# endif				/* !ARCHIVE_ONLY */
++# endif	/* !ARCHIVE_ONLY */
+ #endif /* OK_ZIP */
+ 
+     if ((arg = match_op("COMPRESS", line)) != 0) {
+Index: src/LYPrettySrc.c
+--- lynx2.8.8dev.6+/src/LYPrettySrc.c	2010-09-24 22:06:29.000000000 +0000
++++ lynx2.8.8dev.6a/src/LYPrettySrc.c	2010-10-27 00:15:12.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: LYPrettySrc.c,v 1.24 2010/09/24 22:06:29 tom Exp $
++ * $LynxId: LYPrettySrc.c,v 1.25 2010/10/27 00:15:12 tom Exp $
+  *
+  * HTML source syntax highlighting
+  * by Vlad Harchev <hvv@hippo.ru>
+@@ -159,7 +159,8 @@
+ 	int n = tag->number_of_attributes;
+ 	attr *attrs = tag->attributes;
+ 
+-/*.... *//* this is not implemented though it's easy */
++/*.... */
++/* this is not implemented though it's easy */
+ #  endif
+ 
+ 	hcode = hash_code_aggregate_char('.', hcode);
+Index: src/LYSession.c
+--- lynx2.8.8dev.6+/src/LYSession.c	2008-07-02 21:24:27.000000000 +0000
++++ lynx2.8.8dev.6a/src/LYSession.c	2010-10-31 18:15:33.000000000 +0000
+@@ -1,4 +1,4 @@
+-/* $LynxId: LYSession.c,v 1.6 2008/07/02 21:24:27 Paul.B.Mahol Exp $ */
++/* $LynxId: LYSession.c,v 1.7 2010/10/31 18:15:33 Paul.B.Mahol Exp $ */
+ 
+ #include <LYSession.h>
+ 
+@@ -63,11 +63,12 @@
+     DocInfo doc;
+     VisitedLink *vl;
+     int i = 0;
+-    short errors = 10;		/* how many syntax errors are allowed in */
+-
+-    /* session file before aborting. */
++    short errors = 10;		/* how many syntax errors are allowed in
++				 * session file before aborting. */
+     char *value1, *value2, *rsline, *linktext, *rslevel;
+ 
++    memset(&doc, 0, sizeof(doc));
++
+     /*
+      * This should be done only once, here:  iff USE_SESSIONS is defined or: 
+      * in mainloop(), otherwise history entries are lost
+Index: src/LYUtils.c
+--- lynx2.8.8dev.6+/src/LYUtils.c	2010-10-04 09:00:23.000000000 +0000
++++ lynx2.8.8dev.6a/src/LYUtils.c	2010-10-31 17:56:21.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: LYUtils.c,v 1.204 2010/10/04 09:00:23 tom Exp $
++ * $LynxId: LYUtils.c,v 1.205 2010/10/31 17:56:21 tom Exp $
+  */
+ #include <HTUtils.h>
+ #include <HTTCP.h>
+@@ -2978,9 +2978,9 @@
+ #  else
+ #   ifdef HAVE_TERMIO_H
+ #    include <termio.h>
+-#   endif			/* HAVE_TERMIO_H */
+-#  endif			/* HAVE_TERMIOS_H */
+-# endif				/* TERMIO_AND_TERMIOS */
++#   endif /* HAVE_TERMIO_H */
++#  endif /* HAVE_TERMIOS_H */
++# endif	/* TERMIO_AND_TERMIOS */
+ #endif /* TERMIO_AND_CURSES */
+ 
+ void size_change(int sig GCC_UNUSED)
+@@ -7574,7 +7574,7 @@
+     return 0;
+ }
+ 
+-#  endif			/* !defined(WIN_EX) && defined(HAVE_POPEN) */
++#  endif /* !defined(WIN_EX) && defined(HAVE_POPEN) */
+ 
+ #endif /* __EMX__ */
+ 
+Index: src/TRSTable.c
+--- lynx2.8.8dev.6+/src/TRSTable.c	2010-09-25 12:47:08.000000000 +0000
++++ lynx2.8.8dev.6a/src/TRSTable.c	2010-10-27 00:15:10.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: TRSTable.c,v 1.28 2010/09/25 12:47:08 tom Exp $
++ * $LynxId: TRSTable.c,v 1.29 2010/10/27 00:15:10 tom Exp $
+  *		Simple table object
+  *		===================
+  * Authors
+@@ -1322,7 +1322,8 @@
+ 	}
+ 
+ 	/* Fake </TR> at BOL */
+-/* Stbl_finishCellInTable(lineno, 0, 0); *//* Needed? */
++	/* Stbl_finishCellInTable(lineno, 0, 0); */
++	/* Needed? */
+ 
+ 	/* Fake <TR> at BOL */
+ 	if (Stbl_addRowToTable(me, al, lineno) < 0) {
+Index: src/UCAuto.c
+--- lynx2.8.8dev.6+/src/UCAuto.c	2010-09-25 00:51:53.000000000 +0000
++++ lynx2.8.8dev.6a/src/UCAuto.c	2010-10-31 17:56:21.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: UCAuto.c,v 1.45 2010/09/25 00:51:53 tom Exp $
++ * $LynxId: UCAuto.c,v 1.46 2010/10/31 17:56:21 tom Exp $
+  *
+  *  This file contains code for changing the Linux console mode.
+  *  Currently some names for font files are hardwired in here.
+@@ -788,7 +788,7 @@
+     CTRACE((tfp, "Display font set to '%s'.\n", name));
+     return ord;
+ }
+-#  endif			/* __EMX__ */
++#  endif /* __EMX__ */
+ 
+ int Switch_Display_Charset(const int ord, const enum switch_display_charset_t really)
+ {
+Index: src/UCdomap.c
+--- lynx2.8.8dev.6+/src/UCdomap.c	2010-09-25 15:31:34.000000000 +0000
++++ lynx2.8.8dev.6a/src/UCdomap.c	2010-10-31 17:56:22.000000000 +0000
+@@ -1,5 +1,5 @@
+ /*
+- * $LynxId: UCdomap.c,v 1.86 2010/09/25 15:31:34 tom Exp $
++ * $LynxId: UCdomap.c,v 1.87 2010/10/31 17:56:22 tom Exp $
+  *
+  *  UCdomap.c
+  *  =========
+@@ -2171,7 +2171,7 @@
+     CTRACE((tfp, "Found %i.\n", ret));
+     return ret;
+ }
+-#  endif			/* __EMX__ */
++#  endif /* __EMX__ */
+ #endif /* CAN_AUTODETECT_DISPLAY_CHARSET */
+ #endif /* EXP_CHARTRANS_AUTOSWITCH */
+ 
+Index: src/parsdate.h
+--- lynx2.8.8dev.6+/src/parsdate.h	2008-06-29 23:23:45.000000000 +0000
++++ lynx2.8.8dev.6a/src/parsdate.h	2010-10-31 17:56:22.000000000 +0000
+@@ -1,4 +1,4 @@
+-/* $LynxId: parsdate.h,v 1.1 2008/06/29 23:23:45 tom Exp $ */
++/* $LynxId: parsdate.h,v 1.2 2010/10/31 17:56:22 tom Exp $ */
+ #ifndef PARSDATE_H
+ #define PARSDATE_H
+ 
+@@ -7,7 +7,7 @@
+ #endif
+ #include <LYUtils.h>
+ #define ARRAY_SIZE(array)       ((int) (sizeof(array) / sizeof(array[0])))
+-     typedef struct _TIMEINFO {
++    typedef struct _TIMEINFO {
+ 	time_t time;
+ 	long usec;
+ 	long tzone;
