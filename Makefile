@@ -52,7 +52,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
 	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
 	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
-	py3cairo qemu-kvm
+	py3cairo qemu-kvm gtk-vnc
 
 SPREZZ:=packaging
 
@@ -208,7 +208,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV) \
 	$(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM) \
 	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER) $(PY3CAIRO) \
-	$(QEMUKVM)
+	$(QEMUKVM) $(GTKVNC)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1106,6 +1106,14 @@ $(GTKHTML): $(SPREZZ)/gtkhtml/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gtkhtml4.0-$(gtkhtml_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gtk-vnc
+gtk-vnc:$(GTKVNC)_$(ARCH).deb
+$(GTKVNC): $(SPREZZ)/gtk-vnc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gtk-vnc-$(gtk-vnc_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gtk2
 gtk2:$(GTK2)_$(ARCH).deb
@@ -2883,7 +2891,7 @@ clean:
 	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
 	rm -rf $(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM)
 	rm -rf $(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
-	rm -rf $(PY3CAIRO) $(QEMUKVM)
+	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC)
 
 clobber:
 	rm -rf $(FETCHED)
