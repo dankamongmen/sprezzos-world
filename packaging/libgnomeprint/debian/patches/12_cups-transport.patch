@@ -1,0 +1,198 @@
+diff -Nur libgnomeprint-2.12.1/libgnomeprint/modules/cups/gnome-print-cups-transport.c libgnomeprint-2.12.1.new/libgnomeprint/modules/cups/gnome-print-cups-transport.c
+--- libgnomeprint-2.12.1/libgnomeprint/modules/cups/gnome-print-cups-transport.c	2004-12-03 16:32:12.000000000 +0100
++++ libgnomeprint-2.12.1.new/libgnomeprint/modules/cups/gnome-print-cups-transport.c	2006-06-07 10:05:20.000000000 +0200
+@@ -42,6 +42,8 @@
+ #include <libgnomeprint/gnome-print-transport.h>
+ #include <libgnomeprint/gnome-print-config.h>
+ 
++#include <libgnomecups/gnome-cups-printer.h>
++
+ #define GP_TYPE_TRANSPORT_CUPS         (gp_transport_cups_get_type ())
+ #define GP_TRANSPORT_CUPS(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), GP_TYPE_TRANSPORT_CUPS, GPTransportCups))
+ #define GP_TRANSPORT_CUPS_CLASS(k)     (G_TYPE_CHECK_CLASS_CAST ((k), GP_TYPE_TRANSPORT_CUPS, GPTransportCupsClass))
+@@ -202,10 +204,23 @@
+ }
+ 
+ static gint
+-get_job_options (GnomePrintConfig *config, cups_option_t **options)
++add_job_options (GnomePrintConfig *config, gint num_options, cups_option_t **options)
+ {
+-	gchar *value;
+-	gint num = 0;
++	gchar *value, *n_up, *orient;
++	gint num = num_options;
++	gboolean duplex, tumble;
++
++	/* Paper Size */
++
++	value = gnome_print_config_get (config, GNOME_PRINT_KEY_PAPER_SIZE);
++
++	if (value != NULL) {
++		num = cupsAddOption ("PageSize", value, num, options);
++		num = cupsAddOption ("PageRegion", value, num, options);
++		g_free (value);
++	}
++
++	/* Paper Source */
+ 
+ 	value = gnome_print_config_get (config, GNOME_PRINT_KEY_PAPER_SOURCE);
+ 
+@@ -214,6 +229,60 @@
+ 		g_free (value);
+ 	}
+ 	
++	/* Page Orientation */
++
++	orient = gnome_print_config_get (config, GNOME_PRINT_KEY_PAGE_ORIENTATION);
++
++	if (strcmp (orient, "R0") == 0)
++		value = "3";
++	else if (strcmp (orient, "R90") == 0)
++		value = "4";
++	else if (strcmp (orient, "R180") == 0)
++		value = "6";
++	else if (strcmp (orient, "R270") == 0)
++		value = "5";
++	else
++		value = NULL;
++
++	g_free (orient);
++
++	if (value != NULL) {
++		num = cupsAddOption ("orientation-requested", value, num, options);
++	}
++
++	/* Duplex and Tumble */
++
++	gnome_print_config_get_boolean (config, GNOME_PRINT_KEY_DUPLEX, &duplex);
++	gnome_print_config_get_boolean (config, GNOME_PRINT_KEY_TUMBLE, &tumble);
++
++	if (!duplex)
++		value = "one-sided";
++	else if (!tumble)
++		value = "two-sided-long-edge";
++	else
++		value = "two-sided-long-edge";
++
++	num = cupsAddOption ("sides", value, num, options);
++
++	/* 2 pages to 1 and 4 pages to 1 */
++
++	n_up = gnome_print_config_get (config, GNOME_PRINT_KEY_LAYOUT);
++
++	if (strcmp (n_up, "2_1") == 0)
++		value = "2";
++	else if (strcmp (n_up, "4_1") == 0)
++		value = "4";
++	else
++		value = NULL;
++
++	g_free (n_up);
++
++	if (value != NULL) {
++		num = cupsAddOption ("number-up", value, num, options);
++	}
++
++	/* Job Hold */
++
+ 	value = gnome_print_config_get (config, GNOME_PRINT_KEY_HOLD);
+ 
+ 	if (value != NULL) {
+@@ -224,14 +293,36 @@
+ 	return num;
+ }
+ 	
++static gint
++convert_and_add_to_cups_options (GList *options, gint num_options, cups_option_t **cups_options)
++{
++	gint num, i;
++	GList *l;
++
++	num = g_list_length (options);
++
++	if (num > 0) {
++		num = num_options;
++		for (l = options, i = 0; l != NULL; l = l->next, i++) {
++			GnomeCupsPrinterOption *option = l->data;
++			num = cupsAddOption (option->id, option->value, num, cups_options);
++		}
++	} else {
++		cups_options = NULL;
++	}
++
++	return num;
++}
+ 
+ static gint
+ gp_transport_cups_close (GnomePrintTransport *gp_transport)
+ {
+ 	GPTransportCups *transport;
+ 	cups_option_t *options;
+-	gint num_options;
++	gint num_options = 0;
+ 	char *title;
++	GnomeCupsPrinter *printer;
++	GList *ppd_and_lpoptions;
+ 
+ 	transport = GP_TRANSPORT_CUPS (gp_transport);
+ 
+@@ -246,8 +337,15 @@
+ 
+ 	title = gnome_print_config_get (gp_transport->config, 
+ 					GNOME_PRINT_KEY_DOCUMENT_NAME);
+-	num_options = get_job_options (gp_transport->config, &options);
++
++	printer = gnome_cups_printer_get (transport->printer);
+ 	
++	ppd_and_lpoptions = gnome_cups_printer_get_options (printer);
++	num_options = convert_and_add_to_cups_options (ppd_and_lpoptions, num_options, &options);
++	gnome_cups_printer_option_list_free (ppd_and_lpoptions);
++
++	num_options = add_job_options (gp_transport->config, num_options, &options);
++
+ 	cupsPrintFile (transport->printer, 
+ 		       transport->temp_file, 
+ 		       title, num_options, options);
+@@ -256,6 +354,8 @@
+ 	unlink (transport->temp_file);
+ 	g_free (title);
+ 	
++	gnome_cups_printer_unref (printer);
++	
+ 	return GNOME_PRINT_OK;
+ }
+ 
+@@ -291,14 +391,22 @@
+ {
+ 	GPTransportCups *transport;
+ 	cups_option_t *options;
+-	gint num_options;
++	gint num_options = 0;
+ 	char *title;
++	GnomeCupsPrinter *printer;
++	GList *ppd_and_lpoptions;
+ 
+ 	transport = GP_TRANSPORT_CUPS (gp_transport);
+ 
+ 	title = gnome_print_config_get (gp_transport->config, 
+ 					GNOME_PRINT_KEY_DOCUMENT_NAME);
+-	num_options = get_job_options (gp_transport->config, &options);
++	printer = gnome_cups_printer_get (transport->printer);
++
++	ppd_and_lpoptions = gnome_cups_printer_get_options (printer);
++	num_options = convert_and_add_to_cups_options (ppd_and_lpoptions, num_options, &options);
++	gnome_cups_printer_option_list_free (ppd_and_lpoptions);
++
++	num_options = add_job_options (gp_transport->config, num_options, &options);
+ 	
+ 	cupsPrintFile (transport->printer, 
+ 		       filename, title, 
+@@ -307,6 +415,8 @@
+ 
+ 	g_free (title);
+ 	
++	gnome_cups_printer_unref (printer);
++
+ 	return GNOME_PRINT_OK;
+ }
+ 
