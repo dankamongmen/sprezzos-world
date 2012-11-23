@@ -1,0 +1,84 @@
+#! /usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+PYVERS := $(shell pyversions -vs)
+CURLVERS := $(strip $(shell /usr/bin/curl-config --version | awk '{print $$2}'))
+
+unexport LDFLAGS
+export FFLAGS="-fPIC"
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	set -e ;\
+	for py in $(PYVERS) ; do \
+		python$$py setup.py build ; \
+		python$$py-dbg setup.py build ; \
+	done
+
+override_dh_auto_test:
+ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
+	set -e ;\
+	for py in $(PYVERS) ; do \
+		for test in "tests/test_internals.py" "tests/test_memleak.py" ; do \
+		    PYTHONPATH=`ls -d $(CURDIR)/build/lib.*-*-$$py` \
+	        	python$$py $$test; \
+		done; \
+	done
+endif
+
+#clean:
+#	dh_testdir
+#	dh_testroot
+#	rm -f build-*
+#
+#	for py in $(PYVERS); do \
+#	    python$$py setup.py clean; \
+#	    python$$py-dbg setup.py clean; \
+#	done
+#
+#	rm -rf build
+#	-find -name '*.py[co]' | xargs rm -f
+#	dh_clean
+
+override_dh_auto_install:
+	for py in $(PYVERS); do \
+  	    python$$py setup.py install --root=$(CURDIR)/debian/python-pycurl --install-layout=deb; \
+ 	    python$$py-dbg setup.py install --root=$(CURDIR)/debian/python-pycurl-dbg --install-layout=deb; \
+	done
+
+	rm -rf $(CURDIR)/debian/python-pycurl-dbg/usr/lib/python*/*-packages/curl
+	rm -f $(CURDIR)/debian/python-pycurl-dbg/usr/lib/python*/*-packages/pycurl-*.egg-info
+
+	rm -rf debian/python-pycurl-dbg/usr/share/doc/python-pycurl-dbg
+	dh_link -ppython-pycurl-dbg usr/share/doc/python-pycurl usr/share/doc/python-pycurl-dbg
+
+override_dh_installdocs:
+	cp -a doc/*.html debian/python-pycurl/usr/share/doc/python-pycurl/html
+	dh_installdocs TODO
+
+override_dh_installexamples:
+	dh_installexamples examples/*
+
+override_dh_installchangelogs:
+	dh_installchangelogs ChangeLog
+
+override_dh_strip:
+ifeq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
+	dh_strip -ppython-pycurl --dbg-package=python-pycurl-dbg
+	# fix python-debug-in-wrong-location lintian warning
+	cd debian/*-dbg/usr/lib/debug/usr/lib && mv pyshared pymodules
+endif
+
+override_dh_compress:
+	dh_compress -X.py
+
+override_dh_shlibdeps:
+	dh_shlibdeps -a
+	sed -i '/shlibs:Depends/s,\(libcurl[0-9]*-gnutls (>= \)[^)]*\().*\),\1$(CURLVERS)\2,' debian/python-pycurl*.substvars
