@@ -1,0 +1,1888 @@
+From 26301caaa1aec5d71b564bff452147d6183370bf Mon Sep 17 00:00:00 2001
+From: Diego Biurrun <diego@biurrun.de>
+Date: Tue, 10 Jul 2012 00:04:18 +0200
+Subject: [PATCH 262/278] x86: mmx2 ---> mmxext in asm constructs
+
+---
+ libavcodec/x86/ac3dsp.asm               |    4 +-
+ libavcodec/x86/ac3dsp_init.c            |    4 +-
+ libavcodec/x86/dsputil.asm              |    8 +--
+ libavcodec/x86/dsputil_mmx.c            |   56 ++++++++--------
+ libavcodec/x86/dsputilenc.asm           |    2 +-
+ libavcodec/x86/dsputilenc_mmx.c         |    6 +-
+ libavcodec/x86/h264_chromamc.asm        |   14 ++--
+ libavcodec/x86/h264_chromamc_10bit.asm  |    4 +-
+ libavcodec/x86/h264_deblock.asm         |   20 +++---
+ libavcodec/x86/h264_deblock_10bit.asm   |    4 +-
+ libavcodec/x86/h264_idct.asm            |   46 ++++++-------
+ libavcodec/x86/h264_idct_10bit.asm      |    2 +-
+ libavcodec/x86/h264_intrapred.asm       |   26 ++++----
+ libavcodec/x86/h264_intrapred_10bit.asm |   20 +++---
+ libavcodec/x86/h264_intrapred_init.c    |   80 +++++++++++------------
+ libavcodec/x86/h264_weight.asm          |   12 ++--
+ libavcodec/x86/h264dsp_init.c           |  107 ++++++++++++++++---------------
+ libavcodec/x86/pngdsp.asm               |    2 +-
+ libavcodec/x86/pngdsp_init.c            |    6 +-
+ libavcodec/x86/rv34dsp.asm              |    6 +-
+ libavcodec/x86/rv34dsp_init.c           |   10 +--
+ libavcodec/x86/rv40dsp.asm              |    4 +-
+ libavcodec/x86/rv40dsp_init.c           |   30 ++++-----
+ libavcodec/x86/vc1dsp_init.c            |    6 +-
+ libavcodec/x86/vp3dsp.asm               |    4 +-
+ libavcodec/x86/vp3dsp_init.c            |   16 +++--
+ libavcodec/x86/vp8dsp.asm               |   30 ++++-----
+ libavcodec/x86/vp8dsp_init.c            |   86 ++++++++++++-------------
+ libavutil/x86/x86util.asm               |    2 +-
+ libswscale/x86/output.asm               |    4 +-
+ libswscale/x86/swscale.c                |    8 +--
+ 31 files changed, 317 insertions(+), 312 deletions(-)
+
+diff --git a/libavcodec/x86/ac3dsp.asm b/libavcodec/x86/ac3dsp.asm
+index 2c453c5..a5d9458 100644
+--- a/libavcodec/x86/ac3dsp.asm
++++ b/libavcodec/x86/ac3dsp.asm
+@@ -97,7 +97,7 @@ AC3_EXPONENT_MIN
+     por         %1, %2
+     pshuflw     %2, %1, q0001
+     por         %1, %2
+-%elif cpuflag(mmx2)
++%elif cpuflag(mmxext)
+     pshufw      %2, %1, q0032
+     por         %1, %2
+     pshufw      %2, %1, q0001
+@@ -153,7 +153,7 @@ cglobal ac3_max_msb_abs_int16, 2,2,5, src, len
+ INIT_MMX mmx
+ %define ABS2 ABS2_MMX
+ AC3_MAX_MSB_ABS_INT16 or_abs
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ %define ABS2 ABS2_MMXEXT
+ AC3_MAX_MSB_ABS_INT16 min_max
+ INIT_XMM sse2
+diff --git a/libavcodec/x86/ac3dsp_init.c b/libavcodec/x86/ac3dsp_init.c
+index 5008d65..b32145b 100644
+--- a/libavcodec/x86/ac3dsp_init.c
++++ b/libavcodec/x86/ac3dsp_init.c
+@@ -31,7 +31,7 @@ extern void ff_ac3_exponent_min_mmxext(uint8_t *exp, int num_reuse_blocks, int n
+ extern void ff_ac3_exponent_min_sse2  (uint8_t *exp, int num_reuse_blocks, int nb_coefs);
+ 
+ extern int ff_ac3_max_msb_abs_int16_mmx  (const int16_t *src, int len);
+-extern int ff_ac3_max_msb_abs_int16_mmx2 (const int16_t *src, int len);
++extern int ff_ac3_max_msb_abs_int16_mmxext(const int16_t *src, int len);
+ extern int ff_ac3_max_msb_abs_int16_sse2 (const int16_t *src, int len);
+ extern int ff_ac3_max_msb_abs_int16_ssse3(const int16_t *src, int len);
+ 
+@@ -182,7 +182,7 @@ av_cold void ff_ac3dsp_init_x86(AC3DSPContext *c, int bit_exact)
+     }
+     if (EXTERNAL_MMXEXT(mm_flags)) {
+         c->ac3_exponent_min = ff_ac3_exponent_min_mmxext;
+-        c->ac3_max_msb_abs_int16 = ff_ac3_max_msb_abs_int16_mmx2;
++        c->ac3_max_msb_abs_int16 = ff_ac3_max_msb_abs_int16_mmxext;
+     }
+     if (EXTERNAL_SSE(mm_flags)) {
+         c->float_to_fixed24 = ff_float_to_fixed24_sse;
+diff --git a/libavcodec/x86/dsputil.asm b/libavcodec/x86/dsputil.asm
+index c9118a1..1a429ae 100644
+--- a/libavcodec/x86/dsputil.asm
++++ b/libavcodec/x86/dsputil.asm
+@@ -108,7 +108,7 @@ cglobal scalarproduct_and_madd_int16_%1, 4,4,8, v1, v2, v3, order, mul
+ %endmacro
+ 
+ INIT_MMX
+-SCALARPRODUCT mmx2
++SCALARPRODUCT mmxext
+ INIT_XMM
+ SCALARPRODUCT sse2
+ 
+@@ -327,8 +327,8 @@ APPLY_WINDOW_INT16 ssse3_atom, 0, 1
+ APPLY_WINDOW_INT16 ssse3,      0, 1
+ 
+ 
+-; void add_hfyu_median_prediction_mmx2(uint8_t *dst, const uint8_t *top, const uint8_t *diff, int w, int *left, int *left_top)
+-cglobal add_hfyu_median_prediction_mmx2, 6,6,0, dst, top, diff, w, left, left_top
++; void add_hfyu_median_prediction_mmxext(uint8_t *dst, const uint8_t *top, const uint8_t *diff, int w, int *left, int *left_top)
++cglobal add_hfyu_median_prediction_mmxext, 6,6,0, dst, top, diff, w, left, left_top
+     movq    mm0, [topq]
+     movq    mm2, mm0
+     movd    mm4, [left_topq]
+@@ -804,7 +804,7 @@ ALIGN 128
+     mov        valh, vall
+ %if %1 >= 8
+     movd        mm0, vald
+-%if cpuflag(mmx2)
++%if cpuflag(mmxext)
+     pshufw      mm0, mm0, 0
+ %else ; mmx
+     punpcklwd   mm0, mm0
+diff --git a/libavcodec/x86/dsputil_mmx.c b/libavcodec/x86/dsputil_mmx.c
+index 74559f4..71e10a8 100644
+--- a/libavcodec/x86/dsputil_mmx.c
++++ b/libavcodec/x86/dsputil_mmx.c
+@@ -2045,21 +2045,21 @@ PREFETCH(prefetch_3dnow, prefetch)
+ 
+ void ff_put_h264_chroma_mc8_rnd_mmx  (uint8_t *dst, uint8_t *src,
+                                       int stride, int h, int x, int y);
+-void ff_avg_h264_chroma_mc8_rnd_mmx2 (uint8_t *dst, uint8_t *src,
+-                                      int stride, int h, int x, int y);
++void ff_avg_h264_chroma_mc8_rnd_mmxext(uint8_t *dst, uint8_t *src,
++                                       int stride, int h, int x, int y);
+ void ff_avg_h264_chroma_mc8_rnd_3dnow(uint8_t *dst, uint8_t *src,
+                                       int stride, int h, int x, int y);
+ 
+ void ff_put_h264_chroma_mc4_mmx      (uint8_t *dst, uint8_t *src,
+                                       int stride, int h, int x, int y);
+-void ff_avg_h264_chroma_mc4_mmx2     (uint8_t *dst, uint8_t *src,
++void ff_avg_h264_chroma_mc4_mmxext   (uint8_t *dst, uint8_t *src,
+                                       int stride, int h, int x, int y);
+ void ff_avg_h264_chroma_mc4_3dnow    (uint8_t *dst, uint8_t *src,
+                                       int stride, int h, int x, int y);
+ 
+-void ff_put_h264_chroma_mc2_mmx2     (uint8_t *dst, uint8_t *src,
++void ff_put_h264_chroma_mc2_mmxext   (uint8_t *dst, uint8_t *src,
+                                       int stride, int h, int x, int y);
+-void ff_avg_h264_chroma_mc2_mmx2     (uint8_t *dst, uint8_t *src,
++void ff_avg_h264_chroma_mc2_mmxext   (uint8_t *dst, uint8_t *src,
+                                       int stride, int h, int x, int y);
+ 
+ void ff_put_h264_chroma_mc8_rnd_ssse3(uint8_t *dst, uint8_t *src,
+@@ -2077,10 +2077,10 @@ void ff_ ## OP ## _h264_chroma_mc ## NUM ## _ ## DEPTH ## _ ## OPT      \
+                                       (uint8_t *dst, uint8_t *src,      \
+                                        int stride, int h, int x, int y);
+ 
+-CHROMA_MC(put, 2, 10, mmx2)
+-CHROMA_MC(avg, 2, 10, mmx2)
+-CHROMA_MC(put, 4, 10, mmx2)
+-CHROMA_MC(avg, 4, 10, mmx2)
++CHROMA_MC(put, 2, 10, mmxext)
++CHROMA_MC(avg, 2, 10, mmxext)
++CHROMA_MC(put, 4, 10, mmxext)
++CHROMA_MC(avg, 4, 10, mmxext)
+ CHROMA_MC(put, 8, 10, sse2)
+ CHROMA_MC(avg, 8, 10, sse2)
+ CHROMA_MC(put, 8, 10, avx)
+@@ -2283,13 +2283,13 @@ static void vector_clipf_sse(float *dst, const float *src,
+ 
+ #endif /* HAVE_INLINE_ASM */
+ 
+-int32_t ff_scalarproduct_int16_mmx2(const int16_t *v1, const int16_t *v2,
+-                                    int order);
++int32_t ff_scalarproduct_int16_mmxext(const int16_t *v1, const int16_t *v2,
++                                      int order);
+ int32_t ff_scalarproduct_int16_sse2(const int16_t *v1, const int16_t *v2,
+                                     int order);
+-int32_t ff_scalarproduct_and_madd_int16_mmx2(int16_t *v1, const int16_t *v2,
+-                                             const int16_t *v3,
+-                                             int order, int mul);
++int32_t ff_scalarproduct_and_madd_int16_mmxext(int16_t *v1, const int16_t *v2,
++                                               const int16_t *v3,
++                                               int order, int mul);
+ int32_t ff_scalarproduct_and_madd_int16_sse2(int16_t *v1, const int16_t *v2,
+                                              const int16_t *v3,
+                                              int order, int mul);
+@@ -2313,9 +2313,9 @@ void ff_apply_window_int16_ssse3_atom(int16_t *output, const int16_t *input,
+ void ff_bswap32_buf_ssse3(uint32_t *dst, const uint32_t *src, int w);
+ void ff_bswap32_buf_sse2(uint32_t *dst, const uint32_t *src, int w);
+ 
+-void ff_add_hfyu_median_prediction_mmx2(uint8_t *dst, const uint8_t *top,
+-                                        const uint8_t *diff, int w,
+-                                        int *left, int *left_top);
++void ff_add_hfyu_median_prediction_mmxext(uint8_t *dst, const uint8_t *top,
++                                          const uint8_t *diff, int w,
++                                          int *left, int *left_top);
+ int  ff_add_hfyu_left_prediction_ssse3(uint8_t *dst, const uint8_t *src,
+                                        int w, int left);
+ int  ff_add_hfyu_left_prediction_sse4(uint8_t *dst, const uint8_t *src,
+@@ -2548,24 +2548,24 @@ static void dsputil_init_mmxext(DSPContext *c, AVCodecContext *avctx,
+ 
+ #if HAVE_YASM
+     if (!high_bit_depth && CONFIG_H264CHROMA) {
+-        c->avg_h264_chroma_pixels_tab[0] = ff_avg_h264_chroma_mc8_rnd_mmx2;
+-        c->avg_h264_chroma_pixels_tab[1] = ff_avg_h264_chroma_mc4_mmx2;
+-        c->avg_h264_chroma_pixels_tab[2] = ff_avg_h264_chroma_mc2_mmx2;
+-        c->put_h264_chroma_pixels_tab[2] = ff_put_h264_chroma_mc2_mmx2;
++        c->avg_h264_chroma_pixels_tab[0] = ff_avg_h264_chroma_mc8_rnd_mmxext;
++        c->avg_h264_chroma_pixels_tab[1] = ff_avg_h264_chroma_mc4_mmxext;
++        c->avg_h264_chroma_pixels_tab[2] = ff_avg_h264_chroma_mc2_mmxext;
++        c->put_h264_chroma_pixels_tab[2] = ff_put_h264_chroma_mc2_mmxext;
+     }
+     if (bit_depth == 10 && CONFIG_H264CHROMA) {
+-        c->put_h264_chroma_pixels_tab[2] = ff_put_h264_chroma_mc2_10_mmx2;
+-        c->avg_h264_chroma_pixels_tab[2] = ff_avg_h264_chroma_mc2_10_mmx2;
+-        c->put_h264_chroma_pixels_tab[1] = ff_put_h264_chroma_mc4_10_mmx2;
+-        c->avg_h264_chroma_pixels_tab[1] = ff_avg_h264_chroma_mc4_10_mmx2;
++        c->put_h264_chroma_pixels_tab[2] = ff_put_h264_chroma_mc2_10_mmxext;
++        c->avg_h264_chroma_pixels_tab[2] = ff_avg_h264_chroma_mc2_10_mmxext;
++        c->put_h264_chroma_pixels_tab[1] = ff_put_h264_chroma_mc4_10_mmxext;
++        c->avg_h264_chroma_pixels_tab[1] = ff_avg_h264_chroma_mc4_10_mmxext;
+     }
+ 
+     /* slower than cmov version on AMD */
+     if (!(mm_flags & AV_CPU_FLAG_3DNOW))
+-        c->add_hfyu_median_prediction = ff_add_hfyu_median_prediction_mmx2;
++        c->add_hfyu_median_prediction = ff_add_hfyu_median_prediction_mmxext;
+ 
+-    c->scalarproduct_int16          = ff_scalarproduct_int16_mmx2;
+-    c->scalarproduct_and_madd_int16 = ff_scalarproduct_and_madd_int16_mmx2;
++    c->scalarproduct_int16          = ff_scalarproduct_int16_mmxext;
++    c->scalarproduct_and_madd_int16 = ff_scalarproduct_and_madd_int16_mmxext;
+ 
+     if (avctx->flags & CODEC_FLAG_BITEXACT) {
+         c->apply_window_int16 = ff_apply_window_int16_mmxext_ba;
+diff --git a/libavcodec/x86/dsputilenc.asm b/libavcodec/x86/dsputilenc.asm
+index 6c4fb50..c5ba78a 100644
+--- a/libavcodec/x86/dsputilenc.asm
++++ b/libavcodec/x86/dsputilenc.asm
+@@ -265,7 +265,7 @@ HADAMARD8_DIFF_MMX mmx
+ 
+ %define ABS1 ABS1_MMXEXT
+ %define HSUM HSUM_MMXEXT
+-HADAMARD8_DIFF_MMX mmx2
++HADAMARD8_DIFF_MMX mmxext
+ 
+ INIT_XMM
+ %define ABS2 ABS2_MMXEXT
+diff --git a/libavcodec/x86/dsputilenc_mmx.c b/libavcodec/x86/dsputilenc_mmx.c
+index 883d965..e5d2473 100644
+--- a/libavcodec/x86/dsputilenc_mmx.c
++++ b/libavcodec/x86/dsputilenc_mmx.c
+@@ -1104,7 +1104,7 @@ int ff_hadamard8_diff16_##cpu(void *s, uint8_t *src1, uint8_t *src2, \
+                               int stride, int h);
+ 
+ hadamard_func(mmx)
+-hadamard_func(mmx2)
++hadamard_func(mmxext)
+ hadamard_func(sse2)
+ hadamard_func(ssse3)
+ 
+@@ -1195,8 +1195,8 @@ void ff_dsputilenc_init_mmx(DSPContext* c, AVCodecContext *avctx)
+         c->hadamard8_diff[1] = ff_hadamard8_diff_mmx;
+ 
+         if (EXTERNAL_MMXEXT(mm_flags)) {
+-            c->hadamard8_diff[0] = ff_hadamard8_diff16_mmx2;
+-            c->hadamard8_diff[1] = ff_hadamard8_diff_mmx2;
++            c->hadamard8_diff[0] = ff_hadamard8_diff16_mmxext;
++            c->hadamard8_diff[1] = ff_hadamard8_diff_mmxext;
+         }
+ 
+         if (EXTERNAL_SSE2(mm_flags)) {
+diff --git a/libavcodec/x86/h264_chromamc.asm b/libavcodec/x86/h264_chromamc.asm
+index dc427d7..2dd4603 100644
+--- a/libavcodec/x86/h264_chromamc.asm
++++ b/libavcodec/x86/h264_chromamc.asm
+@@ -442,17 +442,17 @@ chroma_mc8_mmx_func put, vc1,  nornd_mmx
+ chroma_mc8_mmx_func put, rv40, mmx
+ chroma_mc4_mmx_func put, h264, mmx
+ chroma_mc4_mmx_func put, rv40, mmx
+-chroma_mc2_mmx_func put, h264, mmx2
++chroma_mc2_mmx_func put, h264, mmxext
+ 
+ %define CHROMAMC_AVG  DIRECT_AVG
+ %define CHROMAMC_AVG4 COPY_AVG
+ %define PAVG          pavgb
+-chroma_mc8_mmx_func avg, h264, rnd_mmx2
+-chroma_mc8_mmx_func avg, vc1,  nornd_mmx2
+-chroma_mc8_mmx_func avg, rv40, mmx2
+-chroma_mc4_mmx_func avg, h264, mmx2
+-chroma_mc4_mmx_func avg, rv40, mmx2
+-chroma_mc2_mmx_func avg, h264, mmx2
++chroma_mc8_mmx_func avg, h264, rnd_mmxext
++chroma_mc8_mmx_func avg, vc1,  nornd_mmxext
++chroma_mc8_mmx_func avg, rv40, mmxext
++chroma_mc4_mmx_func avg, h264, mmxext
++chroma_mc4_mmx_func avg, rv40, mmxext
++chroma_mc2_mmx_func avg, h264, mmxext
+ 
+ %define PAVG          pavgusb
+ chroma_mc8_mmx_func avg, h264, rnd_3dnow
+diff --git a/libavcodec/x86/h264_chromamc_10bit.asm b/libavcodec/x86/h264_chromamc_10bit.asm
+index 2619737..aec7678 100644
+--- a/libavcodec/x86/h264_chromamc_10bit.asm
++++ b/libavcodec/x86/h264_chromamc_10bit.asm
+@@ -253,7 +253,7 @@ INIT_XMM sse2
+ CHROMA_MC8 put
+ INIT_XMM avx
+ CHROMA_MC8 put
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ CHROMA_MC4 put
+ CHROMA_MC2 put
+ 
+@@ -262,6 +262,6 @@ INIT_XMM sse2
+ CHROMA_MC8 avg
+ INIT_XMM avx
+ CHROMA_MC8 avg
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ CHROMA_MC4 avg
+ CHROMA_MC2 avg
+diff --git a/libavcodec/x86/h264_deblock.asm b/libavcodec/x86/h264_deblock.asm
+index f5de7c9..c124c4d 100644
+--- a/libavcodec/x86/h264_deblock.asm
++++ b/libavcodec/x86/h264_deblock.asm
+@@ -504,7 +504,7 @@ cglobal deblock_h_luma_8, 0,5
+     RET
+ %endmacro ; DEBLOCK_LUMA
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ DEBLOCK_LUMA v8, 8
+ INIT_XMM sse2
+ DEBLOCK_LUMA v, 16
+@@ -783,11 +783,11 @@ DEBLOCK_LUMA_INTRA v
+ INIT_XMM avx
+ DEBLOCK_LUMA_INTRA v
+ %if ARCH_X86_64 == 0
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ DEBLOCK_LUMA_INTRA v8
+ %endif
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ 
+ %macro CHROMA_V_START 0
+     dec    r2d      ; alpha-1
+@@ -818,7 +818,7 @@ cglobal deblock_v_chroma_8, 5,6
+     movq  m1, [t5+r1]
+     movq  m2, [r0]
+     movq  m3, [r0+r1]
+-    call ff_chroma_inter_body_mmx2
++    call ff_chroma_inter_body_mmxext
+     movq  [t5+r1], m1
+     movq  [r0], m2
+     RET
+@@ -842,7 +842,7 @@ cglobal deblock_h_chroma_8, 5,7
+     TRANSPOSE4x8_LOAD  bw, wd, dq, PASS8ROWS(t5, r0, r1, t6)
+     movq  buf0, m0
+     movq  buf1, m3
+-    call ff_chroma_inter_body_mmx2
++    call ff_chroma_inter_body_mmxext
+     movq  m0, buf0
+     movq  m3, buf1
+     TRANSPOSE8x4B_STORE PASS8ROWS(t5, r0, r1, t6)
+@@ -852,7 +852,7 @@ cglobal deblock_h_chroma_8, 5,7
+     RET
+ 
+ ALIGN 16
+-ff_chroma_inter_body_mmx2:
++ff_chroma_inter_body_mmxext:
+     LOAD_MASK  r2d, r3d
+     movd       m6, [r4] ; tc0
+     punpcklbw  m6, m6
+@@ -885,7 +885,7 @@ cglobal deblock_v_chroma_intra_8, 4,5
+     movq  m1, [t5+r1]
+     movq  m2, [r0]
+     movq  m3, [r0+r1]
+-    call ff_chroma_intra_body_mmx2
++    call ff_chroma_intra_body_mmxext
+     movq  [t5+r1], m1
+     movq  [r0], m2
+     RET
+@@ -896,12 +896,12 @@ cglobal deblock_v_chroma_intra_8, 4,5
+ cglobal deblock_h_chroma_intra_8, 4,6
+     CHROMA_H_START
+     TRANSPOSE4x8_LOAD  bw, wd, dq, PASS8ROWS(t5, r0, r1, t6)
+-    call ff_chroma_intra_body_mmx2
++    call ff_chroma_intra_body_mmxext
+     TRANSPOSE8x4B_STORE PASS8ROWS(t5, r0, r1, t6)
+     RET
+ 
+ ALIGN 16
+-ff_chroma_intra_body_mmx2:
++ff_chroma_intra_body_mmxext:
+     LOAD_MASK r2d, r3d
+     movq   m5, m1
+     movq   m6, m2
+@@ -1025,7 +1025,7 @@ ff_chroma_intra_body_mmx2:
+     jl %%.b_idx_loop
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal h264_loop_filter_strength, 9, 9, 0, bs, nnz, ref, mv, bidir, edges, \
+                                             step, mask_mv0, mask_mv1, field
+ %define b_idxq bidirq
+diff --git a/libavcodec/x86/h264_deblock_10bit.asm b/libavcodec/x86/h264_deblock_10bit.asm
+index e105c6c..3b81ef6 100644
+--- a/libavcodec/x86/h264_deblock_10bit.asm
++++ b/libavcodec/x86/h264_deblock_10bit.asm
+@@ -791,7 +791,7 @@ cglobal deblock_h_luma_intra_10, 4,7,8*(mmsize/16)
+ %endmacro
+ 
+ %if ARCH_X86_64 == 0
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ DEBLOCK_LUMA
+ DEBLOCK_LUMA_INTRA
+ INIT_XMM sse2
+@@ -906,7 +906,7 @@ cglobal deblock_v_chroma_intra_10, 4,6-(mmsize/16),8*(mmsize/16)
+ %endmacro
+ 
+ %if ARCH_X86_64 == 0
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ DEBLOCK_CHROMA
+ %endif
+ INIT_XMM sse2
+diff --git a/libavcodec/x86/h264_idct.asm b/libavcodec/x86/h264_idct.asm
+index 5e779cb..cd1f545 100644
+--- a/libavcodec/x86/h264_idct.asm
++++ b/libavcodec/x86/h264_idct.asm
+@@ -286,14 +286,14 @@ cglobal h264_idct8_add_8_sse2, 3, 4, 10
+ %endmacro
+ 
+ INIT_MMX
+-; ff_h264_idct_dc_add_mmx2(uint8_t *dst, int16_t *block, int stride)
+-cglobal h264_idct_dc_add_8_mmx2, 3, 3, 0
++; ff_h264_idct_dc_add_mmxext(uint8_t *dst, int16_t *block, int stride)
++cglobal h264_idct_dc_add_8_mmxext, 3, 3, 0
+     DC_ADD_MMXEXT_INIT r1, r2
+     DC_ADD_MMXEXT_OP movh, r0, r2, r1
+     RET
+ 
+-; ff_h264_idct8_dc_add_mmx2(uint8_t *dst, int16_t *block, int stride)
+-cglobal h264_idct8_dc_add_8_mmx2, 3, 3, 0
++; ff_h264_idct8_dc_add_mmxext(uint8_t *dst, int16_t *block, int stride)
++cglobal h264_idct8_dc_add_8_mmxext, 3, 3, 0
+     DC_ADD_MMXEXT_INIT r1, r2
+     DC_ADD_MMXEXT_OP mova, r0, r2, r1
+     lea          r0, [r0+r2*4]
+@@ -354,9 +354,9 @@ cglobal h264_idct8_add4_8_mmx, 5, 7 + npicregs, 0, dst, block_offset, block, str
+     ADD         rsp, pad
+     RET
+ 
+-; ff_h264_idct_add16_mmx2(uint8_t *dst, const int *block_offset,
+-;                         DCTELEM *block, int stride, const uint8_t nnzc[6*8])
+-cglobal h264_idct_add16_8_mmx2, 5, 8 + npicregs, 0, dst1, block_offset, block, stride, nnzc, cntr, coeff, dst2, picreg
++; ff_h264_idct_add16_mmxext(uint8_t *dst, const int *block_offset,
++;                           DCTELEM *block, int stride, const uint8_t nnzc[6*8])
++cglobal h264_idct_add16_8_mmxext, 5, 8 + npicregs, 0, dst1, block_offset, block, stride, nnzc, cntr, coeff, dst2, picreg
+     xor          r5, r5
+ %ifdef PIC
+     lea     picregq, [scan8_mem]
+@@ -421,9 +421,10 @@ cglobal h264_idct_add16intra_8_mmx, 5, 7 + npicregs, 0, dst, block_offset, block
+     jl .nextblock
+     REP_RET
+ 
+-; ff_h264_idct_add16intra_mmx2(uint8_t *dst, const int *block_offset,
+-;                              DCTELEM *block, int stride, const uint8_t nnzc[6*8])
+-cglobal h264_idct_add16intra_8_mmx2, 5, 8 + npicregs, 0, dst1, block_offset, block, stride, nnzc, cntr, coeff, dst2, picreg
++; ff_h264_idct_add16intra_mmxext(uint8_t *dst, const int *block_offset,
++;                                DCTELEM *block, int stride,
++;                                const uint8_t nnzc[6*8])
++cglobal h264_idct_add16intra_8_mmxext, 5, 8 + npicregs, 0, dst1, block_offset, block, stride, nnzc, cntr, coeff, dst2, picreg
+     xor          r5, r5
+ %ifdef PIC
+     lea     picregq, [scan8_mem]
+@@ -463,9 +464,10 @@ cglobal h264_idct_add16intra_8_mmx2, 5, 8 + npicregs, 0, dst1, block_offset, blo
+     jl .nextblock
+     REP_RET
+ 
+-; ff_h264_idct8_add4_mmx2(uint8_t *dst, const int *block_offset,
+-;                         DCTELEM *block, int stride, const uint8_t nnzc[6*8])
+-cglobal h264_idct8_add4_8_mmx2, 5, 8 + npicregs, 0, dst1, block_offset, block, stride, nnzc, cntr, coeff, dst2, picreg
++; ff_h264_idct8_add4_mmxext(uint8_t *dst, const int *block_offset,
++;                           DCTELEM *block, int stride,
++;                           const uint8_t nnzc[6*8])
++cglobal h264_idct8_add4_8_mmxext, 5, 8 + npicregs, 0, dst1, block_offset, block, stride, nnzc, cntr, coeff, dst2, picreg
+     %assign pad 128+4-(stack_offset&7)
+     SUB         rsp, pad
+ 
+@@ -620,7 +622,7 @@ cglobal h264_idct_add8_8_mmx, 5, 8 + npicregs, 0, dst1, block_offset, block, str
+     call         h264_idct_add8_mmx_plane
+     RET
+ 
+-h264_idct_add8_mmx2_plane:
++h264_idct_add8_mmxext_plane:
+ .nextblock:
+     movzx        r6, byte [scan8+r5]
+     movzx        r6, byte [r4+r6]
+@@ -661,9 +663,9 @@ h264_idct_add8_mmx2_plane:
+     jnz .nextblock
+     rep ret
+ 
+-; ff_h264_idct_add8_mmx2(uint8_t **dest, const int *block_offset,
+-;                        DCTELEM *block, int stride, const uint8_t nnzc[6*8])
+-cglobal h264_idct_add8_8_mmx2, 5, 8 + npicregs, 0, dst1, block_offset, block, stride, nnzc, cntr, coeff, dst2, picreg
++; ff_h264_idct_add8_mmxext(uint8_t **dest, const int *block_offset,
++;                          DCTELEM *block, int stride, const uint8_t nnzc[6*8])
++cglobal h264_idct_add8_8_mmxext, 5, 8 + npicregs, 0, dst1, block_offset, block, stride, nnzc, cntr, coeff, dst2, picreg
+     mov          r5, 16
+     add          r2, 512
+ %if ARCH_X86_64
+@@ -672,7 +674,7 @@ cglobal h264_idct_add8_8_mmx2, 5, 8 + npicregs, 0, dst1, block_offset, block, st
+ %ifdef PIC
+     lea     picregq, [scan8_mem]
+ %endif
+-    call h264_idct_add8_mmx2_plane
++    call h264_idct_add8_mmxext_plane
+     mov          r5, 32
+     add          r2, 384
+ %if ARCH_X86_64
+@@ -680,12 +682,12 @@ cglobal h264_idct_add8_8_mmx2, 5, 8 + npicregs, 0, dst1, block_offset, block, st
+ %else
+     add        r0mp, gprsize
+ %endif
+-    call h264_idct_add8_mmx2_plane
++    call h264_idct_add8_mmxext_plane
+     RET
+ 
+ INIT_MMX
+ ; r0 = uint8_t *dst, r2 = int16_t *block, r3 = int stride, r6=clobbered
+-h264_idct_dc_add8_mmx2:
++h264_idct_dc_add8_mmxext:
+     movd         m0, [r2   ]          ;  0 0 X D
+     punpcklwd    m0, [r2+32]          ;  x X d D
+     paddsw       m0, [pw_32]
+@@ -779,7 +781,7 @@ cglobal h264_idct_add16_8_sse2, 5, 5 + ARCH_X86_64, 8
+ %else
+     add         r0, r0m
+ %endif
+-    call        h264_idct_dc_add8_mmx2
++    call        h264_idct_dc_add8_mmxext
+ .cycle%1end:
+ %if %1 < 7
+     add         r2, 64
+@@ -828,7 +830,7 @@ cglobal h264_idct_add16intra_8_sse2, 5, 7 + ARCH_X86_64, 8
+     mov         r0, [r0]
+     add         r0, dword [r1+(%1&1)*8+64*(1+(%1>>1))]
+ %endif
+-    call        h264_idct_dc_add8_mmx2
++    call        h264_idct_dc_add8_mmxext
+ .cycle%1end:
+ %if %1 == 1
+     add         r2, 384+64
+diff --git a/libavcodec/x86/h264_idct_10bit.asm b/libavcodec/x86/h264_idct_10bit.asm
+index b3b7df9..51965f0 100644
+--- a/libavcodec/x86/h264_idct_10bit.asm
++++ b/libavcodec/x86/h264_idct_10bit.asm
+@@ -178,7 +178,7 @@ IDCT_ADD16_10
+     mova [%1+%3  ], m4
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal h264_idct_dc_add_10,3,3
+     movd      m0, [r1]
+     paddd     m0, [pd_32]
+diff --git a/libavcodec/x86/h264_intrapred.asm b/libavcodec/x86/h264_intrapred.asm
+index 8faaaf4..c687249 100644
+--- a/libavcodec/x86/h264_intrapred.asm
++++ b/libavcodec/x86/h264_intrapred.asm
+@@ -120,7 +120,7 @@ cglobal pred16x16_horizontal_8, 2,3
+ 
+ INIT_MMX mmx
+ PRED16x16_H
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_H
+ INIT_XMM ssse3
+ PRED16x16_H
+@@ -180,7 +180,7 @@ cglobal pred16x16_dc_8, 2,7
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_DC
+ INIT_XMM sse2
+ PRED16x16_DC
+@@ -229,7 +229,7 @@ cglobal pred16x16_tm_vp8_8, 2,5
+ 
+ INIT_MMX mmx
+ PRED16x16_TM
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_TM
+ 
+ INIT_XMM sse2
+@@ -309,14 +309,14 @@ cglobal pred16x16_plane_%1_8, 2,9,7
+     movhlps      m1, m0
+ %endif
+     paddw        m0, m1
+-%if cpuflag(mmx2)
++%if cpuflag(mmxext)
+     PSHUFLW      m1, m0, 0xE
+ %elif cpuflag(mmx)
+     mova         m1, m0
+     psrlq        m1, 32
+ %endif
+     paddw        m0, m1
+-%if cpuflag(mmx2)
++%if cpuflag(mmxext)
+     PSHUFLW      m1, m0, 0x1
+ %elif cpuflag(mmx)
+     mova         m1, m0
+@@ -536,7 +536,7 @@ INIT_MMX mmx
+ H264_PRED16x16_PLANE h264
+ H264_PRED16x16_PLANE rv40
+ H264_PRED16x16_PLANE svq3
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ H264_PRED16x16_PLANE h264
+ H264_PRED16x16_PLANE rv40
+ H264_PRED16x16_PLANE svq3
+@@ -582,7 +582,7 @@ cglobal pred8x8_plane_8, 2,9,7
+     paddw        m0, m1
+ 
+ %if notcpuflag(ssse3)
+-%if cpuflag(mmx2)
++%if cpuflag(mmxext)
+     PSHUFLW      m1, m0, 0xE
+ %elif cpuflag(mmx)
+     mova         m1, m0
+@@ -591,7 +591,7 @@ cglobal pred8x8_plane_8, 2,9,7
+     paddw        m0, m1
+ %endif ; !ssse3
+ 
+-%if cpuflag(mmx2)
++%if cpuflag(mmxext)
+     PSHUFLW      m1, m0, 0x1
+ %elif cpuflag(mmx)
+     mova         m1, m0
+@@ -716,7 +716,7 @@ ALIGN 16
+ 
+ INIT_MMX mmx
+ H264_PRED8x8_PLANE
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ H264_PRED8x8_PLANE
+ INIT_XMM sse2
+ H264_PRED8x8_PLANE
+@@ -763,7 +763,7 @@ cglobal pred8x8_horizontal_8, 2,3
+ 
+ INIT_MMX mmx
+ PRED8x8_H
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED8x8_H
+ INIT_MMX ssse3
+ PRED8x8_H
+@@ -941,7 +941,7 @@ cglobal pred8x8_tm_vp8_8, 2,6
+ 
+ INIT_MMX mmx
+ PRED8x8_TM
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED8x8_TM
+ 
+ INIT_XMM sse2
+@@ -2442,7 +2442,7 @@ cglobal pred4x4_tm_vp8_8, 3,6
+     sub       r3d, r4d
+     movd      mm2, r1d
+     movd      mm4, r3d
+-%if cpuflag(mmx2)
++%if cpuflag(mmxext)
+     pshufw    mm2, mm2, 0
+     pshufw    mm4, mm4, 0
+ %else
+@@ -2465,7 +2465,7 @@ cglobal pred4x4_tm_vp8_8, 3,6
+ 
+ INIT_MMX mmx
+ PRED4x4_TM
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED4x4_TM
+ 
+ INIT_XMM ssse3
+diff --git a/libavcodec/x86/h264_intrapred_10bit.asm b/libavcodec/x86/h264_intrapred_10bit.asm
+index eae45ae..1b7974b 100644
+--- a/libavcodec/x86/h264_intrapred_10bit.asm
++++ b/libavcodec/x86/h264_intrapred_10bit.asm
+@@ -182,7 +182,7 @@ PRED4x4_HD
+     HADDD   %1, %2
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal pred4x4_dc_10, 3, 3
+     sub    r0, r2
+     lea    r1, [r0+r2*2]
+@@ -261,7 +261,7 @@ PRED4x4_VL
+ ;-----------------------------------------------------------------------------
+ ; void pred4x4_horizontal_up(pixel *src, const pixel *topright, int stride)
+ ;-----------------------------------------------------------------------------
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal pred4x4_horizontal_up_10, 3, 3
+     sub       r0, r2
+     lea       r1, [r0+r2*2]
+@@ -410,7 +410,7 @@ cglobal pred8x8_dc_10, 2, 6
+     RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED8x8_DC pshufw
+ INIT_XMM sse2
+ PRED8x8_DC pshuflw
+@@ -524,7 +524,7 @@ cglobal pred8x8l_128_dc_10, 4, 4
+     RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED8x8L_128_DC
+ INIT_XMM sse2
+ PRED8x8L_128_DC
+@@ -1007,7 +1007,7 @@ cglobal pred16x16_vertical_10, 2, 3
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_VERTICAL
+ INIT_XMM sse2
+ PRED16x16_VERTICAL
+@@ -1031,7 +1031,7 @@ cglobal pred16x16_horizontal_10, 2, 3
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_HORIZONTAL
+ INIT_XMM sse2
+ PRED16x16_HORIZONTAL
+@@ -1077,7 +1077,7 @@ cglobal pred16x16_dc_10, 2, 6
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_DC
+ INIT_XMM sse2
+ PRED16x16_DC
+@@ -1109,7 +1109,7 @@ cglobal pred16x16_top_dc_10, 2, 3
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_TOP_DC
+ INIT_XMM sse2
+ PRED16x16_TOP_DC
+@@ -1146,7 +1146,7 @@ cglobal pred16x16_left_dc_10, 2, 6
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_LEFT_DC
+ INIT_XMM sse2
+ PRED16x16_LEFT_DC
+@@ -1167,7 +1167,7 @@ cglobal pred16x16_128_dc_10, 2,3
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ PRED16x16_128_DC
+ INIT_XMM sse2
+ PRED16x16_128_DC
+diff --git a/libavcodec/x86/h264_intrapred_init.c b/libavcodec/x86/h264_intrapred_init.c
+index eebd137..454dd3f 100644
+--- a/libavcodec/x86/h264_intrapred_init.c
++++ b/libavcodec/x86/h264_intrapred_init.c
+@@ -27,7 +27,7 @@ void ff_pred4x4_ ## TYPE ## _ ## DEPTH ## _ ## OPT (uint8_t *src, \
+                                                     const uint8_t *topright, \
+                                                     ptrdiff_t stride);
+ 
+-PRED4x4(dc, 10, mmx2)
++PRED4x4(dc, 10, mmxext)
+ PRED4x4(down_left, 10, sse2)
+ PRED4x4(down_left, 10, avx)
+ PRED4x4(down_right, 10, sse2)
+@@ -38,7 +38,7 @@ PRED4x4(vertical_left, 10, avx)
+ PRED4x4(vertical_right, 10, sse2)
+ PRED4x4(vertical_right, 10, ssse3)
+ PRED4x4(vertical_right, 10, avx)
+-PRED4x4(horizontal_up, 10, mmx2)
++PRED4x4(horizontal_up, 10, mmxext)
+ PRED4x4(horizontal_down, 10, sse2)
+ PRED4x4(horizontal_down, 10, ssse3)
+ PRED4x4(horizontal_down, 10, avx)
+@@ -47,7 +47,7 @@ PRED4x4(horizontal_down, 10, avx)
+ void ff_pred8x8_ ## TYPE ## _ ## DEPTH ## _ ## OPT (uint8_t *src, \
+                                                     ptrdiff_t stride);
+ 
+-PRED8x8(dc, 10, mmx2)
++PRED8x8(dc, 10, mmxext)
+ PRED8x8(dc, 10, sse2)
+ PRED8x8(top_dc, 10, sse2)
+ PRED8x8(plane, 10, sse2)
+@@ -62,7 +62,7 @@ void ff_pred8x8l_ ## TYPE ## _ ## DEPTH ## _ ## OPT (uint8_t *src, \
+ 
+ PRED8x8L(dc, 10, sse2)
+ PRED8x8L(dc, 10, avx)
+-PRED8x8L(128_dc, 10, mmx2)
++PRED8x8L(128_dc, 10, mmxext)
+ PRED8x8L(128_dc, 10, sse2)
+ PRED8x8L(top_dc, 10, sse2)
+ PRED8x8L(top_dc, 10, avx)
+@@ -88,42 +88,42 @@ PRED8x8L(horizontal_up, 10, avx)
+ void ff_pred16x16_ ## TYPE ## _ ## DEPTH ## _ ## OPT (uint8_t *src, \
+                                                       ptrdiff_t stride);
+ 
+-PRED16x16(dc, 10, mmx2)
++PRED16x16(dc, 10, mmxext)
+ PRED16x16(dc, 10, sse2)
+-PRED16x16(top_dc, 10, mmx2)
++PRED16x16(top_dc, 10, mmxext)
+ PRED16x16(top_dc, 10, sse2)
+-PRED16x16(128_dc, 10, mmx2)
++PRED16x16(128_dc, 10, mmxext)
+ PRED16x16(128_dc, 10, sse2)
+-PRED16x16(left_dc, 10, mmx2)
++PRED16x16(left_dc, 10, mmxext)
+ PRED16x16(left_dc, 10, sse2)
+-PRED16x16(vertical, 10, mmx2)
++PRED16x16(vertical, 10, mmxext)
+ PRED16x16(vertical, 10, sse2)
+-PRED16x16(horizontal, 10, mmx2)
++PRED16x16(horizontal, 10, mmxext)
+ PRED16x16(horizontal, 10, sse2)
+ 
+ /* 8-bit versions */
+ PRED16x16(vertical, 8, mmx)
+ PRED16x16(vertical, 8, sse)
+ PRED16x16(horizontal, 8, mmx)
+-PRED16x16(horizontal, 8, mmx2)
++PRED16x16(horizontal, 8, mmxext)
+ PRED16x16(horizontal, 8, ssse3)
+-PRED16x16(dc, 8, mmx2)
++PRED16x16(dc, 8, mmxext)
+ PRED16x16(dc, 8, sse2)
+ PRED16x16(dc, 8, ssse3)
+ PRED16x16(plane_h264, 8, mmx)
+-PRED16x16(plane_h264, 8, mmx2)
++PRED16x16(plane_h264, 8, mmxext)
+ PRED16x16(plane_h264, 8, sse2)
+ PRED16x16(plane_h264, 8, ssse3)
+ PRED16x16(plane_rv40, 8, mmx)
+-PRED16x16(plane_rv40, 8, mmx2)
++PRED16x16(plane_rv40, 8, mmxext)
+ PRED16x16(plane_rv40, 8, sse2)
+ PRED16x16(plane_rv40, 8, ssse3)
+ PRED16x16(plane_svq3, 8, mmx)
+-PRED16x16(plane_svq3, 8, mmx2)
++PRED16x16(plane_svq3, 8, mmxext)
+ PRED16x16(plane_svq3, 8, sse2)
+ PRED16x16(plane_svq3, 8, ssse3)
+ PRED16x16(tm_vp8, 8, mmx)
+-PRED16x16(tm_vp8, 8, mmx2)
++PRED16x16(tm_vp8, 8, mmxext)
+ PRED16x16(tm_vp8, 8, sse2)
+ 
+ PRED8x8(top_dc, 8, mmxext)
+@@ -131,14 +131,14 @@ PRED8x8(dc_rv40, 8, mmxext)
+ PRED8x8(dc, 8, mmxext)
+ PRED8x8(vertical, 8, mmx)
+ PRED8x8(horizontal, 8, mmx)
+-PRED8x8(horizontal, 8, mmx2)
++PRED8x8(horizontal, 8, mmxext)
+ PRED8x8(horizontal, 8, ssse3)
+ PRED8x8(plane, 8, mmx)
+-PRED8x8(plane, 8, mmx2)
++PRED8x8(plane, 8, mmxext)
+ PRED8x8(plane, 8, sse2)
+ PRED8x8(plane, 8, ssse3)
+ PRED8x8(tm_vp8, 8, mmx)
+-PRED8x8(tm_vp8, 8, mmx2)
++PRED8x8(tm_vp8, 8, mmxext)
+ PRED8x8(tm_vp8, 8, sse2)
+ PRED8x8(tm_vp8, 8, ssse3)
+ 
+@@ -175,7 +175,7 @@ PRED4x4(vertical_right, 8, mmxext)
+ PRED4x4(horizontal_up, 8, mmxext)
+ PRED4x4(horizontal_down, 8, mmxext)
+ PRED4x4(tm_vp8, 8, mmx)
+-PRED4x4(tm_vp8, 8, mmx2)
++PRED4x4(tm_vp8, 8, mmxext)
+ PRED4x4(tm_vp8, 8, ssse3)
+ PRED4x4(vertical_vp8, 8, mmxext)
+ 
+@@ -210,10 +210,10 @@ void ff_h264_pred_init_x86(H264PredContext *h, int codec_id, const int bit_depth
+         }
+ 
+         if (EXTERNAL_MMXEXT(mm_flags)) {
+-            h->pred16x16[HOR_PRED8x8            ] = ff_pred16x16_horizontal_8_mmx2;
+-            h->pred16x16[DC_PRED8x8             ] = ff_pred16x16_dc_8_mmx2;
++            h->pred16x16[HOR_PRED8x8            ] = ff_pred16x16_horizontal_8_mmxext;
++            h->pred16x16[DC_PRED8x8             ] = ff_pred16x16_dc_8_mmxext;
+             if (chroma_format_idc == 1)
+-                h->pred8x8[HOR_PRED8x8          ] = ff_pred8x8_horizontal_8_mmx2;
++                h->pred8x8[HOR_PRED8x8          ] = ff_pred8x8_horizontal_8_mmxext;
+             h->pred8x8l [TOP_DC_PRED            ] = ff_pred8x8l_top_dc_8_mmxext;
+             h->pred8x8l [DC_PRED                ] = ff_pred8x8l_dc_8_mmxext;
+             h->pred8x8l [HOR_PRED               ] = ff_pred8x8l_horizontal_8_mmxext;
+@@ -243,20 +243,20 @@ void ff_h264_pred_init_x86(H264PredContext *h, int codec_id, const int bit_depth
+                 }
+             }
+             if (codec_id == AV_CODEC_ID_VP8) {
+-                h->pred16x16[PLANE_PRED8x8      ] = ff_pred16x16_tm_vp8_8_mmx2;
++                h->pred16x16[PLANE_PRED8x8      ] = ff_pred16x16_tm_vp8_8_mmxext;
+                 h->pred8x8  [DC_PRED8x8         ] = ff_pred8x8_dc_rv40_8_mmxext;
+-                h->pred8x8  [PLANE_PRED8x8      ] = ff_pred8x8_tm_vp8_8_mmx2;
+-                h->pred4x4  [TM_VP8_PRED        ] = ff_pred4x4_tm_vp8_8_mmx2;
++                h->pred8x8  [PLANE_PRED8x8      ] = ff_pred8x8_tm_vp8_8_mmxext;
++                h->pred4x4  [TM_VP8_PRED        ] = ff_pred4x4_tm_vp8_8_mmxext;
+                 h->pred4x4  [VERT_PRED          ] = ff_pred4x4_vertical_vp8_8_mmxext;
+             } else {
+                 if (chroma_format_idc == 1)
+-                    h->pred8x8  [PLANE_PRED8x8] = ff_pred8x8_plane_8_mmx2;
++                    h->pred8x8  [PLANE_PRED8x8] = ff_pred8x8_plane_8_mmxext;
+                 if (codec_id == AV_CODEC_ID_SVQ3) {
+-                    h->pred16x16[PLANE_PRED8x8  ] = ff_pred16x16_plane_svq3_8_mmx2;
++                    h->pred16x16[PLANE_PRED8x8  ] = ff_pred16x16_plane_svq3_8_mmxext;
+                 } else if (codec_id == AV_CODEC_ID_RV40) {
+-                    h->pred16x16[PLANE_PRED8x8  ] = ff_pred16x16_plane_rv40_8_mmx2;
++                    h->pred16x16[PLANE_PRED8x8  ] = ff_pred16x16_plane_rv40_8_mmxext;
+                 } else {
+-                    h->pred16x16[PLANE_PRED8x8  ] = ff_pred16x16_plane_h264_8_mmx2;
++                    h->pred16x16[PLANE_PRED8x8  ] = ff_pred16x16_plane_h264_8_mmxext;
+                 }
+             }
+         }
+@@ -320,20 +320,20 @@ void ff_h264_pred_init_x86(H264PredContext *h, int codec_id, const int bit_depth
+         }
+     } else if (bit_depth == 10) {
+         if (EXTERNAL_MMXEXT(mm_flags)) {
+-            h->pred4x4[DC_PRED             ] = ff_pred4x4_dc_10_mmx2;
+-            h->pred4x4[HOR_UP_PRED         ] = ff_pred4x4_horizontal_up_10_mmx2;
++            h->pred4x4[DC_PRED             ] = ff_pred4x4_dc_10_mmxext;
++            h->pred4x4[HOR_UP_PRED         ] = ff_pred4x4_horizontal_up_10_mmxext;
+ 
+             if (chroma_format_idc == 1)
+-                h->pred8x8[DC_PRED8x8      ] = ff_pred8x8_dc_10_mmx2;
++                h->pred8x8[DC_PRED8x8      ] = ff_pred8x8_dc_10_mmxext;
+ 
+-            h->pred8x8l[DC_128_PRED        ] = ff_pred8x8l_128_dc_10_mmx2;
++            h->pred8x8l[DC_128_PRED        ] = ff_pred8x8l_128_dc_10_mmxext;
+ 
+-            h->pred16x16[DC_PRED8x8        ] = ff_pred16x16_dc_10_mmx2;
+-            h->pred16x16[TOP_DC_PRED8x8    ] = ff_pred16x16_top_dc_10_mmx2;
+-            h->pred16x16[DC_128_PRED8x8    ] = ff_pred16x16_128_dc_10_mmx2;
+-            h->pred16x16[LEFT_DC_PRED8x8   ] = ff_pred16x16_left_dc_10_mmx2;
+-            h->pred16x16[VERT_PRED8x8      ] = ff_pred16x16_vertical_10_mmx2;
+-            h->pred16x16[HOR_PRED8x8       ] = ff_pred16x16_horizontal_10_mmx2;
++            h->pred16x16[DC_PRED8x8        ] = ff_pred16x16_dc_10_mmxext;
++            h->pred16x16[TOP_DC_PRED8x8    ] = ff_pred16x16_top_dc_10_mmxext;
++            h->pred16x16[DC_128_PRED8x8    ] = ff_pred16x16_128_dc_10_mmxext;
++            h->pred16x16[LEFT_DC_PRED8x8   ] = ff_pred16x16_left_dc_10_mmxext;
++            h->pred16x16[VERT_PRED8x8      ] = ff_pred16x16_vertical_10_mmxext;
++            h->pred16x16[HOR_PRED8x8       ] = ff_pred16x16_horizontal_10_mmxext;
+         }
+         if (EXTERNAL_SSE2(mm_flags)) {
+             h->pred4x4[DIAG_DOWN_LEFT_PRED ] = ff_pred4x4_down_left_10_sse2;
+diff --git a/libavcodec/x86/h264_weight.asm b/libavcodec/x86/h264_weight.asm
+index bc3fb4b..46f5ddb 100644
+--- a/libavcodec/x86/h264_weight.asm
++++ b/libavcodec/x86/h264_weight.asm
+@@ -71,7 +71,7 @@ SECTION .text
+ %endmacro
+ 
+ INIT_MMX
+-cglobal h264_weight_16_mmx2, 6, 6, 0
++cglobal h264_weight_16_mmxext, 6, 6, 0
+     WEIGHT_SETUP
+ .nextrow:
+     WEIGHT_OP 0,  4
+@@ -96,7 +96,7 @@ cglobal h264_weight_%1_%3, 6, 6, %2
+ %endmacro
+ 
+ INIT_MMX
+-WEIGHT_FUNC_MM  8, 0, mmx2
++WEIGHT_FUNC_MM  8, 0, mmxext
+ INIT_XMM
+ WEIGHT_FUNC_MM 16, 8, sse2
+ 
+@@ -121,7 +121,7 @@ cglobal h264_weight_%1_%3, 6, 6, %2
+ %endmacro
+ 
+ INIT_MMX
+-WEIGHT_FUNC_HALF_MM 4, 0, mmx2
++WEIGHT_FUNC_HALF_MM 4, 0, mmxext
+ INIT_XMM
+ WEIGHT_FUNC_HALF_MM 8, 8, sse2
+ 
+@@ -175,7 +175,7 @@ WEIGHT_FUNC_HALF_MM 8, 8, sse2
+ %endmacro
+ 
+ INIT_MMX
+-cglobal h264_biweight_16_mmx2, 7, 8, 0
++cglobal h264_biweight_16_mmxext, 7, 8, 0
+     BIWEIGHT_SETUP
+     movifnidn r3d, r3m
+ .nextrow:
+@@ -210,7 +210,7 @@ cglobal h264_biweight_%1_%3, 7, 8, %2
+ %endmacro
+ 
+ INIT_MMX
+-BIWEIGHT_FUNC_MM  8, 0, mmx2
++BIWEIGHT_FUNC_MM  8, 0, mmxext
+ INIT_XMM
+ BIWEIGHT_FUNC_MM 16, 8, sse2
+ 
+@@ -239,7 +239,7 @@ cglobal h264_biweight_%1_%3, 7, 8, %2
+ %endmacro
+ 
+ INIT_MMX
+-BIWEIGHT_FUNC_HALF_MM 4, 0, mmx2
++BIWEIGHT_FUNC_HALF_MM 4, 0, mmxext
+ INIT_XMM
+ BIWEIGHT_FUNC_HALF_MM 8, 8, sse2
+ 
+diff --git a/libavcodec/x86/h264dsp_init.c b/libavcodec/x86/h264dsp_init.c
+index 913c362..d7257e6 100644
+--- a/libavcodec/x86/h264dsp_init.c
++++ b/libavcodec/x86/h264dsp_init.c
+@@ -33,9 +33,9 @@ void ff_h264_idct ## NUM ## _add_ ## DEPTH ## _ ## OPT(uint8_t *dst,    \
+ 
+ IDCT_ADD_FUNC(, 8, mmx)
+ IDCT_ADD_FUNC(, 10, sse2)
+-IDCT_ADD_FUNC(_dc, 8, mmx2)
+-IDCT_ADD_FUNC(_dc, 10, mmx2)
+-IDCT_ADD_FUNC(8_dc, 8, mmx2)
++IDCT_ADD_FUNC(_dc, 8, mmxext)
++IDCT_ADD_FUNC(_dc, 10, mmxext)
++IDCT_ADD_FUNC(8_dc, 8, mmxext)
+ IDCT_ADD_FUNC(8_dc, 10, sse2)
+ IDCT_ADD_FUNC(8, 8, mmx)
+ IDCT_ADD_FUNC(8, 8, sse2)
+@@ -51,16 +51,16 @@ void ff_h264_idct ## NUM ## _add ## REP ## _ ## DEPTH ## _ ## OPT       \
+      DCTELEM *block, int stride, const uint8_t nnzc[6 * 8]);
+ 
+ IDCT_ADD_REP_FUNC(8, 4, 8, mmx)
+-IDCT_ADD_REP_FUNC(8, 4, 8, mmx2)
++IDCT_ADD_REP_FUNC(8, 4, 8, mmxext)
+ IDCT_ADD_REP_FUNC(8, 4, 8, sse2)
+ IDCT_ADD_REP_FUNC(8, 4, 10, sse2)
+ IDCT_ADD_REP_FUNC(8, 4, 10, avx)
+ IDCT_ADD_REP_FUNC(, 16, 8, mmx)
+-IDCT_ADD_REP_FUNC(, 16, 8, mmx2)
++IDCT_ADD_REP_FUNC(, 16, 8, mmxext)
+ IDCT_ADD_REP_FUNC(, 16, 8, sse2)
+ IDCT_ADD_REP_FUNC(, 16, 10, sse2)
+ IDCT_ADD_REP_FUNC(, 16intra, 8, mmx)
+-IDCT_ADD_REP_FUNC(, 16intra, 8, mmx2)
++IDCT_ADD_REP_FUNC(, 16intra, 8, mmxext)
+ IDCT_ADD_REP_FUNC(, 16intra, 8, sse2)
+ IDCT_ADD_REP_FUNC(, 16intra, 10, sse2)
+ IDCT_ADD_REP_FUNC(, 16, 10, avx)
+@@ -73,7 +73,7 @@ void ff_h264_idct ## NUM ## _add ## REP ## _ ## DEPTH ## _ ## OPT     \
+      DCTELEM *block, int stride, const uint8_t nnzc[6 * 8]);
+ 
+ IDCT_ADD_REP_FUNC2(, 8, 8, mmx)
+-IDCT_ADD_REP_FUNC2(, 8, 8, mmx2)
++IDCT_ADD_REP_FUNC2(, 8, 8, mmxext)
+ IDCT_ADD_REP_FUNC2(, 8, 8, sse2)
+ IDCT_ADD_REP_FUNC2(, 8, 10, sse2)
+ IDCT_ADD_REP_FUNC2(, 8, 10, avx)
+@@ -84,10 +84,11 @@ void ff_h264_luma_dc_dequant_idct_sse2(DCTELEM *output, DCTELEM *input, int qmul
+ /***********************************/
+ /* deblocking */
+ 
+-void ff_h264_loop_filter_strength_mmx2(int16_t bS[2][4][4], uint8_t nnz[40],
+-                                       int8_t ref[2][40], int16_t mv[2][40][2],
+-                                       int bidir, int edges, int step,
+-                                       int mask_mv0, int mask_mv1, int field);
++void ff_h264_loop_filter_strength_mmxext(int16_t bS[2][4][4], uint8_t nnz[40],
++                                         int8_t ref[2][40],
++                                         int16_t mv[2][40][2],
++                                         int bidir, int edges, int step,
++                                         int mask_mv0, int mask_mv1, int field);
+ 
+ #define LF_FUNC(DIR, TYPE, DEPTH, OPT)                                        \
+ void ff_deblock_ ## DIR ## _ ## TYPE ## _ ## DEPTH ## _ ## OPT(uint8_t *pix,  \
+@@ -102,12 +103,12 @@ void ff_deblock_ ## DIR ## _ ## TYPE ## _ ## DEPTH ## _ ## OPT(uint8_t *pix,  \
+                                                                int beta);
+ 
+ #define LF_FUNCS(type, depth)                   \
+-LF_FUNC(h,  chroma,       depth, mmx2)          \
+-LF_IFUNC(h, chroma_intra, depth, mmx2)          \
+-LF_FUNC(v,  chroma,       depth, mmx2)          \
+-LF_IFUNC(v, chroma_intra, depth, mmx2)          \
+-LF_FUNC(h,  luma,         depth, mmx2)          \
+-LF_IFUNC(h, luma_intra,   depth, mmx2)          \
++LF_FUNC(h,  chroma,       depth, mmxext)        \
++LF_IFUNC(h, chroma_intra, depth, mmxext)        \
++LF_FUNC(v,  chroma,       depth, mmxext)        \
++LF_IFUNC(v, chroma_intra, depth, mmxext)        \
++LF_FUNC(h,  luma,         depth, mmxext)        \
++LF_IFUNC(h, luma_intra,   depth, mmxext)        \
+ LF_FUNC(h,  luma,         depth, sse2)          \
+ LF_IFUNC(h, luma_intra,   depth, sse2)          \
+ LF_FUNC(v,  luma,         depth, sse2)          \
+@@ -129,26 +130,26 @@ LF_FUNCS(uint8_t,   8)
+ LF_FUNCS(uint16_t, 10)
+ 
+ #if ARCH_X86_32
+-LF_FUNC(v8, luma, 8, mmx2)
++LF_FUNC(v8, luma, 8, mmxext)
+ static void ff_deblock_v_luma_8_mmxext(uint8_t *pix, int stride, int alpha,
+                                        int beta, int8_t *tc0)
+ {
+     if ((tc0[0] & tc0[1]) >= 0)
+-        ff_deblock_v8_luma_8_mmx2(pix + 0, stride, alpha, beta, tc0);
++        ff_deblock_v8_luma_8_mmxext(pix + 0, stride, alpha, beta, tc0);
+     if ((tc0[2] & tc0[3]) >= 0)
+-        ff_deblock_v8_luma_8_mmx2(pix + 8, stride, alpha, beta, tc0 + 2);
++        ff_deblock_v8_luma_8_mmxext(pix + 8, stride, alpha, beta, tc0 + 2);
+ }
+-LF_IFUNC(v8, luma_intra, 8, mmx2)
++LF_IFUNC(v8, luma_intra, 8, mmxext)
+ static void ff_deblock_v_luma_intra_8_mmxext(uint8_t *pix, int stride,
+                                              int alpha, int beta)
+ {
+-    ff_deblock_v8_luma_intra_8_mmx2(pix + 0, stride, alpha, beta);
+-    ff_deblock_v8_luma_intra_8_mmx2(pix + 8, stride, alpha, beta);
++    ff_deblock_v8_luma_intra_8_mmxext(pix + 0, stride, alpha, beta);
++    ff_deblock_v8_luma_intra_8_mmxext(pix + 8, stride, alpha, beta);
+ }
+ #endif /* ARCH_X86_32 */
+ 
+-LF_FUNC(v,  luma,       10, mmx2)
+-LF_IFUNC(v, luma_intra, 10, mmx2)
++LF_FUNC(v,  luma,       10, mmxext)
++LF_IFUNC(v, luma_intra, 10, mmxext)
+ 
+ /***********************************/
+ /* weighted prediction */
+@@ -165,8 +166,8 @@ void ff_h264_biweight_ ## W ## _ ## OPT(uint8_t *dst, uint8_t *src,     \
+                                         int weights, int offset);
+ 
+ #define H264_BIWEIGHT_MMX(W)                    \
+-    H264_WEIGHT(W, mmx2)                        \
+-    H264_BIWEIGHT(W, mmx2)
++    H264_WEIGHT(W, mmxext)                      \
++    H264_BIWEIGHT(W, mmxext)
+ 
+ #define H264_BIWEIGHT_MMX_SSE(W)                \
+     H264_BIWEIGHT_MMX(W)                        \
+@@ -212,7 +213,7 @@ void ff_h264dsp_init_x86(H264DSPContext *c, const int bit_depth,
+     int mm_flags = av_get_cpu_flags();
+ 
+     if (chroma_format_idc == 1 && EXTERNAL_MMXEXT(mm_flags))
+-        c->h264_loop_filter_strength = ff_h264_loop_filter_strength_mmx2;
++        c->h264_loop_filter_strength = ff_h264_loop_filter_strength_mmxext;
+ 
+     if (bit_depth == 8) {
+         if (EXTERNAL_MMX(mm_flags)) {
+@@ -230,33 +231,33 @@ void ff_h264dsp_init_x86(H264DSPContext *c, const int bit_depth,
+                 c->h264_luma_dc_dequant_idct = ff_h264_luma_dc_dequant_idct_mmx;
+ 
+             if (EXTERNAL_MMXEXT(mm_flags)) {
+-                c->h264_idct_dc_add  = ff_h264_idct_dc_add_8_mmx2;
+-                c->h264_idct8_dc_add = ff_h264_idct8_dc_add_8_mmx2;
+-                c->h264_idct_add16   = ff_h264_idct_add16_8_mmx2;
+-                c->h264_idct8_add4   = ff_h264_idct8_add4_8_mmx2;
++                c->h264_idct_dc_add  = ff_h264_idct_dc_add_8_mmxext;
++                c->h264_idct8_dc_add = ff_h264_idct8_dc_add_8_mmxext;
++                c->h264_idct_add16   = ff_h264_idct_add16_8_mmxext;
++                c->h264_idct8_add4   = ff_h264_idct8_add4_8_mmxext;
+                 if (chroma_format_idc == 1)
+-                    c->h264_idct_add8 = ff_h264_idct_add8_8_mmx2;
+-                c->h264_idct_add16intra = ff_h264_idct_add16intra_8_mmx2;
++                    c->h264_idct_add8 = ff_h264_idct_add8_8_mmxext;
++                c->h264_idct_add16intra = ff_h264_idct_add16intra_8_mmxext;
+ 
+-                c->h264_v_loop_filter_chroma       = ff_deblock_v_chroma_8_mmx2;
+-                c->h264_v_loop_filter_chroma_intra = ff_deblock_v_chroma_intra_8_mmx2;
++                c->h264_v_loop_filter_chroma       = ff_deblock_v_chroma_8_mmxext;
++                c->h264_v_loop_filter_chroma_intra = ff_deblock_v_chroma_intra_8_mmxext;
+                 if (chroma_format_idc == 1) {
+-                    c->h264_h_loop_filter_chroma       = ff_deblock_h_chroma_8_mmx2;
+-                    c->h264_h_loop_filter_chroma_intra = ff_deblock_h_chroma_intra_8_mmx2;
++                    c->h264_h_loop_filter_chroma       = ff_deblock_h_chroma_8_mmxext;
++                    c->h264_h_loop_filter_chroma_intra = ff_deblock_h_chroma_intra_8_mmxext;
+                 }
+ #if ARCH_X86_32
+                 c->h264_v_loop_filter_luma       = ff_deblock_v_luma_8_mmxext;
+-                c->h264_h_loop_filter_luma       = ff_deblock_h_luma_8_mmx2;
++                c->h264_h_loop_filter_luma       = ff_deblock_h_luma_8_mmxext;
+                 c->h264_v_loop_filter_luma_intra = ff_deblock_v_luma_intra_8_mmxext;
+-                c->h264_h_loop_filter_luma_intra = ff_deblock_h_luma_intra_8_mmx2;
++                c->h264_h_loop_filter_luma_intra = ff_deblock_h_luma_intra_8_mmxext;
+ #endif /* ARCH_X86_32 */
+-                c->weight_h264_pixels_tab[0] = ff_h264_weight_16_mmx2;
+-                c->weight_h264_pixels_tab[1] = ff_h264_weight_8_mmx2;
+-                c->weight_h264_pixels_tab[2] = ff_h264_weight_4_mmx2;
++                c->weight_h264_pixels_tab[0] = ff_h264_weight_16_mmxext;
++                c->weight_h264_pixels_tab[1] = ff_h264_weight_8_mmxext;
++                c->weight_h264_pixels_tab[2] = ff_h264_weight_4_mmxext;
+ 
+-                c->biweight_h264_pixels_tab[0] = ff_h264_biweight_16_mmx2;
+-                c->biweight_h264_pixels_tab[1] = ff_h264_biweight_8_mmx2;
+-                c->biweight_h264_pixels_tab[2] = ff_h264_biweight_4_mmx2;
++                c->biweight_h264_pixels_tab[0] = ff_h264_biweight_16_mmxext;
++                c->biweight_h264_pixels_tab[1] = ff_h264_biweight_8_mmxext;
++                c->biweight_h264_pixels_tab[2] = ff_h264_biweight_4_mmxext;
+ 
+                 if (EXTERNAL_SSE2(mm_flags)) {
+                     c->h264_idct8_add  = ff_h264_idct8_add_8_sse2;
+@@ -297,14 +298,14 @@ void ff_h264dsp_init_x86(H264DSPContext *c, const int bit_depth,
+         if (EXTERNAL_MMX(mm_flags)) {
+             if (EXTERNAL_MMXEXT(mm_flags)) {
+ #if ARCH_X86_32
+-                c->h264_v_loop_filter_chroma       = ff_deblock_v_chroma_10_mmx2;
+-                c->h264_v_loop_filter_chroma_intra = ff_deblock_v_chroma_intra_10_mmx2;
+-                c->h264_v_loop_filter_luma         = ff_deblock_v_luma_10_mmx2;
+-                c->h264_h_loop_filter_luma         = ff_deblock_h_luma_10_mmx2;
+-                c->h264_v_loop_filter_luma_intra   = ff_deblock_v_luma_intra_10_mmx2;
+-                c->h264_h_loop_filter_luma_intra   = ff_deblock_h_luma_intra_10_mmx2;
++                c->h264_v_loop_filter_chroma       = ff_deblock_v_chroma_10_mmxext;
++                c->h264_v_loop_filter_chroma_intra = ff_deblock_v_chroma_intra_10_mmxext;
++                c->h264_v_loop_filter_luma         = ff_deblock_v_luma_10_mmxext;
++                c->h264_h_loop_filter_luma         = ff_deblock_h_luma_10_mmxext;
++                c->h264_v_loop_filter_luma_intra   = ff_deblock_v_luma_intra_10_mmxext;
++                c->h264_h_loop_filter_luma_intra   = ff_deblock_h_luma_intra_10_mmxext;
+ #endif /* ARCH_X86_32 */
+-                c->h264_idct_dc_add = ff_h264_idct_dc_add_10_mmx2;
++                c->h264_idct_dc_add = ff_h264_idct_dc_add_10_mmxext;
+                 if (EXTERNAL_SSE2(mm_flags)) {
+                     c->h264_idct_add     = ff_h264_idct_add_10_sse2;
+                     c->h264_idct8_dc_add = ff_h264_idct8_dc_add_10_sse2;
+diff --git a/libavcodec/x86/pngdsp.asm b/libavcodec/x86/pngdsp.asm
+index 1573363..c05f3da 100644
+--- a/libavcodec/x86/pngdsp.asm
++++ b/libavcodec/x86/pngdsp.asm
+@@ -166,7 +166,7 @@ cglobal add_png_paeth_prediction, 5, 7, %1, dst, src, top, w, bpp, end, cntr
+     RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ ADD_PAETH_PRED_FN 0
+ 
+ INIT_MMX ssse3
+diff --git a/libavcodec/x86/pngdsp_init.c b/libavcodec/x86/pngdsp_init.c
+index 213b854..2e858fa 100644
+--- a/libavcodec/x86/pngdsp_init.c
++++ b/libavcodec/x86/pngdsp_init.c
+@@ -23,8 +23,8 @@
+ #include "libavutil/x86/cpu.h"
+ #include "libavcodec/pngdsp.h"
+ 
+-void ff_add_png_paeth_prediction_mmx2 (uint8_t *dst, uint8_t *src,
+-                                       uint8_t *top, int w, int bpp);
++void ff_add_png_paeth_prediction_mmxext(uint8_t *dst, uint8_t *src,
++                                        uint8_t *top, int w, int bpp);
+ void ff_add_png_paeth_prediction_ssse3(uint8_t *dst, uint8_t *src,
+                                        uint8_t *top, int w, int bpp);
+ void ff_add_bytes_l2_mmx (uint8_t *dst, uint8_t *src1,
+@@ -41,7 +41,7 @@ void ff_pngdsp_init_x86(PNGDSPContext *dsp)
+         dsp->add_bytes_l2         = ff_add_bytes_l2_mmx;
+ #endif
+     if (EXTERNAL_MMXEXT(flags))
+-        dsp->add_paeth_prediction = ff_add_png_paeth_prediction_mmx2;
++        dsp->add_paeth_prediction = ff_add_png_paeth_prediction_mmxext;
+     if (EXTERNAL_SSE2(flags))
+         dsp->add_bytes_l2         = ff_add_bytes_l2_sse2;
+     if (EXTERNAL_SSSE3(flags))
+diff --git a/libavcodec/x86/rv34dsp.asm b/libavcodec/x86/rv34dsp.asm
+index 2f12446..c099ac5 100644
+--- a/libavcodec/x86/rv34dsp.asm
++++ b/libavcodec/x86/rv34dsp.asm
+@@ -57,7 +57,7 @@ cglobal rv34_idct_%1, 1, 2, 0
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ %define IDCT_DC IDCT_DC_ROUND
+ rv34_idct dc
+ %define IDCT_DC IDCT_DC_NOROUND
+@@ -133,7 +133,7 @@ cglobal rv34_idct_dc_add, 3, 3
+     mova        mm5, [pd_512]           ; 0x200
+ %endmacro
+ 
+-; ff_rv34_idct_add_mmx2(uint8_t *dst, ptrdiff_t stride, DCTELEM *block);
++; ff_rv34_idct_add_mmxext(uint8_t *dst, ptrdiff_t stride, DCTELEM *block);
+ %macro COL_TRANSFORM  4
+     pshufw      mm3, %2, 0xDD        ; col. 1,3,1,3
+     pshufw       %2, %2, 0x88        ; col. 0,2,0,2
+@@ -154,7 +154,7 @@ cglobal rv34_idct_dc_add, 3, 3
+     packuswb     %2, %2
+     movd         %1, %2
+ %endmacro
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal rv34_idct_add, 3,3,0, d, s, b
+     ROW_TRANSFORM       bq
+     COL_TRANSFORM     [dq], mm0, [pw_col_coeffs+ 0], [pw_col_coeffs+ 8]
+diff --git a/libavcodec/x86/rv34dsp_init.c b/libavcodec/x86/rv34dsp_init.c
+index 305745a..6b6cf91 100644
+--- a/libavcodec/x86/rv34dsp_init.c
++++ b/libavcodec/x86/rv34dsp_init.c
+@@ -25,11 +25,11 @@
+ #include "libavcodec/dsputil.h"
+ #include "libavcodec/rv34dsp.h"
+ 
+-void ff_rv34_idct_dc_mmx2(DCTELEM *block);
+-void ff_rv34_idct_dc_noround_mmx2(DCTELEM *block);
++void ff_rv34_idct_dc_mmxext(DCTELEM *block);
++void ff_rv34_idct_dc_noround_mmxext(DCTELEM *block);
+ void ff_rv34_idct_dc_add_mmx(uint8_t *dst, ptrdiff_t stride, int dc);
+ void ff_rv34_idct_dc_add_sse4(uint8_t *dst, ptrdiff_t stride, int dc);
+-void ff_rv34_idct_add_mmx2(uint8_t *dst, ptrdiff_t stride, DCTELEM *block);
++void ff_rv34_idct_add_mmxext(uint8_t *dst, ptrdiff_t stride, DCTELEM *block);
+ 
+ av_cold void ff_rv34dsp_init_x86(RV34DSPContext* c, DSPContext *dsp)
+ {
+@@ -38,8 +38,8 @@ av_cold void ff_rv34dsp_init_x86(RV34DSPContext* c, DSPContext *dsp)
+     if (EXTERNAL_MMX(mm_flags))
+         c->rv34_idct_dc_add = ff_rv34_idct_dc_add_mmx;
+     if (EXTERNAL_MMXEXT(mm_flags)) {
+-        c->rv34_inv_transform_dc = ff_rv34_idct_dc_noround_mmx2;
+-        c->rv34_idct_add         = ff_rv34_idct_add_mmx2;
++        c->rv34_inv_transform_dc = ff_rv34_idct_dc_noround_mmxext;
++        c->rv34_idct_add         = ff_rv34_idct_add_mmxext;
+     }
+     if (EXTERNAL_SSE4(mm_flags))
+         c->rv34_idct_dc_add = ff_rv34_idct_dc_add_sse4;
+diff --git a/libavcodec/x86/rv40dsp.asm b/libavcodec/x86/rv40dsp.asm
+index 02267ef..7ec72be 100644
+--- a/libavcodec/x86/rv40dsp.asm
++++ b/libavcodec/x86/rv40dsp.asm
+@@ -240,7 +240,7 @@ INIT_MMX  mmx
+ FILTER_V  put
+ FILTER_H  put
+ 
+-INIT_MMX  mmx2
++INIT_MMX  mmxext
+ FILTER_V  avg
+ FILTER_H  avg
+ 
+@@ -486,7 +486,7 @@ cglobal rv40_weight_func_%1_%2, 6, 7, 8
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ RV40_WEIGHT   rnd,    8, 3
+ RV40_WEIGHT   rnd,   16, 4
+ RV40_WEIGHT   nornd,  8, 3
+diff --git a/libavcodec/x86/rv40dsp_init.c b/libavcodec/x86/rv40dsp_init.c
+index a7d92f7..a1dc22a 100644
+--- a/libavcodec/x86/rv40dsp_init.c
++++ b/libavcodec/x86/rv40dsp_init.c
+@@ -34,15 +34,15 @@
+ #if HAVE_YASM
+ void ff_put_rv40_chroma_mc8_mmx  (uint8_t *dst, uint8_t *src,
+                                   int stride, int h, int x, int y);
+-void ff_avg_rv40_chroma_mc8_mmx2 (uint8_t *dst, uint8_t *src,
+-                                  int stride, int h, int x, int y);
++void ff_avg_rv40_chroma_mc8_mmxext(uint8_t *dst, uint8_t *src,
++                                   int stride, int h, int x, int y);
+ void ff_avg_rv40_chroma_mc8_3dnow(uint8_t *dst, uint8_t *src,
+                                   int stride, int h, int x, int y);
+ 
+ void ff_put_rv40_chroma_mc4_mmx  (uint8_t *dst, uint8_t *src,
+                                   int stride, int h, int x, int y);
+-void ff_avg_rv40_chroma_mc4_mmx2 (uint8_t *dst, uint8_t *src,
+-                                  int stride, int h, int x, int y);
++void ff_avg_rv40_chroma_mc4_mmxext(uint8_t *dst, uint8_t *src,
++                                   int stride, int h, int x, int y);
+ void ff_avg_rv40_chroma_mc4_3dnow(uint8_t *dst, uint8_t *src,
+                                   int stride, int h, int x, int y);
+ 
+@@ -55,7 +55,7 @@ void ff_rv40_weight_func_nornd_16_##opt(uint8_t *dst, uint8_t *src1, uint8_t *sr
+                                         int w1, int w2, ptrdiff_t stride); \
+ void ff_rv40_weight_func_nornd_8_##opt (uint8_t *dst, uint8_t *src1, uint8_t *src2, \
+                                         int w1, int w2, ptrdiff_t stride);
+-DECLARE_WEIGHT(mmx2)
++DECLARE_WEIGHT(mmxext)
+ DECLARE_WEIGHT(sse2)
+ DECLARE_WEIGHT(ssse3)
+ 
+@@ -150,9 +150,9 @@ QPEL_MC_DECL(avg_, _sse2)
+ 
+ QPEL_MC_DECL(put_, _mmx)
+ 
+-#define ff_put_rv40_qpel_h_mmx2  ff_put_rv40_qpel_h_mmx
+-#define ff_put_rv40_qpel_v_mmx2  ff_put_rv40_qpel_v_mmx
+-QPEL_MC_DECL(avg_, _mmx2)
++#define ff_put_rv40_qpel_h_mmxext  ff_put_rv40_qpel_h_mmx
++#define ff_put_rv40_qpel_v_mmxext  ff_put_rv40_qpel_v_mmx
++QPEL_MC_DECL(avg_, _mmxext)
+ 
+ #define ff_put_rv40_qpel_h_3dnow  ff_put_rv40_qpel_h_mmx
+ #define ff_put_rv40_qpel_v_3dnow  ff_put_rv40_qpel_v_mmx
+@@ -206,14 +206,14 @@ void ff_rv40dsp_init_x86(RV34DSPContext *c, DSPContext *dsp)
+ #endif
+     }
+     if (EXTERNAL_MMXEXT(mm_flags)) {
+-        c->avg_chroma_pixels_tab[0] = ff_avg_rv40_chroma_mc8_mmx2;
+-        c->avg_chroma_pixels_tab[1] = ff_avg_rv40_chroma_mc4_mmx2;
+-        c->rv40_weight_pixels_tab[0][0] = ff_rv40_weight_func_rnd_16_mmx2;
+-        c->rv40_weight_pixels_tab[0][1] = ff_rv40_weight_func_rnd_8_mmx2;
+-        c->rv40_weight_pixels_tab[1][0] = ff_rv40_weight_func_nornd_16_mmx2;
+-        c->rv40_weight_pixels_tab[1][1] = ff_rv40_weight_func_nornd_8_mmx2;
++        c->avg_chroma_pixels_tab[0]     = ff_avg_rv40_chroma_mc8_mmxext;
++        c->avg_chroma_pixels_tab[1]     = ff_avg_rv40_chroma_mc4_mmxext;
++        c->rv40_weight_pixels_tab[0][0] = ff_rv40_weight_func_rnd_16_mmxext;
++        c->rv40_weight_pixels_tab[0][1] = ff_rv40_weight_func_rnd_8_mmxext;
++        c->rv40_weight_pixels_tab[1][0] = ff_rv40_weight_func_nornd_16_mmxext;
++        c->rv40_weight_pixels_tab[1][1] = ff_rv40_weight_func_nornd_8_mmxext;
+ #if ARCH_X86_32
+-        QPEL_MC_SET(avg_, _mmx2)
++        QPEL_MC_SET(avg_, _mmxext)
+ #endif
+     } else if (EXTERNAL_AMD3DNOW(mm_flags)) {
+         c->avg_chroma_pixels_tab[0] = ff_avg_rv40_chroma_mc8_3dnow;
+diff --git a/libavcodec/x86/vc1dsp_init.c b/libavcodec/x86/vc1dsp_init.c
+index c359c4a..230d06f 100644
+--- a/libavcodec/x86/vc1dsp_init.c
++++ b/libavcodec/x86/vc1dsp_init.c
+@@ -64,8 +64,8 @@ static void vc1_h_loop_filter16_sse4(uint8_t *src, int stride, int pq)
+ 
+ void ff_put_vc1_chroma_mc8_nornd_mmx  (uint8_t *dst, uint8_t *src,
+                                        int stride, int h, int x, int y);
+-void ff_avg_vc1_chroma_mc8_nornd_mmx2 (uint8_t *dst, uint8_t *src,
+-                                       int stride, int h, int x, int y);
++void ff_avg_vc1_chroma_mc8_nornd_mmxext(uint8_t *dst, uint8_t *src,
++                                        int stride, int h, int x, int y);
+ void ff_avg_vc1_chroma_mc8_nornd_3dnow(uint8_t *dst, uint8_t *src,
+                                        int stride, int h, int x, int y);
+ void ff_put_vc1_chroma_mc8_nornd_ssse3(uint8_t *dst, uint8_t *src,
+@@ -99,7 +99,7 @@ av_cold void ff_vc1dsp_init_x86(VC1DSPContext *dsp)
+ 
+     if (mm_flags & AV_CPU_FLAG_MMXEXT) {
+         ASSIGN_LF(mmxext);
+-        dsp->avg_no_rnd_vc1_chroma_pixels_tab[0] = ff_avg_vc1_chroma_mc8_nornd_mmx2;
++        dsp->avg_no_rnd_vc1_chroma_pixels_tab[0] = ff_avg_vc1_chroma_mc8_nornd_mmxext;
+     } else if (mm_flags & AV_CPU_FLAG_3DNOW) {
+         dsp->avg_no_rnd_vc1_chroma_pixels_tab[0] = ff_avg_vc1_chroma_mc8_nornd_3dnow;
+     }
+diff --git a/libavcodec/x86/vp3dsp.asm b/libavcodec/x86/vp3dsp.asm
+index d300304..fc1e776 100644
+--- a/libavcodec/x86/vp3dsp.asm
++++ b/libavcodec/x86/vp3dsp.asm
+@@ -101,7 +101,7 @@ SECTION .text
+     mov  [r0+r3  -1], r2w
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal vp3_v_loop_filter, 3, 4
+ %if ARCH_X86_64
+     movsxd        r1, r1d
+@@ -633,7 +633,7 @@ vp3_idct_funcs
+     movq   [r0+r3  ], m5
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal vp3_idct_dc_add, 3, 4
+ %if ARCH_X86_64
+     movsxd        r1, r1d
+diff --git a/libavcodec/x86/vp3dsp_init.c b/libavcodec/x86/vp3dsp_init.c
+index d91050e..bbe74ba 100644
+--- a/libavcodec/x86/vp3dsp_init.c
++++ b/libavcodec/x86/vp3dsp_init.c
+@@ -31,11 +31,13 @@ void ff_vp3_idct_add_mmx(uint8_t *dest, int line_size, DCTELEM *block);
+ void ff_vp3_idct_put_sse2(uint8_t *dest, int line_size, DCTELEM *block);
+ void ff_vp3_idct_add_sse2(uint8_t *dest, int line_size, DCTELEM *block);
+ 
+-void ff_vp3_idct_dc_add_mmx2(uint8_t *dest, int line_size,
+-                             const DCTELEM *block);
++void ff_vp3_idct_dc_add_mmxext(uint8_t *dest, int line_size,
++                               const DCTELEM *block);
+ 
+-void ff_vp3_v_loop_filter_mmx2(uint8_t *src, int stride, int *bounding_values);
+-void ff_vp3_h_loop_filter_mmx2(uint8_t *src, int stride, int *bounding_values);
++void ff_vp3_v_loop_filter_mmxext(uint8_t *src, int stride,
++                                 int *bounding_values);
++void ff_vp3_h_loop_filter_mmxext(uint8_t *src, int stride,
++                                 int *bounding_values);
+ 
+ av_cold void ff_vp3dsp_init_x86(VP3DSPContext *c, int flags)
+ {
+@@ -50,11 +52,11 @@ av_cold void ff_vp3dsp_init_x86(VP3DSPContext *c, int flags)
+ #endif
+ 
+     if (EXTERNAL_MMXEXT(cpuflags)) {
+-        c->idct_dc_add = ff_vp3_idct_dc_add_mmx2;
++        c->idct_dc_add = ff_vp3_idct_dc_add_mmxext;
+ 
+         if (!(flags & CODEC_FLAG_BITEXACT)) {
+-            c->v_loop_filter = ff_vp3_v_loop_filter_mmx2;
+-            c->h_loop_filter = ff_vp3_h_loop_filter_mmx2;
++            c->v_loop_filter = ff_vp3_v_loop_filter_mmxext;
++            c->h_loop_filter = ff_vp3_h_loop_filter_mmxext;
+         }
+     }
+ 
+diff --git a/libavcodec/x86/vp8dsp.asm b/libavcodec/x86/vp8dsp.asm
+index 5dc4ca3..d732bf4 100644
+--- a/libavcodec/x86/vp8dsp.asm
++++ b/libavcodec/x86/vp8dsp.asm
+@@ -338,7 +338,7 @@ INIT_XMM ssse3
+ FILTER_SSSE3 8
+ 
+ ; 4x4 block, H-only 4-tap filter
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal put_vp8_epel4_h4, 6, 6 + npicregs, 0, dst, dststride, src, srcstride, height, mx, picreg
+     shl       mxd, 4
+ %ifdef PIC
+@@ -386,7 +386,7 @@ cglobal put_vp8_epel4_h4, 6, 6 + npicregs, 0, dst, dststride, src, srcstride, he
+     REP_RET
+ 
+ ; 4x4 block, H-only 6-tap filter
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ cglobal put_vp8_epel4_h6, 6, 6 + npicregs, 0, dst, dststride, src, srcstride, height, mx, picreg
+     lea       mxd, [mxq*3]
+ %ifdef PIC
+@@ -673,7 +673,7 @@ cglobal put_vp8_epel%1_v6, 7, 7, 8, dst, dststride, src, srcstride, height, picr
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ FILTER_V 4
+ INIT_XMM sse2
+ FILTER_V 8
+@@ -769,7 +769,7 @@ cglobal put_vp8_bilinear%1_h, 6, 6 + npicregs, 7, dst, dststride, src, srcstride
+     REP_RET
+ %endmacro
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ FILTER_BILINEAR 4
+ INIT_XMM sse2
+ FILTER_BILINEAR 8
+@@ -1611,7 +1611,7 @@ cglobal vp8_%1_loop_filter_simple, 3, %2, 8, dst, stride, flim, cntr
+ INIT_MMX mmx
+ SIMPLE_LOOPFILTER v, 4
+ SIMPLE_LOOPFILTER h, 5
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ SIMPLE_LOOPFILTER v, 4
+ SIMPLE_LOOPFILTER h, 5
+ %endif
+@@ -1835,7 +1835,7 @@ cglobal vp8_%1_loop_filter16y_inner, 5, 5, 13, dst, stride, flimE, flimI, hevthr
+     psubusb          m6, m5          ; q2-q1
+     por              m6, m4          ; abs(q2-q1)
+ 
+-%if notcpuflag(mmx2)
++%if notcpuflag(mmxext)
+     mova             m4, m_flimI
+     pxor             m3, m3
+     psubusb          m0, m4
+@@ -1875,7 +1875,7 @@ cglobal vp8_%1_loop_filter16y_inner, 5, 5, 13, dst, stride, flimE, flimI, hevthr
+     psubusb          m1, m3          ; p1-p0
+     psubusb          m6, m2          ; p0-p1
+     por              m1, m6          ; abs(p1-p0)
+-%if notcpuflag(mmx2)
++%if notcpuflag(mmxext)
+     mova             m6, m1
+     psubusb          m1, m4
+     psubusb          m6, m_hevthr
+@@ -1906,7 +1906,7 @@ cglobal vp8_%1_loop_filter16y_inner, 5, 5, 13, dst, stride, flimE, flimI, hevthr
+     psubusb          m1, m5          ; q0-q1
+     psubusb          m7, m4          ; q1-q0
+     por              m1, m7          ; abs(q1-q0)
+-%if notcpuflag(mmx2)
++%if notcpuflag(mmxext)
+     mova             m7, m1
+     psubusb          m1, m6
+     psubusb          m7, m_hevthr
+@@ -2014,14 +2014,14 @@ cglobal vp8_%1_loop_filter16y_inner, 5, 5, 13, dst, stride, flimE, flimI, hevthr
+ %else
+     mova             m6, m_maskres
+ %endif
+-%if notcpuflag(mmx2)
++%if notcpuflag(mmxext)
+     mova             m7, [pb_1]
+ %else ; mmxext/sse2
+     pxor             m7, m7
+ %endif
+     pand             m0, m6
+     pand             m1, m6
+-%if notcpuflag(mmx2)
++%if notcpuflag(mmxext)
+     paddusb          m0, m7
+     pand             m1, [pb_FE]
+     pandn            m7, m0
+@@ -2097,7 +2097,7 @@ INNER_LOOPFILTER h, 16
+ INNER_LOOPFILTER v,  8
+ INNER_LOOPFILTER h,  8
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ INNER_LOOPFILTER v, 16
+ INNER_LOOPFILTER h, 16
+ INNER_LOOPFILTER v,  8
+@@ -2343,7 +2343,7 @@ cglobal vp8_%1_loop_filter16y_mbedge, 5, 5, 15, dst1, stride, flimE, flimI, hevt
+     psubusb          m6, m5          ; q2-q1
+     por              m6, m4          ; abs(q2-q1)
+ 
+-%if notcpuflag(mmx2)
++%if notcpuflag(mmxext)
+     mova             m4, m_flimI
+     pxor             m3, m3
+     psubusb          m0, m4
+@@ -2383,7 +2383,7 @@ cglobal vp8_%1_loop_filter16y_mbedge, 5, 5, 15, dst1, stride, flimE, flimI, hevt
+     psubusb          m1, m3          ; p1-p0
+     psubusb          m6, m2          ; p0-p1
+     por              m1, m6          ; abs(p1-p0)
+-%if notcpuflag(mmx2)
++%if notcpuflag(mmxext)
+     mova             m6, m1
+     psubusb          m1, m4
+     psubusb          m6, m_hevthr
+@@ -2414,7 +2414,7 @@ cglobal vp8_%1_loop_filter16y_mbedge, 5, 5, 15, dst1, stride, flimE, flimI, hevt
+     psubusb          m1, m5          ; q0-q1
+     psubusb          m7, m4          ; q1-q0
+     por              m1, m7          ; abs(q1-q0)
+-%if notcpuflag(mmx2)
++%if notcpuflag(mmxext)
+     mova             m7, m1
+     psubusb          m1, m6
+     psubusb          m7, m_hevthr
+@@ -2755,7 +2755,7 @@ MBEDGE_LOOPFILTER h, 16
+ MBEDGE_LOOPFILTER v,  8
+ MBEDGE_LOOPFILTER h,  8
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ MBEDGE_LOOPFILTER v, 16
+ MBEDGE_LOOPFILTER h, 16
+ MBEDGE_LOOPFILTER v,  8
+diff --git a/libavcodec/x86/vp8dsp_init.c b/libavcodec/x86/vp8dsp_init.c
+index 38ad0c7..bf5463f 100644
+--- a/libavcodec/x86/vp8dsp_init.c
++++ b/libavcodec/x86/vp8dsp_init.c
+@@ -30,16 +30,16 @@
+ /*
+  * MC functions
+  */
+-extern void ff_put_vp8_epel4_h4_mmx2  (uint8_t *dst, ptrdiff_t dststride,
++extern void ff_put_vp8_epel4_h4_mmxext(uint8_t *dst, ptrdiff_t dststride,
+                                        uint8_t *src, ptrdiff_t srcstride,
+                                        int height, int mx, int my);
+-extern void ff_put_vp8_epel4_h6_mmx2  (uint8_t *dst, ptrdiff_t dststride,
++extern void ff_put_vp8_epel4_h6_mmxext(uint8_t *dst, ptrdiff_t dststride,
+                                        uint8_t *src, ptrdiff_t srcstride,
+                                        int height, int mx, int my);
+-extern void ff_put_vp8_epel4_v4_mmx2  (uint8_t *dst, ptrdiff_t dststride,
++extern void ff_put_vp8_epel4_v4_mmxext(uint8_t *dst, ptrdiff_t dststride,
+                                        uint8_t *src, ptrdiff_t srcstride,
+                                        int height, int mx, int my);
+-extern void ff_put_vp8_epel4_v6_mmx2  (uint8_t *dst, ptrdiff_t dststride,
++extern void ff_put_vp8_epel4_v6_mmxext(uint8_t *dst, ptrdiff_t dststride,
+                                        uint8_t *src, ptrdiff_t srcstride,
+                                        int height, int mx, int my);
+ 
+@@ -81,7 +81,7 @@ extern void ff_put_vp8_epel8_v6_ssse3 (uint8_t *dst, ptrdiff_t dststride,
+                                        uint8_t *src, ptrdiff_t srcstride,
+                                        int height, int mx, int my);
+ 
+-extern void ff_put_vp8_bilinear4_h_mmx2  (uint8_t *dst, ptrdiff_t dststride,
++extern void ff_put_vp8_bilinear4_h_mmxext(uint8_t *dst, ptrdiff_t dststride,
+                                           uint8_t *src, ptrdiff_t srcstride,
+                                           int height, int mx, int my);
+ extern void ff_put_vp8_bilinear8_h_sse2  (uint8_t *dst, ptrdiff_t dststride,
+@@ -94,7 +94,7 @@ extern void ff_put_vp8_bilinear8_h_ssse3 (uint8_t *dst, ptrdiff_t dststride,
+                                           uint8_t *src, ptrdiff_t srcstride,
+                                           int height, int mx, int my);
+ 
+-extern void ff_put_vp8_bilinear4_v_mmx2  (uint8_t *dst, ptrdiff_t dststride,
++extern void ff_put_vp8_bilinear4_v_mmxext(uint8_t *dst, ptrdiff_t dststride,
+                                           uint8_t *src, ptrdiff_t srcstride,
+                                           int height, int mx, int my);
+ extern void ff_put_vp8_bilinear8_v_sse2  (uint8_t *dst, ptrdiff_t dststride,
+@@ -140,16 +140,16 @@ static void ff_put_vp8_ ## FILTERTYPE ## 8_ ## TAPTYPE ## _ ## OPT( \
+ }
+ 
+ #if ARCH_X86_32
+-TAP_W8 (mmx2,  epel, h4)
+-TAP_W8 (mmx2,  epel, h6)
+-TAP_W16(mmx2,  epel, h6)
+-TAP_W8 (mmx2,  epel, v4)
+-TAP_W8 (mmx2,  epel, v6)
+-TAP_W16(mmx2,  epel, v6)
+-TAP_W8 (mmx2,  bilinear, h)
+-TAP_W16(mmx2,  bilinear, h)
+-TAP_W8 (mmx2,  bilinear, v)
+-TAP_W16(mmx2,  bilinear, v)
++TAP_W8 (mmxext, epel, h4)
++TAP_W8 (mmxext, epel, h6)
++TAP_W16(mmxext, epel, h6)
++TAP_W8 (mmxext, epel, v4)
++TAP_W8 (mmxext, epel, v6)
++TAP_W16(mmxext, epel, v6)
++TAP_W8 (mmxext, bilinear, h)
++TAP_W16(mmxext, bilinear, h)
++TAP_W8 (mmxext, bilinear, v)
++TAP_W16(mmxext, bilinear, v)
+ #endif
+ 
+ TAP_W16(sse2,  epel, h6)
+@@ -178,13 +178,13 @@ static void ff_put_vp8_epel ## SIZE ## _h ## TAPNUMX ## v ## TAPNUMY ## _ ## OPT
+ 
+ #if ARCH_X86_32
+ #define HVTAPMMX(x, y) \
+-HVTAP(mmx2, 8, x, y,  4,  8) \
+-HVTAP(mmx2, 8, x, y,  8, 16)
++HVTAP(mmxext, 8, x, y,  4,  8) \
++HVTAP(mmxext, 8, x, y,  8, 16)
+ 
+-HVTAP(mmx2, 8, 6, 6, 16, 16)
++HVTAP(mmxext, 8, 6, 6, 16, 16)
+ #else
+ #define HVTAPMMX(x, y) \
+-HVTAP(mmx2, 8, x, y,  4,  8)
++HVTAP(mmxext, 8, x, y,  4,  8)
+ #endif
+ 
+ HVTAPMMX(4, 4)
+@@ -219,10 +219,10 @@ static void ff_put_vp8_bilinear ## SIZE ## _hv_ ## OPT( \
+         dst, dststride, tmp, SIZE,      height,     mx, my); \
+ }
+ 
+-HVBILIN(mmx2,  8,  4,  8)
++HVBILIN(mmxext,  8,  4,  8)
+ #if ARCH_X86_32
+-HVBILIN(mmx2,  8,  8, 16)
+-HVBILIN(mmx2,  8, 16, 16)
++HVBILIN(mmxext,  8,  8, 16)
++HVBILIN(mmxext,  8, 16, 16)
+ #endif
+ HVBILIN(sse2,  8,  8, 16)
+ HVBILIN(sse2,  8, 16, 16)
+@@ -284,7 +284,7 @@ extern void ff_vp8_h_loop_filter8uv_mbedge_ ## NAME(uint8_t *dstU, \
+                                                     int e, int i, int hvt);
+ 
+ DECLARE_LOOP_FILTER(mmx)
+-DECLARE_LOOP_FILTER(mmx2)
++DECLARE_LOOP_FILTER(mmxext)
+ DECLARE_LOOP_FILTER(sse2)
+ DECLARE_LOOP_FILTER(ssse3)
+ DECLARE_LOOP_FILTER(sse4)
+@@ -352,26 +352,26 @@ av_cold void ff_vp8dsp_init_x86(VP8DSPContext* c)
+     /* note that 4-tap width=16 functions are missing because w=16
+      * is only used for luma, and luma is always a copy or sixtap. */
+     if (mm_flags & AV_CPU_FLAG_MMXEXT) {
+-        VP8_MC_FUNC(2, 4, mmx2);
+-        VP8_BILINEAR_MC_FUNC(2, 4, mmx2);
++        VP8_MC_FUNC(2, 4, mmxext);
++        VP8_BILINEAR_MC_FUNC(2, 4, mmxext);
+ #if ARCH_X86_32
+-        VP8_LUMA_MC_FUNC(0, 16, mmx2);
+-        VP8_MC_FUNC(1, 8, mmx2);
+-        VP8_BILINEAR_MC_FUNC(0, 16, mmx2);
+-        VP8_BILINEAR_MC_FUNC(1, 8, mmx2);
+-
+-        c->vp8_v_loop_filter_simple = ff_vp8_v_loop_filter_simple_mmx2;
+-        c->vp8_h_loop_filter_simple = ff_vp8_h_loop_filter_simple_mmx2;
+-
+-        c->vp8_v_loop_filter16y_inner = ff_vp8_v_loop_filter16y_inner_mmx2;
+-        c->vp8_h_loop_filter16y_inner = ff_vp8_h_loop_filter16y_inner_mmx2;
+-        c->vp8_v_loop_filter8uv_inner = ff_vp8_v_loop_filter8uv_inner_mmx2;
+-        c->vp8_h_loop_filter8uv_inner = ff_vp8_h_loop_filter8uv_inner_mmx2;
+-
+-        c->vp8_v_loop_filter16y       = ff_vp8_v_loop_filter16y_mbedge_mmx2;
+-        c->vp8_h_loop_filter16y       = ff_vp8_h_loop_filter16y_mbedge_mmx2;
+-        c->vp8_v_loop_filter8uv       = ff_vp8_v_loop_filter8uv_mbedge_mmx2;
+-        c->vp8_h_loop_filter8uv       = ff_vp8_h_loop_filter8uv_mbedge_mmx2;
++        VP8_LUMA_MC_FUNC(0, 16, mmxext);
++        VP8_MC_FUNC(1, 8, mmxext);
++        VP8_BILINEAR_MC_FUNC(0, 16, mmxext);
++        VP8_BILINEAR_MC_FUNC(1,  8, mmxext);
++
++        c->vp8_v_loop_filter_simple   = ff_vp8_v_loop_filter_simple_mmxext;
++        c->vp8_h_loop_filter_simple   = ff_vp8_h_loop_filter_simple_mmxext;
++
++        c->vp8_v_loop_filter16y_inner = ff_vp8_v_loop_filter16y_inner_mmxext;
++        c->vp8_h_loop_filter16y_inner = ff_vp8_h_loop_filter16y_inner_mmxext;
++        c->vp8_v_loop_filter8uv_inner = ff_vp8_v_loop_filter8uv_inner_mmxext;
++        c->vp8_h_loop_filter8uv_inner = ff_vp8_h_loop_filter8uv_inner_mmxext;
++
++        c->vp8_v_loop_filter16y       = ff_vp8_v_loop_filter16y_mbedge_mmxext;
++        c->vp8_h_loop_filter16y       = ff_vp8_h_loop_filter16y_mbedge_mmxext;
++        c->vp8_v_loop_filter8uv       = ff_vp8_v_loop_filter8uv_mbedge_mmxext;
++        c->vp8_h_loop_filter8uv       = ff_vp8_h_loop_filter8uv_mbedge_mmxext;
+ #endif
+     }
+ 
+diff --git a/libavutil/x86/x86util.asm b/libavutil/x86/x86util.asm
+index cf11183..40d8763 100644
+--- a/libavutil/x86/x86util.asm
++++ b/libavutil/x86/x86util.asm
+@@ -555,7 +555,7 @@
+ %if mmsize == 16
+     pshuflw    %1, %2, (%3)*0x55
+     punpcklqdq %1, %1
+-%elif cpuflag(mmx2)
++%elif cpuflag(mmxext)
+     pshufw     %1, %2, (%3)*0x55
+ %else
+     %ifnidn %1, %2
+diff --git a/libswscale/x86/output.asm b/libswscale/x86/output.asm
+index 23508b8..d137e6e 100644
+--- a/libswscale/x86/output.asm
++++ b/libswscale/x86/output.asm
+@@ -247,7 +247,7 @@ cglobal yuv2planeX_%1, %3, 8, %2, filter, fltsize, src, dst, w, dither, offset
+ %endmacro
+ 
+ %if ARCH_X86_32
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ yuv2planeX_fn  8,  0, 7
+ yuv2planeX_fn  9,  0, 5
+ yuv2planeX_fn 10,  0, 5
+@@ -388,7 +388,7 @@ INIT_MMX mmx
+ yuv2plane1_fn  8, 0, 5
+ yuv2plane1_fn 16, 0, 3
+ 
+-INIT_MMX mmx2
++INIT_MMX mmxext
+ yuv2plane1_fn  9, 0, 3
+ yuv2plane1_fn 10, 0, 3
+ %endif
+diff --git a/libswscale/x86/swscale.c b/libswscale/x86/swscale.c
+index 571510a..c48e56d 100644
+--- a/libswscale/x86/swscale.c
++++ b/libswscale/x86/swscale.c
+@@ -250,7 +250,7 @@ extern void ff_yuv2planeX_ ## size ## _ ## opt(const int16_t *filter, int filter
+     VSCALEX_FUNC(10, opt)
+ 
+ #if ARCH_X86_32
+-VSCALEX_FUNCS(mmx2);
++VSCALEX_FUNCS(mmxext);
+ #endif
+ VSCALEX_FUNCS(sse2);
+ VSCALEX_FUNCS(sse4);
+@@ -267,7 +267,7 @@ extern void ff_yuv2plane1_ ## size ## _ ## opt(const int16_t *src, uint8_t *dst,
+     VSCALE_FUNC(16, opt1)
+ 
+ #if ARCH_X86_32
+-VSCALE_FUNCS(mmx, mmx2);
++VSCALE_FUNCS(mmx, mmxext);
+ #endif
+ VSCALE_FUNCS(sse2, sse2);
+ VSCALE_FUNC(16, sse4);
+@@ -360,7 +360,7 @@ switch(c->dstBpc){ \
+     if (EXTERNAL_MMX(cpu_flags)) {
+         ASSIGN_MMX_SCALE_FUNC(c->hyScale, c->hLumFilterSize, mmx, mmx);
+         ASSIGN_MMX_SCALE_FUNC(c->hcScale, c->hChrFilterSize, mmx, mmx);
+-        ASSIGN_VSCALE_FUNC(c->yuv2plane1, mmx, mmx2, cpu_flags & AV_CPU_FLAG_MMXEXT);
++        ASSIGN_VSCALE_FUNC(c->yuv2plane1, mmx, mmxext, cpu_flags & AV_CPU_FLAG_MMXEXT);
+ 
+         switch (c->srcFormat) {
+         case AV_PIX_FMT_Y400A:
+@@ -393,7 +393,7 @@ switch(c->dstBpc){ \
+         }
+     }
+     if (EXTERNAL_MMXEXT(cpu_flags)) {
+-        ASSIGN_VSCALEX_FUNC(c->yuv2planeX, mmx2, , 1);
++        ASSIGN_VSCALEX_FUNC(c->yuv2planeX, mmxext, , 1);
+     }
+ #endif /* ARCH_X86_32 */
+ #define ASSIGN_SSE_SCALE_FUNC(hscalefn, filtersize, opt1, opt2) \
+-- 
+1.7.9.5
+

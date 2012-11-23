@@ -1,0 +1,246 @@
+#!/usr/bin/make -f
+
+EPOCH=6:
+DEB_SOURCE := $(shell dpkg-parsechangelog | sed -n 's/^Source: //p')
+DEB_VERSION := $(shell dpkg-parsechangelog | sed -n 's/^Version: //p')
+UPSTREAM_VERSION := $(shell echo $(DEB_VERSION) | sed -r 's/[^:]+://; s/-[^-]+$$//')
+SHLIBS_VERSION := $(EPOCH)9~beta2-1
+
+ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
+# In Ubuntu, all -extra- packages are built from a special source
+# package called 'libav-extra', which is found in the universe section
+# of the archive because it requires extra build dependencies that are
+# not found in 'main'
+#
+# In order to ease the transition period when libav is uploaded to the
+# archive and libav-extra is not built yet, all libraries in libav
+# produce -extra variants. However, only libavcodec-extra comes with
+# additional functionality.
+VENDOR := Ubuntu
+
+# these package do not build -extra variants
+LIB_PKGS := 
+# these packages do build -extra variants
+LIB_PKGS2 := $(shell sed -nr 's/^Package:[[:space:]]*(lib(avutil|avcodec|avdevice|avformat|avresample|avfilter|swscale)[0-9]+)[[:space:]]*$$/\1/p' debian/control)
+# these packages are the -extra- variants
+LIB_EXTRA_PKGS := $(shell sed -nr 's/^Package:[[:space:]]*(lib(avutil|avcodec|avdevice|avformat|avresample|avfilter|swscale)(-extra-)[0-9]+)[[:space:]]*$$/\1/p' debian/control)
+
+else
+# In Debian, there is no need (anymore) for a separate libav-extra
+# source package. Instead, the libavcodec-extra package is built
+# directly from the 'main' source package.
+#
+# the libavcodec-extra package is necessary because it links against
+# libraries that are GPLv3 licensed. Make sure that you do not link
+# GPLv2 only applications against the libavcodec-extra flavor!
+#
+# Because of the lack of archive skew problems, only libavcodec produces
+# an -extra variant.
+
+VENDOR := Debian
+# these package do not build -extra variants
+LIB_PKGS := $(shell sed -nr 's/^Package:[[:space:]]*(lib(avutil|avdevice|avformat|avfilter|avresample|swscale)[0-9]+)[[:space:]]*$$/\1/p' debian/control)
+# these packages do build -extra variants
+LIB_PKGS2 := $(shell sed -nr 's/^Package:[[:space:]]*(libavcodec[0-9]+)[[:space:]]*$$/\1/p' debian/control)
+# these packages are the -extra- variants
+LIB_EXTRA_PKGS := $(shell sed -nr 's/^Package:[[:space:]]*(libavcodec-extra-[0-9]+)[[:space:]]*$$/\1/p' debian/control)
+endif
+
+
+# these are the -dev packages
+DEV_PKGS := $(shell echo $(LIB_PKGS) $(LIB_PKGS2) | sed 's/[0-9]\+\>/-dev/g')
+
+# Support multiple makes at once
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+NUMJOBS = -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+else
+# on i386 and amd64, we query the system unless overriden by DEB_BUILD_OPTIONS
+ifeq      ($(DEB_HOST_ARCH),i386)
+NUMJOBS := -j$(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+else ifeq ($(DEB_HOST_ARCH),amd64)
+NUMJOBS := -j$(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+endif
+endif
+
+include debian/confflags
+OPT_FLAVORS := $(filter-out static shared, $(FLAVORS))
+
+$(info FLAVORS = $(FLAVORS))
+$(info DEB_BUILD_OPTIONS = $(DEB_BUILD_OPTIONS))
+$(info CFLAGS = $(CFLAGS))
+$(info CPPFLAGS = $(CPPFLAGS))
+$(info LDFLAGS = $(LDFLAGS))
+
+define dh_install_file_opt_flavor
+	  grep @DEB_HOST_MULTIARCH_OPT@ < $(1).in | \
+	  sed 's:@DEB_HOST_MULTIARCH_OPT@:$(DEB_HOST_MULTIARCH)/$($(2)_shlibdir):g' >> $(1)
+
+endef
+
+DH_INSTALL_FILES := $(foreach pkg, $(LIB_PKGS) $(LIB_PKGS2) $(LIB_EXTRA_PKGS) $(DEV_PKGS), debian/$(pkg).install)
+$(DH_INSTALL_FILES):
+	sed 's/@DEB_HOST_MULTIARCH\(_OPT\)\?@/$(DEB_HOST_MULTIARCH)/g' $@.in > $@
+	$(foreach opt_flavor,$(OPT_FLAVORS),$(call dh_install_file_opt_flavor,$@,$(opt_flavor)))
+
+ifeq ($(DEB_SOURCE),libav-extra)
+CONFIGURE := libav/configure
+libav/configure:
+	tar xvf /usr/src/libav-source.tar.gz
+else
+CONFIGURE := configure
+endif
+
+configure-%: configure-stamp-%
+configure-stamp-%: $(CONFIGURE)
+	dh_testdir
+	mkdir -p debian-$*
+	cd debian-$* && CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" $(CURDIR)/$(CONFIGURE) \
+		$($*_build_confflags) $(extra_$*_build_confflags)
+	touch $@
+configure-extra-stamp-%:
+	dh_testdir
+	mkdir -p debian-extra-$*
+	cd debian-extra-$* && CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" $(CURDIR)/$(CONFIGURE) \
+		$($*_build_confflags) $(v3_confflags) $(extra_$*_build_confflags)
+	touch $@
+
+build-%: build-stamp-%
+build-stamp-%: configure-stamp-%
+	dh_testdir
+	$(MAKE) -C debian-$* $(NUMJOBS) V=1
+	touch $@
+build-extra-stamp-%: configure-extra-stamp-%
+	dh_testdir
+	$(MAKE) -C debian-extra-$* $(NUMJOBS) V=1
+	touch $@
+
+debian-shared/tools/qt-faststart: build-stamp-shared
+	$(MAKE) -C debian-shared tools/qt-faststart V=1
+
+build-doxy: build-doxy-stamp
+build-doxy-stamp:
+	dh_testdir
+	[ ! -x /usr/bin/doxygen ] || doxygen doc/Doxyfile
+	touch $@
+
+build: build-stamp build-extra
+build-stamp: $(addprefix build-stamp-, $(FLAVORS)) debian-shared/tools/qt-faststart
+	touch $@
+build-extra: $(addprefix build-extra-stamp-, $(filter-out static,$(FLAVORS)))
+	touch $@
+
+clean:
+	dh_testdir
+	rm -f build-stamp build-extra $(addprefix build-stamp-, $(FLAVORS)) \
+	    $(addprefix build-extra-stamp-, $(FLAVORS)) \
+	    $(addprefix configure-stamp-, $(FLAVORS)) \
+	    $(addprefix configure-extra-stamp-, $(FLAVORS)) \
+	    build-doxy-stamp
+	rm -rf libav/ # created by the libav-extra variant
+	rm -rf $(addprefix debian-, $(FLAVORS)) \
+		$(addprefix debian-extra-, $(FLAVORS)) doxy
+	dh_clean $(DH_INSTALL_FILES) $(wildcard formats*.txt) $(wildcard codecs*.txt)
+
+# The trailing newline is important!
+define install_flavor
+	$(MAKE) -C debian-$(1) install DESTDIR=$(CURDIR)/debian/tmp \
+	    mandir=$(CURDIR)/debian/tmp/usr/share/man
+
+endef
+
+# The trailing newline is important!
+define install_flavor_extra
+	$(MAKE) -C debian-extra-$(1) install DESTDIR=$(CURDIR)/debian/tmp/extra \
+	    mandir=$(CURDIR)/debian/tmp/usr/share/man
+
+endef
+
+install: install-common install-extra
+install-common: build $(DH_INSTALL_FILES)
+	dh_testdir
+	dh_testroot
+	dh_prep
+ifeq ($(DEB_SOURCE), libav)
+	# the libav-source package does exist in some derivatives such as ubuntu, etc.
+	if grep -q 'Package: libav-source' debian/control; then \
+	  dh_installdirs -ptmp usr/src;  \
+	  tar czvf debian/tmp/usr/src/libav-source.tar.gz . \
+	  	 --exclude 'debian*' --exclude .git  --exclude .pc --exclude '*-stamp' \
+	  	 --transform 's,^./,libav/,' ; \
+	fi
+endif
+	dh_installdirs -ptmp usr/src
+	dh_installdirs -ptmp usr/share/doc/libav/html etc
+	dh_installdirs -ptmp usr/share/doc/libav-doc/html
+	$(foreach flavor,$(FLAVORS),$(call install_flavor,$(flavor)))
+	# don't fail on binary-indep only builds.
+	-cp -avf doc/doxy/html debian/tmp/usr/share/doc/libav-doc
+	install -m 644 -D debian-shared/doc/*.html debian/tmp/usr/share/doc/libav/html/
+	install -m 644 -D doc/avserver.conf debian/tmp/etc/
+	install -m 644 -D debian-shared/tools/qt-faststart debian/tmp/usr/bin/qt-faststart
+	dh_install $(addprefix -N,$(LIB_EXTRA_PKGS)) \
+		-Xusr/share/doc/libav-doc \
+		-Xusr/share/doc/libav --fail-missing --sourcedir=debian/tmp
+	env LD_LIBRARY_PATH="$(LD_LIBRARY_PATH):$(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)" \
+	debian/tmp/usr/bin/avconv -formats | tee formats-$(DEB_HOST_ARCH).txt
+	env LD_LIBRARY_PATH="$(LD_LIBRARY_PATH):$(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)" \
+	debian/tmp/usr/bin/avconv -codecs | tee codecs.txt
+	dh_installdocs -plibavformat54 formats-$(DEB_HOST_ARCH).txt
+	dh_installdocs -plibavcodec54 codecs.txt
+install-extra: build $(DH_INSTALL_FILES)
+	dh_testdir
+	dh_testroot
+	$(foreach flavor,$(filter-out static,$(FLAVORS)),$(call install_flavor_extra,$(flavor)))
+	dh_install $(addprefix -p,$(LIB_EXTRA_PKGS)) -Xusr/share/doc/libav-doc \
+		-Xusr/share/doc/libav --fail-missing \
+		--sourcedir=debian/tmp/extra
+	env LD_LIBRARY_PATH="$(LD_LIBRARY_PATH):$(CURDIR)/debian/tmp/extra/usr/lib/$(DEB_HOST_MULTIARCH)" \
+	debian/tmp/usr/bin/avconv -codecs | tee codecs.txt
+	dh_installdocs -plibavcodec-extra-54 codecs.txt
+
+binary-indep: build-doxy install
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installman -plibav-tools debian/qt-faststart.1
+	dh_installdocs -A debian/README.Debian
+ifeq ($(DEB_SOURCE), libav)
+	dh_installdocs -p libavcodec-dev -plibavdevice-dev \
+		-plibavformat-dev -plibavfilter-dev -plibavresample-dev \
+		-plibswscale-dev -plibavutil-dev -plibav-doc \
+		doc/APIchanges
+	dh_installexamples -p libav-tools doc/avserver.conf debian/recordshow.sh
+	dh_installexamples -p libavcodec-dev libavcodec/api-example.c
+	dh_strip --dbg-package=libav-dbg
+	dh_installchangelogs Changelog
+else
+	dh_strip --dbg-package=libav-extra-dbg
+	dh_installchangelogs libav/Changelog
+endif
+	dh_lintian
+	dh_link
+	dh_compress
+	dh_fixperms
+
+	for pkg in $(LIB_PKGS) $(LIB_EXTRA_PKGS); do \
+	    dh_makeshlibs -p"$$pkg" -V"$$pkg (>= $(SHLIBS_VERSION))"; \
+	done
+	for pkg in $(LIB_PKGS2); do \
+	    upkg=$$(echo "$$pkg" | sed -r 's/([0-9]+)$$/-extra-\1/'); \
+	    dh_makeshlibs -p"$$pkg" -V"$$pkg (>= $(SHLIBS_VERSION)) | $$upkg (>= $(EPOCH)$(UPSTREAM_VERSION))"; \
+	done
+	dh_shlibdeps
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -- -Zxz
+
+binary: binary-indep binary-arch
+
+.PHONY: build $(addprefix build-, $(FLAVORS)) build-doxy \
+	clean \
+	configure $(addprefix configure-, $(FLAVORS)) \
+	binary binary-indep binary-arch \
+	install \
+	get-orig-source

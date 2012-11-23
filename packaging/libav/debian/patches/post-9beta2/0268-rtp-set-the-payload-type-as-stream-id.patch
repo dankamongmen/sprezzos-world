@@ -1,0 +1,318 @@
+From 8034130e06b03859af9ce64f7ee653cd14df328d Mon Sep 17 00:00:00 2001
+From: Luca Barbato <lu_zero@gentoo.org>
+Date: Sun, 11 Nov 2012 20:44:28 +0100
+Subject: [PATCH 268/278] rtp: set the payload type as stream id
+
+Support multiple video/audio streams with different format in the
+same session.
+
+Signed-off-by: Luca Barbato <lu_zero@gentoo.org>
+---
+ libavformat/avformat.h     |    3 +++
+ libavformat/internal.h     |    5 +++--
+ libavformat/movenc.c       |   11 +++++++----
+ libavformat/movenchint.c   |    2 +-
+ libavformat/rtp.c          |    8 ++++++--
+ libavformat/rtp.h          |    9 +++++++--
+ libavformat/rtpenc.c       |   13 +++++++++++--
+ libavformat/rtpenc_chain.c |   12 ++++++++++--
+ libavformat/rtpenc_chain.h |    3 ++-
+ libavformat/rtsp.c         |    3 ++-
+ libavformat/sapenc.c       |    2 +-
+ libavformat/sdp.c          |   21 +++++++++++++--------
+ 12 files changed, 66 insertions(+), 26 deletions(-)
+
+diff --git a/libavformat/avformat.h b/libavformat/avformat.h
+index d1d4763..51635c4 100644
+--- a/libavformat/avformat.h
++++ b/libavformat/avformat.h
+@@ -1684,6 +1684,9 @@ int av_filename_number_test(const char *filename);
+ /**
+  * Generate an SDP for an RTP session.
+  *
++ * Note, this overwrites the id values of AVStreams in the muxer contexts
++ * for getting unique dynamic payload types.
++ *
+  * @param ac array of AVFormatContexts describing the RTP streams. If the
+  *           array is composed by only one context, such context can contain
+  *           multiple AVStreams (one AVStream per RTP stream). Otherwise,
+diff --git a/libavformat/internal.h b/libavformat/internal.h
+index 3ef46ea..01e3df3 100644
+--- a/libavformat/internal.h
++++ b/libavformat/internal.h
+@@ -124,7 +124,8 @@ int ff_url_join(char *str, int size, const char *proto,
+  *
+  * @param buff the buffer to append the SDP fragment to
+  * @param size the size of the buff buffer
+- * @param c the AVCodecContext of the media to describe
++ * @param st the AVStream of the media to describe
++ * @param idx the global stream index
+  * @param dest_addr the destination address of the media stream, may be NULL
+  * @param dest_type the destination address type, may be NULL
+  * @param port the destination port of the media stream, 0 if unknown
+@@ -132,7 +133,7 @@ int ff_url_join(char *str, int size, const char *proto,
+  * @param fmt the AVFormatContext, which might contain options modifying
+  *            the generated SDP
+  */
+-void ff_sdp_write_media(char *buff, int size, AVCodecContext *c,
++void ff_sdp_write_media(char *buff, int size, AVStream *st, int idx,
+                         const char *dest_addr, const char *dest_type,
+                         int port, int ttl, AVFormatContext *fmt);
+ 
+diff --git a/libavformat/movenc.c b/libavformat/movenc.c
+index 50371cd..3949520 100644
+--- a/libavformat/movenc.c
++++ b/libavformat/movenc.c
+@@ -1536,13 +1536,16 @@ static int mov_write_uuid_tag_psp(AVIOContext *pb, MOVTrack *mov)
+     return 0x34;
+ }
+ 
+-static int mov_write_udta_sdp(AVIOContext *pb, AVFormatContext *ctx, int index)
++static int mov_write_udta_sdp(AVIOContext *pb, MOVTrack *track)
+ {
++
++    AVFormatContext *ctx = track->rtp_ctx;
+     char buf[1000] = "";
+     int len;
+ 
+-    ff_sdp_write_media(buf, sizeof(buf), ctx->streams[0]->codec, NULL, NULL, 0, 0, ctx);
+-    av_strlcatf(buf, sizeof(buf), "a=control:streamid=%d\r\n", index);
++    ff_sdp_write_media(buf, sizeof(buf), ctx->streams[0], track->src_track,
++                       NULL, NULL, 0, 0, ctx);
++    av_strlcatf(buf, sizeof(buf), "a=control:streamid=%d\r\n", track->track_id);
+     len = strlen(buf);
+ 
+     avio_wb32(pb, len + 24);
+@@ -1573,7 +1576,7 @@ static int mov_write_trak_tag(AVIOContext *pb, MOVMuxContext *mov,
+     if (track->mode == MODE_PSP)
+         mov_write_uuid_tag_psp(pb,track);  // PSP Movies require this uuid box
+     if (track->tag == MKTAG('r','t','p',' '))
+-        mov_write_udta_sdp(pb, track->rtp_ctx, track->track_id);
++        mov_write_udta_sdp(pb, track);
+     if (track->enc->codec_type == AVMEDIA_TYPE_VIDEO && track->mode == MODE_MOV) {
+         double sample_aspect_ratio = av_q2d(st->sample_aspect_ratio);
+         if (0.0 != sample_aspect_ratio && 1.0 != sample_aspect_ratio)
+diff --git a/libavformat/movenchint.c b/libavformat/movenchint.c
+index 5ef90f1..02391b5 100644
+--- a/libavformat/movenchint.c
++++ b/libavformat/movenchint.c
+@@ -44,7 +44,7 @@ int ff_mov_init_hinting(AVFormatContext *s, int index, int src_index)
+     track->enc->codec_tag  = track->tag;
+ 
+     ret = ff_rtp_chain_mux_open(&track->rtp_ctx, s, src_st, NULL,
+-                                RTP_MAX_PACKET_SIZE);
++                                RTP_MAX_PACKET_SIZE, src_index);
+     if (ret < 0)
+         goto fail;
+ 
+diff --git a/libavformat/rtp.c b/libavformat/rtp.c
+index 4314c46..6512206 100644
+--- a/libavformat/rtp.c
++++ b/libavformat/rtp.c
+@@ -90,7 +90,8 @@ int ff_rtp_get_codec_info(AVCodecContext *codec, int payload_type)
+     return -1;
+ }
+ 
+-int ff_rtp_get_payload_type(AVFormatContext *fmt, AVCodecContext *codec)
++int ff_rtp_get_payload_type(AVFormatContext *fmt,
++                            AVCodecContext *codec, int idx)
+ {
+     int i;
+     AVOutputFormat *ofmt = fmt ? fmt->oformat : NULL;
+@@ -124,8 +125,11 @@ int ff_rtp_get_payload_type(AVFormatContext *fmt, AVCodecContext *codec)
+             return AVRtpPayloadTypes[i].pt;
+         }
+ 
++    if (idx < 0)
++        idx = codec->codec_type == AVMEDIA_TYPE_AUDIO;
++
+     /* dynamic payload type */
+-    return RTP_PT_PRIVATE + (codec->codec_type == AVMEDIA_TYPE_AUDIO);
++    return RTP_PT_PRIVATE + idx;
+ }
+ 
+ const char *ff_rtp_enc_name(int payload_type)
+diff --git a/libavformat/rtp.h b/libavformat/rtp.h
+index 6df4ed4..f8d406e 100644
+--- a/libavformat/rtp.h
++++ b/libavformat/rtp.h
+@@ -25,13 +25,18 @@
+ #include "libavcodec/avcodec.h"
+ 
+ /**
+- * Return the payload type for a given codec used in the given format context.
++ * Return the payload type for a given stream used in the given format context.
++ * Static payload types are derived from the codec.
++ * Dynamic payload type are derived from the id field in AVStream.
++ * The format context private option payload_type overrides both.
+  *
+  * @param fmt   The context of the format
+  * @param codec The context of the codec
++ * @param idx   The stream index
+  * @return The payload type (the 'PT' field in the RTP header).
+  */
+-int ff_rtp_get_payload_type(AVFormatContext *fmt, AVCodecContext *codec);
++int ff_rtp_get_payload_type(AVFormatContext *fmt, AVCodecContext *codec,
++                            int idx);
+ 
+ /**
+  * Initialize a codec context based on the payload type.
+diff --git a/libavformat/rtpenc.c b/libavformat/rtpenc.c
+index b17c465..babb2bb 100644
+--- a/libavformat/rtpenc.c
++++ b/libavformat/rtpenc.c
+@@ -101,8 +101,17 @@ static int rtp_write_header(AVFormatContext *s1)
+         return -1;
+     }
+ 
+-    if (s->payload_type < 0)
+-        s->payload_type = ff_rtp_get_payload_type(s1, st->codec);
++    if (s->payload_type < 0) {
++        /* Re-validate non-dynamic payload types */
++        if (st->id < RTP_PT_PRIVATE)
++            st->id = ff_rtp_get_payload_type(s1, st->codec, -1);
++
++        s->payload_type = st->id;
++    } else {
++        /* private option takes priority */
++        st->id = s->payload_type;
++    }
++
+     s->base_timestamp = av_get_random_seed();
+     s->timestamp = s->base_timestamp;
+     s->cur_timestamp = 0;
+diff --git a/libavformat/rtpenc_chain.c b/libavformat/rtpenc_chain.c
+index 3742099..adc432a 100644
+--- a/libavformat/rtpenc_chain.c
++++ b/libavformat/rtpenc_chain.c
+@@ -23,13 +23,15 @@
+ #include "avio_internal.h"
+ #include "rtpenc_chain.h"
+ #include "avio_internal.h"
++#include "rtp.h"
+ #include "libavutil/opt.h"
+ 
+ int ff_rtp_chain_mux_open(AVFormatContext **out, AVFormatContext *s,
+-                          AVStream *st, URLContext *handle, int packet_size)
++                          AVStream *st, URLContext *handle, int packet_size,
++                          int idx)
+ {
+     AVFormatContext *rtpctx = NULL;
+-    int ret;
++    int ret, pt;
+     AVOutputFormat *rtp_format = av_guess_format("rtp", NULL, NULL);
+     uint8_t *rtpflags;
+     AVDictionary *opts = NULL;
+@@ -57,6 +59,12 @@ int ff_rtp_chain_mux_open(AVFormatContext **out, AVFormatContext *s,
+     rtpctx->max_delay = s->max_delay;
+     /* Copy other stream parameters. */
+     rtpctx->streams[0]->sample_aspect_ratio = st->sample_aspect_ratio;
++    /* Get the payload type from the codec */
++    if (st->id < RTP_PT_PRIVATE)
++        rtpctx->streams[0]->id =
++            ff_rtp_get_payload_type(rtpctx, st->codec, idx);
++    else
++        rtpctx->streams[0]->id = st->id;
+ 
+     if (av_opt_get(s, "rtpflags", AV_OPT_SEARCH_CHILDREN, &rtpflags) >= 0)
+         av_dict_set(&opts, "rtpflags", rtpflags, AV_DICT_DONT_STRDUP_VAL);
+diff --git a/libavformat/rtpenc_chain.h b/libavformat/rtpenc_chain.h
+index 66b9e4c..4117239 100644
+--- a/libavformat/rtpenc_chain.h
++++ b/libavformat/rtpenc_chain.h
+@@ -26,6 +26,7 @@
+ #include "url.h"
+ 
+ int ff_rtp_chain_mux_open(AVFormatContext **out, AVFormatContext *s,
+-                          AVStream *st, URLContext *handle, int packet_size);
++                          AVStream *st, URLContext *handle, int packet_size,
++                          int id);
+ 
+ #endif /* AVFORMAT_RTPENC_CHAIN_H */
+diff --git a/libavformat/rtsp.c b/libavformat/rtsp.c
+index 44de4af..8142094 100644
+--- a/libavformat/rtsp.c
++++ b/libavformat/rtsp.c
+@@ -630,7 +630,8 @@ int ff_rtsp_open_transport_ctx(AVFormatContext *s, RTSPStream *rtsp_st)
+     if (s->oformat && CONFIG_RTSP_MUXER) {
+         int ret = ff_rtp_chain_mux_open(&rtsp_st->transport_priv, s, st,
+                                         rtsp_st->rtp_handle,
+-                                        RTSP_TCP_MAX_PACKET_SIZE);
++                                        RTSP_TCP_MAX_PACKET_SIZE,
++                                        rtsp_st->stream_index);
+         /* Ownership of rtp_handle is passed to the rtp mux context */
+         rtsp_st->rtp_handle = NULL;
+         if (ret < 0)
+diff --git a/libavformat/sapenc.c b/libavformat/sapenc.c
+index 1575848..fd9be4f 100644
+--- a/libavformat/sapenc.c
++++ b/libavformat/sapenc.c
+@@ -151,7 +151,7 @@ static int sap_write_header(AVFormatContext *s)
+             ret = AVERROR(EIO);
+             goto fail;
+         }
+-        ret = ff_rtp_chain_mux_open(&contexts[i], s, s->streams[i], fd, 0);
++        ret = ff_rtp_chain_mux_open(&contexts[i], s, s->streams[i], fd, 0, i);
+         if (ret < 0)
+             goto fail;
+         s->streams[i]->priv_data = contexts[i];
+diff --git a/libavformat/sdp.c b/libavformat/sdp.c
+index 0f7eb2f..57044d4 100644
+--- a/libavformat/sdp.c
++++ b/libavformat/sdp.c
+@@ -590,12 +590,15 @@ static char *sdp_write_media_attributes(char *buff, int size, AVCodecContext *c,
+     return buff;
+ }
+ 
+-void ff_sdp_write_media(char *buff, int size, AVCodecContext *c, const char *dest_addr, const char *dest_type, int port, int ttl, AVFormatContext *fmt)
++void ff_sdp_write_media(char *buff, int size, AVStream *st, int idx,
++                        const char *dest_addr, const char *dest_type,
++                        int port, int ttl, AVFormatContext *fmt)
+ {
++    AVCodecContext *c = st->codec;
+     const char *type;
+     int payload_type;
+ 
+-    payload_type = ff_rtp_get_payload_type(fmt, c);
++    payload_type = ff_rtp_get_payload_type(fmt, c, idx);
+ 
+     switch (c->codec_type) {
+         case AVMEDIA_TYPE_VIDEO   : type = "video"      ; break;
+@@ -617,7 +620,7 @@ int av_sdp_create(AVFormatContext *ac[], int n_files, char *buf, int size)
+ {
+     AVDictionaryEntry *title = av_dict_get(ac[0]->metadata, "title", NULL, 0);
+     struct sdp_session_level s = { 0 };
+-    int i, j, port, ttl, is_multicast;
++    int i, j, port, ttl, is_multicast, index = 0;
+     char dst[32], dst_type[5];
+ 
+     memset(buf, 0, size);
+@@ -656,10 +659,10 @@ int av_sdp_create(AVFormatContext *ac[], int n_files, char *buf, int size)
+                 ttl = 0;
+         }
+         for (j = 0; j < ac[i]->nb_streams; j++) {
+-            ff_sdp_write_media(buf, size,
+-                                  ac[i]->streams[j]->codec, dst[0] ? dst : NULL,
+-                                  dst_type, (port > 0) ? port + j * 2 : 0, ttl,
+-                                  ac[i]);
++            ff_sdp_write_media(buf, size, ac[i]->streams[j], index++,
++                               dst[0] ? dst : NULL, dst_type,
++                               (port > 0) ? port + j * 2 : 0,
++                               ttl, ac[i]);
+             if (port <= 0) {
+                 av_strlcatf(buf, size,
+                                    "a=control:streamid=%d\r\n", i + j);
+@@ -675,7 +678,9 @@ int av_sdp_create(AVFormatContext *ac[], int n_files, char *buf, int size)
+     return AVERROR(ENOSYS);
+ }
+ 
+-void ff_sdp_write_media(char *buff, int size, AVCodecContext *c, const char *dest_addr, const char *dest_type, int port, int ttl, AVFormatContext *fmt)
++void ff_sdp_write_media(char *buff, int size, AVStream *st, int idx,
++                        const char *dest_addr, const char *dest_type,
++                        int port, int ttl, AVFormatContext *fmt)
+ {
+ }
+ #endif
+-- 
+1.7.9.5
+

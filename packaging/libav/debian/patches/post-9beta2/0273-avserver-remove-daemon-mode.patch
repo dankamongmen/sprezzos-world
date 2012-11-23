@@ -1,0 +1,167 @@
+From ada51a334aeb1e378fe852c8b5eede9cbbd05f69 Mon Sep 17 00:00:00 2001
+From: Mans Rullgard <mans@mansr.com>
+Date: Wed, 25 Apr 2012 12:08:54 +0000
+Subject: [PATCH 273/278] avserver: remove daemon mode
+
+This code spews a multitude of warnings with glibc (unchecked
+return values), some of them possibly warranted.  Furthermore,
+the deamonisation is not suitable for use with typical startup
+scripts as it does not provide the PID of the daemon in any way.
+Users wishing to run avserver as a daemon can still do so using
+start-stop-daemon or equivalent tools.
+
+Signed-off-by: Mans Rullgard <mans@mansr.com>
+Signed-off-by: Janne Grunau <janne-libav@jannau.net>
+---
+ Changelog         |    1 +
+ avserver.c        |   38 --------------------------------------
+ doc/avserver.conf |    3 ---
+ doc/avserver.texi |    8 +-------
+ 4 files changed, 2 insertions(+), 48 deletions(-)
+
+diff --git a/Changelog b/Changelog
+index f8079d1..33e55a5 100644
+--- a/Changelog
++++ b/Changelog
+@@ -9,6 +9,7 @@ version <next>:
+ version 9_beta2:
+ - metadata (INFO tag) support in WAV muxer
+ - support for building DLLs using MSVC
++- remove avserver daemon mode
+ 
+ 
+ version 9_beta1:
+diff --git a/avserver.c b/avserver.c
+index f9d85d8..649cbed 100644
+--- a/avserver.c
++++ b/avserver.c
+@@ -301,12 +301,10 @@ static int rtp_new_av_stream(HTTPContext *c,
+                              HTTPContext *rtsp_c);
+ 
+ static const char *my_program_name;
+-static const char *my_program_dir;
+ 
+ static const char *config_filename = "/etc/avserver.conf";
+ 
+ static int avserver_debug;
+-static int avserver_daemon;
+ static int no_launch;
+ static int need_to_start_children;
+ 
+@@ -524,9 +522,6 @@ static void start_children(FFStream *feed)
+                     }
+                 }
+ 
+-                /* This is needed to make relative pathnames work */
+-                chdir(my_program_dir);
+-
+                 signal(SIGPIPE, SIG_DFL);
+ 
+                 execvp(pathname, feed->child_argv);
+@@ -4081,8 +4076,6 @@ static int parse_ffconfig(const char *filename)
+             if (resolve_host(&my_http_addr.sin_addr, arg) != 0) {
+                 ERROR("%s:%d: Invalid host/IP address: %s\n", arg);
+             }
+-        } else if (!av_strcasecmp(cmd, "NoDaemon")) {
+-            avserver_daemon = 0;
+         } else if (!av_strcasecmp(cmd, "RTSPPort")) {
+             get_arg(arg, sizeof(arg), &p);
+             val = atoi(arg);
+@@ -4655,7 +4648,6 @@ static void handle_child_exit(int sig)
+ static void opt_debug(void)
+ {
+     avserver_debug = 1;
+-    avserver_daemon = 0;
+     logfilename[0] = '-';
+ }
+ 
+@@ -4686,8 +4678,6 @@ int main(int argc, char **argv)
+     show_banner();
+ 
+     my_program_name = argv[0];
+-    my_program_dir = getcwd(0, 0);
+-    avserver_daemon = 1;
+ 
+     parse_options(NULL, argc, argv, options, NULL);
+ 
+@@ -4719,37 +4709,9 @@ int main(int argc, char **argv)
+ 
+     compute_bandwidth();
+ 
+-    /* put the process in background and detach it from its TTY */
+-    if (avserver_daemon) {
+-        int pid;
+-
+-        pid = fork();
+-        if (pid < 0) {
+-            perror("fork");
+-            exit(1);
+-        } else if (pid > 0) {
+-            /* parent : exit */
+-            exit(0);
+-        } else {
+-            /* child */
+-            setsid();
+-            close(0);
+-            open("/dev/null", O_RDWR);
+-            if (strcmp(logfilename, "-") != 0) {
+-                close(1);
+-                dup(0);
+-            }
+-            close(2);
+-            dup(0);
+-        }
+-    }
+-
+     /* signal init */
+     signal(SIGPIPE, SIG_IGN);
+ 
+-    if (avserver_daemon)
+-        chdir("/");
+-
+     if (http_server() < 0) {
+         http_log("Could not start server\n");
+         exit(1);
+diff --git a/doc/avserver.conf b/doc/avserver.conf
+index e9724bb..e1cd9fb 100644
+--- a/doc/avserver.conf
++++ b/doc/avserver.conf
+@@ -25,9 +25,6 @@ MaxBandwidth 1000
+ # '-' is the standard output.
+ CustomLog -
+ 
+-# Suppress that if you want to launch avserver as a daemon.
+-NoDaemon
+-
+ 
+ ##################################################################
+ # Definition of the live feeds. Each live feed contains one video
+diff --git a/doc/avserver.texi b/doc/avserver.texi
+index c023814..88e6221 100644
+--- a/doc/avserver.texi
++++ b/doc/avserver.texi
+@@ -31,11 +31,6 @@ several live feeds, streaming from files and time shifting on live feeds
+ (you can seek to positions in the past on each live feed, provided you
+ specify a big enough feed storage in avserver.conf).
+ 
+-avserver runs in daemon mode by default; that is, it puts itself in
+-the background and detaches from its TTY, unless it is launched in
+-debug mode or a NoDaemon option is specified in the configuration
+-file.
+-
+ This documentation covers only the streaming aspects of avserver /
+ avconv. All questions about parameters for avconv, codec questions,
+ etc. are not covered here. Read @file{avconv.html} for more
+@@ -257,8 +252,7 @@ within the various <Stream> sections. Since avserver will not launch
+ any avconv instances, you will have to launch them manually.
+ @item -d
+ Enable debug mode. This option increases log verbosity, directs log
+-messages to stdout and causes avserver to run in the foreground
+-rather than as a daemon.
++messages to stdout.
+ @end table
+ @c man end
+ 
+-- 
+1.7.9.5
+
