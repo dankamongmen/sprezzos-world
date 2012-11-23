@@ -1,0 +1,80 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+# Copyright © 2008, Bradley Smith <brad@brad-smith.co.uk>
+# Copyright © 2011, Jonas Smedegaard <dr@jones.dk>
+# Description: Main Debian packaging script for IJS
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+DEB_AUTO_UPDATE_LIBTOOL = pre
+DEB_AUTO_UPDATE_AUTOCONF = 2.68
+DEB_AUTO_UPDATE_ACLOCAL = 1.11
+DEB_AUTO_UPDATE_AUTOMAKE = 1.11
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/utils.mk
+
+libpkgname = libijs-$(DEB_UPSTREAM_VERSION)
+
+DEB_COPYRIGHT_CHECK_IGNORE_REGEX = ^(ijs_spec\.pdf|debian/(changelog|copyright(|_hints|_newhints)))$
+
+DEB_CONFIGURE_EXTRA_FLAGS += --enable-shared
+DEB_MAKE_BUILD_TARGET = all doc
+
+DEB_DH_MAKESHLIBS_ARGS_$(libpkgname) = -V'$(libpkgname) (>= $(DEB_UPSTREAM_VERSION))'
+
+DEB_INSTALL_DOCS_libijs-dev += ijs_spec.pdf
+
+# put aside upstream-shipped temp files during build but after copyright-check
+upstreamtmpfiles = ltmain.sh configure aclocal.m4 Makefile.in ijs_spec.pdf
+pre-build:: debian/stamp-upstreamtmpstuff
+debian/stamp-upstreamtmpstuff: debian/stamp-copyright-check
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file ] || [ -e $$file.upstream ] || cp -a $$file $$file.upstream; \
+	done
+	touch $@
+clean::
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file.upstream ] || mv -f $$file.upstream $$file; \
+	done
+	rm -f debian/stamp-upstreamtmpstuff
+
+# Make sure that all files installed is also packaged
+#  * ignore debhelper-installed files (we trust dh_install*)
+#  * ignore example binaries
+binary: fail-missing
+fail-missing: binary-arch binary-indep list-missing
+	cat debian/cdbs-package-list | sort | uniq | \
+		grep -v 'DEBIAN' | \
+		grep -v '/usr/share/doc' | \
+		grep -v '/usr/share/lintian/overrides' | \
+		grep -v '/usr/share/menu' | \
+		grep -v '/usr/bin/.*_example' | \
+		> debian/cdbs-reduced-package-list
+	cat debian/cdbs-install-list | sort | uniq | \
+		> debian/cdbs-reduced-install-list
+	diff -u debian/cdbs-reduced-install-list \
+		debian/cdbs-reduced-package-list \
+		> debian/cdbs-install-diff \
+		|| true
+	@if [ "`wc -l debian/cdbs-install-diff`" != "0 debian/cdbs-install-diff" ]; then \
+		echo "ERROR: Differences between intermediary installed and packaged files:"; \
+		echo; \
+		cat debian/cdbs-install-diff; \
+		echo; \
+		echo "Individual binary packages may work, but whole package build failed!"; \
+		exit 1; \
+	fi
+clean::
+	rm -f debian/cdbs-reduced-package-list debian/cdbs-reduced-install-list debian/cdbs-install-diff
