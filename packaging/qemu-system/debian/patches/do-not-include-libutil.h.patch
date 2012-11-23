@@ -1,0 +1,170 @@
+From 63a8ac9875ab4e9865756a61e9e3d9d5d41e468e Mon Sep 17 00:00:00 2001
+From: Michael Tokarev <mjt@tls.msk.ru>
+Date: Sat, 2 Jun 2012 23:22:20 +0400
+Subject: [PATCH] do not include <libutil.h> needlessly or if it doesn't exist
+
+<libutil.h> and <util.h> on *BSD (some have one, some another)
+were #included just for openpty() declaration.  The only file
+where this function is actually used is qemu-char.c.
+
+In vl.c, savevm.c and net/tap-bsd.c, none of functions declared
+in libutil.h (login logout logwtmp timdomain openpty forkpty
+uu_lock realhostname fparseln and a few others depending on
+version) are used.
+
+Initially the code which is currently in qemu-char.c was in vl.c,
+it has been removed into separate file in commit 0e82f34d077dc2542
+Fri Oct 31 18:44:40 2008, but the #includes were left in vl.c.
+So with vl.c, we just remove includes - libutil.h, util.h and
+pty.h (which declares only openpty() and forkpty()) from there.
+
+The code in net/tap-bsd.c, which come from net/tap.c, had this
+
+commit 5281d757efa6e40d74ce124be048b08d43887555
+Author: Mark McLoughlin <markmc@redhat.com>
+Date:   Thu Oct 22 17:49:07 2009 +0100
+
+    net: split all the tap code out into net/tap.c
+
+Note this commit not only moved stuff out of net.c to net/tap.c,
+but also rewrote large portions of the tap code, and added these
+completely unnecessary #includes -- as usual, I question why such
+a misleading commit messages are allowed.
+
+Again, no functions defined in libutil.h or util.h on *BSD are
+used by neither net/tap.c nor net/tap-bsd.c.  Removing them.
+
+savevm.c were split out of vl.c too, before split of qemu-char.c,
+and it merely copied all #includes from original vl.c.  There,
+there are a ton of other #includes which are completely unnecessary,
+this patch removes only libutil, pty and the ones right around these
+(also completely and obviously unnecessary).
+
+And finally, the only real user for these #includes, qemu-char.c,
+which actually uses openpty().  There, the #ifdef logic is wrong.
+A GLIBC-based system has <pty.h>, even if it is a variant of *BSD.
+So __GLIBC__ should be checked first, and instead of trying to
+include <libutil.h> or <util.h>, we include <pty.h>.  If it is not
+GLIBC-based, we check for variations between <*util.h> as before.
+
+This patch fixes build of qemu 1.1 on Debian/kFreebsd (well, one
+of the two problems): it is a distribution with a FreeBSD kernel,
+so it #defines at least __FreeBSD_kernel__, but since it is based
+on GLIBC, it has <pty.h>, but current version does not have neither
+<util.h> nor <libutil.h>, which the code tries to include 3 times
+but uses only once.
+
+Signed-off-By: Michael Tokarev <mjt@tls.msk.ru>
+Cc: Aurelien Jarno <aurelien@aurel32.net>
+---
+ net/tap-bsd.c |    6 ------
+ qemu-char.c   |   14 +++++++-------
+ savevm.c      |   13 -------------
+ vl.c          |    6 ------
+ 4 files changed, 7 insertions(+), 32 deletions(-)
+
+diff --git a/net/tap-bsd.c b/net/tap-bsd.c
+index 4b6b3a4..937a94b 100644
+--- a/net/tap-bsd.c
++++ b/net/tap-bsd.c
+@@ -33,12 +33,6 @@
+ #include <net/if_tap.h>
+ #endif
+ 
+-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+-#include <libutil.h>
+-#else
+-#include <util.h>
+-#endif
+-
+ int tap_open(char *ifname, int ifname_size, int *vnet_hdr, int vnet_hdr_required)
+ {
+     int fd;
+diff --git a/qemu-char.c b/qemu-char.c
+index fe1126f..3248c62 100644
+--- a/qemu-char.c
++++ b/qemu-char.c
+@@ -56,19 +56,19 @@
+ #include <sys/select.h>
+ #ifdef CONFIG_BSD
+ #include <sys/stat.h>
+-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+-#include <libutil.h>
+-#include <dev/ppbus/ppi.h>
+-#include <dev/ppbus/ppbconf.h>
+ #if defined(__GLIBC__)
+ #include <pty.h>
++#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
++#include <libutil.h>
++#else
++#include <util.h>
+ #endif
++#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
++#include <dev/ppbus/ppi.h>
++#include <dev/ppbus/ppbconf.h>
+ #elif defined(__DragonFly__)
+-#include <libutil.h>
+ #include <dev/misc/ppi/ppi.h>
+ #include <bus/ppbus/ppbconf.h>
+-#else
+-#include <util.h>
+ #endif
+ #else
+ #ifdef __linux__
+diff --git a/savevm.c b/savevm.c
+index 2d18bab..981f368 100644
+--- a/savevm.c
++++ b/savevm.c
+@@ -45,19 +45,6 @@
+ #include <dirent.h>
+ #include <netdb.h>
+ #include <sys/select.h>
+-#ifdef CONFIG_BSD
+-#include <sys/stat.h>
+-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+-#include <libutil.h>
+-#else
+-#include <util.h>
+-#endif
+-#ifdef __linux__
+-#include <pty.h>
+-#include <malloc.h>
+-#include <linux/rtc.h>
+-#endif
+-#endif
+ #endif
+ 
+ #ifdef _WIN32
+diff --git a/vl.c b/vl.c
+index 23ab3a3..1489a01 100644
+--- a/vl.c
++++ b/vl.c
+@@ -51,14 +51,12 @@
+ #ifdef CONFIG_BSD
+ #include <sys/stat.h>
+ #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+-#include <libutil.h>
+ #include <sys/sysctl.h>
+ #else
+ #include <util.h>
+ #endif
+ #else
+ #ifdef __linux__
+-#include <pty.h>
+ #include <malloc.h>
+ 
+ #include <linux/ppdev.h>
+@@ -81,10 +79,6 @@
+ #endif
+ #endif
+ 
+-#if defined(__OpenBSD__)
+-#include <util.h>
+-#endif
+-
+ #if defined(CONFIG_VDE)
+ #include <libvdeplug.h>
+ #endif
+-- 
+1.7.10
+

@@ -1,0 +1,229 @@
+#!/usr/bin/make -f
+#
+# $Id: rules 391 2009-03-07 05:21:19Z aurel32 $
+#
+
+# Packaging version
+DEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
+
+# Compiler flags
+CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+LDFLAGS += -Wl,--as-needed
+CFLAGS += $(shell dpkg-buildflags --get CPPFLAGS)
+
+# Architecture/system specific configuration
+DEB_HOST_ARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_ARCH_OS = $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+DEB_HOST_ARCH_CPU = $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+       conf_audio_drv += --audio-drv-list=alsa,oss,sdl,pa
+endif
+ifeq ($(DEB_HOST_ARCH_OS),kfreebsd)
+       conf_audio_drv += --audio-drv-list=oss,sdl,pa
+endif
+
+# binfmt support
+ALL_BINFMT_TARGETS=alpha arm armeb cris i386 m68k microblaze mips mipsel ppc ppc64 ppc64abi32 s390x sh4 sh4eb sparc sparc32plus sparc64 x86_64
+ifeq ($(DEB_HOST_ARCH),amd64)
+BINFMT_TARGETS=$(filter-out i386 x86_64, $(ALL_BINFMT_TARGETS))
+endif
+ifneq (,$(findstring $(DEB_HOST_ARCH), arm armel armhf))
+BINFMT_TARGETS=$(filter-out arm, $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(DEB_HOST_ARCH),i386)
+# Drop support for emulating amd64 on i386, as it is broken and including it
+# interferes with environments capable of running amd64 natively.
+# http://bugs.debian.org/604712
+BINFMT_TARGETS=$(filter-out i386 x86_64, $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(DEB_HOST_ARCH),mips)
+BINFMT_TARGETS=$(filter-out mips, $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(DEB_HOST_ARCH),mipsel)
+BINFMT_TARGETS=$(filter-out mipsel, $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(DEB_HOST_ARCH),powerpc)
+BINFMT_TARGETS=$(filter-out ppc, $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(DEB_HOST_ARCH),ppc64)
+BINFMT_TARGETS=$(filter-out ppc ppc64 ppc64abi32 , $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(DEB_HOST_ARCH),s390x)
+BINFMT_TARGETS=$(filter-out s390x, $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(DEB_HOST_ARCH),sparc)
+BINFMT_TARGETS=$(filter-out sparc sparc32plus sparc64, $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(DEB_HOST_ARCH),sparc64)
+BINFMT_TARGETS=$(filter-out sparc sparc32plus sparc64, $(ALL_BINFMT_TARGETS))
+endif
+ifeq ($(BINFMT_TARGETS),)
+BINFMT_TARGETS=$(ALL_BINFMT_TARGETS)
+endif
+
+configure-stamp: configure
+	dh_testdir
+
+	# system build
+	mkdir -p $(CURDIR)/system-build
+	cd $(CURDIR)/system-build && \
+		../configure \
+			--with-pkgversion="Debian $(DEB_VERSION)" \
+			--extra-cflags="$(CFLAGS)" \
+			--extra-ldflags="$(LDFLAGS)" \
+			--prefix=/usr \
+			--sysconfdir=/etc \
+			--disable-blobs \
+			--disable-strip \
+			--disable-linux-user \
+			--disable-bsd-user \
+			$(conf_arch) $(conf_audio_drv)
+
+ifeq ($(DEB_HOST_ARCH_OS),kfreebsd)
+# Hack alert.
+# On recent kFreebsd, old USB host API has been removed,
+# but qemu did not learn to use new USB API.
+# Just do not build USB host support.
+	sed -i 's/^HOST_USB=bsd/HOST_USB=stub/' \
+		$(CURDIR)/system-build/config-host.mak
+endif
+
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+	# user build
+	mkdir -p $(CURDIR)/user-build
+	cd $(CURDIR)/user-build && \
+		../configure \
+			--with-pkgversion="Debian $(DEB_VERSION)" \
+			--extra-cflags="$(CFLAGS)" \
+			--extra-ldflags="$(LDFLAGS)" \
+			--prefix=/usr \
+			--sysconfdir=/etc \
+			--interp-prefix=/etc/qemu-binfmt/%M \
+			--disable-blobs \
+			--disable-strip \
+			--disable-system \
+			$(conf_arch)
+
+	# static user build
+	mkdir -p $(CURDIR)/user-static-build
+	cd $(CURDIR)/user-static-build && \
+		../configure \
+			--with-pkgversion="Debian $(DEB_VERSION)" \
+			--extra-cflags="$(CFLAGS)" \
+			--extra-ldflags="$(LDFLAGS)" \
+			--prefix=/usr \
+			--sysconfdir=/etc \
+			--interp-prefix=/etc/qemu-binfmt/%M \
+			--disable-blobs \
+			--disable-strip \
+			--disable-system \
+			--static \
+			$(conf_arch)
+endif
+	touch $@
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	
+	# system build
+	$(MAKE) -C $(CURDIR)/system-build
+
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+	# user build
+	$(MAKE) -C $(CURDIR)/user-build
+
+	# static user build
+	$(MAKE) -C $(CURDIR)/user-static-build
+endif
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	
+	rm -rf $(CURDIR)/*-build
+	rm -f $(CURDIR)/*-stamp
+	rm -f config.log
+	
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs -a
+	
+	# system build
+	$(MAKE) -C $(CURDIR)/system-build DESTDIR=$(CURDIR)/debian/tmp install
+
+	for i in bamboo mpc8544ds ; do \
+		dtc -o $(CURDIR)/debian/tmp/usr/share/qemu/$$i.dtb pc-bios/$$i.dts ; \
+	done
+
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+	# user build
+	$(MAKE) -C $(CURDIR)/user-build DESTDIR=$(CURDIR)/debian/tmp install
+
+	# static user build
+	for target in $(CURDIR)/user-static-build/*-*-user/qemu-* ; do \
+		install -m 755 $$target $(CURDIR)/debian/tmp/usr/bin/$$(basename $$target)-static ; \
+	done
+
+	# binfmt support
+	sed -i -e 's/^BINFMT_TARGETS=.*/BINFMT_TARGETS=\"$(ALL_BINFMT_TARGETS)\"/g' \
+		$(CURDIR)/debian/qemu-user-static.prerm \
+		$(CURDIR)/debian/qemu-user-static.postinst
+
+	for target in $(BINFMT_TARGETS) ; do \
+		install -m 644 $(CURDIR)/debian/binfmts/qemu-$$target \
+			$(CURDIR)/debian/qemu-user-static/usr/share/binfmts ; \
+	done
+endif
+
+	# Install files in the various packages
+	dh_install -s --list-missing
+
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_install -i
+	dh_installdocs -i
+	dh_installman -i
+	dh_installchangelogs -i Changelog
+	dh_link -i
+	dh_strip -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install -a
+	dh_installdocs -a
+	dh_installman -a
+	dh_installudev -a
+	dh_installchangelogs -a Changelog
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	chmod a+x $(CURDIR)/debian/qemu-system/etc/qemu-ifup
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+
+.PHONY: build clean binary-indep binary-arch binary install
+
