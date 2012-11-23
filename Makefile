@@ -50,7 +50,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt gjs \
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
-	qpdf lightspark ramen gnome-vfs neon libav imlib terminator ekiga python-gnutls \
+	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
 
 SPREZZ:=packaging
 
@@ -204,7 +204,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING) \
 	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GLIBNETWORKING) \
 	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV) \
-	$(IMLIB) $(TERMINATOR) $(EKIGA) $(PYTHONGNUTLS)
+	$(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -519,13 +519,13 @@ $(CINNAMON): $(SPREZZ)/cinnamon/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf cinnamon-$(cinnamon_UPVER).tar.xz --strip-components=1 -C $@
 
-.PHONY: terminator
-terminator:$(TERMINATOR)_$(ARCH).deb
-$(TERMINATOR): $(SPREZZ)/terminator/debian/changelog
+.PHONY: terminology
+terminology:$(TERMINOLOGY)_$(ARCH).deb
+$(TERMINOLOGY): $(SPREZZ)/terminology/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf terminator-$(terminator_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xjvf terminology-$(terminology_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: cogl
 cogl:$(COGL)_$(ARCH).deb
@@ -2813,7 +2813,7 @@ clean:
 	rm -rf $(MUTT) $(TRACKER) $(WGET) $(NVIDIAKERNELDKMS) $(XSERVERXORGVIDEOMODESETTING)
 	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GJS) $(GLIBNETWORKING)
 	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
-	rm -rf $(IMLIB) $(TERMINATOR) $(EKIGA) $(PYTHONGNUTLS)
+	rm -rf $(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS)
 
 clobber:
 	rm -rf $(FETCHED)
