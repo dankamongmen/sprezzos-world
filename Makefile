@@ -1317,7 +1317,7 @@ $(IMLIB): $(SPREZZ)/imlib/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf imlib-$(imlib_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xjvf imlib2-$(imlib_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: libav
 libav:$(LIBAV)_$(ARCH).deb
