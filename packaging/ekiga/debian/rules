@@ -1,0 +1,96 @@
+#!/usr/bin/make -f
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+include /usr/share/gnome-pkg-tools/1/rules/uploaders.mk
+-include /usr/share/gnome-pkg-tools/1/rules/gnome-get-source.mk
+
+# how to call quilt
+QUILT := QUILT_PATCHES=debian/patches quilt --quiltrc /dev/null
+
+CFLAGS   += -Wall -g -O$(if $(findstring noopt,$(DEB_BUILD_OPTIONS)),0,2)
+CXXFLAGS += -Wall -g -O$(if $(findstring noopt,$(DEB_BUILD_OPTIONS)),0,2)
+# --as-needed is relatively risky and should be added with -z defs if possible
+LDFLAGS += -Wl,-z,defs -Wl,--as-needed
+
+confflags += \
+	--prefix=/usr \
+	--sysconfdir=/etc \
+	--disable-schemas-install
+
+patch: patch-stamp
+patch-stamp:
+	dh_testdir
+	# backup the original files to restore them in the clean target
+	[ ! -r config.sub ]   || cp config.sub   config.sub.orig
+	[ ! -r config.guess ] || cp config.guess config.guess.orig
+	[ ! -r gnome-doc-utils.make ] || cp gnome-doc-utils.make gnome-doc-utils.make.orig
+	# install latest version from autotools-dev
+	[ ! -r config.sub ]   || cp -f /usr/share/misc/config.sub   .
+	[ ! -r config.guess ] || cp -f /usr/share/misc/config.guess   .
+	[ ! -r gnome-doc-utils.make ] || cp -f /usr/share/gnome-doc-utils/gnome-doc-utils.make .
+	touch $@
+
+build: build-stamp
+build-stamp: patch-stamp
+	dh_testdir
+	rm -f config.cache
+	CXXFLAGS="$(CXXFLAGS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" \
+	    ./configure $(confflags)
+	$(MAKE) $(MAKEFLAGS)
+	touch $@
+
+clean::
+	dh_testdir
+	dh_testroot
+	[ ! -f Makefile ] || $(MAKE) distclean
+	# restore files from backup (before unpatching)
+	[ ! -e config.sub.orig ]   || mv -f config.sub.orig   config.sub
+	[ ! -e config.guess.orig ] || mv -f config.guess.orig config.guess
+	[ ! -e gnome-doc-utils.make.orig ] || mv -f gnome-doc-utils.make.orig gnome-doc-utils.make
+	-$(RM) -f build-stamp patch-stamp
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	cd po/; intltool-update -p
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/ekiga
+
+binary-indep: build install
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -s -Nekiga-dbg
+	dh_install -s
+	dh_installmenu -s
+	dh_installman -s -Nekiga-dbg
+	dh_installchangelogs -s -Nekiga-dbg NEWS
+	dh_gconf -s
+	dh_link -s
+	dh_strip -s --dbg-package=ekiga-dbg
+	dh_compress -s
+	dh_fixperms -s
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install patch
