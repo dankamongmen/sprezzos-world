@@ -52,7 +52,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
 	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
 	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
-	py3cairo qemu-kvm gtk-vnc
+	py3cairo qemu-kvm gtk-vnc gthumb
 
 SPREZZ:=packaging
 
@@ -208,7 +208,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV) \
 	$(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM) \
 	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER) $(PY3CAIRO) \
-	$(QEMUKVM) $(GTKVNC)
+	$(QEMUKVM) $(GTKVNC) $(GTHUMB)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1098,6 +1098,14 @@ $(GSTREAMER): $(SPREZZ)/gstreamer/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gstreamer-$(gstreamer_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gthumb
+gthumb:$(GTHUMB)_$(ARCH).deb
+$(GTHUMB): $(SPREZZ)/gthumb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gthumb_$(gthumb_UPVER).orig.tar.xz --strip-components=1 -C $@
 
 .PHONY: gtkhtml
 gtkhtml:$(GTKHTML)_$(ARCH).deb
@@ -2891,7 +2899,7 @@ clean:
 	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
 	rm -rf $(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM)
 	rm -rf $(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
-	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC)
+	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB)
 
 clobber:
 	rm -rf $(FETCHED)
