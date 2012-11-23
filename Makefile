@@ -51,7 +51,8 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
 	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
-	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter
+	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
+	py3cairo
 
 SPREZZ:=packaging
 
@@ -206,7 +207,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GLIBNETWORKING) \
 	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV) \
 	$(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM) \
-	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
+	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER) $(PY3CAIRO)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1722,6 +1723,14 @@ $(PROCPS): $(SPREZZ)/procps/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf procps-$(procps_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: py3cairo
+py3cairo:$(PY3CAIRO)_$(ARCH).deb
+$(PY3CAIRO): $(SPREZZ)/py3cairo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf pycairo-$(py3cairo_UPVER).tar.bz2 --strip-components=1 -C $@
+
 .PHONY: pygobject
 pygobject:$(PYGOBJECT)_$(ARCH).deb
 $(PYGOBJECT): $(SPREZZ)/pygobject/debian/changelog
@@ -2865,6 +2874,7 @@ clean:
 	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
 	rm -rf $(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM)
 	rm -rf $(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
+	rm -rf $(PY3CAIRO)
 
 clobber:
 	rm -rf $(FETCHED)
