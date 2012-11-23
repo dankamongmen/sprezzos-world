@@ -51,7 +51,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
 	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
-	xorg qemu-system network-manager-applet network-manager libgadu
+	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter
 
 SPREZZ:=packaging
 
@@ -206,7 +206,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GLIBNETWORKING) \
 	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV) \
 	$(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM) \
-	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU)
+	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1625,6 +1625,14 @@ $(NETWORKMANAGERAPPLET): $(SPREZZ)/network-manager-applet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf network-manager-applet-$(network-manager-applet_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: newsbeuter
+newsbeuter:$(NEWSBEUTER)_$(ARCH).deb
+$(NEWSBEUTER): $(SPREZZ)/newsbeuter/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf newsbeuter_$(newsbeuter_UPVER).orig.tar.gz --strip-components=1 -C $@
+
 .PHONY: nfs-utils
 nfs-utils:$(NFSUTILS)_$(ARCH).deb
 $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
@@ -2856,7 +2864,7 @@ clean:
 	rm -rf $(LIBTOOL) $(SUBVERSION) $(LIBIMOBILEDEVICE) $(USBMUXD) $(GJS) $(GLIBNETWORKING)
 	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
 	rm -rf $(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM)
-	rm -rf $(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU)
+	rm -rf $(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
 
 clobber:
 	rm -rf $(FETCHED)
