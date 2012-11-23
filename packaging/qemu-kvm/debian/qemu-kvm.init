@@ -1,0 +1,81 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          qemu-kvm kvm
+# Required-Start:    mountkernfs
+# Required-Stop:     
+# Should-Start:      udev devfsd
+# Should-Stop:       
+# Default-Start:     S
+# Default-Stop:      
+# Short-Description: KVM init script
+# Description:       This script loads the kernel modules needed by kvm
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+# Figure out which module we need.
+whichmodule() {
+    if grep -q '^flags.*\<vmx\>' /proc/cpuinfo
+    then
+	module=kvm_intel
+	return 0
+    elif grep -q '^flags.*\<svm\>' /proc/cpuinfo
+    then
+	module=kvm_amd
+	return 0
+    else
+	module=
+	return 1
+    fi
+}
+
+case "$1" in
+  start)
+	if ! whichmodule
+	then
+		log_failure_msg "Your system does not have the CPU extensions required to use KVM. Not doing anything."
+		exit 0
+	fi
+	if [ -c /dev/kvm ]
+	then
+		log_success_msg "/dev/kvm already exists. Not doing anything."
+		exit 0
+	fi
+	if modprobe "$module" 
+	then
+		log_success_msg "Loading kvm module $module"
+	else
+		log_failure_msg "Module $module failed to load"
+		exit 1
+	fi
+	;;
+  stop)
+	if ! whichmodule
+	then
+		exit 0
+	fi
+	if lsmod | grep -qw "$module"
+	then
+		if rmmod "$module" 
+		then
+			log_success_msg "Succesfully unloaded kvm module $module"
+			rmmod kvm
+		else
+			log_failure_msg "Failed to remove $module"
+			exit 1
+		fi
+	else
+		log_failure_msg "Module $module not loaded"
+	fi
+	;;
+  force-reload|restart)
+	$0 stop
+	$0 start
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart|force-reload}" >&2
+	exit 3
+	;;
+esac
+
+:

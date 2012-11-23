@@ -1,0 +1,983 @@
+From: Michael Tokarev <mjt@tls.msk.ru>
+Date:   Wed Jun 6 22:21:57 2012 +0400
+Subject: resurrect extboot
+
+This patch restores extboot functionality of qemu-kvm
+which was removed for 1.0 version.  It partially reverts
+commit
+   2a06024dc1b1e27b1be0266379af397e61b4a9ad qemu-kvm: Remove extboot support
+and modifies commit
+  841280b6c224ea2c6edc2f5afc2add513c85181d qemu-kvm: Deprecate drive parameter boot=on|off
+in qemu-kvm git tree.
+    
+I want to keep it for some more time to let users to migrate --
+e.g. from bootable scsi drives - to something else.  One possible
+alternative is to use ahci (sata).
+
+It will definitely go away after wheezy.
+
+diff --git a/Makefile.target b/Makefile.target
+index eda8637..4e4bd23 100644
+--- a/Makefile.target
++++ b/Makefile.target
+@@ -226,6 +226,7 @@ obj-i386-y += apic_common.o apic.o kvmvapic.o
+ obj-i386-y += sga.o ioapic_common.o ioapic.o piix_pci.o
+ obj-i386-y += vmport.o
+ obj-i386-y += pci-hotplug.o smbios.o wdt_ib700.o
++obj-i386-y += extboot.o
+ obj-i386-y += debugcon.o multiboot.o
+ obj-i386-y += pc_piix.o
+ obj-i386-y += pc_sysfw.o
+diff --git a/blockdev.c b/blockdev.c
+index 0d20460..63c384e 100644
+--- a/blockdev.c
++++ b/blockdev.c
+@@ -20,6 +20,8 @@
+ #include "trace.h"
+ #include "arch_init.h"
+ 
++DriveInfo *extboot_drive = NULL;
++
+ static QTAILQ_HEAD(drivelist, DriveInfo) drives = QTAILQ_HEAD_INITIALIZER(drives);
+ 
+ static const char *const if_name[IF_COUNT] = {
+@@ -293,6 +295,7 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+     int on_read_error, on_write_error;
+     const char *devaddr;
+     DriveInfo *dinfo;
++    int is_extboot = 0;
+     BlockIOLimit io_limits;
+     int snapshot = 0;
+     bool copy_on_read;
+@@ -435,11 +438,17 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+     }
+ 
+     if (qemu_opt_get(opts, "boot") != NULL) {
+-        fprintf(stderr, "qemu-kvm: boot=on|off is deprecated and will be "
+-                "ignored. Future versions will reject this parameter. Please "
++        fprintf(stderr, "qemu-kvm: WARNING: boot=on|off is deprecated and does not exist upstream. "
++                "Please "
+                 "update your scripts.\n");
+     }
+ 
++    is_extboot = qemu_opt_get_bool(opts, "boot", 0);
++    if (is_extboot && extboot_drive) {
++        fprintf(stderr, "qemu: two bootable drives specified\n");
++        return NULL;
++    }
++
+     on_write_error = BLOCK_ERR_STOP_ENOSPC;
+     if ((buf = qemu_opt_get(opts, "werror")) != NULL) {
+         if (type != IF_IDE && type != IF_SCSI && type != IF_VIRTIO && type != IF_NONE) {
+@@ -546,6 +555,10 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
+     }
+     QTAILQ_INSERT_TAIL(&drives, dinfo, next);
+ 
++    if (is_extboot) {
++        extboot_drive = dinfo;
++    }
++
+     bdrv_set_on_error(dinfo->bdrv, on_read_error, on_write_error);
+ 
+     /* disk I/O throttling */
+diff --git a/blockdev.h b/blockdev.h
+index 260e16b..0b593f4 100644
+--- a/blockdev.h
++++ b/blockdev.h
+@@ -54,6 +54,8 @@ QemuOpts *drive_add(BlockInterfaceType type, int index, const char *file,
+                     const char *optstr);
+ DriveInfo *drive_init(QemuOpts *arg, int default_to_scsi);
+ 
++extern DriveInfo *extboot_drive;
++
+ /* device-hotplug */
+ 
+ DriveInfo *add_init_drive(const char *opts);
+diff --git a/hw/extboot.c b/hw/extboot.c
+new file mode 100644
+index 0000000..d517834
+--- /dev/null
++++ b/hw/extboot.c
+@@ -0,0 +1,123 @@
++/*
++ * Extended boot option ROM support.
++ *
++ * Copyright IBM, Corp. 2007
++ *
++ * Authors:
++ *  Anthony Liguori   <aliguori@us.ibm.com>
++ *
++ * This work is licensed under the terms of the GNU GPL, version 2.  See
++ * the COPYING file in the top-level directory.
++ *
++ */
++
++#include "hw.h"
++#include "pc.h"
++#include "isa.h"
++#include "block.h"
++
++/* Extended Boot ROM suport */
++
++union extboot_cmd
++{
++    uint16_t type;
++    struct {
++	uint16_t type;
++	uint16_t cylinders;
++	uint16_t heads;
++	uint16_t sectors;
++	uint64_t nb_sectors;
++    } query_geometry;
++    struct {
++	uint16_t type;
++	uint16_t nb_sectors;
++	uint16_t segment;
++	uint16_t offset;
++	uint64_t sector;
++    } xfer;
++};
++
++static void get_translated_chs(BlockDriverState *bs, int *c, int *h, int *s)
++{
++    bdrv_get_geometry_hint(bs, c, h, s);
++
++    if (*c <= 1024) {
++	*c >>= 0;
++	*h <<= 0;
++    } else if (*c <= 2048) {
++	*c >>= 1;
++	*h <<= 1;
++    } else if (*c <= 4096) {
++	*c >>= 2;
++	*h <<= 2;
++    } else if (*c <= 8192) {
++	*c >>= 3;
++	*h <<= 3;
++    } else {
++	*c >>= 4;
++	*h <<= 4;
++    }
++
++    /* what is the correct algorithm for this?? */
++    if (*h == 256) {
++	*h = 255;
++	*c = *c + 1;
++    }
++}
++
++static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
++{
++    union extboot_cmd cmd;
++    BlockDriverState *bs = opaque;
++    int cylinders, heads, sectors, err;
++    uint64_t nb_sectors;
++    target_phys_addr_t pa = 0;
++    int blen = 0;
++    void *buf = NULL;
++
++    cpu_physical_memory_read((value & 0xFFFF) << 4, (uint8_t *)&cmd,
++                             sizeof(cmd));
++
++    if (cmd.type == 0x01 || cmd.type == 0x02) {
++	pa = cmd.xfer.segment * 16 + cmd.xfer.offset;
++        blen = cmd.xfer.nb_sectors * 512;
++        buf = qemu_memalign(512, blen);
++    }
++
++    switch (cmd.type) {
++    case 0x00:
++        get_translated_chs(bs, &cylinders, &heads, &sectors);
++	bdrv_get_geometry(bs, &nb_sectors);
++	cmd.query_geometry.cylinders = cylinders;
++	cmd.query_geometry.heads = heads;
++	cmd.query_geometry.sectors = sectors;
++	cmd.query_geometry.nb_sectors = nb_sectors;
++	break;
++    case 0x01:
++	err = bdrv_read(bs, cmd.xfer.sector, buf, cmd.xfer.nb_sectors);
++	if (err)
++	    printf("Read failed\n");
++
++        cpu_physical_memory_write(pa, buf, blen);
++
++	break;
++    case 0x02:
++        cpu_physical_memory_read(pa, buf, blen);
++
++	err = bdrv_write(bs, cmd.xfer.sector, buf, cmd.xfer.nb_sectors);
++	if (err)
++	    printf("Write failed\n");
++
++	break;
++    }
++
++    cpu_physical_memory_write((value & 0xFFFF) << 4, (uint8_t *)&cmd,
++                              sizeof(cmd));
++    if (buf)
++        free(buf);
++}
++
++void extboot_init(BlockDriverState *bs)
++{
++    register_ioport_write(0x405, 1, 2, extboot_write_cmd, bs);
++}
+diff --git a/hw/pc.c b/hw/pc.c
+index dc31933..b4111d8 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1021,6 +1021,12 @@ void pc_memory_init(MemoryRegion *system_memory,
+     /* Initialize PC system firmware */
+     pc_system_firmware_init(rom_memory);
+ 
++    if (extboot_drive) {
++        option_rom[nb_option_roms].name = "extboot.bin";
++        option_rom[nb_option_roms].bootindex = 0;
++        nb_option_roms++;
++    }
++
+     option_rom_mr = g_malloc(sizeof(*option_rom_mr));
+     memory_region_init_ram(option_rom_mr, "pc.rom", PC_ROM_SIZE);
+     vmstate_register_ram_global(option_rom_mr);
+@@ -1190,4 +1196,16 @@ void pc_pci_device_init(PCIBus *pci_bus)
+     for (bus = 0; bus <= max_bus; bus++) {
+         pci_create_simple(pci_bus, -1, "lsi53c895a");
+     }
++
++    if (extboot_drive) {
++        DriveInfo *info = extboot_drive;
++        int cyls, heads, secs;
++
++        if (info->type != IF_IDE && info->type != IF_VIRTIO) {
++            bdrv_guess_geometry(info->bdrv, &cyls, &heads, &secs);
++            bdrv_set_geometry_hint(info->bdrv, cyls, heads, secs);
++        }
++
++        extboot_init(info->bdrv);
++    }
+ }
+diff --git a/hw/pc.h b/hw/pc.h
+index 8ccf202..d8744ef 100644
+--- a/hw/pc.h
++++ b/hw/pc.h
+@@ -225,6 +225,10 @@ static inline bool isa_ne2000_init(ISABus *bus, int base, int irq, NICInfo *nd)
+ /* pc_sysfw.c */
+ void pc_system_firmware_init(MemoryRegion *rom_memory);
+ 
++/* extboot.c */
++
++void extboot_init(BlockDriverState *bs);
++
+ /* e820 types */
+ #define E820_RAM        1
+ #define E820_RESERVED   2
+diff --git a/pc-bios/optionrom/Makefile b/pc-bios/optionrom/Makefile
+index 57d8bd0..ef2e9de 100644
+--- a/pc-bios/optionrom/Makefile
++++ b/pc-bios/optionrom/Makefile
+@@ -14,7 +14,7 @@ CFLAGS += -I$(SRC_PATH)
+ CFLAGS += $(call cc-option, $(CFLAGS), -fno-stack-protector)
+ QEMU_CFLAGS = $(CFLAGS)
+ 
+-build-all: multiboot.bin linuxboot.bin kvmvapic.bin
++build-all: multiboot.bin linuxboot.bin kvmvapic.bin extboot.bin
+ 
+ # suppress auto-removal of intermediate files
+ .SECONDARY:
+diff --git a/pc-bios/optionrom/extboot.S b/pc-bios/optionrom/extboot.S
+new file mode 100644
+index 0000000..db6c2b6
+--- /dev/null
++++ b/pc-bios/optionrom/extboot.S
+@@ -0,0 +1,691 @@
++/*
++ * Extended Boot Option ROM
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
++ *
++ * Copyright IBM Corporation, 2007
++ *   Authors: Anthony Liguori <aliguori@us.ibm.com>
++ */
++
++#define OLD_INT19	(0x80 * 4)	/* re-use INT 0x80 BASIC vector */
++#define OLD_INT13	(0x81 * 4)	/* re-use INT 0x81 BASIC vector */
++
++.code16
++.text
++	.global _start
++_start:
++	.short 0xaa55
++	.byte (_end - _start) / 512
++	push %eax
++	push %ds
++
++	/* setup ds so we can access the IVT */
++	xor %ax, %ax
++	mov %ax, %ds
++
++	/* there is one more bootable HD */
++	incb 0x0475
++
++	/* save old int 19 */
++	mov (0x19*4), %eax
++	mov %eax, (OLD_INT19)
++
++	/* install out int 19 handler */
++	movw $int19_handler, (0x19*4)
++	mov %cs, (0x19*4+2)
++
++	pop %ds
++	pop %eax
++	lret
++
++int19_handler:
++	push %eax /* reserve space for lret */
++	push %eax
++	push %bx
++	push %cx
++	push %dx
++	push %ds
++
++	/* setup ds to access IVT */
++	xor %ax, %ax
++	mov %ax, %ds
++
++	/* save old int 13 to int 2c */
++	mov (0x13*4), %eax
++	mov %eax, (OLD_INT13)
++
++	/* install our int 13 handler */
++	movw $int13_handler, (0x13*4)
++	mov %cs, (0x13*4+2)
++
++	/* restore previous int $0x19 handler */
++	mov (OLD_INT19),%eax
++	mov %eax,(0x19*4)
++
++	/* write old handler as return address onto stack */
++	push %bp
++	mov %sp, %bp
++	mov %eax, 14(%bp)
++	pop %bp
++
++	pop %ds
++	pop %dx
++	pop %cx
++	pop %bx
++	pop %eax
++	lret
++
++#define FLAGS_CF	0x01
++
++/* The two macro below clear/set the carry flag to indicate the status
++ * of the interrupt execution. It is not enough to issue a clc/stc instruction,
++ * since the value of the flags register will be overwritten by whatever is
++ * in the stack frame
++ */
++.macro clc_stack
++	push %bp
++	mov %sp, %bp
++	/* 8 = 2 (bp, just pushed) + 2 (ip) + 3 (real mode interrupt frame) */
++	and $(~FLAGS_CF), 8(%bp)
++	pop %bp
++.endm
++
++.macro stc_stack
++	push %bp
++	/* 8 = 2 (bp, just pushed) + 2 (ip) + 3 (real mode interrupt frame) */
++	or $(FLAGS_CF), 8(%bp)
++	pop %bp
++.endm
++
++/* we clobber %bx */
++.macro alloca size
++	push %ds
++	push %bp
++	mov %sp, %bp  /* remember the current stack position */
++
++	mov %ss, %bx
++	mov %bx, %ds
++
++	sub \size, %sp
++	and $(~0x0F), %sp
++	mov %sp, %bx
++
++	push %bp
++	mov 0(%bp), %bp
++.endm
++
++/* we clobber %bp */
++.macro allocbpa size
++	mov %sp, %bp  /* remember the current stack position */
++	sub \size, %sp
++	and $(~0x0F), %sp
++	push %bp
++	mov %sp, %bp
++	add $2, %bp
++.endm
++
++.macro freea
++	pop %sp
++	add $2, %sp
++	pop %ds
++.endm
++
++.macro freebpa
++	pop %sp
++.endm
++
++.macro dump reg
++	push %ax
++	push %dx
++
++	mov \reg, %ax
++	mov $0x406, %dx
++	outw %ax, %dx
++
++	pop %dx
++	pop %ax
++.endm
++
++.macro callout value
++	push %bp
++	push %bx
++	mov %sp, %bp
++	alloca $16
++	push %ax
++	push %dx
++
++	mov %ax, 0(%bx)     /* ax */
++	mov 0(%bp), %ax     /* bx */
++	mov %ax, 2(%bx)
++	mov %cx, 4(%bx)     /* cx */
++	mov %dx, 6(%bx)     /* dx */
++	mov %si, 8(%bx)     /* si */
++	mov %ds, 10(%bx)    /* ds */
++	mov %es, 12(%bx)    /* ds */
++	movw \value, 14(%bx) /* value */
++
++	mov %bx, %ax
++	shr $4, %ax
++	mov %ds, %dx
++	add %dx, %ax
++
++	mov $0x407, %dx
++	outw %ax, %dx
++
++	pop %dx
++	pop %ax
++	freea
++	pop %bx
++	pop %bp
++.endm
++
++send_command:
++	push %bp
++	mov %sp, %bp
++	push %ax
++	push %bx
++	push %dx
++
++	mov 4(%bp), %ax
++	shr $4, %ax
++	and $0x0FFF, %ax
++	mov %ss, %bx
++	add %bx, %ax
++
++	mov $0x405, %dx
++	outw %ax, %dx
++
++	pop %dx
++	pop %bx
++	pop %ax
++	pop %bp
++
++	push %ax
++	mov 2(%bx), %ax
++	pop %ax
++
++	ret
++
++add32:  /* lo, hi, lo, hi */
++	push %bp
++	mov %sp, %bp
++
++	movw 4(%bp), %cx  /* hi */
++	movw 6(%bp), %dx  /* lo */
++
++	add  10(%bp), %dx
++	jnc 1f
++	add $1, %cx
++1:	add 8(%bp), %cx
++
++	pop %bp
++	ret
++
++mul32:  /* lo,      hi,     lo,     hi */
++	/* 10(%bp), 8(%bp), 6(%bp), 4(%bp) */
++	push %bp
++	mov %sp, %bp
++	push %ax
++	push %bx
++
++	xor %cx, %cx
++	xor %dx, %dx
++
++	/* for (i = 0; i < 16;) */
++	xor %bx, %bx
++0:
++	cmp $16, %bx
++	jge 2f
++
++	mov 6(%bp), %ax
++	and $1, %ax
++	cmp $1, %ax
++	jne 1f
++	push 10(%bp)
++	push 8(%bp)
++	push %dx
++	push %cx
++	call add32
++	add $8, %sp
++1:
++	shlw $1, 8(%bp)
++	movw 10(%bp), %ax
++	and $0x8000, %ax
++	cmp $0x8000, %ax
++	jne 1f
++	orw $1, 8(%bp)
++1:
++	shlw $1, 10(%bp)
++	shrw $1, 6(%bp)
++
++	/* i++) { */
++	add $1, %bx
++	jmp 0b
++
++2:
++	pop %bx
++	pop %ax
++	pop %bp
++	ret
++
++disk_reset:
++	movb $0, %ah
++	clc_stack
++	ret
++
++/* this really should be a function, not a macro but i'm lazy */
++.macro read_write_disk_sectors cmd
++	push %ax
++	push %bx
++	push %cx
++	push %dx
++	push %si
++
++	push %bp
++	sub $10, %sp
++	mov %sp, %bp
++
++	/* save nb_sectors */
++	mov %al, 6(%bp)
++	movb $0, 7(%bp)
++
++	/* save buffer */
++	mov %bx, 8(%bp)
++
++	/* cylinders */
++	xor %ax, %ax
++	mov %cl, %al
++	shl $2, %ax
++	and $0x300, %ax
++	mov %ch, %al
++	mov %ax, 0(%bp)
++
++	/* heads */
++	xor %ax, %ax
++	mov %dh, %al
++	mov %ax, 2(%bp)
++
++	/* sectors - 1 */
++	xor %ax, %ax
++	mov %cl, %al
++	and $0x3F, %al
++	sub $1, %ax
++	mov %ax, 4(%bp)
++
++	alloca $16
++
++	movw $0, 0(%bx) /* read c,h,s */
++	push %bx
++	call send_command
++	add $2, %sp
++
++	mov 6(%bx), %ax /* total_sectors */
++	mov 2(%bp), %si /* *= heads */
++	mul %si
++	add 4(%bp), %ax /* += sectors - 1 */
++
++	push 4(%bx) /* total_heads */
++	push $0
++	push 6(%bx) /* total_sectors */
++	push $0
++	call mul32
++	add $8, %sp
++
++	push 0(%bp) /* cylinders */
++	push $0
++	push %dx
++	push %cx
++	call mul32
++	add $8, %sp
++
++	add %ax, %dx
++	jnc 1f
++	add $1, %cx
++1:
++	freea
++
++	alloca $16
++
++	movw \cmd, 0(%bx) /* read */
++	movw 6(%bp), %ax /* nb_sectors */
++	movw %ax, 2(%bx)
++	movw %es, 4(%bx) /* segment */
++	movw 8(%bp), %ax /* offset */
++	mov %ax, 6(%bx)
++	movw %dx, 8(%bx) /* sector */
++	movw %cx, 10(%bx)
++	movw $0, 12(%bx)
++	movw $0, 14(%bx)
++
++	push %bx
++	call send_command
++	add $2, %sp
++
++	freea
++
++	add $10, %sp
++	pop %bp
++
++	pop %si
++	pop %dx
++	pop %cx
++	pop %bx
++	pop %ax
++
++	mov $0, %ah
++	clc_stack
++	ret
++.endm
++
++read_disk_sectors:
++	read_write_disk_sectors $0x01
++
++write_disk_sectors:
++	read_write_disk_sectors $0x02
++
++read_disk_drive_parameters:
++	push %bx
++
++	/* allocate memory for packet, pointer gets returned in bx */
++	alloca $16
++
++	/* issue command */
++	movw $0, 0(%bx) /* cmd = 0, read c,h,s */
++	push %bx
++	call send_command
++	add $2, %sp
++
++	/* normalize sector value */
++	movb 6(%bx), %cl
++	andb $0x3F, %cl
++	movb %cl, 6(%bx)
++
++	/* normalize cylinders */
++	subw $2, 2(%bx)
++
++	/* normalize heads */
++	subw $1, 4(%bx)
++
++	/* return code */
++	mov $0, %ah
++
++	/* cylinders */
++	movb 2(%bx), %ch
++	movb 3(%bx), %cl
++	shlb $6, %cl
++	andb $0xC0, %cl
++
++	/* sectors */
++	orb 6(%bx), %cl
++
++	/* heads */
++	movb 4(%bx), %dh
++
++	/* drives */
++	movb $1, %dl
++
++	/* status */
++	mov $0, %ah
++
++	freea
++
++	pop %bx
++
++	/* do this last since it's the most sensitive */
++	clc_stack
++	ret
++
++alternate_disk_reset:
++	movb $0, %ah
++	clc_stack
++	ret
++
++read_disk_drive_size:
++	push %bx
++	alloca $16
++
++	movw $0, 0(%bx) /* cmd = 0, read c,h,s */
++	push %bx
++	call send_command
++	add $2, %sp
++
++	/* cylinders - 1 to cx:dx */
++	mov 2(%bx), %dx
++	xor %cx, %cx
++	sub $1, %dx
++
++	/* heads */
++	push 4(%bx)
++	push $0
++	push %dx
++	push %cx
++	call mul32
++	add $8, %sp
++
++	/* sectors */
++	push 6(%bx)
++	push $0
++	push %dx
++	push %cx
++	call mul32
++	add $8, %sp
++
++	/* status */
++	mov $3, %ah
++
++	freea
++	pop %bx
++
++	clc_stack
++	ret
++
++check_if_extensions_present:
++	mov $0x30, %ah
++	mov $0xAA55, %bx
++	mov $0x07, %cx
++	clc_stack
++	ret
++
++.macro extended_read_write_sectors cmd
++	cmpb $10, 0(%si)
++	jg 1f
++	mov $1, %ah
++	stc_stack
++	ret
++1:
++	push %ax
++	push %bp
++	allocbpa $16
++
++	movw \cmd, 0(%bp) /* read */
++	movw 2(%si), %ax   /* nb_sectors */
++	movw %ax, 2(%bp)
++	movw 4(%si), %ax   /* offset */
++	movw %ax, 6(%bp)
++	movw 6(%si), %ax   /* segment */
++	movw %ax, 4(%bp)
++	movw 8(%si), %ax   /* block */
++	movw %ax, 8(%bp)
++	movw 10(%si), %ax
++	movw %ax, 10(%bp)
++	movw 12(%si), %ax
++	movw %ax, 12(%bp)
++	movw 14(%si), %ax
++	movw %ax, 14(%bp)
++
++	push %bp
++	call send_command
++	add $2, %sp
++
++	freebpa
++	pop %bp
++	pop %ax
++
++	mov $0, %ah
++	clc_stack
++	ret
++.endm
++
++extended_read_sectors:
++	extended_read_write_sectors $0x01
++
++extended_write_sectors:
++	extended_read_write_sectors $0x02
++
++get_extended_drive_parameters:
++	push %ax
++	push %bp
++	push %cx
++	push %dx
++
++	allocbpa $16
++
++	movw $0, 0(%bp) /* read c,h,s */
++	push %bp
++	call send_command
++	add $2, %sp
++
++	/* write size */
++	movw $26, 0(%si)
++
++	/* set flags to 2 */
++	movw $2, 2(%si)
++
++	/* cylinders */
++	mov 2(%bp), %ax
++	mov %ax, 4(%si)
++	xor %ax, %ax
++	mov %ax, 6(%si)
++
++	/* heads */
++	mov 4(%bp), %ax
++	mov %ax, 8(%si)
++	xor %ax, %ax
++	mov %ax, 10(%si)
++
++	/* sectors */
++	mov 6(%bp), %ax
++	mov %ax, 12(%si)
++	xor %ax, %ax
++	mov %ax, 14(%si)
++
++	/* set total number of sectors */
++	mov 8(%bp), %ax
++	mov %ax, 16(%si)
++	mov 10(%bp), %ax
++	mov %ax, 18(%si)
++	mov 12(%bp), %ax
++	mov %ax, 20(%si)
++	mov 14(%bp), %ax
++	mov %ax, 22(%si)
++
++	/* number of bytes per sector */
++	movw $512, 24(%si)
++
++	freebpa
++
++	pop %dx
++	pop %cx
++	pop %bp
++	pop %ax
++
++	mov $0, %ah
++	clc_stack
++	ret
++
++terminate_disk_emulation:
++	mov $1, %ah
++	stc_stack
++	ret
++
++int13_handler:
++	cmp $0x80, %dl
++	je 1f
++
++	/* write old handler as return address onto stack */
++	push %eax
++	push %eax
++	push %ds
++	push %bp
++	mov %sp, %bp
++	xor %ax, %ax
++	mov %ax, %ds
++	mov (OLD_INT13), %eax
++	mov %eax, 8(%bp)
++	pop %bp
++	pop %ds
++	pop %eax
++	lret
++1:
++	cmp $0x0, %ah
++	jne 1f
++	call disk_reset
++	iret
++1:
++	cmp $0x2, %ah
++	jne 1f
++	call read_disk_sectors
++	iret
++1:
++	cmp $0x8, %ah
++	jne 1f
++	call read_disk_drive_parameters
++	iret
++1:
++	cmp $0x15, %ah
++	jne 1f
++	call read_disk_drive_size
++	iret
++1:
++	cmp $0x41, %ah
++	jne 1f
++	call check_if_extensions_present
++	iret
++1:
++	cmp $0x42, %ah
++	jne 1f
++	call extended_read_sectors
++	iret
++1:
++	cmp $0x48, %ah
++	jne 1f
++	call get_extended_drive_parameters
++	iret
++1:
++	cmp $0x4b, %ah
++	jne 1f
++	call terminate_disk_emulation
++	iret
++1:
++	cmp $0x0d, %ah
++	jne 1f
++	call alternate_disk_reset
++	iret
++1:
++	cmp $0x03, %ah
++	jne 1f
++	call write_disk_sectors
++	iret
++1:
++	cmp $0x43, %ah
++	jne 1f
++	call extended_write_sectors
++	iret
++1:
++	int $0x18  /* boot failed */
++	iret
++
++.align 512, 0
++_end:
