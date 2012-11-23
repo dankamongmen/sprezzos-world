@@ -52,7 +52,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
 	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
 	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
-	py3cairo qemu-kvm gtk-vnc gthumb
+	py3cairo qemu-kvm gtk-vnc gthumb pycurl
 
 SPREZZ:=packaging
 
@@ -208,7 +208,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV) \
 	$(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM) \
 	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER) $(PY3CAIRO) \
-	$(QEMUKVM) $(GTKVNC) $(GTHUMB)
+	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1748,6 +1748,14 @@ $(PY3CAIRO): $(SPREZZ)/py3cairo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pycairo-$(py3cairo_UPVER).tar.bz2 --strip-components=1 -C $@
 
+.PHONY: pycurl
+pycurl:$(PYCURL)_$(ARCH).deb
+$(PYCURL): $(SPREZZ)/pycurl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf pycurl-$(pycurl_UPVER).tar.bz2 --strip-components=1 -C $@
+
 .PHONY: pygobject
 pygobject:$(PYGOBJECT)_$(ARCH).deb
 $(PYGOBJECT): $(SPREZZ)/pygobject/debian/changelog
@@ -2899,7 +2907,7 @@ clean:
 	rm -rf $(CUPSFILTERS) $(QPDF) $(LIGHTSPARK) $(RAMEN) $(GNOMEVFS) $(NEON) $(LIBAV)
 	rm -rf $(IMLIB) $(TERMINOLOGY) $(EKIGA) $(PYTHONGNUTLS) $(XORG) $(QEMUSYSTEM)
 	rm -rf $(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
-	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB)
+	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL)
 
 clobber:
 	rm -rf $(FETCHED)
