@@ -1,0 +1,242 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+export DH_ALWAYS_EXCLUDE=.gitignore
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+
+
+version=`dpkg-parsechangelog -ldebian/changelog | grep 'Version: ' | sed 's/Version: //g'`
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+CFLAGS_COMMON=-g
+CFLAGS_COMMON += `dpkg-buildflags --get CFLAGS`
+
+LDFLAGS_COMMON="-Wl,-z,defs"
+LDFLAGS_COMMON += `dpkg-buildflags --get LDFLAGS`
+
+CPPFLAGS_COMMON = `dpkg-buildflags --get CPPFLAGS`
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS_COMMON += -O0
+	CFLAGS_LITE=
+else
+	CFLAGS_COMMON += -O2
+	CFLAGS_LITE=-Os -fno-inline
+endif
+
+confopts = --prefix=/usr \
+	--mandir=\$${prefix}/share/man \
+	--infodir=\$${prefix}/share/info \
+	--sysconfdir=/etc/elinks \
+	--without-lzma \
+	--without-openssl \
+	--without-x \
+	--enable-finger \
+	--with-gnutls=/usr
+
+confopts_main = $(confopts) \
+	--disable-nntp \
+	--enable-88-colors \
+	--enable-256-colors \
+	--enable-leds \
+	--enable-html-highlight \
+	--enable-fsp \
+	--disable-smb \
+	--with-perl \
+	--without-guile \
+	--without-python \
+	--without-ruby \
+	--with-gssapi \
+	--enable-cgi \
+	--disable-exmode \
+	--disable-bittorrent \
+	--disable-debug \
+	--without-spidermonkey
+
+confopts_lite = $(confopts) \
+	--disable-nntp \
+	--disable-256-colors \
+	--disable-leds \
+	--disable-nls \
+	--disable-formhist \
+	--disable-xbel \
+	--disable-data \
+	--disable-uri-rewrite \
+	--disable-smb \
+	--disable-mouse \
+	--disable-marks \
+	--disable-css \
+	--disable-backtrace \
+	--disable-sm-scripting \
+	--enable-fastmem \
+	--enable-small \
+	--without-gpm \
+	--without-perl \
+	--without-spidermonkey \
+	--without-zlib \
+	--without-bzlib \
+	--without-idn \
+	--without-lua \
+	--without-tre
+
+save-upstream: patch save-stamp
+patch: patch-stamp
+patch-stamp:
+	mkdir -p debian/patched
+	for pfile in debian/patches/*.diff; do \
+		[ -f "$$pfile" ] || continue; \
+		pname="$$(basename $$pfile .diff)"; \
+		[ ! -f "debian/patched/$$pname.patched" ] || continue; \
+		echo "### Applying patch $$pname"; \
+		patch -p1 -N < $$pfile; \
+		cp -f "$$pfile" "debian/patched/$$pname.patched"; \
+	done
+	touch $@
+
+save-stamp:
+	dh_testdir
+	rm -f debian/elinks.conf
+	cat debian/elinks.config | sed "s/%v/$(version)/g" > debian/elinks.conf
+	rm -f debian/elinks-lite.conf
+	cat debian/elinks.config | sed "s/%v/$(version)-lite/g" > debian/elinks-lite.conf
+	# Add here commands to configure the package.
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	[ ! -f config/config.sub ] || mv -f config/config.sub config/config.sub.ups
+	cp -f /usr/share/misc/config.sub config/config.sub
+endif
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	[ ! -f config/config.guess ] || mv -f config/config.guess config/config.guess.ups
+	cp -f /usr/share/misc/config.guess config/config.guess
+endif
+	[ ! -f config.h ] || mv -f config.h config.h.ups
+	[ ! -f Makefile.config ] || mv -f Makefile.config Makefile.config.ups
+	[ ! -f doc/man/man1/elinks.1.in ] || cp -af doc/man/man1/elinks.1.in doc/man/man1/elinks.1.in.ups
+	[ ! -f doc/man/man5/elinks.conf.5 ] || cp -af doc/man/man5/elinks.conf.5 doc/man/man5/elinks.conf.5.ups
+	[ ! -f doc/man/man5/elinkskeys.5 ] || cp -af doc/man/man5/elinkskeys.5 doc/man/man5/elinkskeys.5.ups
+	touch $@
+
+#Architecture 
+build: build-arch build-indep
+
+build-arch: build-arch-stamp
+build-arch-stamp: patch-stamp save-stamp
+	mkdir $(CURDIR)/build-main && cd $(CURDIR)/build-main && \
+		$(CURDIR)/configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) \
+		$(confopts_main) CPPFLAGS="$(CPPFLAGS_COMMON)" CFLAGS="$(CFLAGS_COMMON)" LDFLAGS="$(LDFLAGS_COMMON)"
+	$(MAKE) -C $(CURDIR)/build-main
+	mkdir $(CURDIR)/build-lite && cd $(CURDIR)/build-lite && \
+		$(CURDIR)/configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) \
+		$(confopts_lite) CPPFLAGS="$(CPPFLAGS_COMMON)" CFLAGS="$(CFLAGS_COMMON) $(CFLAGS_LITE)" LDFLAGS="$(LDFLAGS_COMMON)"
+	$(MAKE) -C $(CURDIR)/build-lite
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp: patch-stamp save-stamp
+	$(MAKE) -C $(CURDIR)/build-main/doc all-docs
+	touch $@
+
+clean: clean-patched unpatch
+clean-patched:
+	dh_testdir
+	dh_testroot
+	rm -f build-arch-stamp build-indep-stamp save-stamp
+	rm -rf build-lite build-main
+	[ ! -f doc/man/man5/elinkskeys.5.ups ] || mv -f doc/man/man5/elinkskeys.5.ups doc/man/man5/elinkskeys.5
+	[ ! -f doc/man/man5/elinks.conf.5.ups ] || mv -f doc/man/man5/elinks.conf.5.ups doc/man/man5/elinks.conf.5
+	[ ! -f doc/man/man1/elinks.1.in.ups ] || mv -f doc/man/man1/elinks.1.in.ups doc/man/man1/elinks.1.in
+	[ ! -f Makefile.config.ups ] || mv -f Makefile.config.ups Makefile.config
+	[ ! -f config.h.ups ] || mv -f config.h.ups config.h
+	[ ! -f config/config.guess.ups ] || mv -f config/config.guess.ups config/config.guess
+	[ ! -f config/config.sub.ups ] || mv -f config/config.sub.ups config/config.sub
+	rm -f debian/elinks-lite.conf
+	rm -f debian/elinks.conf
+	rm -rf debian/tmp.elinks-data
+	rm -rf docbook2html-dir
+	dh_clean 
+
+unpatch:
+	for pfile in debian/patched/*.patched ; do \
+		[ -f "$$pfile" ] || continue; \
+		pname="$$(basename $$pfile .patched)"; \
+		[ -f "debian/patches/$$pname.diff" ] || continue; \
+		echo "### Reverting patch $$pname"; \
+		patch -p1 -N -R < $$pfile; \
+		rm -f "debian/patched/$$pname.patched"; \
+	done
+	rm -rf debian/patched patch-stamp
+
+install: install-indep install-arch
+install-indep:
+	dh_testdir
+	dh_testroot
+	dh_clean -k -i 
+	dh_installdirs -i
+	# Move elinks arch-indep from temp location to elinks-data
+	mv -f $(CURDIR)/debian/tmp.elinks-data/usr $(CURDIR)/debian/elinks-data/
+	# Install elinks documentation, remove manpages (already installed in
+	# elinks-data)
+	$(MAKE) -C build-main/doc DESTDIR=$(CURDIR)/debian/elinks-doc install-doc
+	mv -f $(CURDIR)/debian/elinks-doc/usr/share/doc/elinks $(CURDIR)/debian/elinks-doc/usr/share/doc/elinks-doc
+	rm -rf $(CURDIR)/debian/elinks-doc/usr/share/man
+	dh_install -i
+
+install-arch:
+	dh_testdir
+	dh_testroot
+	dh_clean -k -s 
+	# Install elinks binaries and elinks.conf
+	$(MAKE) -C build-main DESTDIR=$(CURDIR)/debian/elinks install
+	install -o root -g root -p -D -m 0644 $(CURDIR)/debian/elinks.conf \
+		$(CURDIR)/debian/elinks/etc/elinks/elinks.conf
+	# Install elinks-lite binaries and elinks.conf
+	$(MAKE) -C build-lite DESTDIR=$(CURDIR)/debian/elinks-lite install
+	install -o root -g root -p -D -m 0644 $(CURDIR)/debian/elinks-lite.conf \
+		$(CURDIR)/debian/elinks-lite/etc/elinks/elinks.conf
+	# Move elinks arch-indep parts to temp location for elinks-data
+	mkdir -p $(CURDIR)/debian/tmp.elinks-data/usr/
+	mv -f $(CURDIR)/debian/elinks/usr/share $(CURDIR)/debian/tmp.elinks-data/usr/
+	rm -f $(CURDIR)/debian/tmp.elinks-data/usr/share/locale/locale.alias
+	dh_link -pelinks usr/share/doc/elinks-data usr/share/doc/elinks
+	dh_install -s
+	dh_lintian -s
+
+# Must not depend on anything. This is to be called by
+# binary-arch/binary-indep
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -Nelinks NEWS
+	dh_installdocs
+	dh_installexamples
+	dh_installmenu
+	dh_installmime
+	dh_strip
+	dh_compress 
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: build-indep install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build-arch install-arch 
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install install-indep install-arch patch unpatch save-upstream

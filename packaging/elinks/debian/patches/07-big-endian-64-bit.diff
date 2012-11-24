@@ -1,0 +1,1594 @@
+From bf36f8d9464da1ca907f2ae7ec28428caeb5c231 Mon Sep 17 00:00:00 2001
+From: Kalle Olavi Niemitalo <kon@iki.fi>
+Date: Sat, 8 Aug 2009 23:23:09 +0300
+Subject: [PATCH 1/1] bug 764: Fix option_value initialization on sparc64
+
+INIT_OPTION used to initialize union option_value at compile time by
+casting the default value to LIST_OF(struct option) *, which is the
+type of the first member.  On sparc64 and other big-endian systems
+where sizeof(int) < sizeof(struct list_head *), this tended to leave
+option->value.number as zero, thus messing up OPT_INT and OPT_BOOL
+at least.  OPT_LONG however tended to work right.
+
+This would be easy to fix with C99 designated initializers,
+but doc/hacking.txt says ELinks must be kept C89 compatible.
+Another solution would be to make register_options() read the
+value from option->value.tree (the first member), cast it back
+to the right type, and write it to the appropriate member;
+but that would still require somewhat dubious conversions
+between integers, data pointers, and function pointers.
+
+So here's a rather more invasive solution.  Move several members
+of struct option into a substructure in a union: for example,
+option->value becomes option->u.run.value.  The first member of
+the union, i.e. option->u.init, is used solely for compile-time
+initialization.  It has separate members for different types of
+values, to ensure nothing is lost in compile-time conversions.
+register_options() calls the new init_option_union() to move
+the data from option->u.init to option->u.run, from which it is
+thereafter used.
+---
+ src/bfu/leds.c                 |    2 +-
+ src/bookmarks/bookmarks.c      |    2 +-
+ src/config/cmdline.c           |   18 ++--
+ src/config/conf.c              |    6 +-
+ src/config/dialogs.c           |   12 +-
+ src/config/options.c           |  240 +++++++++++++++++++++++-----------------
+ src/config/options.h           |   78 +++++++++-----
+ src/config/opttypes.c          |   90 ++++++++--------
+ src/cookies/cookies.c          |    2 +-
+ src/dialogs/menu.c             |    2 +-
+ src/dialogs/options.c          |    4 +-
+ src/globhist/globhist.c        |    2 +-
+ src/mime/backend/default.c     |    8 +-
+ src/mime/backend/mailcap.c     |    2 +-
+ src/mime/backend/mimetypes.c   |    4 +-
+ src/mime/dialogs.c             |    6 +-
+ src/mime/mime.c                |    2 +-
+ src/protocol/nntp/nntp.c       |    4 +-
+ src/protocol/rewrite/rewrite.c |    6 +-
+ src/protocol/user.c            |    2 +-
+ src/scripting/lua/core.c       |   12 +-
+ src/session/session.c          |    2 +-
+ src/terminal/screen.c          |    2 +-
+ src/viewer/text/search.c       |    4 +-
+ 24 files changed, 287 insertions(+), 225 deletions(-)
+
+diff --git a/src/bfu/leds.c b/src/bfu/leds.c
+index 989acb6..fcd95cf 100644
+--- a/src/bfu/leds.c
++++ b/src/bfu/leds.c
+@@ -99,7 +99,7 @@ static struct option_info led_options[] = {
+ 	NULL_OPTION_INFO,
+ };
+ 
+-#define get_opt_leds(which)		led_options[(which)].option.value
++#define get_opt_leds(which)		led_options[(which)].option.u.run.value
+ #define get_leds_clock_enable()		get_opt_leds(LEDS_CLOCK_ENABLE).number
+ #define get_leds_clock_format()		get_opt_leds(LEDS_CLOCK_FORMAT).string
+ #define get_leds_panel_enable()		get_opt_leds(LEDS_PANEL_ENABLE).number
+diff --git a/src/bookmarks/bookmarks.c b/src/bookmarks/bookmarks.c
+index bf8db05..62a9f89 100644
+--- a/src/bookmarks/bookmarks.c
++++ b/src/bookmarks/bookmarks.c
+@@ -125,7 +125,7 @@ static int
+ change_hook_folder_state(struct session *ses, struct option *current,
+ 			 struct option *changed)
+ {
+-	if (!changed->value.number) {
++	if (!changed->u.run.value.number) {
+ 		/* We are to collapse all folders on exit; mark bookmarks dirty
+ 		 * to ensure that this will happen. */
+ 		bookmarks_set_dirty();
+diff --git a/src/config/cmdline.c b/src/config/cmdline.c
+index 2c9956a..8454fb6 100644
+--- a/src/config/cmdline.c
++++ b/src/config/cmdline.c
+@@ -453,7 +453,7 @@ print_full_help_inner(struct option *tree, unsigned char *path,
+ 
+ 	*savedpos = 0;
+ 
+-	foreach (option, *tree->value.tree) {
++	foreach (option, *tree->u.run.value.tree) {
+ 		enum option_type type = option->type;
+ 		unsigned char *help;
+ 		unsigned char *capt = option->capt;
+@@ -496,28 +496,28 @@ print_full_help_inner(struct option *tree, unsigned char *path,
+ 			case OPT_LONG:
+ 				printf(gettext("(default: %ld)"),
+ 					type == OPT_LONG
+-					? option->value.big_number
+-					: (long) option->value.number);
++					? option->u.run.value.big_number
++					: (long) option->u.run.value.number);
+ 				break;
+ 
+ 			case OPT_STRING:
+ 				printf(gettext("(default: \"%s\")"),
+-					option->value.string);
++					option->u.run.value.string);
+ 				break;
+ 
+ 			case OPT_ALIAS:
+ 				printf(gettext("(alias for %s)"),
+-					option->value.string);
++					option->u.run.value.string);
+ 				break;
+ 
+ 			case OPT_CODEPAGE:
+ 				printf(gettext("(default: %s)"),
+-					get_cp_name(option->value.number));
++					get_cp_name(option->u.run.value.number));
+ 				break;
+ 
+ 			case OPT_COLOR:
+ 			{
+-				color_T color = option->value.color;
++				color_T color = option->u.run.value.color;
+ 				unsigned char hexcolor[8];
+ 
+ 				printf(gettext("(default: %s)"),
+@@ -531,7 +531,7 @@ print_full_help_inner(struct option *tree, unsigned char *path,
+ 			case OPT_LANGUAGE:
+ #ifdef CONFIG_NLS
+ 				printf(gettext("(default: \"%s\")"),
+-				       language_to_name(option->value.number));
++				       language_to_name(option->u.run.value.number));
+ #endif
+ 				break;
+ 
+@@ -593,7 +593,7 @@ print_short_help(void)
+ 	memset(align, ' ', sizeof(align) - 1);
+ 	align[sizeof(align) - 1] = 0;
+ 
+-	foreach (option, *cmdline_options->value.tree) {
++	foreach (option, *cmdline_options->u.run.value.tree) {
+ 		unsigned char *capt;
+ 		unsigned char *help;
+ 		unsigned char *info = saved ? saved->source
+diff --git a/src/config/conf.c b/src/config/conf.c
+index 48fd135..604db11 100644
+--- a/src/config/conf.c
++++ b/src/config/conf.c
+@@ -945,7 +945,7 @@ create_config_string(unsigned char *prefix, unsigned char *name,
+ 
+ 	if (!init_string(&config)) return NULL;
+ 
+-	prepare_mustsave_flags(options->value.tree,
++	prepare_mustsave_flags(options->u.run.value.tree,
+ 			       savestyle == 1 || savestyle == 2);
+ 
+ 	/* Scaring. */
+@@ -1005,7 +1005,7 @@ create_config_string(unsigned char *prefix, unsigned char *name,
+ 				 conf_i18n(N_("Automatically saved options\n"), i18n));
+ 
+ 	origlen = tmpstring.length;
+-	smart_config_string(&tmpstring, 2, i18n, options->value.tree, NULL, 0,
++	smart_config_string(&tmpstring, 2, i18n, options->u.run.value.tree, NULL, 0,
+ 			    smart_config_output_fn);
+ 	if (tmpstring.length > origlen)
+ 		add_string_to_string(&config, &tmpstring);
+@@ -1051,7 +1051,7 @@ write_config_file(unsigned char *prefix, unsigned char *name,
+ 		secure_fputs(ssi, cfg_str);
+ 		ret = secure_close(ssi);
+ 		if (!ret)
+-			untouch_options(options->value.tree);
++			untouch_options(options->u.run.value.tree);
+ 	}
+ 
+ 	write_config_dialog(term, config_file, secsave_errno, ret);
+diff --git a/src/config/dialogs.c b/src/config/dialogs.c
+index 235b62f..3daa2a4 100644
+--- a/src/config/dialogs.c
++++ b/src/config/dialogs.c
+@@ -195,9 +195,9 @@ get_option_root(struct listbox_item *item)
+ 
+ 	/* The config_options root has no listbox so return that
+ 	 * we are at the bottom. */
+-	if (option->root == config_options) return NULL;
++	if (option->u.run.root == config_options) return NULL;
+ 
+-	return option->root ? option->root->box_item : NULL;
++	return option->u.run.root ? option->u.run.root->u.run.box_item : NULL;
+ }
+ 
+ static enum listbox_match
+@@ -221,8 +221,8 @@ can_delete_option(struct listbox_item *item)
+ {
+ 	struct option *option = item->udata;
+ 
+-	if (option->root) {
+-		struct option *parent_option = option->root;
++	if (option->u.run.root) {
++		struct option *parent_option = option->u.run.root;
+ 
+ 		return parent_option->flags & OPT_AUTOCREATE;
+ 	}
+@@ -415,7 +415,7 @@ add_option_to_tree(void *data, unsigned char *name)
+ 	if (old && (old->flags & OPT_DELETED)) delete_option(old);
+ 	/* get_opt_rec() will create the option. */
+ 	new = get_opt_rec(ctx->option, name);
+-	if (new) listbox_sel(ctx->widget_data, new->box_item);
++	if (new) listbox_sel(ctx->widget_data, new->u.run.box_item);
+ 	/* TODO: If the return value is NULL, we should pop up a msgbox. */
+ }
+ 
+@@ -466,7 +466,7 @@ invalid_option:
+ 	option = item->udata;
+ 
+ 	if (!(option->flags & OPT_AUTOCREATE)) {
+-		if (option->root) option = option->root;
++		if (option->u.run.root) option = option->u.run.root;
+ 		if (!option || !(option->flags & OPT_AUTOCREATE))
+ 			goto invalid_option;
+ 	}
+diff --git a/src/config/options.c b/src/config/options.c
+index 5bf5181..6b44db6 100644
+--- a/src/config/options.c
++++ b/src/config/options.c
+@@ -55,18 +55,21 @@
+ static INIT_LIST_OF(struct option, options_root_tree);
+ 
+ static struct option options_root = INIT_OPTION(
+-	/* name: */	"",
+-	/* flags: */	0,
+-	/* type: */	OPT_TREE,
+-	/* min, max: */	0, 0,
+-	/* value: */	&options_root_tree,
+-	/* desc: */	"",
+-	/* capt: */	NULL
++	/* name: */		"",
++	/* flags: */		0,
++	/* type: */		OPT_TREE,
++	/* min, max: */		0, 0,
++	/* value_long: */	0,
++	/* value_ptr: */	&options_root_tree,
++	/* value_fn: */		NULL,
++	/* desc: */		"",
++	/* capt: */		NULL
+ );
+ 
+ struct option *config_options;
+ struct option *cmdline_options;
+ 
++static void init_option_union(struct option *);
+ static void add_opt_rec(struct option *, unsigned char *, struct option *);
+ static void free_options_tree(LIST_OF(struct option) *, int recursive);
+ 
+@@ -194,7 +197,7 @@ get_opt_rec(struct option *tree, const unsigned char *name_)
+ 		name = sep + 1;
+ 	}
+ 
+-	foreach (option, *tree->value.tree) {
++	foreach (option, *tree->u.run.value.tree) {
+ 		if (option->name && !strcmp(option->name, name)) {
+ 			mem_free(aname);
+ 			return option;
+@@ -261,9 +264,9 @@ indirect_option(struct option *alias)
+ 
+ 	if (alias->type != OPT_ALIAS) return alias; /* not an error */
+ 
+-	real = get_opt_rec(config_options, alias->value.string);
++	real = get_opt_rec(config_options, alias->u.run.value.string);
+ 	assertm(real != NULL, "%s aliased to unknown option %s!",
+-		alias->name, alias->value.string);
++		alias->name, alias->u.run.value.string);
+ 	if_assert_failed return alias;
+ 
+ 	return real;
+@@ -294,30 +297,30 @@ get_opt_(
+ 
+ 	switch (opt->type) {
+ 	case OPT_TREE:
+-		if (!opt->value.tree)
++		if (!opt->u.run.value.tree)
+ 			elinks_internal("Option %s has no value!", name);
+ 		break;
+ 	case OPT_ALIAS:
+ 		elinks_internal("Invalid use of alias %s for option %s!",
+-				name, opt->value.string);
++				name, opt->u.run.value.string);
+ 		break;
+ 	case OPT_STRING:
+-		if (!opt->value.string)
++		if (!opt->u.run.value.string)
+ 			elinks_internal("Option %s has no value!", name);
+ 		break;
+ 	case OPT_BOOL:
+ 	case OPT_INT:
+-		if (opt->value.number < opt->min
+-		    || opt->value.number > opt->max)
+-			elinks_internal("Option %s has invalid value %d!", name, opt->value.number);
++		if (opt->u.run.value.number < opt->min
++		    || opt->u.run.value.number > opt->max)
++			elinks_internal("Option %s has invalid value %d!", name, opt->u.run.value.number);
+ 		break;
+ 	case OPT_LONG:
+-		if (opt->value.big_number < opt->min
+-		    || opt->value.big_number > opt->max)
+-			elinks_internal("Option %s has invalid value %ld!", name, opt->value.big_number);
++		if (opt->u.run.value.big_number < opt->min
++		    || opt->u.run.value.big_number > opt->max)
++			elinks_internal("Option %s has invalid value %ld!", name, opt->u.run.value.big_number);
+ 		break;
+ 	case OPT_COMMAND:
+-		if (!opt->value.command)
++		if (!opt->u.run.value.command)
+ 			elinks_internal("Option %s has no value!", name);
+ 		break;
+ 	case OPT_CODEPAGE: /* TODO: check these too. */
+@@ -327,20 +330,20 @@ get_opt_(
+ 	}
+ #endif
+ 
+-	return &opt->value;
++	return &opt->u.run.value;
+ }
+ 
+ static void
+ add_opt_sort(struct option *tree, struct option *option, int abi)
+ {
+-	LIST_OF(struct option) *cat = tree->value.tree;
+-	LIST_OF(struct listbox_item) *bcat = &tree->box_item->child;
++	LIST_OF(struct option) *cat = tree->u.run.value.tree;
++	LIST_OF(struct listbox_item) *bcat = &tree->u.run.box_item->child;
+ 	struct option *pos;
+ 
+ 	/* The list is empty, just add it there. */
+ 	if (list_empty(*cat)) {
+ 		add_to_list(*cat, option);
+-		if (abi) add_to_list(*bcat, option->box_item);
++		if (abi) add_to_list(*bcat, option->u.run.box_item);
+ 
+ 	/* This fits as the last list entry, add it there. This
+ 	 * optimizes the most expensive BUT most common case ;-). */
+@@ -350,7 +353,7 @@ add_opt_sort(struct option *tree, struct option *option, int abi)
+ 			     option->name) <= 0) {
+ append:
+ 		add_to_list_end(*cat, option);
+-		if (abi) add_to_list_end(*bcat, option->box_item);
++		if (abi) add_to_list_end(*bcat, option->u.run.box_item);
+ 
+ 	/* At the end of the list is tree and we are ordinary. That's
+ 	 * clear case then. */
+@@ -368,7 +371,7 @@ append:
+ 			 * only if the position has not been marked as deleted
+ 			 * and actually has a box_item -- else we will end up
+ 			 * 'overflowing' and causing assertion failure. */
+-			if (!(pos->flags & OPT_DELETED) && pos->box_item) {
++			if (!(pos->flags & OPT_DELETED) && pos->u.run.box_item) {
+ 				bpos = bpos->next;
+ 				assert(bpos != (struct listbox_item *) bcat);
+ 			}
+@@ -395,12 +398,12 @@ append:
+ 			if (option->type == pos->type
+ 			    && *option->name <= '_'
+ 			    && !strcmp(pos->name, "_template_")) {
+-				if (abi) add_at_pos(bpos, option->box_item);
++				if (abi) add_at_pos(bpos, option->u.run.box_item);
+ 				add_at_pos(pos, option);
+ 				break;
+ 			}
+ 
+-			if (abi) add_at_pos(bpos->prev, option->box_item);
++			if (abi) add_at_pos(bpos->prev, option->u.run.box_item);
+ 			add_at_pos(pos->prev, option);
+ 			break;
+ 		}
+@@ -420,12 +423,12 @@ add_opt_rec(struct option *tree, unsigned char *path, struct option *option)
+ 	if (*path) tree = get_opt_rec(tree, path);
+ 
+ 	assertm(tree != NULL, "Missing option tree for '%s'", path);
+-	if (!tree->value.tree) return;
++	if (!tree->u.run.value.tree) return;
+ 
+ 	object_nolock(option, "option");
+ 
+-	if (option->box_item && option->name && !strcmp(option->name, "_template_"))
+-		option->box_item->visible = get_opt_bool("config.show_template");
++	if (option->u.run.box_item && option->name && !strcmp(option->name, "_template_"))
++		option->u.run.box_item->visible = get_opt_bool("config.show_template");
+ 
+ 	if (tree->flags & OPT_AUTOCREATE && !option->desc) {
+ 		struct option *template = get_opt_rec(tree, "_template_");
+@@ -434,17 +437,17 @@ add_opt_rec(struct option *tree, unsigned char *path, struct option *option)
+ 		option->desc = template->desc;
+ 	}
+ 
+-	option->root = tree;
++	option->u.run.root = tree;
+ 
+-	abi = (tree->box_item && option->box_item);
++	abi = (tree->u.run.box_item && option->u.run.box_item);
+ 
+ 	if (abi) {
+ 		/* The config_root tree is a just a placeholder for the
+ 		 * box_items, it actually isn't a real box_item by itself;
+ 		 * these ghosts are indicated by the fact that they have
+ 		 * NULL @next. */
+-		if (tree->box_item->next) {
+-			option->box_item->depth = tree->box_item->depth + 1;
++		if (tree->u.run.box_item->next) {
++			option->u.run.box_item->depth = tree->u.run.box_item->depth + 1;
+ 		}
+ 	}
+ 
+@@ -452,8 +455,8 @@ add_opt_rec(struct option *tree, unsigned char *path, struct option *option)
+ 		add_opt_sort(tree, option, abi);
+ 
+ 	} else {
+-		add_to_list_end(*tree->value.tree, option);
+-		if (abi) add_to_list_end(tree->box_item->child, option->box_item);
++		add_to_list_end(*tree->u.run.value.tree, option);
++		if (abi) add_to_list_end(tree->u.run.box_item->child, option->u.run.box_item);
+ 	}
+ 
+ 	update_hierbox_browser(&option_browser);
+@@ -505,32 +508,32 @@ add_opt(struct option *tree, unsigned char *path, unsigned char *capt,
+ 				mem_free(option);
+ 				return NULL;
+ 			}
+-			option->value.tree = (LIST_OF(struct option) *) value;
++			option->u.run.value.tree = (LIST_OF(struct option) *) value;
+ 			break;
+ 		case OPT_STRING:
+ 			if (!value) {
+ 				mem_free(option);
+ 				return NULL;
+ 			}
+-			option->value.string = (unsigned char *) value;
++			option->u.run.value.string = (unsigned char *) value;
+ 			break;
+ 		case OPT_ALIAS:
+-			option->value.string = (unsigned char *) value;
++			option->u.run.value.string = (unsigned char *) value;
+ 			break;
+ 		case OPT_BOOL:
+ 		case OPT_INT:
+ 		case OPT_CODEPAGE:
+-			option->value.number = (int) value;
++			option->u.run.value.number = (int) value;
+ 			break;
+ 		case OPT_LONG:
+-			option->value.big_number = (long) value; /* FIXME: cast from void * */
++			option->u.run.value.big_number = (long) value; /* FIXME: cast from void * */
+ 			break;
+ 		case OPT_COLOR:
+ 			decode_color((unsigned char *) value, strlen((unsigned char *) value),
+-					&option->value.color);
++				     &option->u.run.value.color);
+ 			break;
+ 		case OPT_COMMAND:
+-			option->value.command = (void *) value;
++			option->u.run.value.command = (void *) value;
+ 			break;
+ 		case OPT_LANGUAGE:
+ 			break;
+@@ -538,8 +541,8 @@ add_opt(struct option *tree, unsigned char *path, unsigned char *capt,
+ 
+ 	if (option->type != OPT_ALIAS
+ 	    && ((tree->flags & OPT_LISTBOX) || (option->flags & OPT_LISTBOX))) {
+-		option->box_item = init_option_listbox_item(option);
+-		if (!option->box_item) {
++		option->u.run.box_item = init_option_listbox_item(option);
++		if (!option->u.run.box_item) {
+ 			mem_free(option);
+ 			return NULL;
+ 		}
+@@ -554,17 +557,17 @@ done_option(struct option *option)
+ {
+ 	switch (option->type) {
+ 		case OPT_STRING:
+-			mem_free_if(option->value.string);
++			mem_free_if(option->u.run.value.string);
+ 			break;
+ 		case OPT_TREE:
+-			mem_free_if(option->value.tree);
++			mem_free_if(option->u.run.value.tree);
+ 			break;
+ 		default:
+ 			break;
+ 	}
+ 
+-	if (option->box_item)
+-		done_listbox_item(&option_browser, option->box_item);
++	if (option->u.run.box_item)
++		done_listbox_item(&option_browser, option->u.run.box_item);
+ 
+ 	if (option->flags & OPT_ALLOC) {
+ 		mem_free_if(option->name);
+@@ -596,8 +599,8 @@ delete_option_do(struct option *option, int recursive)
+ 		ERROR("Orphaned option %s", option->name);
+ 	}
+ 
+-	if (option->type == OPT_TREE && option->value.tree
+-	    && !list_empty(*option->value.tree)) {
++	if (option->type == OPT_TREE && option->u.run.value.tree
++	    && !list_empty(*option->u.run.value.tree)) {
+ 		if (!recursive) {
+ 			if (option->flags & OPT_AUTOCREATE) {
+ 				recursive = 1;
+@@ -608,7 +611,7 @@ delete_option_do(struct option *option, int recursive)
+ 				recursive = -1;
+ 			}
+ 		}
+-		free_options_tree(option->value.tree, recursive);
++		free_options_tree(option->u.run.value.tree, recursive);
+ 	}
+ 
+ 	done_option(option);
+@@ -620,13 +623,13 @@ mark_option_as_deleted(struct option *option)
+ 	if (option->type == OPT_TREE) {
+ 		struct option *unmarked;
+ 
+-		assert(option->value.tree);
++		assert(option->u.run.value.tree);
+ 
+-		foreach (unmarked, *option->value.tree)
++		foreach (unmarked, *option->u.run.value.tree)
+ 			mark_option_as_deleted(unmarked);
+ 	}
+ 
+-	option->box_item->visible = 0;
++	option->u.run.box_item->visible = 0;
+ 
+ 	option->flags |= (OPT_TOUCHED | OPT_DELETED);
+ }
+@@ -651,20 +654,20 @@ copy_option(struct option *template)
+ 	option->max = template->max;
+ 	option->capt = template->capt;
+ 	option->desc = template->desc;
+-	option->change_hook = template->change_hook;
++	option->u.run.change_hook = template->u.run.change_hook;
+ 
+-	option->box_item = init_option_listbox_item(option);
+-	if (option->box_item) {
+-		if (template->box_item) {
+-			option->box_item->type = template->box_item->type;
+-			option->box_item->depth = template->box_item->depth;
++	option->u.run.box_item = init_option_listbox_item(option);
++	if (option->u.run.box_item) {
++		if (template->u.run.box_item) {
++			option->u.run.box_item->type = template->u.run.box_item->type;
++			option->u.run.box_item->depth = template->u.run.box_item->depth;
+ 		}
+ 	}
+ 
+ 	if (option_types[template->type].dup) {
+ 		option_types[template->type].dup(option, template);
+ 	} else {
+-		option->value = template->value;
++		option->u.run.value = template->u.run.value;
+ 	}
+ 
+ 	return option;
+@@ -713,6 +716,7 @@ static const struct change_hook_info change_hooks[];
+ void
+ init_options(void)
+ {
++	init_option_union(&options_root);
+ 	cmdline_options = add_opt_tree_tree(&options_root, "", "",
+ 					    "cmdline", 0, "");
+ 	register_options(cmdline_options_info, cmdline_options);
+@@ -720,7 +724,7 @@ init_options(void)
+ 	config_options = add_opt_tree_tree(&options_root, "", "",
+ 					 "config", OPT_SORT, "");
+ 	config_options->flags |= OPT_LISTBOX;
+-	config_options->box_item = &option_browser.root;
++	config_options->u.run.box_item = &option_browser.root;
+ 	register_options(config_options_info, config_options);
+ 
+ 	register_autocreated_options();
+@@ -739,7 +743,7 @@ done_options(void)
+ {
+ 	unregister_options(config_options_info, config_options);
+ 	unregister_options(cmdline_options_info, cmdline_options);
+-	config_options->box_item = NULL;
++	config_options->u.run.box_item = NULL;
+ 	free_options_tree(&options_root_tree, 0);
+ }
+ 
+@@ -753,7 +757,7 @@ register_change_hooks(const struct change_hook_info *change_hooks)
+ 						    change_hooks[i].name);
+ 
+ 		assert(option);
+-		option->change_hook = change_hooks[i].change_hook;
++		option->u.run.change_hook = change_hooks[i].change_hook;
+ 	}
+ }
+ 
+@@ -773,7 +777,7 @@ prepare_mustsave_flags(LIST_OF(struct option) *tree, int set_all)
+ 			option->flags &= ~OPT_MUST_SAVE;
+ 
+ 		if (option->type == OPT_TREE)
+-			prepare_mustsave_flags(option->value.tree, set_all);
++			prepare_mustsave_flags(option->u.run.value.tree, set_all);
+ 	}
+ }
+ 
+@@ -786,7 +790,7 @@ untouch_options(LIST_OF(struct option) *tree)
+ 		option->flags &= ~OPT_TOUCHED;
+ 
+ 		if (option->type == OPT_TREE)
+-			untouch_options(option->value.tree);
++			untouch_options(option->u.run.value.tree);
+ 	}
+ }
+ 
+@@ -797,7 +801,7 @@ check_nonempty_tree(LIST_OF(struct option) *options)
+ 
+ 	foreach (opt, *options) {
+ 		if (opt->type == OPT_TREE) {
+-			if (check_nonempty_tree(opt->value.tree))
++			if (check_nonempty_tree(opt->u.run.value.tree))
+ 				return 1;
+ 		} else if (opt->flags & OPT_MUST_SAVE) {
+ 			return 1;
+@@ -826,7 +830,7 @@ smart_config_string(struct string *str, int print_comment, int i18n,
+ 
+ 		/* Is there anything to be printed anyway? */
+ 		if (option->type == OPT_TREE
+-		    ? !check_nonempty_tree(option->value.tree)
++		    ? !check_nonempty_tree(option->u.run.value.tree)
+ 		    : !(option->flags & OPT_MUST_SAVE))
+ 			continue;
+ 
+@@ -887,7 +891,7 @@ smart_config_string(struct string *str, int print_comment, int i18n,
+ 				add_char_to_string(&newpath, '.');
+ 			}
+ 			add_to_string(&newpath, option->name);
+-			smart_config_string(str, pc, i18n, option->value.tree,
++			smart_config_string(str, pc, i18n, option->u.run.value.tree,
+ 					    newpath.source, depth + 1, fn);
+ 			done_string(&newpath);
+ 
+@@ -958,17 +962,17 @@ update_visibility(LIST_OF(struct option) *tree, int show)
+ 		if (opt->flags & OPT_DELETED) continue;
+ 
+ 		if (!strcmp(opt->name, "_template_")) {
+-			if (opt->box_item)
+-				opt->box_item->visible = (show & 1);
++			if (opt->u.run.box_item)
++				opt->u.run.box_item->visible = (show & 1);
+ 
+ 			if (opt->type == OPT_TREE)
+-				update_visibility(opt->value.tree, show | 2);
++				update_visibility(opt->u.run.value.tree, show | 2);
+ 		} else {
+-			if (opt->box_item && (show & 2))
+-				opt->box_item->visible = (show & 1);
++			if (opt->u.run.box_item && (show & 2))
++				opt->u.run.box_item->visible = (show & 1);
+ 
+ 			if (opt->type == OPT_TREE)
+-				update_visibility(opt->value.tree, show);
++				update_visibility(opt->u.run.value.tree, show);
+ 		}
+ 	}
+ }
+@@ -976,26 +980,26 @@ update_visibility(LIST_OF(struct option) *tree, int show)
+ void
+ update_options_visibility(void)
+ {
+-	update_visibility(config_options->value.tree,
++	update_visibility(config_options->u.run.value.tree,
+ 			  get_opt_bool("config.show_template"));
+ }
+ 
+ void
+ toggle_option(struct session *ses, struct option *option)
+ {
+-	long number = option->value.number + 1;
++	long number = option->u.run.value.number + 1;
+ 
+ 	assert(option->type == OPT_BOOL || option->type == OPT_INT);
+ 	assert(option->max);
+ 
+-	option->value.number = (number <= option->max) ? number : option->min;
++	option->u.run.value.number = (number <= option->max) ? number : option->min;
+ 	option_changed(ses, option);
+ }
+ 
+ static int
+ change_hook_stemplate(struct session *ses, struct option *current, struct option *changed)
+ {
+-	update_visibility(config_options->value.tree, changed->value.number);
++	update_visibility(config_options->u.run.value.tree, changed->u.run.value.number);
+ 	return 0;
+ }
+ 
+@@ -1003,7 +1007,7 @@ static int
+ change_hook_language(struct session *ses, struct option *current, struct option *changed)
+ {
+ #ifdef CONFIG_NLS
+-	set_language(changed->value.number);
++	set_language(changed->u.run.value.number);
+ #endif
+ 	return 0;
+ }
+@@ -1034,12 +1038,12 @@ call_change_hooks(struct session *ses, struct option *current, struct option *op
+ 	 * basically says that we should proceed when there's
+ 	 * no change_hook or there's one and its return value
+ 	 * was zero. */
+-	while (current && (!current->change_hook ||
+-		!current->change_hook(ses, current, option))) {
+-		if (!current->root)
++	while (current && (!current->u.run.change_hook ||
++		!current->u.run.change_hook(ses, current, option))) {
++		if (!current->u.run.root)
+ 			break;
+ 
+-		current = current->root;
++		current = current->u.run.root;
+ 	}
+ }
+ 
+@@ -1065,8 +1069,8 @@ commit_option_values(struct option_resolver *resolvers,
+ 		struct option *option = get_opt_rec(root, name);
+ 		int id = resolvers[i].id;
+ 
+-		if (memcmp(&option->value, &values[id], sizeof(union option_value))) {
+-			option->value = values[id];
++		if (memcmp(&option->u.run.value, &values[id], sizeof(union option_value))) {
++			option->u.run.value = values[id];
+ 			option->flags |= OPT_TOUCHED;
+ 			/* Speed hack: Directly call the change-hook for each
+ 			 * option in resolvers and later call call_change_hooks
+@@ -1075,8 +1079,8 @@ commit_option_values(struct option_resolver *resolvers,
+ 			 * the change-hooks of root, its parents, its
+ 			 * grandparents, and so on for each option in resolvers
+ 			 * because call_change_hooks is recursive. -- Miciah */
+-			if (option->change_hook)
+-				option->change_hook(NULL, option, NULL);
++			if (option->u.run.change_hook)
++				option->u.run.change_hook(NULL, option, NULL);
+ 			touched++;
+ 		}
+ 	}
+@@ -1099,7 +1103,7 @@ checkout_option_values(struct option_resolver *resolvers,
+ 		struct option *option = get_opt_rec(root, name);
+ 		int id = resolvers[i].id;
+ 
+-		values[id] = option->value;
++		values[id] = option->u.run.value;
+ 	}
+ }
+ 
+@@ -1109,6 +1113,39 @@ checkout_option_values(struct option_resolver *resolvers,
+ 
+ #include "config/options.inc"
+ 
++static void
++init_option_union(struct option *option)
++{
++	const struct option_init init = option->u.init;
++	struct option_run run = {{ 0 }};
++
++	switch (option->type) {
++	case OPT_BOOL:
++	case OPT_INT:
++		run.value.number = init.value_long;
++		break;
++	case OPT_LONG:
++		run.value.big_number = init.value_long;
++		break;
++	case OPT_STRING:
++	case OPT_CODEPAGE:
++	case OPT_COLOR:
++	case OPT_ALIAS:
++		run.value.string = init.value_dataptr;
++		break;
++	case OPT_COMMAND:
++		run.value.command = init.value_funcptr;
++		break;
++	case OPT_TREE:
++		run.value.tree = init.value_dataptr;
++		break;
++	case OPT_LANGUAGE:
++		break;
++	}
++
++	option->u.run = run;
++}
++
+ void
+ register_options(struct option_info info[], struct option *tree)
+ {
+@@ -1118,13 +1155,14 @@ register_options(struct option_info info[], struct option *tree)
+ 		struct option *option = &info[i].option;
+ 		unsigned char *string;
+ 
++		init_option_union(option);
+ 		debug_check_option_syntax(option);
+ 
+ 		if (option->type != OPT_ALIAS
+ 		    && ((tree->flags & OPT_LISTBOX)
+ 			|| (option->flags & OPT_LISTBOX))) {
+-			option->box_item = init_option_listbox_item(option);
+-			if (!option->box_item) {
++			option->u.run.box_item = init_option_listbox_item(option);
++			if (!option->u.run.box_item) {
+ 				delete_option(option);
+ 				continue;
+ 			}
+@@ -1132,8 +1170,8 @@ register_options(struct option_info info[], struct option *tree)
+ 
+ 		switch (option->type) {
+ 			case OPT_TREE:
+-				option->value.tree = init_options_tree();
+-				if (!option->value.tree) {
++				option->u.run.value.tree = init_options_tree();
++				if (!option->u.run.value.tree) {
+ 					delete_option(option);
+ 					continue;
+ 				}
+@@ -1144,19 +1182,19 @@ register_options(struct option_info info[], struct option *tree)
+ 					delete_option(option);
+ 					continue;
+ 				}
+-				safe_strncpy(string, option->value.string, MAX_STR_LEN);
+-				option->value.string = string;
++				safe_strncpy(string, option->u.run.value.string, MAX_STR_LEN);
++				option->u.run.value.string = string;
+ 				break;
+ 			case OPT_COLOR:
+-				string = option->value.string;
++				string = option->u.run.value.string;
+ 				assert(string);
+ 				decode_color(string, strlen(string),
+-						&option->value.color);
++					     &option->u.run.value.color);
+ 				break;
+ 			case OPT_CODEPAGE:
+-				string = option->value.string;
++				string = option->u.run.value.string;
+ 				assert(string);
+-				option->value.number = get_cp_index(string);
++				option->u.run.value.number = get_cp_index(string);
+ 				break;
+ 			case OPT_BOOL:
+ 			case OPT_INT:
+diff --git a/src/config/options.h b/src/config/options.h
+index 2baea8c..bd9afab 100644
+--- a/src/config/options.h
++++ b/src/config/options.h
+@@ -99,6 +99,9 @@ struct listbox_item; /* bfu/listbox.h */
+ struct option; /* defined later in this file */
+ struct session; /* session/session.h */
+ 
++typedef unsigned char *option_command_fn_T(struct option *,
++					   unsigned char ***, int *);
++
+ union option_value {
+ 	/* XXX: Keep first to make @options_root initialization possible. */
+ 	/* The OPT_TREE list_head is allocated. */
+@@ -114,7 +117,7 @@ union option_value {
+ 	color_T color;
+ 
+ 	/* The OPT_COMMAND value */
+-	unsigned char *(*command)(struct option *, unsigned char ***, int *);
++	option_command_fn_T *command;
+ 
+ 	/* The OPT_STRING string is allocated and has length MAX_STR_LEN.
+ 	 * The OPT_ALIAS string is NOT allocated, has variable length
+@@ -142,25 +145,35 @@ struct option {
+ 	OBJECT_HEAD(struct option);
+ 
+ 	unsigned char *name;
++	unsigned char *desc;
++	unsigned char *capt;
+ 	enum option_flags flags;
+ 	enum option_type type;
+ 	long min, max;
+-	union option_value value;
+-	unsigned char *desc;
+-	unsigned char *capt;
+-
+-	struct option *root;
+-
+-	/* To be called when the option (or sub-option if it's a tree) is
+-	 * changed. If it returns zero, we will continue descending the options
+-	 * tree checking for change handlers. */
+-	change_hook_T change_hook;
+-
+-	struct listbox_item *box_item;
++	union {
++		struct option_init {
++			long value_long;
++			void *value_dataptr;
++			option_command_fn_T *value_funcptr;
++		} init;
++		struct option_run {
++			union option_value value;
++			struct option *root;
++
++			/* To be called when the option (or sub-option
++			 * if it's a tree) is changed. If it returns
++			 * zero, we will continue descending the options
++			 * tree checking for change handlers. */
++			change_hook_T change_hook;
++
++			struct listbox_item *box_item;
++		} run;
++	} u;
+ };
+ 
+-#define INIT_OPTION(name, flags, type, min, max, value, desc, capt) \
+-	{ NULL_LIST_HEAD, INIT_OBJECT("option"), name, flags, type, min, max, { (LIST_OF(struct option) *) (value) }, desc, capt }
++#define INIT_OPTION(name, flags, type, min, max, vl, vdp, vfp, desc, capt) \
++	{ NULL_LIST_HEAD, INIT_OBJECT("option"), name, desc, capt, \
++	  flags, type, min, max, {{ vl, vdp, vfp }} }
+ 
+ extern struct option *config_options;
+ extern struct option *cmdline_options;
+@@ -323,40 +336,51 @@ extern void register_options(struct option_info info[], struct option *tree);
+ extern void unregister_options(struct option_info info[], struct option *tree);
+ 
+ #define NULL_OPTION_INFO \
+-	{ INIT_OPTION(NULL, 0, 0, 0, 0, NULL, NULL, NULL), NULL }
++	{ INIT_OPTION(NULL, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL), NULL }
+ 
+ #define INIT_OPT_BOOL(path, capt, name, flags, def, desc) \
+-	{ INIT_OPTION(name, flags, OPT_BOOL, 0, 1, def, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_BOOL, 0, 1, \
++	  def, NULL, NULL, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_INT(path, capt, name, flags, min, max, def, desc) \
+-	{ INIT_OPTION(name, flags, OPT_INT, min, max, def, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_INT, min, max, \
++	  def, NULL, NULL, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_LONG(path, capt, name, flags, min, max, def, desc) \
+-	{ INIT_OPTION(name, flags, OPT_LONG, min, max, def, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_LONG, min, max, \
++	  def, NULL, NULL, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_STRING(path, capt, name, flags, def, desc) \
+-	{ INIT_OPTION(name, flags, OPT_STRING, 0, MAX_STR_LEN, def, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_STRING, 0, MAX_STR_LEN, \
++	  0, def, NULL, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_CODEPAGE(path, capt, name, flags, def, desc) \
+-	{ INIT_OPTION(name, flags, OPT_CODEPAGE, 0, 0, def, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_CODEPAGE, 0, 0, \
++	  0, def, NULL, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_COLOR(path, capt, name, flags, def, desc) \
+-	{ INIT_OPTION(name, flags, OPT_COLOR, 0, 0, def, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_COLOR, 0, 0, \
++	  0, def, NULL, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_LANGUAGE(path, capt, name, flags, desc) \
+-	{ INIT_OPTION(name, flags, OPT_LANGUAGE, 0, 0, 0, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_LANGUAGE, 0, 0, \
++	  0, NULL, NULL, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_COMMAND(path, capt, name, flags, cmd, desc) \
+-	{ INIT_OPTION(name, flags, OPT_COMMAND, 0, 0, cmd, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_COMMAND, 0, 0, \
++	  0, 0, cmd, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_CMDALIAS(path, capt, name, flags, def, desc) \
+-	{ INIT_OPTION(name, flags, OPT_ALIAS, 0, sizeof(def) - 1, def, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_ALIAS, 0, sizeof(def) - 1, \
++	  0, def, NULL, DESC(desc), capt), path }
+ 
+ #define INIT_OPT_ALIAS(path, name, flags, def) \
+-	{ INIT_OPTION(name, flags, OPT_ALIAS, 0, sizeof(def) - 1, def, NULL, NULL), path }
++	{ INIT_OPTION(name, flags, OPT_ALIAS, 0, sizeof(def) - 1, \
++	  0, def, NULL, NULL, NULL), path }
+ 
+ #define INIT_OPT_TREE(path, capt, name, flags, desc) \
+-	{ INIT_OPTION(name, flags, OPT_TREE, 0, 0, NULL, DESC(desc), capt), path }
++	{ INIT_OPTION(name, flags, OPT_TREE, 0, 0, \
++	  0, NULL, NULL, DESC(desc), capt), path }
+ 
+ 
+ /* TODO: We need to do *something* with this ;). */
+diff --git a/src/config/opttypes.c b/src/config/opttypes.c
+index e79e42f..63e573c 100644
+--- a/src/config/opttypes.c
++++ b/src/config/opttypes.c
+@@ -59,7 +59,7 @@ gen_cmd(struct option *o, unsigned char ***argv, int *argc)
+ static unsigned char *
+ bool_cmd(struct option *o, unsigned char ***argv, int *argc)
+ {
+-	o->value.number = 1;
++	o->u.run.value.number = 1;
+ 
+ 	if (!*argc) return NULL;
+ 
+@@ -67,8 +67,8 @@ bool_cmd(struct option *o, unsigned char ***argv, int *argc)
+ 	if (!(*argv)[0][0] || (*argv)[0][1]) return NULL;
+ 
+ 	switch ((*argv)[0][0]) {
+-		case '0': o->value.number = 0; break;
+-		case '1': o->value.number = 1; break;
++		case '0': o->u.run.value.number = 0; break;
++		case '1': o->u.run.value.number = 1; break;
+ 		default: return NULL;
+ 	}
+ 
+@@ -80,7 +80,7 @@ bool_cmd(struct option *o, unsigned char ***argv, int *argc)
+ static unsigned char *
+ exec_cmd(struct option *o, unsigned char ***argv, int *argc)
+ {
+-	return o->value.command(o, argv, argc);
++	return o->u.run.value.command(o, argv, argc);
+ }
+ 
+ 
+@@ -93,16 +93,16 @@ exec_cmd(struct option *o, unsigned char ***argv, int *argc)
+ static unsigned char *
+ redir_cmd(struct option *opt, unsigned char ***argv, int *argc)
+ {
+-	struct option *real = get_opt_rec(config_options, opt->value.string);
++	struct option *real = get_opt_rec(config_options, opt->u.run.value.string);
+ 	unsigned char * ret = NULL;
+ 
+-	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->value.string);
++	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->u.run.value.string);
+ 	if_assert_failed { return ret; }
+ 
+ 	if (option_types[real->type].cmdline) {
+ 		ret = option_types[real->type].cmdline(real, argv, argc);
+ 		if ((opt->flags & OPT_ALIAS_NEGATE) && real->type == OPT_BOOL) {
+-			real->value.number = !real->value.number;
++			real->u.run.value.number = !real->u.run.value.number;
+ 		}
+ 	}
+ 
+@@ -112,10 +112,10 @@ redir_cmd(struct option *opt, unsigned char ***argv, int *argc)
+ static unsigned char *
+ redir_rd(struct option *opt, unsigned char **file, int *line)
+ {
+-	struct option *real = get_opt_rec(config_options, opt->value.string);
++	struct option *real = get_opt_rec(config_options, opt->u.run.value.string);
+ 	unsigned char *ret = NULL;
+ 
+-	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->value.string);
++	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->u.run.value.string);
+ 	if_assert_failed { return ret; }
+ 
+ 	if (option_types[real->type].read) {
+@@ -131,9 +131,9 @@ redir_rd(struct option *opt, unsigned char **file, int *line)
+ static void
+ redir_wr(struct option *opt, struct string *string)
+ {
+-	struct option *real = get_opt_rec(config_options, opt->value.string);
++	struct option *real = get_opt_rec(config_options, opt->u.run.value.string);
+ 
+-	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->value.string);
++	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->u.run.value.string);
+ 	if_assert_failed { return; }
+ 
+ 	if (option_types[real->type].write)
+@@ -143,10 +143,10 @@ redir_wr(struct option *opt, struct string *string)
+ static int
+ redir_set(struct option *opt, unsigned char *str)
+ {
+-	struct option *real = get_opt_rec(config_options, opt->value.string);
++	struct option *real = get_opt_rec(config_options, opt->u.run.value.string);
+ 	int ret = 0;
+ 
+-	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->value.string);
++	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->u.run.value.string);
+ 	if_assert_failed { return ret; }
+ 
+ 	if (option_types[real->type].set) {
+@@ -165,10 +165,10 @@ redir_set(struct option *opt, unsigned char *str)
+ static int
+ redir_eq(struct option *opt, const unsigned char *str)
+ {
+-	struct option *real = get_opt_rec(config_options, opt->value.string);
++	struct option *real = get_opt_rec(config_options, opt->u.run.value.string);
+ 	int ret = 0;
+ 
+-	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->value.string);
++	assertm(real != NULL, "%s aliased to unknown option %s!", opt->name, opt->u.run.value.string);
+ 	if_assert_failed { return ret; }
+ 
+ 	if (option_types[real->type].equals) {
+@@ -225,40 +225,40 @@ num_rd(struct option *opt, unsigned char **file, int *line)
+ static int
+ num_set(struct option *opt, unsigned char *str)
+ {
+-	opt->value.number = *((long *) str);
++	opt->u.run.value.number = *((long *) str);
+ 	return 1;
+ }
+ 
+ static int
+ num_eq(struct option *opt, const unsigned char *str)
+ {
+-	return str && opt->value.number == *(const long *) str;
++	return str && opt->u.run.value.number == *(const long *) str;
+ }
+ 
+ static void
+ num_wr(struct option *option, struct string *string)
+ {
+-	add_knum_to_string(string, option->value.number);
++	add_knum_to_string(string, option->u.run.value.number);
+ }
+ 
+ 
+ static int
+ long_set(struct option *opt, unsigned char *str)
+ {
+-	opt->value.big_number = *((long *) str);
++	opt->u.run.value.big_number = *((long *) str);
+ 	return 1;
+ }
+ 
+ static int
+ long_eq(struct option *opt, const unsigned char *str)
+ {
+-	return str && opt->value.big_number == *(const long *) str;
++	return str && opt->u.run.value.big_number == *(const long *) str;
+ }
+ 
+ static void
+ long_wr(struct option *option, struct string *string)
+ {
+-	add_knum_to_string(string, option->value.big_number);
++	add_knum_to_string(string, option->u.run.value.big_number);
+ }
+ 
+ static unsigned char *
+@@ -318,25 +318,25 @@ str_rd(struct option *opt, unsigned char **file, int *line)
+ static int
+ str_set(struct option *opt, unsigned char *str)
+ {
+-	assert(opt->value.string);
++	assert(opt->u.run.value.string);
+ 
+-	safe_strncpy(opt->value.string, str, MAX_STR_LEN);
++	safe_strncpy(opt->u.run.value.string, str, MAX_STR_LEN);
+ 	return 1;
+ }
+ 
+ static int
+ str_eq(struct option *opt, const unsigned char *str)
+ {
+-	return str && strcmp(opt->value.string, str) == 0;
++	return str && strcmp(opt->u.run.value.string, str) == 0;
+ }
+ 
+ static void
+ str_wr(struct option *o, struct string *s)
+ {
+-	int len = strlen(o->value.string);
++	int len = strlen(o->u.run.value.string);
+ 
+ 	int_upper_bound(&len, o->max - 1);
+-	add_optstring_to_string(s, o->value.string, len);
++	add_optstring_to_string(s, o->u.run.value.string, len);
+ }
+ 
+ static void
+@@ -344,8 +344,8 @@ str_dup(struct option *opt, struct option *template)
+ {
+ 	unsigned char *new = mem_alloc(MAX_STR_LEN);
+ 
+-	if (new) safe_strncpy(new, template->value.string, MAX_STR_LEN);
+-	opt->value.string = new;
++	if (new) safe_strncpy(new, template->u.run.value.string, MAX_STR_LEN);
++	opt->u.run.value.string = new;
+ }
+ 
+ 
+@@ -356,20 +356,20 @@ cp_set(struct option *opt, unsigned char *str)
+ 
+ 	if (ret < 0) return 0;
+ 
+-	opt->value.number = ret;
++	opt->u.run.value.number = ret;
+ 	return 1;
+ }
+ 
+ static int
+ cp_eq(struct option *opt, const unsigned char *str)
+ {
+-	return str && get_cp_index(str) == opt->value.number;
++	return str && get_cp_index(str) == opt->u.run.value.number;
+ }
+ 
+ static void
+ cp_wr(struct option *o, struct string *s)
+ {
+-	unsigned char *mime_name = get_cp_config_name(o->value.number);
++	unsigned char *mime_name = get_cp_config_name(o->u.run.value.number);
+ 
+ 	add_optstring_to_string(s, mime_name, strlen(mime_name));
+ }
+@@ -379,8 +379,8 @@ static int
+ lang_set(struct option *opt, unsigned char *str)
+ {
+ #ifdef CONFIG_NLS
+-	opt->value.number = name_to_language(str);
+-	set_language(opt->value.number);
++	opt->u.run.value.number = name_to_language(str);
++	set_language(opt->u.run.value.number);
+ #endif
+ 	return 1;
+ }
+@@ -389,7 +389,7 @@ static int
+ lang_eq(struct option *opt, const unsigned char *str)
+ {
+ #ifdef CONFIG_NLS
+-	return str && name_to_language(str) == opt->value.number;
++	return str && name_to_language(str) == opt->u.run.value.number;
+ #else
+ 	return 1;		/* All languages are the same.  */
+ #endif
+@@ -413,7 +413,7 @@ lang_wr(struct option *o, struct string *s)
+ static int
+ color_set(struct option *opt, unsigned char *str)
+ {
+-	return !decode_color(str, strlen(str), &opt->value.color);
++	return !decode_color(str, strlen(str), &opt->u.run.value.color);
+ }
+ 
+ static int
+@@ -422,13 +422,13 @@ color_eq(struct option *opt, const unsigned char *str)
+ 	color_T color;
+ 
+ 	return str && !decode_color(str, strlen(str), &color)
+-		&& color == opt->value.color;
++		&& color == opt->u.run.value.color;
+ }
+ 
+ static void
+ color_wr(struct option *opt, struct string *str)
+ {
+-	color_T color = opt->value.color;
++	color_T color = opt->u.run.value.color;
+ 	unsigned char hexcolor[8];
+ 	const unsigned char *strcolor = get_color_string(color, hexcolor);
+ 
+@@ -439,11 +439,11 @@ static void
+ tree_dup(struct option *opt, struct option *template)
+ {
+ 	LIST_OF(struct option) *new = init_options_tree();
+-	LIST_OF(struct option) *tree = template->value.tree;
++	LIST_OF(struct option) *tree = template->u.run.value.tree;
+ 	struct option *option;
+ 
+ 	if (!new) return;
+-	opt->value.tree = new;
++	opt->u.run.value.tree = new;
+ 
+ 	foreachback (option, *tree) {
+ 		struct option *new_opt = copy_option(option);
+@@ -451,16 +451,16 @@ tree_dup(struct option *opt, struct option *template)
+ 		if (!new_opt) continue;
+ 		object_nolock(new_opt, "option");
+ 		add_to_list_end(*new, new_opt);
+-		new_opt->root = opt;
++		new_opt->u.run.root = opt;
+ 
+-		if (!new_opt->box_item) continue;
++		if (!new_opt->u.run.box_item) continue;
+ 
+ 		if (new_opt->name && !strcmp(new_opt->name, "_template_"))
+-			new_opt->box_item->visible = get_opt_bool("config.show_template");
++			new_opt->u.run.box_item->visible = get_opt_bool("config.show_template");
+ 
+-		if (opt->box_item) {
+-			add_to_list(opt->box_item->child,
+-				    new_opt->box_item);
++		if (opt->u.run.box_item) {
++			add_to_list(opt->u.run.box_item->child,
++				    new_opt->u.run.box_item);
+ 		}
+ 	}
+ }
+diff --git a/src/cookies/cookies.c b/src/cookies/cookies.c
+index 011f853..c64830f 100644
+--- a/src/cookies/cookies.c
++++ b/src/cookies/cookies.c
+@@ -128,7 +128,7 @@ static struct option_info cookies_options[] = {
+ 	NULL_OPTION_INFO,
+ };
+ 
+-#define get_opt_cookies(which)		cookies_options[(which)].option.value
++#define get_opt_cookies(which)		cookies_options[(which)].option.u.run.value
+ #define get_cookies_accept_policy()	get_opt_cookies(COOKIES_ACCEPT_POLICY).number
+ #define get_cookies_max_age()		get_opt_cookies(COOKIES_MAX_AGE).number
+ #define get_cookies_paranoid_security()	get_opt_cookies(COOKIES_PARANOID_SECURITY).number
+diff --git a/src/dialogs/menu.c b/src/dialogs/menu.c
+index b8233ae..2a769fc 100644
+--- a/src/dialogs/menu.c
++++ b/src/dialogs/menu.c
+@@ -858,7 +858,7 @@ pass_uri_to_command(struct session *ses, struct document_view *doc_view,
+ 		text = stracpy(option->name);
+ 		if (!text) continue;
+ 
+-		data = format_command(option->value.string, uri);
++		data = format_command(option->u.run.value.string, uri);
+ 		if (!data) {
+ 			mem_free(text);
+ 			continue;
+diff --git a/src/dialogs/options.c b/src/dialogs/options.c
+index f40d07d..1bf17fb 100644
+--- a/src/dialogs/options.c
++++ b/src/dialogs/options.c
+@@ -35,8 +35,8 @@ display_codepage(struct terminal *term, void *name_, void *xxx)
+ 
+ 	assertm(index != -1, "%s", name);
+ 
+-	if (opt->value.number != index) {
+-		opt->value.number = index;
++	if (opt->u.run.value.number != index) {
++		opt->u.run.value.number = index;
+ 		option_changed(NULL, opt);
+ 	}
+ 
+diff --git a/src/globhist/globhist.c b/src/globhist/globhist.c
+index ecb7c90..71a6b1b 100644
+--- a/src/globhist/globhist.c
++++ b/src/globhist/globhist.c
+@@ -83,7 +83,7 @@ static struct option_info global_history_options[] = {
+ 	NULL_OPTION_INFO,
+ };
+ 
+-#define get_opt_globhist(which)		global_history_options[(which)].option.value
++#define get_opt_globhist(which)		global_history_options[(which)].option.u.run.value
+ #define get_globhist_enable()		get_opt_globhist(GLOBHIST_ENABLE).number
+ #define get_globhist_max_items()	get_opt_globhist(GLOBHIST_MAX_ITEMS).number
+ #define get_globhist_display_type()	get_opt_globhist(GLOBHIST_DISPLAY_TYPE).number
+diff --git a/src/mime/backend/default.c b/src/mime/backend/default.c
+index f2ea450..9833143 100644
+--- a/src/mime/backend/default.c
++++ b/src/mime/backend/default.c
+@@ -120,7 +120,7 @@ get_content_type_default(unsigned char *extension)
+ 
+ 	opt_tree = get_opt_rec_real(config_options, "mime.extension");
+ 
+-	foreach (opt, *opt_tree->value.tree) {
++	foreach (opt, *opt_tree->u.run.value.tree) {
+ 		unsigned char *namepos = opt->name + strlen(opt->name) - 1;
+ 		unsigned char *extpos = extend;
+ 
+@@ -140,7 +140,7 @@ get_content_type_default(unsigned char *extension)
+ 		 * extension.. */
+ 		if (namepos < opt->name
+ 		    && (extpos < extension || *extpos == '.'))
+-			return stracpy(opt->value.string);
++			return stracpy(opt->u.run.value.string);
+ 	}
+ 
+ 	return NULL;
+@@ -184,7 +184,7 @@ get_mime_handler_option(struct option *type_opt, int xwin)
+ 	handler_opt = get_opt_rec_real(config_options, "mime.handler");
+ 	if (!handler_opt) return NULL;
+ 
+-	handler_opt = get_opt_rec_real(handler_opt, type_opt->value.string);
++	handler_opt = get_opt_rec_real(handler_opt, type_opt->u.run.value.string);
+ 	if (!handler_opt) return NULL;
+ 
+ 	return get_opt_rec_real(handler_opt, get_system_str(xwin));
+@@ -202,7 +202,7 @@ get_mime_handler_default(unsigned char *type, int have_x)
+ 	if (!handler_opt) return NULL;
+ 
+ 	return init_mime_handler(get_opt_str_tree(handler_opt, "program"),
+-				 type_opt->value.string,
++				 type_opt->u.run.value.string,
+ 				 default_mime_module.name,
+ 				 get_opt_bool_tree(handler_opt, "ask"),
+ 				 get_opt_bool_tree(handler_opt, "block"));
+diff --git a/src/mime/backend/mailcap.c b/src/mime/backend/mailcap.c
+index afbb9d1..d04ff19 100644
+--- a/src/mime/backend/mailcap.c
++++ b/src/mime/backend/mailcap.c
+@@ -123,7 +123,7 @@ static struct option_info mailcap_options[] = {
+ };
+ 
+ #define get_opt_mailcap(which)		mailcap_options[(which)].option
+-#define get_mailcap(which)		get_opt_mailcap(which).value
++#define get_mailcap(which)		get_opt_mailcap(which).u.run.value
+ #define get_mailcap_ask()		get_mailcap(MAILCAP_ASK).number
+ #define get_mailcap_description()	get_mailcap(MAILCAP_DESCRIPTION).number
+ #define get_mailcap_enable()		get_mailcap(MAILCAP_ENABLE).number
+diff --git a/src/mime/backend/mimetypes.c b/src/mime/backend/mimetypes.c
+index 6e3e675..184edbf 100644
+--- a/src/mime/backend/mimetypes.c
++++ b/src/mime/backend/mimetypes.c
+@@ -61,8 +61,8 @@ static struct option_info mimetypes_options[] = {
+ 	NULL_OPTION_INFO,
+ };
+ 
+-#define get_opt_mimetypes(which)		mimetypes_options[(which)].option
+-#define get_mimetypes(which)		get_opt_mimetypes(which).value
++#define get_opt_mimetypes(which)	mimetypes_options[(which)].option
++#define get_mimetypes(which)		get_opt_mimetypes(which).u.run.value
+ #define get_mimetypes_enable()		get_mimetypes(MIMETYPES_ENABLE).number
+ #define get_mimetypes_path()		get_mimetypes(MIMETYPES_PATH).string
+ 
+diff --git a/src/mime/dialogs.c b/src/mime/dialogs.c
+index f55310f..5aeba27 100644
+--- a/src/mime/dialogs.c
++++ b/src/mime/dialogs.c
+@@ -65,7 +65,7 @@ menu_del_ext(struct terminal *term, void *fcp, void *xxx2)
+ 	msg_box(term, getml(extension, (void *) NULL), MSGBOX_FREE_TEXT,
+ 		N_("Delete extension"), ALIGN_CENTER,
+ 		msg_text(term, N_("Delete extension %s -> %s?"),
+-			 extension, opt->value.string),
++			 extension, opt->u.run.value.string),
+ 		extension, 2,
+ 		MSG_BOX_BUTTON(N_("~Yes"), really_del_ext, B_ENTER),
+ 		MSG_BOX_BUTTON(N_("~No"), NULL, B_ESC));
+@@ -116,7 +116,7 @@ menu_add_ext(struct terminal *term, void *fcp, void *xxx2)
+ 
+ 		if (opt) {
+ 			safe_strncpy(new->ext, fcp, MAX_STR_LEN);
+-			safe_strncpy(new->ct, opt->value.string, MAX_STR_LEN);
++			safe_strncpy(new->ct, opt->u.run.value.string, MAX_STR_LEN);
+ 			safe_strncpy(new->ext_orig, fcp, MAX_STR_LEN);
+ 		}
+ 
+@@ -174,7 +174,7 @@ menu_list_ext(struct terminal *term, void *fn_, void *xxx)
+ 		}
+ 
+ 		translated2 = memacpy(translated.source, translated.length);
+-		optptr2 = stracpy(opt->value.string);
++		optptr2 = stracpy(opt->u.run.value.string);
+ 
+ 		if (translated2 && optptr2) {
+ 			add_to_menu(&mi, translated.source, optptr2, ACT_MAIN_NONE,
+diff --git a/src/mime/mime.c b/src/mime/mime.c
+index 7f0d454..a36ba08 100644
+--- a/src/mime/mime.c
++++ b/src/mime/mime.c
+@@ -49,7 +49,7 @@ static struct option_info mime_options[] = {
+ };
+ 
+ #define get_opt_mime(which)	mime_options[(which)].option
+-#define get_default_mime_type()	get_opt_mime(MIME_DEFAULT_TYPE).value.string
++#define get_default_mime_type()	get_opt_mime(MIME_DEFAULT_TYPE).u.run.value.string
+ 
+ /* Checks protocols headers for a suitable filename */
+ static unsigned char *
+diff --git a/src/protocol/nntp/nntp.c b/src/protocol/nntp/nntp.c
+index 45016bc..88b102e 100644
+--- a/src/protocol/nntp/nntp.c
++++ b/src/protocol/nntp/nntp.c
+@@ -53,13 +53,13 @@ static struct option_info nntp_protocol_options[] = {
+ unsigned char *
+ get_nntp_server(void)
+ {
+-	return get_opt_nntp(NNTP_PROTOCOL_SERVER).value.string;
++	return get_opt_nntp(NNTP_PROTOCOL_SERVER).u.run.value.string;
+ }
+ 
+ unsigned char *
+ get_nntp_header_entries(void)
+ {
+-	return get_opt_nntp(NNTP_PROTOCOL_HEADER_ENTRIES).value.string;
++	return get_opt_nntp(NNTP_PROTOCOL_HEADER_ENTRIES).u.run.value.string;
+ }
+ 
+ struct module nntp_protocol_module = struct_module(
+diff --git a/src/protocol/rewrite/rewrite.c b/src/protocol/rewrite/rewrite.c
+index 42ef5ae..9d8f990 100644
+--- a/src/protocol/rewrite/rewrite.c
++++ b/src/protocol/rewrite/rewrite.c
+@@ -220,8 +220,8 @@ static struct option_info uri_rewrite_options[] = {
+ };
+ 
+ #define get_opt_rewrite(which)	uri_rewrite_options[(which)].option
+-#define get_dumb_enable()	get_opt_rewrite(URI_REWRITE_ENABLE_DUMB).value.number
+-#define get_smart_enable()	get_opt_rewrite(URI_REWRITE_ENABLE_SMART).value.number
++#define get_dumb_enable()	get_opt_rewrite(URI_REWRITE_ENABLE_DUMB).u.run.value.number
++#define get_smart_enable()	get_opt_rewrite(URI_REWRITE_ENABLE_SMART).u.run.value.number
+ 
+ static inline struct option *
+ get_prefix_tree(enum uri_rewrite_option tree)
+@@ -316,7 +316,7 @@ get_uri_rewrite_prefix(enum uri_rewrite_type type, unsigned char *url)
+ 			? URI_REWRITE_DUMB_TREE : URI_REWRITE_SMART_TREE;
+ 	struct option *prefix_tree = get_prefix_tree(tree);
+ 	struct option *opt = get_opt_rec_real(prefix_tree, url);
+-	unsigned char *exp = opt ? opt->value.string : NULL;
++	unsigned char *exp = opt ? opt->u.run.value.string : NULL;
+ 
+ 	return (exp && *exp) ? exp : NULL;
+ }
+diff --git a/src/protocol/user.c b/src/protocol/user.c
+index 8c6f978..36f6b22 100644
+--- a/src/protocol/user.c
++++ b/src/protocol/user.c
+@@ -113,7 +113,7 @@ get_user_program(struct terminal *term, unsigned char *progid, int progidlen)
+ 	opt = get_opt_rec_real(config_options, name.source);
+ 
+ 	done_string(&name);
+-	return (unsigned char *) (opt ? opt->value.string : NULL);
++	return (unsigned char *) (opt ? opt->u.run.value.string : NULL);
+ }
+ 
+ 
+diff --git a/src/scripting/lua/core.c b/src/scripting/lua/core.c
+index 8aec3a9..0a9a23c 100644
+--- a/src/scripting/lua/core.c
++++ b/src/scripting/lua/core.c
+@@ -573,22 +573,22 @@ l_get_option(LS)
+ 	/* Convert to an appropriate Lua type */
+ 	switch (opt->type) {
+ 	case OPT_BOOL:
+-		lua_pushboolean(S, opt->value.number);
++		lua_pushboolean(S, opt->u.run.value.number);
+ 		break;
+ 	case OPT_INT:
+-		lua_pushnumber(S, opt->value.number);
++		lua_pushnumber(S, opt->u.run.value.number);
+ 		break;
+ 	case OPT_LONG:
+-		lua_pushnumber(S, opt->value.big_number);
++		lua_pushnumber(S, opt->u.run.value.big_number);
+ 		break;
+ 	case OPT_STRING:
+-		lua_pushstring(S, opt->value.string);
++		lua_pushstring(S, opt->u.run.value.string);
+ 		break;
+ 	case OPT_CODEPAGE:
+ 	{
+ 		unsigned char *cp_name;
+ 
+-		cp_name = get_cp_config_name(opt->value.number);
++		cp_name = get_cp_config_name(opt->u.run.value.number);
+ 		lua_pushstring(S, cp_name);
+ 		break;
+ 	}
+@@ -610,7 +610,7 @@ l_get_option(LS)
+ 		unsigned char hexcolor[8];
+ 		const unsigned char *strcolor;
+ 
+-		color = opt->value.color;
++		color = opt->u.run.value.color;
+ 		strcolor = get_color_string(color, hexcolor);
+ 		lua_pushstring(S, strcolor);
+ 		break;
+diff --git a/src/session/session.c b/src/session/session.c
+index 7f97317..3b59b2b 100644
+--- a/src/session/session.c
++++ b/src/session/session.c
+@@ -783,7 +783,7 @@ setup_first_session(struct session *ses, struct uri *uri)
+ 
+ 	if (!get_opt_bool("config.saving_style_w")) {
+ 		struct option *opt = get_opt_rec(config_options, "config.saving_style_w");
+-		opt->value.number = 1;
++		opt->u.run.value.number = 1;
+ 		option_changed(ses, opt);
+ 		if (get_opt_int("config.saving_style") != 3) {
+ 			info_box(term, 0,
+diff --git a/src/terminal/screen.c b/src/terminal/screen.c
+index 8f838a6..c0e5ecb 100644
+--- a/src/terminal/screen.c
++++ b/src/terminal/screen.c
+@@ -433,7 +433,7 @@ add_screen_driver(enum term_mode_type type, struct terminal *term, int env_len)
+ 	set_screen_driver_opt(driver, term->spec);
+ 	memcpy(driver->name, term->spec->name, env_len + 1);
+ 
+-	term->spec->change_hook = screen_driver_change_hook;
++	term->spec->u.run.change_hook = screen_driver_change_hook;
+ 
+ #ifdef CONFIG_UTF8
+ 	term->utf8_cp = driver->opt.utf8_cp;
+diff --git a/src/viewer/text/search.c b/src/viewer/text/search.c
+index fc1cdd7..85bed2d 100644
+--- a/src/viewer/text/search.c
++++ b/src/viewer/text/search.c
+@@ -1430,8 +1430,8 @@ text_typeahead_handler(struct input_line *line, int action_id)
+ 					    "document.browse.search.regex");
+ 
+ 			if (opt) {
+-				opt->value.number = (opt->value.number + 1)
+-						    % (opt->max + 1);
++				opt->u.run.value.number = ((opt->u.run.value.number + 1)
++							   % (opt->max + 1));
+ 				option_changed(ses, opt);
+ 			}
+ 		}
+-- 
+1.6.4.11.gc8f6
+

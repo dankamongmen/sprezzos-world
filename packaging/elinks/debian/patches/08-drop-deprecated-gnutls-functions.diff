@@ -1,0 +1,84 @@
+Backport of upstream commits b228fe82ab7c8bf79f7ab67b957e4fe72708ff58 and
+2d8fd9cecfc7c71ade541f9a0593a62244e0bdc8.
+
+diff -aur elinks-0.12~pre5.orig//src/network/ssl/socket.c elinks-0.12~pre5/src/network/ssl/socket.c
+--- elinks-0.12~pre5.orig//src/network/ssl/socket.c	2009-07-07 14:23:17.000000000 +0200
++++ elinks-0.12~pre5/src/network/ssl/socket.c	2011-11-06 11:34:55.000000000 +0100
+@@ -70,14 +70,9 @@
+ 	((ssl_t *) socket->ssl)->options |= SSL_OP_NO_TLSv1;
+ #elif defined(CONFIG_GNUTLS)
+ 	{
+-		/* GnuTLS does not support SSLv2 because it is "insecure".
+-		 * That leaves only SSLv3.  */
+-		static const int protocol_priority[] = {
+-			GNUTLS_SSL3,
+-			0
+-		};
++		const char *error;
+ 
+-		gnutls_protocol_set_priority(*(ssl_t *) socket->ssl, protocol_priority);
++		gnutls_priority_set_direct(*(ssl_t *) socket->ssl, "SECURE", &error);
+ 	}
+ #endif
+ }
+@@ -85,6 +80,10 @@
+ static void
+ ssl_want_read(struct socket *socket)
+ {
++#ifdef CONFIG_GNUTLS
++	unsigned int status;
++#endif
++
+ 	if (socket->no_tls)
+ 		ssl_set_no_tls(socket);
+ 
+@@ -92,7 +91,8 @@
+ 		case SSL_ERROR_NONE:
+ #ifdef CONFIG_GNUTLS
+ 			if (get_opt_bool("connection.ssl.cert_verify")
+-			    && gnutls_certificate_verify_peers(*((ssl_t *) socket->ssl))) {
++			    && (gnutls_certificate_verify_peers2(*((ssl_t *) socket->ssl), &status)
++				|| status)) {
+ 				socket->ops->retry(socket, connection_state(S_SSL_ERROR));
+ 				return;
+ 			}
+@@ -117,6 +117,9 @@
+ ssl_connect(struct socket *socket)
+ {
+ 	int ret;
++#ifdef CONFIG_GNUTLS
++	unsigned int status;
++#endif
+ 
+ 	if (init_ssl_connection(socket) == S_SSL_ERROR) {
+ 		socket->ops->done(socket, connection_state(S_SSL_ERROR));
+@@ -182,7 +185,8 @@
+ 			if (!get_opt_bool("connection.ssl.cert_verify"))
+ 				break;
+ 
+-			if (!gnutls_certificate_verify_peers(*((ssl_t *) socket->ssl)))
++			if (!gnutls_certificate_verify_peers2(*((ssl_t *) socket->ssl), &status)
++			    && !status)
+ #endif
+ 				break;
+ 
+Nur in elinks-0.12~pre5/src/network/ssl: socket.c~.
+diff -aur elinks-0.12~pre5.orig//src/network/ssl/ssl.c elinks-0.12~pre5/src/network/ssl/ssl.c
+--- elinks-0.12~pre5.orig//src/network/ssl/ssl.c	2009-07-07 14:23:17.000000000 +0200
++++ elinks-0.12~pre5/src/network/ssl/ssl.c	2011-11-06 11:33:12.000000000 +0100
+@@ -264,12 +264,15 @@
+ #else
+ 	gnutls_set_default_priority(*state);
+ #endif
++#if 0
++	/* Deprecated functions */
+ 	/* gnutls_handshake_set_private_extensions(*state, 1); */
+ 	gnutls_cipher_set_priority(*state, cipher_priority);
+ 	gnutls_kx_set_priority(*state, kx_priority);
+ 	/* gnutls_certificate_type_set_priority(*state, cert_type_priority);
+ 	gnutls_server_name_set(*state, GNUTLS_NAME_DNS, server_name,
+ 			       sizeof(server_name) - 1); */
++#endif
+ 
+ 	socket->ssl = state;
+ #endif
