@@ -1094,8 +1094,8 @@ $(GNUTLS): $(SPREZZ)/gnutls/debian/changelog
 	tar xJvf gnutls-$(gnutls_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gnutls26
-gnutls26:$(gnutls2626)_$(ARCH).deb
-$(gnutls2626): $(SPREZZ)/gnutls26/debian/changelog
+gnutls26:$(GNUTLS26)_$(ARCH).deb
+$(GNUTLS26): $(SPREZZ)/gnutls26/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
