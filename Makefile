@@ -249,6 +249,13 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	tar cJf $(GROWLIGHTORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
+.PHONY: reportbug
+reportbug: $(REPORTBUG)_$(ARCH).deb
+$(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
+	git clone git://anonscm.debian.org/reportbug/reportbug.git $@
+	tar cJf ../$(reportbug-UPVER).tar.xz -C.. $@ --exclude-vcs
+	cp -r $(<D) $@/
+
 .PHONY: mcelog
 mcelog:$(MCELOG)_$(ARCH).deb
 $(MCELOG): $(SPREZZ)/mcelog/debian/changelog
@@ -1870,14 +1877,6 @@ $(REAVER): $(SPREZZ)/reaver/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf reaver-$(reaver_UPVER).tar.gz --strip-components=1 -C $@
-
-.PHONY: reportbug
-reportbug:$(REPORTBUG)_$(ARCH).deb
-$(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf reportbug-$(reportbug_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: rtmpdump
 rtmpdump:$(RTMPDUMP)_$(ARCH).deb
