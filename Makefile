@@ -253,7 +253,8 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 reportbug: $(REPORTBUG)_$(ARCH).deb
 $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
 	git clone git://anonscm.debian.org/reportbug/reportbug.git $@
-	tar cJf ../$(reportbug-UPVER).tar.xz -C.. $@ --exclude-vcs
+	tar cJf $(reportbug-UPVER).tar.xz $@ --exclude-vcs
+	ln -s $(reportbug-UPVER).tar.xz reportbug_$(reportbug-UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: mcelog
