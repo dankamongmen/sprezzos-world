@@ -254,7 +254,7 @@ reportbug: $(REPORTBUG)_$(ARCH).deb
 $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
 	git clone git://anonscm.debian.org/reportbug/reportbug.git $@
 	tar cJf reportbug-$(reportbug_UPVER).tar.xz $@ --exclude-vcs
-	ln -s $(reportbug_UPVER).tar.xz reportbug_$(reportbug_UPVER).orig.tar.xz
+	ln -s reportbug-$(reportbug_UPVER).tar.xz reportbug_$(reportbug_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: mcelog
