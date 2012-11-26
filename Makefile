@@ -43,7 +43,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml iproute \
 	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
 	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
-	ratpoison ghostscript jbig2dec cups libgd2 xorg-xserver libexif numactl \
+	ratpoison ghostscript jbig2dec cups xorg-xserver libexif numactl \
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison procps \
 	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
@@ -53,7 +53,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
 	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
 	py3cairo qemu-kvm gtk-vnc gthumb pycurl libgnomecups libgnomeprint telepathy-gabble \
-	gnome-photo-printer elinks lynx gnutls26 rawstudio
+	gnome-photo-printer elinks lynx gnutls26 rawstudio libwacom
 
 SPREZZ:=packaging
 
@@ -190,14 +190,14 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EIO) $(EDJE) $(EFREET) $(EMBRYO) $(EDBUS) $(EEZE) $(ITSTOOL) $(VIRTUALBOX) \
 	$(EMOTION) $(ELEMENTARY) $(ETHUMB) $(COGL) $(MPD) $(MUTTER) $(LFTP) $(NCMPCPP) \
 	$(EVASGENERICLOADERS) $(GCSTAR) $(GPERF) $(CALIBRE) $(BAOBAB) $(GHEX) $(BLUEZ) \
-	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) $(GIMP) \
+	$(SYNCEVOLUTION) $(LIBSYNTHESIS) $(SIMPLESCAN) $(EOGPLUGINS) $(LIBXCB) \
 	$(XCBPROTO) $(XINPUT) $(GNOMEKEYRING) $(GCR) $(REAVER) $(WIFITE) $(AACPLUSENC) \
 	$(FAAC) $(HANDBRAKE) $(GNOMETHEMES) $(GNOMESESSION) $(GNOMEBLUETOOTH) $(EXO) \
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
 	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) \
 	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) \
-	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) \
+	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(XORGXSERVER) \
 	$(LIBEXIF) $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) $(W3M) \
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
 	$(BISON) $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) \
@@ -211,7 +211,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER) $(PY3CAIRO) \
 	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS) $(LIBGNOMEPRINT) \
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
-	$(RAWSTUDIO)
+	$(RAWSTUDIO) $(LIBWACOM)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -789,14 +789,6 @@ $(GHOSTSCRIPT): $(SPREZZ)/ghostscript/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ghostscript-$(ghostscript_UPVER).tar.gz --strip-components=1 -C $@
-
-.PHONY: gimp
-gimp:$(GIMP)_$(ARCH).deb
-$(GIMP): $(SPREZZ)/gimp/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf gimp-$(gimp_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: git
 git:$(GIT)_$(ARCH).deb
@@ -1438,14 +1430,6 @@ $(LIBGADU): $(SPREZZ)/libgadu/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libgadu-$(libgadu_UPVER).tar.gz --strip-components=1 -C $@
 
-.PHONY: libgd2
-libgd2:$(LIBGD2)_$(ARCH).deb
-$(LIBGD2): $(SPREZZ)/libgd2/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libgd2-$(libgd2_UPVER).tar.gz --strip-components=1 -C $@
-
 .PHONY: libgphoto2
 libgphoto2:$(LIBGPHOTO2)_$(ARCH).deb
 $(LIBGPHOTO2): $(SPREZZ)/libgphoto2/debian/changelog
@@ -1525,6 +1509,14 @@ $(LIBVIRT): $(SPREZZ)/libvirt/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libvirt-$(libvirt_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: libwacom
+libwacom:$(LIBWACOM)_$(ARCH).deb
+$(LIBWACOM): $(SPREZZ)/libwacom/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libwacom-$(libwacom_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: libwnck
 libwnck:$(LIBWNCK)_$(ARCH).deb
@@ -2961,8 +2953,8 @@ clean:
 	rm -rf $(GNOMETERMINAL) $(XFCE4TERMINAL) $(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF)
 	rm -rf $(GTKHTML) $(GNOMEONLINEACCOUNTS) $(PYGOBJECT) $(YELPTOOLS) $(RTMPDUMP)
 	rm -rf $(GNOMEICONTHEMEEXTRAS) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) $(GNOMEICONTHEME)
-	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(GIMP) $(ZSH) $(BASH) $(RATPOISON)
-	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(LIBGD2) $(XORGXSERVER) $(LIBEXIF)
+	rm -rf $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) $(RATPOISON)
+	rm -rf $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(XORGXSERVER) $(LIBEXIF)
 	rm -rf $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) $(FILEROLLER)
 	rm -rf $(ALACARTE) $(X11PROTOFONTS) $(X11PROTOXEXT) $(X11PROTOCORE) $(BISON)
 	rm -rf $(X11PROTODAMAGE) $(X11PROTOFIXES) $(X11PROTOINPUT) $(X11PROTOKB) $(W3M)
@@ -2976,7 +2968,7 @@ clean:
 	rm -rf $(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
 	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS)
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
-	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO)
+	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM)
 
 clobber:
 	rm -rf $(FETCHED)
