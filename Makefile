@@ -54,7 +54,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
 	py3cairo qemu-kvm gtk-vnc gthumb pycurl libgnomecups libgnomeprint telepathy-gabble \
 	gnome-photo-printer elinks lynx gnutls26 rawstudio libwacom muffin samba \
-	xserver-xorg-video-intel ptlib uwsgi heimdal
+	xserver-xorg-video-intel ptlib uwsgi heimdal lame
 
 SPREZZ:=packaging
 
@@ -213,7 +213,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS) $(LIBGNOMEPRINT) \
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
-	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL)
+	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1415,6 +1415,14 @@ $(IMLIB): $(SPREZZ)/imlib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf imlib2-$(imlib_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: lame
+lame:$(LAME)_$(ARCH).deb
+$(LAME): $(SPREZZ)/lame/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lame-$(lame_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: libav
 libav:$(LIBAV)_$(ARCH).deb
@@ -3035,7 +3043,7 @@ clean:
 	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS)
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
 	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL)
-	rm -rf $(SAMBA) $(PTLIB) $(UWSGI) $(HEIMDAL) $(OPAL)
+	rm -rf $(SAMBA) $(PTLIB) $(UWSGI) $(HEIMDAL) $(OPAL) $(LAME)
 
 update:
 	for i in $(wildcard packaging/*) ; do \
