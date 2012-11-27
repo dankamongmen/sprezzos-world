@@ -1,0 +1,696 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+export LDFLAGS=$(shell dpkg-buildflags --get LDFLAGS)
+export CFLAGS=$(shell dpkg-buildflags --get CFLAGS)
+export CFLAGS+=$(shell dpkg-buildflags --get CPPFLAGS)
+export CPPFLAGS=$(shell dpkg-buildflags --get CPPFLAGS)
+
+# Common variables
+# ================
+
+PYTHON=/usr/bin/python
+APXS2=/usr/bin/apxs2
+APR_CONFIG=/usr/bin/apr-config
+APU_CONFIG=/usr/bin/apu-config
+UWSGI_BUILDER = $(CURDIR)/uwsgiconfig.py
+
+DEB_HOST_ARCH := $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+# Dotted versions of Python runtimes (like 'X.Y').
+PYTHON_VERS_DOTTED=$(shell pyversions -vs)
+PYTHON_DEFAULT_DOTTED=$(shell pyversions -dv)
+PYTHON3_VERS_DOTTED=$(shell py3versions -vs)
+PYTHON3_DEFAULT_DOTTED=$(shell py3versions -dv)
+
+# Dotless versions of Python runtimes (like 'XY').
+PYTHON_VERS=$(subst .,,$(PYTHON_VERS_DOTTED))
+PYTHON_DEFAULT=$(subst .,,$(PYTHON_DEFAULT_DOTTED))
+PYTHON3_VERS=$(subst .,,$(PYTHON3_VERS_DOTTED))
+PYTHON3_DEFAULT=$(subst .,,$(PYTHON3_DEFAULT_DOTTED))
+
+PYTHON_MAJOR_VER := 2
+PYTHON3_MAJOR_VER := 3
+
+# Standard directories, where dh_pythonX helper looking for Python modules.
+# Note: path is provided in debhelper format (without leading slash).
+PYTHON_DIST_PACKAGES_DIR = usr/lib/python$(PYTHON_DEFAULT_DOTTED)/dist-packages
+PYTHON3_DIST_PACKAGES_DIR = usr/lib/python3/dist-packages
+
+# Search in debian/control for packages with name $(1)% and extract % in list.
+list_pkgname_suffixes = $(strip \
+	$(shell \
+		grep "^Package: $(1)" $(CURDIR)/debian/control \
+		| sed 's/Package: $(1)//' \
+	) \
+)
+
+# Transform plugin's package name to plugin's name:
+# * delete dots
+# * replace '-' with '_'
+# * replace 'openjdk_6' with 'openjdk6'
+pkg_name_to_plugin_name = $(strip \
+	$(subst openjdk_6,openjdk6,$(subst -,_,$(subst .,,$(1))) \
+))
+
+# List of plugins' packages names (without common prefix 'uwsgi-plugin-')
+UWSGI_PLUGIN_PKGS_NAMES = $(call list_pkgname_suffixes,uwsgi-plugin-)
+
+# List of plugins' names
+UWSGI_PLUGINS_NAMES = $(call \
+	pkg_name_to_plugin_name, $(UWSGI_PLUGIN_PKGS_NAMES))
+
+UWSGI_PLUGINS_SRC_DIR = plugins
+
+UWSGI_PLUGIN_PYTHON_PKG_KINDS = python python3
+
+PARTICULARLY_BUILT_UWSGI_PLUGIN_PKGS = \
+	$(UWSGI_PLUGIN_PYTHON_PKG_KINDS) \
+	greenlet-python \
+	jvm-openjdk-6 jwsgi-openjdk-6 \
+	lua5.1 \
+	$(patsubst %,pyerl-%,$(UWSGI_PLUGIN_PYTHON_PKG_KINDS)) \
+	rack-ruby1.8 rack-ruby1.9.1 fiber
+
+ORDINARILY_BUILT_UWSGI_PLUGIN_PKGS := $(filter-out \
+	$(PARTICULARLY_BUILT_UWSGI_PLUGIN_PKGS), $(UWSGI_PLUGIN_PKGS_NAMES))
+
+# List of packaged Apache2 modules' names
+LIBAPACHE2_MODS_NAMES = uwsgi ruwsgi
+
+ruwsgi_to_orig = $(subst ruwsgi,Ruwsgi,$(1))
+
+# List of templates to instantiate for each libapache2-mod-X package
+# There is special-case template, not listed here: uwsgi.load
+LIBAPACHE2_MOD_PKG_TEMPLATES = install postinst prerm
+
+UWSGI_CORE_DOCS_STAGING_DIR = $(CURDIR)/debian/uwsgi-core-docs-staging
+
+# Discards directory-part of target and returns substring after last '-'
+# character
+target_name_tail = $(lastword $(subst -, ,$(notdir $(1))))
+
+# From something like:
+#   $(call <...>, uwsgi-, $(UWSGI_PLUGIN_PYTHON_PKG_KINDS), .dirs)
+# makes list:
+#   $(CURDIR)/debian/uwsgi-python.dirs $(CURDIR)/debian/uwsgi-python3.dirs
+files_instantiated_in_debian_dir = $(addprefix \
+	$(CURDIR)/debian/$(strip $(1)), $(addsuffix $(strip $(3)), $(strip $(2))) \
+)
+
+# CDBS-specific variables
+# =======================
+
+DEB_COMPRESS_EXCLUDE_uwsgi-core = .ini .lua .pl .png .psgi .py .ru .ws .xml \
+                                  .yml
+DEB_COMPRESS_EXCLUDE_uwsgi-extra = .class .java .rb .c
+
+DEB_DH_STRIP_ARGS_uwsgi-core := --dbg-package=uwsgi-dbg
+$(foreach PLUGIN_PKG_NAME, $(UWSGI_PLUGIN_PKGS_NAMES), $(eval \
+	DEB_DH_STRIP_ARGS_uwsgi-plugin-$(PLUGIN_PKG_NAME) := --dbg-package=uwsgi-dbg\
+))
+
+DEB_INSTALL_DOCS_ALL += $(DEB_SRCDIR)/CONTRIBUTORS
+
+# Rules
+# =====
+
+clean::
+	# uWSGI executable binaries
+	$(RM) $(CURDIR)/uwsgi-core $(CURDIR)/uwsgi-core-local
+	for PLUGIN_NAME in $(UWSGI_PLUGINS_NAMES); do \
+		$(RM) $(CURDIR)/uwsgi_$${PLUGIN_NAME}; \
+	done
+	for PYTHON_VERSION in $(PYTHON_VERS) $(PYTHON3_VERS); do \
+		$(RM) $(CURDIR)/uwsgi_python$${PYTHON_VERSION}; \
+	done
+	# intermediate compiled files
+	find $(CURDIR) \
+		\! -path '$(CURDIR)/debian/*' \( -name '*.o' -o -name '*.pyc' \) -type f \
+		-delete
+	find $(CURDIR) \
+		\! -path '$(CURDIR)/debian/*' -name __pycache__ -type d \
+		-delete
+	# plugins
+	for PLUGIN_NAME in $(UWSGI_PLUGINS_NAMES); do \
+		$(RM) $(CURDIR)/$${PLUGIN_NAME}_plugin.so; \
+	done
+	for PYVER in $(PYTHON_VERS) $(PYTHON3_VERS); do \
+		$(RM) \
+			$(CURDIR)/greenlet_python$${PYVER}_plugin.so \
+			$(CURDIR)/pyerl_python$${PYVER}_plugin.so \
+			$(CURDIR)/python$${PYVER}_plugin.so; \
+	done
+	# compiled Apache2 modules
+	$(RM) -r $(CURDIR)/apache2/.libs
+	$(RM) -r $(addprefix $(CURDIR)/apache2/mod_, \
+		$(foreach module_name, $(LIBAPACHE2_MODS_NAMES), \
+			$(addprefix $(call ruwsgi_to_orig, $(module_name)), .la .lo .slo) \
+	))
+	# instantiated build configurations
+	$(RM) $(CURDIR)/debian/buildconf/uwsgi-plugin.ini
+	# staging directory of uwsgi-core documentation
+	$(RM) -r $(UWSGI_CORE_DOCS_STAGING_DIR)
+	# instantiated uwsgi-plugin-X templates
+	$(RM) $(call files_instantiated_in_debian_dir, \
+		uwsgi-plugin-, $(filter-out jwsgi-openjdk-6, $(UWSGI_PLUGIN_PKGS_NAMES)), \
+		.install \
+	)
+	for TEMPLATE_TYPE in links manpages postinst prerm; do \
+		for INSTANTIATED_TEMPLATE in $(call files_instantiated_in_debian_dir, \
+			uwsgi-plugin-, \
+			$(ORDINARILY_BUILT_UWSGI_PLUGIN_PKGS) \
+				lua5.1 rack-ruby1.8 rack-ruby1.9.1, \
+			.$${TEMPLATE_TYPE} \
+		); do \
+			if [ -f $(CURDIR)/debian/uwsgi-plugin.$${TEMPLATE_TYPE}.in ]; then \
+				$(RM) $${INSTANTIATED_TEMPLATE}; \
+			fi; \
+		done; \
+	done
+	for TEMPLATE_TYPE in dirs links manpages postinst prerm; do \
+		$(RM) $(call files_instantiated_in_debian_dir, \
+			uwsgi-plugin-, $(UWSGI_PLUGIN_PYTHON_PKG_KINDS), .$${TEMPLATE_TYPE} \
+		); \
+		$(RM) $(call files_instantiated_in_debian_dir, \
+			uwsgi-plugin-pyerl-, \
+			$(UWSGI_PLUGIN_PYTHON_PKG_KINDS), .$${TEMPLATE_TYPE} \
+		); \
+	done
+	for TEMPLATE_TYPE in postinst prerm; do \
+		$(RM) $(call files_instantiated_in_debian_dir, \
+			uwsgi-plugin-greenlet-, \
+			$(UWSGI_PLUGIN_PYTHON_PKG_KINDS), .$${TEMPLATE_TYPE} \
+		); \
+	done
+	for TEMPLATE_TYPE in links manpages; do \
+		$(RM) $(CURDIR)/debian/uwsgi-plugin-jvm-openjdk-6.$${TEMPLATE_TYPE}; \
+	done
+	# instantiated libapache2-mod-X templates
+	for TEMPLATE_TYPE in $(LIBAPACHE2_MOD_PKG_TEMPLATES); do \
+		$(RM) $(call files_instantiated_in_debian_dir, \
+			libapache2-mod-, $(LIBAPACHE2_MODS_NAMES), .$${TEMPLATE_TYPE} \
+		); \
+	done
+	$(RM) $(addprefix $(CURDIR)/debian/, \
+		$(foreach module_name, $(LIBAPACHE2_MODS_NAMES), \
+			$(addsuffix .load,  $(call ruwsgi_to_orig, $(module_name))) \
+	))
+	# generated manpages
+	$(RM) $(CURDIR)/debian/uwsgi-core.1
+	$(RM) $(call files_instantiated_in_debian_dir, \
+		uwsgi_, $(UWSGI_PLUGINS_NAMES), .1 \
+	)
+	$(RM) $(call files_instantiated_in_debian_dir, \
+		uwsgi_python, $(PYTHON_VERS) $(PYTHON3_VERS), .1 \
+	)
+	# stampfiles
+	$(RM) $(CURDIR)/debian/stamp-*
+
+# uwsgi package
+# -------------
+
+binary-post-install/uwsgi::
+	for SUBDIR in apps-available apps-enabled; do \
+		cp \
+			$(CURDIR)/debian/uwsgi.etc.$${SUBDIR}.README \
+			$(CURDIR)/debian/$(cdbs_curpkg)/etc/$(cdbs_curpkg)/$${SUBDIR}/README; \
+	done
+
+# uwsgi-core package
+# ------------------
+
+build/uwsgi-core:: uwsgi-core
+
+uwsgi-core:
+	$(PYTHON) $(UWSGI_BUILDER) \
+		--build $(CURDIR)/debian/buildconf/uwsgi-core.ini
+
+install/uwsgi-core::
+	test -e $(UWSGI_CORE_DOCS_STAGING_DIR) \
+		|| mkdir $(UWSGI_CORE_DOCS_STAGING_DIR)
+	cp -r $(CURDIR)/tests $(UWSGI_CORE_DOCS_STAGING_DIR)
+	for SUBDIR in conffile jwsgi psgi rack router wsapi wsgi; do \
+		mkdir -p $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/$${SUBDIR}; \
+	done
+	for FILE in logo_uWSGI.png mongrel2-uwsgi.conf myadmin.py simple_logger.py \
+	            staticfilesnmp.py testsignals.py ugreenchat.py uwsgistatus.py \
+	            websockets.py welcome.py; do \
+		cp $(CURDIR)/$${FILE} $(UWSGI_CORE_DOCS_STAGING_DIR)/examples; \
+	done
+	for FILE in mega.xml multi.ini multi.xml sites.xml uwsgi.xml \
+	            werkzeug_strict.yml werkzeug.js werkzeug.yml; do \
+		cp $(CURDIR)/$${FILE} $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/conffile; \
+	done
+	cp -r $(CURDIR)/vassals $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/conffile
+	for FILE in utest.java; do \
+		cp $(CURDIR)/$${FILE} $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/jwsgi; \
+	done
+	for FILE in config.ru config2.ru fibers.ru fibers.yml; do \
+		cp $(CURDIR)/$${FILE} $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/rack; \
+	done
+	for FILE in router.lua uwsgirouter.py uwsgirouter2.py uwsgirouter3.py \
+	            uwsgirouter4.py uwsgirouter5.py; do \
+		cp $(CURDIR)/$${FILE} $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/router; \
+	done
+	for FILE in mojoapp.pl psgi.py test.psgi; do \
+		cp $(CURDIR)/$${FILE} $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/psgi; \
+	done
+	for FILE in sputnik.ws; do \
+		cp $(CURDIR)/$${FILE} $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/wsapi; \
+	done
+	for FILE in hello_world.py hello_world_rrdtool.py decoratortest.py \
+	            mjpeg_stream.py multiapp.py sigwait.py simple_app.py \
+	            simple_app_wsgi2.py taskqueue.py testapp.py testpy3.py \
+	            uploadtest.py; do \
+		cp $(CURDIR)/$${FILE} $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/wsgi; \
+	done
+	chmod a-x $(UWSGI_CORE_DOCS_STAGING_DIR)/examples/ugreenchat.py
+	help2man \
+		--name 'fast (pure C), self-healing, developer-friendly WSGI server' \
+		--section 1 \
+		--no-info \
+		$(CURDIR)/uwsgi-core \
+		> $(CURDIR)/debian/uwsgi-core.1; \
+
+# uwsgi-plugin-% packages
+# -----------------------
+
+# Build uwsgi-plugin-% package
+$(patsubst %,build/uwsgi-plugin-%,$(UWSGI_PLUGIN_PKGS_NAMES)) \
+	:: build/uwsgi-plugin-% \
+	:  debian/buildconf/uwsgi-plugin.ini uwsgi-core-local \
+	   debian/stamp-plugin-%
+
+debian/buildconf/uwsgi-plugin.ini:
+	sed -e 's|@@curdir@@|$(CURDIR)|g' \
+		< $(CURDIR)/debian/buildconf/uwsgi-plugin.ini.in \
+		> $(CURDIR)/debian/buildconf/uwsgi-plugin.ini
+
+uwsgi-core-local:
+	$(PYTHON) $(UWSGI_BUILDER) \
+		--build $(CURDIR)/debian/buildconf/uwsgi-plugin.ini
+
+# Ordinary building of uWSGI plugins
+$(patsubst %,debian/stamp-plugin-%,$(ORDINARILY_BUILT_UWSGI_PLUGIN_PKGS)):
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst stamp-plugin-,,$(notdir $@)) \
+	))
+	$(PYTHON) $(UWSGI_BUILDER) \
+		--plugin $(CURDIR)/$(UWSGI_PLUGINS_SRC_DIR)/$(PLUGIN_NAME) \
+		         $(CURDIR)/debian/buildconf/uwsgi-plugin.ini \
+		         $(PLUGIN_NAME)
+	touch $@
+
+# Build jvm_openjdk6.so and jwsgi_openjdk6.so
+debian/stamp-plugin-jvm-openjdk-6 debian/stamp-plugin-jwsgi-openjdk-6:
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst stamp-plugin-,,$(notdir $@)) \
+	))
+	$(eval PLUGIN_SRC_SUBDIR = $(firstword $(subst _, ,$(PLUGIN_NAME))))
+	$(eval JAVA_ARCH := $(shell /usr/share/javahelper/java-arch.sh))
+	UWSGICONFIG_JVM_INCPATH='/usr/lib/jvm/java-6-openjdk-$(DEB_HOST_ARCH)/include/ -I/usr/lib/jvm/java-6-openjdk-$(JAVA_ARCH)/include/linux' \
+	UWSGICONFIG_JVM_LIBPATH='/usr/lib/jvm/java-6-openjdk-$(DEB_HOST_ARCH)/jre/lib/$(JAVA_ARCH)/server/' \
+	$(PYTHON) $(UWSGI_BUILDER) \
+		--plugin $(CURDIR)/$(UWSGI_PLUGINS_SRC_DIR)/$(PLUGIN_SRC_SUBDIR) \
+		         $(CURDIR)/debian/buildconf/uwsgi-plugin.ini \
+		         $(PLUGIN_NAME)
+	touch $@
+
+# Build pyerl_python2x_plugin.so/pyerl_python3x_plugin.so
+$(patsubst %,debian/stamp-plugin-pyerl-%,$(UWSGI_PLUGIN_PYTHON_PKG_KINDS)):
+	$(eval PYTHON_KIND = $(call target_name_tail, $@))
+	$(eval PYVERS = $($(subst python,PYTHON,$(PYTHON_KIND))_VERS_DOTTED))
+	for PYTHON_VERSION in $(PYVERS); do \
+		$(PYTHON)$${PYTHON_VERSION} $(UWSGI_BUILDER) \
+			--plugin $(CURDIR)/$(UWSGI_PLUGINS_SRC_DIR)/pyerl \
+			         $(CURDIR)/debian/buildconf/uwsgi-plugin.ini \
+			         pyerl_python$$(echo $${PYTHON_VERSION} | tr -d .); \
+	done
+	sed -e 's/@@python_kind@@/$(PYTHON_KIND)/g' \
+			< $(CURDIR)/debian/uwsgi-plugin-pyerl.dirs.in \
+			> $(CURDIR)/debian/uwsgi-plugin-pyerl-$(PYTHON_KIND).dirs
+	touch $@
+
+# Build python2x_plugin.so/python3x_plugin.so
+$(patsubst %,debian/stamp-plugin-%,$(UWSGI_PLUGIN_PYTHON_PKG_KINDS)):
+	$(eval PYTHON_KIND = $(call target_name_tail, $@))
+	$(eval PYVERS = $($(subst python,PYTHON,$(PYTHON_KIND))_VERS_DOTTED))
+	for PYTHON_VERSION in $(PYVERS); do \
+		$(PYTHON)$${PYTHON_VERSION} $(UWSGI_BUILDER) \
+			--plugin $(CURDIR)/$(UWSGI_PLUGINS_SRC_DIR)/python \
+			         $(CURDIR)/debian/buildconf/uwsgi-plugin.ini\
+			         python$$(echo $${PYTHON_VERSION} | tr -d .); \
+	done
+	sed -e 's/@@python_kind@@/$(PYTHON_KIND)/g' \
+			< $(CURDIR)/debian/uwsgi-plugin-python.dirs.in \
+			> $(CURDIR)/debian/uwsgi-plugin-$(PYTHON_KIND).dirs
+	touch $@
+
+# Build greenlet plugin
+debian/stamp-plugin-greenlet-python:
+	for PYTHON_VERSION in $(PYTHON_VERS_DOTTED); do \
+		$(PYTHON)$${PYTHON_VERSION} $(UWSGI_BUILDER) \
+			--plugin $(CURDIR)/$(UWSGI_PLUGINS_SRC_DIR)/greenlet \
+			         $(CURDIR)/debian/buildconf/uwsgi-plugin.ini \
+			         greenlet_python$$(echo $${PYTHON_VERSION} | tr -d .); \
+	done
+	touch $@
+
+# Build fiber plugin
+debian/stamp-plugin-fiber:
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst stamp-plugin-,,$(notdir $@)) \
+	))
+	UWSGICONFIG_RUBYPATH=/usr/bin/ruby1.9.1 \
+	$(PYTHON) $(UWSGI_BUILDER) \
+		--plugin $(CURDIR)/$(UWSGI_PLUGINS_SRC_DIR)/$(PLUGIN_NAME) \
+		         $(CURDIR)/debian/buildconf/uwsgi-plugin.ini \
+		         $(PLUGIN_NAME)
+	touch $@
+
+# Build lua51_plugin.so
+debian/stamp-plugin-lua5.1:
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst stamp-plugin-,,$(notdir $@)) \
+	))
+	UWSGICONFIG_LUA_IMPLEMENTATION=$(call target_name_tail, $@) \
+	$(PYTHON) $(UWSGI_BUILDER) \
+		--plugin $(CURDIR)/$(UWSGI_PLUGINS_SRC_DIR)/lua \
+		         $(CURDIR)/debian/buildconf/uwsgi-plugin.ini \
+		         $(PLUGIN_NAME)
+	touch $@
+
+# Build rack_ruby18_plugin.so/rack_ruby191_plugin.so
+debian/stamp-plugin-rack-ruby1.8 debian/stamp-plugin-rack-ruby1.9.1:
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst stamp-plugin-,,$(notdir $@)) \
+	))
+	UWSGICONFIG_RUBYPATH=/usr/bin/$(call target_name_tail, $@) \
+	$(PYTHON) $(UWSGI_BUILDER) \
+		--plugin $(CURDIR)/$(UWSGI_PLUGINS_SRC_DIR)/rack \
+		         $(CURDIR)/debian/buildconf/uwsgi-plugin.ini \
+		         $(PLUGIN_NAME)
+	touch $@
+
+# Install uwsgi-plugin-% package for ordinarily built uWSGI plugin
+$(patsubst %,install/uwsgi-plugin-%,$(ORDINARILY_BUILT_UWSGI_PLUGIN_PKGS))::
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst uwsgi-plugin-,,$(notdir $@)) \
+	))
+	for TEMPLATE_TYPE in install links manpages postinst prerm; do \
+		sed \
+			-e 's/@@plugin_name@@/$(PLUGIN_NAME)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	ln -sf $(CURDIR)/uwsgi-core-local $(CURDIR)/uwsgi_$(PLUGIN_NAME)
+	help2man \
+		--name 'fast (pure C), self-healing, developer-friendly WSGI server' \
+		--section 1 \
+		--no-info \
+		$(CURDIR)/uwsgi_$(PLUGIN_NAME) \
+		> $(CURDIR)/debian/uwsgi_$(PLUGIN_NAME).1; \
+
+install/uwsgi-plugin-jvm-openjdk-6::
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst uwsgi-plugin-,,$(notdir $@)) \
+	))
+	for TEMPLATE_TYPE in install links manpages; do \
+		sed \
+			-e 's/@@plugin_name@@/$(PLUGIN_NAME)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	ln -sf $(CURDIR)/uwsgi-core-local $(CURDIR)/uwsgi_$(PLUGIN_NAME)
+	help2man \
+		--name 'fast (pure C), self-healing, developer-friendly WSGI server' \
+		--section 1 \
+		--no-info \
+		$(CURDIR)/uwsgi_$(PLUGIN_NAME) \
+		> $(CURDIR)/debian/uwsgi_$(PLUGIN_NAME).1; \
+
+# Install uwsgi-plugin-pyerl-python/uwsgi-plugin-pyerl-python3 packages
+$(patsubst %,install/uwsgi-plugin-pyerl-%,$(UWSGI_PLUGIN_PYTHON_PKG_KINDS))::
+	$(eval PYTHON_KIND = $(call target_name_tail, $@))
+	$(eval PYVERS = $($(subst python,PYTHON,$(PYTHON_KIND))_VERS))
+	$(eval PYDEFAULT = $($(subst python,PYTHON,$(PYTHON_KIND))_DEFAULT))
+	for TEMPLATE_TYPE in postinst prerm; do \
+		sed \
+			-e 's/@@available_python_versions_dotless@@/$(PYVERS)/g' \
+			-e 's/@@default_python_version_dotless@@/$(PYDEFAULT)/g' \
+			-e 's/@@python_kind@@/$(PYTHON_KIND)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin-pyerl.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	for PYTHON_VERSION in $(PYVERS); do \
+		sed -e "s/@@plugin_name@@/pyerl_python$${PYTHON_VERSION}/g" \
+			< $(CURDIR)/debian/uwsgi-plugin.install.in \
+			>> $(CURDIR)/debian/$(cdbs_curpkg).install; \
+	done
+
+# Install uwsgi-plugin-python/uwsgi-plugin-python3 packages
+$(patsubst %,install/uwsgi-plugin-%,$(UWSGI_PLUGIN_PYTHON_PKG_KINDS))::
+	$(eval PYTHON_KIND = $(call target_name_tail, $@))
+	$(eval PYVERS = $($(subst python,PYTHON,$(PYTHON_KIND))_VERS))
+	$(eval PYDEFAULT = $($(subst python,PYTHON,$(PYTHON_KIND))_DEFAULT))
+	for TEMPLATE_TYPE in postinst prerm; do \
+		sed \
+			-e 's/@@available_python_versions_dotless@@/$(PYVERS)/g' \
+			-e 's/@@default_python_version_dotless@@/$(PYDEFAULT)/g' \
+			-e 's/@@python_kind@@/$(PYTHON_KIND)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin-python.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	for PYTHON_VERSION in $(PYVERS); do \
+		for TEMPLATE_TYPE in install links manpages; do \
+			sed -e "s/@@plugin_name@@/python$${PYTHON_VERSION}/g" \
+				< $(CURDIR)/debian/uwsgi-plugin.$${TEMPLATE_TYPE}.in \
+				>> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+		done; \
+		ln -sf \
+			$(CURDIR)/uwsgi-core-local \
+			$(CURDIR)/uwsgi_python$${PYTHON_VERSION}; \
+		help2man \
+			--name 'fast (pure C), self-healing, developer-friendly WSGI server' \
+			--section 1 \
+			--no-info \
+			$(CURDIR)/uwsgi_python$${PYTHON_VERSION} \
+			> $(CURDIR)/debian/uwsgi_python$${PYTHON_VERSION}.1; \
+	done
+
+install/uwsgi-plugin-greenlet-python::
+	for TEMPLATE_TYPE in postinst prerm; do \
+		sed \
+			-e 's/@@available_python_versions_dotless@@/$(PYTHON_VERS)/g' \
+			-e 's/@@default_python_version_dotless@@/$(PYTHON_DEFAULT)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin-greenlet-python.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	for PYTHON_VERSION in $(PYTHON_VERS); do \
+		sed -e "s/@@plugin_name@@/greenlet_python$${PYTHON_VERSION}/g" \
+			< $(CURDIR)/debian/uwsgi-plugin.install.in \
+			>> $(CURDIR)/debian/$(cdbs_curpkg).install; \
+	done
+
+install/uwsgi-plugin-fiber::
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst uwsgi-plugin-,,$(notdir $@)) \
+	))
+	sed \
+		-e 's/@@plugin_name@@/$(PLUGIN_NAME)/g' \
+			< $(CURDIR)/debian/uwsgi-plugin.install.in \
+			> $(CURDIR)/debian/$(cdbs_curpkg).install
+
+install/uwsgi-plugin-lua5.1::
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst uwsgi-plugin-,,$(notdir $@)) \
+	))
+	$(eval PLUGIN_PRIORITY = $(if $(findstring uwsgi-plugin-lua5.1, $@),75,35))
+	for TEMPLATE_TYPE in postinst prerm; do \
+		sed \
+			-e 's/@@lua_kind@@/$(subst uwsgi-plugin-,,$(notdir $@))/g' \
+			-e 's/@@plugin_name@@/$(PLUGIN_NAME)/g' \
+			-e 's/@@plugin_alternatives_priority@@/$(PLUGIN_PRIORITY)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin-lua.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	for TEMPLATE_TYPE in install links manpages; do \
+		sed \
+			-e 's/@@plugin_name@@/$(PLUGIN_NAME)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	ln -sf $(CURDIR)/uwsgi-core-local $(CURDIR)/uwsgi_$(PLUGIN_NAME)
+	help2man \
+		--name 'fast (pure C), self-healing, developer-friendly WSGI server' \
+		--section 1 \
+		--no-info \
+		$(CURDIR)/uwsgi_$(PLUGIN_NAME) \
+		> $(CURDIR)/debian/uwsgi_$(PLUGIN_NAME).1
+
+install/uwsgi-plugin-rack-ruby1.8 install/uwsgi-plugin-rack-ruby1.9.1::
+	$(eval PLUGIN_NAME = $(call pkg_name_to_plugin_name, \
+		$(subst uwsgi-plugin-,,$(notdir $@)) \
+	))
+	$(eval PLUGIN_PRIORITY = $(if \
+		$(findstring uwsgi-plugin-rack-ruby1.8, $@),75,35) \
+	)
+	for TEMPLATE_TYPE in postinst prerm; do \
+		sed \
+			-e 's/@@ruby_kind@@/$(subst uwsgi-plugin-rack-,,$(notdir $@))/g' \
+			-e 's/@@plugin_name@@/$(PLUGIN_NAME)/g' \
+			-e 's/@@plugin_alternatives_priority@@/$(PLUGIN_PRIORITY)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin-rack.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	for TEMPLATE_TYPE in install links manpages; do \
+		sed \
+			-e 's/@@plugin_name@@/$(PLUGIN_NAME)/g' \
+				< $(CURDIR)/debian/uwsgi-plugin.$${TEMPLATE_TYPE}.in \
+				> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE}; \
+	done
+	ln -sf $(CURDIR)/uwsgi-core-local $(CURDIR)/uwsgi_$(PLUGIN_NAME)
+	help2man \
+		--name 'fast (pure C), self-healing, developer-friendly WSGI server' \
+		--section 1 \
+		--no-info \
+		$(CURDIR)/uwsgi_$(PLUGIN_NAME) \
+		> $(CURDIR)/debian/uwsgi_$(PLUGIN_NAME).1
+
+# Binary-post-install uwsgi-plugin-pyerl-% packages
+$(patsubst %,binary-post-install/uwsgi-plugin-pyerl-%,$(UWSGI_PLUGIN_PYTHON_PKG_KINDS))::
+	$(eval PYTHON_KIND = $(call target_name_tail, $@))
+	$(eval PYVERS = $($(subst python,PYTHON,$(PYTHON_KIND))_VERS))
+	$(eval PYTHON_RTUPDATE_SCRIPT = \
+		$(CURDIR)/debian/$(cdbs_curpkg)/usr/share/$(PYTHON_KIND)/runtime.d/uwsgi-plugin-pyerl-$(PYTHON_KIND).rtupdate \
+	)
+	sed \
+		-e 's/@@available_python_versions_dotless@@/$(PYVERS)/g' \
+		-e 's/@@python_kind@@/$(PYTHON_KIND)/g' \
+			< $(CURDIR)/debian/uwsgi-plugin-pyerl.rtupdate.in \
+			> $(PYTHON_RTUPDATE_SCRIPT)
+	chmod 755 $(PYTHON_RTUPDATE_SCRIPT)
+
+# Binary-post-install uwsgi-plugin-python/uwsgi-plugin-python3 packages
+$(patsubst %,binary-post-install/uwsgi-plugin-%,$(UWSGI_PLUGIN_PYTHON_PKG_KINDS))::
+	$(eval PYTHON_KIND = $(call target_name_tail, $@))
+	$(eval PYVERS = $($(subst python,PYTHON,$(PYTHON_KIND))_VERS))
+	$(eval PYTHON_RTUPDATE_SCRIPT = \
+		$(CURDIR)/debian/$(cdbs_curpkg)/usr/share/$(PYTHON_KIND)/runtime.d/uwsgi-plugin-$(PYTHON_KIND).rtupdate \
+	)
+	sed \
+		-e 's/@@available_python_versions_dotless@@/$(PYVERS)/g' \
+		-e 's/@@python_kind@@/$(PYTHON_KIND)/g' \
+			< $(CURDIR)/debian/uwsgi-plugin-python.rtupdate.in \
+			> $(PYTHON_RTUPDATE_SCRIPT)
+	chmod 755 $(PYTHON_RTUPDATE_SCRIPT)
+
+binary-post-install/uwsgi-plugin-greenlet-python::
+	$(eval PYTHON_RTUPDATE_SCRIPT = \
+		$(CURDIR)/debian/$(cdbs_curpkg)/usr/share/python/runtime.d/uwsgi-plugin-greenlet-python.rtupdate \
+	)
+	sed \
+		-e 's/@@available_python_versions_dotless@@/$(PYTHON_VERS)/g' \
+			< $(CURDIR)/debian/uwsgi-plugin-greenlet-python.rtupdate.in \
+			> $(PYTHON_RTUPDATE_SCRIPT)
+	chmod 755 $(PYTHON_RTUPDATE_SCRIPT)
+
+# libapache2-mod-% packages
+# -------------------------
+
+# Build libapache2-mod-% package
+$(patsubst %,build/libapache2-mod-%,$(LIBAPACHE2_MODS_NAMES)):: build/% : debian/stamp-%
+
+# Build specific Apache2 module
+$(patsubst %,debian/stamp-libapache2-mod-%,$(LIBAPACHE2_MODS_NAMES)):
+	$(eval MODULE_NAME = $(call ruwsgi_to_orig, $(call target_name_tail, $@)))
+	$(APXS2) -c \
+		`$(APR_CONFIG) --link-ld` `$(APU_CONFIG) --link-ld` \
+		$(CURDIR)/apache2/mod_$(MODULE_NAME).c
+	touch $@
+
+# Install libapache2-mod-% package
+$(patsubst %,install/libapache2-mod-%,$(LIBAPACHE2_MODS_NAMES))::
+	$(eval MODULE_NAME = $(call ruwsgi_to_orig, $(call target_name_tail, $@)))
+	sed -e 's/@@module_name@@/$(MODULE_NAME)/g' \
+		< $(CURDIR)/debian/uwsgi.load.in \
+		> $(CURDIR)/debian/$(MODULE_NAME).load
+	for TEMPLATE_TYPE in $(LIBAPACHE2_MOD_PKG_TEMPLATES); do \
+		sed -e 's/@@module_name@@/$(MODULE_NAME)/g' \
+			< $(CURDIR)/debian/libapache2-mod.$${TEMPLATE_TYPE}.in \
+			> $(CURDIR)/debian/$(cdbs_curpkg).$${TEMPLATE_TYPE} ; \
+	done
+
+# Some other packages
+# -------------------
+
+binary-install/python-django-uwsgi-admin::
+	dh_install -p $(cdbs_curpkg) \
+		django/uwsgi_admin \
+		$(PYTHON_DIST_PACKAGES_DIR)
+	dh_python2 -p $(cdbs_curpkg)
+
+binary-install/python-uwsgicc::
+	$(eval PYPKG_NAME := $(cdbs_curpkg:python-%=%))
+	$(eval PYPKG_DESTDIR := $(PYTHON_DIST_PACKAGES_DIR))
+
+	# Install:
+	# * Python code of uwsgicc into Python packages directory
+	# * assets of uwsgicc (images, JavaScript files, templates) into subdirectory
+	#   of /usr/share
+	dh_install -p $(cdbs_curpkg) -Xstatic -Xtemplates uwsgicc $(PYPKG_DESTDIR)
+	dh_install -p $(cdbs_curpkg) \
+		uwsgicc/templates uwsgicc/static \
+		usr/share/$(cdbs_curpkg)
+
+	# Replace installed jQuery files with symlinks to Debian packaged jQuery
+	# (embedding of JavaScript library should be avoided; see Debian Policy 4.13
+	# and description of Lintian tag embedded-javascript-library).
+	$(RM) $(CURDIR)/debian/$(cdbs_curpkg)/usr/share/$(cdbs_curpkg)/static/js/jquery*.js
+	dh_link -p $(cdbs_curpkg) \
+		usr/share/javascript/jquery/jquery.min.js \
+		usr/share/$(cdbs_curpkg)/static/js/jquery.min.js
+	dh_link -p $(cdbs_curpkg) \
+		usr/share/javascript/jquery-ui/jquery-ui.min.js \
+		usr/share/$(cdbs_curpkg)/static/js/jquery-ui.min.js
+
+	# Provide to uwsgicc Python package access to it's assets by symlinking them
+	# into package directory.
+	dh_link -p $(cdbs_curpkg) \
+		usr/share/$(cdbs_curpkg)/static \
+		$(PYPKG_DESTDIR)/$(PYPKG_NAME)/static
+	dh_link -p $(cdbs_curpkg) \
+		usr/share/$(cdbs_curpkg)/templates \
+		$(PYPKG_DESTDIR)/$(PYPKG_NAME)/templates
+
+	dh_python2 -p $(cdbs_curpkg)
+
+binary-install/python-uwsgidecorators::
+	$(eval PYTHON_KIND = $(firstword $(subst -, ,$(notdir $@))))
+	$(eval PYPKG_DESTDIR = $($(subst python,PYTHON,$(PYTHON_KIND))_DIST_PACKAGES_DIR))
+	dh_install -p $(cdbs_curpkg) uwsgidecorators.py $(PYPKG_DESTDIR)
+	dh_python2 -p $(cdbs_curpkg)
+
+binary-install/python3-uwsgidecorators::
+	$(eval PYTHON_KIND = $(firstword $(subst -, ,$(notdir $@))))
+	$(eval PYPKG_DESTDIR = $($(subst python,PYTHON,$(PYTHON_KIND))_DIST_PACKAGES_DIR))
+	dh_install -p $(cdbs_curpkg) uwsgidecorators.py $(PYPKG_DESTDIR)
+	2to3 --write --nobackups --no-diffs \
+		$(CURDIR)/debian/$(cdbs_curpkg)/$(PYPKG_DESTDIR)/uwsgidecorators.py
+	dh_python3 -p $(cdbs_curpkg)
+
+
+DEB_UPSTREAM_VERSION=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([^+]+).*,\1,p')
+get-orig-source:
+	uscan --noconf --force-download --rename --download-current-version --destdir=.
+	rm -rf uwsgi-$(DEB_UPSTREAM_VERSION)
+	tar -xf uwsgi_$(DEB_UPSTREAM_VERSION).orig.tar.gz
+	rm uwsgi_$(DEB_UPSTREAM_VERSION).orig.tar.gz
+	rm uwsgi-$(DEB_UPSTREAM_VERSION)/uwsgicc/static/js/jquery*.min.js
+	mv uwsgi-$(DEB_UPSTREAM_VERSION) uwsgi-$(DEB_UPSTREAM_VERSION).orig
+	GZIP=--best tar -cz --owner root --group root --mode a+rX \
+		-f uwsgi_$(DEB_UPSTREAM_VERSION)+dfsg.orig.tar.gz \
+		uwsgi-$(DEB_UPSTREAM_VERSION).orig
+	rm -r uwsgi-$(DEB_UPSTREAM_VERSION).orig

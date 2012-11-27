@@ -54,7 +54,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
 	py3cairo qemu-kvm gtk-vnc gthumb pycurl libgnomecups libgnomeprint telepathy-gabble \
 	gnome-photo-printer elinks lynx gnutls26 rawstudio libwacom muffin samba \
-	xserver-xorg-video-intel ptlib
+	xserver-xorg-video-intel ptlib uwsgi
 
 SPREZZ:=packaging
 
@@ -212,7 +212,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER) $(PY3CAIRO) \
 	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS) $(LIBGNOMEPRINT) \
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
-	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB)
+	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
+	$(UWSGI)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1984,6 +1985,14 @@ $(TRACKER): $(SPREZZ)/tracker/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf tracker_$(tracker_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: uwsgi
+uwsgi:$(UWSGI)_$(ARCH).deb
+$(UWSGI): $(SPREZZ)/uwsgi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf uwsgi-$(uwsgi_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: vim
 vim:$(VIM)_$(ARCH).deb
 $(VIM): $(SPREZZ)/vim/debian/changelog
@@ -3002,7 +3011,7 @@ clean:
 	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS)
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
 	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL)
-	rm -rf $(SAMBA) $(PTLIB)
+	rm -rf $(SAMBA) $(PTLIB) $(UWSGI)
 
 update:
 	for i in $(wildcard packaging/*) ; do \

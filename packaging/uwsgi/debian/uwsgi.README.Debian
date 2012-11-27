@@ -1,0 +1,224 @@
+Contents:
+  1. Automatic starting of instances of uWSGI
+  2. Owner, group and permissions of UNIX socket and pidfile
+  3. Commands recognized by init.d script
+  4. Controling specific instances of uWSGI
+  5. Status of executing init.d command for specific instance
+  6. Alternatives of /usr/bin/uwsgi executable
+
+Automatic starting of instances of uWSGI
+========================================
+
+On boot init.d script automatically starts one instance of uWSGI for each
+configuration file found in /etc/uwsgi/apps-enabled.
+
+Note: sub-directories of /etc/uwsgi/apps-enabled (if any) are also searched for
+      configuration files. Though it can be useful feature, rules of searching
+      order and choosing between same named files from several directories
+      might be a little confusing ('find' command is used for searching and
+      ordering of search results). As a general anticonfusion rule, you must
+      strictly avoid creating of same named files in several directories
+      ('name' here meant as the file name without extension).
+
+'configuration file' is the file with one of following extensions (listed in
+alphabetical order):
+
+    db, ini, js, json, sqlite, sqlite3, xml, yaml, yml
+
+When files with the same name but different extensions are found, only one of
+them will be processed: first in sorting by alphabetic order.
+
+Path to found configuration file is passed to new uWSGI instance as value of
+appropriate option, basing on file extension:
+  * ini                 | --ini       | expecting INI format
+  * js, json            | --json      | expecting JSON format
+  * db, sqlite, sqlite3 | --sqlite    | expecting SQLite3 database
+  * xml                 | --xmlconfig | expecting XML format
+  * yaml, yml           | --yaml      | expecting YAML format
+
+INI configuration file may be empty. Example of INI configuration:
+
+    [uwsgi]
+    uid = uwsgi_user
+    gid = uwsgi_group
+    socket = /tmp/uwsgi.sock
+
+JSON configuration file must contain at least following content:
+
+    { "uwsgi": {} }
+
+Example of more realistic JSON configuration:
+
+    {
+      "uwsgi": {
+        "uid":    "uwsgi_user",
+        "gid":    "uwsgi_group",
+        "socket": "/tmp/uwsgi.sock"
+    }}
+
+XML configuration file must contain at least following content:
+
+    <uwsgi></uwsgi>
+
+Example of more realistic XML configuration:
+
+    <uwsgi>
+      <uid>uwsgi_user</uid>
+      <gid>uwsgi_group</gid>
+      <socket>/tmp/uwsgi.sock</socket>
+    </uwsgi>
+
+SQLite3 configuration database must contain 'uwsgi' table. First column of this
+table must contain valid option name and second column must contain appropriate
+option value. Name of columns aren't significant. All other columns (except
+first and second) are ignored. Example of creating of SQLite3 configuration:
+
+    $ sqlite3 /etc/uwsgi/apps-enabled/example.sqlite
+    sqlite> CREATE TABLE uwsgi (option_name varchar, option_value varchar);
+    sqlite> INSERT INTO uwsgi VALUES ('uid', 'uwsgi_user');
+    sqlite> INSERT INTO uwsgi VALUES ('gid', 'uwsgi_group');
+    sqlite> INSERT INTO uwsgi VALUES ('socket', '/tmp/uwsgi.sock');
+
+YAML configuration file may be empty. Example of YAML configuration:
+
+    uwsgi:
+        uid: uwsgi_uwser
+        gid: uwsgi_group
+        socket: /tmp/uwsgi.sock
+
+For list of options passed by default to each started instance look at
+file, defined by option INHERITED_CONFIG in /etc/default/uwsgi.
+
+Service files of started uWSGI instance are located in directory named after
+configuration file (without extension):
+  * UNIX socket | /run/uwsgi/app/<confname>/socket
+  * pidfile     | /run/uwsgi/app/<confname>/pid
+
+Log of started uWSGI instance is placed at /var/log/uwsgi/app/<confname>.log
+
+Owner, group and permissions of UNIX socket and pidfile
+=======================================================
+
+After starting of uWSGI instance init.d script tries to chown and/or chmod:
+  * pidfile                    | chown root:root   | chmod 644
+  * UNIX socket                |                   | chmod 660
+  * directory with these files | chown <uid>:<gid> | chmod 755
+
+If mentioned directory doesn't exist it will be created. Note that this
+directory will be chowned/chmodded only if it was created by init.d script.
+
+init.d script tries to parse configuration file for values of uid/gid. If such
+the key/tag didn't found, script tries to parse file, defined by option
+INHERITED_CONFIG in /etc/default/uwsgi, for 'uid' or 'gid' option. If even this
+fails, directory will be chowned to 'root'.
+
+Note: for possibility of parsing of SQLite3 configuration database
+      /usr/bin/sqlite3 executable must be available in system. It is provided
+      by 'sqlite3' package. If it isn't available, parsing of configuration
+      database will be silently skipped.
+
+Chmodding of UNIX socket is made by using of uWSGI option 'chmod-socket'.
+
+Commands recognized by init.d script
+====================================
+
+You can issue to init.d script following commands:
+  * start        | starts daemon
+  * stop         | stops daemon
+  * reload       | sends to daemon SIGHUP signal
+  * force-reload | sends to daemon SIGTERM signal
+  * restart      | issues 'stop', then 'start' commands
+  * status       | shows status of daemon instance (running/not running)
+
+'status' command must be issued with exactly one argument: '<confname>'.
+
+Controling specific instances of uWSGI
+======================================
+
+You could control specific instance(s) by issuing:
+
+    service uwsgi <command> <confname> <confname> ...
+
+where:
+  * <command> is one of 'start', 'stop' etc.
+  * <confname> is the name of configuration file (without extension)
+
+For example, this is how instance for /etc/uwsgi/apps-enabled/hello.xml is
+started:
+
+    service uwsgi start hello
+
+Status of executing init.d command for specific instance
+========================================================
+
+In init.d script output:
+  * . -- command was executed without problems or instance is already in needed
+         state
+  * ! -- command failed (or executed with some problems)
+  * ? -- configuration file for this instance isn't found
+         and this instance is ignored
+
+Let's see by example:
+
+    service uwsgi start ario wrogn googl moogl
+
+Output:
+
+    <...> -> . ? . ! failed!
+
+It means that:
+  * 'ario' and 'googl' instances was started without problems (or was already
+    ran before executing 'start' command)
+  * configuration file for 'wrogn' wasn't found
+  * starting 'moogl' was failed
+
+In this example (as one of instances failed to start), init.d script output
+ends with 'failed!' message. But generally, output ends with 'done.' message:
+
+    <...> -> . . . done.
+
+With changing of appropriate setting in /etc/default/uwsgi, init.d script could
+print configuration file names instead of one-character symbols:
+  * <confname>   -- command was executed without problems
+  * <confname>!  -- command is failed (or executed with some problems)
+  * <confname>?  -- configuration file for this instance isn't found
+                    and this instance is ignored
+  * (<confname>) -- instance is already in needed state
+
+Let's see by example:
+
+    service uwsgi start ario wrogn googl moogl
+
+Output:
+
+    <...> -> (ario) wrogn? googl moogl! failed!
+
+It means that:
+  * 'ario' instance was already ran before executing 'start' command
+  * configuration file for 'wrogn' wasn't found
+  * 'googl' is started without problems
+  * starting 'moogl' was failed
+
+Return value of init.d script is the number of instances with '!' mark.
+
+Alternatives of /usr/bin/uwsgi executable
+=========================================
+
+init.d script runs uWSGI instances with command /usr/bin/uwsgi.
+
+/usr/bin/uwsgi executable is provided with using of Debian alternatives system.
+It is registered as master link in link group with generic name 'uwsgi' and,
+by default, references to /usr/bin/uwsgi-core.
+
+Most of plugins' packages provides /usr/bin/uwsgi_plugin_name executable. It is
+a simple symlink to /usr/bin/uwsgi-core. When uWSGI notices that it has been
+called with name 'uwsgi_smth' it is automagically loads appropriate plugin
+shared library with name 'smth_plugin.so'.
+
+Every executable /usr/bin/uwsgi_plugin_name is added as low-priority
+alternative to link group 'uwsgi'. Because of low priority, it doesn't change
+automatically current choice of alternative in group. /usr/bin/uwsgi can be
+manually configured as reference to /usr/bin/uwsgi_plugin_name with command:
+
+    # update-alternatives --config uwsgi
+
