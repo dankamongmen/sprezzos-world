@@ -53,7 +53,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
 	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
 	py3cairo qemu-kvm gtk-vnc gthumb pycurl libgnomecups libgnomeprint telepathy-gabble \
-	gnome-photo-printer elinks lynx gnutls26 rawstudio libwacom
+	gnome-photo-printer elinks lynx gnutls26 rawstudio libwacom muffin
 
 SPREZZ:=packaging
 
@@ -211,7 +211,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER) $(PY3CAIRO) \
 	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS) $(LIBGNOMEPRINT) \
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
-	$(RAWSTUDIO) $(LIBWACOM)
+	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1622,6 +1622,14 @@ $(MPD): $(SPREZZ)/mpd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mpd_$(mpd_UPVER).orig.tar.gz --strip-components=1 -C $@
 
+.PHONY: muffin
+muffin:$(MUFFIN)_$(ARCH).deb
+$(MUFFIN): $(SPREZZ)/muffin/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf muffin-$(muffin_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: mutt
 mutt:$(MUTT)_$(ARCH).deb
 $(MUTT): $(SPREZZ)/mutt/debian/changelog
@@ -2968,7 +2976,7 @@ clean:
 	rm -rf $(NETWORKMANAGERAPPLET) $(NETWORKMANAGER) $(LIBGADU) $(NEWSBEUTER)
 	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS)
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
-	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM)
+	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM) $(MUFFIN)
 
 clobber:
 	rm -rf $(FETCHED)
