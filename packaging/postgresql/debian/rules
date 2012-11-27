@@ -1,0 +1,190 @@
+#!/usr/bin/make -f
+TCL_VER := 8.5
+MAJOR_VER := 9.1
+
+# support both hardening-wrapper (for backports) and dpkg-buildflags
+export DEB_BUILD_HARDENING = 1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all,-pie
+DPKG_EXPORT_BUILDFLAGS = 1
+-include /usr/share/dpkg/buildflags.mk
+LDFLAGS+= -Wl,--as-needed
+CFLAGS+= -fPIC -pie
+
+# When protecting the postmaster with oom_adj=-17, allow the OOM killer to slay
+# the backends (http://archives.postgresql.org/pgsql-hackers/2010-01/msg00170.php)
+ifeq ($(shell uname -s),Linux)
+CPPFLAGS+= -DLINUX_OOM_ADJ=0
+endif
+
+ifneq ($(findstring $(DEB_BUILD_ARCH), sparc alpha),)
+# sparc and alpha's gcc currently miscompiles; see
+# http://lists.debian.org/debian-alpha/2007/11/msg00025.html
+    CFLAGS+=-O1
+endif
+
+export DPKG_GENSYMBOLS_CHECK_LEVEL=4
+
+COMMON_CONFIGURE_FLAGS= \
+  --mandir=/usr/share/postgresql/$(MAJOR_VER)/man \
+  --docdir=/usr/share/doc/postgresql-doc-$(MAJOR_VER) \
+  --sysconfdir=/etc/postgresql-common \
+  --datarootdir=/usr/share/ \
+  --datadir=/usr/share/postgresql/$(MAJOR_VER) \
+  --bindir=/usr/lib/postgresql/$(MAJOR_VER)/bin \
+  --libdir=/usr/lib/ \
+  --libexecdir=/usr/lib/postgresql/ \
+  --includedir=/usr/include/postgresql/ \
+  --enable-nls \
+  --enable-integer-datetimes \
+  --enable-thread-safety \
+  --enable-debug \
+  --disable-rpath \
+  --with-ossp-uuid \
+  --with-gnu-ld \
+  --with-pgport=5432 \
+  --with-system-tzdata=/usr/share/zoneinfo \
+  CFLAGS='$(CFLAGS)' \
+  CPPFLAGS='$(CPPFLAGS)' \
+  LDFLAGS='$(LDFLAGS)'
+
+# build should fail on test suite failures on all arches
+TESTSUITE_FAIL_CMD=exit 1
+
+
+%:
+	dh $@
+
+override_dh_auto_configure: stamp/configure-build stamp/configure-build-py3
+
+stamp/configure-build:
+	mkdir -p stamp build
+	cd build && ../configure \
+           --with-tcl \
+           --with-perl \
+           --with-python \
+           --with-pam \
+           --with-krb5 \
+           --with-gssapi \
+           --with-openssl \
+           --with-libxml \
+           --with-libxslt \
+           --with-ldap \
+           --with-tclconfig=/usr/lib/tcl$(TCL_VER) \
+           --with-tkconfig=/usr/lib/tk$(TCL_VER) \
+           --with-includes=/usr/include/tcl$(TCL_VER) \
+           PYTHON=/usr/bin/python \
+           $(COMMON_CONFIGURE_FLAGS)
+	touch "$@"
+	
+stamp/configure-build-py3:
+	mkdir build-py3
+	cd build-py3 && ../configure \
+           --with-python \
+           PYTHON=/usr/bin/python3 \
+           $(COMMON_CONFIGURE_FLAGS)
+	touch "$@"
+
+override_dh_auto_build: stamp/build stamp/build-py3
+
+stamp/build: stamp/configure-build
+	cd build && $(MAKE) world
+
+	# generate POT files for translators
+	find -name nls.mk -exec sh -c "make -C \$$(dirname {}) init-po" \;
+
+	# build tutorial stuff
+	make -C build/src/tutorial NO_PGXS=1
+
+	touch "$@"
+
+stamp/build-py3: stamp/configure-build-py3
+	cd build-py3 && $(MAKE)
+	touch "$@"
+
+override_dh_auto_install:
+	make -C build-py3 install DESTDIR=$(CURDIR)/debian/tmp
+	make -C build install-world DESTDIR=$(CURDIR)/debian/tmp
+	# compress manpages
+	gzip -9n $(CURDIR)/debian/tmp/usr/share/postgresql/*/man/man*/*.[137]
+
+override_dh_makeshlibs:
+	dh_makeshlibs -Xusr/lib/postgresql/$(MAJOR_VER)
+
+override_dh_auto_clean:
+	rm -rf build* stamp
+
+override_dh_installchangelogs:
+	dh_installchangelogs HISTORY
+
+override_dh_compress:
+	dh_compress -X.source -X.c
+
+override_dh_install:
+	dh_install --fail-missing
+
+	# these get installed into the individual -/l* packages; -f because it
+	# does not exist for an -A build
+	rm -f debian/postgresql-contrib-$(MAJOR_VER)/usr/share/postgresql/$(MAJOR_VER)/extension/pl*
+
+	if [ -d debian/postgresql-doc-$(MAJOR_VER) ]; then \
+		install src/tutorial/*.c src/tutorial/*.source src/tutorial/Makefile src/tutorial/README debian/postgresql-doc-$(MAJOR_VER)/usr/share/doc/postgresql-doc-$(MAJOR_VER)/tutorial; \
+	fi
+
+override_dh_auto_test:
+ifeq (, $(findstring nocheck, $(DEB_BUILD_OPTIONS)))
+	# patch away the "don't execute as root" check for the test
+	# suite; doing it here will ensure that the actual debs have
+	# the check.
+	set -e; \
+	patch --no-backup-if-mismatch -p1 < debian/disable-root-check.patch; \
+	patch --no-backup-if-mismatch -p1 < debian/pg_regress-in-tmp.patch; \
+	make -C build/src/test/regress bigcheck || fail=1; \
+	patch --no-backup-if-mismatch -Rp1 < debian/pg_regress-in-tmp.patch; \
+	patch --no-backup-if-mismatch -Rp1 < debian/disable-root-check.patch; \
+	if [ -n "$$fail" ]; then \
+	    for l in regression.diffs log/initdb.log log/postmaster.log; do \
+	    	if [ -e build/src/test/regress/$$l ]; then \
+		    echo "********* $$l *******"; \
+		    cat build/src/test/regress/$$l; \
+		fi; \
+	    done; \
+	    $(TESTSUITE_FAIL_CMD); \
+	fi
+endif
+
+override_dh_strip:
+	dh_strip --dbg-package=postgresql-$(MAJOR_VER)-dbg
+
+# run tests in contrib in temporary test installations, using programs
+# from local tree
+contrib-check:
+	set -e; cd build/contrib; \
+	for d in *; do \
+	    [ -d $$d/sql ] || continue; \
+	    echo "==============  Running tests in $$d"; \
+	    (cd $$d; \
+	    if ! ../../src/test/regress/pg_regress --top-builddir=../.. --temp-install=tmp_check --dbname=contrib_regression `cd sql; ls *.sql | sed 's/.sql$$//'`; then \
+		 cat regression.diffs; \
+	    fi); \
+	done
+
+# run tests in contrib in temporary test installation, using programs
+# from system installation
+contrib-installcheck:
+	# set up temporary db
+	rm -rf tmp_data
+	mkdir tmp_data
+	/usr/lib/postgresql/$(MAJOR_VER)/bin/initdb -D tmp_data
+	/usr/lib/postgresql/$(MAJOR_VER)/bin/pg_ctl -D tmp_data -l tmp_data/postgres.log -o '-k /tmp' start
+	# wait until it started up
+	while !/usr/lib/postgresql/$(MAJOR_VER)/bin/psql -h /tmp -l >/dev/null 2>&1; do sleep 1; done
+	sleep 1
+	while !/usr/lib/postgresql/$(MAJOR_VER)/bin/psql -h /tmp -l >/dev/null 2>&1; do sleep 1; done
+	# run the tests
+	-cd build/contrib; make installcheck
+	/usr/lib/postgresql/$(MAJOR_VER)/bin/pg_ctl -D tmp_data stop
+	# find and print the regression diffs
+	find build/contrib/ -name regression.diffs -exec cat '{}' \;
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz

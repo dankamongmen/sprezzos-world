@@ -1,0 +1,62 @@
+#!/bin/sh
+
+set -e
+
+#DEBHELPER#
+
+VERSION=9.1
+
+clean_dir() {
+    if [ -d "$1" ] && [ ! -L "$1" ]; then
+        rmdir "$1" >/dev/null 2>/dev/null || true
+    fi
+}
+
+drop_cluster() {
+    # if we still have the postgresql-common package, use it to also shutdown
+    # server, etc.; otherwise just remove the directories
+    if [ -x /usr/bin/pg_dropcluster ]; then
+        pg_dropcluster --stop-server $VERSION "$1"
+    else
+        # remove data directory
+        PGDATALINK="/etc/postgresql/$VERSION/$1/pgdata"
+        if [ -e "$PGDATALINK" ]; then
+            rm -rf $(readlink -f "$PGDATALINK") "$PGDATALINK"
+        else
+            rm -rf "/var/lib/postgresql/$VERSION/$1/"
+        fi
+
+        # remove log file, including rotated ones
+        LOGLINK="/etc/postgresql/$VERSION/$1/log"
+        if [ -e "$LOGLINK" ]; then
+            LOG=$(readlink -f "$LOGLINK")
+            rm -f $LOG* "$LOGLINK"
+        else
+            rm -f /var/log/postgresql/postgresql-$VERSION-"$1".log*
+        fi
+
+        # remove conffiles
+        for f in pg_hba.conf pg_ident.conf postgresql.conf start.conf environment pg_ctl.conf; do
+            rm -f /etc/postgresql/$VERSION/"$1"/$f
+        done
+
+        clean_dir /etc/postgresql/$VERSION/"$1"
+    fi
+}
+
+if [ "$1" = purge ]; then
+    [ -d "/etc/postgresql/$VERSION" ] || exit 0
+    if [ "$(ls /etc/postgresql/$VERSION)" ]; then
+        for c in /etc/postgresql/$VERSION/*; do
+            [ -e "$c/postgresql.conf" ] || continue
+            cluster=$(basename "$c")
+            echo "Dropping cluster $cluster..."
+            drop_cluster "$cluster"
+        done
+    fi
+
+    clean_dir /etc/postgresql/$VERSION
+    clean_dir /etc/postgresql
+    clean_dir /var/lib/postgresql/$VERSION
+    clean_dir /var/log/postgresql/$VERSION
+fi
