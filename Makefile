@@ -20,7 +20,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus lsb \
 	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools vte \
 	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs gvfs \
-	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp \
+	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp opal \
 	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
 	installation-report gnome-shell gnome-shell-extensions gnome-contacts icu \
 	gnome-power-manager evince poppler gnome-media compiz9 fbset meta-gnome \
@@ -54,7 +54,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
 	py3cairo qemu-kvm gtk-vnc gthumb pycurl libgnomecups libgnomeprint telepathy-gabble \
 	gnome-photo-printer elinks lynx gnutls26 rawstudio libwacom muffin samba \
-	xserver-xorg-video-intel ptlib uwsgi
+	xserver-xorg-video-intel ptlib uwsgi heimdal
 
 SPREZZ:=packaging
 
@@ -213,7 +213,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS) $(LIBGNOMEPRINT) \
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
-	$(UWSGI) $(POSTGRESQL)
+	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1400,6 +1400,14 @@ $(EXO): $(SPREZZ)/exo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf exo-$(exo_UPVER).tar.bz2 --strip-components=1 -C $@
 
+.PHONY: heimdal
+heimdal:$(HEIMDAL)_$(ARCH).deb
+$(HEIMDAL): $(SPREZZ)/heimdal/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf heimdal-$(heimdal_UPVER).tar.bz2 --strip-components=1 -C $@
+
 .PHONY: imlib
 imlib:$(IMLIB)_$(ARCH).deb
 $(IMLIB): $(SPREZZ)/imlib/debian/changelog
@@ -1744,6 +1752,14 @@ $(NVIDIAKERNELDKMS): $(SPREZZ)/nvidia-kernel-dkms/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	mv NVIDIA-Linux-*.run $@
 	tar czvf nvidia-graphics-drivers_310.19.orig.tar.gz $@ --exclude-vcs --exclude=debian
+
+.PHONY: opal
+opal:$(OPAL)_$(ARCH).deb
+$(OPAL): $(SPREZZ)/opal/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf opal-$(opal_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: opencv
 opencv:$(OPENCV)_$(ARCH).deb
@@ -3019,7 +3035,7 @@ clean:
 	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS)
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
 	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL)
-	rm -rf $(SAMBA) $(PTLIB) $(UWSGI)
+	rm -rf $(SAMBA) $(PTLIB) $(UWSGI) $(HEIMDAL) $(OPAL)
 
 update:
 	for i in $(wildcard packaging/*) ; do \
