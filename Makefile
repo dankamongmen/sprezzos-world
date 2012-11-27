@@ -42,7 +42,7 @@ PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3
 	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 rtmpdump \
 	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml iproute \
 	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
-	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta gimp zsh bash \
+	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta zsh bash \
 	ratpoison ghostscript jbig2dec cups xorg-xserver libexif numactl \
 	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
 	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison procps \
