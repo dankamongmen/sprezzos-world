@@ -2987,5 +2987,10 @@ clean:
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
 	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL)
 
+update:
+	for i in $(wildcard packaging/*) ; do \
+		cd $$i && { uscan --verbose ; cd - ; } || true ; \
+	done
+
 clobber:
 	rm -rf $(FETCHED)
