@@ -1902,7 +1902,7 @@ $(SAMBA): $(SPREZZ)/samba/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf samba-$(samba_UPVER).tar.bz2 --strip-components=1 -C $@
+	tar xzvf samba-$(samba_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
