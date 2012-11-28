@@ -10,53 +10,11 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
+SPREZZ:=packaging
+
 # These spur generation of definition files in sprezzos-world from
 # debian/changelog files in packaging/*.
-PACKAGES:=growlight fwts util-linux linux-latest libpng libjpeg8-turbo lvm2 gdm3 \
-	omphalos sudo systemd librsvg grub2 xmlstarlet openssh hfsutils fbi udisks \
-	conpalette strace splitvt xbmc sprezzos-grub2theme apitrace cairo wpa git \
-	fbv fonts-adobe-sourcesanspro mplayer nethorologist fbterm base-files gtk2 \
-	netbase firmware-all gtk3 libdrm mesa pulseaudio socat wireless-tools vim \
-	nfs-utils eglibc hwloc freetype pango fontconfig gdk-pixbuf glib ibus lsb \
-	harfbuzz curl libxml libxslt console-setup f2fs-tools linux-tools vte \
-	lightdm opencv gsettings-desktop-schemas gnome-desktop less spl zfs gvfs \
-	gnome-control-center nautilus eog atk aptitude atk-bridge cheese yelp opal \
-	gnome-settings-daemon clutter-gtk clutter-gst brasero aptitude clutter \
-	installation-report gnome-shell gnome-shell-extensions gnome-contacts icu \
-	gnome-power-manager evince poppler gnome-media compiz9 fbset meta-gnome \
-	gobject-introspection gnomecatalog kismet wireshark gnome-sushi gnutls \
-	freeglut libwnck d-conf gnome-user-docs abcde pidgin libdebian-installer \
-	libatasmart gcrypt gcovr dri2proto x11proto-gl x11proto-randr GLU anna \
-	libx86 Sick-Beard gnome-font-viewer gnome-screenshot gnome-search-tool netcf \
-	gnome-themes-standard usbview mcelog libjpeg compiz openldap boost screenlets \
-	gnome-orca at-spi banshee inkscape shotwell webkit libsoup enchant frei0r \
-	gmake packagekit gnome-dictionary gnome-color-manager mash yelp-xsl dbus \
-	pixman gnome-disk-utility gnome-doc-utils libvirt reportbug gphoto2 razorqt \
-	libgphoto2 nvidia-cuda-toolkit pcre zerofree gstreamer zenity autokey eio exo \
-	metacity grilo lcms2 colord colord-gtk telepathy-glib enlightenment eet gdl \
-	eina evas ecore exactimage edje efreet embryo edbus eeze itstool virtualbox \
-	emotion elementary ethumb cogl mpd mutter lftp ncmpcpp evas-generic-loaders \
-	gcstar gperf evolution evolution-data-server calibre baobab ghex syncevolution \
-	libsynthesis simple-scan eog-plugins vinagre libxcb xcb-proto xinput gcr \
-	gnome-keyring reaver wifite aacplusenc faac handbrake gnome-themes bluez w3m \
-	gnome-session gnome-bluetooth nautilus-sendto libgnome-keyring mp4v2 rtmpdump \
-	gnome-terminal xfce4-terminal libxfce4ui libxfce4util xfconf gtkhtml iproute \
-	gnome-online-accounts pygobject yelp-tools gnome-icon-theme-extras gnome-menus \
-	gnome-icon-theme gnome-icon-theme-symbolic audit mdadm anjuta zsh bash \
-	ratpoison ghostscript jbig2dec cups xorg-xserver libexif numactl postgresql \
-	libcap2 devhelp libsecret cinnamon file-roller alacarte x11proto-fonts x11proto-xext \
-	x11proto-core x11proto-damage x11proto-fixes x11proto-input x11proto-kb bison procps \
-	x11proto-record x11proto-render x11proto-resource x11proto-video x11proto-scrnsaver \
-	x11proto-xinerama wayland libxrender x11proto-xf86dga x11proto-xf86dri mutt gjs \
-	x11proto-xf86vidmode libtasn tracker wget nvidia-kernel-dkms xserver-xorg-video-modesetting \
-	libtool subversion libimobiledevice usbmuxd glib-networking cups-filters \
-	qpdf lightspark ramen gnome-vfs neon libav imlib terminology ekiga python-gnutls \
-	xorg qemu-system network-manager-applet network-manager libgadu newsbeuter \
-	py3cairo qemu-kvm gtk-vnc gthumb pycurl libgnomecups libgnomeprint telepathy-gabble \
-	gnome-photo-printer elinks lynx gnutls26 rawstudio libwacom muffin samba \
-	xserver-xorg-video-intel ptlib uwsgi heimdal lame
-
-SPREZZ:=packaging
+PACKAGES:=$(wildcard $(SPREZZ)/*)
 
 include $(addprefix sprezzos-world/,$(PACKAGES))
 
