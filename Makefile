@@ -1540,7 +1540,7 @@ $(LIBXSS): $(SPREZZ)/libxss/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libxss-$(libxss_UPVER).tar.gz --strip-components=1 -C $@
+	tar xzvf libXScrnSaver-$(libxss_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: gmake
 gmake:$(GMAKE)_$(ARCH).deb
