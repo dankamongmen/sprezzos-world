@@ -1,0 +1,115 @@
+#!/usr/bin/make -f
+# Copyright © 2002,2003 Colin Walters <walters@verbum.org>
+# Copyright © 2003 Daniel Stone <daniels@debian.org>
+# Copyright © 2006 Sjoerd Simons <sjoerd@debian.org>
+# Copyright © 2012 Collabora Ltd.
+
+include /usr/share/dpkg/default.mk
+
+PYTHON2 := $(shell pyversions --requested --version debian/control)
+PYTHON3 := $(shell py3versions --requested --version debian/control)
+PYDEFAULTVER := $(shell pyversions --default --version)
+
+FLAVOURS := $(patsubst %,%-dbg,$(PYTHON2) $(PYTHON3)) $(PYTHON2) $(PYTHON3)
+
+%:
+	dh $@ --with python2,python3,autoreconf
+
+override_dh_auto_configure-arch:
+	set -e && for x in $(FLAVOURS); do \
+		dh_auto_configure \
+			--builddirectory=build-$$x \
+			-- \
+			PYTHON=/usr/bin/python$$x \
+			--disable-api-docs \
+			--disable-html-docs \
+			--libdir=/usr/lib \
+			; \
+	done
+override_dh_auto_configure-indep:
+	dh_auto_configure --builddirectory=build-doc
+
+override_dh_auto_build-arch:
+	set -e && for x in $(FLAVOURS); do \
+		PYTHON=/usr/bin/python$$x \
+		dh_auto_build --arch --builddirectory=build-$$x; \
+	done
+override_dh_auto_build-indep:
+	dh_auto_build --indep --builddirectory=build-doc
+
+override_dh_auto_test-arch:
+	:
+#	set -e && for x in $(PYTHON2) $(PYTHON3); do \
+#		PYTHON=/usr/bin/python$$x \
+#		dh_auto_test --arch --builddirectory=build-$$x; \
+#	done
+override_dh_auto_test-indep:
+	:
+
+override_dh_auto_install-arch:
+	set -e && for x in $(PYTHON2); do \
+		PYTHON=/usr/bin/python$$x \
+		dh_auto_install \
+			--arch \
+			--builddirectory=build-$$x \
+			--destdir=debian/tmp \
+			; \
+		PYTHON=/usr/bin/python$$x-dbg \
+		dh_auto_install \
+			--arch \
+			--builddirectory=build-$$x-dbg \
+			--destdir=debian/tmp-dbg \
+			; \
+		install debian/tmp-dbg/usr/lib/python$$x/dist-packages/_dbus_bindings.so \
+			debian/tmp/usr/lib/python$$x/dist-packages/_dbus_bindings_d.so; \
+		install debian/tmp-dbg/usr/lib/python$$x/dist-packages/_dbus_glib_bindings.so \
+			debian/tmp/usr/lib/python$$x/dist-packages/_dbus_glib_bindings_d.so; \
+	done
+	set -e && for x in $(PYTHON3); do \
+		PYTHON=/usr/bin/python$$x \
+		dh_auto_install \
+			--arch \
+			--builddirectory=build-$$x \
+			--destdir=debian/tmp \
+			; \
+		so=`/usr/bin/python$$x -c "print(__import__('sysconfig').get_config_var('SO'))"`; \
+		mv debian/tmp/usr/lib/python3/dist-packages/_dbus_bindings.so \
+			debian/tmp/usr/lib/python3/dist-packages/_dbus_bindings$$so; \
+		mv debian/tmp/usr/lib/python3/dist-packages/_dbus_glib_bindings.so \
+			debian/tmp/usr/lib/python3/dist-packages/_dbus_glib_bindings$$so; \
+		PYTHON=/usr/bin/python$$x-dbg \
+		dh_auto_install \
+			--arch \
+			--builddirectory=build-$$x-dbg \
+			--destdir=debian/tmp-dbg \
+			; \
+		so=`/usr/bin/python$$x-dbg -c "print(__import__('sysconfig').get_config_var('SO'))"`; \
+		mv debian/tmp-dbg/usr/lib/python3/dist-packages/_dbus_bindings.so \
+			debian/tmp-dbg/usr/lib/python3/dist-packages/_dbus_bindings$$so; \
+		mv debian/tmp-dbg/usr/lib/python3/dist-packages/_dbus_glib_bindings.so \
+			debian/tmp-dbg/usr/lib/python3/dist-packages/_dbus_glib_bindings$$so; \
+	done
+
+# do not install any docs, we copy those from the builddir
+override_dh_auto_install-indep:
+	:
+
+override_dh_install:
+	rm -fr debian/tmp/usr/share/doc/dbus-python
+	find debian/tmp -name '*.py[co]' -print0 | xargs -0 rm -f
+	find debian/tmp -name '*.la' -print0 | xargs -0 rm -f
+	dh_install
+
+override_dh_installdocs-arch:
+	dh_installdocs --link-doc=python-dbus -ppython-dbus-dbg
+	dh_installdocs --link-doc=python3-dbus -ppython3-dbus-dbg
+	dh_installdocs --remaining-packages
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -Rf build-* install-2* install-3* debian/tmp-dbg
+	find . -name '*.py[co]' -print0 | xargs -0 rm -f
+
+override_dh_strip:
+	dh_strip --dbg-package=python-dbus-dbg -ppython-dbus -ppython-dbus-dbg
+	dh_strip --dbg-package=python3-dbus-dbg -ppython3-dbus -ppython3-dbus-dbg

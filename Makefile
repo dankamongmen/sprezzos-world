@@ -171,7 +171,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS) $(LIBGNOMEPRINT) \
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
-	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER)
+	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) $(DBUSPYTHON)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -581,6 +581,14 @@ $(DBUS): $(SPREZZ)/dbus/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-$(dbus_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: dbus-python
+dbus-python:$(dbus-pythonPYTHON)_$(ARCH).deb
+$(dbus-pythonPYTHON): $(SPREZZ)/dbus-python/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dbus-python-$(dbus-python_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: dri2proto
 dri2proto:$(DRI2PROTO)_$(ARCH).deb
@@ -3010,6 +3018,7 @@ clean:
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
 	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL)
 	rm -rf $(SAMBA) $(PTLIB) $(UWSGI) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER)
+	rm -rf $(DBUSPYTHON)
 
 update:
 	for i in $(wildcard packaging/*) ; do \
