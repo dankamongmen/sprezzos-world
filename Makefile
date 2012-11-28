@@ -10,11 +10,11 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-SPREZZ:=packaging
+SPREZZ:=packaging/
 
 # These spur generation of definition files in sprezzos-world from
 # debian/changelog files in packaging/*.
-PACKAGES:=$(wildcard $(SPREZZ)/*)
+PACKAGES:=$(wildcard $(SPREZZ)*)
 
 include $(subst $(SPREZZ),sprezzos-world/,$(PACKAGES))
 
