@@ -171,7 +171,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS) $(LIBGNOMEPRINT) \
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
-	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME)
+	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1967,6 +1967,14 @@ $(TELEPATHYGLIB): $(SPREZZ)/telepathy-glib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf telepathy-glib-$(telepathy-glib_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: totem-pl-parser
+totem-pl-parser:$(TOTEMPLPARSER)_$(ARCH).deb
+$(TOTEMPLPARSER): $(SPREZZ)/totem-pl-parser/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf totem-pl-parser-$(totem-pl-parser_UPVER).tar.bz2 --strip-components=1 -C $@
+
 .PHONY: tracker
 tracker:$(TRACKER)_$(ARCH).deb
 $(TRACKER): $(SPREZZ)/tracker/debian/changelog
@@ -3001,7 +3009,7 @@ clean:
 	rm -rf $(PY3CAIRO) $(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS)
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
 	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL)
-	rm -rf $(SAMBA) $(PTLIB) $(UWSGI) $(HEIMDAL) $(OPAL) $(LAME)
+	rm -rf $(SAMBA) $(PTLIB) $(UWSGI) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER)
 
 update:
 	for i in $(wildcard packaging/*) ; do \
