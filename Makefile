@@ -583,8 +583,8 @@ $(DBUS): $(SPREZZ)/dbus/debian/changelog
 	tar xzvf dbus-$(dbus_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: dbus-python
-dbus-python:$(dbus-pythonPYTHON)_$(ARCH).deb
-$(dbus-pythonPYTHON): $(SPREZZ)/dbus-python/debian/changelog
+dbus-python:$(DBUSPYTHON)_$(ARCH).deb
+$(DBUSPYTHON): $(SPREZZ)/dbus-python/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
