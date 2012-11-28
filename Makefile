@@ -1534,6 +1534,14 @@ $(LIBXCB): $(SPREZZ)/libxcb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxcb_$(libxcb_UPVER).orig.tar.gz --strip-components=1 -C $@
 
+.PHONY: libxss
+libxss:$(LIBXSS)_$(ARCH).deb
+$(LIBXSS): $(SPREZZ)/libxss/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxss-$(libxss_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: gmake
 gmake:$(GMAKE)_$(ARCH).deb
 $(GMAKE): $(SPREZZ)/gmake/debian/changelog
