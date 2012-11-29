@@ -2006,7 +2006,7 @@ $(TIFF3): $(SPREZZ)/tiff3/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf tiff3-$(tiff3_UPVER).tar.gz --strip-components=1 -C $@
+	tar xzvf tiff-$(tiff3_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: totem-pl-parser
 totem-pl-parser:$(TOTEMPLPARSER)_$(ARCH).deb
