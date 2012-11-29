@@ -21,105 +21,103 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
-	 echo -n "$(@F)_VERSION:=" && \
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && \
 	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && \
 	 echo -n "$(@F)_UPVER:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | sed -e 's/[+-]SprezzOS[0-9]*//' \
 	 ) > $@
 
-APITRACEORIG:=apitrace_$(shell echo $(apitrace_VERSION) | cut -d- -f1).orig.tar.xz
-GROWLIGHTORIG:=growlight_$(shell echo $(growlight_VERSION) | cut -d- -f1).orig.tar.xz
-OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_VERSION) | cut -d- -f1).orig.tar.xz
-SICKBEARDORIG:=sick-beard_$(shell echo $(Sick-Beard_VERSION) | cut -d- -f1).orig.tar.xz
+APITRACEORIG:=apitrace_$(shell echo $(apitrace_UPVER) | cut -d- -f1).orig.tar.xz
+GROWLIGHTORIG:=growlight_$(shell echo $(growlight_UPVER) | cut -d- -f1).orig.tar.xz
+OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_UPVER) | cut -d- -f1).orig.tar.xz
+SICKBEARDORIG:=sick-beard_$(shell echo $(Sick-Beard_UPVER) | cut -d- -f1).orig.tar.xz
 
-APTITUDEORIG:=aptitude_$(shell echo $(aptitude_VERSION) | cut -d- -f1).orig.tar.bz2
-ATKUP:=atk-$(shell echo $(atk_VERSION) | cut -d- -f1)
-ATKORIG:=atk1.0_$(shell echo $(atk_VERSION) | cut -d- -f1).orig.tar.xz
-BRASEROUP:=brasero-$(shell echo $(brasero_VERSION) | cut -d: -f2- | cut -d- -f1)
-BRASEROORIG:=brasero_$(shell echo $(brasero_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CHEESEUP:=cheese-$(shell echo $(cheese_VERSION) | cut -d: -f2- | cut -d- -f1)
-CHEESEORIG:=cheese_$(shell echo $(cheese_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CLUTTERUP:=clutter-$(shell echo $(clutter_VERSION) | cut -d: -f2- | cut -d- -f1)
-CLUTTERORIG:=clutter-1.0_$(shell echo $(clutter_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CLUTTERGSTUP:=clutter-gst-$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | cut -d- -f1)
-CLUTTERGSTORIG:=clutter-gst_$(shell echo $(clutter-gst_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CLUTTERGTKUP:=clutter-gtk-$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1)
-CLUTTERGTKORIG:=clutter-gtk_$(shell echo $(clutter-gtk_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-EGLIBCUP:=glibc-$(shell echo $(eglibc_VERSION) | cut -d- -f1)
-EGLIBCORIG:=eglibc_$(shell echo $(eglibc_VERSION) | cut -d- -f1).orig.tar.gz
-EVINCEUP:=evince-$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1)
-EVINCEORIG:=evince_$(shell echo $(evince_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-FBIUP:=fbida-$(shell echo $(fbi_VERSION) | cut -d= -f2- | cut -d- -f1)
-FBTERMUP:=nfbterm-$(shell echo $(fbterm_VERSION) | cut -d= -f2 | cut -d- -f1)
-FBTERMORIG:=fbterm_$(shell echo $(fbterm_VERSION) | cut -d- -f1).orig.tar.gz
-FBVORIG:=fbv_$(shell echo $(fbv_VERSION) | cut -d- -f1).orig.tar.gz
-FONTCONFIGUP:=fontconfig-$(shell echo $(fontconfig_VERSION) | cut -d- -f1)
-FONTCONFIGORIG:=fontconfig_$(shell echo $(fontconfig_VERSION) | cut -d- -f1).orig.tar.gz
-FREETYPEUP:=freetype-$(shell echo $(freetype_VERSION) | cut -d- -f1) \
-	freetype-doc-$(shell echo $(freetype_VERSION) | cut -d- -f1) \
-	ft2demos-$(shell echo $(freetype_VERSION) | cut -d- -f1)
-FREETYPEORIG:=freetype_$(shell echo $(freetype_VERSION) | cut -d- -f1).orig.tar.gz
-GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1)
-GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_VERSION) | cut -d- -f1).orig.tar.xz
-GNOMECONTACTSUP:=gnome-contacts-$(shell echo $(gnome-contacts_VERSION) | cut -d- -f1)
-GNOMECONTACTSORIG:=gnome-contacts_$(shell echo $(gnome-contacts_VERSION) | cut -d- -f1).orig.tar.xz
-GNOMECONTROLCENTERUP:=gnome-control-center-$(shell echo $(gnome-control-center_VERSION) | cut -d: -f2- | cut -d- -f1)
-GNOMECONTROLCENTERORIG:=gnome-control-center_$(shell echo $(gnome-control-center_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-GNOMEDESKTOPUP:=gnome-desktop-$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1)
-GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_VERSION) | cut -d- -f1).orig.tar.xz
-GNOMEMEDIAUP:=gnome-media-$(shell echo $(gnome-media_VERSION) | cut -d- -f1)
-GNOMEMEDIAORIG:=gnome-media_$(shell echo $(gnome-media_VERSION) | cut -d- -f1).orig.tar.xz
-GNOMEPOWERMANAGERUP:=gnome-power-manager-$(shell echo $(gnome-power-manager_VERSION) | cut -d: -f2- | cut -d- -f1)
-GNOMEPOWERMANAGERORIG:=gnome-power-manager_$(shell echo $(gnome-power-manager_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1)
-GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_VERSION) | cut -d- -f1).orig.tar.xz
-SPLORIG:=spl_$(shell echo $(spl_VERSION) | cut -d- -f1).orig.tar.xz
-ZFSORIG:=zfs_$(shell echo $(zfs_VERSION) | cut -d- -f1).orig.tar.xz
-GRUBUP:=grub-$(shell echo $(grub2_VERSION) | cut -d- -f1 | cut -d= -f2- | tr : -)
-HARFBUZZUP:=harfbuzz-$(shell echo $(harfbuzz_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-HARFBUZZORIG:=harfbuzz_$(shell echo $(harfbuzz_VERSION) | cut -d- -f1).orig.tar.gz
-HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_VERSION) | cut -d- -f1).orig.tar.gz
-HWLOCUP:=hwloc-$(shell echo $(hwloc_VERSION) | cut -d- -f1)
-HWLOCORIG:=hwloc_$(shell echo $(hwloc_VERSION) | cut -d- -f1).orig.tar.bz2
-IBUSUP:=ibus-$(shell echo $(ibus_VERSION) | cut -d: -f2- | cut -d- -f1)
-IBUSORIG:=ibus_$(shell echo $(ibus_VERSION) | cut -d: -f2- | cut -d- -f1).orig.tar.gz
-LESSUP:=less-$(shell echo $(less_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+APTITUDEORIG:=aptitude_$(shell echo $(aptitude_UPVER) | cut -d- -f1).orig.tar.bz2
+ATKUP:=atk-$(shell echo $(atk_UPVER) | cut -d- -f1)
+ATKORIG:=atk1.0_$(shell echo $(atk_UPVER) | cut -d- -f1).orig.tar.xz
+BRASEROUP:=brasero-$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1)
+BRASEROORIG:=brasero_$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+CHEESEUP:=cheese-$(shell echo $(cheese_UPVER) | cut -d: -f2- | cut -d- -f1)
+CHEESEORIG:=cheese_$(shell echo $(cheese_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+CLUTTERUP:=clutter-$(shell echo $(clutter_UPVER) | cut -d: -f2- | cut -d- -f1)
+CLUTTERORIG:=clutter-1.0_$(shell echo $(clutter_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+CLUTTERGSTUP:=clutter-gst-$(shell echo $(clutter-gst_UPVER) | cut -d: -f2- | cut -d- -f1)
+CLUTTERGSTORIG:=clutter-gst_$(shell echo $(clutter-gst_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+CLUTTERGTKUP:=clutter-gtk-$(shell echo $(clutter-gtk_UPVER) | cut -d: -f2- | cut -d- -f1)
+CLUTTERGTKORIG:=clutter-gtk_$(shell echo $(clutter-gtk_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+EGLIBCUP:=glibc-$(shell echo $(eglibc_UPVER) | cut -d- -f1)
+EGLIBCORIG:=eglibc_$(shell echo $(eglibc_UPVER) | cut -d- -f1).orig.tar.gz
+EVINCEUP:=evince-$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1)
+EVINCEORIG:=evince_$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+FBIUP:=fbida-$(shell echo $(fbi_UPVER) | cut -d= -f2- | cut -d- -f1)
+FBTERMUP:=nfbterm-$(shell echo $(fbterm_UPVER) | cut -d= -f2 | cut -d- -f1)
+FBTERMORIG:=fbterm_$(shell echo $(fbterm_UPVER) | cut -d- -f1).orig.tar.gz
+FBVORIG:=fbv_$(shell echo $(fbv_UPVER) | cut -d- -f1).orig.tar.gz
+FONTCONFIGUP:=fontconfig-$(shell echo $(fontconfig_UPVER) | cut -d- -f1)
+FONTCONFIGORIG:=fontconfig_$(shell echo $(fontconfig_UPVER) | cut -d- -f1).orig.tar.gz
+FREETYPEUP:=freetype-$(shell echo $(freetype_UPVER) | cut -d- -f1) \
+	freetype-doc-$(shell echo $(freetype_UPVER) | cut -d- -f1) \
+	ft2demos-$(shell echo $(freetype_UPVER) | cut -d- -f1)
+FREETYPEORIG:=freetype_$(shell echo $(freetype_UPVER) | cut -d- -f1).orig.tar.gz
+GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_UPVER) | cut -d- -f1)
+GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_UPVER) | cut -d- -f1).orig.tar.xz
+GNOMECONTACTSUP:=gnome-contacts-$(shell echo $(gnome-contacts_UPVER) | cut -d- -f1)
+GNOMECONTACTSORIG:=gnome-contacts_$(shell echo $(gnome-contacts_UPVER) | cut -d- -f1).orig.tar.xz
+GNOMECONTROLCENTERUP:=gnome-control-center-$(shell echo $(gnome-control-center_UPVER) | cut -d: -f2- | cut -d- -f1)
+GNOMECONTROLCENTERORIG:=gnome-control-center_$(shell echo $(gnome-control-center_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+GNOMEDESKTOPUP:=gnome-desktop-$(shell echo $(gnome-desktop_UPVER) | cut -d- -f1)
+GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_UPVER) | cut -d- -f1).orig.tar.xz
+GNOMEMEDIAUP:=gnome-media-$(shell echo $(gnome-media_UPVER) | cut -d- -f1)
+GNOMEMEDIAORIG:=gnome-media_$(shell echo $(gnome-media_UPVER) | cut -d- -f1).orig.tar.xz
+GNOMEPOWERMANAGERUP:=gnome-power-manager-$(shell echo $(gnome-power-manager_UPVER) | cut -d: -f2- | cut -d- -f1)
+GNOMEPOWERMANAGERORIG:=gnome-power-manager_$(shell echo $(gnome-power-manager_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
+GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1)
+GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1).orig.tar.xz
+SPLORIG:=spl_$(shell echo $(spl_UPVER) | cut -d- -f1).orig.tar.xz
+ZFSORIG:=zfs_$(shell echo $(zfs_UPVER) | cut -d- -f1).orig.tar.xz
+GRUBUP:=grub-$(shell echo $(grub2_UPVER) | cut -d- -f1 | cut -d= -f2- | tr : -)
+HARFBUZZUP:=harfbuzz-$(shell echo $(harfbuzz_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+HARFBUZZORIG:=harfbuzz_$(shell echo $(harfbuzz_UPVER) | cut -d- -f1).orig.tar.gz
+HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_UPVER) | cut -d- -f1).orig.tar.gz
+HWLOCUP:=hwloc-$(shell echo $(hwloc_UPVER) | cut -d- -f1)
+HWLOCORIG:=hwloc_$(shell echo $(hwloc_UPVER) | cut -d- -f1).orig.tar.bz2
+IBUSUP:=ibus-$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1)
+IBUSORIG:=ibus_$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.gz
+LESSUP:=less-$(shell echo $(less_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LESSORIG:=$(shell echo $(LESSUP) | tr - _).orig.tar.gz
-LIBDRMUP:=libdrm-$(shell echo $(libdrm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBDRMUP:=libdrm-$(shell echo $(libdrm_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBDRMORIG:=$(shell echo $(LIBDRMUP) | tr - _).orig.tar.bz2
-LIBPNGUP:=libpng-$(shell echo $(libpng_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBPNGUP:=libpng-$(shell echo $(libpng_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
-LIBRSVGUP:=librsvg-$(shell echo $(librsvg_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBRSVGUP:=librsvg-$(shell echo $(librsvg_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
-LIBXMLUP:=libxml2-$(shell echo $(libxml_VERSION) | cut -d- -f1 | cut -d. -f-3 | cut -d= -f2- | cut -d: -f2)
+LIBXMLUP:=libxml2-$(shell echo $(libxml_UPVER) | cut -d- -f1 | cut -d. -f-3 | cut -d= -f2- | cut -d: -f2)
 LIBXMLORIG:=$(shell echo $(LIBXMLUP) | tr - _).orig.tar.gz
-LIBXSLTUP:=libxslt-$(shell echo $(libxslt_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIBXSLTUP:=libxslt-$(shell echo $(libxslt_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBXSLTORIG:=$(shell echo $(LIBXSLTUP) | tr - _).orig.tar.gz
-LIGHTDMUP:=lightdm_$(shell echo $(lightdm_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+LIGHTDMUP:=lightdm_$(shell echo $(lightdm_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIGHTDMORIG:=$(shell echo $(LIGHTDMUP) | tr - _).orig.tar.gz
-LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_VERSION) | cut -d- -f1).orig.tar.bz2
-LVM2:=lvm2_$(shell echo $(lvm2_VERSION) | tr : .)
-LVM2UP:=LVM2.$(shell echo $(lvm2_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-MCELOGORIG:=mcelog_$(shell echo $(mcelog_VERSION) | cut -d- -f1).orig.tar.xz
-MPLAYER:=mplayer_$(shell echo $(mplayer_VERSION) | tr : .)
-NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_VERSION) | cut -d- -f1).orig.tar.xz
-FREI0RORIG:=frei0r_$(shell echo $(frei0r_VERSION) | cut -d- -f1).orig.tar.xz
-XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_VERSION) | cut -d- -f1).orig.tar.bz2
-OPENSSH:=openssh_$(shell echo $(openssh_VERSION) | tr : .)
-OPENSSHUP:=openssh-$(shell echo $(openssh_VERSION) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-PANGOUP:=pango-$(shell echo $(pango_VERSION) | cut -d- -f1)
+LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_UPVER) | cut -d- -f1).orig.tar.bz2
+LVM2:=lvm2_$(shell echo $(lvm2_UPVER) | tr : .)
+LVM2UP:=LVM2.$(shell echo $(lvm2_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+MCELOGORIG:=mcelog_$(shell echo $(mcelog_UPVER) | cut -d- -f1).orig.tar.xz
+MPLAYER:=mplayer_$(shell echo $(mplayer_UPVER) | tr : .)
+NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_UPVER) | cut -d- -f1).orig.tar.xz
+FREI0RORIG:=frei0r_$(shell echo $(frei0r_UPVER) | cut -d- -f1).orig.tar.xz
+XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_UPVER) | cut -d- -f1).orig.tar.bz2
+OPENSSH:=openssh_$(shell echo $(openssh_UPVER) | tr : .)
+OPENSSHUP:=openssh-$(shell echo $(openssh_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
+PANGOUP:=pango-$(shell echo $(pango_UPVER) | cut -d- -f1)
 PANGOORIG:=pango1.0_$(shell echo $(PANGOUP) | cut -d- -f2 | tr - _).orig.tar.xz
-POPPLERUP:=poppler-$(shell echo $(poppler_VERSION) | cut -d- -f1)
+POPPLERUP:=poppler-$(shell echo $(poppler_UPVER) | cut -d- -f1)
 POPPLERORIG:=poppler_$(shell echo $(POPPLERUP) | cut -d- -f2 | tr - _).orig.tar.gz
-PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_VERSION) | cut -d- -f1)
+PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_UPVER) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
-SOCATUP:=socat-$(shell echo $(socat_VERSION) | cut -d- -f1 | tr \~ -)
-SOCATORIG:=socat_$(shell echo $(socat_VERSION) | cut -d- -f1).orig.tar.bz2
-USBVIEWUP:=usbview-$(shell echo $(usbview_VERSION) | cut -d= -f2- | cut -d- -f1)
-USBVIEWORIG:=usbview_$(shell echo $(usbview_VERSION) | cut -d- -f1).orig.tar.gz
+SOCATUP:=socat-$(shell echo $(socat_UPVER) | cut -d- -f1 | tr \~ -)
+SOCATORIG:=socat_$(shell echo $(socat_UPVER) | cut -d- -f1).orig.tar.bz2
+USBVIEWUP:=usbview-$(shell echo $(usbview_UPVER) | cut -d= -f2- | cut -d- -f1)
+USBVIEWORIG:=usbview_$(shell echo $(usbview_UPVER) | cut -d- -f1).orig.tar.gz
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(ICU) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
