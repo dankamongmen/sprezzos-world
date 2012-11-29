@@ -172,7 +172,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
 	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
-	$(DBUSPYTHON) $(GDB)
+	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -406,6 +406,14 @@ $(AUDIT): $(SPREZZ)/audit/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf audit-$(audit_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: atk-bridge
+atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
+$(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf at-spi2-atk-$(atk-bridge_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: at-spi
 at-spi:$(ATSPI)_$(ARCH).deb
@@ -3035,7 +3043,7 @@ clean:
 	rm -rf $(LIBGNOMEPRINT) $(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS)
 	rm -rf $(LYNX) $(GNUTLS26) $(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL)
 	rm -rf $(SAMBA) $(PTLIB) $(UWSGI) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER)
-	rm -rf $(DBUSPYTHON) $(GDB)
+	rm -rf $(DBUSPYTHON) $(GDB) $(ATKBRIDGE)
 
 update:
 	for i in $(wildcard packaging/*) ; do \
