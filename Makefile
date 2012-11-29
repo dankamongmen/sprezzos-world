@@ -16,7 +16,7 @@ SPREZZ:=packaging/
 # debian/changelog files in packaging/*.
 PACKAGES:=$(wildcard $(SPREZZ)*)
 
-include $(subst $(SPREZZ),sprezzos-world/,$(PACKAGES))
+-include $(subst $(SPREZZ),sprezzos-world/,$(PACKAGES))
 
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
