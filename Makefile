@@ -1373,7 +1373,7 @@ $(GDB): $(SPREZZ)/gdb/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gdb-$(gdb_UPVER).tar.gz --strip-components=1 -C $@
+	tar xjvf gdb-$(gdb_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: heimdal
 heimdal:$(HEIMDAL)_$(ARCH).deb
