@@ -170,7 +170,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) \
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
 	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
-	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3)
+	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2303,6 +2303,14 @@ $(LIBXFCE4UTIL): $(SPREZZ)/libxfce4util/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libxfce4util-$(libxfce4util_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: libxrandr
+libxrandr:$(LIBXRANDR)_$(ARCH).deb
+$(LIBXRANDR): $(SPREZZ)/libxrandr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXrandr-$(libxrandr_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: libxrender
 libxrender:$(LIBXRENDER)_$(ARCH).deb
