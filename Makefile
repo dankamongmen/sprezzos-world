@@ -2065,7 +2065,7 @@ $(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf valgrind-$(valgrind_UPVER).tar.xz --strip-components=1 -C $@
+	tar xjvf valgrind-$(valgrind_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: vim
 vim:$(VIM)_$(ARCH).deb
