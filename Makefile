@@ -167,7 +167,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
 	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
-	$(VALGRIND) $(EMPATHY)
+	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -481,6 +481,14 @@ $(CAIRO): $(SPREZZ)/cairo/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf cairo-$(cairo_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: libcanberra
+libcanberra:$(LIBCANBERRA)_$(ARCH).deb
+$(LIBCANBERRA): $(SPREZZ)/libcanberra/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libcanberra-$(libcanberra_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: calibre
 calibre:$(CALIBRE)_$(ARCH).deb
