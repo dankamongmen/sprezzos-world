@@ -168,7 +168,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
-	$(LIBNICE) $(XSERVERXORGVIDEOVESA)
+	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1570,6 +1570,14 @@ $(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libwnck3-$(libwnck_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: libx11
+libx11:$(LIBX11)_$(ARCH).deb
+$(LIBX11): $(SPREZZ)/libx11/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libx11_$(libx11_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: libx86
 libx86:$(LIBX86)_$(ARCH).deb
