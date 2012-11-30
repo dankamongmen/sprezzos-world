@@ -169,7 +169,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
-	$(XCBUTIL) $(GAWK)
+	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1830,6 +1830,14 @@ $(LIBNICE): $(SPREZZ)/libnice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libnice-$(libnice_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: notification-daemon
+notification-daemon:$(NOTIFICATIONDAEMON)_$(ARCH).deb
+$(NOTIFICATIONDAEMON): $(SPREZZ)/notification-daemon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf notification-daemon-$(notification-daemon_UPVER).tar.xz --strip-components=1 -C $@
+
 .PHONY: numactl
 numactl:$(NUMACTL)_$(ARCH).deb
 $(NUMACTL): $(SPREZZ)/numactl/debian/changelog
@@ -2062,6 +2070,14 @@ $(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf simple-scan_$(simple-scan_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: startup-notification
+startup-notification:$(STARTUPNOTIFICATION)_$(ARCH).deb
+$(STARTUPNOTIFICATION): $(SPREZZ)/startup-notification/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf startup-notification-$(startup-notification_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: syncevolution
 syncevolution:$(SYNCEVOLUTION)_$(ARCH).deb
