@@ -92,10 +92,6 @@ LIBPNGUP:=libpng-$(shell echo $(libpng_UPVER) | cut -d- -f1 | cut -d= -f2- | cut
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
 LIBRSVGUP:=librsvg-$(shell echo $(librsvg_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
-LIBXMLUP:=libxml2-$(shell echo $(libxml_UPVER) | cut -d- -f1 | cut -d. -f-3 | cut -d= -f2- | cut -d: -f2)
-LIBXMLORIG:=$(shell echo $(LIBXMLUP) | tr - _).orig.tar.gz
-LIBXSLTUP:=libxslt-$(shell echo $(libxslt_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-LIBXSLTORIG:=$(shell echo $(LIBXSLTUP) | tr - _).orig.tar.gz
 LIGHTDMUP:=lightdm_$(shell echo $(lightdm_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIGHTDMORIG:=$(shell echo $(LIGHTDMUP) | tr - _).orig.tar.gz
 LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_UPVER) | cut -d- -f1).orig.tar.bz2
@@ -170,7 +166,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) $(MX) \
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
 	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
-	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME)
+	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
+	$(VALGRIND)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1557,6 +1554,22 @@ $(LIBXCB): $(SPREZZ)/libxcb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxcb_$(libxcb_UPVER).orig.tar.gz --strip-components=1 -C $@
 
+.PHONY: libxml2
+libxml2:$(LIBXML2)_$(ARCH).deb
+$(LIBXML2): $(SPREZZ)/libxml2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxml2-$(libxml2_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: libxslt
+libxslt:$(LIBXSLT)_$(ARCH).deb
+$(LIBXSLT): $(SPREZZ)/libxslt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxslt-$(libxslt_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: libxss
 libxss:$(LIBXSS)_$(ARCH).deb
 $(LIBXSS): $(SPREZZ)/libxss/debian/changelog
@@ -2045,6 +2058,14 @@ $(UWSGI): $(SPREZZ)/uwsgi/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf uwsgi-$(uwsgi_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: valgrind
+valgrind:$(VALGRIND)_$(ARCH).deb
+$(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf valgrind-$(valgrind_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: vim
 vim:$(VIM)_$(ARCH).deb
@@ -2783,20 +2804,6 @@ libxml:$(LIBXML)_$(ARCH).deb
 $(LIBXML): $(SPREZZ)/libxml/debian/changelog $(LIBXMLORIG)
 	mkdir -p $@
 	tar xzvf $(LIBXMLORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(LIBXSLTUP).tar.gz
-$(LIBXSLTUP).tar.gz:
-	wget -nc -O$@ ftp://xmlsoft.org/libxslt/$@
-
-$(LIBXSLTORIG): $(LIBXSLTUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: libxslt
-libxslt:$(LIBXSLT)_$(ARCH).deb
-$(LIBXSLT): $(SPREZZ)/libxslt/debian/changelog $(LIBXSLTORIG)
-	mkdir -p $@
-	tar xzvf $(LIBXSLTORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(BRASEROUP).tar.xz
