@@ -1,0 +1,154 @@
+#!/usr/bin/make -f
+# debian/rules for the Debian libx11 package.
+# Copyright © 2004 Scott James Remnant <scott@netsplit.com>
+# Copyright © 2005 Daniel Stone <daniel@fooishbar.org>
+# Copyright © 2005 David Nusinow <dnusinow@debian.org>
+# Copyright © 2006 Josh Triplett <josh@freedesktop.org>
+# Copyright © 2006 Jamey Sharp <sharpone@debian.org>
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include debian/xsfbs/xsfbs.mk
+
+CFLAGS = -Wall -g
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+# This is for maintainer's convenience. It really should be always on option
+# but dh_install doesn't support --exclude-from <file>, and we leave out too
+# much crap to bother specifying it through --exclude arguments.
+# It alters dh_install call in binary_indep, as it is the first one called
+# from binary target.
+ifneq (,$(filter checkinstall,$(DEB_BUILD_OPTIONS)))
+	dhinstallindepflags := --fail-missing
+else
+	dhinstallindepflags := -i
+endif
+
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build=$(DEB_HOST_GNU_TYPE)
+else
+	confflags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+configure: $(STAMP_DIR)/patch
+	dh_testdir
+	autoreconf -vfi
+
+build: build-indep
+build-indep: build-stamp
+build-indep: docflags = --enable-specs --with-xmlto
+build-arch: build-stamp
+build-arch: docflags = --disable-specs
+
+build-stamp: configure $(STAMP_DIR)/genscripts
+	dh_testdir
+
+	mkdir -p build
+	cd build && \
+	../configure \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+		$(docflags) \
+		--without-fop \
+		$(confflags) \
+		CFLAGS="$(CFLAGS)"
+	cd build && $(MAKE)
+	>$@
+
+clean: xsfclean
+	dh_testdir
+	rm -f build-stamp
+	rm -f config.cache config.log config.status
+	rm -f */config.cache */config.log */config.status
+	rm -f conftest* */conftest*
+	rm -rf autom4te.cache */autom4te.cache
+	rm -rf build
+	rm -f aclocal.m4 compile config.guess config.sub configure
+	rm -f m4/lt*.m4 m4/libtool.m4
+	rm -f depcomp install-sh ltmain.sh missing mkinstalldirs
+	rm -f src/config.h.in
+	find -name Makefile.in -delete
+	dh_clean
+
+install: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	cd build && $(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+
+# Build architecture-dependent files here.
+binary-arch: build-stamp install
+	dh_testdir
+	dh_testroot
+
+	dh_installdocs -s NEWS
+	# Kill *.xml files, we don't need them:
+	find debian/tmp -name '*.xml' -delete
+	# Using exclusions here allows libx11-dev.install to use wildcards
+	# for headers, rather than listing every header other than this one.
+	dh_install --sourcedir=debian/tmp -plibx11-dev \
+	           --exclude=usr/include/X11/Xlib-xcb.h
+	dh_install --sourcedir=debian/tmp -Nlibx11-dev -s
+	dh_installchangelogs -s ChangeLog
+	dh_installman -s
+	dh_lintian -s
+	dh_link -s
+	dh_strip -plibx11-6 --dbg-package=libx11-6-dbg
+	dh_strip -plibx11-xcb1 --dbg-package=libx11-xcb1-dbg
+	dh_strip -Nlibx11-6 -Nlibx11-xcb1
+	dh_compress -s
+	dh_fixperms -s
+	dh_makeshlibs -s -plibx11-6 -V'libx11-6 (>= 2:1.4.99.1)' --add-udeb=libx11-6-udeb -- -c4
+	dh_makeshlibs -s -Nlibx11-6 -- -c4
+	dh_shlibdeps -s
+	dh_installdeb -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+# Build architecture-independent files here.
+binary-indep: build-indep install
+	dh_testdir
+	dh_testroot
+
+	dh_installdocs -i
+	dh_installchangelogs -i NEWS
+	# Using exclusions here allows libx11-6.install to use wildcards for
+	# headers and manpages, rather than listing every header and manpage
+	# other than these.
+	dh_install --sourcedir=debian/tmp -plibx11-doc \
+	           --exclude=usr/include/X11/Xlib-xcb.h \
+	           --exclude=usr/share/man/man3/XGetXCBConnection.3 \
+	           --exclude=usr/share/man/man3/XSetEventQueueOwner.3
+	dh_install --sourcedir=debian/tmp -i -Nlibx11-doc
+	dh_link -i
+	dh_installman -i
+	dh_lintian -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary: binary-indep binary-arch
+.PHONY: build build-indep build-arch
+.PHONY: clean binary-indep binary-arch binary install
