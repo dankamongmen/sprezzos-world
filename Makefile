@@ -24,7 +24,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && \
 	 echo -n "$(@F)_UPVER:=" && \
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | sed -e 's/[+-]SprezzOS[0-9]*//' \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
 
 APITRACEORIG:=apitrace_$(shell echo $(apitrace_UPVER) | cut -d- -f1).orig.tar.xz
@@ -169,7 +169,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
-	$(XCBUTIL)
+	$(XCBUTIL) $(GAWK)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -379,6 +379,8 @@ $(AACPLUSENC): $(SPREZZ)/aacplusenc/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf aacplusenc_$(aacplusenc_UPVER).tar.gz --strip-components=1 -C $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: libaacplus
 libaacplus:$(LIBAACPLUS)_$(ARCH).deb
@@ -755,6 +757,14 @@ $(FREEGLUT): $(SPREZZ)/freeglut/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf freeglut_$(freeglut_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: gawk
+gawk:$(GAWK)_$(ARCH).deb
+$(GAWK): $(SPREZZ)/gawk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gawk-$(gawk_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: gcr
 gcr:$(GCR)_$(ARCH).deb

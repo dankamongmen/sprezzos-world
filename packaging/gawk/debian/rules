@@ -1,0 +1,61 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+ifeq (sh4,$(shell dpkg-architecture -qDEB_HOST_ARCH))
+  # Renesas SH(sh4) need -mieee option.
+  # If this option is not effective, fmtspcl test fails.
+  export DEB_CFLAGS_MAINT_APPEND = -mieee
+endif
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure
+	# Add fake info files (see README.source).
+	touch --date="Jan 01 2000" doc/gawk.info doc/gawk.texi \
+                           doc/gawkinet.info doc/gawkinet.texi
+
+override_dh_auto_build:
+	dh_auto_build
+	make -C po update-gmo
+
+override_dh_auto_test:
+	# Generate locales used in testsuite.
+	mkdir tmp-locales
+	localedef -i en_US -c -f ISO-8859-1 -A /usr/share/locale/locale.alias \
+          tmp-locales/en_US.ISO-8859-1
+	localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias \
+          tmp-locales/en_US.UTF-8
+	localedef -i ja_JP -c -f UTF-8 -A /usr/share/locale/locale.alias \
+          tmp-locales/ja_JP.UTF-8
+	localedef -i ru_RU -c -f UTF-8 -A /usr/share/locale/locale.alias \
+          tmp-locales/ru_RU.UTF-8
+	# Run actual test suite.
+	LOCPATH=$(CURDIR)/tmp-locales make check
+	# Display any failed tests.
+	tests=$$(ls test/_* 2>/dev/null); \
+        if [ -n "$$tests" ]; then \
+          echo "Failing tests: $$(echo $$tests | sed -e 's/test\/_//g')"; \
+          for test in $$(ls test/_* 2>/dev/null); do \
+            echo ">>> $$test" && cat $$test; \
+          done; \
+        fi
+
+override_dh_auto_install:
+	dh_auto_install
+	# Remove unwanted files.
+	rm -f debian/gawk/usr/bin/*awk-*
+	rm -f debian/gawk/usr/bin/awk
+	rm -f debian/gawk/usr/share/man/man1/pgawk.1
+	# Remove fake info files (see README.source).
+	rm -rf debian/gawk/usr/share/info
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf tmp-locales
+
+override_dh_compress:
+	# Don't compress awk examples.
+	dh_compress --exclude=.awk
