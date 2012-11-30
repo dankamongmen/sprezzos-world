@@ -409,7 +409,7 @@ $(ARGYLL): $(SPREZZ)/argyll/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf argyll-$(argyll_UPVER).tar.bz2 --strip-components=1 -C $@
+	unzip Argyll_V$(argyll_UPVER)_src.zip -d $@
 
 .PHONY: audit
 audit:$(AUDIT)_$(ARCH).deb
