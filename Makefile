@@ -2746,6 +2746,14 @@ $(PULSEAUDIO): $(SPREZZ)/pulseaudio/debian/changelog $(PULSEAUDIOORIG)
 	tar xJvf $(PULSEAUDIOORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
+.PHONY: slang2
+slang2:$(SLANG2)_$(ARCH).deb
+$(SLANG2): $(SPREZZ)/slang2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf slang2-$(slang2_UPVER).tar.bz2 --strip-components=1 -C $@
+
 FETCHED:=$(FETCHED) $(SOCATUP).tar.bz2
 $(SOCATUP).tar.bz2:
 	wget -nc -O$@ http://www.dest-unreach.org/socat/download/$(@F)
