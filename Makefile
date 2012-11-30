@@ -168,7 +168,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
-	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11)
+	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -402,6 +402,14 @@ $(ANJUTA): $(SPREZZ)/anjuta/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf anjuta-$(anjuta_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: argyll
+argyll:$(ARGYLL)_$(ARCH).deb
+$(ARGYLL): $(SPREZZ)/argyll/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf argyll-$(argyll_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: audit
 audit:$(AUDIT)_$(ARCH).deb
