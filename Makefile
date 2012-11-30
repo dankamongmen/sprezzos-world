@@ -377,7 +377,15 @@ $(AACPLUSENC): $(SPREZZ)/aacplusenc/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf aacplusenc_$(aacplusenc_UPVER).tar.gz --strip-components=1 -C $@
+	tar xzvf aacplusenc-$(aacplusenc_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: libaacplus
+libaacplus:$(LIBAACPLUS)_$(ARCH).deb
+$(LIBAACPLUS): $(SPREZZ)/libaacplus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libaacplus-$(libaacplus_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: alacarte
 alacarte:$(ALACARTE)_$(ARCH).deb
