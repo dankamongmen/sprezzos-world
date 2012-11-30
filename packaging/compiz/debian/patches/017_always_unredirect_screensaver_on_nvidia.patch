@@ -1,41 +1,32 @@
-# Description: Workaround for nvidia not allocating memory when VT non-active
-#  When switching users a new X server is launched and the active VT is
-#  switched to it before gnome-screensaver is able to display the lock
-#  screen.
-#  .
-#  Because compiz is drawing the lock screen in to a texture this causes
-#  the user to see a solid white screen when switching back to this VT
-#  as gnome-screensaver is a fullscreen window.
-#  .
-#  To prevent this from happening we explicitly unredirect the
-#  gnome-screensaver window if we detect the user is using the nvidia driver.
-# Forwarded: not-needed
-# Origin: Ubuntu
-# Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/compiz/+bug/160264
-# Author: Travis Watkins <amaranth@ubuntu.com>
-
---- a/plugins/opengl/src/paint.cpp
-+++ b/plugins/opengl/src/paint.cpp
-@@ -208,6 +208,7 @@
-     bool          withOffset = false;
-     GLMatrix      vTransform;
-     CompPoint     offXY;
+Author: Travis Watkins <amaranth@ubuntu.com>
+Description: Always unredirect gnome-screensaver when using nvidia
+ Workaround for LP #160264 while still disabling unredirect fullscreen
+ windows for nvidia users
+Origin: vendor, ubuntu (1:0.8.3+git20090917-0ubuntu4)
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/compiz/+bug/160264
+--- compiz.orig/src/paint.c
++++ compiz/src/paint.c
+@@ -262,6 +262,7 @@ paintOutputRegion (CompScreen	       *sc
+     CompTransform vTransform;
+     int           offX, offY;
+     Region        clip = region;
 +    int           dontcare;
  
-     CompWindowList                   pl;
-     CompWindowList::reverse_iterator rit;
-@@ -285,7 +286,13 @@
- 		    tmpRegion -= w->region ();
+     if (!tmpRegion)
+     {
+@@ -341,8 +342,14 @@ paintOutputRegion (CompScreen	       *sc
+ 		    XSubtractRegion (tmpRegion, w->region, tmpRegion);
  
  		/* unredirect top most fullscreen windows. */
--		if (count == 0 && unredirectFS)
 +		/* if the fullscreen window is gnome-screensaver and we're
 +		   on nvidia we want to always unredirect even if this
 +		   option is disabled to work around LP #160264 */
-+		if (count == 0 && (unredirectFS ||
-+		    (!w->resName ().compare ("gnome-screensaver") &&
-+		     XQueryExtension (screen->dpy (), "NV-GLX",
-+				      &dontcare, &dontcare, &dontcare))))
+ 		if (count == 0 &&
+-		    screen->opt[COMP_SCREEN_OPTION_UNREDIRECT_FS].value.b)
++		    (screen->opt[COMP_SCREEN_OPTION_UNREDIRECT_FS].value.b ||
++		    (w->resName && !strcmp(w->resName, "gnome-screensaver") &&
++		    XQueryExtension (screen->display->display, "NV-GLX",
++				     &dontcare, &dontcare, &dontcare))))
  		{
- 		    if (w->region () == screen->region () &&
- 			tmpRegion.isEmpty ())
+ 		    if (XEqualRegion (w->region, &screen->region) &&
+ 			!REGION_NOT_EMPTY (tmpRegion))
