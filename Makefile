@@ -168,7 +168,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
-	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL)
+	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -408,8 +408,8 @@ argyll:$(ARGYLL)_$(ARCH).deb
 $(ARGYLL): $(SPREZZ)/argyll/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	unzip Argyll_V$(argyll_UPVER)_src.zip -d $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf Argyll_V$(argyll_UPVER)_src.tar.gz --strip-components=1 -C $@
 
 .PHONY: audit
 audit:$(AUDIT)_$(ARCH).deb
@@ -2357,6 +2357,14 @@ $(X11PROTOXF86DRI): $(SPREZZ)/x11proto-xf86dri/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86driproto-$(x11proto-xf86dri_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: x11proto-xf86bigfont
+x11proto-xf86bigfont:$(X11PROTOXF86BIGFONT)_$(ARCH).deb
+$(X11PROTOXF86BIGFONT): $(SPREZZ)/x11proto-xf86bigfont/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86bigfontproto-$(x11proto-xf86bigfont_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: x11proto-xf86vidmode
 x11proto-xf86vidmode:$(X11PROTOXF86VIDMODE)_$(ARCH).deb
