@@ -167,7 +167,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
 	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
-	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA)
+	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2026,6 +2026,14 @@ $(UTILLINUX): $(SPREZZ)/util-linux/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf util-linux-$(util-linux_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: telepathy-farstream
+telepathy-farstream:$(TELEPATHYFARSTREAM)_$(ARCH).deb
+$(TELEPATHYFARSTREAM): $(SPREZZ)/telepathy-farstream/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf telepathy-farstream-$(telepathy-farstream_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: telepathy-gabble
 telepathy-gabble:$(TELEPATHYGABBLE)_$(ARCH).deb
