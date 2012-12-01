@@ -169,7 +169,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
-	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON)
+	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
+	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -397,6 +398,30 @@ $(ALACARTE): $(SPREZZ)/alacarte/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf alacarte-$(alacarte_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: alsa-lib
+alsa-lib:$(ALSALIB)_$(ARCH).deb
+$(ALSALIB): $(SPREZZ)/alsa-lib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf alsa-lib-$(alsa-lib_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: alsa-tools
+alsa-tools:$(ALSATOOLS)_$(ARCH).deb
+$(ALSATOOLS): $(SPREZZ)/alsa-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf alsa-tools-$(alsa-tools_UPVER).tar.bz2 --strip-components=1 -C $@
+
+.PHONY: alsa-utils
+alsa-utils:$(ALSAUTILS)_$(ARCH).deb
+$(ALSAUTILS): $(SPREZZ)/alsa-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf alsa-utils-$(alsa-utils_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: anjuta
 anjuta:$(ANJUTA)_$(ARCH).deb
