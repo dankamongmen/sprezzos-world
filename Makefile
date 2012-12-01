@@ -2248,6 +2248,14 @@ $(VIRTUALBOX): $(SPREZZ)/virtualbox/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf virtualbox_$(virtualbox_UPVER).orig.tar.bz2 --strip-components=1 -C $@
 
+.PHONY: vo-aacenc
+vo-aacenc:$(VOAACENC)_$(ARCH).deb
+$(VOAACENC): $(SPREZZ)/vo-aacenc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vo-aacenc-$(vo-aacenc_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: vte
 vte:$(VTE)_$(ARCH).deb
 $(VTE): $(SPREZZ)/vte/debian/changelog
