@@ -1,0 +1,106 @@
+#!/usr/bin/make -f
+#	Debian rules file for nmap, requires the debhelper package.
+#	Crafted by Bdale Garbee, bdale@gag.com, 8 December 1997.
+#	Modified and maintained by LaMont Jones, lamont@debian.org.
+
+CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS:=$(shell dpkg-buildflags --get CFLAGS)
+CXXFLAGS:=$(shell dpkg-buildflags --get CXXFLAGS)
+LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS)
+
+PYVERS:=$(shell pyversions -r)
+
+CONFIGURE_FLAGS=--prefix=/usr \
+	--mandir='$${prefix}/share/man' \
+	--enable-ipv6 \
+	--libexec='$${prefix}/lib' \
+	--with-liblua \
+	--with-liblinear
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	cd libpcap && ln -sf ../config.sub ../config.guess .
+	cd nbase && ln -sf ../config.sub ../config.guess .
+	cd ncat && ln -sf ../config.sub ../config.guess .
+	cd nsock/src && ln -sf ../../config.sub ../../config.guess .
+	LDFLAGS="$(LDFLAGS)" CXXFLAGS="$(CXXFLAGS)" CFLAGS="$(CFLAGS)" ./configure $(CONFIGURE_FLAGS)
+	touch configure-stamp
+
+build: configure build-stamp
+build-stamp: configure-stamp
+	make 
+	touch build-stamp
+
+CLEANLIST=libdent-stripped libdnet-stripped/srv libpcap nbase ncat nsock/src
+clean: configure
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	-for dir in ${CLEANLIST}; do ( cd $$dir && make -i distclean ) ;done
+	for dir in ${CLEANLIST}; do ( cd $$dir && rm -f config.guess config.sub *.o *.la *.lo ); done
+	-make -i distclean
+	find zenmap -name '*.pyc' | xargs rm -f
+	dh_clean
+
+install: DH_OPTIONS=
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) DESTDIR=`pwd`/debian/tmp install
+	find debian/tmp/usr/lib/python* -type f | xargs sed -i "s:`pwd`/debian/tmp::g"
+	rm debian/tmp/usr/bin/uninstall_zenmap
+
+# This single target is used to build all the packages, all at once, or
+# one at a time. So keep in mind: any options passed to commands here will
+# affect _all_ packages. Anything you want to only affect one package
+# should be put in another target, such as the install target.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	dh_installman
+	mv debian/tmp/usr/lib/python* debian/zenmap/usr/lib/
+	cp debian/zenmap.desktop debian/zenmap/usr/share/applications
+	cp debian/zenmap-root.desktop debian/zenmap/usr/share/applications
+	cp debian/zenmap.xpm debian/zenmap/usr/share/zenmap/pixmaps
+	dh_installdocs docs/*.txt
+	dh_installchangelogs CHANGELOG
+	dh_movefiles
+	mv debian/nmap/usr/share/man/pt_PT debian/nmap/usr/share/man/pt
+	dh_undocumented
+	dh_desktop
+	dh_python2
+	[ -n "$(STRIP)" ] || dh_strip
+	dh_compress
+	dh_fixperms 
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -- -Zxz
+
+
+# Build architecture independant packages using the common target.
+binary-indep: build install
+# (Uncomment this next line if you have such packages.)
+#        $(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build install
+	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
+
+# Any other binary targets build just one binary package at a time.
+binary-%: build install
+	make -f debian/rules binary-common DH_OPTIONS=-p$*
+
+binary: binary-indep binary-arch
+
+binary: binary-indep binary-arch
+.PHONY: build clean install binary-common binary-indep binary-arch binary
+

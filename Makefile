@@ -1830,6 +1830,14 @@ $(LIBNICE): $(SPREZZ)/libnice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libnice-$(libnice_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: nmap
+nmap:$(NMAP)_$(ARCH).deb
+$(NMAP): $(SPREZZ)/nmap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nmap-$(nmap_UPVER).tgz --strip-components=1 -C $@
+
 .PHONY: notification-daemon
 notification-daemon:$(NOTIFICATIONDAEMON)_$(ARCH).deb
 $(NOTIFICATIONDAEMON): $(SPREZZ)/notification-daemon/debian/changelog
