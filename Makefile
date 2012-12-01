@@ -1271,6 +1271,14 @@ $(HICOLORICONTHEME): $(SPREZZ)/hicolor-icon-theme/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hicolor-icon-theme-$(hicolor-icon-theme_UPVER).tar.gz --strip-components=1 -C $@
 
+.PHONY: htop
+htop:$(HTOP)_$(ARCH).deb
+$(HTOP): $(SPREZZ)/htop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf htop-$(htop_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: icu
 icu:$(ICU)_$(ARCH).deb
 $(ICU): $(SPREZZ)/icu/debian/changelog
