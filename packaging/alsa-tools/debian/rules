@@ -1,0 +1,155 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# GNU copyright 1997 to 1999 by Joey Hess.
+#
+# Modified to make a template file for a multi-binary package with separated
+# build-arch and build-indep targets  by Bill Allombert 2001
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+SUBDIRS_alsa-tools-gui = echomixer envy24control hdspconf hdspmixer rmedigicontrol
+SUBDIRS_alsa-tools = ac3dec as10k1 seq/sbiload us428control
+SUBDIRS_alsa-firmware-loaders = sb16_csp hdsploader mixartloader pcxhrloader sscape_ctl usx2yloader vxloader
+SUBDIRS_tmp = ld10k1
+SUBDIRS := $(SUBDIRS_alsa-tools-gui) $(SUBDIRS_alsa-tools) $(SUBDIRS_alsa-firmware-loaders) $(SUBDIRS_tmp)
+#SUBDIRS := $(SUBDIRS_tmp)
+DOCS = README README.profiles TODO NEWS output.doc
+
+#
+# Common
+#
+
+config: config-stamp
+config-stamp:
+	dh_testdir
+
+	set -e; list='$(SUBDIRS)'; for subdir in $$list; do \
+	  echo; \
+	  echo "Configuring $$subdir"; \
+	  (cd $$subdir && \
+	  ln -sf /usr/share/misc/config.sub . && \
+	  ln -sf /usr/share/misc/config.guess . && \
+	  ./configure \
+	    --host=$(DEB_HOST_GNU_TYPE) \
+	    --build=$(DEB_BUILD_GNU_TYPE) \
+	    --prefix=/usr \
+	    --mandir=\$${prefix}/share/man \
+	    --infodir=\$${prefix}/share/info \
+	    --datadir=\$${prefix}/share \
+	    --cache-file=$(CURDIR)/config.cache \
+	    $(shell dpkg-buildflags --export=configure) \
+	  ); \
+	done
+
+	touch config-stamp
+
+
+#Architecture 
+build: build-arch build-indep
+build-arch: config build-stamp
+build-indep: build-stamp
+build-stamp:
+
+	set -e; list='$(SUBDIRS)'; for subdir in $$list; do \
+	  echo; \
+	  echo "Building $$subdir"; \
+	  $(MAKE) -C $$subdir; \
+	done
+
+	touch build-arch-stamp
+
+clean: clean-stamp
+clean-stamp:
+	dh_testdir
+	dh_testroot
+
+	rm -f build-arch-stamp config-stamp
+	rm -f config.cache
+
+	-list='$(SUBDIRS)'; for subdir in $$list; do \
+	  echo; \
+	  echo "Cleaning $$subdir"; \
+	  $(MAKE) -C $$subdir distclean; \
+	  rm -f $$subdir/config.guess; \
+	  rm -f $$subdir/config.sub; \
+	done
+
+	dh_clean
+
+# PKG = package
+install-pkg:
+	set -e; list='$(SUBDIRS_$(PKG))'; for subdir in $$list; do \
+	  (cd $$subdir; \
+	  package=$(PKG); \
+	  name=$(shell echo \$$subdir | sed -e 's/^.*\///g' | sed -e 's/_/-/g'); \
+	  echo; \
+	  echo "Installing $$subdir into $$name"; \
+	  $(MAKE) install DESTDIR=$(CURDIR)/debian/$$package; \
+	  set -e; doc_list='$(DOCS)'; for doc_file in $$doc_list; do \
+	    if [ -s $$doc_file ]; then \
+	      install -d $(CURDIR)/debian/$$package/usr/share/doc/$$package/$$name; \
+	      install $$doc_file $(CURDIR)/debian/$$package/usr/share/doc/$$package/$$name/$$doc_file; \
+	    fi; \
+          done; \
+	  ) \
+	done
+
+install: install-arch
+install-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs -s
+
+	$(MAKE) -f debian/rules PKG=alsa-tools install-pkg
+	$(MAKE) -f debian/rules PKG=alsa-tools-gui install-pkg
+	$(MAKE) -f debian/rules PKG=alsa-firmware-loaders install-pkg
+	$(MAKE) -f debian/rules PKG=tmp install-pkg
+
+# Must not depend on anything. This is to be called by binary-arch
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs debian/changelog.ALSA
+	dh_installdocs --exclude=Makefile
+	dh_installexamples --exclude=.cvsignore --exclude=Makefile.am --exclude=Makefile.in
+	chmod 644 $(CURDIR)/debian/ld10k1/usr/share/doc/ld10k1/examples/emu10k1MIDIEffects/pontodo5
+	dh_install --list-missing
+	(cd debian/ld10k1/usr/bin && mv -f lo10k1 lo10k1.bin && mv -f lo10k1.sh lo10k1)
+	dh_installmenu
+	dh_installman
+	dh_installudev
+	# Unless there is a reason not to, for start sequence number N
+	# it is good policy to use 100 - N as the stop sequence number.
+	dh_installinit --update-rcd-params='start 19 2 3 4 5 . stop 81 0 1 6 .'
+	dh_link
+	dh_strip
+	# Exclude .asm files because only one is over 4k, and only slightly
+	dh_compress -X.asm
+	dh_fixperms
+	dh_makeshlibs  # --version-info='liblo10k1-0 (>= 1.0.8+1.0.9rc3-1)'
+	dh_installdeb
+	dh_shlibdeps -l debian/liblo10k1-0/usr/lib
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture dependant packages using the common target.
+binary-arch: build-arch install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
+
+binary-indep:
+	#Nothing to do here
+
+binary: binary-arch
+.PHONY: build clean binary-arch binary install install-arch config
