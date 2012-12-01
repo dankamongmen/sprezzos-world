@@ -1957,8 +1957,8 @@ pcre:$(PCRE)_$(ARCH).deb
 $(PCRE): $(SPREZZ)/pcre/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	{ cd $@ && TARBALL=`uscan --no-symlink --force-download --download-current-version --dehs | xmlstarlet sel -t -v //upstream-url` && \
-	  cd - && ln -sf `basename $$TARBALL` pcre-$(pcre_UPVER).orig.zip && unzip `basename $$TARBALL` -d $@ ; }
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf pcre-$(pcre_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: packagekit
 packagekit:$(PACKAGEKIT)_$(ARCH).deb
