@@ -1,0 +1,41 @@
+Description: compile in the ALSA search path instead of relying on ld.so.conf
+ The Ubuntu package currently uses ld.so.conf.d fragments to add
+ /usr/lib/alsa-lib and /usr/lib{32,64}/alsa-lib to the dlopen search path.
+ These don't *belong* on the global search path, and it becomes much more
+ problematic to put them there with the advent of multiarch because each
+ architecture then needs its own distinct config file to add the separate
+ path... which is then also put in the global library namespace.  Instead,
+ let ALSA make use of the already defined ALSA_PLUGIN_DIR to look up plugins.
+Author: Steve Langasek <steve.langasek@canonical.com>
+
+Index: alsa-lib-1.0.24.1/src/dlmisc.c
+===================================================================
+--- alsa-lib-1.0.24.1.orig/src/dlmisc.c
++++ alsa-lib-1.0.24.1/src/dlmisc.c
+@@ -67,7 +67,25 @@
+ #endif
+ #endif
+ #ifdef HAVE_LIBDL
+-	return dlopen(name, mode);
++	/*
++	 * Handle the plugin dir not being on the default dlopen search
++	 * path, without resorting to polluting the entire system namespace
++	 * via ld.so.conf.
++	 */
++	void *handle = NULL;
++	char *filename;
++
++	if (name && name[0] != '/') {
++		filename = malloc(sizeof(ALSA_PLUGIN_DIR) + 1 + strlen(name) + 1);
++		strcpy(filename, ALSA_PLUGIN_DIR);
++		strcat(filename, "/");
++		strcat(filename, name);
++		handle = dlopen(filename, mode);
++		free(filename);
++	}
++	if (!handle)
++		handle = dlopen(name, mode);
++	return handle;
+ #else
+ 	return NULL;
+ #endif

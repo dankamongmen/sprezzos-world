@@ -1,0 +1,160 @@
+#!/usr/bin/make -f
+#
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+DEB_BUILD_ARCH_CPU ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH_CPU)
+DEB_HOST_ARCH  ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifneq (,$(findstring /$(DEB_HOST_ARCH)/, /amd64/))
+  configure_biarch_stamp = configure-biarch-stamp
+  build_biarch_stamp = build-biarch-stamp
+  BIARCH_CC = gcc -m32
+  dpkg_ctrl_args = -- '-Vbilib:Depends=libc6-i386' \
+	'-Vbidev:Depends=libc6-dev-i386'
+endif
+
+export DEB_CFLAGS_MAINT_APPEND = -g -Wall -D_GNU_SOURCE
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+autoreconf-stamp:
+	dh_testdir
+	dh_autoreconf
+	touch autoreconf-stamp
+
+configure-stamp: autoreconf-stamp $(configure_biarch_stamp)
+	dh_testdir
+	-rm -f config.sub config.guess
+	ln -s /usr/share/misc/config.sub config.sub
+	ln -s /usr/share/misc/config.guess config.guess
+	./configure --prefix=/usr \
+		    --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+		    --mandir=\$${prefix}/share/man \
+		    --infodir=\$${prefix}/share/info \
+		    --datadir=\$${prefix}/share \
+		    --with-plugindir=/usr/lib/$(DEB_HOST_MULTIARCH)/alsa-lib \
+		    --build $(DEB_BUILD_GNU_TYPE) \
+		    --host $(DEB_HOST_GNU_TYPE) \
+		    --disable-maintainer-mode
+	touch configure-stamp
+
+configure-biarch-stamp: autoreconf-stamp
+	dh_testdir
+	-rm -f config.sub config.guess
+	ln -s /usr/share/misc/config.sub config.sub
+	ln -s /usr/share/misc/config.guess config.guess
+	rm -rf bibuild
+	mkdir bibuild
+	mkdir bibuild/include
+	cd bibuild && CC="$(BIARCH_CC)" ../configure --prefix=/usr \
+		    --mandir=\$${prefix}/share/man \
+		    --infodir=\$${prefix}/share/info \
+		    --datadir=\$${prefix}/share \
+		    --build $(DEB_BUILD_GNU_TYPE) \
+		    --host $(DEB_HOST_GNU_TYPE) \
+		    --disable-maintainer-mode \
+		    --disable-python --with-plugindir=/usr/lib32/alsa-lib
+	#ln -sf . include/alsa
+	rm -f bibuild/include/alsa
+	ln -s . bibuild/include/alsa
+	sed -ie '/^SUBDIRS/s/doc//' bibuild/Makefile
+	touch configure-biarch-stamp
+
+configure: configure-stamp $(configure_biarch_stamp)
+
+build-arch-stamp: configure-stamp
+	dh_testdir
+	$(MAKE) CFLAGS="$(CFLAGS)"
+	touch build-arch-stamp
+
+build-biarch-stamp: configure-biarch-stamp
+	dh_testdir
+	$(MAKE) -C bibuild
+	touch build-biarch-stamp
+
+build-arch: $(build_biarch_stamp) build-arch-stamp
+
+build-indep-stamp: build-arch-stamp
+	dh_testdir
+	$(MAKE) doc CFLAGS="$(CFLAGS)"
+	touch build-indep-stamp
+
+build-indep: build-indep-stamp
+
+build: build-arch build-indep
+
+install-arch: build-arch-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep -s
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+ifneq (,$(build_biarch_stamp))
+	$(MAKE) -C bibuild/src install DESTDIR=$(CURDIR)/debian/bitmp
+endif
+	dh_installdirs -s
+	dh_install -s
+	dh_installdocs -plibasound2
+	dh_installexamples -s doc/asoundrc.txt
+	dh_installchangelogs -plibasound2 debian/changelog.ALSA
+	dh_strip -plibasound2 --dbg-package=libasound2-dbg
+	dh_strip -s --remaining-packages
+	dh_link -s
+	dh_compress -s
+	dh_fixperms -s
+
+install-indep: build-indep-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep -i
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	dh_installdirs -i
+	dh_install -i
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_installchangelogs -plibasound2-doc debian/changelog.ALSA
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+
+binary-arch: build-arch-stamp install-arch
+	dh_makeshlibs -plibasound2 -V'libasound2 (>> 1.0.25)' --add-udeb=libasound2-udeb -- -c4
+ifneq (,$(build_biarch_stamp))
+	dh_makeshlibs -plib32asound2 -V'lib32asound2 (>> 1.0.25)'
+endif
+
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary-indep: build-indep-stamp install-indep
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary: binary-arch binary-indep
+
+clean:
+	dh_testdir
+	dh_testroot
+	#-$(MAKE) distclean
+	[ ! -f Makefile ] || $(MAKE) distclean
+	-rm -f *-stamp
+	-rm -f config.sub config.guess config.status config.cache
+	-rm -rf doc/doxygen
+ifneq (,$(build_biarch_stamp))
+	rm -rf bibuild debian/bitmp
+endif
+	-rm -f include/alsa
+	dh_autoreconf_clean
+	dh_clean
+
+.PHONY: configure build-arch build-indep build install-arch install-indep binary-arch binary-indep binary clean stamp-patched
