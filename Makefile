@@ -949,6 +949,14 @@ $(GNOMECONTROLCENTER): $(SPREZZ)/gnome-control-center/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-control-center-$(gnome-control-center_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: gnome-desktop
+gnome-desktop:$(GNOMEDESKTOP)_$(ARCH).deb
+$(GNOMEDESKTOP): $(SPREZZ)/gnome-desktop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-desktop-$(gnome-desktop_UPVER).tar.xz --strip-components=1 -C $@
+
 .PHONY: gnome-dictionary
 gnome-dictionary:$(GNOMEDICTIONARY)_$(ARCH).deb
 $(GNOMEDICTIONARY): $(SPREZZ)/gnome-dictionary/debian/changelog
@@ -1067,7 +1075,7 @@ $(GNOMEORCA): $(SPREZZ)/gnome-orca/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-orca_$(gnome-orca_UPVER).orig.tar.xz --strip-components=1 -C $@
+	tar xJvf gnome-orca-$(gnome-orca_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-photo-printer
 gnome-photo-printer:$(GNOMEPHOTOPRINTER)_$(ARCH).deb
@@ -1075,7 +1083,15 @@ $(GNOMEPHOTOPRINTER): $(SPREZZ)/gnome-photo-printer/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-photo-printer_$(gnome-photo-printer_UPVER).orig.tar.xz --strip-components=1 -C $@
+	tar xJvf gnome-photo-printer-$(gnome-photo-printer_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-power-manager
+gnome-power-manager:$(GNOMEPOWERMANAGER)_$(ARCH).deb
+$(GNOMEPOWERMANAGER): $(SPREZZ)/gnome-power-manager/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-power-manager-$(gnome-power-manager_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-screenshot
 gnome-screenshot:$(GNOMESCREENSHOT)_$(ARCH).deb
@@ -3093,34 +3109,6 @@ clutter-gtk:$(CLUTTERGTK)_$(ARCH).deb
 $(CLUTTERGTK): $(SPREZZ)/clutter-gtk/debian/changelog $(CLUTTERGTKORIG)
 	mkdir -p $@
 	tar xJvf $(CLUTTERGTKORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GNOMEDESKTOPUP).tar.xz
-$(GNOMEDESKTOPUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-desktop/3.6/$@
-
-$(GNOMEDESKTOPORIG): $(GNOMEDESKTOPUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gnome-desktop
-gnome-desktop:$(GNOMEDESKTOP)_$(ARCH).deb
-$(GNOMEDESKTOP): $(SPREZZ)/gnome-desktop/debian/changelog $(GNOMEDESKTOPORIG)
-	mkdir -p $@
-	tar xJvf $(GNOMEDESKTOPORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GNOMEPOWERMANAGERUP).tar.xz
-$(GNOMEPOWERMANAGERUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/gnome-power-manager/3.6/$@
-
-$(GNOMEPOWERMANAGERORIG): $(GNOMEPOWERMANAGERUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gnome-power-manager
-gnome-power-manager:$(GNOMEPOWERMANAGER)_$(ARCH).deb
-$(GNOMEPOWERMANAGER): $(SPREZZ)/gnome-power-manager/debian/changelog $(GNOMEPOWERMANAGERORIG)
-	mkdir -p $@
-	tar xJvf $(GNOMEPOWERMANAGERORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GSETSCHEMASUP).tar.xz
