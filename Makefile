@@ -61,16 +61,6 @@ FREETYPEUP:=freetype-$(shell echo $(freetype_UPVER) | cut -d- -f1) \
 FREETYPEORIG:=freetype_$(shell echo $(freetype_UPVER) | cut -d- -f1).orig.tar.gz
 GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_UPVER) | cut -d- -f1)
 GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_UPVER) | cut -d- -f1).orig.tar.xz
-GNOMECONTACTSUP:=gnome-contacts-$(shell echo $(gnome-contacts_UPVER) | cut -d- -f1)
-GNOMECONTACTSORIG:=gnome-contacts_$(shell echo $(gnome-contacts_UPVER) | cut -d- -f1).orig.tar.xz
-GNOMECONTROLCENTERUP:=gnome-control-center-$(shell echo $(gnome-control-center_UPVER) | cut -d: -f2- | cut -d- -f1)
-GNOMECONTROLCENTERORIG:=gnome-control-center_$(shell echo $(gnome-control-center_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-GNOMEDESKTOPUP:=gnome-desktop-$(shell echo $(gnome-desktop_UPVER) | cut -d- -f1)
-GNOMEDESKTOPORIG:=gnome-desktop_$(shell echo $(gnome-desktop_UPVER) | cut -d- -f1).orig.tar.xz
-GNOMEMEDIAUP:=gnome-media-$(shell echo $(gnome-media_UPVER) | cut -d- -f1)
-GNOMEMEDIAORIG:=gnome-media_$(shell echo $(gnome-media_UPVER) | cut -d- -f1).orig.tar.xz
-GNOMEPOWERMANAGERUP:=gnome-power-manager-$(shell echo $(gnome-power-manager_UPVER) | cut -d: -f2- | cut -d- -f1)
-GNOMEPOWERMANAGERORIG:=gnome-power-manager_$(shell echo $(gnome-power-manager_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1)
 GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1).orig.tar.xz
 SPLORIG:=spl_$(shell echo $(spl_UPVER) | cut -d- -f1).orig.tar.xz
@@ -170,7 +160,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
 	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
-	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT)
+	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -855,6 +845,14 @@ $(GDM3): $(SPREZZ)/gdm3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gdm-$(gdm3_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: gettext
+gettext:$(GETTEXT)_$(ARCH).deb
+$(GETTEXT): $(SPREZZ)/gettext/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gettext-$(gettext_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: ghex
 ghex:$(GHEX)_$(ARCH).deb
 $(GHEX): $(SPREZZ)/ghex/debian/changelog
@@ -926,6 +924,22 @@ $(GNOMECOLORMANAGER): $(SPREZZ)/gnome-color-manager/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-color-manager_$(gnome-color-manager_UPVER).orig.tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-contacts
+gnome-contacts:$(GNOMECONTACTS)_$(ARCH).deb
+$(GNOMECONTACTS): $(SPREZZ)/gnome-contacts/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-contacts-$(gnome-contacts_UPVER).tar.xz --strip-components=1 -C $@
+
+.PHONY: gnome-control-center
+gnome-control-center:$(GNOMECONTROLCENTER)_$(ARCH).deb
+$(GNOMECONTROLCENTER): $(SPREZZ)/gnome-control-center/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-control-center-$(gnome-control-center_UPVER).tar.xz --strip-components=1 -C $@
 
 .PHONY: gnome-dictionary
 gnome-dictionary:$(GNOMEDICTIONARY)_$(ARCH).deb
@@ -3071,34 +3085,6 @@ clutter-gtk:$(CLUTTERGTK)_$(ARCH).deb
 $(CLUTTERGTK): $(SPREZZ)/clutter-gtk/debian/changelog $(CLUTTERGTKORIG)
 	mkdir -p $@
 	tar xJvf $(CLUTTERGTKORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GNOMECONTACTSUP).tar.xz
-$(GNOMECONTACTSUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-contacts/3.6/$@
-
-$(GNOMECONTACTSORIG): $(GNOMECONTACTSUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gnome-contacts
-gnome-contacts:$(GNOMECONTACTS)_$(ARCH).deb
-$(GNOMECONTACTS): $(SPREZZ)/gnome-contacts/debian/changelog $(GNOMECONTACTSORIG)
-	mkdir -p $@
-	tar xJvf $(GNOMECONTACTSORIG) --strip-components=1 -C $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GNOMECONTROLCENTERUP).tar.xz
-$(GNOMECONTROLCENTERUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/gnome-control-center/3.6/$@
-
-$(GNOMECONTROLCENTERORIG): $(GNOMECONTROLCENTERUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gnome-control-center
-gnome-control-center:$(GNOMECONTROLCENTER)_$(ARCH).deb
-$(GNOMECONTROLCENTER): $(SPREZZ)/gnome-control-center/debian/changelog $(GNOMECONTROLCENTERORIG)
-	mkdir -p $@
-	tar xJvf $(GNOMECONTROLCENTERORIG) --strip-components=1 -C $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GNOMEDESKTOPUP).tar.xz
