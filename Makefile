@@ -510,6 +510,22 @@ $(LIBCANBERRA): $(SPREZZ)/libcanberra/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libcanberra-$(libcanberra_UPVER).tar.xz --strip-components=1 -C $@
 
+.PHONY: lsscsi
+lsscsi:$(LSSCSI)_$(ARCH).deb
+$(LSSCSI): $(SPREZZ)/lsscsi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lsscsi-$(lsscsi_UPVER).tgz --strip-components=1 -C $@
+
+.PHONY: lshw
+lshw:$(LSHW)_$(ARCH).deb
+$(LSHW): $(SPREZZ)/lshw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lshw-B.$(lshw_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: calibre
 calibre:$(CALIBRE)_$(ARCH).deb
 $(CALIBRE): $(SPREZZ)/calibre/debian/changelog
