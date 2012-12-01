@@ -1,0 +1,123 @@
+#!/usr/bin/python
+
+# (C) 2005 Canonical Ltd.
+# Author: Martin Pitt <martin.pitt@ubuntu.com>
+# License: GNU General Public License, version 2 or any later version
+
+# Configure default output device in ~/.asoundrc.
+
+import sys, re, os.path
+
+conffile = os.path.expanduser('~/.asoundrc')
+
+def help(): 
+	print '''Usage: set-default-soundcard <number> | --check-markers
+If %s does not exist, or its magic comments are present, 
+change the default sound card setting in it to the given number. If
+--check-markers is given, the exit code shows whether the configuration file
+could be modified, but does not actually change it.
+''' % conffile 
+
+def create_conffile(card_num): 
+	'''Create a new configuration file with the given card as default.'''
+
+	try:
+		f = open(conffile, 'w')
+		print >> f, '''### BEGIN set-default-soundcard
+# If the "### BEGIN..." and "### END..." comments are intact, then you
+# can change your default soundcard with "set-default-soundcard(1)."
+# Remove these comments if you want to maintain a custom configuration
+# that should not be changed automatically.
+
+# Default soundcard
+defaults.pcm.card %s
+
+### END set-default-soundcard
+''' % card_num
+	except IOError:
+		print >> sys.stderr, 'Could not create', conffile
+		sys.exit(1)
+
+def change_conffile(card_num):
+	'''Change default to given card number an existing configuration file. If
+	successful, return true; return false if the file does not exist, cannot be
+	written, or does not have the magic comments. If card_num is None, then
+	only the markers are checked without actually modifying the file.'''
+
+	try:
+		lines = open(conffile).readlines()
+	except IOError:
+		return False
+
+	# search for the BEGIN marker
+	marker = re.compile('### BEGIN set-default-soundcard')
+	lineno = 0
+	found = 0
+	for l in lines:
+		lineno = lineno+1
+		if marker.match(l):
+			found = 1
+			break
+	if not found:
+		return False
+
+	# search for default setting
+	marker = re.compile('(defaults.pcm.card\s+)(\d+)(.*)$')
+	found = 0
+	for l in lines[lineno:]:
+		lineno = lineno+1
+		m = marker.match(l)
+		if m:
+			if card_num:
+				lines[lineno-1] = m.group(1) + card_num + m.group(3) + '\n'
+			found = 1
+			break
+	if not found:
+		return False
+
+	# search for the END marker
+	marker = re.compile('### END set-default-soundcard')
+	found = 0
+	for l in lines[lineno:]:
+		lineno = lineno+1
+		if marker.match(l):
+			found = 1
+			break
+	if not found:
+		return False
+
+	# write back file
+	if card_num:
+		try:
+			open(conffile, 'w').writelines(lines)
+		except IOError:
+			return False
+	return True
+
+if len(sys.argv) < 2 or sys.argv[1] == '--help' or sys.argv[1] == '-h':
+	help()
+	sys.exit(0)
+
+check_only = (sys.argv[1] == '--check-markers')
+
+if len(sys.argv) != 2 or not (check_only or sys.argv[1].isdigit()):
+	help()
+	sys.exit(1)
+
+if not check_only:
+	card_num = sys.argv[1]
+else:
+	card_num = None
+
+# if ~/.asoundrc does not exist, create it
+if not os.path.exists(conffile):
+	if check_only:
+		sys.exit(0)
+	create_conffile(card_num)
+else:
+	if not change_conffile(card_num):
+		if not check_only:
+			print >> sys.stderr, conffile, \
+				'was modified manually, cannot be changed by this program.'
+		sys.exit(1) 
+
