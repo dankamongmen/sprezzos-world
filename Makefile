@@ -170,7 +170,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
 	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
-	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB)
+	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -766,6 +766,14 @@ $(FAAC): $(SPREZZ)/faac/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf faac-$(faac_UPVER).tar.gz --strip-components=1 -C $@
+
+.PHONY: fakeroot
+fakeroot:$(FAKEROOT)_$(ARCH).deb
+$(FAKEROOT): $(SPREZZ)/fakeroot/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf fakeroot-$(fakeroot_UPVER).tar.bz2 --strip-components=1 -C $@
 
 .PHONY: farstream
 farstream:$(FARSTREAM)_$(ARCH).deb
