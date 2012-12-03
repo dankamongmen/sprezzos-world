@@ -124,7 +124,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBATASMART) $(GCRYPT) $(GNUTLS) $(DRI2PROTO) $(X11PROTOGL) $(X11PROTORANDR) \
 	$(GLU) $(FREEGLUT) $(LIBWNCK) $(GNOMEUSERDOCS) $(ABCDE) $(PIDGIN) $(LIBX86) \
 	$(SICKBEARD) $(GNOMEFONTVIEWER) $(GNOMESCREENSHOT) $(GNOMESEARCHTOOL) $(NETCF) \
-	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST) \
+	$(GNOMETHEMESSTANDARD) $(USBVIEW) $(MCELOG) $(LIBJPEG) $(COMPIZ) $(BOOST150) \
 	$(OPENLDAP) $(SCREENLETS) $(GNOMEORCA) $(ATSPI) $(BANSHEE) $(INKSCAPE) $(GJS) \
 	$(SHOTWELL) $(WEBKIT) $(LIBSOUP) $(ENCHANT) $(FREI0R) $(PACKAGEKIT) $(MASH) \
 	$(GNOMEDICTIONARY) $(GNOMECOLORMANAGER) $(YELPXSL) $(PIXMAN) $(LIBVIRT) \
@@ -163,7 +163,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
 	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
 	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
-	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON)
+	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
+	$(YASM)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -504,13 +505,21 @@ $(BLUEZ): $(SPREZZ)/bluez/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bluez-$(bluez_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: boost
-boost:$(BOOST)_$(ARCH).deb
-$(BOOST): $(SPREZZ)/boost/debian/changelog
+.PHONY: boost1.50
+boost1.50:$(boost1.50150)_$(ARCH).deb
+$(boost1.50150): $(SPREZZ)/boost1.50/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	{ cd $@ && TARBALL=`uscan --no-symlink --force-download --download-current-version --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && ln -sf $$TARBALL boost-build_2.0.m10.orig.tar.bz2 && tar xjvf $$TARBALL $(TARARGS) $@ ; }
+
+.PHONY: boost1.52
+boost1.52:$(BOOST1.52)_$(ARCH).deb
+$(BOOST1.52): $(SPREZZ)/boost1.52/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf boost1.52_$(boost1.52_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: cairo
 cairo:$(CAIRO)_$(ARCH).deb
@@ -2674,6 +2683,14 @@ $(UDISKS): $(SPREZZ)/udisks/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf udisks_$(udisks_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: yasm
+yasm:$(YASM)_$(ARCH).deb
+$(YASM): $(SPREZZ)/yasm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf yasm-$(yasm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: yelp
 yelp:$(YELP)_$(ARCH).deb
