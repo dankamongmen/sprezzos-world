@@ -2033,6 +2033,14 @@ $(NVIDIAKERNELDKMS): $(SPREZZ)/nvidia-kernel-dkms/debian/changelog
 	mv NVIDIA-Linux-*.run $@
 	tar czvf nvidia-graphics-drivers_310.19.orig.tar.gz $@ --exclude-vcs --exclude=debian
 
+.PHONY: nvidia-settings
+nvidia-settings:$(NVIDIASETTINGS)_$(ARCH).deb
+$(NVIDIASETTINGS): $(SPREZZ)/nvidia-settings/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf nvidia-settings-$(nvidia-settings_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: opal
 opal:$(OPAL)_$(ARCH).deb
 $(OPAL): $(SPREZZ)/opal/debian/changelog
