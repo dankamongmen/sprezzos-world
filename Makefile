@@ -160,12 +160,13 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
 	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
-	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE)
+	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
+	$(OPENSSL) $(LIBSSH)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
-	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG) $(PCRE) $(WGET)
+	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG) $(PCRE) $(WGET) $(OPENSSL)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -1637,6 +1638,14 @@ $(LIBSOUP): $(SPREZZ)/libsoup/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libsoup2.4_$(libsoup_UPVER).orig.tar.xz --strip-components=1 -C $@
 
+.PHONY: libssh
+libssh:$(LIBSSH)_$(ARCH).deb
+$(LIBSSH): $(SPREZZ)/libssh/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libssh-$(libssh_UPVER).tar.gz --strip-components=1 -C $@
+
 .PHONY: libsynthesis
 libsynthesis:$(LIBSYNTHESIS)_$(ARCH).deb
 $(LIBSYNTHESIS): $(SPREZZ)/libsynthesis/debian/changelog
@@ -1989,6 +1998,14 @@ $(OPENLDAP): $(SPREZZ)/openldap/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openldap_$(openldap_UPVER).orig.tar.gz --strip-components=1 -C $@
+
+.PHONY: openssl
+openssl:$(OPENSSL)_$(ARCH).deb
+$(OPENSSL): $(SPREZZ)/openssl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openssl_$(openssl_UPVER).orig.tar.gz --strip-components=1 -C $@
 
 .PHONY: pcre
 pcre:$(PCRE)_$(ARCH).deb
