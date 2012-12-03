@@ -94,8 +94,6 @@ MPLAYER:=mplayer_$(shell echo $(mplayer_UPVER) | tr : .)
 NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_UPVER) | cut -d- -f1).orig.tar.xz
 FREI0RORIG:=frei0r_$(shell echo $(frei0r_UPVER) | cut -d- -f1).orig.tar.xz
 XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_UPVER) | cut -d- -f1).orig.tar.bz2
-OPENSSH:=openssh_$(shell echo $(openssh_UPVER) | tr : .)
-OPENSSHUP:=openssh-$(shell echo $(openssh_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 PANGOUP:=pango-$(shell echo $(pango_UPVER) | cut -d- -f1)
 PANGOORIG:=pango1.0_$(shell echo $(PANGOUP) | cut -d- -f2 | tr - _).orig.tar.xz
 POPPLERUP:=poppler-$(shell echo $(poppler_UPVER) | cut -d- -f1)
@@ -164,7 +162,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
 	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
 	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
-	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS)
+	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
+	$(OPENVPN)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2066,6 +2065,22 @@ $(OPENSSL): $(SPREZZ)/openssl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openssl_$(openssl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: openssh
+openssh:$(OPENSSH)_$(ARCH).deb
+$(OPENSSH): $(SPREZZ)/openssh/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openssh-$(openssh_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: openvpn
+openvpn:$(OPENVPN)_$(ARCH).deb
+$(OPENVPN): $(SPREZZ)/openvpn/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openvpn-$(openvpn_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: pcre
 pcre:$(PCRE)_$(ARCH).deb
 $(PCRE): $(SPREZZ)/pcre/debian/changelog
@@ -3095,17 +3110,6 @@ lvm2:$(LVM2)_$(ARCH).deb
 $(LVM2): $(SPREZZ)/lvm2/debian/changelog $(LVM2UP).tgz
 	mkdir -p $@
 	tar xzvf $(LVM2UP).tgz $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(OPENSSHUP).tar.gz
-$(OPENSSHUP).tar.gz:
-	wget -nc -O$@ ftp://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/$(OPENSSHUP).tar.gz
-
-.PHONY: openssh
-openssh:$(OPENSSH)_$(ARCH).deb
-$(OPENSSH): $(SPREZZ)/openssh/debian/changelog $(OPENSSHUP).tar.gz
-	mkdir -p $@
-	tar xzvf $(OPENSSHUP).tar.gz $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GRUBUP).tar.xz
