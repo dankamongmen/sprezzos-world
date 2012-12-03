@@ -164,7 +164,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
-	$(AVIDEMUX) $(BLESS)
+	$(AVIDEMUX) $(BLESS) $(POLICYKIT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2170,6 +2170,14 @@ $(PIXMAN): $(SPREZZ)/pixman/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pixman-$(pixman_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: policykit
+policykit:$(POLICYKIT)_$(ARCH).deb
+$(POLICYKIT): $(SPREZZ)/policykit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf policykit-$(policykit_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: postgresql
 postgresql:$(POSTGRESQL)_$(ARCH).deb
