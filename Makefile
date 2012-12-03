@@ -164,7 +164,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
-	$(AVIDEMUX) $(BLESS) $(POLICYKIT)
+	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -385,6 +385,14 @@ $(LIBAACPLUS): $(SPREZZ)/libaacplus/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libaacplus-$(libaacplus_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: aften
+aften:$(AFTEN)_$(ARCH).deb
+$(AFTEN): $(SPREZZ)/aften/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf aften-$(aften_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: alacarte
 alacarte:$(ALACARTE)_$(ARCH).deb
