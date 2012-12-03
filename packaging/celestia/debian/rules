@@ -1,0 +1,222 @@
+#!/usr/bin/make -f 
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+#
+# Modified to make a template file for a multi-binary package with separated
+# build-arch and build-indep targets  by Bill Allombert 2001
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+#GCC4_ICES_HERE := arm m68k hppa
+DEB_HOST_ARCH_CPU ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+
+#ifneq (,$(filter $(DEB_HOST_ARCH_CPU),$(GCC4_ICES_HERE)))
+#	export CC=gcc-3.4
+#	export CPP=cpp-3.4
+#	export CXX=g++-3.4
+#endif
+
+# Since the configure-script doesn't work when building outside of the
+# source dir, we have to copy the damned thing a few times.
+# This is a crude hack really and the configure script should be fixed
+# but for now it works...
+# 
+# So first we build a list of stuff to copy.
+LIST       = $(shell ls | grep -v ^debian$ | grep -v ^build-)
+BUILDDIRS  = build-glut build-gnome
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+################
+# CONFIG PHASE #
+################
+config: config-glut config-gnome
+
+config-glut: config-glut-stamp
+config-glut-stamp:
+	-mkdir build-glut
+	-chmod a+x configure
+	-for TMP in $(LIST); do cp -ldpR $$TMP build-glut; done
+	-cp /usr/share/misc/config.* build-glut
+	cd build-glut && LIBS=-ldl ./configure --host=$(DEB_HOST_GNU_TYPE) \
+	                             --build=$(DEB_BUILD_GNU_TYPE) \
+				     --prefix=/usr \
+				     --mandir=\$${prefix}/share/man \
+				     --infodir=\$${prefix}/share/info \
+				     --disable-rpath \
+				     --with-glut \
+				     --with-lua \
+				     --without-arts
+	touch config-glut-stamp
+
+config-gnome: config-gnome-stamp
+config-gnome-stamp:
+	-mkdir build-gnome
+	-chmod a+x configure
+	-for TMP in $(LIST); do cp -ldpR $$TMP build-gnome; done
+	-cp /usr/share/misc/config.* build-gnome
+	cd build-gnome && LIBS=-ldl ./configure --host=$(DEB_HOST_GNU_TYPE) \
+	                              --build=$(DEB_BUILD_GNU_TYPE) \
+				      --prefix=/usr \
+				      --mandir=\$${prefix}/share/man \
+				      --infodir=\$${prefix}/share/info \
+				      --disable-rpath \
+				      --with-gnome \
+				      --with-lua \
+				      --without-arts \
+				      --with-gconf-schema-file-dir=/usr/share/gconf/schemas
+	touch config-gnome-stamp
+
+###############
+# BUILD PHASE #
+###############
+build: build-arch build-indep
+
+build-arch: build-glut build-gnome
+
+build-indep: build-glut
+
+build-glut: build-glut-stamp
+build-glut-stamp: config-glut
+	cd build-glut && $(MAKE)
+	touch build-glut-stamp
+
+build-gnome: build-gnome-stamp
+build-gnome-stamp: config-gnome
+	cd build-gnome && $(MAKE)
+	touch build-gnome-stamp
+
+###############
+# CLEAN PHASE #
+###############
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f *-stamp
+	rm -rf $(BUILDDIRS)
+	rm -rf debian/debiandirs
+	rm -rf config.sub config.guess
+	dh_clean
+
+
+#################
+# INSTALL PHASE #
+#################
+install: install-arch install-indep
+
+install-indep: install-indep-stamp
+install-indep-stamp: build-indep
+	dh_testdir
+	dh_testroot
+	dh_prep -i
+	dh_installdirs -i
+	
+	# Common files
+
+	cd build-glut && GCONF_DISABLE_MAKEFILE_SCHEMA_INSTALL=yes \
+		$(MAKE) install DESTDIR=$(CURDIR)/debian/celestia-common
+
+	rm -rf debian/celestia-common/usr/bin \
+		debian/celestia-common/usr/lib \
+		debian/celestia-common/usr/share/celestia/COPYING*
+
+	mv debian/celestia-common/usr/share/celestia/celestia.cfg \
+		debian/celestia-common/etc/celestia.cfg
+	ln -s /etc/celestia.cfg debian/celestia-common/usr/share/celestia/
+
+	touch install-indep-stamp
+	
+install-arch: build-arch install-indep
+	dh_testdir
+	dh_testroot
+	dh_prep -a
+	dh_installdirs -a
+
+	# GLUT frontend
+
+	cd build-glut/src/celestia  && GCONF_DISABLE_MAKEFILE_SCHEMA_INSTALL=yes \
+		$(MAKE) install DESTDIR=$(CURDIR)/debian/celestia-glut
+
+	mv debian/celestia-glut/usr/bin/celestia debian/celestia-glut/usr/bin/celestia-glut
+	chrpath --delete debian/celestia-glut/usr/bin/celestia-glut
+	mkdir -p debian/celestia-glut/usr/share/applications
+	cp debian/celestia-glut.desktop debian/celestia-glut/usr/share/applications/
+
+	# GNOME frontend
+
+	cd build-gnome && GCONF_DISABLE_MAKEFILE_SCHEMA_INSTALL=yes \
+		$(MAKE) install DESTDIR=$(CURDIR)/debian/celestia-gnome
+
+	mv debian/celestia-gnome/usr/bin/celestia debian/celestia-gnome/usr/bin/celestia-gnome
+	chrpath --delete debian/celestia-gnome/usr/bin/celestia-gnome
+	mkdir -p debian/celestia-gnome/usr/share/celestia
+
+	# Remove /usr/share/celestia files already found in celestia-common
+	for i in celestia-glut celestia-gnome; \
+	do \
+		cd $(CURDIR)/debian/celestia-common/usr/share && \
+			find . ! -type d -print0 | \
+				(cd $(CURDIR)/debian/$$i/usr/share && \
+					xargs -0 rm -f); \
+		rm -f $(CURDIR)/debian/$$i/usr/share/celestia/COPYING* \
+			$(CURDIR)/debian/$$i/usr/share/celestia/celestia.cfg \
+			$(CURDIR)/debian/$$i/celestia; \
+		cd $(CURDIR)/debian/$$i && \
+			find . -mindepth 1 -depth -type d -print0 | \
+				xargs -0 rmdir --ignore-fail-on-non-empty; \
+	done
+
+	dh_install -a
+
+
+################
+# BINARY PHASE #
+################
+# Must not depend on anything. This is to be called by
+# binary-arch/binary-multi
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_icons
+#	dh_installexamples
+	dh_installmenu
+#	dh_installdebconf
+#	dh_installinfo
+	dh_installman
+	dh_gconf
+	dh_link
+	dh_strip
+	dh_compress -X.docbook
+	dh_fixperms
+	dh_shlibdeps
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+# Build architecture independant packages using the common target.
+binary-indep: install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch config config-glut config-gnome build-glut build-gnome build-indep build-arch build binary install install-indep install-arch 
