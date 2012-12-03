@@ -2247,7 +2247,7 @@ $(RPCBIND): $(SPREZZ)/rpcbind/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf rpcbind-$(rpcbind_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf rpcbind-$(rpcbind_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: rtmpdump
 rtmpdump:$(RTMPDUMP)_$(ARCH).deb
