@@ -163,7 +163,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
 	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
-	$(OPENVPN) $(RPCBIND)
+	$(OPENVPN) $(RPCBIND) $(NETSNMP)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1951,6 +1951,14 @@ $(NETCF): $(SPREZZ)/netcf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf netcf_$(netcf_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: net-snmp
+net-snmp:$(NETSNMP)_$(ARCH).deb
+$(NETSNMP): $(SPREZZ)/net-snmp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf net-snmp-$(net-snmp_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: network-manager
 network-manager:$(NETWORKMANAGER)_$(ARCH).deb
