@@ -163,7 +163,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
 	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
-	$(OPENVPN)
+	$(OPENVPN) $(RPCBIND)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2240,6 +2240,14 @@ $(REAVER): $(SPREZZ)/reaver/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf reaver-$(reaver_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: rpcbind
+rpcbind:$(RPCBIND)_$(ARCH).deb
+$(RPCBIND): $(SPREZZ)/rpcbind/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rpcbind-$(rpcbind_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: rtmpdump
 rtmpdump:$(RTMPDUMP)_$(ARCH).deb
