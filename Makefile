@@ -164,7 +164,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
 	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
 	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
-	$(YASM) $(GSTPLUGINSBASE)
+	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2121,6 +2121,14 @@ $(PYGOBJECT): $(SPREZZ)/pygobject/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf pygobject-$(pygobject_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: python-coverage
+python-coverage:$(PYTHONCOVERAGE)_$(ARCH).deb
+$(PYTHONCOVERAGE): $(SPREZZ)/python-coverage/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-coverage_$(python-coverage_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: python-gnutls
 python-gnutls:$(PYTHONGNUTLS)_$(ARCH).deb
