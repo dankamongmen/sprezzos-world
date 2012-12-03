@@ -480,7 +480,7 @@ $(AVIDEMUX): $(SPREZZ)/avidemux/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf avidemux-$(avidemux_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf avidemux_$(avidemux_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: banshee
 banshee:$(BANSHEE)_$(ARCH).deb
