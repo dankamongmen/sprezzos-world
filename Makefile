@@ -1030,7 +1030,7 @@ $(GNOMEJSCOMMON): $(SPREZZ)/gnome-js-common/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-js-common-$(gnome-js-common_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf gnome-js-common-$(gnome-js-common_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gnome-keyring
 gnome-keyring:$(GNOMEKEYRING)_$(ARCH).deb
