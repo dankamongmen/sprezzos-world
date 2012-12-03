@@ -540,7 +540,7 @@ $(LIBCRYPTSSLEAYPERL): $(SPREZZ)/libcrypt-ssleay-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf libcrypt-ssleay-perl-$(libcrypt-ssleay-perl_UPVER).tar.xz --strip-components=1 -C $@
+	tar xzvf Crypt-SSLeay-$(libcrypt-ssleay-perl_UPVER).tar.gz --strip-components=1 -C $@
 
 .PHONY: lsscsi
 lsscsi:$(LSSCSI)_$(ARCH).deb
