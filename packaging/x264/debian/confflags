@@ -1,0 +1,153 @@
+# -*- mode: makefile -*-
+# vi:syntax=make
+# configure flags logic
+
+# Set CFLAGS from DEB_CFLAGS if defined, otherwise add build flags from
+# dpkg-buildflags excluding -g and -O2.
+CFLAGS = $(or $(DEB_CFLAGS),$(shell dpkg-buildflags --get CFLAGS 2>/dev/null | sed -e 's/-g\|-O2//g'))
+ifeq (,$(CFLAGS))
+  # Handle case for versions of Debian/Ubuntu that have dpkg-dev (<< 1.15.7).
+  CFLAGS = -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security -Werror=format-security
+endif
+shared_extra_cflags = $(CFLAGS)
+
+LDFLAGS := $(filter-out %-Bsymbolic-functions,$(LDFLAGS))
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+common_confflags += --prefix=/usr --libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+# XXX why isn't --enable-visualize used in the static build?
+# TODO --disable-asm when we build an opt flavor?
+static_confflags += \
+	$(common_confflags) \
+	--enable-static \
+	--disable-cli
+
+# upstream defaults to forcing a bunch of optimizations on various arches;
+# --disable-asm should disable them all, but then we need to figure out what
+# the toolchain actually targets to turn then back on ourselves if appropriate;
+# also, we try providing an optimized flavor for the arches / toolchain
+# combinations where it makes sense
+
+shared_confflags += \
+	$(common_confflags) \
+	--enable-shared \
+	--system-libx264
+
+opt_confflags += \
+	$(common_confflags) \
+	--enable-shared \
+	--disable-cli \
+	--libdir=$(opt_libdir)
+
+# this is only used for the check_asm macro
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+CC := gcc
+else
+CC := $(DEB_HOST_GNU_TYPE)-gcc
+endif
+
+# this outputs 0 or 1 depending on whether a piece of C or assembly can be
+# compiled with the *default* gcc flags; this is used to test the toolchain
+# *default* configuration
+check_c = $(shell echo 'int main(void) { $(1); }' | $(CC) -Werror $(2) -x c - -o /dev/null 2>/dev/null && echo 1 || echo 0)
+check_asm = $(call check_c, __asm__ volatile("$(1)"))
+
+do_opt := no
+
+# X86 upstream arch, hurd-i386, i386, and kfreebsd-i386 Debian arches; upstream
+# adds -march=i686 and -mfpmath=sse -msse by default and runtime detects MMX,
+# SSE, SSE2 etc.
+ifneq (,$(filter i386 i486 i586 i686 pentium,$(DEB_HOST_GNU_CPU)))
+sse_asm := addss m0, m0
+has_sse := $(call check_asm, $(sse_asm))
+ifneq ($(has_sse),1)
+# build an SSE optimized flavor for i686
+do_opt := yes
+opt_libdir := /usr/lib/$(DEB_HOST_MULTIARCH)/i686/sse2
+shared_confflags += --disable-asm
+endif
+endif
+
+# X86_64 upstream arch, amd64 and kfreebsd-amd64 Debian arches; no upstream
+# flags by default
+#ifeq (x86-64,$(DEB_HOST_GNU_CPU))
+#endif
+
+# PPC upstream arch, powerpc and ppc64 Debian arches; upstream adds -maltivec
+# -mabi=altivec by default
+# XXX upstream: --disable-asm should disable altivec; fixed in
+# 6a443d3cdf338408b1b39e7f336306d2a34703f6
+ifneq (,$(filter powerpc powerpc64,$(DEB_HOST_GNU_CPU)))
+altivec_c := vector signed int v1, v2, v3; v1 = vec_add(v2, v3)
+has_altivec := $(call check_c, $(altivec_c), -include altivec.h)
+ifneq ($(has_altivec),1)
+# build an Altivec optimized flavor
+do_opt := yes
+opt_libdir := /usr/lib/$(DEB_HOST_MULTIARCH)/altivec
+shared_confflags += --disable-asm
+endif
+endif
+
+# Sparc and UltraSparc upstream arches, sparc Debian arch; upstream adds
+# -mcpu=ultrasparc to CFLAGS and LDFLAGS and -xarch=v8plusa to ASFLAGS by
+# default
+# XXX upstream: --disable-asm should disable vis; fixed in
+# 6a443d3cdf338408b1b39e7f336306d2a34703f6
+ifeq (sparc,$(DEB_HOST_GNU_CPU))
+vis_asm := pdist %f0, %f0, %f0
+has_vis := $(call check_asm, $(vis_asm))
+ifneq ($(has_vis),1)
+# build a VIS optimized flavor
+do_opt := yes
+opt_libdir := /usr/lib/$(DEB_HOST_MULTIARCH)/v9
+shared_confflags += --disable-asm
+endif
+endif
+
+# MIPS upstream arch, mips and mipsel Debian arches; no upstream flags by
+# default
+#ifneq (,$(filter mips mipsel,$(DEB_HOST_GNU_CPU)))
+#endif
+
+# ARM upsteam arch, arm, armeb, and armel Debian arches; upstream prepends -O3
+# -fno-fast-math by default, but that's ok as we override -O and we don't care
+# about -ffast-math which is said to be negligible and buggy by upstream, and
+# appends -mcpu=cortex-a8 -mfpu=neon -mfloat-abi=softfp by default; upstream
+# supports ARMv6t2 with runtime detection of NEON, so if the baseline supports
+# ARMv6t2, use it, otherwise build a NEON opt flavor; note that NEON implies
+# VFP and ARMv7 and hence the flags are ok
+ifeq (arm,$(DEB_HOST_GNU_CPU))
+armv6t2_asm := movt r0, \#0
+has_armv6t2 := $(call check_asm, $(armv6t2_asm))
+ifeq ($(has_armv6t2),1)
+# extract the actual -march= the toolchain targets
+toolchain_arch := $(shell $(CC) -v 2>&1 | sed -n '/^Configured with: / s/.* --with-arch=\([^ ]*\).*/\1/p')
+ifeq ($(toolchain_arch),)
+toolchain_arch := armv6t2
+endif
+shared_extra_cflags += -march=$(toolchain_arch)
+else
+do_opt := yes
+opt_libdir := /usr/lib/$(DEB_HOST_MULTIARCH)/neon/vfp
+shared_confflags += --disable-asm
+endif
+endif
+
+# S390 upstream arch, s390 and s390x Debian arches; no upstream flags by
+# default
+#ifneq (,$(filter s390 s390x,$(DEB_HOST_GNU_CPU)))
+#endif
+
+# IA64 upstream arch, ia64 Debian arch; no upstream flags by default
+#ifeq (ia64,$(DEB_HOST_GNU_CPU))
+#endif
+
+# there's no special handling for other arches upstream, except for PARISC
+# which is not supported in Debian and for which there's no upstream flags by
+# default
+

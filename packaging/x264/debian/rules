@@ -1,0 +1,67 @@
+#!/usr/bin/make -f
+
+libx264N := libx264-$(shell grep '\#define X264_BUILD' < x264.h | cut -f 3 -d ' ')
+
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_GNU_CPU    ?= $(shell dpkg-architecture -qDEB_HOST_GNU_CPU)
+
+include debian/confflags
+
+DH_INSTALL_FILES = debian/$(libx264N).install \
+                   debian/libx264-dev.install
+
+%:
+	dh $@ --parallel
+
+.PHONY: debian/control
+debian/control:
+	sed -e 's/@libx264N@/$(libx264N)/g' $@.in > $@
+
+$(DH_INSTALL_FILES):
+	sed -e 's/@DEB_HOST_MULTIARCH@/$(DEB_HOST_MULTIARCH)/g' $(subst $(libx264N),libx264N,$@).in > $@
+
+override_dh_auto_build:
+	# Build static lib
+	LDFLAGS="$(LDFLAGS)" ./configure $(static_confflags) \
+	   || ( tail -v -n +0 config.log config.log ; exit 1 )
+	$(MAKE)
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/install/static
+	$(MAKE) distclean
+	# Build shared lib
+	CFLAGS="$(shared_extra_cflags)" LDFLAGS="$(LDFLAGS)" ./configure $(shared_confflags) \
+	   || ( tail -v -n +0 config.log config.log ; exit 1 )
+	$(MAKE)
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/install/shared
+ifeq ($(do_opt),yes)
+	$(MAKE) distclean
+	# Build opt lib
+	LDFLAGS="$(LDFLAGS)" ./configure $(opt_confflags) \
+	   || ( tail -v -n +0 config.log config.log ; exit 1 )
+	$(MAKE)
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/install/opt
+endif
+
+override_dh_auto_configure:
+	# dh_auto_configure phase handled via dh_auto_build.
+
+override_dh_auto_install:
+	# dh_auto_install phase handled via dh_auto_build.
+
+override_dh_auto_clean: debian/control
+	rm -rf debian/install
+	$(MAKE) -o config.mak distclean
+	dh_clean config.mak2 $(DH_INSTALL_FILES)
+
+override_dh_install: $(DH_INSTALL_FILES)
+	dh_install --list-missing --sourcedir=debian/install
+ifeq ($(do_opt),yes)
+	mkdir -p debian/$(libx264N)$(opt_libdir)
+	cp -a debian/install/opt$(opt_libdir)/*.so.* debian/$(libx264N)$(opt_libdir)
+endif
+
+debian/x264.1: build
+	env LD_LIBRARY_PATH="$(LD_LIBRARY_PATH):$(CURDIR)/debian/install/shared/usr/lib/$(DEB_HOST_MULTIARCH)" \
+	help2man -n "fast h264 encoder" -N -s1 -S "Videolan project" -h '--fullhelp' \
+		debian/install/shared/usr/bin/x264 > debian/x264.1
