@@ -1374,7 +1374,7 @@ $(INKSCAPE): $(SPREZZ)/inkscape/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf inkscape-$(inkscape_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf inkscape-$(inkscape_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: jbig2dec
 jbig2dec:$(JBIG2DEC)_$(ARCH).deb
