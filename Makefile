@@ -2177,7 +2177,7 @@ $(POLICYKIT): $(SPREZZ)/policykit/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf policykit-$(policykit_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf polkit-$(policykit_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: postgresql
 postgresql:$(POSTGRESQL)_$(ARCH).deb
