@@ -1,0 +1,176 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+export DEB_BUILD_HARDENING=1
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+ifndef DEB_HOST_ARCH
+DEB_BUILD_ARCH := $(shell dpkg --print-architecture)
+endif
+export arch = $(DEB_HOST_ARCH)
+
+DEB_HOST_MULTIARCH := $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+DEBUG = -g
+endif
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+OPT = 
+else
+OPT = -O2
+endif
+
+export CFLAGS=-fno-strict-aliasing -DDIG_SIGCHASE $(DEBUG) $(OPT)
+
+ifeq ($(DEB_HOST_ARCH_OS),kfreebsd)
+EXTRA_FEATURES=--disable-linux-caps --disable-threads
+endif
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	./configure --prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--sysconfdir=/etc/bind \
+		--localstatedir=/var \
+		--enable-threads \
+		--enable-largefile \
+		--with-libtool \
+		--enable-shared \
+		--enable-static \
+		--with-openssl=/usr \
+		--with-gssapi=/usr \
+		--with-gnu-ld \
+		--with-geoip=/usr \
+		--with-atf=no \
+		--enable-ipv6 \
+		--with-dlopen=no \
+		$(EXTRA_FEATURES)
+
+	touch configure-stamp
+
+build: configure-stamp build-stamp
+build-stamp:
+	dh_testdir
+	LD_LIBRARY_PATH=$$(pwd)/lib/isc/.libs:$$(pwd)/lib/isccc/.libs:$$(pwd)/isccfg/.libs:$${LD_LIBRARY_PATH} $(MAKE)
+	touch build-stamp
+
+autofiles:
+	libtoolize --automake --copy --force
+	aclocal
+	#automake
+	autoheader
+	autoconf
+	rm -rf autom4te.cache
+
+clean:
+	dh_testdir
+	dh_testroot
+	-$(MAKE) distclean
+	find . -name \*.o -exec rm {} \;
+	rm -f build-stamp configure-stamp
+	rm -f debian/substvars lib/bind/include/isc/platform.h
+	rm -f contrib/dlz/bin/dlzbdb/Makefile contrib/dlz/drivers/rules
+	rm -f doc/arm/Bv9ARM.pdf
+	dh_clean
+
+newtemplate:
+	debconf-updatepo
+
+msgstats:
+	@cd debian/po && for i in *.po; do x=$$(msgfmt --statistics $$i 2>&1); echo $$i $$x; done; rm -f messages.mo *.po~
+
+msg-email:
+	@podebconf-report-po
+
+ETCBIND=debian/bind9/etc/bind
+ETCAPP=debian/bind9/etc/apparmor.d
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) install DESTDIR=`pwd`/debian/bind9
+	rm -f debian/bind9/usr/lib/*.la
+	install -c -o bin -g bin -m 444 debian/db.0 ${ETCBIND}/db.0
+	install -c -o bin -g bin -m 444 debian/db.0 ${ETCBIND}/db.255
+	install -c -o bin -g bin -m 444 debian/db.empty ${ETCBIND}
+	install -c -o bin -g bin -m 444 debian/zones.rfc1918 ${ETCBIND}
+	install -c -o bin -g bin -m 444 debian/db.127 ${ETCBIND}
+	install -c -o bin -g bin -m 444 debian/db.local ${ETCBIND}
+	install -c -o bin -g bin -m 444 debian/db.root ${ETCBIND}
+	install -c -o bin -g bin -m 440 debian/named.conf ${ETCBIND}
+	install -c -o bin -g bin -m 440 debian/named.conf.local ${ETCBIND}
+	install -c -o bin -g bin -m 440 debian/named.conf.default-zones ${ETCBIND}
+	install -c -o bin -g bin -m 440 bind.keys ${ETCBIND}
+	install -c -o bin -g bin -m 440 debian/named.conf.options debian/bind9/usr/share/bind9/
+	cp doc/arm/*.html debian/bind9-doc/usr/share/doc/bind9-doc/arm
+	install -m 644 -o root -g root debian/apparmor-profile ${ETCAPP}/usr.sbin.named
+	install -m 644 -o root -g root debian/apparmor-profile.local ${ETCAPP}/local/usr.sbin.named
+	rmdir debian/bind9/var/run/named debian/lwresd/var/run/named || true
+
+	install debian/ip-up.d debian/bind9/etc/ppp/ip-up.d/bind9
+	install debian/ip-down.d debian/bind9/etc/ppp/ip-down.d/bind9
+	install debian/ip-up.d debian/bind9/etc/network/if-up.d/bind9
+	install debian/ip-down.d debian/bind9/etc/network/if-down.d/bind9
+	install -m644 debian/bind9.ufw.profile debian/bind9/etc/ufw/applications.d/bind9
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_installmenu -i
+	dh_installcron -i
+	dh_installinfo -i
+	dh_installchangelogs -i # CHANGES # upstream changelog only in bind9-doc
+	dh_installchangelogs -pbind9-doc CHANGES
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	for i in $$(sed -n '/^Package:/s/^.* //p' debian/control); do cat debian/vars.in >> debian/$$i.substvars; done
+	cat debian/vars.in >> debian/substvars
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdocs -a
+	dh_installexamples -a
+	dh_installmenu -a
+	dh_installinit -a --no-start -- defaults 15 85
+	dh_installcron -a
+	dh_installdebconf -pbind9
+	dh_installinfo -a
+	dh_installchangelogs -a # CHANGES # upstream changelog only in bind9-doc
+	dh_install --sourcedir=debian/bind9 -a
+	(cd debian/bind9/ && rm -rf $$(cat ../*.install) )
+	rm -f debian/bind9/usr/share/man/man1/query-loc.1
+	# install apport hook on Ubuntu
+	if dpkg-vendor --is ubuntu; then \
+	    install -m 644 -D debian/bind9.apport debian/bind9/usr/share/apport/package-hooks/bind9.py; \
+	fi
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a
+	dh_installdeb -a
+	dh_shlibdeps -l"debian/libbind9-90/usr/lib:debian/libbind-dev/usr/lib:debian/libdns95/usr/lib:debian/libisc92/usr/lib:debian/libisccc90/usr/lib:debian/libisccfg90/usr/lib:debian/liblwres90/usr/lib:/usr/lib/libfakeroot" -a
+	for i in $$(sed -n '/^Package:/s/^.* //p' debian/control); do cat debian/vars.in >> debian/$$i.substvars; done
+	cat debian/vars.in >> debian/substvars
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure

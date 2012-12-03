@@ -1,0 +1,44 @@
+#!/bin/sh
+# pre install script for the Debian bind9 package
+
+set -e
+
+# Check if we are upgrading while running a kernel before 2.2.18. If so abort
+# immediately since we don't support those kernels anymore.
+if [ "$1" = "upgrade" ] && dpkg --compare-versions "`uname -r`" lt 2.2.18 ; then
+        cat <<EOF
+ERROR: you are running a pre-2.2.18 kernel on this machine. Recent
+versions of bind9 no longer support those kernels.
+To prevent breaking nameservices on this system bind9 upgrade will abort.
+EOF
+        exit 1
+fi
+
+APP_PROFILE="usr.sbin.named"
+APP_CONFFILE="/etc/apparmor.d/$APP_PROFILE"
+APP_COMPLAIN="/etc/apparmor.d/force-complain/$APP_PROFILE"
+if [ "$1" = "upgrade" ]; then
+    mkdir -p `dirname $APP_COMPLAIN` 2>/dev/null || true
+    if dpkg --compare-versions $2 lt 1:9.3.4-2ubuntu2 ; then
+        # force-complain for pre-apparmor upgrades
+        ln -sf $APP_CONFFILE $APP_COMPLAIN
+    elif dpkg --compare-versions $2 lt 1:9.4.2-3ubuntu1 ; then
+        if [ -e "$APP_CONFFILE" ]; then
+            md5sum="`md5sum \"$APP_CONFFILE\" | sed -e \"s/ .*//\"`"
+            pkg_md5sum="`sed -n -e \"/^Conffiles:/,/^[^ ]/{\\\\' $APP_CONFFILE'{s/.* //;p}}\" /var/lib/dpkg/status`"
+            if [ "$md5sum" = "$pkg_md5sum" ]; then
+		# force-complain when upgrade from pre-shipped profile and an existing
+                # profile is same as in conffiles
+                ln -sf $APP_CONFFILE $APP_COMPLAIN
+            fi
+        else
+            # force-complain on upgrade from pre-shipped profile and
+            # there is no existing profile
+            ln -sf $APP_CONFFILE $APP_COMPLAIN
+        fi
+    fi
+fi
+
+
+#DEBHELPER#
+exit 0

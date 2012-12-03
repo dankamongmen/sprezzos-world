@@ -1,0 +1,169 @@
+#!/bin/sh
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+if [ "$1" = configure ]; then
+    lastversion="$2";
+
+    # lets give them a bind user/group in all cases.
+    getent group bind >/dev/null 2>&1 || addgroup --system bind
+    getent passwd bind >/dev/null 2>&1 ||
+	adduser --system --home /var/cache/bind --no-create-home \
+		--disabled-password --ingroup bind bind
+
+    if [ -z "$lastversion" ] || dpkg --compare-versions "$lastversion" lt 1:9.4.2-2 ; then
+	mkdir -p /var/lib/bind
+	chown root:bind /var/lib/bind
+	chmod 775 /var/lib/bind
+    fi
+
+    if [ ! -s /etc/bind/rndc.key ]; then
+	rndc-confgen -r /dev/urandom -a
+    fi
+
+    # no sumfile means you get the default
+    [ -f /usr/share/bind9/bind9-default.md5sum ] || 
+        echo "2cfcfb7bf1b99c7930fd475907e38be7  /etc/default/bind9" > /usr/share/bind9/bind9-default.md5sum
+
+    if [ -f /etc/default/bind9 ] && \
+       [ "$(cat /usr/share/bind9/bind9-default.md5sum)" = "$(md5sum /etc/default/bind9)" ]; then
+        config="/etc/default/bind9"
+    elif [ ! -e /etc/default/bind9 ]; then
+        config="/etc/default/bind9"
+    else 
+        config="/etc/default/bind9.dpkg-dist"
+    fi
+
+    
+    # On a fresh install, or if we are upgrading from pre-9.8, think about dnssec
+    if [ -z "$lastversion" ] || dpkg --compare-versions "$lastversion" lt 1:9.8.1.dfsg-1 ; then
+	UPDATE_OPTS="n"
+	if [ -f /etc/bind/named.conf.options ]; then
+	    case $(md5sum /etc/bind/named.conf.options | sed 's/ .*$//') in
+		d6b678ac90fd6ab163d74dfe5d68c2c9)	UPDATE_OPTS=y;;	 # 9.4.2ish
+		0367900f381d5c83cf34009440f3d211)	UPDATE_OPTS=y;;	 # 9.6 and later
+		56919cbc0d819c9a303a8bdeb306b5f1)	UPDATE_OPTS=ok;; # 9.8
+	    esac
+	    case $UPDATE_OPTS in
+		y)
+		    echo Updating named.conf.options to include DNSSEC enablement
+		    cp /usr/share/bind9/named.conf.options /etc/bind/named.conf.options
+		    chmod 644 /etc/bind/named.conf.options
+		    ;;
+		n)
+		    echo NOT updating named.conf.options to include DNSSEC enablement
+		    ;;
+	    esac
+	else
+	    cp /usr/share/bind9/named.conf.options /etc/bind/named.conf.options
+	    chmod 644 /etc/bind/named.conf.options
+	fi
+    fi
+
+    localconf=""
+    if [ ! -f $config ]; then
+	CONF=/etc/bind/named.conf
+	for file in ${CONF} ${CONF}.local ${CONF}.default-zones; do
+	    if [ -f ${file} ]; then
+		theirs=$(md5sum $file | sed 's/ .*$//')
+		mine=$(dpkg --status bind9 | grep "^ $file " | sed -n 's/.* //p')
+		if [ "$mine" != "$theirs" ]; then
+		    localconf="y"
+		fi
+	    else
+		localconf="y"
+	    fi
+	done
+	if [ -n "$localconf" ]; then
+                db_reset bind9/start-as-user
+	else
+                db_set bind9/start-as-user bind || true
+	fi
+   
+        echo '#' 
+        echo '# run resolvconf?' >> $config
+        db_get bind9/run-resolvconf
+        if [ ! -z "$RET" ] && [ "$RET" = "true" ]; then
+                echo "RESOLVCONF=yes" >> $config
+        else
+                echo "RESOLVCONF=no" >> $config
+        fi
+
+        db_get bind9/start-as-user
+        USER=$RET
+        db_get bind9/different-configuration-file
+        CONFFILE=$RET
+        
+        echo '' >> $config
+        echo '# startup options for the server' >> $config
+        if [ ! -z "$USER" ] && [ ! -z "$CONFFILE" ]; then
+                echo "OPTIONS=\"-u $USER -c $CONFFILE\"" >> $config
+        elif [ ! -z "$USER" ]; then
+                echo "OPTIONS=\"-u $USER\"" >> $config
+        elif [ ! -z "$CONFFILE" ]; then
+                echo "OPTIONS=\"-c $CONFFILE\"" >> $config
+        else
+                echo "OPTIONS=\"\"" >> $config
+        fi
+    else
+        db_get bind9/run-resolvconf
+         if [ ! -z "$RET" ] && [ "$RET" = "true" ]; then
+	        sed -e "s#^\([[:space:]]*\)\(RESOLVCONF=[[:space:]]*\)[^ ]*#\1\2yes#g" -i $config
+        else
+	        sed -e "s#^\([[:space:]]*\)\(RESOLVCONF=[[:space:]]*\)[^ ]*#\1\2no#g" -i $config
+        fi
+        db_get bind9/start-as-user
+        if [ ! -z "$RET" ]; then
+            if [ ! -z "`grep OPTIONS $config`" ]; then
+                if [ ! -z "`grep OPTIONS $config | grep '\-u'`" ]; then
+                        sed -e "s#\([[:space:]]*OPTIONS[[:space:]]*\)=\"\([^\"]*\)-u[[:space:]]*[^\" ]*\([^\"]*\)\"#\1=\"\2-u $RET\3\"#g" -i $config
+                else 
+                        sed -e "s#\([[:space:]]*OPTIONS[[:space:]]*\)=\"\([^\"]*\)\"#\1=\"\2 -u $RET\"#g" -i $config
+                fi
+            else
+                echo "OPTIONS=\"-u $RET\""
+            fi
+        fi
+        db_get bind9/different-configuration-file
+        if [ ! -z "$RET" ]; then
+            if [ ! -z "`grep OPTIONS $config | grep '\-c'`" ]; then
+                sed -e "s#\([[:space:]]*OPTIONS[[:space:]]*\)=\"\([^\"]*\)-c[[:space:]]*[^\" ]*\([^\"]*\)\"#\1=\"\2-c $RET\3\"#g" -i $config
+            else 
+                sed -e "s#\([[:space:]]*OPTIONS[[:space:]]*\)=\"\([^\"]*\)\"#\1=\"\2 -c $RET\"#g" -i $config
+            fi
+        fi
+    fi
+
+    if [ "$config" = "/etc/default/bind9" ]; then
+        md5sum /etc/default/bind9 > /usr/share/bind9/bind9-default.md5sum
+    fi
+
+    uid=$(ls -ln /etc/bind/rndc.key | awk '{print $3}')
+    if [ "$uid" = "0" ]; then
+	[ -n "$localconf" ] || chown bind /etc/bind/rndc.key
+	chgrp bind /etc/bind
+	chmod g+s /etc/bind
+	chgrp bind /etc/bind/rndc.key /var/cache/bind
+	chgrp bind /etc/bind/named.conf* || true
+	chmod g+r /etc/bind/rndc.key /etc/bind/named.conf* || true
+	chmod g+rwx /var/cache/bind
+    fi
+
+    # Reload AppArmor profile
+    APP_PROFILE="/etc/apparmor.d/usr.sbin.named"
+    if [ -f "$APP_PROFILE" ] && aa-status --enabled 2>/dev/null; then
+        apparmor_parser -r "$APP_PROFILE" || true
+    fi
+
+    if pidof /usr/sbin/named >/dev/null 2>&1; then
+	invoke-rc.d bind9 restart
+    else
+    	invoke-rc.d bind9 start
+    fi
+fi
+
+db_stop
+
+#DEBHELPER#
