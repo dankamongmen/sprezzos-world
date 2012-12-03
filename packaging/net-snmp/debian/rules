@@ -1,0 +1,137 @@
+#!/usr/bin/make -f
+
+include /usr/share/python/python.mk
+
+LIB_VERSION = 15
+UPSTREAM_VERSION = $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ':' | sed 's/ //' | sed 's/~dfsg.*$$//')
+COMPAT_VERSION = $(UPSTREAM_VERSION)
+PYTHON_VERSION = 1.0a1
+
+MIB_MODULES = smux ucd-snmp/dlmod
+EXCL_MIB_MODULES =
+
+PYVERS=$(shell pyversions -vr)
+
+ifeq (linux,$(DEB_HOST_ARCH_OS))
+MIB_MODULES += ucd-snmp/diskio ucd-snmp/lmSensors 
+IPV6 = --enable-ipv6
+DEB_DH_GENCONTROL_ARGS=-- -Vos-specific-dev="libsensors4-dev"
+else
+ifeq (kfreebsd,$(DEB_HOST_ARCH_OS))
+IPV6 = --disable-ipv6
+DEB_DH_GENCONTROL_ARGS=-- -Vos-specific-dev="libkvm-dev"
+endif
+endif
+ifeq (hurd,$(DEB_HOST_ARCH_OS))
+IPV6 = --enable-ipv6
+EXCL_MIB_MODULES += mibII
+else
+MIB_MODULES += host
+endif
+
+DEB_CFLAGS_MAINT_APPEND=-DNETSNMP_USE_INLINE
+
+%:
+	dh --with python-central $@
+
+.PHONY: override_dh_auto_configure
+override_dh_auto_configure:
+	ln -f -s /usr/share/misc/config.guess .
+	ln -f -s /usr/share/misc/config.sub .
+	libtoolize --install --copy
+	aclocal
+	autoheader
+	autoconf
+	dh_auto_configure -- --prefix=/usr --sysconfdir=/etc --mandir=/usr/share/man \
+	  --with-persistent-directory=/var/lib/snmp \
+	  --enable-ucd-snmp-compatibility \
+	  --enable-shared $(shell dpkg-buildflags --export=configure) \
+	  --with-perl-modules="INSTALLDIRS=vendor" --enable-as-needed \
+	  $(IPV6) --with-logfile=none \
+	  --without-rpm --without-libwrap --with-openssl \
+	  --without-dmalloc --without-efence --without-rsaref \
+	  --with-sys-contact="root" --with-sys-location="Unknown" \
+	  --with-mib-modules="$(MIB_MODULES)" \
+	  --with-out-mib-modules="$(EXCL_MIB_MODULES)" \
+	  --enable-mfd-rewrites \
+	  --with-mnttab=/etc/mtab \
+	  --with-mibdirs="\$$HOME/.snmp/mibs:/usr/share/mibs/site:/usr/share/snmp/mibs:/usr/share/mibs/iana:/usr/share/mibs/ietf:/usr/share/mibs/netsnmp" \
+	  --with-defaults
+
+.PHONY: override_dh_clean
+override_dh_clean:
+	dh_clean
+	rm -rf `find . -name .libs`
+	rm -rf `find . -name .svn`
+	find . -name *\.py[co] -exec rm {} \;
+	find debian -name python-*-stamp-* -exec rm {} \;
+	rm -rf python/build
+	rm -rf python/netsnmp_python.egg-info
+
+.PHONY: override_dh_auto_build
+override_dh_auto_build:
+	dh_auto_build -- LD_RUN_PATH=
+
+.PHONY: override_dh_auto_install
+override_dh_auto_install: $(PYVERS:%=debian/python-build-stamp-%)
+	dh_auto_install -- INSTALL_PREFIX=$(CURDIR)/debian/tmp DESTDIR=$(CURDIR)/debian/tmp
+	# Install the "broke" headers
+	cp agent/mibgroup/struct.h debian/tmp/usr/include/net-snmp/agent
+	cp agent/mibgroup/util_funcs.h debian/tmp/usr/include/net-snmp
+	cp agent/mibgroup/mibincl.h debian/tmp/usr/include/net-snmp/library
+	cp agent/mibgroup/header_complex.h debian/tmp/usr/include/net-snmp/agent
+	# Remove the snmpcheck program since we don't support it (yet).
+	rm debian/tmp/usr/bin/snmpcheck
+	# Copy the .conf files.
+	mkdir -p debian/tmp/etc/snmp
+	cp EXAMPLE.conf debian/tmp/etc/snmp/snmpd.conf
+	cp EXAMPLE-trap.conf debian/tmp/etc/snmp/snmptrapd.conf
+	cp debian/snmp.conf debian/tmp/etc/snmp/snmp.conf
+	mv debian/tmp/usr/share/snmp/mib2c*.conf debian/tmp/etc/snmp
+	dh_installdocs -plibsnmp-base mibs/README.mibs
+	# Perform other man pages fixups.
+	bash ./debian/fixman
+
+.PHONY: override_dh_auto_test
+dh_auto_test:
+
+.PHONY: override_dh_makeshlibs
+override_dh_makeshlibs:
+	dh_makeshlibs -plibsnmp$(LIB_VERSION) -V"libsnmp$(LIB_VERSION) (>= $(COMPAT_VERSION))"
+
+.PHONY: override_dh_strip
+override_dh_strip:
+	dh_strip -plibsnmp$(LIB_VERSION) --dbg-package=libsnmp$(LIB_VERSION)-dbg
+	dh_strip
+
+.PHONY: override_dh_install
+override_dh_install: $(PYVERS:%=debian/python-install-stamp-%)
+	dh_installexamples -plibsnmp-perl $(shell ls -d perl/SNMP/examples/* | grep -v SCCS)
+	dh_install
+
+.PHONY: override_dh_installdocs
+override_dh_installdocs:
+	dh_installdocs
+	rm -rf debian/libsnmp-dev/usr/share/doc/libsnmp-dev
+	rm -rf debian/libsnmp$(LIB_VERSION)-dbg/usr/share/doc/libsnmp$(LIB_VERSION)-dbg
+	rm -rf debian/libsnmp-perl/usr/share/doc/libsnmp-perl
+	ln -sf libsnmp$(LIB_VERSION) debian/libsnmp-dev/usr/share/doc/libsnmp-dev
+	ln -sf libsnmp$(LIB_VERSION) debian/libsnmp$(LIB_VERSION)-dbg/usr/share/doc/libsnmp$(LIB_VERSION)-dbg
+	ln -sf libsnmp$(LIB_VERSION) debian/libsnmp-perl/usr/share/doc/libsnmp-perl
+
+.PHONY: override_dh_fixperms
+override_dh_fixperms:
+	dh_fixperms
+	chmod 600 debian/snmpd/etc/snmp/snmp*d.conf
+
+debian/python-build-stamp-%:
+	# Build python modules manually as the net-snmp Makefile is too limited.
+	cd python; python$* setup.py build --basedir=$(CURDIR)
+	touch $@
+
+debian/python-install-stamp-%:
+	# Build python modules manually as the net-snmp Makefile is too limited.
+	cd python; python$* setup.py install --root $(CURDIR)/debian/tmp $(py_setup_install_args)
+	mv debian/tmp/usr/lib/python$*/$(call py_sitename, $*)/netsnmp_python-$(PYTHON_VERSION).egg-info \
+	   debian/tmp/usr/lib/python$*/$(call py_sitename, $*)/netsnmp_python.egg-info
+	touch $@
