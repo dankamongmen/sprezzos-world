@@ -163,7 +163,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
 	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
-	$(OPENVPN) $(RPCBIND) $(NETSNMP)
+	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2096,6 +2096,22 @@ $(OPENVPN): $(SPREZZ)/openvpn/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openvpn-$(openvpn_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libpciaccess
+libpciaccess:$(LIBPCIACCESS)_$(ARCH).deb
+$(LIBPCIACCESS): $(SPREZZ)/libpciaccess/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libpciaccess-$(libpciaccess_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: pciutils
+pciutils:$(PCIUTILS)_$(ARCH).deb
+$(PCIUTILS): $(SPREZZ)/pciutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf pciutils-$(pciutils_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: pcre
 pcre:$(PCRE)_$(ARCH).deb
