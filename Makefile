@@ -165,7 +165,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
-	$(NGINX) $(LIBGD2) $(LIBXFIXES)
+	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2387,6 +2387,14 @@ $(SHOTWELL): $(SPREZZ)/shotwell/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf shotwell_$(shotwell_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: shutter
+shutter:$(SHUTTER)_$(ARCH).deb
+$(SHUTTER): $(SPREZZ)/shutter/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf shutter_$(shutter_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: simple-scan
 simple-scan:$(SIMPLESCAN)_$(ARCH).deb
