@@ -165,7 +165,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
-	$(NGINX)
+	$(NGINX) $(LIBGD2)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1106,6 +1106,14 @@ $(GNOMEKEYRING): $(SPREZZ)/gnome-keyring/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-keyring_$(gnome-keyring_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: libgd2
+libgd2:$(LIBGD2)_$(ARCH).deb
+$(LIBGD2): $(SPREZZ)/libgd2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libgd2-$(libgd2_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libgnomecups
 libgnomecups:$(LIBGNOMECUPS)_$(ARCH).deb

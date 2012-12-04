@@ -1,0 +1,98 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+# Copyright © 2002-2010 Jonas Smedegaard <dr@jones.dk>
+# Description: Main Debian packaging script for GD
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+DEB_BUILDDIR = build
+DEB_MAKE_FLAVORS = noxpm xpm
+include /usr/share/cdbs/1/rules/upstream-tarball.mk
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/utils.mk
+
+DEB_UPSTREAM_PACKAGE = gd
+DEB_UPSTREAM_URL = http://www.libgd.org/releases
+DEB_UPSTREAM_TARBALL_VERSION_MANGLE = s/~rc/RC/
+DEB_UPSTREAM_TARBALL_MD5 = 39ac48e6d5e0012a3bd2248a0102f209
+
+# Upstream source contains copyrights with questionable or missing licenses
+DEB_UPSTREAM_REPACKAGE_EXCLUDE = cmake tests VMS
+
+# Avoid copyright-check choking on config/install.sh and aclocal.m4
+DEB_COPYRIGHT_CHECK_IGNORE_REGEX = ^(demoin\.gif|test/gdtest.*.png|(.*/)?config\.(guess|sub|rpath)(\..*)?|config/install-sh|aclocal\.m4|debian/(changelog|copyright(|_hints|_newhints)))$
+
+pkgname = libgd2
+libname = libgd
+
+# Install multiple flavors to separate destinations
+# TODO: drop unneeded pkgname from skel (included to minimize transition patch)
+DEB_MAKE_DESTDIRSKEL = $(CURDIR)/debian/tmp-$(pkgname)-@FLAVOR@
+# TODO: stop setting DEB_DESTDIR when DEB_MAKE_DESTDIRSKEL is actually used
+DEB_DESTDIR = $(CURDIR)/debian/tmp-$(pkgname)-$(cdbs_make_curflavor)/
+
+DEB_CONFIGURE_FLAGS_noxpm = --without-x --without-xpm --without-fontconfig
+DEB_CONFIGURE_FLAGS_xpm = --with-x
+DEB_CONFIGURE_EXTRA_FLAGS = --disable-rpath
+DEB_CONFIGURE_EXTRA_FLAGS += --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH)
+
+DEB_DH_MAKESHLIBS_ARGS_libgd2-noxpm = -V'libgd2-noxpm (>= $(DEB_UPSTREAM_VERSION)) | libgd2-xpm (>= $(DEB_UPSTREAM_VERSION))'
+DEB_DH_MAKESHLIBS_ARGS_libgd2-xpm = -V'libgd2-xpm (>= $(DEB_UPSTREAM_VERSION))'
+DEB_INSTALL_DOCS_ALL += README.html README readme.jpn
+
+CFLAGS += -D_REENTRANT -pipe
+
+DEB_SHLIBDEPS_LIBRARY_ALL = -Llibgd2-noxpm -ldebian/libgd2-noxpm/usr/lib
+
+# FIXME: Drop this when CDBS honors per-flavor configure flags
+debian/stamp-autotools/noxpm: cdbs_configure_flags += $(DEB_CONFIGURE_FLAGS_noxpm)
+debian/stamp-autotools/xpm: cdbs_configure_flags += $(DEB_CONFIGURE_FLAGS_xpm)
+
+# put aside upstream-shipped tempfile during build but after copyright-check
+upstreamtmpfiles = test/gdtest_wbmp_to_png.png
+pre-build:: debian/stamp-upstreamtmpstuff
+debian/stamp-upstreamtmpstuff: debian/stamp-copyright-check
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file ] || [ -e $$file.upstream ] || mv $$file $$file.upstream; \
+	done
+	touch $@
+clean::
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file.upstream ] || mv -f $$file.upstream $$file; \
+	done
+	rm -f debian/stamp-upstreamtmpstuff
+
+# build tests and more _after_ normal build routines
+common-post-build-arch:: buildmore
+buildmore: build/libgd2-noxpm
+	LD_PRELOAD=$(CURDIR)/build/noxpm/.libs/libgd.so $(CURDIR)/build/noxpm/gddemo
+	LD_PRELOAD=$(CURDIR)/build/noxpm/.libs/libgd.so $(CURDIR)/build/noxpm/gdtest demoin.png
+	perl debian/doc_cleaner.pl index.html > README.html
+	html2text -nobs < README.html > README
+
+clean::
+	rm -f README.html README
+	cd test && rm -f gdtest.jpg gdtest.wbmp
+	rm -f demoout.png demooutp.png demoout.gif demooutp.gif
+	rm -rf build debian/tmp-libgd2-noxpm debian/tmp-libgd2-xpm
+
+# Needed by upstream for all flavors
+CDBS_BUILD_DEPENDS += , libpng-dev, libz-dev, libjpeg-dev
+
+# Needed by upstream for xpm flavor
+CDBS_BUILD_DEPENDS += , libfreetype6-dev, libxpm-dev, libx11-dev, libxt-dev, libfontconfig-dev
+
+# Needed for our packaging
+CDBS_BUILD_DEPENDS += , html2text
