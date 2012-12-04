@@ -165,7 +165,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
-	$(NGINX) $(LIBGD2)
+	$(NGINX) $(LIBGD2) $(LIBXFIXES)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1794,6 +1794,14 @@ $(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libwnck3-$(libwnck_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: libxfixes
+libxfixes:$(LIBXFIXES)_$(ARCH).deb
+$(LIBXFIXES): $(SPREZZ)/libxfixes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxfixes_$(libxfixes_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libx11
 libx11:$(LIBX11)_$(ARCH).deb
