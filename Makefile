@@ -165,7 +165,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
-	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO)
+	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -738,6 +738,14 @@ $(DBUSPYTHON): $(SPREZZ)/dbus-python/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-python-$(dbus-python_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: dnsmasq
+dnsmasq:$(DNSMASQ)_$(ARCH).deb
+$(DNSMASQ): $(SPREZZ)/dnsmasq/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf dnsmasq-$(dnsmasq_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: dri2proto
 dri2proto:$(DRI2PROTO)_$(ARCH).deb
