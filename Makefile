@@ -1788,13 +1788,13 @@ $(LIBTOOL): $(SPREZZ)/libtool/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtool-$(libtool_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: libtorrent
-libtorrent:$(LIBTORRENT)_$(ARCH).deb
-$(LIBTORRENT): $(SPREZZ)/libtorrent14/debian/changelog
+.PHONY: libtorrent14
+libtorrent14:$(LIBTORRENT14)_$(ARCH).deb
+$(LIBTORRENT14): $(SPREZZ)/libtorrent14/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libtorrent-$(libtorrent_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libtorrent-$(libtorrent14_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libvirt
 libvirt:$(LIBVIRT)_$(ARCH).deb
