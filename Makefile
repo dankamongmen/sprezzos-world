@@ -1441,7 +1441,7 @@ $(ICU): $(SPREZZ)/icu/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf icu-$(icu_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf icu_$(icu_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: iproute
 iproute:$(IPROUTE)_$(ARCH).deb
