@@ -166,7 +166,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
-	$(KMOD)
+	$(KMOD) $(LIBTORRENT) $(RTORRENT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1788,6 +1788,14 @@ $(LIBTOOL): $(SPREZZ)/libtool/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtool-$(libtool_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libtorrent
+libtorrent:$(LIBTORRENT)_$(ARCH).deb
+$(LIBTORRENT): $(SPREZZ)/libtorrent14/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtorrent-$(libtorrent_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libvirt
 libvirt:$(LIBVIRT)_$(ARCH).deb
 $(LIBVIRT): $(SPREZZ)/libvirt/debian/changelog
@@ -2380,6 +2388,14 @@ $(RTMPDUMP): $(SPREZZ)/rtmpdump/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rtmpdump-$(rtmpdump_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: rtorrent
+rtorrent:$(RTORRENT)_$(ARCH).deb
+$(RTORRENT): $(SPREZZ)/rtorrent/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rtorrent-$(rtorrent_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: samba
 samba:$(SAMBA)_$(ARCH).deb
