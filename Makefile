@@ -2530,7 +2530,7 @@ $(VIRTUOSOOPENSOURCE): $(SPREZZ)/virtuoso-opensource/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf virtuoso-opensource-$(virtuoso-opensource_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf virtuoso-opensource-$(virtuoso-opensource_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: vo-aacenc
 vo-aacenc:$(VOAACENC)_$(ARCH).deb
