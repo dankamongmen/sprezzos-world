@@ -165,7 +165,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
-	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM)
+	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
+	$(KMOD)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1482,6 +1483,14 @@ $(KISMET): $(SPREZZ)/kismet/debian/changelog
 	cp -r $(<D) $@/
 	{ cd $@ && TARBALL=`uscan --force-download --download-current-version --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && tar xzvf $$TARBALL $(TARARGS) $@ ; }
+
+.PHONY: kmod
+kmod:$(KMOD)_$(ARCH).deb
+$(KMOD): $(SPREZZ)/kmod/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kmod-$(kmod_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: lcms2
 lcms2:$(LCMS2)_$(ARCH).deb
