@@ -199,6 +199,13 @@ $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
 	tar cJf $(APITRACEORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
+.PHONY: gnome-xcf-thumbnailer
+gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
+$(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
+	git clone git@github.com:dankamongmen/gnome-xcf-thumbnailer.git $@
+	tar cJf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER) $@ --exclude-vcs
+	cp -r $(<D) $@/
+
 .PHONY: growlight
 growlight: $(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
@@ -1330,14 +1337,6 @@ $(GNOMEVFS): $(SPREZZ)/gnome-vfs/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-vfs-$(gnome-vfs_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: gnome-xcf-thumbnailer
-gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
-$(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gnomecatalog
 gnomecatalog:$(GNOMECATALOG)_$(ARCH).deb
