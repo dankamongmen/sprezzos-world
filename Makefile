@@ -205,6 +205,7 @@ $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
 everpad:$(EVERPAD)_$(ARCH).deb
 $(EVERPAD): $(SPREZZ)/everpad/debian/changelog
 	git clone git@github.com:nvbn/everpad.git $@
+	rm -rf $@/debian
 	tar cJf everpad-$(everpad_UPVER).tar.xz $@ --exclude-vcs
 	ln -s everpad-$(everpad_UPVER).tar.xz everpad_$(everpad_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
