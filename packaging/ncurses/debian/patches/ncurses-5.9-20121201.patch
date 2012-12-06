@@ -1,0 +1,554 @@
+# ncurses 5.9 - patch 20121201 - Thomas E. Dickey
+#
+# ------------------------------------------------------------------------------
+#
+# Ncurses 5.9 is at
+# 	ftp.gnu.org:/pub/gnu
+#
+# Patches for ncurses 5.9 are in the subdirectory
+# 	ftp://invisible-island.net/ncurses/5.9
+#
+# ------------------------------------------------------------------------------
+# ftp://invisible-island.net/ncurses/5.9/ncurses-5.9-20121201.patch.gz
+# patch by Thomas E. Dickey <dickey@invisible-island.net>
+# created  Sun Dec  2 02:34:01 UTC 2012
+# ------------------------------------------------------------------------------
+# MANIFEST                                          |    2 
+# NEWS                                              |    8 -
+# dist.mk                                           |    4 
+# ncurses-5.9-20121201/ncurses/widechar/widechars.c |  151 ++++++++++++++++++++
+# ncurses-5.9-20121201/test/widechars.h             |   71 +++++++++
+# ncurses/curses.priv.h                             |   22 ++
+# ncurses/modules                                   |    3 
+# package/debian/changelog                          |    4 
+# package/ncurses.spec                              |    2 
+# test/modules                                      |    6 
+# test/test.priv.h                                  |    6 
+# test/view.c                                       |   50 +++---
+# 12 files changed, 294 insertions(+), 35 deletions(-)
+# ------------------------------------------------------------------------------
+Index: MANIFEST
+--- ncurses-5.9-20121124+/MANIFEST	2012-11-03 19:43:02.000000000 +0000
++++ ncurses-5.9-20121201/MANIFEST	2012-12-01 21:41:33.000000000 +0000
+@@ -1113,6 +1113,8 @@
+ ./test/tracemunch
+ ./test/view.c
+ ./test/widechars-utf8.txt
++./test/widechars.c
++./test/widechars.h
+ ./test/worm.c
+ ./test/xmas.c
+ ./test/xterm-16color.dat
+Index: NEWS
+Prereq:  1.1976 
+--- ncurses-5.9-20121124+/NEWS	2012-11-24 20:02:52.000000000 +0000
++++ ncurses-5.9-20121201/NEWS	2012-12-02 01:51:32.000000000 +0000
+@@ -25,7 +25,7 @@
+ -- sale, use or other dealings in this Software without prior written        --
+ -- authorization.                                                            --
+ -------------------------------------------------------------------------------
+--- $Id: NEWS,v 1.1976 2012/11/24 20:02:52 tom Exp $
++-- $Id: NEWS,v 1.1979 2012/12/02 01:51:32 tom Exp $
+ -------------------------------------------------------------------------------
+ 
+ This is a log of changes that ncurses has gone through since Zeyd started
+@@ -45,6 +45,12 @@
+ Changes through 1.9.9e did not credit all contributions;
+ it is not possible to add this information.
+ 
++20121201
++	+ also replace MinGW's wctomb(), fixing a problem with setcchar().
++	+ modify test/view.c to load UTF-8 when built with MinGW by using
++	  regular win32 API because the MinGW functions mblen() and mbtowc()
++	  do not work.
++
+ 20121124
+ 	+ correct order of color initialization versus display in some of the
+ 	  test-programs, e.g., test_addstr.c
+Index: dist.mk
+Prereq:  1.902 
+--- ncurses-5.9-20121124+/dist.mk	2012-11-24 17:11:44.000000000 +0000
++++ ncurses-5.9-20121201/dist.mk	2012-12-01 18:22:40.000000000 +0000
+@@ -25,7 +25,7 @@
+ # use or other dealings in this Software without prior written               #
+ # authorization.                                                             #
+ ##############################################################################
+-# $Id: dist.mk,v 1.902 2012/11/24 17:11:44 tom Exp $
++# $Id: dist.mk,v 1.903 2012/12/01 18:22:40 tom Exp $
+ # Makefile for creating ncurses distributions.
+ #
+ # This only needs to be used directly as a makefile by developers, but
+@@ -37,7 +37,7 @@
+ # These define the major/minor/patch versions of ncurses.
+ NCURSES_MAJOR = 5
+ NCURSES_MINOR = 9
+-NCURSES_PATCH = 20121124
++NCURSES_PATCH = 20121201
+ 
+ # We don't append the patch to the version, since this only applies to releases
+ VERSION = $(NCURSES_MAJOR).$(NCURSES_MINOR)
+Index: ncurses/curses.priv.h
+Prereq:  1.508 
+--- ncurses-5.9-20121124+/ncurses/curses.priv.h	2012-11-03 19:41:04.000000000 +0000
++++ ncurses-5.9-20121201/ncurses/curses.priv.h	2012-12-02 01:41:23.000000000 +0000
+@@ -34,7 +34,7 @@
+  ****************************************************************************/
+ 
+ /*
+- * $Id: curses.priv.h,v 1.508 2012/11/03 19:41:04 tom Exp $
++ * $Id: curses.priv.h,v 1.511 2012/12/02 01:41:23 tom Exp $
+  *
+  *	curses.priv.h
+  *
+@@ -2038,6 +2038,23 @@
+  * Wide-character macros to hide some platform-differences.
+  */
+ #if USE_WIDEC_SUPPORT
++
++#if defined(__MINGW32__)
++/*
++ * MinGW has wide-character functions, but they do not work correctly.
++ */
++
++extern int __MINGW_NOTHROW _nc_wctomb(char *, wchar_t);
++#define wctomb(s,wc) _nc_wctomb(s,wc)
++
++extern int __MINGW_NOTHROW _nc_mbtowc(wchar_t *, const char *, size_t);
++#define mbtowc(pwc,s,n) _nc_mbtowc(pwc,s,n)
++
++extern int __MINGW_NOTHROW _nc_mblen(const char *, size_t);
++#define mblen(s,n) _nc_mblen(s, n)
++
++#endif /* __MINGW32__ */
++
+ #if HAVE_MBTOWC && HAVE_MBLEN
+ #define reset_mbytes(state) IGNORE_RC(mblen(NULL, (size_t) 0)), IGNORE_RC(mbtowc(NULL, NULL, (size_t) 0))
+ #define count_mbytes(buffer,length,state) mblen(buffer,length)
+@@ -2052,7 +2069,8 @@
+ #else
+ make an error
+ #endif
+-#endif
++
++#endif /* USE_WIDEC_SUPPORT */
+ 
+ /*
+  * Not everyone has vsscanf(), but we'd like to use it for scanw().
+Index: ncurses/modules
+Prereq:  1.118 
+--- ncurses-5.9-20121124+/ncurses/modules	2012-11-03 19:44:28.000000000 +0000
++++ ncurses-5.9-20121201/ncurses/modules	2012-12-02 00:51:44.000000000 +0000
+@@ -1,4 +1,4 @@
+-# $Id: modules,v 1.118 2012/11/03 19:44:28 tom Exp $
++# $Id: modules,v 1.119 2012/12/02 00:51:44 tom Exp $
+ ##############################################################################
+ # Copyright (c) 1998-2010,2012 Free Software Foundation, Inc.                #
+ #                                                                            #
+@@ -235,6 +235,7 @@
+ @ port_win32con
+ gettimeofday	lib		$(win32con)	$(HEADER_DEPS)
+ wcwidth		lib             $(win32con)	$(HEADER_DEPS)
++widechars	lib             $(wide)		$(HEADER_DEPS)
+ win_driver	lib             $(win32con)	$(HEADER_DEPS)
+ 
+ @ port_tinfo
+Index: ncurses/widechar/widechars.c
+--- /dev/null	2012-12-01 12:02:39.813727708 +0000
++++ ncurses-5.9-20121201/ncurses/widechar/widechars.c	2012-12-02 01:50:59.000000000 +0000
+@@ -0,0 +1,151 @@
++/****************************************************************************
++ * Copyright (c) 2012 Free Software Foundation, Inc.                        *
++ *                                                                          *
++ * Permission is hereby granted, free of charge, to any person obtaining a  *
++ * copy of this software and associated documentation files (the            *
++ * "Software"), to deal in the Software without restriction, including      *
++ * without limitation the rights to use, copy, modify, merge, publish,      *
++ * distribute, distribute with modifications, sublicense, and/or sell       *
++ * copies of the Software, and to permit persons to whom the Software is    *
++ * furnished to do so, subject to the following conditions:                 *
++ *                                                                          *
++ * The above copyright notice and this permission notice shall be included  *
++ * in all copies or substantial portions of the Software.                   *
++ *                                                                          *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS  *
++ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF               *
++ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.   *
++ * IN NO EVENT SHALL THE ABOVE COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,   *
++ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR    *
++ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR    *
++ * THE USE OR OTHER DEALINGS IN THE SOFTWARE.                               *
++ *                                                                          *
++ * Except as contained in this notice, the name(s) of the above copyright   *
++ * holders shall not be used in advertising or otherwise to promote the     *
++ * sale, use or other dealings in this Software without prior written       *
++ * authorization.                                                           *
++ ****************************************************************************/
++
++#include <curses.priv.h>
++
++#if USE_WIDEC_SUPPORT
++
++MODULE_ID("$Id: widechars.c,v 1.4 2012/12/02 01:50:59 tom Exp $")
++
++#if defined(__MINGW32__)
++/*
++ * MinGW has wide-character functions, but they do not work correctly.
++ */
++
++int
++_nc_mbtowc(wchar_t *pwc, const char *s, size_t n)
++{
++    int result;
++    int count;
++    int try;
++
++    if (s != 0 && n != 0) {
++	/*
++	 * MultiByteToWideChar() can decide to return more than one wide-character.
++	 * We want only one. Ignore any trailing null, both in the initial count
++	 * and in the conversion.
++	 */
++	count = 0;
++	for (try = 1; try <= (int) n; ++try) {
++	    count = MultiByteToWideChar(CP_UTF8,
++					MB_ERR_INVALID_CHARS,
++					s,
++					try,
++					pwc,
++					0);
++	    TR(TRACE_BITS, ("...try %d:%d", try, count));
++	    if (count > 0) {
++		break;
++	    }
++	}
++	if (count < 1 || count > 2) {
++	    result = -1;
++	} else {
++	    wchar_t actual[2];
++	    count = MultiByteToWideChar(CP_UTF8,
++					MB_ERR_INVALID_CHARS,
++					s,
++					try,
++					actual,
++					2);
++	    TR(TRACE_BITS, ("\twin32 ->%#x, %#x", actual[0], actual[1]));
++	    *pwc = actual[0];
++	    if (actual[1] != 0)
++		result = -1;
++	    else
++		result = try;
++	}
++    } else {
++	result = 0;
++    }
++
++    return result;
++}
++
++int
++_nc_mblen(const char *s, size_t n)
++{
++    int result = -1;
++    int count;
++    wchar_t temp;
++
++    if (s != 0 && n != 0) {
++	count = _nc_mbtowc(&temp, s, n);
++	if (count == 1) {
++	    int check = WideCharToMultiByte(CP_UTF8,
++					    0,
++					    &temp,
++					    1,
++					    NULL,
++					    0,	/* compute length only */
++					    NULL,
++					    NULL);
++	    TR(TRACE_BITS, ("\tcheck ->%d\n", check));
++	    if (check > 0 && (size_t) check <= n) {
++		result = check;
++	    }
++	}
++    } else {
++	result = 0;
++    }
++
++    return result;
++}
++
++int __MINGW_NOTHROW
++_nc_wctomb(char *s, wchar_t wc)
++{
++    int result;
++    int check;
++
++    check = WideCharToMultiByte(CP_UTF8,
++				0,
++				&wc,
++				1,
++				NULL,
++				0,	/* compute length only */
++				NULL,
++				NULL);
++    if (check > 0) {
++	result = WideCharToMultiByte(CP_UTF8,
++				     0,
++				     &wc,
++				     1,
++				     s,
++				     check + 1,
++				     NULL,
++				     NULL);
++    } else {
++	result = -1;
++    }
++    return result;
++}
++
++#endif /* __MINGW32__ */
++
++#endif /* USE_WIDEC_SUPPORT */
+Index: package/debian/changelog
+--- ncurses-5.9-20121124+/package/debian/changelog	2012-11-24 17:13:24.000000000 +0000
++++ ncurses-5.9-20121201/package/debian/changelog	2012-12-01 18:28:34.000000000 +0000
+@@ -1,8 +1,8 @@
+-ncurses6 (5.9-20121124) unstable; urgency=low
++ncurses6 (5.9-20121201) unstable; urgency=low
+ 
+   * latest weekly patch
+ 
+- -- Thomas E. Dickey <dickey@invisible-island.net>  Sat, 24 Nov 2012 12:13:21 -0500
++ -- Thomas E. Dickey <dickey@invisible-island.net>  Sat, 01 Dec 2012 13:28:31 -0500
+ 
+ ncurses6 (5.9-20120608) unstable; urgency=low
+ 
+Index: package/ncurses.spec
+--- ncurses-5.9-20121124+/package/ncurses.spec	2012-11-24 17:13:24.000000000 +0000
++++ ncurses-5.9-20121201/package/ncurses.spec	2012-12-01 18:28:24.000000000 +0000
+@@ -1,7 +1,7 @@
+ Summary: shared libraries for terminal handling
+ Name: ncurses6
+ Release: 5.9
+-Version: 20121124
++Version: 20121201
+ License: X11
+ Group: Development/Libraries
+ Source: ncurses-%{release}-%{version}.tgz
+Index: test/modules
+Prereq:  1.43 
+--- ncurses-5.9-20121124+/test/modules	2010-01-23 17:51:38.000000000 +0000
++++ ncurses-5.9-20121201/test/modules	2012-12-02 00:50:53.000000000 +0000
+@@ -1,6 +1,6 @@
+-# $Id: modules,v 1.43 2010/01/23 17:51:38 tom Exp $
++# $Id: modules,v 1.46 2012/12/02 00:50:53 tom Exp $
+ ##############################################################################
+-# Copyright (c) 1998-2009,2010 Free Software Foundation, Inc.                #
++# Copyright (c) 1998-2010,2012 Free Software Foundation, Inc.                #
+ #                                                                            #
+ # Permission is hereby granted, free of charge, to any person obtaining a    #
+ # copy of this software and associated documentation files (the "Software"), #
+@@ -89,7 +89,7 @@
+ testaddch	progs		$(srcdir)	$(HEADER_DEPS)
+ testcurs	progs		$(srcdir)	$(HEADER_DEPS)
+ testscanw	progs		$(srcdir)	$(HEADER_DEPS)
+-view		progs		$(srcdir)	$(HEADER_DEPS)
++view		progs		$(srcdir)	$(HEADER_DEPS)	$(srcdir)/widechars.h
+ worm		progs		$(srcdir)	$(HEADER_DEPS)
+ xmas		progs		$(srcdir)	$(HEADER_DEPS)
+ 
+Index: test/test.priv.h
+Prereq:  1.114 
+--- ncurses-5.9-20121124+/test/test.priv.h	2011-10-29 19:59:55.000000000 +0000
++++ ncurses-5.9-20121201/test/test.priv.h	2012-12-02 00:46:34.000000000 +0000
+@@ -1,5 +1,5 @@
+ /****************************************************************************
+- * Copyright (c) 1998-2010,2011 Free Software Foundation, Inc.              *
++ * Copyright (c) 1998-2011,2012 Free Software Foundation, Inc.              *
+  *                                                                          *
+  * Permission is hereby granted, free of charge, to any person obtaining a  *
+  * copy of this software and associated documentation files (the            *
+@@ -29,7 +29,7 @@
+ /****************************************************************************
+  *  Author: Thomas E. Dickey                    1996-on                     *
+  ****************************************************************************/
+-/* $Id: test.priv.h,v 1.114 2011/10/29 19:59:55 tom Exp $ */
++/* $Id: test.priv.h,v 1.115 2012/12/02 00:46:34 tom Exp $ */
+ 
+ #ifndef __TEST_PRIV_H
+ #define __TEST_PRIV_H 1
+@@ -758,6 +758,8 @@
+ #define USE_TRACE 0
+ #endif
+ 
++#define Trace2(p)		/* nothing */
++
+ #define MvAddCh         (void) mvaddch
+ #define MvWAddCh        (void) mvwaddch
+ #define MvAddStr        (void) mvaddstr
+Index: test/view.c
+Prereq:  1.85 
+--- ncurses-5.9-20121124+/test/view.c	2012-06-09 20:29:33.000000000 +0000
++++ ncurses-5.9-20121201/test/view.c	2012-12-01 23:19:49.000000000 +0000
+@@ -50,10 +50,11 @@
+  * scroll operation worked, and the refresh() code only had to do a
+  * partial repaint.
+  *
+- * $Id: view.c,v 1.85 2012/06/09 20:29:33 tom Exp $
++ * $Id: view.c,v 1.88 2012/12/01 23:19:49 tom Exp $
+  */
+ 
+ #include <test.priv.h>
++#include <widechars.h>
+ 
+ #include <time.h>
+ 
+@@ -81,23 +82,6 @@
+ #include <sys/ptem.h>
+ #endif
+ 
+-#if USE_WIDEC_SUPPORT
+-#if HAVE_MBTOWC && HAVE_MBLEN
+-#define reset_mbytes(state) IGNORE_RC(mblen(NULL, 0)), IGNORE_RC(mbtowc(NULL, NULL, 0))
+-#define count_mbytes(buffer,length,state) mblen(buffer,length)
+-#define check_mbytes(wch,buffer,length,state) \
+-	(int) mbtowc(&wch, buffer, length)
+-#define state_unused
+-#elif HAVE_MBRTOWC && HAVE_MBRLEN
+-#define reset_mbytes(state) init_mb(state)
+-#define count_mbytes(buffer,length,state) mbrlen(buffer,length,&state)
+-#define check_mbytes(wch,buffer,length,state) \
+-	(int) mbrtowc(&wch, buffer, length, &state)
+-#else
+-make an error
+-#endif
+-#endif				/* USE_WIDEC_SUPPORT */
+-
+ static RETSIGTYPE finish(int sig) GCC_NORETURN;
+ static void show_all(const char *tag);
+ 
+@@ -280,7 +264,13 @@
+ #endif
+ #ifdef TRACE
+ 	case 'T':
+-	    trace((unsigned) atoi(optarg));
++	    {
++		char *next = 0;
++		int tvalue = strtol(optarg, &next, 0);
++		if (tvalue < 0 || (next != 0 && *next != 0))
++		    usage();
++		trace((unsigned) tvalue);
++	    }
+ 	    break;
+ 	case 't':
+ 	    trace(TRACE_CALLS);
+@@ -308,7 +298,7 @@
+ 	(void) signal(SIGWINCH, adjust);	/* arrange interrupts to resize */
+ #endif
+ 
+-    /* slurp the file */
++    Trace(("slurp the file"));
+     for (lptr = &vec_lines[0]; (lptr - vec_lines) < MAXLINES; lptr++) {
+ 	char temp[BUFSIZ], *s, *d;
+ 	int col;
+@@ -316,8 +306,26 @@
+ 	if (fgets(buf, sizeof(buf), fp) == 0)
+ 	    break;
+ 
+-	/* convert tabs so that shift will work properly */
++#if USE_WIDEC_SUPPORT
++	if (lptr == vec_lines) {
++	    if (!memcmp("﻿", buf, 3)) {
++		Trace(("trim BOM"));
++		s = buf + 3;
++		d = buf;
++		do {
++		} while ((*d++ = *s++) != '\0');
++	    }
++	}
++#endif
++
++	/* convert tabs and nonprinting chars so that shift will work properly */
+ 	for (s = buf, d = temp, col = 0; (*d = *s) != '\0'; s++) {
++	    if (*d == '\r') {
++		if (s[1] == '\n')
++		    continue;
++		else
++		    break;
++	    }
+ 	    if (*d == '\n') {
+ 		*d = '\0';
+ 		break;
+Index: test/widechars.h
+--- /dev/null	2012-12-01 12:02:39.813727708 +0000
++++ ncurses-5.9-20121201/test/widechars.h	2012-12-01 20:45:54.000000000 +0000
+@@ -0,0 +1,71 @@
++/****************************************************************************
++ * Copyright (c) 2012 Free Software Foundation, Inc.                        *
++ *                                                                          *
++ * Permission is hereby granted, free of charge, to any person obtaining a  *
++ * copy of this software and associated documentation files (the            *
++ * "Software"), to deal in the Software without restriction, including      *
++ * without limitation the rights to use, copy, modify, merge, publish,      *
++ * distribute, distribute with modifications, sublicense, and/or sell       *
++ * copies of the Software, and to permit persons to whom the Software is    *
++ * furnished to do so, subject to the following conditions:                 *
++ *                                                                          *
++ * The above copyright notice and this permission notice shall be included  *
++ * in all copies or substantial portions of the Software.                   *
++ *                                                                          *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS  *
++ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF               *
++ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.   *
++ * IN NO EVENT SHALL THE ABOVE COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,   *
++ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR    *
++ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR    *
++ * THE USE OR OTHER DEALINGS IN THE SOFTWARE.                               *
++ *                                                                          *
++ * Except as contained in this notice, the name(s) of the above copyright   *
++ * holders shall not be used in advertising or otherwise to promote the     *
++ * sale, use or other dealings in this Software without prior written       *
++ * authorization.                                                           *
++ ****************************************************************************/
++
++#ifndef __WIDECHARS_H
++#define __WIDECHARS_H 1
++
++#include <test.priv.h>
++
++#if USE_WIDEC_SUPPORT
++
++#if defined(__MINGW32__)
++/*
++ * MinGW has wide-character functions, but they do not work correctly.
++ */
++
++extern int _nc_mbtowc(wchar_t *pwc, const char *s, size_t n);
++extern int __MINGW_NOTHROW _nc_mbtowc(wchar_t *pwc, const char *s, size_t n);
++#define mbtowc(pwc,s,n) _nc_mbtowc(pwc,s,n)
++
++extern int __MINGW_NOTHROW _nc_mblen(const char *, size_t);
++#define mblen(s,n) _nc_mblen(s, n)
++
++#endif /* __MINGW32__ */
++
++#if HAVE_MBTOWC && HAVE_MBLEN
++#define reset_mbytes(state) IGNORE_RC(mblen(NULL, 0)), IGNORE_RC(mbtowc(NULL, NULL, 0))
++#define count_mbytes(buffer,length,state) mblen(buffer,length)
++#define check_mbytes(wch,buffer,length,state) \
++	(int) mbtowc(&wch, buffer, length)
++#define state_unused
++#elif HAVE_MBRTOWC && HAVE_MBRLEN
++#define reset_mbytes(state) init_mb(state)
++#define count_mbytes(buffer,length,state) mbrlen(buffer,length,&state)
++#define check_mbytes(wch,buffer,length,state) \
++	(int) mbrtowc(&wch, buffer, length, &state)
++#else
++make an error
++#endif
++
++#else
++
++#endif /* USE_WIDEC_SUPPORT */
++
++extern void widechars_stub(void);
++
++#endif /* __WIDECHARS_H */
