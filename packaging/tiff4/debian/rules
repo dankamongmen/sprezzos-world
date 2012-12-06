@@ -1,0 +1,62 @@
+#!/usr/bin/make -f
+
+# Enable all hardening options.
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+# Variables used by cdbs
+DEB_COMPRESS_EXCLUDE = html
+CPPFLAGS += -D_REENTRANT
+export CPPFLAGS
+
+# Include cdbs rules files.
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+DEB_CONFIGURE_USER_FLAGS = --with-docdir="\$${prefix}/share/doc/libtiff-doc" \
+	--libdir="\$${prefix}/lib/$(DEB_HOST_MULTIARCH)" \
+	--enable-ld-version-script
+
+clean::
+	$(RM) *.cdbs-config_list
+	$(RM) debian/*.preinst
+
+# tiffgt is in libtiff-opengl so libtiff-tools doesn't have to have
+# all the X and opengl dependencies.
+binary-post-install/libtiff-tools::
+	$(RM) debian/libtiff-tools/usr/bin/tiffgt
+	$(RM) debian/libtiff-tools/usr/share/man/man1/tiffgt.1*
+
+# Empty dependency_libs from all .la files
+binary-post-install/libtiff5-dev::
+	sed -i "s,^dependency_libs=.*,dependency_libs=''," \
+	   debian/libtiff5-dev/usr/lib/*/*.la
+
+# Create preinst
+binary-post-install/%::
+	if [ "$*" != "libtiff5" ]; then \
+	    sed -e s/PKG/$*/g < debian/all-preinst > debian/$*.preinst; \
+	fi
+
+# --- TEMPORARY -- remove when libtiff5-alt-dev is gone ---
+# Also remove debian/libtiff5-alt-dev.*
+binary-post-install/libtiff5-alt-dev::
+	sed -i "s,^dependency_libs=.*,dependency_libs=''," \
+	   debian/libtiff5-alt-dev/usr/lib/*/*.la
+	rm -rf debian/libtiff5-alt-dev/usr/share/man
+	mkdir debian/libtiff5-alt-dev/usr/include/libtiff5-alt
+	mv debian/libtiff5-alt-dev/usr/include/tiff* \
+	   debian/libtiff5-alt-dev/usr/include/libtiff5-alt
+	LDIR=$(wildcard debian/libtiff5-alt-dev/usr/lib/*); \
+	mkdir $$LDIR/libtiff5-alt; \
+	mv $$LDIR/lib* $$LDIR/libtiff5-alt; \
+	l1=`readlink $$LDIR/libtiff5-alt/libtiff.so`; \
+	l2=`readlink $$LDIR/libtiff5-alt/libtiffxx.so`; \
+	rm $$LDIR/libtiff5-alt/libtiff*.so; \
+	ln -s ../$$l1  $$LDIR/libtiff5-alt/libtiff.so; \
+	ln -s ../$$l2  $$LDIR/libtiff5-alt/libtiffxx.so; \
+	sed -i "s,\(lib\|include\)dir=\(.*\),\1dir=\2/libtiff5-alt," \
+	   $$LDIR/pkgconfig/libtiff-4.pc; \
+	sed -i "s,libdir='\(.*\)',libdir='\1/libtiff5-alt'," \
+	   $$LDIR/libtiff5-alt/*.la
