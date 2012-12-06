@@ -155,7 +155,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(QEMUKVM) $(GTKVNC) $(GTHUMB) $(PYCURL) $(LIBGNOMECUPS) $(LIBGNOMEPRINT) \
 	$(TELEPATHYGABBLE) $(GNOMEPHOTOPRINTER) $(ELINKS) $(LYNX) $(GNUTLS26) $(MX) \
 	$(RAWSTUDIO) $(LIBWACOM) $(MUFFIN) $(XSERVERXORGVIDEOINTEL) $(SAMBA) $(PTLIB) \
-	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) \
+	$(UWSGI) $(POSTGRESQL) $(HEIMDAL) $(OPAL) $(LAME) $(TOTEM_PL_PARSER) $(TIFF4) \
 	$(DBUSPYTHON) $(GDB) $(ATKBRIDGE) $(TIFF3) $(LIBXRANDR) $(HICOLORICONTHEME) \
 	$(VALGRIND) $(EMPATHY) $(LIBCANBERRA) $(TELEPATHYFARSTREAM) $(FARSTREAM) \
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
@@ -2655,6 +2655,14 @@ $(TIFF3): $(SPREZZ)/tiff3/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tiff-$(tiff3_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: tiff4
+tiff4:$(TIFF4)_$(ARCH).deb
+$(TIFF4): $(SPREZZ)/tiff4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tiff-$(tiff4_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: totem-pl-parser
 totem-pl-parser:$(TOTEMPLPARSER)_$(ARCH).deb
