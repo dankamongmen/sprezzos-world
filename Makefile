@@ -23,8 +23,6 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
-	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && \
 	 echo -n "$(@F)_UPVER:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr -d \~ | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
