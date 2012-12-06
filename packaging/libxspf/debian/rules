@@ -1,0 +1,122 @@
+#! /usr/bin/make -f
+
+###
+
+# Configure arguments
+
+confflags = --prefix=/usr
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+confflags += --build $(DEB_BUILD_GNU_TYPE)
+
+# Only specify --host when cross-compiling
+ifneq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+    confflags += --host $(DEB_HOST_GNU_TYPE)
+endif
+
+###
+
+# Directory to make the build on
+
+objdir = $(CURDIR)/obj-$(DEB_HOST_GNU_TYPE)
+
+###
+
+# CFLAGS
+
+CFLAGS = -Wall -g
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+###
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+
+	ln -sf /usr/share/misc/config.sub .
+	ln -sf /usr/share/misc/config.guess .
+
+	# Remove when we no longer patch configure.*
+	touch configure.in aclocal.m4 configure Makefile.in
+
+	-mkdir $(objdir)
+	cd $(objdir) && \
+	env CFLAGS="$(CFLAGS)" ../configure $(confflags)
+
+	# This is needed to run the tests out of tree
+	ln -s ../../test/for_version_0 $(objdir)/test
+	ln -s ../../test/for_version_1 $(objdir)/test
+	ln -s ../../../test/ProjectOpus/Example.xspf $(objdir)/test/ProjectOpus
+
+	touch $@
+
+#
+
+build: build-stamp
+build-stamp: configure-stamp
+	cd $(objdir) && \
+	$(MAKE) all check
+
+	touch $@
+
+#
+
+clean:
+	dh_testdir
+	dh_testroot
+
+	rm -f configure-stamp build-stamp install-stamp
+	rm -f config.guess config.sub
+	rm -rf $(objdir)
+
+	dh_clean
+
+#
+
+install: install-stamp
+install-stamp:
+	dh_testdir
+	dh_testroot
+	dh_clean
+	dh_installdirs
+	cd $(objdir) && $(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	dh_install --list-missing
+	nm -DC $(CURDIR)/debian/tmp/usr/lib/libspiff.so.1 | sed -ne 's/.* T //p' | env LC_ALL=C sort | diff -u $(CURDIR)/debian/libspiff1.symbols -
+	touch $@ 
+
+#
+
+binary: binary-arch
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_installexamples
+	dh_installmime
+	dh_installman
+	dh_link
+	dh_strip
+	dh_compress -X.cpp -X.xspf
+	dh_fixperms
+	dh_makeshlibs -V 'libspiff1 (>= 0.8.2)'
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-indep:
+	@echo "Nothing to do."
+
+#
+
+.PHONY: configure build clean install binary binary-arch binary-indep
