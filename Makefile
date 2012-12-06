@@ -2086,8 +2086,8 @@ $(MPD): $(SPREZZ)/mpd/debian/changelog
 	tar xzvf mpd_$(mpd_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libmpd
-libmpd:$(LIBMPD)_$(ARCH).deb
-$(LIBMPD): $(SPREZZ)/libmpd/debian/changelog
+libmpd:libmpd-$(libmpd_UPVER)_$(ARCH).deb
+libmpd-$(libmpd_UPVER)_$(ARCH).deb: $(SPREZZ)/libmpd/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
