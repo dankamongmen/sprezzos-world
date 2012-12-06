@@ -168,7 +168,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
-	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO)
+	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
+	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1972,6 +1973,14 @@ $(GMAKE): $(SPREZZ)/gmake/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf make-$(gmake_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gmpc
+gmpc:$(GMPC)_$(ARCH).deb
+$(GMPC): $(SPREZZ)/gmpc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gmpc-$(gmpc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: lightspark
 lightspark:$(LIGHTSPARK)_$(ARCH).deb
 $(LIGHTSPARK): $(SPREZZ)/lightspark/debian/changelog
@@ -2059,6 +2068,22 @@ $(MPD): $(SPREZZ)/mpd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mpd_$(mpd_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libmpd
+libmpd:$(LIBMPD)_$(ARCH).deb
+$(LIBMPD): $(SPREZZ)/libmpd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmpd-$(libmpd_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libmpdclient
+libmpdclient:$(LIBMPDCLIENT)_$(ARCH).deb
+$(LIBMPDCLIENT): $(SPREZZ)/libmpdclient/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmpdclient-$(libmpdclient_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: muffin
 muffin:$(MUFFIN)_$(ARCH).deb
