@@ -167,7 +167,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
-	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD)
+	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -197,6 +197,14 @@ apitrace:$(APITRACE)_$(ARCH).deb
 $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
 	git clone git://github.com/apitrace/apitrace.git $@
 	tar cJf $(APITRACEORIG) $@ --exclude-vcs
+	cp -r $(<D) $@/
+
+.PHONY: everpad
+everpad:$(EVERPAD)_$(ARCH).deb
+$(EVERPAD): $(SPREZZ)/everpad/debian/changelog
+	git clone git@github.com:nvbn/everpad.git $@
+	tar cJf everpad-$(everpad_UPVER).tar.xz $@ --exclude-vcs
+	ln -s everpad-$(everpad_UPVER).tar.xz everpad_$(everpad_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: gnome-xcf-thumbnailer
