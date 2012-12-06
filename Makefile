@@ -169,7 +169,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
-	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) \
+	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
 	$(AWNEXTRAAPPLETS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -1942,6 +1942,14 @@ $(LIBXFIXES): $(SPREZZ)/libxfixes/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxfixes_$(libxfixes_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libxspf
+libxspf:$(LIBXSPF)_$(ARCH).deb
+$(LIBXSPF): $(SPREZZ)/libxspf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libxspf-$(libxspf_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libx11
 libx11:$(LIBX11)_$(ARCH).deb
