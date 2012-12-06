@@ -1,0 +1,158 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+LSB_RELEASE := $(shell lsb_release -i -s)
+SERVER_VERSION := $(shell dpkg-parsechangelog | perl -ne 'print $$1 if m/Version:\s*([\d\.]+)/')
+MODULE_DIR := /usr/lib/apache2/modules/
+API = $(shell perl -ne 'print $$1 if m/define\s+MODULE_MAGIC_NUMBER_MAJOR\s+?(.*)$$/' < include/ap_mmn.h)
+AP2_CFLAGS = -pipe $(shell dpkg-buildflags --get CFLAGS)
+AP2_LDFLAGS = -Wl,--as-needed $(shell dpkg-buildflags --get LDFLAGS)
+AP2_CPPFLAGS = -DPLATFORM='\"$(LSB_RELEASE)\"' $(shell dpkg-buildflags --get CPPFLAGS)
+
+patch: patch.stamp
+patch.stamp: 
+	cp support/suexec.c support/suexec-custom.c
+	patch -p1 < debian/patches/suexec-custom.patch
+	mkdir server/mpm/itk/
+	cp server/mpm/prefork/* server/mpm/itk/
+	mv server/mpm/itk/prefork.c server/mpm/itk/itk.c
+	set -ex; for p in $$(grep -v '^#' debian/patches/itk/series) ; do \
+		echo Applying $$p ... ;\
+		patch -p1 < debian/patches/itk/$$p ;\
+	done
+	touch $@
+
+unpatch:
+	if [ -e patch.stamp ] ;\
+	then \
+		set -ex ;\
+		for p in $$(grep -v '^#' debian/patches/itk/series | tac) ;\
+		do \
+			echo De-applying $$p ... ;\
+			patch -R -p1 < debian/patches/itk/$$p ;\
+		done ;\
+		rm -r server/mpm/itk ;\
+		rm support/suexec-custom.c ;\
+		rm patch.stamp ;\
+	fi
+
+prebuild-checks:
+	ERRS="" ;\
+	for a in $$(find debian/config-dir/ -type f) ; do \
+		t="$$a.$$$$" ;\
+		unexpand < "$$a" > "$$t" ;\
+		cmp -s "$$a" "$$t" || ERRS="$$ERRS $$a" ;\
+		rm "$$t" ;\
+	done ;\
+	if [ -n "$$ERRS" ] ; then \
+		echo 'ERROR: The following files contain spaces instead of tabs. Run through unexpand!' ;\
+		ls -1 $$ERRS ;\
+		false ;\
+	fi
+
+clean-config-vars:
+	# Clean up config_vars.mk
+	# FIXME: Maybe someone could document here why we actually need to
+	# cleanup some stuff here
+	perl ./debian/clean_config_vars '$(AP2_CFLAGS)' '$(AP2_CPPFLAGS)' '$(AP2_LDFLAGS)'
+
+%: %.in
+	sed 's#__SERVER_VERSION__#$(SERVER_VERSION)#; s#__MODULE_DIR__#$(MODULE_DIR)#; s#__API__#$(API)#;' $< > $@
+	chmod `/usr/bin/stat -c '%a' "$<"` $@
+
+prepare-scripts: debian/a2query debian/debhelper/dh_apache2
+	(grep -s -v apache2:API debian/apache2-bin.substvars; echo apache2:API=apache2-api-$(API)) > debian/apache2-bin.substvars.new
+	mv debian/apache2-bin.substvars.new debian/apache2-bin.substvars
+
+generate-maintainer-scripts:
+	set -e ; \
+	for type in custom pristine ; do \
+		for f in postinst preinst prerm links dirs lintian-overrides postrm; do \
+			if [ -e debian/apache2-suexec.$$f.in ] ; then \
+				perl -pe "s{__TYPE__}{$$type}g" < debian/apache2-suexec.$$f.in > debian/apache2-suexec-$$type.$$f ;\
+				chmod `/usr/bin/stat -c '%a' "debian/apache2-suexec.$$f.in"` debian/apache2-suexec-$$type.$$f ;\
+			fi ;\
+		done ;\
+	done
+
+%:
+	dh $@ --parallel --with autotools_dev
+
+override_dh_auto_configure: patch generate-maintainer-scripts prebuild-checks
+	./configure --enable-layout=Debian --enable-so --with-program-name=apache2 \
+		--enable-suexec --with-suexec-caller=www-data \
+		--with-suexec-bin=/usr/lib/apache2/suexec --with-suexec-docroot=/var/www \
+		--with-suexec-userdir=public_html --with-suexec-logfile=/var/log/apache2/suexec.log \
+		--with-suexec-uidmin=100 --enable-suexec=shared --enable-log-config=static \
+		--with-apr=/usr/bin/apr-1-config --with-apr-util=/usr/bin/apu-1-config \
+		--with-pcre=yes \
+		--enable-pie \
+		--enable-mpms-shared=all \
+		--enable-mods-shared="all cgi" \
+		--enable-mods-static="unixd logio watchdog version" \
+		CFLAGS="$(AP2_CFLAGS)" CPPFLAGS="$(AP2_CPPFLAGS)" LDFLAGS="$(AP2_LDFLAGS)" \
+		$(AP2_EXTRAFLAGS)
+
+override_dh_install: clean-config-vars prepare-scripts
+	dh_install --list-missing
+
+override_dh_fixperms-arch:
+	# standard suexec
+	chmod 4754 debian/apache2-suexec-pristine/usr/lib/apache2/suexec-pristine
+	chgrp www-data debian/apache2-suexec-pristine/usr/lib/apache2/suexec-pristine
+	# configurable suexec
+	chmod 4754 debian/apache2-suexec-custom/usr/lib/apache2/suexec-custom
+	chgrp www-data debian/apache2-suexec-custom/usr/lib/apache2/suexec-custom
+	dh_fixperms -a -Xusr/lib/apache2/suexec-custom -Xusr/lib/apache2/suexec-pristine
+	chown -R www-data:www-data debian/apache2/var/cache/apache2
+	chown root:adm debian/apache2/var/log/apache2
+	chmod o-rx debian/apache2/var/log/apache2
+
+override_dh_fixperms-indep:
+	dh_fixperms -i
+
+override_dh_installinit:
+	dh_installinit --no-start --no-restart-on-upgrade  -- defaults 91 09
+
+
+override_dh_installdocs-indep:
+	# TODO: So, did anyone check convert_docs needs an update? ;)
+	perl debian/convert_docs debian/apache2-doc/usr/share/doc/apache2-doc/manual
+	dh_installdocs -i
+
+override_dh_installdocs-arch:
+	dh_installdocs --link-doc=apache2 -papache2 -papache2-dev -papache2-dbg \
+		-papache2-mpm-worker -papache2-mpm-prefork -papache2-mpm-event \
+		-papache2-mpm-itk
+	dh_installdocs --link-doc=apache2-suexec-pristine -papache2-suexec
+	dh_installdocs -a
+
+override_dh_installchangelogs:
+	# Do not install changelogs for transitional packages and the -data
+	# package not to trash the disk at the installation site. Together with
+	# dh_installdocs this means that changelogs are installed in a few
+	# packages only.
+	dh_installchangelogs -Napache2-suexec -Napache2-mpm-worker \
+		-Napache2-mpm-prefork -Napache2-mpm-event -Napache2-mpm-itk \
+		-Napache2-data
+
+override_dh_installman:
+	mv debian/tmp/usr/share/man/man8/suexec.8 debian/tmp/usr/share/man/man8/suexec-pristine.8
+	pod2man debian/debhelper/dh_apache2 > debian/manpages/dh_apache2.1
+	pod2man debian/a2query.in > debian/manpages/a2query.8
+	dh_installman
+
+override_dh_strip:
+	dh_strip --dbg-package=apache2-dbg
+
+override_dh_auto_install:
+	dh_auto_install -- -j1
+
+override_dh_clean: unpatch
+	dh_clean
+
+.PHONY: patch unpatch generate-maintainer-scripts clean-config-vars prepare-scripts prebuild-checks

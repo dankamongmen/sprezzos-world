@@ -1,0 +1,401 @@
+#! /usr/bin/perl
+
+# a2query - Apache2 helper to retrieve configuration informations
+# Copyright (C) 2012 Arno Töll <debian@toell.net>
+#
+# This program is licensed at your choice under the terms of the GNU General
+# Public License vserion 2+ or under the terms of the Apache Software License
+# 2.0.
+#
+# For GPL-2+:
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
+# USA.
+#
+# For ASF 2.0:
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+use feature "switch";
+use strict;
+use Getopt::Std;
+
+=head1 NAME
+
+a2query - retrieve runtime configuration from a local Apache 2 HTTP server
+
+=cut
+
+
+our $APACHE2 = "apache2ctl";
+our $API = "__API__";
+our $MODULE_DIR = "__MODULE_DIR__";
+our $SERVER_VERSION = "__SERVER_VERSION__";
+our $MODULE_DIR = "/usr/lib/apache2/modules/";
+our $STATE_DIR = "/var/lib/apache2";
+our @STATES = ("maint", "admin");
+
+our $MPM = "invalid";
+our $CONFIG_DIR = "/etc/apache2";
+
+# time to introduce more _exit_ values
+our $E_OK = '0';
+our $E_FOUND = '0';
+our $E_NOTFOUND = '1';
+our $E_OFFBYADMIN = '32';
+our $E_OFFBYMAINT = '33';
+our @RETVALS = ( $E_OK, $E_FOUND, $E_OFFBYADMIN, $E_NOTFOUND, $E_OFFBYMAINT );
+
+our @MODULES = ();
+our @CONFS = ();
+our @SITES =();
+our @HELP = ();
+our %verbose_state = ( 'admin' => 'site administrator', 'maint' => 'maintainer script', 'unknown' => 'unknown' );
+
+=head1 SYNOPSIS
+
+B<a2query>  [S<-m> [I<MODULE>]] [S<-s> [I<SITE>]] [S<-c> [I<CONF>]] [S<-a>] [S<-v>]
+[S<-M>] [S<-d>] [S<-h>]
+
+=head1 DESCRIPTION
+
+B<a2query> is a program designed to retrieve configuration values from a locally
+available Apache 2 HTTP web server. It was designed to be as robust as possible
+by returning feasible values even if the Apache 2 syntax validator fails.
+
+This program is primarily meant to be used from maintainer scripts.
+
+=head1 OPTIONS
+
+=over 4
+
+=item S<-a>
+
+Returns the Apache 2 "Module Magic Version" (API version) number, the server was
+compiled with. The returned version does not contain any minor versions which
+are known to be compatible with the major version returned.
+
+=item S<-c> [I<CONF>]
+
+Checks whether the configuration I<CONF> is enabled. If no argument was given,
+all enabled configuration files are being returned. I<CONF> is compared by
+string comparison by ignoring a leading "mod_" prefix and possibly a '.conf' or
+'.load' suffix.
+
+=item S<-h>
+
+Displays a brief summary how the program can be called and exits.
+
+=item S<-m> [I<MODULE>]
+
+Checks whether the module I<MODULE> is enabled, The argument is interpreted in
+the same way, as for configuration files queried by the S<-c> switch.
+
+=item S<-M>
+
+Returns the currently enabled Apache 2 MPM (Multi Processing Module).
+
+=item S<-s> [I<SITE>]
+
+Checks whether the module I<SITE> is enabled, The argument is interpreted in
+the same way, as for configuration files queried by the S<-c> switch.
+
+
+=item S<-v>
+
+returns the currently installed Apache 2 HTTP server version
+
+=back
+
+=head1 EXIT CODES
+
+B<a2query> returns with a zero (S<0>) exit status if the requested operation was
+effectuated successfully and with a non-zero status otherwise. In case of an
+error it leaves with error code S<32> if a requested module, site or
+configuration was not found and S<33> if a module, site or configuration was
+disabled by a maintainer script. However, exit status S<1> is returned if the
+module was not found at all
+
+=head1 SEE ALSO
+
+L<apache2ctl>(8), L<apache2>(8), L<perl>(1)
+
+=head1 AUTHOR
+
+This manual and L<a2query> was written by Arno Toell <debian@toell.net>.
+
+=cut
+
+sub fail
+{
+	die('usage: fail($reason, $retval)') if @_ != 2;
+	my $reason = shift;
+	my $retval = shift;
+	print STDERR "$reason\n";
+	exit $retval;
+}
+
+sub load_defaults
+{
+	my @out = `$APACHE2 -V 2>/dev/null`;
+	return if $?;
+	for (my $line; $line <= $#out; $line++)
+	{
+		if ($out[$line] =~ m/(Server version|Server MPM|Magic Number):\s+(.*?)$/)
+		{
+			my ($pattern, $value) = ($1, $2);
+			if ($pattern =~ /version/)
+			{
+				$SERVER_VERSION = $value;
+				$SERVER_VERSION =~ s/[^\d\.]//g;
+			}
+			elsif($pattern =~ /MPM/)
+			{
+				$MPM = $value;
+			}
+			elsif($pattern =~ /Magic/)
+			{
+				$API = $value;
+				$API =~ s/\:\d+//;
+			}
+		}
+	}
+
+}
+
+sub load_modules
+{
+	my $conf_dir = $CONFIG_DIR . "/mods-enabled";
+	opendir(DIR, $conf_dir) || fail("$conf_dir: $!");
+	while( readdir(DIR) )
+	{
+		my $file = $_;
+		next if $file !~ m/\.load$/;
+		$file =~ s/\.load//;
+		if ($file =~ /mpm_(\w+)/)
+		{
+			$MPM = $1 if $MPM eq 'invalid';
+			if(grep { $_ =~ m/^mpm_/ } @MODULES)
+			{
+				fail("There is more than one MPM loaded. Do not proceed due to undefined results");
+			}
+		}
+		push @MODULES, $file;
+	}
+	closedir(DIR);
+}
+
+
+sub load_conf
+{
+	if ($#CONFS >= 0)
+	{
+		return;
+	}
+	my $conf_dir = $CONFIG_DIR . "/conf-enabled";
+	opendir(DIR, $conf_dir) || fail("$conf_dir: $!");
+	while( readdir(DIR) )
+	{
+		my $file = $_;
+		next if $file !~ m/\.conf$/;
+		push @CONFS, $file;
+	}
+	closedir(DIR);
+}
+
+
+sub load_sites
+{
+	if ($#SITES >= 0)
+	{
+		return;
+	}
+	my $conf_dir = $CONFIG_DIR . "/sites-enabled";
+	opendir(DIR, $conf_dir) || fail("$conf_dir: $!");
+	while( readdir(DIR) )
+	{
+		my $file = $_;
+		next if $file !~ m/\.conf$/;
+		push @SITES, $file;
+	}
+	closedir(DIR);
+}
+
+sub switch_history
+{
+	die('usage: switch_history([module|site|conf], [enabled|disabled], $name)') if @_ != 3;
+	my $which = shift;
+	my $what = shift;
+	my $name = shift;
+
+	$name =~ s/\.conf$//;
+
+	foreach my $state (@STATES)
+	{
+		my $state_token = "$STATE_DIR/$which/$what" . "_by_$state/" . $name;
+		if (-e $state_token)
+		{
+			return $state;
+		}
+	}
+	return 0;
+}
+
+
+sub query_state
+{
+	my $type    = shift;
+	my $pattern = shift;
+	my $listref = shift;
+
+	$pattern =~ s/^mod//;
+	$pattern =~ s/\.(conf|load)//;
+	my @candidates;
+
+	if ($pattern)
+	{
+		@candidates = grep { $_ eq $pattern } @{ $listref };
+	}
+	else
+	{
+		@candidates = @{ $listref }
+	}
+
+	my $matches = 0;
+	foreach my $module (@candidates)
+	{
+		my $state = switch_history($type, "enabled", $module);
+		if (!$state)
+		{
+			$state = "unknown";
+		}
+		print("$module (enabled by $verbose_state{$state})\n");
+		$matches++;
+	}
+	if (!$matches)
+	{
+		my $reason = "No $type matches $pattern";
+		my $retval = $E_NOTFOUND;
+		my $state = switch_history($type, "disabled", $pattern);
+		if ($state)
+		{
+			$reason .= " (disabled by $verbose_state{$state})";
+			if ($state eq 'maint')
+			{
+				$retval = $E_OFFBYMAINT;
+			}
+			if ($state eq 'admin')
+			{
+				$retval = $E_OFFBYADMIN;
+			}
+		}
+		fail($reason, $retval);
+	}
+}
+
+load_defaults();
+load_modules();
+
+my %opts;
+my $help = 1;
+getopt('m:s:c:havMd', \%opts);
+
+
+push @HELP, ["m [MODULE]", "checks whether the module MODULE is enabled, lists all enabled modules if no argument was given"];
+if (exists $opts{'m'})
+{
+	--$help;
+	query_state('module', $opts{'m'}, \@MODULES);
+}
+
+push @HELP, ["s [SITE]", "checks whether the site SITE is enabled, lists all sites if no argument was given"];
+if (exists $opts{'s'})
+{
+	--$help;
+	load_sites();
+	query_state('site', $opts{'s'}, \@SITES);
+}
+
+
+push @HELP, ["c [CONF]", "checks whether the configuration CONF is enabled, lists all configurations if no argument was given"];
+if (exists $opts{'c'})
+{
+	--$help;
+	load_conf();
+	query_state('conf', $opts{'c'}, \@CONFS);
+}
+
+
+push @HELP, ["a", "returns the current Apache 2 module magic version"];
+if (exists $opts{'a'})
+{
+	--$help;
+	print("$API\n");
+}
+
+
+push @HELP, ["v", "returns the current Apache 2 version"];
+if (exists $opts{'v'})
+{
+	--$help;
+	print("$SERVER_VERSION\n");
+}
+
+push @HELP, ["M", "returns the enabled Apache 2 MPM"];
+if (exists $opts{'M'})
+{
+	--$help;
+	print("$MPM\n");
+}
+
+push @HELP, ["d", "returns the Apache 2 module directory"];
+if (exists $opts{'d'})
+{
+	--$help;
+	print("$MODULE_DIR\n");
+}
+
+push @HELP, ["h", "display this help"];
+if (exists $opts{'h'} or $help == 1)
+{
+	my $usage = "$0 ";
+	map { $usage .= "-$_->[0] " } @HELP;
+	print("Usage: $usage\n");
+	my $switch_name;
+	my $description;
+	format STDOUT =
+@<<<<<<<<<<<<	^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+"-$switch_name",        $description,
+~~	        ^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+			$description,
+.
+	foreach my $switch (@HELP)
+	{
+		($switch_name, $description) = ($switch->[0], $switch->[1]);
+		write STDOUT;
+	}
+	exit $E_OK;
+}
+
+# vim: syntax=perl sw=8 sts=8 sr noet

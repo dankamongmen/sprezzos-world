@@ -1,0 +1,198 @@
+# the analogon of running autoheader; autoconf, which is a pain to clean up
+diff --git a/configure b/configure
+index c94d7b8..3eb397a 100755
+--- a/configure
++++ b/configure
+@@ -1946,8 +1946,8 @@ Optional Packages:
+   --with-lua=PATH         Path to the Lua 5.1 prefix
+   --with-ssl=DIR          OpenSSL base directory
+   --with-mpm=MPM          Choose the process model for Apache to use by
+-                          default. MPM={event|worker|prefork|winnt} This will
+-                          be statically linked as the only available MPM
++                          default. MPM={event|worker|prefork|winnt|itk} This
++                          will be statically linked as the only available MPM
+                           unless --enable-mpms-shared is also specified.
+   --with-module=module-type:module-file
+                           Enable module-file in the modules/<module-type>
+@@ -24988,6 +24988,27 @@ $as_echo "yes" >&6; }
+ 
+ fi
+ 
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if itk MPM supports this platform" >&5
++$as_echo_n "checking if itk MPM supports this platform... " >&6; }
++if test $forking_mpms_supported != yes; then
++    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no - This is not a forking platform" >&5
++$as_echo "no - This is not a forking platform" >&6; }
++else
++    { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
++$as_echo "yes" >&6; }
++
++    if test "yes" = "yes"; then
++        eval "ap_supported_mpm_itk=shared"
++        ap_supported_shared_mpms="$ap_supported_shared_mpms itk "
++    else
++        eval "ap_supported_mpm_itk=static"
++    fi
++    if test "no" = "yes"; then
++        eval "ap_threaded_mpm_itk=yes"
++    fi
++
++fi
++
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking if mpmt_os2 MPM supports this platform" >&5
+ $as_echo_n "checking if mpmt_os2 MPM supports this platform... " >&6; }
+ case $host in
+@@ -26565,6 +26586,53 @@ for i in $ap_enabled_mpms; do
+     else
+         as_fn_error $? "MPM $i is not supported on this platform." "$LINENO" 5
+     fi
++    if test "$i" = "itk" ; then
++        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for cap_init in -lcap" >&5
++$as_echo_n "checking for cap_init in -lcap... " >&6; }
++if ${ac_cv_lib_cap_cap_init+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  ac_check_lib_save_LIBS=$LIBS
++LIBS="-lcap  $LIBS"
++cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++
++/* Override any GCC internal prototype to avoid an error.
++   Use char because int might match the return type of a GCC
++   builtin and then its argument prototype would still apply.  */
++#ifdef __cplusplus
++extern "C"
++#endif
++char cap_init ();
++int
++main ()
++{
++return cap_init ();
++  ;
++  return 0;
++}
++_ACEOF
++if ac_fn_c_try_link "$LINENO"; then :
++  ac_cv_lib_cap_cap_init=yes
++else
++  ac_cv_lib_cap_cap_init=no
++fi
++rm -f core conftest.err conftest.$ac_objext \
++    conftest$ac_exeext conftest.$ac_ext
++LIBS=$ac_check_lib_save_LIBS
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_cap_cap_init" >&5
++$as_echo "$ac_cv_lib_cap_cap_init" >&6; }
++if test "x$ac_cv_lib_cap_cap_init" = xyes; then :
++  cat >>confdefs.h <<_ACEOF
++#define HAVE_LIBCAP 1
++_ACEOF
++
++  LIBS="-lcap $LIBS"
++
++fi
++
++    fi
+ done
+ 
+ if test $mpm_build = "shared"; then
+@@ -26685,6 +26753,77 @@ done
+ 
+ 
+ 
++    if ap_mpm_is_enabled itk; then
++        if test -z ""; then
++            objects="itk.lo"
++        else
++            objects=""
++        fi
++
++        if test -z ""; then
++            mpmpath="server/mpm/itk"
++        else
++            mpmpath=
++        fi
++
++                test -d $mpmpath || $srcdir/build/mkdir.sh $mpmpath
++
++
++  APACHE_FAST_OUTPUT_FILES="$APACHE_FAST_OUTPUT_FILES $mpmpath/Makefile"
++
++
++        if test -z "$enable_mpm_itk"; then
++
++  if test "x$AP_LIBS" = "x"; then
++    test "x$silent" != "xyes" && echo "  setting AP_LIBS to \"\""
++    AP_LIBS=""
++  else
++    apr_addto_bugger=""
++    for i in $apr_addto_bugger; do
++      apr_addto_duplicate="0"
++      for j in $AP_LIBS; do
++        if test "x$i" = "x$j"; then
++          apr_addto_duplicate="1"
++          break
++        fi
++      done
++      if test $apr_addto_duplicate = "0"; then
++        test "x$silent" != "xyes" && echo "  adding \"$i\" to AP_LIBS"
++        AP_LIBS="$AP_LIBS $i"
++      fi
++    done
++  fi
++
++            libname="libitk.la"
++            cat >$mpmpath/modules.mk<<EOF
++$libname: $objects
++	\$(MOD_LINK) $objects
++DISTCLEAN_TARGETS = modules.mk
++static = $libname
++shared =
++EOF
++        else
++            apache_need_shared=yes
++            libname="mod_mpm_itk.la"
++            shobjects=`echo $objects | sed 's/\.lo/.slo/g'`
++            cat >$mpmpath/modules.mk<<EOF
++$libname: $shobjects
++	\$(SH_LINK) -rpath \$(libexecdir) -module -avoid-version $objects
++DISTCLEAN_TARGETS = modules.mk
++static =
++shared = $libname
++EOF
++            # add default MPM to LoadModule list
++            if test itk = $default_mpm; then
++                DSO_MODULES="$DSO_MODULES mpm_itk"
++                ENABLED_DSO_MODULES="${ENABLED_DSO_MODULES},mpm_itk"
++            fi
++        fi
++
++    fi
++
++
++
+     if ap_mpm_is_enabled prefork; then
+         if test -z ""; then
+             objects="prefork.lo"
+@@ -26923,6 +27062,7 @@ done
+ 
+ if ap_mpm_is_enabled "worker" \
+    || ap_mpm_is_enabled "event" \
++   || ap_mpm_is_enabled "itk" \
+    || ap_mpm_is_enabled "prefork"; then
+     unixd_mods_enable=yes
+ else
+diff --git a/include/ap_config_auto.h.in b/include/ap_config_auto.h.in
+index 6b6fbfa..73bb460 100644
+--- a/include/ap_config_auto.h.in
++++ b/include/ap_config_auto.h.in
+@@ -100,6 +100,9 @@
+ /* Define to 1 if you have the `kqueue' function. */
+ #undef HAVE_KQUEUE
+ 
++/* Define to 1 if you have the `cap' library (-lcap). */
++#undef HAVE_LIBCAP
++
+ /* Define to 1 if you have the <limits.h> header file. */
+ #undef HAVE_LIMITS_H
+ 

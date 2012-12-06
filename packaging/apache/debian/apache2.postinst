@@ -1,0 +1,400 @@
+#! /bin/bash
+# postinst script
+#
+# see: dh_installdeb(1)
+
+set -e
+
+# summary of how this script can be called:
+#       * <postinst> `configure' <most-recently-configured-version>
+#       * <old-postinst> `abort-upgrade' <new version>
+#       * <conflictor's-postinst> `abort-remove' `in-favour' <package>
+#         <new-version>
+#       * <deconfigured's-postinst> `abort-deconfigure' `in-favour'
+#         <failed-install-package> <version> `removing'
+#         <conflicting-package> <version>
+#
+# for details, see http://www.debian.org/doc/debian-policy/ or
+# the debian-policy package
+#
+
+# XXX remove
+# echo apache2.postinst $@ running
+
+OBSOLETE_CONFFILES="/etc/apache2/mods-available/authz_default.load
+/etc/apache2/mods-available/authn_default.load
+/etc/apache2/mods-available/mem_cache.load
+/etc/apache2/mods-available/mem_cache.conf
+/etc/apache2/mods-available/authn_alias.load
+/etc/apache2/mods-available/cern_meta.load
+/etc/apache2/mods-available/disk_cache.load
+/etc/apache2/mods-available/disk_cache.conf
+/etc/apache2/mods-available/ident.load
+/etc/apache2/mods-available/imagemap.load
+/etc/apache2/mods-available/version.load"
+
+
+MOVED_CONFFILES="/etc/bash_completion.d/apache2.2-common:/etc/bash_completion.d/apache2
+/etc/apache2/sites-available/default:/etc/apache2/sites-available/000-default.conf
+/etc/apache2/sites-available/default-ssl:/etc/apache2/sites-available/default-ssl.conf
+/etc/apache2/conf.d/charset:/etc/apache2/conf-available/charset.conf
+/etc/apache2/conf.d/localized-error-pages:/etc/apache2/conf-available/localized-error-pages.conf
+/etc/apache2/conf.d/other-vhosts-access-log:/etc/apache2/conf-available/other-vhosts-access-log.conf
+/etc/apache2/conf.d/security:/etc/apache2/conf-available/security.conf"
+
+
+# the functions below need to be idempotent, however we guess the upgrade based
+# on obsolete conffiles which might be removed anytime. Thus, remember we were
+# already in there once.
+SQUEEZE_UPGRADE=0
+
+#      n.b you can't rely on $2 (the last installed version)  for upgrades, as
+#      the user might have been using apache2.2-common only. Let's pretend we're
+#      upgrading if there is either a /etc/apache2/.apache2_mpm_selected file
+#      around or an /etc/apache2/.apache2_upgrade file exists.
+we_are_upgrading_from_squeeze()
+{
+	if [ -n "$2" ] && dpkg --compare-versions "$2" le-nl "2.3"; then
+		SQUEEZE_UPGRADE=1
+		return 0
+	fi
+
+	# this check is a probably tautology but makes it easier to understand
+	# the logic
+	if [ -n "$2" ] && dpkg --compare-versions "$2" ge-nl "2.3"; then
+		return 1
+	fi
+
+	if [ -e /etc/apache2/.apache2_mpm_selected ] ; then
+		SQUEEZE_UPGRADE=1
+		return 0
+	fi
+
+	if [ $SQUEEZE_UPGRADE -eq 1 ] ; then
+		return 0
+	fi
+
+	for CONFFILE in $OBSOLETE_CONFFILES ; do
+		if [ -e "$CONFFILE.dpkg-backup" ] || [ -e "$CONFFILE.dpkg-remove" ] ; then
+			SQUEEZE_UPGRADE=1
+			return 0
+		fi
+	done
+
+	for CONFFILE in $MOVED_CONFFILES ; do
+		OLDCONFFILE=$( echo "$CONFFILE" | cut -d: -f1 )
+		if [ -e "$OLDCONFFILE.dpkg-remove" ] ; then
+			SQUEEZE_UPGRADE=1
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+is_fresh_install()
+{
+	if [ -z "$2" ] ; then
+		return 0
+	fi
+	return 1
+}
+
+
+# The two functions below are licensed GPL-2+ and was written by dpkg maintainers
+# See the dpkg-maintscript-helper script for details
+
+remove_conffiles()
+{
+	# we can't use dpkg-maintscript-helper as we shifted conffiles from the
+	# apache2.2-common package to apache2, too. The tool can cope with
+	# that, but additionally we didn't require apache2 to be installed. This
+	# yields the wrong result when upgrading such an installation
+	if we_are_upgrading_from_squeeze $@ ; then
+		for CONFFILE in $OBSOLETE_CONFFILES ; do
+			if [ -e "$CONFFILE.dpkg-backup" ]; then
+				mv -f "$CONFFILE.dpkg-backup" "$CONFFILE.dpkg-bak"
+			fi
+			if [ -e "$CONFFILE.dpkg-remove" ]; then
+				echo "Removing obsolete conffile $CONFFILE ..."
+				rm -f "$CONFFILE.dpkg-remove"
+			fi
+		done
+	fi
+}
+
+mv_conffiles()
+{
+	# same rationale as above
+	if we_are_upgrading_from_squeeze $@ ; then
+		for CONFFILE in $MOVED_CONFFILES ; do
+			OLDCONFFILE=$( echo "$CONFFILE" | cut -d: -f1 )
+			NEWCONFFILE=$( echo "$CONFFILE" | cut -d: -f2 )
+
+			rm -f $OLDCONFFILE.dpkg-remove
+			[ -e "$OLDCONFFILE" ] || continue
+
+			echo "Preserving user changes to $NEWCONFFILE (renamed from $OLDCONFFILE)..."
+			mv -f "$NEWCONFFILE" "$NEWCONFFILE.dpkg-new"
+			mv -f "$OLDCONFFILE" "$NEWCONFFILE"
+		done
+
+		if [ -d /etc/apache2/conf.d ] && [ ! "$(ls -A /etc/apache2/conf.d)" ] ; then
+			echo "Removing obsolete directory /etc/apache2/conf.d"
+			rmdir /etc/apache2/conf.d
+		fi
+
+		if [ -d /etc/apache2/conf.d ] && [ "$(ls -A /etc/apache2/conf.d)" ]	; then
+			echo "Directory /etc/apache2/conf.d is not empty - leaving as is"
+			echo "Please note, that directory is considered obsolete and not read anymore by default"
+			# XXX order of processing??? this may become empty later on (after upgrade of apache2-doc)
+			ls -A /etc/apache2/conf.d
+		fi
+	fi
+}
+
+
+enable_default_mpm()
+{
+	mpm="mpm_event"
+	if we_are_upgrading_from_squeeze $@ && [ -e /etc/apache2/.apache2_mpm_selected  ]; then
+		tmpmpm=$(grep -v "^#" /etc/apache2/.apache2_mpm_selected | head -n1)
+		case "$tmpmpm" in
+			apache2-mpm-worker)
+				mpm="mpm_worker"
+			;;
+
+			apache2-mpm-event)
+				mpm="mpm_event"
+			;;
+
+			apache2-mpm-prefork)
+				mpm="mpm_prefork"
+			;;
+
+			apache2-mpm-itk)
+				mpm="mpm_itk"
+			;;
+
+			*)
+				# default MPM for upgrading in case we got an unrecognized
+				# hint file
+				mpm="mpm_event"
+			;;
+		esac
+
+		# No -m here, we pretend the user picked the MPM as this choice comes
+		# from a 2.2 package relation
+		a2enmod -q $mpm
+		return 0
+	fi
+
+	if is_fresh_install $@ ; then
+		a2enmod -m -q $mpm
+	fi
+
+}
+
+enable_default_modules()
+{
+	if is_fresh_install $@; then
+		for module in authz_host auth_basic access_compat authn_file authz_user \
+				alias dir autoindex \
+				env mime negotiation setenvif \
+				filter deflate \
+				status ; do
+			a2enmod -m -q $module
+		done
+	elif we_are_upgrading_from_squeeze $@; then
+		for module in authz_core filter access_compat ; do
+			a2enmod -m -q $module
+		done
+	fi
+}
+
+enable_default_conf()
+{
+	if is_fresh_install $@ || we_are_upgrading_from_squeeze $@ ; then
+		for conf in charset localized-error-pages other-vhosts-access-log security ; do
+			a2enconf -m -q $conf
+		done
+	fi
+	# This line must catch upgrades, upgrades from Squeeze und fresh
+	# installs
+	if dpkg --compare-versions "$2" "le" "2.4.1-4" ; then
+		a2enconf -m -q serve-cgi-bin
+	fi
+}
+
+install_default_site()
+{
+	if we_are_upgrading_from_squeeze $@ ; then
+		# by here, the old default sites were already renamed. Thus, the links
+		# are dangling
+		for SITE in /etc/apache2/sites-enabled/000-default /etc/apache2/sites-enabled/default-ssl ; do
+			if [ -L $SITE ] ; then
+				target=$(readlink -e "$SITE") || true
+				sitename=$(basename "$SITE")
+				if [ -z "$target" ] ; then
+					rm -f $SITE
+					a2ensite -q "$sitename"
+				fi
+			fi
+		done
+	elif is_fresh_install $@ ; then
+		if [ ! -L /etc/apache2/sites-enabled/000-default.conf -a \
+			! -f /etc/apache2/sites-enabled/000-default.conf ]; then
+				a2ensite -q 000-default
+		fi
+
+		touch /var/log/apache2/error.log /var/log/apache2/access.log
+		chown root:adm /var/log/apache2/error.log /var/log/apache2/access.log
+		chmod 0640 /var/log/apache2/error.log /var/log/apache2/access.log
+
+		touch /var/log/apache2/other_vhosts_access.log
+		chown root:adm /var/log/apache2/other_vhosts_access.log
+		chmod 0640 /var/log/apache2/other_vhosts_access.log
+	fi
+}
+
+# XXX: This site is installed in the apache2-data package. Should the postinst
+# scriptlet move there too?
+install_default_files()
+{
+	if is_fresh_install $@ ; then
+		if [ ! -e /var/www/index.html  -a \
+			! -h /var/www/index.html  -a \
+			! -e /var/www/index.cgi   -a \
+			! -e /var/www/index.pl    -a \
+			! -e /var/www/index.php   -a \
+			! -e /var/www/index.xhtml -a \
+			! -e /var/www/index.htm ] ; then
+				cp /usr/share/apache2/default-site/index.html /var/www/index.html
+		fi
+	fi
+}
+
+# XXX: Find out whether I am on crack removing stale modules that way
+refresh_modules()
+{
+	if we_are_upgrading_from_squeeze $@ && [ -d /etc/apache2/mods-enabled/ ] ; then
+		shopt -s nullglob
+		for link in /etc/apache2/mods-enabled/*.load ; do
+			target=$(readlink "$link") || true
+			if [ -z "$target" ] ; then
+				continue
+			fi
+
+			module=$(basename "$link" | sed 's/\.load//') || true
+
+			if [ ! -e "/etc/apache2/mods-enabled/$target" ] ; then
+				echo "disable obsolete module $module"
+				a2dismod -m -q "$module"
+
+				if [ "$module" = "disk_cache" ] ; then
+					echo "Enable cache_disk as disk_cache was enabled in Apache 2.2"
+					# ditto, we pretend it was the user's
+					# choice not to use -m here
+					a2enmod -q cache_disk
+				fi
+			fi
+			# the module is already enabled, however
+			# dependencies could have changed hence re-call
+			# a2enmod again.
+			# Example: the deflate module when upgraded from
+			# Squeeze
+			if [ -e "/etc/apache2/mods-enabled/$target" ] ; then
+				a2enmod -m -q "$module"
+			fi
+		done
+	fi
+}
+
+move_httpd_conf()
+{
+	if we_are_upgrading_from_squeeze $@ ; then
+		if [ -e /etc/apache2/httpd.conf ] && [ -f /etc/apache2/httpd.conf ] ; then
+			local md5sum="$(md5sum /etc/apache2/httpd.conf | sed -e 's/ .*//')"
+			if [ $md5sum = "d41d8cd98f00b204e9800998ecf8427e" ] ||
+			   [ $md5sum = "a20c3e53dd07836481a5e64bc71e1a33" ]
+			then
+				echo "Remove obsolete configuration file /etc/apache2/httpd.conf"
+				rm -f /etc/apache2/httpd.conf
+			else
+				if [ -d /etc/apache2/conf-available/ ] && [ ! -f /etc/apache2/conf-available/httpd.conf ] ; then
+					echo "Detected legacy httpd.conf - moving file to /etc/apache2/conf-available/httpd.conf"
+					mv /etc/apache2/httpd.conf /etc/apache2/conf-available/httpd.conf
+					a2enconf -q httpd
+				fi
+			fi
+		fi
+	fi
+}
+
+migrate_data()
+{
+	#XXX: jimjag recommends purging the cache albeit it is probably not
+	#     technically required.
+	#if we_are_upgrading_from_squeeze $@ ; then
+	#	# /var/cache/apache2/mod_disk_cache -> /var/cache/apache2/mod_cache_disk
+	#	if [ -d /var/cache/apache2/mod_disk_cache ] && [ "$(ls -A /var/cache/apache2/mod_disk_cache)" ] ; then
+	#		echo "Migrate mod_disk_cache cache data to /var/cache/apache2/mod_cache_disk/"
+	#		mv /var/cache/apache2/mod_disk_cache/* /var/cache/apache2/mod_cache_disk/
+	#		rmdir /var/cache/apache2/mod_disk_cache
+	#	fi
+	#fi
+	if we_are_upgrading_from_squeeze $@ ; then
+		if [ -d /var/cache/apache2/mod_disk_cache ] ; then
+			echo "Purge obsolete mod_disk_cache cache data in /var/cache/apache2/mod_cache_disk/"
+			rm -rf /var/cache/apache2/mod_disk_cache
+		fi
+	fi
+}
+
+#XXX: Deal with the sites-available/sites-enabled *.conf transition, e.g. rename
+#     all files which look like site configuration?
+
+case "$1" in
+	configure)
+
+		remove_conffiles $@
+		mv_conffiles $@
+		enable_default_mpm $@
+		refresh_modules $@
+		install_default_files $@
+		enable_default_modules $@
+		enable_default_conf $@
+		install_default_site $@
+		move_httpd_conf $@
+		migrate_data $@
+
+		# post installation cleanup
+		if [ -e /etc/apache2/.apache2_mpm_selected ] ; then
+			rm -f /etc/apache2/.apache2_mpm_selected
+		fi
+
+	;;
+
+	abort-upgrade|abort-remove|abort-deconfigure)
+
+	;;
+
+	*)
+		echo "postinst called with unknown argument \`$1'" >&2
+		exit 1
+	;;
+esac
+
+#DEBHELPER#
+
+# And now the traditional insanity of apache2 upgrades (see #390823):
+# If everything went well, we need to purge apache2.2-common's postrm, or
+# purging that package will remove our logs, caches, ...
+if [ "$1" = configure ] && we_are_upgrading_from_squeeze $@ ; then
+	oldpostrm=$(dpkg-query -c apache2.2-common postrm  2>/dev/null || true)
+	if [ -n "$oldpostrm" ] ; then
+		rm -f "$oldpostrm"
+	fi
+fi
+
+exit 0

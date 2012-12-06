@@ -1,0 +1,426 @@
+# apache2-maintscript-helper - Apache2 helper function for maintainer scripts
+# Copyright (C) 2012 Arno Töll <debian@toell.net>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of
+# this software and associated documentation files (the "Software"), to deal in
+# the Software without restriction, including without limitation the rights to
+# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+# the Software, and to permit persons to whom the Software is furnished to do so,
+# subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+
+#
+# VARIABLES
+#
+
+
+# global environment variables used by apache2-maintscript-helper:
+# * APACHE2_MAINTSCRIPT_DEBUG:
+#				set this to any non-zero value to get debug output
+# * APACHE2_MAINTSCRIPT_HELPER_QUIET:
+#				set this to any non-zero value to omit any output
+# * EXPORT_APACHE2_MAINTSCRIPT_HELPER:
+#				will be defined by apache2-maintscript-helper
+#				to avoid inclusion loops. Do not set this
+#				variable manually
+# * APACHE2_NEED_ACTION:
+#				will be defined if a function call wants to
+#				override the behavior of apache2_needs_action.
+#				Do not rely on this variable. It is considered
+#				an implementation detail.
+# * APACHE2_MAINTSCRIPT_NAME
+# * APACHE2_MAINTSCRIPT_PACKAGE
+# * APACHE2_MAINTSCRIPT_METHOD
+# * APACHE2_MAINTSCRIPT_ARGUMENT
+#				these variables contain information about the
+#				maintainer script which is calling the
+#				maintscript-helper. It contains arguments which
+#				dpkg supplies to maintainer scripts and similar
+#				information. These variables are an
+#				implementation detail and not to be changed.
+
+
+#
+# INITIALIZATION
+#
+
+if [ -n "${EXPORT_APACHE2_MAINTSCRIPT_HELPER:-}" ] ; then
+	return
+else
+	EXPORT_APACHE2_MAINTSCRIPT_HELPER=1
+
+	if [ -n "${APACHE2_MAINTSCRIPT_DEBUG:-}" ] ; then
+		set -x
+	elif [ -e /etc/apache2/envvars ] ; then
+		APACHE2_MAINTSCRIPT_DEBUG=$(. /etc/apache2/envvars && echo ${APACHE2_MAINTSCRIPT_DEBUG})
+		if [ -n "${APACHE2_MAINTSCRIPT_DEBUG:-}" ] ; then
+			set -x
+		fi
+	fi
+
+
+	if [ -z "$1" ] ; then
+		echo "You must invoke apache2-maintscript-helper with an unmodified environment when sourcing it"
+		return 1
+	fi
+
+	APACHE2_MAINTSCRIPT_NAME="${0##*.}"
+	case "$APACHE2_MAINTSCRIPT_NAME" in
+		preinst|prerm|postrm|postinst)
+			# yay - recognized script
+		;;
+		*)
+			echo "Invoked from an unrecognized maintainer script: exiting"
+			return 1
+		;;
+	esac
+
+	APACHE2_MAINTSCRIPT_PACKAGE="${0##*/}"
+	APACHE2_MAINTSCRIPT_PACKAGE="${APACHE2_MAINTSCRIPT_PACKAGE%.*}"
+
+	APACHE2_MAINTSCRIPT_METHOD="$1"
+	APACHE2_MAINTSCRIPT_ARGUMENT="${2:-}"
+
+fi
+
+
+
+#
+# FUNCTIONS
+#
+
+
+
+
+#
+# Function apache2_msg
+#	print out a warning to both, the syslog and a local standard output.
+#	This function should generally be used to display messages related to
+#	the web server in maintainer scripts.
+# Parameters:
+#	priority
+#		The message priority. Recognized values are the same as defined
+#		by syslog(3), thus: one among debug, info, notice, warning,
+#		err, crit, alert, emerg.
+#		If no known priority is recognized, the priority is set to
+#		"warning".
+#	message
+#		The message as a string. It is printed out verbatim.
+# Behavior:
+#	No message is displayed if APACHE2_MAINTSCRIPT_HELPER_QUIET is defined
+# Returns:
+#	this function always returns 0
+# Since: 2.4.1-3
+apache2_msg()
+{
+	local PRIORITY="$1"
+	local MSG="$2"
+	[ -z "$APACHE2_MAINTSCRIPT_HELPER_QUIET" ] && echo "$MSG"
+	[ -x /usr/bin/logger ] || return 0
+	case "$PRIORITY" in
+		debug|info|notice|warning|err|crit|alert|emerg)
+		;;
+		*)
+			PRIORITY="warning"
+		;;
+	esac
+	local LOGGER="/usr/bin/logger -p daemon.$PRIORITY -t $APACHE2_MAINTSCRIPT_PACKAGE "
+	$LOGGER "$MSG" || return 0
+}
+
+#
+# Function apache2_needs_action
+#	succeeds if the package invoking the maintscript helper
+#	needs any work. This function can be used as a conditional whether a
+#	certain function should be executed by means of the package state.
+#	Note, calling some other functions may change the outcome of this
+#	function, depending on the action required
+#Parameters:
+#	none
+# Returns:
+#	0 if an older version of the maintainer script invoking the helper is
+#	already installed
+#	1 otherwise
+# Since: 2.4.1-3
+apache2_needs_action()
+{
+	# Summary how the maintscript behaves:
+	# preinst:
+	#	Not sure why anyone would like to call this function in preinst. Die loud.
+	# prerm remove:
+	#	Basically the same as postrm. If a maintainer would like to
+	#	disable his module before removing his stuff, be it.
+	#	However, we have nothing useful to do if we're called in any
+	#	other way than "remove" in prerm.
+	# postinst configure
+	#	Probably the most important invokation. When invoked in configure we:
+	#	- enable the piece of configuration on fresh installs
+	#	- do nothing on upgrades UNLESS the configuration was removed automatically in the past
+	# postrm remove|purge
+	#	- disable the configuration, mark it as automatically disabled in remove
+	#	- disable the configuration, remove any trace we have on purge
+
+	case "$APACHE2_MAINTSCRIPT_NAME" in
+	preinst)
+		apache2_msg "info" "apache2_needs_action: The maintainer helper can not be called in preinst"
+		return 1
+		;;
+	prerm|postrm)
+		case "$APACHE2_MAINTSCRIPT_METHOD" in
+		remove|purge)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+		esac
+		;;
+	postinst)
+		if [ "$APACHE2_MAINTSCRIPT_METHOD" = "configure" ] ; then
+			# act on fresh installs
+			[ -z "$APACHE2_MAINTSCRIPT_ARGUMENT" ] && return 0
+			# act if someone told us
+			[ -n "$APACHE2_NEED_ACTION" ] && return 0
+		fi
+		;;
+	esac
+
+	return 1
+}
+
+
+
+#
+# Function apache2_has_module
+#	checks whether a supplied module is enabled in the current Apache server
+#	configuration
+# Parameters:
+#	module - the module name which should be checked. Can be a regular
+#		string or a Perl compatible regular expression e.g. cgi(d|)
+# Returns:
+#	0 if the module(s) was/were found
+#	1 otherwise
+# Since: 2.4.1-1
+apache2_has_module()
+{
+	[ -x /usr/sbin/a2query ] || return 1
+	local MODULE="$1"
+	if a2query -m "$MODULE" > /dev/null ; then
+		return 0
+	fi
+
+	return 1
+}
+
+#
+# Function apache2_switch_mpm
+#	switches the MPM enabled on the web server. This function switches the
+#	MPM unconditionally but does careful checks to make sure the web server
+#	is left back with a working MPM.
+#	It checks whether the supplied MPM exists and enables it on purpose.
+# Parameters:
+#	mpm - change the MPM to the supplied argument. It should be given
+#	without "mpm_" prefix, e.g. "worker", "prefork", and so on.
+# Returns:
+#	0 if the MPM could be changed
+#	1 otherwise
+# Since: 2.4.1-1
+apache2_switch_mpm()
+{
+	[ -x /usr/sbin/a2query ] || return 1
+	[ -x /usr/sbin/a2dismod ] || return 1
+	[ -x /usr/sbin/a2enmod ] || return 1
+
+	local MPM="$1"
+	MPM="${MPM#mpm_}"
+
+
+	if [ ! -e "/etc/apache2/mods-available/mpm_$MPM.load" ] ; then
+		apache2_msg "err" "apache2_switch_mpm: MPM $MPM not found"
+		return 1
+	fi
+
+	local CUR_MPM=$(a2query -M) || return 1
+
+	if [ $CUR_MPM != $MPM ] ; then
+		a2dismod -m -q "mpm_$CUR_MPM";
+		a2enmod -m -q "mpm_$MPM";
+		apache2_msg "info" "apache2_switch_mpm Switch to $MPM"
+	else
+		apache2_msg "info" "apache2_switch_mpm $MPM: No action required"
+		return 0
+	fi
+
+	if ! apache2_has_module "mpm_$MPM" ; then
+		# rollback
+		a2enmod -m -q "mpm_$CUR_MPM"
+		apache2_msg "warning" "apache2_switch_mpm Switch to $MPM failed. Rolling back to $CUR_MPM"
+		return 1
+	fi
+
+
+	APACHE2_NEED_ACTION=1
+	apache2_reload restart
+	return 0
+
+}
+
+#
+# Function apache2_invoke
+#	invokes an Apache 2 configuration helper to enable or disable a
+#	particular piece of configuration, a site or a module. It carefully
+#	checks whether the supplied configuration snippet exists and reloads the
+#	web server if the site administrator desires that by calling the
+#	apache2_reload function.
+# Parameters:
+#	command - The command to invoke. Recognized commands are "enconf",
+#		"enmod", "ensite", "disconf", "dismod", "dissite"
+#	arguments
+#		- A single argument (e.g. a module) which shall be
+#		  enabled or disabled respectively. Do not enable module
+#		  dependencies that way, instead use module dependencies as
+#		  documented in </usr/share/doc/apache2/PACKAGING>.
+#	rcd-action
+#		- An optional rc.d action to override the default which is to
+#		  reload the web server for sites and configurations but restart
+#		  it for modules. Recognized arguments are "restart" and "reload"
+# Returns
+#	0 if the changes could be activated
+#	1 otherwise
+# Since: 2.4.1-3
+# Changes: 2.4.2-2: Added the second, optional argument
+apache2_invoke()
+{
+	local CMD=$1
+	local CONF=$2
+	local RCD_ACTION=$3
+	local invoke_rcd=0
+	local check_switch=""
+	local invoke_string=""
+
+	[ -x "/usr/sbin/a2$CMD" ] || return 1
+	[ -x "/usr/sbin/a2query" ] || return 1
+
+	case "${RCD_ACTION:-}" in
+		""|reload|restart)
+			;;
+		*)
+			return 1
+			;;
+	esac
+
+	case "$CMD" in
+		*conf)
+			check_switch="-c"
+			invoke_string="configuration"
+			rcd_action="${RCD_ACTION:-reload}"
+			;;
+		*mod)
+			check_switch="-m"
+			invoke_string="module"
+			rcd_action="${RCD_ACTION:-restart}"
+			;;
+		*site)
+			check_switch="-s"
+			invoke_string="site"
+			rcd_action="${RCD_ACTION:-reload}"
+			;;
+		*)
+			;;
+	esac
+
+
+	case "$CMD" in
+		enconf|enmod|ensite)
+			(a2query $check_switch "$CONF" > /dev/null 2>&1)
+			local a2query_ret=$?
+			if [ "$a2query_ret" -eq 0 ] ; then
+				# configuration is already enabled
+				apache2_msg "info" "apache2_invoke $CONF: No action required"
+				return 0
+			elif [ "$a2query_ret" -eq 32	 ] ; then
+				# the maintainer disabled the module
+				apache2_msg "info" "apache2_invoke $CONF: no action - $invoke_string was disabled by maintainer"
+				return 0
+			fi
+
+			# coming here either means:
+			# a) we have no clue about the module (e.g. for upgrades prior to maintscript-helper
+			# b) it's a fresh install
+			APACHE2_NEED_ACTION=1
+			a2$CMD -m -q "$CONF" > /dev/null 2>&1 || return 1
+			apache2_msg "info" "apache2_invoke: Enable $invoke_string $CONF"
+			;;
+		disconf|dismod|dissite)
+			if a2query $check_switch $CONF > /dev/null 2>&1 ; then
+				if [ "$APACHE2_MAINTSCRIPT_NAME" = 'postrm' ] && [ "$APACHE2_MAINTSCRIPT_METHOD" = "purge" ] ; then
+					a2$CMD -p -f -q "$CONF" || return 1
+				else
+					a2$CMD -m -f -q "$CONF" || return 1
+				fi
+				APACHE2_NEED_ACTION=1
+				apache2_msg "info" "apache2_invoke: Disable $invoke_string $CONF"
+			else
+				apache2_msg "info" "apache2_invoke $CONF: No action required"
+				continue
+			fi
+			;;
+		*)
+			return 1
+			;;
+	esac
+
+	if [ "$APACHE2_NEED_ACTION" -eq 1 ] ; then
+		apache2_reload $rcd_action
+	fi
+
+}
+
+#
+# Function apache2_reload
+#	reloads the web server to activate a changed configuration. It does not
+#	actually reload the web server if the current configuration fails to
+#	parse.
+# Parameters:
+#	action - optional, can be 'reload' (default) or 'restart'
+# Returns:
+#	0 if the changes could be activated
+#	1 otherwise
+# Since: 2.4.1-1
+apache2_reload()
+{
+	if ! apache2_needs_action ; then
+		return 0
+	fi
+	local action
+	case "${1:-}" in
+	""|reload)
+		action=reload
+		;;
+	restart)
+		action=restart
+		;;
+	*)
+		return 1
+		;;
+	esac
+
+	if apache2ctl configtest 2>/dev/null; then
+		invoke-rc.d apache2 $action || true
+	else
+		apache2_msg "err" "apache2_reload: Your configuration is broken. Not ${action}ing Apache 2"
+	fi
+}
+
+# vim: syntax=sh sw=8 sts=8 sr noet

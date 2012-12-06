@@ -1,0 +1,223 @@
+Description: Adapt apxs to Debian specific changes
+ - Make apxs2 use a2enmod and /etc/apache2/mods-available
+ - Make libtool happier
+ - Use LDFLAGS from config_vars.mk, allow to override them
+Forwarded: not-needed
+Author: Stefan Fritsch <sf@debian.org>
+Last-Update: 2012-03-17
+
+Index: apache2/support/apxs.in
+===================================================================
+--- apache2.orig/support/apxs.in
++++ apache2/support/apxs.in
+@@ -38,7 +38,9 @@
+ my $CFG_TARGET     = get_vars("progname");
+ my $CFG_SYSCONFDIR = get_vars("sysconfdir");
+ my $CFG_CFLAGS     = join ' ', map { get_vars($_) }
+-  qw(SHLTCFLAGS CFLAGS NOTEST_CPPFLAGS EXTRA_CPPFLAGS EXTRA_CFLAGS);
++  qw(SHLTCFLAGS CFLAGS CPPFLAGS NOTEST_CPPFLAGS EXTRA_CPPFLAGS EXTRA_CFLAGS);
++my $CFG_LDFLAGS    = join ' ', map { get_vars($_) }
++  qw(LDFLAGS NOTEST_LDFLAGS SH_LDFLAGS);
+ my $includedir     = get_vars("includedir");
+ my $CFG_INCLUDEDIR = eval qq("$includedir");
+ my $CFG_CC         = get_vars("CC");
+@@ -274,6 +276,7 @@
+     $data =~ s|%TARGET%|$CFG_TARGET|sg;
+     $data =~ s|%PREFIX%|$prefix|sg;
+     $data =~ s|%INSTALLBUILDDIR%|$installbuilddir|sg;
++    $data =~ s|%DATADIR%|$datadir|sg;
+ 
+     my ($mkf, $mods, $src) = ($data =~ m|^(.+)-=#=-\n(.+)-=#=-\n(.+)|s);
+ 
+@@ -426,7 +429,7 @@
+         $la =~ s|\.c$|.la|;
+         my $o = $s;
+         $o =~ s|\.c$|.o|;
+-        push(@cmds, "$libtool $ltflags --mode=compile $CFG_CC $cflags -I$CFG_INCLUDEDIR $apr_includedir $apu_includedir $opt -c -o $lo $s && touch $slo");
++        push(@cmds, "$libtool $ltflags --mode=compile --tag=disable-static $CFG_CC $cflags -I$CFG_INCLUDEDIR $apr_includedir $apu_includedir $opt -c -o $lo $s && touch $slo");
+         unshift(@objs, $lo);
+     }
+ 
+@@ -448,6 +451,7 @@
+         $opt .= " -l$opt_l";
+     }
+ 
++    my $ldflags = "$CFG_LDFLAGS";
+     if ($opt_p == 1) {
+         
+         my $apr_libs=`$apr_config --cflags --ldflags --link-libtool --libs`;
+@@ -466,7 +470,7 @@
+         $opt .= " -rpath $CFG_LIBEXECDIR -module -avoid-version $apr_ldflags";
+     }
+ 
+-    push(@cmds, "$libtool $ltflags --mode=link $CFG_CC -o $dso_file $opt $lo");
++    push(@cmds, "$libtool $ltflags --mode=link --tag=disable-static $CFG_CC $ldflags -o $dso_file $opt $lo");
+ 
+     #   execute the commands
+     &execute_cmds(@cmds);
+@@ -500,7 +504,7 @@
+         if ($opt_i) {
+ 	    push(@cmds, "$installbuilddir/instdso.sh SH_LIBTOOL='" .
+                  "$libtool' $f $CFG_LIBEXECDIR");
+-	    push(@cmds, "chmod 755 $CFG_LIBEXECDIR/$t");
++	    push(@cmds, "chmod 644 $CFG_LIBEXECDIR/$t");
+         }
+ 
+         #   determine module symbolname and filename
+@@ -536,10 +540,11 @@
+             $filename = "mod_${name}.c";
+         }
+         my $dir = $CFG_LIBEXECDIR;
+-        $dir =~ s|^$CFG_PREFIX/?||;
++        # Debian doesn't have a CFG_PREFIX, so this stuffs up:
++	# $dir =~ s|^$CFG_PREFIX/?||;
+         $dir =~ s|(.)$|$1/|;
+ 	$t =~ s|\.la$|.so|;
+-        push(@lmd, sprintf("LoadModule %-18s %s", "${name}_module", "$dir$t"));
++        push(@lmd, [ $name, sprintf("LoadModule %-18s %s", "${name}_module", "$dir$t") ] );
+     }
+ 
+     #   execute the commands
+@@ -547,108 +552,35 @@
+ 
+     #   activate module via LoadModule/AddModule directive
+     if ($opt_a or $opt_A) {
+-        if (not -f "$CFG_SYSCONFDIR/$CFG_TARGET.conf") {
+-            error("Config file $CFG_SYSCONFDIR/$CFG_TARGET.conf not found");
++        if (not -d "$CFG_SYSCONFDIR/mods-available") {
++            error("Config file $CFG_SYSCONFDIR/mods-available not found");
+             exit(1);
+         }
+ 
+-        open(FP, "<$CFG_SYSCONFDIR/$CFG_TARGET.conf") || die;
+-        my $content = join('', <FP>);
+-        close(FP);
+-
+-        if ($content !~ m|\n#?\s*LoadModule\s+|) {
+-            error("Activation failed for custom $CFG_SYSCONFDIR/$CFG_TARGET.conf file.");
+-            error("At least one `LoadModule' directive already has to exist.");
+-            exit(1);
+-        }
+-
+-        my $lmd;
+-        my $c = '';
+-        $c = '#' if ($opt_A);
+-        foreach $lmd (@lmd) {
+-            my $what = $opt_A ? "preparing" : "activating";
+-            my $lmd_re = $lmd;
+-            $lmd_re =~ s/\s+/\\s+/g;
+-
+-            if ($content !~ m|\n#?\s*$lmd_re|) {
+-                # check for open <containers>, so that the new LoadModule
+-                # directive always appears *outside* of an <container>.
+-
+-                my $before = ($content =~ m|^(.*\n)#?\s*LoadModule\s+[^\n]+\n|s)[0];
+-
+-                # the '()=' trick forces list context and the scalar
+-                # assignment counts the number of list members (aka number
+-                # of matches) then
+-                my $cntopen = () = ($before =~ m|^\s*<[^/].*$|mg);
+-                my $cntclose = () = ($before =~ m|^\s*</.*$|mg);
+-
+-                if ($cntopen == $cntclose) {
+-                    # fine. Last LoadModule is contextless.
+-                    $content =~ s|^(.*\n#?\s*LoadModule\s+[^\n]+\n)|$1$c$lmd\n|s;
++        my $entry;
++        foreach $entry (@lmd) {
++            my ($name, $lmd) = @{$entry};
++            my $filename = "$CFG_SYSCONFDIR/mods-available/$name.load";
++            if (-f $filename) {
++                my $cmd = "mv $filename $filename.bak~";
++                if (system($cmd) != 0) {
++                    die "'$cmd' failed\n";
+                 }
+-                elsif ($cntopen < $cntclose) {
+-                    error('Configuration file is not valid. There are sections'
+-                          . ' closed before opened.');
+-                    exit(1);
+-                }
+-                else {
+-                    # put our cmd after the section containing the last
+-                    # LoadModule.
+-                    my $found =
+-                    $content =~ s!\A (               # string and capture start
+-                                  (?:(?:
+-                                    ^\s*             # start of conf line with a
+-                                    (?:[^<]|<[^/])   # directive which does not
+-                                                     # start with '</'
+-
+-                                    .*(?:$)\n        # rest of the line.
+-                                                     # the '$' is in parentheses
+-                                                     # to avoid misinterpreting
+-                                                     # the string "$\" as
+-                                                     # perl variable.
+-
+-                                    )*               # catch as much as possible
+-                                                     # of such lines. (including
+-                                                     # zero)
+-
+-                                    ^\s*</.*(?:$)\n? # after the above, we
+-                                                     # expect a config line with
+-                                                     # a closing container (</)
+-
+-                                  ) {$cntopen}       # the whole pattern (bunch
+-                                                     # of lines that end up with
+-                                                     # a closing directive) must
+-                                                     # be repeated $cntopen
+-                                                     # times. That's it.
+-                                                     # Simple, eh? ;-)
+-
+-                                  )                  # capture end
+-                                 !$1$c$lmd\n!mx;
+-
+-                    unless ($found) {
+-                        error('Configuration file is not valid. There are '
+-                              . 'sections opened and not closed.');
+-                        exit(1);
+-                    }
++            }
++
++            notice("[preparing module `$name' in $filename]");
++            open(FP, ">$filename") || die;
++            print FP "$lmd\n";
++            close(FP);
++
++            if ($opt_a) {
++                my $cmd = "a2enmod $name";
++                if (system($cmd) != 0) {
++                    die "'$cmd' failed\n";
+                 }
+-            } else {
+-                # replace already existing LoadModule line
+-                $content =~ s|^(.*\n)#?\s*$lmd_re[^\n]*\n|$1$c$lmd\n|s;
+-            }
+-            $lmd =~ m|LoadModule\s+(.+?)_module.*|;
+-            notice("[$what module `$1' in $CFG_SYSCONFDIR/$CFG_TARGET.conf]");
+-        }
+-        if (@lmd) {
+-            if (open(FP, ">$CFG_SYSCONFDIR/$CFG_TARGET.conf.new")) {
+-                print FP $content;
+-                close(FP);
+-                system("cp $CFG_SYSCONFDIR/$CFG_TARGET.conf $CFG_SYSCONFDIR/$CFG_TARGET.conf.bak && " .
+-                       "cp $CFG_SYSCONFDIR/$CFG_TARGET.conf.new $CFG_SYSCONFDIR/$CFG_TARGET.conf && " .
+-                       "rm $CFG_SYSCONFDIR/$CFG_TARGET.conf.new");
+-            } else {
+-                notice("unable to open configuration file");
+             }
+-	}
++
++        }
+     }
+ }
+ 
+@@ -668,8 +600,8 @@
+ ##
+ 
+ builddir=.
+-top_srcdir=%PREFIX%
+-top_builddir=%PREFIX%
++top_srcdir=%DATADIR%
++top_builddir=%DATADIR%
+ include %INSTALLBUILDDIR%/special.mk
+ 
+ #   the used tools

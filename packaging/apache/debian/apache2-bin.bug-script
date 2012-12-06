@@ -1,0 +1,81 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Text::Wrap;
+$Text::Wrap::columns = 70;
+
+open (my $out, ">&=3") or die "could not open FD 3\n";
+
+our $AQUERY = 0;
+our $PHP = 0;
+
+if (-x "/usr/sbin/a2query")
+{
+	$AQUERY = "/usr/sbin/a2query";
+}
+
+if ($AQUERY)
+{
+		my $mpm = `$AQUERY -M`;
+		chomp($mpm);
+		print $out "Enabled MPM: $mpm\n";
+}
+
+
+my @modules;
+if ($AQUERY)
+{
+	print $out "List of enabled modules:\n";
+	@modules = `$AQUERY -m`;
+}
+else
+{
+	print $out "a2query is not available.\n";
+	@modules = sort glob("/etc/apache2/mods-enabled/*.load");
+	map { s{^/etc/apache2/mods-enabled/(.*)\.load$}{$1} } @modules;
+	print $out "List of /etc/apache2/mods-enabled/*.load:\n";
+}
+if (! scalar @modules) {
+	print $out "Could not determine module list\n";
+}
+else {
+	my $missing;
+	foreach my $m (@modules) {
+		if (-e "/etc/apache2/mods-available/$m.conf" and
+		    ! -e "/etc/apache2/mods-enabled/$m.conf") {
+			$m .= "*";
+			$missing = 1;
+		}
+		if ($m =~ /^(php\d)/) {
+			$PHP = $1;
+		}
+	}
+
+	print $out wrap("  ", "  ", "@modules\n");
+
+	print $out
+	    wrap("  ", "   ", 
+		"(A * means that the .conf file for that module is not " .
+		"enabled in /etc/apache2/mods-enabled/)\n") 
+	    if $missing;
+}
+
+if (defined $PHP) {
+	my @exts = qx{egrep ^extension= /etc/$PHP/apache2/php.ini /etc/$PHP/apache2/conf.d/* 2>/dev/null};
+	if (scalar @exts) {
+		chomp @exts;
+		@exts = grep { ! m{\.dpkg-(?:bak|dist):} } @exts;
+		@exts = sort grep { s{^.*:extension=(\S+)\.\S+}{$1} } @exts;
+		print $out "List of enabled $PHP extensions:\n";
+		print $out wrap("  ", "  ", "@exts\n");
+	}
+}
+
+
+if ($AQUERY)
+{
+		my @confs;
+		print $out "List of enabled configurations:\n";
+		@confs = `$AQUERY -c`;
+		print $out wrap("  ", "  ", "@confs\n");
+}

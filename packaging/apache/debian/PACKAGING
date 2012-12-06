@@ -1,0 +1,452 @@
+Apache 2 Packaging Guidelines
+=============================
+
+This document describes handling and behavior of reverse dependencies which
+would like to interact with the Apache 2 HTTP server
+
+Contents
+========
+
+	1. Overview
+
+	2. Packaging Modules
+                2.1 '.load' and '.conf' files
+                2.2 Maintainer scripts
+
+	3. Packaging Sites and Configurations for Web Applications
+                3.1 Web application module dependencies
+                3.2 Package dependencies
+
+	4. Maintainer Scripts
+		4.1 Enabling Configurations
+		4.2 Switching MPMs
+
+	5. Tools
+		5.1 a2query
+		5.2 apache2-maintscript-helper
+		5.3 dh_apache2
+
+        6. Version
+                6.1 Changes
+
+
+1 Overview
+==========
+
+The Apache 2 web server package in Debian supports two types of reverse
+dependencies: modules and web applications. They need to be treated differently
+as their requirements are different. We have special requirements for how to
+declare dependencies against Apache 2 web server packages depending on the type
+of package. Refer to the appropriate parts for extensive information.
+
+Furthermore, there are several helper tools available to assist with common
+tasks. These are outlined in their respective sub sections as well. You should
+use these tools to get maintainer scripts and dependencies right.
+
+This document adopts the normative wording of the Debian Policy Manual §1.1[1].
+The words "must", "should", and "may", and the adjectives "required",
+"recommended", and "optional", are used to distinguish the significance of the
+various guidelines in this policy document.
+
+[1] http://www.debian.org/doc/debian-policy/ch-scope.html#s1.1
+
+2 Packaging Modules
+===================
+
+Modules are packages which are installing third party extensions to the Apache 2
+web server which can be loaded at runtime to extend the functionality of the
+core server. Please be aware that such compiled modules make use of a stable
+Application Binary Interface (ABI) and therefore need a recompile if the web
+server changes. Hence be careful how you declare dependencies against the web
+server. You need to make sure it does not break upon upgrades.
+
+A module package providing an Apache module must obey these policies to make
+sure it can be upgraded without breakage of local sites. To achieve this, a
+package must build-depend on apache2-dev. That package provides the 'apxs'
+compile helper which makes sure the module to be compiled is compatible with the
+Apache 2 web server and the C headers the server is providing as a public
+interface. If an updated package is not buildable with Apache 2.2 anymore, the
+apache2-dev build-dependency should be versioned ">> 2.4~", because older
+versions of apache2-threaded-dev did provide apache2-dev.
+
+The resulting binary package should be called libapache2-mod-<modulename> and
+MUST NOT depend on apache2 or apache2-bin. Instead a module package must depend
+on our virtual package providing the module magic number which denotes the ABI
+compatibility version number. The virtual package is called apache2-api-YYYYMMDD
+and is guaranteed to be stable through all binary updates of 2.4.x. The
+dh_apache2 helper assists in getting the dependencies right.
+
+2.1 '.load' and '.conf' files
+-----------------------------
+
+The module must install a 'module.load' file to /etc/apache2/modules-available,
+where 'module' is the name of the installed module minus the "mod_" prefix. The
+'.load' file must contain an appropriate "LoadModule" directive only.
+Additionally maintainers may use a magic line in '.load' files to declare
+module dependencies and conflicts which need to be resolved to load a module for
+a local site. This is useful if a module depends on other modules to be
+loaded, or to conflict with other modules if they can't be loaded at the same
+time. a2enmod and a2dismod will parse any "magic comment lines" with the format
+"# Depends: module [module [...]]" and "# Conflicts: module [module [...]]";
+for example to load mod_foo:
+
+In 'foo.load':
+
+	# Depends: bar
+	# Conflicts: baz
+	LoadModule foo_module /usr/lib/modules/mod_foo.so
+
+
+Additionally, if required, a 'foo.conf' configuration file to configure the
+module may be installed along with the 'load' file, following the same naming
+scheme. This is useful if the module in question requires some initial
+configuration to be useful. No magic comments are recognized in '.conf' files.
+Otherwise they have the same functionality and requirements as configuration
+files (see section 3 below). You should use only directives provided by default
+by our web server configuration or which are provided by your module itelf in a
+supplied '.conf' file.
+
+In some rare cases it can't be avoided that a module depends on an another
+module being loaded already before its own loading process can succeed. The
+module load order is guaranteed to be sorted alphabetically, which could lead to
+problems if the new module to be loaded sorts later. In most cases such
+pre-load dependencies can be avoided upstream - consider filing a bug. If there
+is no way out of this problem, you may want to add a conditional Include in your
+own module file.
+
+Suppose mod_foo relies on mod_bar to be loaded first. You may want to write a
+module 'load' file like this:
+
+	# Depends: bar
+	<IfModule !mod_bar.c>
+		Include mods-enabled/bar.load
+	</IfModule>
+
+	LoadModule foo_module /usr/lib/modules/mod_foo.so
+
+Please note that the bar.load file must also contain a matching "<IfModule
+!mod_bar.c>" guard as it would be loaded twice otherwise. Use this method
+extremely sparingly and in agreement with related package maintainers only.
+Note that such a module '.load' file must still contain a "Depends:" magic line
+to make sure that the a2enmod/a2dismod dependency resolver works correctly.
+
+2.2 Maintainer scripts
+----------------------
+
+Maintainer scripts should not invoke a2enmod directly. Instead, the
+apache2-maintscript-helper should be used. Please be aware that the helper is
+not guaranteed to be installed on the target system. There are certain setups
+which do not require Debian specific configurations, so modules must not do
+anything in maintainer scripts which makes use of Debian-specific enhancements
+like apache2-maintscript-helper, a2enmod, or a2query unconditionally. It is
+recommended to invoke it like this:
+
+        if [ -e /usr/share/apache2/apache2-maintscript-helper ] ; then
+		. /usr/share/apache2/apache2-maintscript-helper
+		apache2_invoke enmod foo
+	fi
+
+The dh_apache2 helper can be used to install module configuration and load
+files. Additionally it generates appropriate maintainer scripts. The
+apache2-maintscript-helper provides a few functions for common tasks. See their
+respective reference documentations below.
+
+If maintainer scripts use a2enmod/a2dismod manually, they must invoke them with
+the "-m" (maintainer mode) switch.
+
+3 Packaging Sites and Configurations for Web Applications
+=========================================================
+
+Web applications are different from modules in that they do not have a hard
+dependency on the web server. Typically they require a running web server,
+but they do not need to worry about binary compatibility of modules. We accept
+that there are other web servers besides Apache; thus we discourage package
+maintainers of web applications from depending unconditionally on Apache. That
+said, we provide several helpers to assist web application packagers to invoke
+configuration snippets to enable a web application in the Apache 2 web server.
+
+We differentiate between two sub-types: sites and general configuration. Sites
+are installed to /etc/apache2/sites-available and configure a particular
+virtual host. Special care must be taken when installing a site configuration
+to make sure it does not interfere with site-local configuration used by the
+administrator. Typically there are only a few use cases where a Debian
+package should include a virtual host configuration.
+
+The general configuration snippets are installed to /etc/apache2/conf-available
+instead. Package maintainers are advised to avoid "local-" prefixes to
+installed conffiles, and ideally use "packagename.conf" to avoid name clashes.
+This type of configuration must be used when installing a global (i.e. virtual
+host independent) configuration. Usually these configuration snippets will be
+included in the global server context via the conf-enabled directory. However,
+it is planned to allow the administrator to only enable the configuration
+snippets in a selected set of virtual hosts.
+
+Typically a "packagename.conf" should enable a global alias pointing to your web
+application along with a script-dependendent per-script configuration; for
+example:
+
+	Alias /packagename /usr/share/packagename
+
+	<Directory /usr/share/packagename>
+	  ...
+	</Directory>
+
+Please be careful about the directives you are using. Some might be provided by
+modules which are not enabled by default. By default you can unconditionally use
+directives from these modules: mod_access_compat, mod_alias, mod_auth_basic,
+mod_authn_file, mod_authz_host, mod_authz_user, mod_autoindex, mod_deflate,
+mod_dir, mod_env, mod_filter, mod_logio, mod_mime, mod_negotiation,
+mod_setenvif, mod_unixd, mod_version, mod_watchdog. Check the module
+documentation for the modules providing directives you are using.
+
+Note that not all directives are really required. If your <Directory>
+configuration can be enhanced by mod_rewrite rules, but does not necessarily
+need to use them, you could do something like:
+
+	<Directory /usr/share/packagename>
+	  ...
+	  <IfModule mod_rewrite.c>
+	   RewriteEngine on
+	   RewriteRule ...
+	  </IfModule>
+	</Directory>
+
+(Note that some common uses of mod_rewrite for web applications can be replaced
+by the relatively new FallbackResource directive.)
+
+3.1 Web application module dependencies
+---------------------------------------
+
+There are use cases where a configuration really needs a certain module to be
+enabled. This is tricky to achieve for web applications as dependencies could
+lead to complex dependency chains which could break unrelated web applications
+installed alongside your package. Thus, we do not resolve module dependencies
+for web applications automatically, but they may be expressed (see 'load' files
+in section 2.1), and a2enconf will warn the site administrator about modules
+which need to enabled. Moreover, modules can be arbitrarily enabled and
+disabled by local administrators, so a web application must make sure not to
+break the web server's start-up if a required module is not available.
+
+The syntax for config snippets to express dependencies is identical to the
+syntax in modules' '.load' files.  Within your package.conf file you still need
+to protect non-default directives with <IfModule> clauses as there is no
+guarantee that the modules are actually enabled. It is acceptable if your
+configuration file turns into a no-op as long as it does not break the server
+start-up.
+
+For both types of configuration (configurations and sites), dh_apache2 can be
+used to assist packagers.
+
+3.2 Package dependencies
+------------------------
+
+Web applications must only depend on (or recommend) the apache2 package. Web
+applications must not depend on or recommend the packages apache2-bin or
+apache2-data. Generally, web server dependencies should be declared in the form:
+
+	Depends: apache2 | <alternative web servers you support> | httpd-cgi
+
+Using dh_apache2 assists you to do so, although dh_apache2 declares a weaker
+Recommends relation only. While a consolidated and consistent behavior among web
+applications would be desirable, from Apache's point of view, both alternatives
+are acceptable. If your web application depends on a particular web server module
+you need to depend on that, too. For example, PHP applications might need to
+formulate dependency lines in the form:
+
+	Depends: libapache2-mod-php5 | php5-cgi | php5-fpm
+	Recommends: apache2 | <alternative web servers you support> | httpd-cgi
+
+A with modules, web applications may enable their configuration files in
+maintainer scripts. Use of dh_apache2 is recommended to achieve this. Generally,
+special care should be taken not to use Apache2 Debian helper scripts like
+a2query and a2enmod unconditionally. You can use the apache2-maintscript-helper
+tools provided by the apache2 package for common tasks this way:
+
+        if [ -e /usr/share/apache2/apache2-maintscript-helper ] ; then
+		. /usr/share/apache2/apache2-maintscript-helper
+		apache2_invoke enconf foo
+	fi
+
+Refer to the reference documentation below to learn how to use
+apache2-maintscript-helper. Do not enable or disable modules in web
+application maintainer scripts; instead protect your configuration with
+<IfModule> clauses if you require non-standard modules.
+
+4 Maintainer Scripts
+====================
+
+Though already discussed briefly in previous sections, here follow some
+clarifications regarding the invocation of wrapper scripts in maintainer scripts
+of modules and web applications.
+
+4.1 Enabling Configurations
+---------------------------
+
+Both modules and web applications should use the apache2-maintscript-helper in
+general. The helper will obey local policies to decide when to enable a piece of
+configuration, to reload the web server, and so on. Moreover, it will remember
+whether a module was activated by the site administrator or a maintainer script.
+Thus, it is particularly important you do not use "a2enmod" and so on directly
+(though a2query is acceptable).
+
+This is a summary of how the apache2-maintscript-helper should be invoked in
+maintainer scripts:
+
+Modules:
+	Unless a maintainer or debconf script verified that no configuration was
+	to be installed at all, e.g. for scripts supporting several web servers,
+	modules should unconditionally call apache2_invoke in their "postinst
+	configure" sections. It will obey site-local policies in future and will
+	make sure that disabled modules are not enabled again during upgrades of
+	a module package.
+
+	Modules need to be disabled on removal (and purge anyway), as otherwise
+	their configuration will be broken (as LoadModule would fail because of
+	the missing shared object file). Thus, modules need to call
+	"apache2_invoke dismod" on both removal and purge. It's apache2_invoke's
+	job to deal with upgrades and it will remember modules it removed during
+	removal and will reenable them during re-install.
+
+Web Applications:
+	Web Applications derive the same behavior as modules if the web
+	application can be run with a sensible out-of-box configuration; don't
+	enable it otherwise. Likewise, web application should also be disabled
+	on removal (and on purge anyway), because important files may be missing
+	(and that's the point of package removal, anyway).
+
+4.2 Switching MPMs
+------------------
+
+Only modules are allowed to switch the enabled MPM. Web applications must not
+switch the enabled MPM in their maintainer scripts. To actually switch the MPM,
+packagers can use a2query to find out whether it is necessary, and if so, can
+switch it by using the corresponding helper function provided in
+apache2-maintscript-helper. Do not try to switch the MPM yourself - the helper
+function takes special care not to leave the site in a state without an enabled
+MPM, which is a fatal error.
+
+
+The helper call may fail. Your maintainer script must cope with this
+possibility. It is not recommended to make your maintainer script fail if the
+MPM could not be changed. Instead emit a warning. You can use the apache2_msg
+function from apache2-maintscript-helper which will also log to syslog. If you
+are using debconf anyway you may want to consider using that - but continue
+operation. However, make sure you only enable the module in question if the MPM
+was changed successfully.  See below for an example snippet:
+
+
+	if [ -e /usr/share/apache2/apache2-maintscript-helper ] ; then
+		. /usr/share/apache2/apache2-maintscript-helper
+
+		# mod_foo requires the prefork MPM
+		if [ $(a2query -M) != 'prefork' ] ; then
+			if apache2_switch_mpm prefork ; then
+				apache2_invoke enmod foo
+			else
+				apache2_msg err "Could not switch to prefork, not enabling mod_foo"
+			fi
+		else
+			apache2_invoke enmod foo
+		fi
+
+	fi
+
+
+5. Tools
+========
+
+This is an overview of tools supplied with the Apache2 package which can assist
+in building web application and module packages.
+
+5.1 apache2-maintscript-helper
+------------------------------
+
+The apache2-maintscript-helper is a collection of functions which can be
+sourced in maintainer scripts to do required tasks in a simple and
+standardized way. It is NOT a script; it is a library (insofar as shell
+functions can be libraries). This is to avoid users calling these functions.
+They are not meant to be used by users. The helper is installed within the
+apache2 binary package. Thus you MUST NOT use any function of it
+unconditionally, as for both modules and web applications there are use cases
+when this package is not added as a dependency. Thus, use it in a protected
+conditional like this only:
+
+        if [ -e /usr/share/apache2/apache2-maintscript-helper ] ; then
+		. /usr/share/apache2/apache2-maintscript-helper
+		<call apache2-maintscript-helper specific functions>
+	fi
+
+The helper provides functions to enable and disable configuration files,
+restart the web server, switch the MPM in use and similar. Refer to the source
+code for detailed interface documentation. When available, please use the
+apache2-maintscript-helper instead of calling helper scripts directly, as these
+functions are careful to invoke and use the appropriate helper. Later versions
+may be configurable to allow the administrator to influence which actions are
+performed.
+
+Always check the return code of the called function to find out whether
+something went wrong:
+
+	if ! apache2_invoke enmod modulename ; then
+		echo "Whoops! Something went wrong"
+	fi
+
+5.2 dh_apache2
+--------------
+
+dh_apache2 is a debhelper which can be used to install modules, module
+configuration, site configuration, and global configuration snippets. It assists
+you to set appropriate dependencies and maintainer scripts. Refer to
+dh_apache2(1) for full usage guidelines.
+
+5.2 a2enmod
+-----------
+
+a2enmod and its special invocations a2enconf, a2ensite, a2dismod, a2dissite and
+a2disconf can be used to enable all types of Apache 2 configuration files. When
+invoking these helpers in maintainer scripts, you should carefully check their
+error return codes. These scripts must always be used with the -q (quiet) and -m
+(maintainer mode) switches in maintainer scripts. Preferably, you should not
+interface with this scripts directly; instead it is recommended to use
+apache2-maintscript-helper. For detailed usage refer to their respective man
+pages.
+
+5.3 a2query
+----------
+
+a2query is a query tool to retrieve runtime status information about the Apache
+2 web server instance. You can use this tool to get information about loaded
+modules, the MPM used on the installation site, the module magic number and
+other useful information. Use this script instead of accessing configuration
+files in /etc/apache2 directly as it tries its best to return useful information
+even on incomplete or broken configurations.
+
+For example, you can use a2query to retrieve the MPM enabled on the local site
+and make actions dependent on the result like this:
+
+        [ -x /usr/sbin/a2query ] || exit $?
+        CUR_MPM=$(a2query -M) || exit $?
+	case "$CUR_MPM" in
+		worker)
+		;;
+	...
+	esac
+
+Refer to the a2query(1) man page for the full documentation. Please note that
+the apache2-maintscript-helper can be used to interface with this task as well.
+
+6 Version
+=========
+
+Document version: 1.0
+
+Starting with Apache2 2.4.2-2 this document is versioned. Any change which affects
+packaging is denoted by an increased major nummer; clarifications, spelling fixes
+and minor edits are denoted by minor numbers. In future, a changelog will appear
+here as well.
+
+6.1 Changes
+-----------
+
+1.0:
+        * first version of this document which is versioned.
