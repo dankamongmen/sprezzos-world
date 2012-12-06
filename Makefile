@@ -169,7 +169,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
-	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT)
+	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) \
+	$(AWNEXTRAAPPLETS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -533,6 +534,14 @@ $(AVIDEMUX): $(SPREZZ)/avidemux/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf avidemux_$(avidemux_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: awn-extras-applets
+awn-extras-applets:$(AWNEXTRASAPPLETS)_$(ARCH).deb
+$(AWNEXTRASAPPLETS): $(SPREZZ)/awn-extras-applets/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf awn-extras_$(awn-extras-applets_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: banshee
 banshee:$(BANSHEE)_$(ARCH).deb
