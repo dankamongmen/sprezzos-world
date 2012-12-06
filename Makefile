@@ -541,7 +541,7 @@ $(AWNEXTRASAPPLETS): $(SPREZZ)/awn-extras-applets/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf awn-extras_$(awn-extras-applets_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf awn-extras-$(awn-extras-applets_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: banshee
 banshee:$(BANSHEE)_$(ARCH).deb
