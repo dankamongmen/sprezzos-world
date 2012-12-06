@@ -169,7 +169,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
-	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) \
+	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) \
 	$(AWNEXTRAAPPLETS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -526,6 +526,14 @@ $(AUTOKEY): $(SPREZZ)/autokey/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf autokey-$(autokey_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: avahi
+avahi:$(AVAHI)_$(ARCH).deb
+$(AVAHI): $(SPREZZ)/avahi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf avahi-$(avahi_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: avidemux
 avidemux:$(AVIDEMUX)_$(ARCH).deb
