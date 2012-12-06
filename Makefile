@@ -442,7 +442,7 @@ $(APACHE): $(SPREZZ)/apache/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf apache-$(apache_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf httpd-$(apache_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: argyll
 argyll:$(ARGYLL)_$(ARCH).deb
