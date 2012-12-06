@@ -166,7 +166,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
-	$(KMOD) $(LIBTORRENT) $(RTORRENT)
+	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1179,6 +1179,14 @@ $(GNOMEORCA): $(SPREZZ)/gnome-orca/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-orca-$(gnome-orca_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gnome-paint
+gnome-paint:$(GNOMEPAINT)_$(ARCH).deb
+$(GNOMEPAINT): $(SPREZZ)/gnome-paint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-paint-$(gnome-paint_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gnome-photo-printer
 gnome-photo-printer:$(GNOMEPHOTOPRINTER)_$(ARCH).deb
