@@ -166,7 +166,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
-	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT)
+	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -435,6 +435,14 @@ $(ANJUTA): $(SPREZZ)/anjuta/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf anjuta-$(anjuta_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: apache
+apache:$(APACHE)_$(ARCH).deb
+$(APACHE): $(SPREZZ)/apache/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf apache-$(apache_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: argyll
 argyll:$(ARGYLL)_$(ARCH).deb
@@ -1955,6 +1963,14 @@ $(MESADEMOS): $(SPREZZ)/mesa-demos/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mesa-demos_$(mesa-demos_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: mon
+mon:$(MON)_$(ARCH).deb
+$(MON): $(SPREZZ)/mon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mon_$(mon_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: mp4v2
 mp4v2:$(MP4V2)_$(ARCH).deb
