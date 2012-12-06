@@ -107,7 +107,7 @@ USBVIEWORIG:=usbview_$(shell echo $(usbview_UPVER) | cut -d- -f1).orig.tar.gz
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(ICU) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
-	$(GRUBTHEME) $(ADOBE) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) $(DCONF) \
+	$(GRUBTHEME) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) $(DCONF) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) $(YELP) $(DBUS) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) $(WPA) $(LSB) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) $(FBV) $(GIT) \
@@ -167,7 +167,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
-	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD)
+	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
+	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -922,6 +923,22 @@ $(FILEROLLER): $(SPREZZ)/file-roller/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf file-roller-$(file-roller_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: fonts-cantarell
+fonts-cantarell:$(FONTSCANTARELL)_$(ARCH).deb
+$(FONTSCANTARELL): $(SPREZZ)/fonts-cantarell/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf fonts-cantarell-$(fonts-cantarell_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: fonts-sourcesanspro
+fonts-sourcesanspro:$(FONTSADOBESOURCESANSPRO)_$(ARCH).deb
+$(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
+	mkdir -p $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	unzip SourceSansPro_FontsOnly-$(fonts-adobe-sourcesanspro_UPVER).zip -d $@
 
 .PHONY: freeglut
 freeglut:$(FREEGLUT)_$(ARCH).deb
@@ -3501,14 +3518,6 @@ $(CONPALETTE): $(SPREZZ)/conpalette/debian/changelog $(CONPAL).tar.gz
 	tar xzvf $(CONPAL).tar.gz
 	mv $(CONPAL) $@
 	cp -r $(<D) $@/
-
-.PHONY: adobe
-adobe:$(FONTSADOBESOURCESANSPRO)_$(ARCH).deb
-$(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
-	mkdir -p $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	unzip SourceSansPro_FontsOnly-$(fonts-adobe-sourcesanspro_UPVER).zip -d $@
 
 # Native packages (those containing their own source)
 .PHONY: anna
