@@ -166,7 +166,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
-	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE)
+	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
+	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -342,6 +343,12 @@ $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
 	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
 	cp -r $(<D)/.. $@
 
+.PHONY: javascript-common
+javascript-common:$(JAVASCRIPTCOMMON)_$(ARCH).deb
+$(JAVASCRIPTCOMMON): $(SPREZZ)/javascript-common/debian/changelog
+	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
+	cp -r $(<D)/.. $@/
+
 .PHONY: lsb
 lsb:$(LSB)_$(ARCH).deb
 $(LSB): $(SPREZZ)/lsb/debian/changelog
@@ -443,6 +450,14 @@ $(APACHE): $(SPREZZ)/apache/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf httpd-$(apache_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: apachetop
+apachetop:$(APACHETOP)_$(ARCH).deb
+$(APACHETOP): $(SPREZZ)/apachetop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf apachetop-$(apachetop_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: argyll
 argyll:$(ARGYLL)_$(ARCH).deb
@@ -1084,6 +1099,14 @@ $(GNOMEFONTVIEWER): $(SPREZZ)/gnome-font-viewer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-font-viewer_$(gnome-font-viewer_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: gnome-gmail
+gnome-gmail:$(GNOMEGMAIL)_$(ARCH).deb
+$(GNOMEGMAIL): $(SPREZZ)/gnome-gmail/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-gmail-$(gnome-gmail_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnome-icon-theme
 gnome-icon-theme:$(GNOMEICONTHEME)_$(ARCH).deb
 $(GNOMEICONTHEME): $(SPREZZ)/gnome-icon-theme/debian/changelog
@@ -1307,6 +1330,14 @@ $(GNOMEVFS): $(SPREZZ)/gnome-vfs/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-vfs-$(gnome-vfs_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnome-xcf-thumbnailer
+gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
+$(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gnomecatalog
 gnomecatalog:$(GNOMECATALOG)_$(ARCH).deb
