@@ -930,7 +930,7 @@ $(FONTSCANTARELL): $(SPREZZ)/fonts-cantarell/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf fonts-cantarell-$(fonts-cantarell_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf cantarell-fonts-$(fonts-cantarell_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: fonts-sourcesanspro
 fonts-sourcesanspro:$(FONTSADOBESOURCESANSPRO)_$(ARCH).deb
