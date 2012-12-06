@@ -23,6 +23,8 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
+	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && \
 	 echo -n "$(@F)_UPVER:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr -d \~ | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
@@ -2086,8 +2088,8 @@ $(MPD): $(SPREZZ)/mpd/debian/changelog
 	tar xzvf mpd_$(mpd_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libmpd
-libmpd:libmpd-$(libmpd_UPVER)_$(ARCH).deb
-libmpd-$(libmpd_UPVER)_$(ARCH).deb: $(SPREZZ)/libmpd/debian/changelog
+libmpd:$(LIBMPD)_$(ARCH).deb
+$(LIBMPD): $(SPREZZ)/libmpd/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
