@@ -203,7 +203,8 @@ $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
 gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
 $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
 	git clone git@github.com:dankamongmen/gnome-xcf-thumbnailer.git $@
-	tar cJf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER) $@ --exclude-vcs
+	tar cJf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz $@ --exclude-vcs
+	ln -s gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz gnome-xcf-thumbnailer_$(gnome-xcf-thumbnailer_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: growlight
