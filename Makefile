@@ -169,7 +169,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
-	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) \
+	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) \
 	$(AWNEXTRAAPPLETS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -998,6 +998,14 @@ $(GCSTAR): $(SPREZZ)/gcstar/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gcstar-$(gcstar_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gdisk
+gdisk:$(GDISK)_$(ARCH).deb
+$(GDISK): $(SPREZZ)/gdisk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gptfdisk-$(gdisk_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gdl
 gdl:$(GDL)_$(ARCH).deb
