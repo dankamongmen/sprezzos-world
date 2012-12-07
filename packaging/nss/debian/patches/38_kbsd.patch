@@ -1,0 +1,147 @@
+## 38_kbsd.patch by Petr Salinger <Petr.Salinger@seznam.cz>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: GNU/kFreeBSD support. bz#356011
+## DP: Added Hurd support.
+
+Index: nss/mozilla/security/coreconf/Linux.mk
+===================================================================
+--- nss.orig/mozilla/security/coreconf/Linux.mk	2012-10-05 14:46:28.447226283 +0200
++++ nss/mozilla/security/coreconf/Linux.mk	2012-10-05 14:46:35.163164107 +0200
+@@ -69,7 +69,7 @@
+ 
+ LIBC_TAG		= _glibc
+ 
+-ifeq ($(OS_RELEASE),2.0)
++ifeq ($(KERNEL)-$(OS_RELEASE),linux-2.0)
+ 	OS_REL_CFLAGS	+= -DLINUX2_0
+ 	MKSHLIB		= $(CC) -shared -Wl,-soname -Wl,$(@:$(OBJDIR)/%.so=%.so) $(RPATH)
+ 	ifdef MAPFILE
+@@ -104,14 +104,21 @@
+ # -ansi on platforms like Android where the system headers are C99 and do
+ # not build with -ansi.
+ STANDARDS_CFLAGS	= -ansi -D_POSIX_SOURCE -D_BSD_SOURCE -D_XOPEN_SOURCE
+-OS_CFLAGS		= $(STANDARDS_CFLAGS) $(DSO_CFLAGS) $(OS_REL_CFLAGS) $(ARCHFLAG) -Wall -Werror-implicit-function-declaration -Wno-switch -pipe -DLINUX -Dlinux -DHAVE_STRERROR
++OS_CFLAGS		= $(STANDARDS_CFLAGS) $(DSO_CFLAGS) $(OS_REL_CFLAGS) $(ARCHFLAG) -Wall -Werror-implicit-function-declaration -Wno-switch -pipe -DHAVE_STRERROR
++ifeq ($(KERNEL),linux)
++OS_CFLAGS		+= -DLINUX -Dlinux
++endif
+ OS_LIBS			= $(OS_PTHREAD) -ldl -lc
+ 
+ ifdef USE_PTHREADS
+ 	DEFINES		+= -D_REENTRANT
+ endif
+ 
+-ARCH			= linux
++ifeq ($(KERNEL),linux)
++	ARCH		= linux
++else
++	ARCH		= gnu
++endif
+ 
+ DSO_CFLAGS		= -fPIC
+ DSO_LDOPTS		= -shared $(ARCHFLAG)
+@@ -128,7 +135,7 @@
+ LDFLAGS			+= -Wl,-rpath-link,/usr/lib:/lib
+ endif
+ 
+-# INCLUDES += -I/usr/include -Y/usr/include/linux
++# INCLUDES += -I/usr/include
+ G++INCLUDES		= -I/usr/include/g++
+ 
+ #
+@@ -161,7 +168,9 @@
+ endif
+ endif
+ 
++ifeq ($(KERNEL), linux)
+ OS_REL_CFLAGS   += -DLINUX2_1
++endif
+ MKSHLIB         = $(CC) $(DSO_LDOPTS) -Wl,-soname -Wl,$(@:$(OBJDIR)/%.so=%.so) $(RPATH)
+ 
+ ifdef MAPFILE
+Index: nss/mozilla/security/coreconf/arch.mk
+===================================================================
+--- nss.orig/mozilla/security/coreconf/arch.mk	2012-10-05 14:46:28.447226283 +0200
++++ nss/mozilla/security/coreconf/arch.mk	2012-10-05 14:46:35.163164107 +0200
+@@ -122,6 +122,14 @@
+     ifneq ($(words $(OS_RELEASE)),1)
+ 	OS_RELEASE := $(word 1,$(OS_RELEASE)).$(word 2,$(OS_RELEASE))
+     endif
++    KERNEL = linux
++endif
++
++# This check must be last.  Since all uses of OS_ARCH that follow affect only
++# userland, we can merge other Glibc systems with Linux here.
++ifneq (, $(filter GNU GNU_%, $(OS_ARCH)))
++OS_ARCH = Linux
++OS_RELEASE = 2.6
+ endif
+ 
+ #
+Index: nss/mozilla/security/coreconf/config.mk
+===================================================================
+--- nss.orig/mozilla/security/coreconf/config.mk	2012-10-05 14:46:28.447226283 +0200
++++ nss/mozilla/security/coreconf/config.mk	2012-10-05 14:46:35.167164069 +0200
+@@ -31,7 +31,7 @@
+ #######################################################################
+ 
+ TARGET_OSES = FreeBSD BSD_OS NetBSD OpenUNIX OS2 QNX Darwin BeOS OpenBSD \
+-              AIX RISCOS WINNT WIN95 WINCE Linux
++              AIX RISCOS WINNT WIN95 WINCE Linux GNU GNU_%
+ 
+ ifeq (,$(filter-out $(TARGET_OSES),$(OS_TARGET)))
+ include $(CORE_DEPTH)/coreconf/$(OS_TARGET).mk
+Index: nss/mozilla/security/nss/lib/freebl/unix_rand.c
+===================================================================
+--- nss.orig/mozilla/security/nss/lib/freebl/unix_rand.c	2012-10-05 14:46:30.599206535 +0200
++++ nss/mozilla/security/nss/lib/freebl/unix_rand.c	2012-10-05 14:46:35.167164069 +0200
+@@ -156,7 +156,8 @@
+ 
+ #if defined(SCO) || defined(UNIXWARE) || defined(BSDI) || defined(FREEBSD) \
+     || defined(NETBSD) || defined(DARWIN) || defined(OPENBSD) \
+-    || defined(NTO) || defined(__riscos__)
++    || defined(NTO) || defined(__riscos__) || defined(__GNU__) \
++    || defined(__FreeBSD_kernel__) || defined(__NetBSD_kernel__)
+ #include <sys/times.h>
+ 
+ #define getdtablesize() sysconf(_SC_OPEN_MAX)
+Index: nss/mozilla/security/nss/lib/softoken/softoken.h
+===================================================================
+--- nss.orig/mozilla/security/nss/lib/softoken/softoken.h	2012-10-05 14:46:28.447226283 +0200
++++ nss/mozilla/security/nss/lib/softoken/softoken.h	2012-10-05 14:46:35.167164069 +0200
+@@ -282,7 +282,7 @@
+ 
+ #define CHECK_FORK_MIXED
+ 
+-#elif defined(LINUX)
++#elif defined(LINUX) || defined (__GLIBC__)
+ 
+ #define CHECK_FORK_PTHREAD
+ 
+Index: nss/mozilla/security/nss/lib/ssl/sslmutex.c
+===================================================================
+--- nss.orig/mozilla/security/nss/lib/ssl/sslmutex.c	2012-10-05 14:46:28.447226283 +0200
++++ nss/mozilla/security/nss/lib/ssl/sslmutex.c	2012-10-05 14:46:35.167164069 +0200
+@@ -57,7 +57,7 @@
+     return SECSuccess;
+ }
+ 
+-#if defined(LINUX) || defined(AIX) || defined(BEOS) || defined(BSDI) || (defined(NETBSD) && __NetBSD_Version__ < 500000000) || defined(OPENBSD)
++#if defined(LINUX) || defined(AIX) || defined(BEOS) || defined(BSDI) || (defined(NETBSD) && __NetBSD_Version__ < 500000000) || defined(OPENBSD) || defined(__GLIBC__)
+ 
+ #include <unistd.h>
+ #include <fcntl.h>
+Index: nss/mozilla/security/nss/lib/ssl/sslmutex.h
+===================================================================
+--- nss.orig/mozilla/security/nss/lib/ssl/sslmutex.h	2012-10-05 14:46:28.447226283 +0200
++++ nss/mozilla/security/nss/lib/ssl/sslmutex.h	2012-10-05 14:46:35.167164069 +0200
+@@ -51,7 +51,7 @@
+ 
+ typedef int    sslPID;
+ 
+-#elif defined(LINUX) || defined(AIX) || defined(BEOS) || defined(BSDI) || (defined(NETBSD) && __NetBSD_Version__ < 500000000) || defined(OPENBSD)
++#elif defined(LINUX) || defined(AIX) || defined(BEOS) || defined(BSDI) || (defined(NETBSD) && __NetBSD_Version__ < 500000000) || defined(OPENBSD) || defined(__GLIBC__)
+ 
+ #include <sys/types.h>
+ #include "prtypes.h"
