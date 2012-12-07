@@ -170,7 +170,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
-	$(AWNEXTRAAPPLETS)
+	$(AWNEXTRAAPPLETS) $(CPPTEST)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -702,6 +702,14 @@ $(CINNAMON): $(SPREZZ)/cinnamon/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf cinnamon-$(cinnamon_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: cpptest
+cpptest:$(CPPTEST)_$(ARCH).deb
+$(CPPTEST): $(SPREZZ)/cpptest/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cpptest-$(cpptest_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: terminology
 terminology:$(TERMINOLOGY)_$(ARCH).deb
@@ -3648,7 +3656,7 @@ $(FIRMWAREALL): $(SPREZZ)/firmware-all/debian/changelog
 	cp -r $(<D)/.. $@
 
 clean:
-	rm -rf sprezzos-world $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
+	rm -rf -- sprezzos-world $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
 
 update:
 	for i in $(wildcard packaging/*) ; do \
@@ -3656,4 +3664,4 @@ update:
 	done
 
 clobber:
-	rm -rf $(FETCHED)
+	rm -rf -- $(FETCHED)
