@@ -170,7 +170,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
-	$(AWNEXTRAAPPLETS) $(CPPTEST)
+	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2727,6 +2727,14 @@ $(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf valgrind-$(valgrind_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: v4l-utils
+v4l-utils:$(V4LUTILS)_$(ARCH).deb
+$(V4LUTILS): $(SPREZZ)/v4l-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf v4l-utils-$(v4l-utils_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: vim
 vim:$(VIM)_$(ARCH).deb
