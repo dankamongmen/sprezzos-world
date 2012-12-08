@@ -107,7 +107,7 @@ USBVIEWORIG:=usbview_$(shell echo $(usbview_UPVER) | cut -d- -f1).orig.tar.gz
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(ICU) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
-	$(GRUBTHEME) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) $(DCONF) \
+	$(GRUBTHEME) $(STRACE) $(SPLITVT) $(HFSUTILS) $(APTITUDE) $(DCONF) $(SBC) \
 	$(NETHOROLOGIST) $(XBMC) $(MPLAYER) $(CONPALETTE) $(APITRACE) $(YELP) $(DBUS) \
 	$(SYSTEMD) $(BASEFILES) $(NETBASE) $(FBI) $(CAIRO) $(XMLSTARLET) $(WPA) $(LSB) \
 	$(GTK3) $(LIBDRM) $(PULSEAUDIO) $(SOCAT) $(NFSUTILS) $(EGLIBC) $(FBV) $(GIT) \
@@ -2640,6 +2640,14 @@ $(SAMBA): $(SPREZZ)/samba/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf samba-$(samba_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: sbc
+sbc:$(SBC)_$(ARCH).deb
+$(SBC): $(SPREZZ)/sbc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf sbc-$(sbc_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
