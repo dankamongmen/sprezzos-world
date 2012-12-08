@@ -171,7 +171,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) \
-	$(EMERILLON)
+	$(EMERILLON) $(LIBPEAS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2408,6 +2408,14 @@ $(LIBPCIACCESS): $(SPREZZ)/libpciaccess/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libpciaccess-$(libpciaccess_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libpeas
+libpeas:$(LIBPEAS)_$(ARCH).deb
+$(LIBPEAS): $(SPREZZ)/libpeas/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libpeas-$(libpeas_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: pciutils
 pciutils:$(PCIUTILS)_$(ARCH).deb
