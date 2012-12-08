@@ -170,7 +170,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
-	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) \
+	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -2400,6 +2400,14 @@ $(OPENVPN): $(SPREZZ)/openvpn/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openvpn-$(openvpn_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: opus
+opus:$(OPUS)_$(ARCH).deb
+$(OPUS): $(SPREZZ)/opus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf opus-$(opus_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libpciaccess
 libpciaccess:$(LIBPCIACCESS)_$(ARCH).deb
