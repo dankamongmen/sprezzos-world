@@ -335,6 +335,8 @@ $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	svn co svn://svn.mplayerhq.hu/mplayer/trunk $@
 	rm -rf $@/debian
 	cp -r $(<D) $@/
+	tar cJf mplayer-$(mplayer_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -s mplayer-$(mplayer_UPVER).tar.xz mplayer_$(mplayer_UPVER).orig.tar.xz
 
 .PHONY: ramen
 ramen:$(RAMEN)_$(ARCH).deb
