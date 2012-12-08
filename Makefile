@@ -172,7 +172,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
-	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH)
+	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2032,6 +2032,14 @@ $(LIBX11): $(SPREZZ)/libx11/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libx11_$(libx11_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libx11-protocol-other-perl
+libx11-protocol-other-perl:$(LIBX11PROTOCOLOTHERPERL)_$(ARCH).deb
+$(LIBX11PROTOCOLOTHERPERL): $(SPREZZ)/libx11-protocol-other-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf X11-Protocol-Other-$(libx11-protocol-other-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libx86
 libx86:$(LIBX86)_$(ARCH).deb
