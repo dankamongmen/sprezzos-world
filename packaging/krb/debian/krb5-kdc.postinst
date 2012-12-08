@@ -1,0 +1,58 @@
+#! /bin/sh
+
+set -e
+
+if [ "configure" = "$1" ] || [ "reconfigure" = "$1" ] ; then
+    . /usr/share/debconf/confmodule
+    db_version 2.0
+
+    db_get krb5-config/default_realm || true
+    KRB5LD_DEFAULT_REALM="$RET"
+    if [ -z "$KRB5LD_DEFAULT_REALM" ] ; then
+        KRB5LD_DEFAULT_REALM=EXAMPLE.COM
+    fi
+    export KRB5LD_DEFAULT_REALM
+
+    db_get krb5-kdc/debconf
+    DEBCONF="$RET"
+
+    if [ ! -f /etc/krb5kdc/kdc.conf ] && [ $DEBCONF = "true" ] ; then
+        sed -e "s/@MYREALM/$KRB5LD_DEFAULT_REALM/" \
+            /usr/share/krb5-kdc/kdc.conf.template > /etc/krb5kdc/kdc.conf
+    fi
+
+    if [ $DEBCONF = "true" ] ; then
+        if [ -f "/etc/default/krb5-kdc" ] ; then
+            . /etc/default/krb5-kdc
+        fi
+        cat <<'EOF' > /etc/default/krb5-kdc
+
+# Automatically generated.  Only the value of DAEMON_ARGS will be preserved.
+# If you change anything in this file other than DAEMON_ARGS, first run
+# dpkg-reconfigure krb5-kdc and disable managing the KDC configuration with
+# debconf.  Otherwise, changes will be overwritten.
+
+EOF
+        if [ -n "$DAEMON_ARGS" ] ; then
+            echo "DAEMON_ARGS=\"$DAEMON_ARGS\"" >> /etc/default/krb5-kdc
+        fi
+    fi
+
+    db_stop
+fi
+
+# Only try to add the inetd line on an initial installation.  Add it
+# commented out in a way that will not be automatically enabled, since the
+# Kerberos administrator should do that manually when ready.
+#
+# If update-inetd isn't available, don't bother, since it's just an example.
+if [ "configure" = "$1" ] && which update-inetd >/dev/null 2>&1 ; then
+    if [ -z "$2" ] || [ x"$2" = x"<unknown>" ] ; then
+        update-inetd --add --group Kerberos \
+            '#krb5_prop\tstream\ttcp\tnowait\troot\t/usr/sbin/kpropd kpropd'
+    fi
+fi
+
+#DEBHELPER#
+
+exit 0

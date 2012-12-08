@@ -1,0 +1,204 @@
+#!/usr/bin/make -f
+# Based on sample debian/rules that uses debhelper. 
+# GNU copyright 1997 by Joey Hess.
+
+# Uncomment this to turn on verbose mode. 
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+SHELL=/bin/bash
+export SHELL
+
+# Tell Autoconf the correct system types.  Needed for cross builds.
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+    SYSTEM = --build $(DEB_HOST_GNU_TYPE)
+    CACHE  =
+else
+    SYSTEM = --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+    CACHE  = --cache-file=$(DEB_HOST_GNU_TYPE).cache
+endif
+
+export DEB_HOST_MULTIARCH
+
+export CC=gcc-4.6
+
+CCOPTS=-g
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+    CCOPTS +=-O0
+else
+    CCOPTS +=-O2
+endif
+
+ifneq (,$(filter i486-linux-gnu x86_64-linux-gnu,$(DEB_HOST_GNU_TYPE)))
+    CCOPTS +=-D_FORTIFY_SOURCE=2 -fstack-protector
+    endif
+FLAGS=$(shell if res=`dpkg-buildflags --export=configure `; then echo $$res; else echo   CFLAGS="'$(CCOPTS)'"; fi)
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+endif
+
+# The flags to pass to dh_install specifying the upstream files to exclude.
+# We use --fail-missing to be sure we catch any new upstream files, so be
+# sure to update this list if upstream adds any more files we don't want.
+EXCLUDE = -Xtmac.doc -Xexamples/krb5 -Xgnats/mit -Xkrb5-send-pr \
+	-Xsserver -Xsim_server -Xuuserver \
+	-Xsclient -Xsim_client -Xuuclient
+
+LIB_PACKAGES = libkrb5-3 libgssapi-krb5-2 libkadm5clnt-mit8 libkadm5srv-mit8 libkdb5-6 libgssrpc4  \
+	libkrb5support0  libk5crypto3 
+
+# We touch each configure and Autoconf-related file so that we do not attempt
+# to use Autoconf.  The cache is used by the Embdebian project for cross
+# compiles.
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	mkdir -p build
+	find src -name configure -print | xargs touch
+	find src \( -name \*hin -o -name \*.h.in -o -name \*.stmp \) -print \
+		| xargs touch
+	[ ! -f $(DEB_HOST_GNU_TYPE).cache ] \
+		|| cp $(DEB_HOST_GNU_TYPE).cache build/
+	cd build && $(FLAGS) ../src/configure  \
+		--prefix=/usr --localstatedir=/etc --mandir=/usr/share/man \
+		--with-system-et --with-system-ss --disable-rpath  \
+		--enable-shared --with-ldap --without-tcl \
+	--with-system-verto \
+		--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+		$(SYSTEM) $(CACHE)
+	touch configure-stamp
+
+# Build the info pages in a separate directory, since otherwise we'll
+# overwrite the info pages provided upstream and then debian/rules clean won't
+# get back to a virgin copy of the package.
+build: build-arch build-indep
+
+build-arch: build-stamp
+
+build-indep: build-indep-stamp
+
+build-stamp: configure-stamp
+	cd build && $(MAKE) $(NUMJOBS) all
+	touch build-stamp
+
+build-indep-stamp: build-stamp
+	-mkdir build/info
+	cd build/info && makeinfo ../../doc/admin.texinfo
+	cd build/info && makeinfo ../../doc/install.texinfo
+	cd build/info && makeinfo ../../doc/user-guide.texinfo
+	touch build-indep-stamp
+
+clean:
+	dh_testdir
+	-rm -rf build
+	dh_clean build-stamp configure-stamp build-indep-stamp
+
+install: DH_OPTIONS=
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	set -e; for file in krb5-kdc.dirs krb5-multidev.dirs krb5-multidev.links \
+	            krb5-multidev.install libkrb5-3.dirs libkrb5-dev.dirs; \
+	do \
+		sed -e"s,\$${DEB_HOST_MULTIARCH},${DEB_HOST_MULTIARCH},g" \
+			debian/$${file}.in > debian/$$file; \
+	done
+	dh_installdirs
+
+	cd build && $(MAKE) install DESTDIR=`pwd`/../debian/tmp
+	install -d $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/krb5 $(CURDIR)/debian/tmp/etc/insserv/overrides
+	install -m644 debian/krb5-kdc-ldap.insserv-override debian/tmp/etc/insserv/overrides/krb5-kdc
+	mv $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libkdb_ldap* \
+	    $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/krb5/
+	rm -f $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/krb5/libkdb_ldap*.so
+
+	install -m644 src/util/ac_check_krb5.m4 \
+		debian/libkrb5-dev/usr/share/aclocal
+
+	dh_install --sourcedir=debian/tmp --fail-missing $(EXCLUDE)
+	set -e ; find debian/krb5-multidev/usr/lib/$(DEB_HOST_MULTIARCH)/mit-krb5 -type l -name \*.so -print |\
+		while read linkname; do \
+		ln -s -f ../`readlink $$linkname` \
+		$$linkname; \
+	done
+		for dir in include lib/$(DEB_HOST_MULTIARCH); do \
+		(cd debian/krb5-multidev/usr/$$dir/mit-krb5 && \
+		find . -type d -print ) | (cd debian/libkrb5-dev/usr/$$dir && \
+		xargs mkdir -p); \
+		(cd debian/krb5-multidev/usr/$$dir/mit-krb5 && find . \( -type f -o -type l \) -print ) | \
+		(cd debian/libkrb5-dev/usr/$$dir && xargs -I+ ln -s /usr/$$dir/mit-krb5/+ +) ; \
+		done
+	# however we will handle libkadm5{srv,clnt.so} in dh_link
+# because they actually point to the current level not one level up
+	rm -f debian/krb5-multidev/usr/lib/$(DEB_HOST_MULTIARCH)/mit-krb5/libkadm5{clnt,srv}.so
+
+
+	docbook-to-man debian/krb5_newrealm.sgml \
+		> debian/krb5-admin-server/usr/share/man/man8/krb5_newrealm.8
+	install -o root -g root -m 755 debian/krb5_newrealm \
+		debian/krb5-admin-server/usr/sbin
+	install -o root -g root -m 644 debian/kdc.conf \
+		debian/krb5-kdc/usr/share/krb5-kdc/kdc.conf.template
+	ln -s /usr/share/krb5-kdc/kdc.conf.template \
+		debian/krb5-kdc/usr/share/doc/krb5-kdc/examples/kdc.conf
+
+# Build architecture-independent files here.
+# Pass -i to all debhelper commands in this target to reduce clutter.
+binary-indep: DH_OPTIONS=-i
+binary-indep: build-indep  install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs  -Xdoc/CHANGES
+	dh_installchangelogs -pkrb5-doc -k doc/CHANGES
+	dh_installdocs
+	dh_installinfo
+	dh_link
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-dependent files here.
+# Pass -a to all debhelper commands in this target to reduce clutter.  Strip
+# library packages  separately and save the debug information for the
+# libkrb5-dbg package.  This method strips the libraries in those packages
+# twice, but that should be harmless and all other ways of doing this seem
+# uglier.
+binary-arch: build-arch install
+binary-arch: DH_OPTIONS=-a
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs  -Xdoc/CHANGES
+	dh_installdocs
+	dh_installdebconf
+	dh_installinit -- defaults 18 18
+	dh_lintian
+	set -e ; for pkg in $(LIB_PACKAGES) ; do \
+		DH_OPTIONS="" dh_strip -p$$pkg --dbg-package=libkrb5-dbg; \
+		DH_OPTIONS="" dh_makeshlibs -p$$pkg -Xusr/lib/$(DEB_HOST_MULTIARCH)/krb5/plugins -- -c4 ; \
+	done
+	dh_strip
+	dh_link
+	dh_compress
+	dh_fixperms
+	chmod u+s debian/krb5-user/usr/bin/ksu
+	chmod 700 debian/krb5-kdc/var/lib/krb5kdc
+	chmod 700 debian/krb5-kdc/etc/krb5kdc
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean configure binary-indep binary-arch binary install
