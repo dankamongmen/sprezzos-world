@@ -1533,7 +1533,7 @@ $(GTKAM): $(SPREZZ)/gtkam/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gtkam-src-$(gtkam_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf gtkam-$(gtkam_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: guvcview
 guvcview:$(GUVCVIEW)_$(ARCH).deb
