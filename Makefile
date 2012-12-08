@@ -171,7 +171,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
-	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG)
+	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
+	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -623,6 +624,14 @@ $(BOOST1.52): $(SPREZZ)/boost1.52/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf boost1.52_$(boost1.52_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: bzip2
+bzip2:$(BZIP2)_$(ARCH).deb
+$(BZIP2): $(SPREZZ)/bzip2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bzip2-$(bzip2_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cairo
 cairo:$(CAIRO)_$(ARCH).deb
@@ -1640,6 +1649,14 @@ $(JBIG2DEC): $(SPREZZ)/jbig2dec/debian/changelog
 	ln -s jbig2dec-$(jbig2dec_UPVER).tar.xz jbig2dec_$(jbig2dec_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: json-c
+json-c:$(JSONC)_$(ARCH).deb
+$(JSONC): $(SPREZZ)/json-c/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf json-c-$(json-c_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: kismet
 kismet:$(KISMET)_$(ARCH).deb
 $(KISMET): $(SPREZZ)/kismet/debian/changelog
@@ -1671,6 +1688,14 @@ $(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libatasmart_$(libatasmart_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: libpam-ssh
+libpam-ssh:$(LIBPAMSSH)_$(ARCH).deb
+$(LIBPAMSSH): $(SPREZZ)/libpam-ssh/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf pam_ssh-$(libpam-ssh_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: lynx
 lynx:$(LYNX)_$(ARCH).deb
@@ -3250,6 +3275,14 @@ $(ZENITY): $(SPREZZ)/zenity/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf zenity-$(zenity_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: zlib
+zlib:$(ZLIB)_$(ARCH).deb
+$(ZLIB): $(SPREZZ)/zlib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf zlib-$(zlib_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: zsh
 zsh:$(ZSH)_$(ARCH).deb
