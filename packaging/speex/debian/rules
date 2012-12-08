@@ -1,0 +1,180 @@
+#!/usr/bin/make -f
+# Copyright Ron Lee 2003, 2004, 2007, 2008, 2012
+
+#export DH_VERBOSE=1
+export DH_OPTIONS
+
+SHELL = /bin/bash
+
+NUM_CPUS = $(shell getconf _NPROCESSORS_ONLN 2>/dev/null)
+PARALLEL = $(subst parallel=,,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+NJOBS    = -j$(or $(PARALLEL),$(NUM_CPUS),1)
+
+
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+DEB_HOST_ARCH_CPU  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+
+HARD_CPPFLAGS = -D_FORTIFY_SOURCE=2
+HARD_CFLAGS   = -Wformat=2
+HARD_LDFLAGS  = -z now
+
+ifneq (,$(filter-out $(DEB_HOST_ARCH), ia64 alpha mips mipsel hppa arm))
+	HARD_CFLAGS += -fstack-protector --param ssp-buffer-size=4
+endif
+ifneq (,$(filter-out $(DEB_HOST_ARCH), ia64 hppa avr32))
+	HARD_LDFLAGS += -z relro
+endif
+
+# Keep dpkg-buildpackage the hell out of messing with our compile flags,
+# we should trust upstream to know better than it what to use here.
+# We explicitly re-add -g and -O2 here, since not all configurations do
+# set it explicitly (and instead rely on autoconf's default of doing that,
+# which we override here when we set the hardening flags, if we do).
+CPPFLAGS = $(HARD_CPPFLAGS)
+CFLAGS   = $(HARD_CFLAGS) -g -O2
+CXXFLAGS = $(HARD_CFLAGS) -g -O2
+LDFLAGS  = $(HARD_LDFLAGS)
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS = -Wall -g -O0
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+
+objdir            = objs
+objdir_sse        = objs-sse
+objdir_fixedpoint = objs-fixed-point
+
+all_objs  = $(objdir) $(objdir_sse) $(objdir_fixedpoint)
+arch_objs = $(objdir)
+
+ifeq ($(DEB_HOST_ARCH_CPU),arm)
+objdir             = $(objdir_fixedpoint)
+
+ifneq ($(DEB_HOST_ARCH),armhf)
+EXTRA_CONFIG_FLAGS = --enable-arm4-asm
+endif
+
+endif
+
+ifneq (,$(filter $(DEB_HOST_ARCH), mips mipsel))
+objdir             = $(objdir_fixedpoint)
+endif
+
+ifeq ($(DEB_HOST_ARCH_CPU),i386)
+arch_objs += $(objdir_sse)
+endif
+
+
+clean:
+	dh_testdir
+	dh_testroot
+	$(RM) *-stamp
+	$(RM) -r $(all_objs) doc/{html,man,latex}
+	dh_clean
+
+
+# This first empty one is equivalent to declaring it .SECONDARY while we have
+# no target specific variables to set.  We don't want it removed by default as
+# an unnamed intermediate file when the build target is completed.
+$(objdir)/config.status:
+$(objdir_sse)/config.status:        EXTRA_CONFIG_FLAGS += --enable-sse
+$(objdir_fixedpoint)/config.status: EXTRA_CONFIG_FLAGS += --enable-fixed-point
+
+%/config.status: configure
+	dh_testdir
+	mkdir -p $*
+	cd $* && ../configure --host=$(DEB_HOST_GNU_TYPE)	\
+			      --build=$(DEB_BUILD_GNU_TYPE)	\
+			      --prefix=/usr			\
+			      --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+			      $(EXTRA_CONFIG_FLAGS)		\
+			      CPPFLAGS="$(CPPFLAGS)"		\
+			      CFLAGS="$(CFLAGS)"		\
+			      CXXFLAGS="$(CXXFLAGS)"		\
+			      LDFLAGS="$(LDFLAGS)"
+
+build: build-arch build-indep
+
+build-arch: $(foreach d,$(arch_objs),build-target-$(d)-stamp)
+build-target-%-stamp : %/config.status
+	dh_testdir
+	$(MAKE) $(NJOBS) -C $*
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp:
+	dh_testdir
+	doxygen Doxyfile
+	touch $@
+
+
+install: install-arch install-indep
+
+install-arch: install-arch-stamp
+install-arch-stamp: build-arch
+	dh_testdir
+	cd $(objdir) && $(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+
+	if [ -d "$(objdir_sse)" ]; then \
+	    dh_install -plibspeex1    $(objdir_sse)/libspeex/.libs/libspeex.so.* \
+				      usr/lib/$(DEB_HOST_MULTIARCH)/sse2; \
+	    dh_install -plibspeexdsp1 $(objdir_sse)/libspeex/.libs/libspeexdsp.so.* \
+				      usr/lib/$(DEB_HOST_MULTIARCH)/sse2; \
+	fi
+
+	dh_install -plibspeex1    $(objdir)/libspeex/.libs/libspeex.so.* \
+				  usr/lib/$(DEB_HOST_MULTIARCH)
+
+	dh_install -plibspeexdsp1 $(objdir)/libspeex/.libs/libspeexdsp.so.* \
+				  usr/lib/$(DEB_HOST_MULTIARCH)
+
+	dh_install -plibspeex-dev -plibspeexdsp-dev -pspeex --sourcedir=debian/tmp
+	touch $@
+
+install-indep: build-indep
+
+
+binary: binary-indep binary-arch
+
+binary-indep: DH_OPTIONS = -i
+binary-indep: install-indep
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installchangelogs
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-arch: install-arch
+	dh_testdir
+	dh_testroot
+	dh_installdocs -a
+	dh_installman -a
+	dh_installchangelogs -a
+	dh_strip -a --dbg-package=libspeex-dbg
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -plibspeex1 -V"libspeex1 (>= 1.2~beta3-1)"
+	dh_makeshlibs -plibspeexdsp1 -V"libspeexdsp1 (>= 1.2~beta3.2-1)"
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+
+.PHONY: clean build build-arch build-indep install install-arch install-indep \
+	binary binary-arch binary-indep
+
