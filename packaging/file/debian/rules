@@ -1,0 +1,92 @@
+#!/usr/bin/make -f
+
+SHELL := sh -e
+
+-include /usr/share/python/python.mk
+
+DEB_HOST_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH	?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+	CROSS= --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE) CC=$(DEB_HOST_GNU_TYPE)-gcc LD=$(DEB_HOST_GNU_TYPE)-ld
+else
+	CROSS= --build=$(DEB_BUILD_GNU_TYPE)
+endif
+
+# HOWMANY is the number of bytes looked at by file
+CFLAGS += -DHOWMANY=0x18000
+
+PYTHON_VERSIONS=$(shell pyversions -r debian/control)
+
+%:
+	dh ${@} --with autotools_dev,python2
+
+override_dh_auto_clean:
+	dh_auto_clean
+
+	rm -rf python/build
+
+override_dh_auto_build:
+	dh_auto_build
+
+	for python in $(PYTHON_VERSIONS); \
+	do \
+		(cd python && $$python setup.py build_ext \
+			-L$(CURDIR)/src/.libs); \
+	done
+
+	for python in $(PYTHON_VERSIONS); do \
+		(cd python && $$python-dbg setup.py build_ext -L$(CURDIR)/src/.libs); \
+	done
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CROSS) --prefix=/usr --datadir=\$${prefix}/share --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) --mandir=\$${prefix}/share/man --enable-fsect-man5 CFLAGS="$(CFLAGS)"
+
+override_dh_auto_install:
+	dh_auto_install
+
+	mv debian/tmp/usr/share/misc debian/tmp/usr/share/file
+
+	install -D -m 0644 magic/magic.local debian/tmp/etc/magic
+	install -D -m 0644 magic/magic.local debian/tmp/etc/magic.mime
+
+	for python in $(PYTHON_VERSIONS); \
+	do \
+		(cd python && $$python setup.py install --no-compile \
+			--root=$(CURDIR)/debian/python-magic $(py_setup_install_args)); \
+	done
+
+	for python in $(PYTHON_VERSIONS); do \
+		(cd python && $$python-dbg setup.py install --no-compile \
+			--root=$(CURDIR)/debian/python-magic-dbg $(py_setup_install_args)); \
+	done
+
+	find debian/python-*-dbg ! -type d ! -name '*.so' | xargs rm -f
+	find debian/python-*-dbg -depth -empty -exec rmdir {} \;
+
+	# Installing additional headers
+	mkdir -p debian/libmagic-dev/usr/include/file
+	cp src/file.h debian/libmagic-dev/usr/include/file
+
+	# Removing useless files
+	rm -f debian/tmp/usr/lib/*/*.la
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz -z9
+
+override_dh_install:
+	dh_install --fail-missing
+
+override_dh_shlibdeps:
+	dh_shlibdeps -Llibmagic1 -ldebian/libmagic1/usr/lib
+
+override_dh_strip:
+ifeq (,$(findstring -i, $(DH_OPTIONS)))
+	dh_strip -Npython-magic -Npython-magic-dbg
+	DH_OPTIONS= dh_strip -ppython-magic --dbg-package=python-magic-dbg
+
+	rm -rf debian/python-magic-dbg/usr/share/doc/python-magic-dbg
+	mkdir -p debian/python-magic-dbg/usr/share/doc
+	ln -s python-magic debian/python-magic-dbg/usr/share/doc/python-magic-dbg
+endif
