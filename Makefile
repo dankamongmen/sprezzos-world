@@ -171,7 +171,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
-	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME)
+	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1440,6 +1440,14 @@ $(GNOMECATALOG): $(SPREZZ)/gnomecatalog/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gnomecatalog_$(gnomecatalog_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: gnupg
+gnupg:$(GNUPG)_$(ARCH).deb
+$(GNUPG): $(SPREZZ)/gnupg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnupg-$(gnupg_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnutls
 gnutls:$(GNUTLS)_$(ARCH).deb
 $(GNUTLS): $(SPREZZ)/gnutls/debian/changelog
@@ -2464,6 +2472,14 @@ $(PIDGIN): $(SPREZZ)/pidgin/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pidgin-$(pidgin_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: pinentry
+pinentry:$(PINENTRY)_$(ARCH).deb
+$(PINENTRY): $(SPREZZ)/pinentry/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pinentry-$(pinentry_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: pixman
 pixman:$(PIXMAN)_$(ARCH).deb
