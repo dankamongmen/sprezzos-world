@@ -2495,7 +2495,7 @@ $(POLICYKITGNOME): $(SPREZZ)/policykit-gnome/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf polkit-$(policykit-gnome_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf polkit-gnome-$(policykit-gnome_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: postgresql
 postgresql:$(POSTGRESQL)_$(ARCH).deb
