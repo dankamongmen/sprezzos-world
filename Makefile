@@ -171,7 +171,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
-	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG)
+	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2488,6 +2488,14 @@ $(POLICYKIT): $(SPREZZ)/policykit/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf polkit-$(policykit_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: policykit-gnome
+policykit-gnome:$(POLICYKITGNOME)_$(ARCH).deb
+$(POLICYKITGNOME): $(SPREZZ)/policykit-gnome/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf polkit-$(policykit-gnome_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: postgresql
 postgresql:$(POSTGRESQL)_$(ARCH).deb
