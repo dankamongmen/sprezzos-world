@@ -2647,7 +2647,7 @@ $(SBC): $(SPREZZ)/sbc/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf sbc-$(sbc_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf sbc-$(sbc_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
