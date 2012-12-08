@@ -170,7 +170,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
 	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
-	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM)
+	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) \
+	$(EMERILLON)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -807,6 +808,22 @@ $(DBUSPYTHON): $(SPREZZ)/dbus-python/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-python-$(dbus-python_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: devhelp
+devhelp:$(DEVHELP)_$(ARCH).deb
+$(DEVHELP): $(SPREZZ)/devhelp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf devhelp-$(devhelp_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: dia
+dia:$(DIA)_$(ARCH).deb
+$(DIA): $(SPREZZ)/dia/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf dia-$(dia_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: dnsmasq
 dnsmasq:$(DNSMASQ)_$(ARCH).deb
 $(DNSMASQ): $(SPREZZ)/dnsmasq/debian/changelog
@@ -822,6 +839,14 @@ $(DRI2PROTO): $(SPREZZ)/dri2proto/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf dri2proto-$(dri2proto_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: emerillon
+emerillon:$(EMERILLON)_$(ARCH).deb
+$(EMERILLON): $(SPREZZ)/emerillon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf emerillon-$(emerillon_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: empathy
 empathy:$(EMPATHY)_$(ARCH).deb
@@ -846,14 +871,6 @@ $(ENLIGHTENMENT): $(SPREZZ)/enlightenment/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf enlightenment-$(enlightenment_UPVER).tar.bz2 $(TARARGS) $@
-
-.PHONY: devhelp
-devhelp:$(DEVHELP)_$(ARCH).deb
-$(DEVHELP): $(SPREZZ)/devhelp/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf devhelp-$(devhelp_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: ekiga
 ekiga:$(EKIGA)_$(ARCH).deb
