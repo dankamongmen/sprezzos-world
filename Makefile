@@ -582,7 +582,7 @@ $(BIND9): $(SPREZZ)/bind9/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf bind9-$(bind9_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf bind-$(bind9_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: bison
 bison:$(BISON)_$(ARCH).deb
