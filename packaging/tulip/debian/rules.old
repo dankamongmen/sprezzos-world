@@ -1,0 +1,163 @@
+#!/usr/bin/make -f
+# GPL'd, copyright 2002 to 2006 by Yann Dirson.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+debdir=$(CURDIR)/debian
+tmpdir=${debdir}/tmp
+
+STAMP_DIR=$(CURDIR)/stamps
+BUILD_TREE=$(CURDIR)/BUILD
+
+TULIP_VERSION = $(shell grep ^PACKAGE_VERSION= configure | cut -d= -f2)
+LIBTULIP_SOVERSION=$(shell echo $(TULIP_VERSION) | cut -d. -f1-2)
+
+ARCH=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+$(STAMP_DIR)/configure:
+	dh_testdir
+
+	mkdir -p ${BUILD_TREE}
+	cd ${BUILD_TREE} && ../configure \
+		--enable-tlprender --enable-stats-gui \
+		--with-qt-dir=/usr/share/qt4 --prefix=/usr \
+		--with-gle-includes=-I/usr/include/GL --with-gle-lib=-lgle \
+		--disable-static --with-pic
+
+		--with-ftgl-includes=-I/usr/include/FTGL --with-ftgl-lib=-lftgl_pic
+
+#	./configure --with-qt-includes=/usr/include/qt3 \
+#			--prefix=/usr --disable-static
+ # Be sure MOC files are rebuilt fo current Qt version
+	find -name 'moc*.cpp' | xargs rm -f
+
+	mkdir -p $(STAMP_DIR)
+	touch $(STAMP_DIR)/configure
+
+build: $(STAMP_DIR)/build
+$(STAMP_DIR)/build: $(STAMP_DIR)/configure
+	dh_testdir
+
+	$(MAKE) -C $(BUILD_TREE)
+	docbook-to-man debian/tulip.sgml > debian/tulip.1
+
+	touch $(STAMP_DIR)/build
+
+build-doc: $(STAMP_DIR)/doc
+$(STAMP_DIR)/doc: $(STAMP_DIR)/configure
+	dh_testdir
+	make -C $(BUILD_TREE) html
+	mkdir -p $(STAMP_DIR)
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -rf $(STAMP_DIR) $(BUILD_TREE) 
+	#rm -rf docs/developerHandbook/html docs/userHandbook/html
+
+	rm -f debian/tulip.1
+
+	dh_clean
+
+install: DH_OPTIONS=
+install: SHELL=/bin/bash
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	make install -C $(BUILD_TREE) DESTDIR=$(tmpdir)
+
+  # handle docs if we built them
+    # uncompress so dh_compress can recompress with max compression
+	if test -d $(tmpdir)/usr/share/tulip/man; then \
+	  ( cd $(tmpdir) && mv usr/share/tulip/man usr/share/ ); \
+	  gunzip $(tmpdir)/usr/share/man/*/*gz; \
+	  mv $(tmpdir)/usr/share/man/man3tulip $(tmpdir)/usr/share/man/man3 ; \
+	  ( cd $(tmpdir)/usr/share/man/man3 && echo *.3tulip | while read f;\
+	      do mv $$f $${f}tlp; done ); \
+	  mkdir -p $(tmpdir)/usr/share/doc; \
+	  ( cd $(tmpdir) && mv usr/share/tulip usr/share/doc/tulip-doc ); \
+	fi
+
+	cd $(tmpdir)/usr/lib/tlp/bitmaps && \
+		ln -sf /usr/share/fonts/truetype/ttf-dejavu/DejaVuSans.ttf font.ttf && \
+		ln -sf /usr/share/fonts/truetype/ttf-dejavu/DejaVuSans-Bold.ttf fontb.ttf
+
+	dh_movefiles
+
+  # disregard headers coming from plugins - upstream bug ?
+	rm -v $(tmpdir)/usr/include/*.h
+  # dispatch header files into proper -dev package
+	set -e; (cd $(tmpdir)/usr/include && find . -type f) | cut -c3- | while read file; do \
+	  lib=$$(cd $(BUILD_TREE) && find library -path */$$file | cut -d/ -f2); \
+	  test -n "$$lib" || lib=$$(find library -path */$$file | cut -d/ -f2); \
+	  if [ "$$lib" = "tulip-qt" ]; then lib=tulip-qt4; fi; \
+	  pkg=lib$$lib-dev; \
+	  mkdir -p $$(dirname debian/$$pkg/usr/include/$$file); \
+	  mv $(tmpdir)/usr/include/$$file debian/$$pkg/usr/include/$$file; \
+	done
+
+	test -z "$$(find ${tmpdir} ! -type d | tee >(cat >&2))"
+
+# Build architecture-independent files here.
+binary-indep: DH_OPTIONS=-i
+binary-indep: build-doc install
+	dh_testdir
+	dh_testroot
+
+	dh_installdocs
+
+	dh_installchangelogs 
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-dependent files here.
+binary-arch: DH_OPTIONS=-a
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+#	dh_installdebconf	
+	dh_installdocs README
+	dh_buildinfo
+#	dh_installexamples samples/[^M]*
+
+	dh_installmenu
+#	dh_installlogrotate
+#	dh_installemacsen
+#	dh_installpam
+#	dh_installmime
+#	dh_installinit
+#	dh_installcron
+	dh_installman debian/tulip.1
+#	dh_installinfo
+#	dh_undocumented
+	dh_installchangelogs 
+#	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+#	dh_perl
+	dh_shlibdeps \
+		-L libtulip-${LIBTULIP_SOVERSION} \
+		-L libtulip-ogl-${LIBTULIP_SOVERSION} \
+		-L libtulip-qt-${LIBTULIP_SOVERSION} \
+		-l debian/libtulip-${LIBTULIP_SOVERSION}/usr/lib \
+		-l debian/libtulip-ogl-${LIBTULIP_SOVERSION}/usr/lib \
+		-l debian/libtulip-qt-${LIBTULIP_SOVERSION}/usr/lib
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure
