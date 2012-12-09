@@ -1992,6 +1992,14 @@ $(LIBIMOBILEDEVICE): $(SPREZZ)/libimobiledevice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libisoburn
+libisoburn:$(LIBISOBURN)_$(ARCH).deb
+$(LIBISOBURN): $(SPREZZ)/libisoburn/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libisoburn-$(libisoburn_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: usbmuxd
 usbmuxd:$(USBMUXD)_$(ARCH).deb
 $(USBMUXD): $(SPREZZ)/usbmuxd/debian/changelog
