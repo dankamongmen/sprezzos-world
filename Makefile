@@ -176,7 +176,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) \
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) \
-	$(DSNIFF)
+	$(DSNIFF) $(DCRAW)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -874,6 +874,14 @@ $(DBUSPYTHON): $(SPREZZ)/dbus-python/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-python-$(dbus-python_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: dcraw
+dcraw:$(DCRAW)_$(ARCH).deb
+$(DCRAW): $(SPREZZ)/dcraw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dcraw-$(dcraw_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: devhelp
 devhelp:$(DEVHELP)_$(ARCH).deb
