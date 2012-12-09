@@ -1,0 +1,566 @@
+From f5a0dea847f4c6377cae368ab3711a1285ae32f2 Mon Sep 17 00:00:00 2001
+From: Chris Schlumberger-Socha <chris.schlumberger-socha@arm.com>
+Date: Fri, 27 Jul 2012 14:16:34 +0100
+Subject: [PATCH] Added R_AARCH64_GOT_LD_PREL19 reloc implementation.
+
+Testcases added for reloc in GAS and LD.
+---
+ bfd/elf64-aarch64.c                               |   28 +++++-
+ bfd/reloc.c                                       |    8 ++
+ gas/config/tc-aarch64.c                           |  123 ++++++++++++++------
+ gas/testsuite/gas/aarch64/reloc-insn.d            |   36 ++++---
+ gas/testsuite/gas/aarch64/reloc-insn.s            |    6 +
+ include/elf/aarch64.h                             |    1 +
+ ld/testsuite/ld-aarch64/aarch64-elf.exp           |    7 +-
+ ld/testsuite/ld-aarch64/emit-relocs-309-low-bad.d |    5 +
+ ld/testsuite/ld-aarch64/emit-relocs-309-low.d     |   12 ++
+ ld/testsuite/ld-aarch64/emit-relocs-309-up-bad.d  |    5 +
+ ld/testsuite/ld-aarch64/emit-relocs-309-up.d      |   12 ++
+ ld/testsuite/ld-aarch64/emit-relocs-309.s         |   14 +++
+ 12 files changed, 202 insertions(+), 55 deletions(-)
+ create mode 100644 ld/testsuite/ld-aarch64/emit-relocs-309-low-bad.d
+ create mode 100644 ld/testsuite/ld-aarch64/emit-relocs-309-low.d
+ create mode 100644 ld/testsuite/ld-aarch64/emit-relocs-309-up-bad.d
+ create mode 100644 ld/testsuite/ld-aarch64/emit-relocs-309-up.d
+ create mode 100644 ld/testsuite/ld-aarch64/emit-relocs-309.s
+
+diff --git a/bfd/elf64-aarch64.c b/bfd/elf64-aarch64.c
+index 6299074..06c976f 100644
+--- a/bfd/elf64-aarch64.c
++++ b/bfd/elf64-aarch64.c
+@@ -908,7 +908,23 @@ static reloc_howto_type elf64_aarch64_howto_table[] =
+   EMPTY_HOWTO (306),
+   EMPTY_HOWTO (307),
+   EMPTY_HOWTO (308),
+-  EMPTY_HOWTO (309),
++
++  /* Set a load-literal immediate field to bits
++     0x1FFFFC of G(S)-P */
++  HOWTO (R_AARCH64_GOT_LD_PREL19,	/* type */
++	 2,				/* rightshift */
++	 2,				/* size (0 = byte,1 = short,2 = long) */
++	 19,				/* bitsize */
++	 TRUE,				/* pc_relative */
++	 0,				/* bitpos */
++	 complain_overflow_signed,	/* complain_on_overflow */
++	 bfd_elf_generic_reloc,		/* special_function */
++	 "R_AARCH64_GOT_LD_PREL19",	/* name */
++	 FALSE,				/* partial_inplace */
++	 0xffffe0,			/* src_mask */
++	 0xffffe0,			/* dst_mask */
++	 TRUE),				/* pcrel_offset */
++
+   EMPTY_HOWTO (310),
+ 
+   /* Get to the page for the GOT entry for the symbol
+@@ -1427,6 +1443,7 @@ static const struct elf64_aarch64_reloc_map elf64_aarch64_reloc_map[] =
+   {BFD_RELOC_AARCH64_CALL26, R_AARCH64_CALL26},
+ 
+   /* Relocations for PIC.  */
++  {BFD_RELOC_AARCH64_GOT_LD_PREL19, R_AARCH64_GOT_LD_PREL19},
+   {BFD_RELOC_AARCH64_ADR_GOT_PAGE, R_AARCH64_ADR_GOT_PAGE},
+   {BFD_RELOC_AARCH64_LD64_GOT_LO12_NC, R_AARCH64_LD64_GOT_LO12_NC},
+ 
+@@ -2143,6 +2160,10 @@ aarch64_resolve_relocation (unsigned int r_type, bfd_vma place, bfd_vma value,
+       value = PG (value + addend) - PG (place);
+       break;
+ 
++    case R_AARCH64_GOT_LD_PREL19:
++      value = value + addend - place;
++      break;
++
+     case R_AARCH64_ADR_GOT_PAGE:
+     case R_AARCH64_TLSDESC_ADR_PAGE:
+     case R_AARCH64_TLSGD_ADR_PAGE21:
+@@ -3362,6 +3383,7 @@ bfd_elf_aarch64_put_addend (bfd *abfd,
+       break;
+ 
+     case R_AARCH64_LD_PREL_LO19:
++    case R_AARCH64_GOT_LD_PREL19:
+       if (old_addend & ((1 << howto->rightshift) - 1))
+ 	return bfd_reloc_overflow;
+       contents = reencode_ld_lit_ofs_19 (contents, addend);
+@@ -3570,6 +3592,7 @@ aarch64_reloc_got_type (unsigned int r_type)
+     {
+     case R_AARCH64_LD64_GOT_LO12_NC:
+     case R_AARCH64_ADR_GOT_PAGE:
++    case R_AARCH64_GOT_LD_PREL19:
+       return GOT_NORMAL;
+ 
+     case R_AARCH64_TLSGD_ADR_PAGE21:
+@@ -3992,6 +4015,7 @@ elf64_aarch64_final_link_relocate (reloc_howto_type *howto,
+ 
+     case R_AARCH64_LD64_GOT_LO12_NC:
+     case R_AARCH64_ADR_GOT_PAGE:
++    case R_AARCH64_GOT_LD_PREL19:
+       if (globals->root.sgot == NULL)
+ 	BFD_ASSERT (h != NULL);
+ 
+@@ -5116,6 +5140,7 @@ elf64_aarch64_check_relocs (bfd *abfd, struct bfd_link_info *info,
+ 	  /* RR: We probably want to keep a consistency check that
+ 	     there are no dangling GOT_PAGE relocs.  */
+ 	case R_AARCH64_LD64_GOT_LO12_NC:
++	case R_AARCH64_GOT_LD_PREL19:
+ 	case R_AARCH64_ADR_GOT_PAGE:
+ 	case R_AARCH64_TLSGD_ADR_PAGE21:
+ 	case R_AARCH64_TLSGD_ADD_LO12_NC:
+@@ -5201,6 +5226,7 @@ elf64_aarch64_check_relocs (bfd *abfd, struct bfd_link_info *info,
+ 
+ 	case R_AARCH64_ADR_PREL_PG_HI21_NC:
+ 	case R_AARCH64_ADR_PREL_PG_HI21:
++	case R_AARCH64_ADR_PREL_LO21:
+ 	  if (h != NULL && info->executable)
+ 	    {
+ 	      /* If this reloc is in a read-only section, we might
+diff --git a/bfd/reloc.c b/bfd/reloc.c
+index 47d052d..a0b185f 100644
+--- a/bfd/reloc.c
++++ b/bfd/reloc.c
+@@ -5889,6 +5889,14 @@ ENUMDOC
+   AArch64 ADD immediate instruction, holding bits 0 to 11 of the address.
+   Used in conjunction with BFD_RELOC_AARCH64_ADR_HI21_PCREL.
+ ENUM
++  BFD_RELOC_AARCH64_GOT_LD_PREL19
++ENUMDOC
++  AArch64 Load Literal instruction, holding a 19 bit PC relative word
++  offset of the global offset table entry for a symbol.  The lowest two
++  bits must be zero and are not stored in the instruction, giving a 21
++  bit signed byte offset.  This relocation type requires signed overflow
++  checking.
++ENUM
+   BFD_RELOC_AARCH64_ADR_GOT_PAGE
+ ENUMDOC
+   Get to the page base of the global offset table entry for a symbol as
+diff --git a/gas/config/tc-aarch64.c b/gas/config/tc-aarch64.c
+index 4333e8e..e695e88 100644
+--- a/gas/config/tc-aarch64.c
++++ b/gas/config/tc-aarch64.c
+@@ -2298,6 +2298,12 @@ static struct reloc_table_entry reloc_table[] = {
+    BFD_RELOC_AARCH64_MOVW_G3,
+    0,
+    0},
++  /* Get to the GOT entry for a symbol.  */
++  {"got_prel19", 0,
++   0,
++   0,
++   0,
++   BFD_RELOC_AARCH64_GOT_LD_PREL19},
+   /* Get to the page containing GOT entry for a symbol.  */
+   {"got", 1,
+    BFD_RELOC_AARCH64_ADR_GOT_PAGE,
+@@ -2816,14 +2822,53 @@ parse_address_main (char **str, aarch64_opnd_info *operand, int reloc,
+       operand->addr.pcrel = 1;
+       operand->addr.preind = 1;
+ 
+-      if (skip_past_char (&p, '='))
+-	/* =immediate; need to generate the literal in the liternal pool.  */
+-	inst.gen_lit_pool = 1;
++      /* #:<reloc_op>:<symbol>  */
++      skip_past_char (&p, '#');
++      if (reloc && skip_past_char (&p, ':'))
++	{
++	  struct reloc_table_entry *entry;
++
++	  /* Try to parse a relocation modifier.  Anything else is
++	     an error.  */
++	  entry = find_reloc_table_entry (&p);
++	  if (! entry)
++	    {
++	      set_syntax_error (_("unknown relocation modifier"));
++	      return FALSE;
++	    }
++
++	  if (entry->ldst_type == 0)
++	    {
++	      set_syntax_error
++		(_("this relocation modifier is not allowed on this "
++		   "instruction"));
++	      return FALSE;
++	    }
++
++	  /* #:<reloc_op>:  */
++	  if (! my_get_expression (exp, &p, GE_NO_PREFIX, 1))
++	    {
++	      set_syntax_error (_("invalid relocation expression"));
++	      return FALSE;
++	    }
+ 
+-      if (! my_get_expression (exp, &p, GE_NO_PREFIX, 1))
++	  /* #:<reloc_op>:<expr>  */
++	  /* Record the load/store relocation type.  */
++	  inst.reloc.type = entry->ldst_type;
++	  inst.reloc.pc_rel = entry->pc_rel;
++	}
++      else
+ 	{
+-	  set_syntax_error (_("invalid address"));
+-	  return FALSE;
++
++	  if (skip_past_char (&p, '='))
++	    /* =immediate; need to generate the literal in the literal pool. */
++	    inst.gen_lit_pool = 1;
++
++	  if (!my_get_expression (exp, &p, GE_NO_PREFIX, 1))
++	    {
++	      set_syntax_error (_("invalid address"));
++	      return FALSE;
++	    }
+ 	}
+ 
+       *str = p;
+@@ -4889,37 +4934,39 @@ parse_operands (char *str, const aarch64_opcode *opcode)
+ 	  else
+ 	    {
+ 	      info->imm.value = 0;
+-	      switch (opcode->iclass)
+-		{
+-		case compbranch:
+-		case condbranch:
+-		  /* e.g. CBZ or B.COND  */
+-		  gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL19);
+-		  inst.reloc.type = BFD_RELOC_AARCH64_BRANCH19;
+-		  break;
+-		case testbranch:
+-		  /* e.g. TBZ  */
+-		  gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL14);
+-		  inst.reloc.type = BFD_RELOC_AARCH64_TSTBR14;
+-		  break;
+-		case branch_imm:
+-		  /* e.g. B or BL  */
+-		  gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL26);
+-		  inst.reloc.type = (opcode->op == OP_BL)
+-		    ? BFD_RELOC_AARCH64_CALL26 : BFD_RELOC_AARCH64_JUMP26;
+-		  break;
+-		case loadlit:
+-		  gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL19);
+-		  inst.reloc.type = BFD_RELOC_AARCH64_LD_LO19_PCREL;
+-		  break;
+-		case pcreladdr:
+-		  gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL21);
+-		  inst.reloc.type = BFD_RELOC_AARCH64_ADR_LO21_PCREL;
+-		  break;
+-		default:
+-		  gas_assert (0);
+-		  abort ();
+-		}
++	      if (inst.reloc.type == BFD_RELOC_UNUSED)
++		switch (opcode->iclass)
++		  {
++		  case compbranch:
++		  case condbranch:
++		    /* e.g. CBZ or B.COND  */
++		    gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL19);
++		    inst.reloc.type = BFD_RELOC_AARCH64_BRANCH19;
++		    break;
++		  case testbranch:
++		    /* e.g. TBZ  */
++		    gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL14);
++		    inst.reloc.type = BFD_RELOC_AARCH64_TSTBR14;
++		    break;
++		  case branch_imm:
++		    /* e.g. B or BL  */
++		    gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL26);
++		    inst.reloc.type =
++		      (opcode->op == OP_BL) ? BFD_RELOC_AARCH64_CALL26
++			 : BFD_RELOC_AARCH64_JUMP26;
++		    break;
++		  case loadlit:
++		    gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL19);
++		    inst.reloc.type = BFD_RELOC_AARCH64_LD_LO19_PCREL;
++		    break;
++		  case pcreladdr:
++		    gas_assert (operands[i] == AARCH64_OPND_ADDR_PCREL21);
++		    inst.reloc.type = BFD_RELOC_AARCH64_ADR_LO21_PCREL;
++		    break;
++		  default:
++		    gas_assert (0);
++		    abort ();
++		  }
+ 	      inst.reloc.pc_rel = 1;
+ 	    }
+ 	  break;
+@@ -6418,6 +6465,7 @@ md_apply_fix (fixS * fixP, valueT * valP, segT seg)
+     case BFD_RELOC_AARCH64_LDST32_LO12:
+     case BFD_RELOC_AARCH64_LDST64_LO12:
+     case BFD_RELOC_AARCH64_LDST128_LO12:
++    case BFD_RELOC_AARCH64_GOT_LD_PREL19:
+     case BFD_RELOC_AARCH64_ADR_GOT_PAGE:
+     case BFD_RELOC_AARCH64_LD64_GOT_LO12_NC:
+       /* Should always be exported to object file, see
+@@ -6575,6 +6623,7 @@ aarch64_force_relocation (struct fix *fixp)
+     case BFD_RELOC_AARCH64_LDST32_LO12:
+     case BFD_RELOC_AARCH64_LDST64_LO12:
+     case BFD_RELOC_AARCH64_LDST128_LO12:
++    case BFD_RELOC_AARCH64_GOT_LD_PREL19:
+       /* Always leave these relocations for the linker.  */
+       return 1;
+ 
+diff --git a/gas/testsuite/gas/aarch64/reloc-insn.d b/gas/testsuite/gas/aarch64/reloc-insn.d
+index ce37b92..7eb13a2 100644
+--- a/gas/testsuite/gas/aarch64/reloc-insn.d
++++ b/gas/testsuite/gas/aarch64/reloc-insn.d
+@@ -37,12 +37,12 @@ Disassembly of section \.text:
+   5c:	f2d75301 	movk	x1, #0xba98, lsl #32
+   60:	f2aeca81 	movk	x1, #0x7654, lsl #16
+   64:	f2864201 	movk	x1, #0x3210
+-  68:	58000920 	ldr	x0, 18c <llit>
++  68:	58000960 	ldr	x0, 194 <llit>
+   6c:	58000001 	ldr	x1, 0 <func>
+ 			6c: R_AARCH64_LD_PREL_LO19	\.data\+0x8
+   70:	58000002 	ldr	x2, 0 <xdata>
+ 			70: R_AARCH64_LD_PREL_LO19	xdata\+0xc
+-  74:	100008c0 	adr	x0, 18c <llit>
++  74:	10000900 	adr	x0, 194 <llit>
+   78:	10000001 	adr	x1, 0 <func>
+ 			78: R_AARCH64_ADR_PREL_LO21	\.data\+0x8
+   7c:	10000002 	adr	x2, 0 <func>
+@@ -54,7 +54,7 @@ Disassembly of section \.text:
+   88:	10000005 	adr	x5, 0 <xdata>
+ 			88: R_AARCH64_ADR_PREL_LO21	xdata\+0xff8
+   8c:	90000000 	adrp	x0, 0 <func>
+-			8c: R_AARCH64_ADR_PREL_PG_HI21	\.text\+0x18c
++			8c: R_AARCH64_ADR_PREL_PG_HI21	\.text\+0x194
+   90:	90000001 	adrp	x1, 0 <func>
+ 			90: R_AARCH64_ADR_PREL_PG_HI21	\.data\+0x8
+   94:	90000002 	adrp	x2, 0 <func>
+@@ -66,7 +66,7 @@ Disassembly of section \.text:
+   a0:	90000005 	adrp	x5, 0 <xdata>
+ 			a0: R_AARCH64_ADR_PREL_PG_HI21	xdata\+0xff8
+   a4:	90000000 	adrp	x0, 0 <func>
+-			a4: R_AARCH64_ADR_PREL_PG_HI21	\.text\+0x18c
++			a4: R_AARCH64_ADR_PREL_PG_HI21	\.text\+0x194
+   a8:	90000001 	adrp	x1, 0 <func>
+ 			a8: R_AARCH64_ADR_PREL_PG_HI21	\.data\+0x8
+   ac:	90000002 	adrp	x2, 0 <func>
+@@ -78,7 +78,7 @@ Disassembly of section \.text:
+   b8:	90000005 	adrp	x5, 0 <xdata>
+ 			b8: R_AARCH64_ADR_PREL_PG_HI21	xdata\+0xff8
+   bc:	91000000 	add	x0, x0, #0x0
+-			bc: R_AARCH64_ADD_ABS_LO12_NC	\.text\+0x18c
++			bc: R_AARCH64_ADD_ABS_LO12_NC	\.text\+0x194
+   c0:	91000021 	add	x1, x1, #0x0
+ 			c0: R_AARCH64_ADD_ABS_LO12_NC	\.data\+0x8
+   c4:	91000042 	add	x2, x2, #0x0
+@@ -91,7 +91,7 @@ Disassembly of section \.text:
+ 			d0: R_AARCH64_ADD_ABS_LO12_NC	xdata\+0xff8
+   d4:	913ffcc6 	add	x6, x6, #0xfff
+   d8:	39400000 	ldrb	w0, \[x0\]
+-			d8: R_AARCH64_LDST8_ABS_LO12_NC	\.text\+0x18c
++			d8: R_AARCH64_LDST8_ABS_LO12_NC	\.text\+0x194
+   dc:	39400021 	ldrb	w1, \[x1\]
+ 			dc: R_AARCH64_LDST8_ABS_LO12_NC	\.data\+0x8
+   e0:	39400042 	ldrb	w2, \[x2\]
+@@ -103,22 +103,22 @@ Disassembly of section \.text:
+   ec:	394000a5 	ldrb	w5, \[x5\]
+ 			ec: R_AARCH64_LDST8_ABS_LO12_NC	xdata\+0xff8
+   f0:	397ffcc6 	ldrb	w6, \[x6,#4095\]
+-  f4:	360004e0 	tbz	w0, #0, 190 <lab>
++  f4:	36000520 	tbz	w0, #0, 198 <lab>
+   f8:	b6f80001 	tbz	x1, #63, 0 <xlab>
+ 			f8: R_AARCH64_TSTBR14	xlab
+-  fc:	374004a2 	tbnz	w2, #8, 190 <lab>
++  fc:	374004e2 	tbnz	w2, #8, 198 <lab>
+  100:	b7780002 	tbnz	x2, #47, 0 <xlab>
+ 			100: R_AARCH64_TSTBR14	xlab
+- 104:	54000460 	b\.eq	190 <lab>
++ 104:	540004a0 	b\.eq	198 <lab>
+  108:	54000000 	b\.eq	0 <xlab>
+ 			108: R_AARCH64_CONDBR19	xlab
+- 10c:	b4000420 	cbz	x0, 190 <lab>
++ 10c:	b4000460 	cbz	x0, 198 <lab>
+  110:	b500001e 	cbnz	x30, 0 <xlab>
+ 			110: R_AARCH64_CONDBR19	xlab
+- 114:	1400001f 	b	190 <lab>
++ 114:	14000021 	b	198 <lab>
+  118:	14000000 	b	0 <xlab>
+ 			118: R_AARCH64_JUMP26	xlab
+- 11c:	9400001d 	bl	190 <lab>
++ 11c:	9400001f 	bl	198 <lab>
+  120:	94000000 	bl	0 <xlab>
+ 			120: R_AARCH64_CALL26	xlab
+  124:	d2e24680 	movz	x0, #0x1234, lsl #48
+@@ -142,7 +142,7 @@ Disassembly of section \.text:
+  16c:	f8500020 	ldr	x0, \[x1,#-256\]
+  170:	f97ffc20 	ldr	x0, \[x1,#32760\]
+  174:	79400000 	ldrh	w0, \[x0\]
+-			174: R_AARCH64_LDST16_ABS_LO12_NC	\.text\+0x18c
++			174: R_AARCH64_LDST16_ABS_LO12_NC	\.text\+0x194
+  178:	b9400021 	ldr	w1, \[x1\]
+ 			178: R_AARCH64_LDST32_ABS_LO12_NC	\.data\+0x8
+  17c:	f9400042 	ldr	x2, \[x2\]
+@@ -151,7 +151,11 @@ Disassembly of section \.text:
+ 			180: R_AARCH64_LDST128_ABS_LO12_NC	xlit
+  184:	f98000f0 	prfm	pstl1keep, \[x7\]
+ 			184: R_AARCH64_LDST64_ABS_LO12_NC	\.data\+0x100c
+- 188:	d65f03c0 	ret
++ 188:	58000000 	ldr	x0, 1 <func\+0x1>
++			188: R_AARCH64_GOT_LD_PREL19	cdata
++ 18c:	39400001 	ldrb	w1, \[x0\]
++ 190:	d65f03c0 	ret
+ 
+-000000000000018c <llit>:
+- 18c:	deadf00d 	\.word	0xdeadf00d
++
++0000000000000194 <llit>:
++ 194:	deadf00d 	\.word	0xdeadf00d
+diff --git a/gas/testsuite/gas/aarch64/reloc-insn.s b/gas/testsuite/gas/aarch64/reloc-insn.s
+index d6e6aa6..1d13900 100644
+--- a/gas/testsuite/gas/aarch64/reloc-insn.s
++++ b/gas/testsuite/gas/aarch64/reloc-insn.s
+@@ -176,6 +176,10 @@ func:
+ 
+ 	// BFD_RELOC_AARCH64_LDST64_LO12
+ 	prfm	pstl1keep, [x7, #:lo12:ldata+4100]
++
++	// BFD_RELOC_AARCH64_GOT_LD_PREL19
++	ldr	x0, :got_prel19:cdata
++	ldrb	w1, [x0]
+ 	
+ 	ret
+ 	
+@@ -201,3 +205,5 @@ ldata:	.xword	0x1122334455667788
+ .set u64, 0xfedcba9876543210
+ .set bit1,0xf000000000000000
+ .set bit2,~0xf
++
++.comm	cdata,1,8
+diff --git a/include/elf/aarch64.h b/include/elf/aarch64.h
+index 7787c68..e3af444 100644
+--- a/include/elf/aarch64.h
++++ b/include/elf/aarch64.h
+@@ -153,6 +153,7 @@ RELOC_NUMBER (R_AARCH64_LDST64_ABS_LO12_NC, 286)
+ /* LD/ST128: (S+A) & 0xff0 */
+ RELOC_NUMBER (R_AARCH64_LDST128_ABS_LO12_NC, 299)
+ 
++RELOC_NUMBER (R_AARCH64_GOT_LD_PREL19, 309)
+ RELOC_NUMBER (R_AARCH64_ADR_GOT_PAGE, 311)
+ RELOC_NUMBER (R_AARCH64_LD64_GOT_LO12_NC, 312)
+ 
+diff --git a/ld/testsuite/ld-aarch64/aarch64-elf.exp b/ld/testsuite/ld-aarch64/aarch64-elf.exp
+index eefe05a..7e5d73e 100644
+--- a/ld/testsuite/ld-aarch64/aarch64-elf.exp
++++ b/ld/testsuite/ld-aarch64/aarch64-elf.exp
+@@ -78,7 +78,12 @@ run_dump_test "emit-relocs-286"
+ run_dump_test "emit-relocs-286-bad"
+ # 287-298 are not done yet
+ run_dump_test "emit-relocs-299"
+-# 300-310 are not done yet
++# 300-308 are not done yet
++run_dump_test "emit-relocs-309-up"
++run_dump_test "emit-relocs-309-low"
++run_dump_test "emit-relocs-309-up-bad"
++run_dump_test "emit-relocs-309-low-bad"
++# 310 not done yet
+ run_dump_test "emit-relocs-311"
+ run_dump_test "emit-relocs-312"
+ 
+diff --git a/ld/testsuite/ld-aarch64/emit-relocs-309-low-bad.d b/ld/testsuite/ld-aarch64/emit-relocs-309-low-bad.d
+new file mode 100644
+index 0000000..6c2d0dc
+--- /dev/null
++++ b/ld/testsuite/ld-aarch64/emit-relocs-309-low-bad.d
+@@ -0,0 +1,5 @@
++#name: aarch64-emit-relocs-309-low-bad
++#source: emit-relocs-309.s
++#as:
++#ld: -Ttext 0xFFFFFD --section-start .got=0x0
++#error: .*relocation truncated to fit: R_AARCH64_GOT_LD_PREL19.*
+diff --git a/ld/testsuite/ld-aarch64/emit-relocs-309-low.d b/ld/testsuite/ld-aarch64/emit-relocs-309-low.d
+new file mode 100644
+index 0000000..4dee982
+--- /dev/null
++++ b/ld/testsuite/ld-aarch64/emit-relocs-309-low.d
+@@ -0,0 +1,12 @@
++#name: aarch64-emit-relocs-309-low
++#source: emit-relocs-309.s
++#as:
++#ld: -Ttext 0xFFFFC --section-start .got=0x0
++#objdump: -dr
++#...
++
++Disassembly of section \.text:
++
++00000000000ffffc <_start>:
++   ffffc:	d503201f 	nop
++  100000:	58800000 	ldr	x0, 0 <_GLOBAL_OFFSET_TABLE_-0x8>
+diff --git a/ld/testsuite/ld-aarch64/emit-relocs-309-up-bad.d b/ld/testsuite/ld-aarch64/emit-relocs-309-up-bad.d
+new file mode 100644
+index 0000000..802b51e
+--- /dev/null
++++ b/ld/testsuite/ld-aarch64/emit-relocs-309-up-bad.d
+@@ -0,0 +1,5 @@
++#name: aarch64-emit-relocs-309-up-bad
++#source: emit-relocs-309.s
++#as:
++#ld: -Ttext 0x0 --section-start .got=0x100001
++#error: .*relocation truncated to fit: R_AARCH64_GOT_LD_PREL19.*
+diff --git a/ld/testsuite/ld-aarch64/emit-relocs-309-up.d b/ld/testsuite/ld-aarch64/emit-relocs-309-up.d
+new file mode 100644
+index 0000000..dc2bb55
+--- /dev/null
++++ b/ld/testsuite/ld-aarch64/emit-relocs-309-up.d
+@@ -0,0 +1,12 @@
++#name: aarch64-emit-relocs-309-up
++#source: emit-relocs-309.s
++#as:
++#ld: -Ttext 0x0 --section-start .got=0x100000
++#objdump: -dr
++#...
++
++Disassembly of section \.text:
++
++0000000000000000 <_start>:
++   0:	d503201f 	nop
++   4:	587fffe0 	ldr	x0, 100000 <_stack\+0x80000>
+diff --git a/ld/testsuite/ld-aarch64/emit-relocs-309.s b/ld/testsuite/ld-aarch64/emit-relocs-309.s
+new file mode 100644
+index 0000000..d66c64b
+--- /dev/null
++++ b/ld/testsuite/ld-aarch64/emit-relocs-309.s
+@@ -0,0 +1,14 @@
++# R_AARCH64_GOT_LD_PREL19 must satisfy condition:
++#
++#   -2^20 <= G(S) - P < 2^20
++#
++
++	.comm	src,1,8
++
++	.global	_start
++
++	.text
++
++_start:
++	nop
++	ldr	x0, :got_prel19:src
+-- 
+1.7.5.2
+diff --git a/bfd/bfd-in2.h b/bfd/bfd-in2.h
+index bc5ed0c..c37c005 100644
+--- a/bfd/bfd-in2.h
++++ b/bfd/bfd-in2.h
+@@ -5072,6 +5072,13 @@ the dynamic object into the runtime process image.  */
+ Used in conjunction with BFD_RELOC_AARCH64_ADR_HI21_PCREL.  */
+   BFD_RELOC_AARCH64_ADD_LO12,
+ 
++/* AArch64 Load Literal instruction, holding a 19 bit PC relative word
++offset of the global offset table entry for a symbol.  The lowest two
++bits must be zero and are not stored in the instruction, giving a 21
++bit signed byte offset.  This relocation type requires signed overflow
++checking.  */
++  BFD_RELOC_AARCH64_GOT_LD_PREL19,
++
+ /* Get to the page base of the global offset table entry for a symbol as
+ part of an ADRP instruction using a 21 bit PC relative value.Used in
+ conjunction with BFD_RELOC_AARCH64_LD64_GOT_LO12_NC.  */
+diff --git a/bfd/libbfd.h b/bfd/libbfd.h
+index 2e9d706..fe126e6 100644
+--- a/bfd/libbfd.h
++++ b/bfd/libbfd.h
+@@ -2421,6 +2421,7 @@ static const char *const bfd_reloc_code_real_names[] = { "@@uninitialized@@",
+   "BFD_RELOC_MICROBLAZE_32_GOTOFF",
+   "BFD_RELOC_MICROBLAZE_COPY",
+   "BFD_RELOC_AARCH64_ADD_LO12",
++  "BFD_RELOC_AARCH64_GOT_LD_PREL19",
+   "BFD_RELOC_AARCH64_ADR_GOT_PAGE",
+   "BFD_RELOC_AARCH64_ADR_HI21_PCREL",
+   "BFD_RELOC_AARCH64_ADR_HI21_NC_PCREL",

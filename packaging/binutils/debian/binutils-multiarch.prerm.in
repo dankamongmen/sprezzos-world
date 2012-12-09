@@ -1,0 +1,66 @@
+#! /bin/sh
+# Remove obsolete diversions.
+#
+# They are already removed in postinst, but if configuration fails,
+# they will still be around.  Removing the package without
+# configuring would then allow the diversions to leak.
+#
+# So we catch them here.  This cannot wait for postrm because that
+# would break error recovery during upgrades: after the old, working
+# version re-adds the diversion in preinst, the diversion would be removed
+# again in postrm.  More generally, removing a diversion requires
+# a guarantee that the conflicting file is not present any more,
+# and we cannot guarantee that if some other version of
+# binutils-multiarch is installed.
+set -e
+this_ver=@DEB_VER@; # this version
+context=$1; # action: upgrade, remove, deconfigure, or failed-upgrade.
+if
+	test "$context" = failed-upgrade &&
+	dpkg --compare-versions "$this_ver" lt "$2"
+then
+	# prerm of the future failed.
+	# Who knows what it was supposed to do?  Abort.
+	exit 1
+fi
+
+old_diversion() {
+	local divertto file
+	file=$1
+	divertto=${2-$file.single}
+	if
+		dpkg-divert --package binutils-multiarch --list |
+		grep -q -F "$divertto"
+	then
+		dpkg-divert --package binutils-multiarch \
+				--remove --rename \
+				--divert "$divertto" "$file"
+	fi
+}
+
+# remove obsolete diversions
+old_diversion /usr/bin/ld.bfd
+old_diversion /usr/bin/c++filt
+old_diversion /usr/lib/libbfd.a /usr/lib/libbfd-single.a
+old_diversion /usr/lib/libopcodes.a /usr/lib/libopcodes-single.a
+old_diversion /usr/bin/ld
+old_diversion /usr/bin/elfedit
+for f in elf32_sparc elf32ppc elf64alpha elf_i386 m68kelf \
+         alpha i386linux m68klinux sparclinux sun4
+do
+	for ext in x xbn xn xr xs xu
+	do
+		old_diversion /usr/lib/ldscripts/$f.$ext
+	done
+done
+old_diversion /usr/lib/libbfd-2.9.1.0.15.so.0.0.0 \
+              /usr/lib/libbfd-single-2.9.1.0.15.so.0.0.0
+old_diversion /usr/lib/libopcodes-2.9.1.0.15.so.0.0.0 \
+              /usr/lib/libopcodes-single-2.9.1.0.15.so.0.0.0
+old_diversion /usr/lib/libbfd.la /usr/lib/libbfd-single.la
+old_diversion /usr/lib/libopcodes.la /usr/lib/libopcodes-single.la
+old_diversion /usr/include/bfd.h /usr/include/bfd.single.h
+old_diversion /usr/lib/ldscripts
+
+rm -f /usr/lib/libbfd-*-multiarch.so.0
+rm -f /usr/lib/libopcodes-*-multiarch.so.0

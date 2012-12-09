@@ -1,0 +1,1283 @@
+#!/usr/bin/make -f
+# debian/rules file - for binutils (2.20)
+# Based on sample debian/rules file - for GNU Hello (1.3).
+# Copyright 1994,1995 by Ian Jackson.
+# Copyright 1998-2007 James Troup.
+# Portions Copyright 2008-2012 Canonical Ltd.
+# Portions Copyright 2008-2012 Matthias Klose.
+# I hereby give you perpetual unlimited permission to copy,
+# modify and relicense this file, provided that you do not remove
+# my name from the file itself.  (I assert my moral right of
+# paternity under the Copyright, Designs and Patents Act 1988.)
+# This file may have to be extensively modified
+
+################################################################################
+
+p_bin = binutils
+p_dev = $(p_bin)-dev
+p_mul = $(p_bin)-multiarch
+p_gold = $(p_bin)-gold
+p_doc = $(p_bin)-doc
+p_hppa64 = $(p_bin)-hppa64
+p_spu = $(p_bin)-spu
+p_src = $(p_bin)-source
+
+# BACKPORT is used for cross builds for a -source package not conflicting
+# with the source package of the native package.
+ifeq ($(BACKPORT),true)
+  p_src = $(p_bin)-$(VERSION)-source
+else
+  p_src = $(p_bin)-source
+endif
+
+pwd   := $(shell pwd)
+d     = debian/tmp
+d_bin = $(d)
+d_dev = debian/$(p_dev)
+d_mul = debian/$(p_mul)
+d_gold = debian/$(p_gold)
+d_doc = debian/$(p_doc)
+d_hppa64 = debian/$(p_hppa64)
+d_spu = debian/$(p_spu)
+d_src = debian/$(p_src)
+
+install_dir    = install -d -m 755
+install_file   = install -m 644
+install_script = install -m 755
+install_binary = install -m 755 -s
+
+vafilt = $(subst $(2)=,,$(filter $(2)=%,$(1)))
+DPKG_VARS := $(shell dpkg-architecture)
+DEB_BUILD_GNU_TYPE	?= $(call vafilt,$(DPKG_VARS),DEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH		?= $(call vafilt,$(DPKG_VARS),DEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE	?= $(call vafilt,$(DPKG_VARS),DEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH	?= $(call vafilt,$(DPKG_VARS),DEB_HOST_MULTIARCH)
+
+# If $(TARGET) is not set, try reading debian/target
+ifeq (,$(TARGET))
+  ifneq (,$(wildcard debian/target))
+    TARGET := $(shell cat debian/target 2>/dev/null)
+  endif
+endif
+
+ifneq (,$(TARGET))
+  # Support TARGET both as Debian architecture specification (e.g. arm),
+  # and as the target name (e.g. arm-linux-gnu).
+  try_convert := $(shell dpkg-architecture -f -a$(TARGET) -qDEB_HOST_GNU_TYPE 2>/dev/null)
+  ifneq ($(try_convert),)
+    override TARGET := $(try_convert)
+  endif
+  DPKG_TARGET_VARS := $(shell dpkg-architecture -f -t$(TARGET))
+  DEB_TARGET_MULTIARCH = $(call vafilt,$(DPKG_TARGET_VARS),DEB_HOST_MULTIARCH)
+  DEB_TARGET_ARCH      = $(call vafilt,$(DPKG_TARGET_VARS),DEB_HOST_ARCH)
+else
+  DEB_TARGET_MULTIARCH = $(DEB_HOST_MULTIARCH)
+  DEB_TARGET_ARCH      = $(DEB_HOST_ARCH)
+endif
+
+ifeq (,$(DEB_HOST_MULTIARCH))
+  ifeq ($(DEB_HOST_ARCH),i386)
+    DEB_HOST_MULTIARCH = i386-linux-gnu
+  else
+    DEB_HOST_MULTIARCH = $(DEB_HOST_GNU_TYPE)
+  endif
+endif
+
+SHELL  = /bin/bash
+
+ifneq (,$(filter $(DEB_HOST_ARCH), amd64 armel armhf i386 powerpc powerpcspe ppc64 sparc sparc64 x32))
+  with_gold = yes
+endif
+
+with_multiarch := yes
+
+CC     = gcc
+CXX    = g++
+CFLAGS = -g -O2
+STRIP  = strip --remove-section=.comment --remove-section=.note
+CROSS :=
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+  CROSS := $(DEB_HOST_GNU_TYPE)-
+  CC   = $(CROSS)gcc
+  CXX  = $(CROSS)g++
+  STRIP= $(CURDIR)/debian/strip.cross
+  install_binary = install -m 755 -s --strip-program="$(STRIP)"
+endif
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  CFLAGS = -g -O0
+endif
+
+# this outputs 0 or 1 depending on whether a macro appears in the *default* cpp
+# -dM -P output; this is used to test the toolchain *default* configuration
+check_cpp = $(shell $(CROSS)cpp -dM -P /dev/null | grep -q '^\#define $(1)' && echo 1 || echo 0)
+
+# testsuite doesn't expect to be built with -mthumb
+# TODO if the testsuite is only broken with Thumb-2 (and not with "Thumb-1"),
+# we should test for __thumb2__ instead
+ifneq (,$(filter $(DEB_HOST_ARCH), armel armhf))
+  ifeq ($(call check_cpp,__thumb__),1)
+    CFLAGS += -marm
+  endif
+endif
+
+SPACE = $(EMPTY) $(EMPTY)
+COMMA = ,
+CHANGELOG_VARS := $(shell dpkg-parsechangelog | \
+        sed -n 's/ /_/g;/^[^_]/s/^\([^:]*\):_\(.*\)/\1=\2/p')
+
+DEB_VERSION	:= $(call vafilt,$(CHANGELOG_VARS),Version)
+DEB_SVERSION	:= $(shell echo $(DEB_VERSION) | sed 's/+b[0-9][0-9]*$$//')
+DEB_UPSTREAM	:= $(firstword $(subst -,$(SPACE),$(DEB_VERSION)))
+
+VERSION		:= $(shell sed -n 's/^ *VERSION=\(.*\)/\1/p' bfd/configure | head -1)
+#DATE		:= $(shell sed -n 's/.* \([0-9]*\)$$/\1/p' bfd/version.h)
+ifneq (,$(DATE))
+  DATE_EXT	:= .$(DATE)
+endif
+
+ifneq ($(DEB_UPSTREAM),$(VERSION)$(DATE_EXT))
+  $(error upstream ($(DEB_UPSTREAM)) and debian ($(VERSION)$(DATE_EXT)) version mismatch)
+endif
+
+SINGLE_VERSION= $(VERSION)-system
+MULTI_VERSION = $(VERSION)-multiarch
+HPPA64_VERSION= $(VERSION)-hppa64
+SPU_VERSION   = $(VERSION)-spu
+
+DISTRIBUTION := $(shell lsb_release -is)
+NJOBS =
+# Support parallel=<n> in DEB_BUILD_OPTIONS (see #209008)
+ifneq (,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+  NJOBS := -j $(subst parallel=,,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+endif
+ifneq (,$(findstring nogold,$(DEB_BUILD_OPTIONS)))
+  with_gold = disabled in DEB_BUILD_OPTIONS
+endif
+ifneq (,$(findstring nomult,$(DEB_BUILD_OPTIONS)))
+  with_multiarch = disabled in DEB_BUILD_OPTIONS
+endif
+
+# PF is the installation prefix for the package without the leading slash.
+# It's "usr" for gcc releases, so use this if not explicitly set
+ifeq ($(PF),)
+  PF = usr
+endif
+
+# Don't include docs with GFDL invariant sections
+GFDL_INVARIANT_FREE := yes
+ifeq ($(distribution),Ubuntu)
+  GFDL_INVARIANT_FREE := no
+endif
+
+gfdl_toplevel_texinfo_files = \
+	bfd/doc/bfd.texinfo \
+	bfd/doc/bfdint.texi \
+	ld/ldint.texinfo
+
+gfdl_generated_files = \
+	bfd/doc/bfd.info
+
+########################################
+
+CONFARGS = \
+	--enable-shared \
+	--enable-plugins \
+	--prefix=/$(PF) \
+	--build=$(DEB_BUILD_GNU_TYPE) \
+	--host=$(DEB_HOST_GNU_TYPE) \
+	--with-pkgversion="GNU Binutils for $(DISTRIBUTION)"
+
+ifeq ($(DEB_TARGET_MULTIARCH),x86_64-linux-gnu)
+  DEB_TARGET_MULTIARCH32 = i386-linux-gnu
+  DEB_TARGET_MULTIARCHX32 = x86_64-linux-gnux32
+else ifeq ($(DEB_TARGET_MULTIARCH),x86_64-linux-gnux32)
+  DEB_TARGET_MULTIARCH32 = i386-linux-gnu
+  DEB_TARGET_MULTIARCH64 = x86_64-linux-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),powerpc64-linux-gnu)
+  DEB_TARGET_MULTIARCH32 = powerpc-linux-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),s390x-linux-gnu)
+  DEB_TARGET_MULTIARCH32 = s390-linux-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),sparc64-linux-gnu)
+  DEB_TARGET_MULTIARCH32 = sparc-linux-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),x86_64-kfreebsd-gnu)
+  DEB_TARGET_MULTIARCH32 = i386-kfreebsd-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),i386-linux-gnu)
+  DEB_TARGET_MULTIARCH64 = x86_64-linux-gnu
+  DEB_TARGET_MULTIARCHX32 = x86_64-linux-gnux32
+else ifeq ($(DEB_TARGET_MULTIARCH),powerpc-linux-gnu)
+  DEB_TARGET_MULTIARCH64 = powerpc64-linux-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),sparc-linux-gnu)
+  DEB_TARGET_MULTIARCH64 = sparc64-linux-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),s390-linux-gnu)
+  DEB_TARGET_MULTIARCH64 = s390x-linux-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),i386-kfreebsd-gnu)
+  DEB_TARGET_MULTIARCH64 = x86_64-kfreebsd-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),mips-linux-gnu)
+  DEB_TARGET_MULTIARCH64 = mips64-linux-gnu
+else ifeq ($(DEB_TARGET_MULTIARCH),mipsel-linux-gnu)
+  DEB_TARGET_MULTIARCH64 = mips64el-linux-gnu
+endif
+export DEB_TARGET_MULTIARCH DEB_TARGET_MULTIARCH32 DEB_TARGET_MULTIARCH64
+export DEB_TARGET_MULTIARCHX32
+
+ifeq ($(DEB_TARGET_ARCH),sparc)
+	CONFARGS += --enable-targets=sparc64-linux-gnu
+	CONFLICTS = -VextraConflicts="libc6-dev-sparc64 (<< 2.2.5-7)"
+endif
+ifeq ($(DEB_TARGET_ARCH),sparc64)
+	CONFARGS += --enable-targets=sparc-linux-gnu
+	CONFLICTS = -VextraConflicts="libc6-dev-sparc64 (<< 2.2.5-7)"
+endif
+ifeq ($(DEB_TARGET_ARCH),powerpc)
+	CONFARGS += --enable-targets=powerpc64-linux-gnu,spu
+endif
+ifeq ($(DEB_TARGET_ARCH),ppc64)
+	CONFARGS += --enable-targets=powerpc-linux-gnu,spu
+endif
+ifeq ($(DEB_TARGET_ARCH),s390)
+	CONFARGS += --enable-targets=s390x-linux-gnu
+endif
+ifeq ($(DEB_TARGET_ARCH),s390x)
+	CONFARGS += --enable-targets=s390-linux-gnu
+endif
+ifeq ($(DEB_TARGET_ARCH),amd64)
+	CONFARGS += --enable-targets=x86_64-linux-gnux32
+endif
+ifeq ($(DEB_TARGET_ARCH),i386)
+	CONFARGS += --enable-targets=x86_64-linux-gnu,x86_64-linux-gnux32
+endif
+ifeq ($(DEB_TARGET_ARCH),kfreebsd-i386)
+	CONFARGS += --enable-targets=x86_64-kfreebsd-gnu
+endif
+ifeq ($(DEB_TARGET_ARCH),mips)
+       CONFARGS += --enable-targets=mips64-linux-gnu
+endif
+ifeq ($(DEB_TARGET_ARCH),mipsel)
+       CONFARGS += --enable-targets=mips64el-linux-gnu
+endif
+
+with_check := yes
+ifneq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	with_check := disabled through DEB_BUILD_OPTIONS
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH), armel armhf mips mipsel sparc))
+	ignore_regressions := regressions ignored on architecture $(DEB_HOST_ARCH)
+endif
+ignore_regressions := regressions ignored on architecture $(DEB_HOST_ARCH)
+#ifneq (,$(filter $(DEB_HOST_ARCH),mips mipsel))
+#	with_check := disabled for architecture $(DEB_HOST_ARCH)
+#endif
+
+with_strip := yes
+ifneq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	with_strip := disabled through DEB_BUILD_OPTIONS
+endif
+
+source_files = $(addprefix $(shell basename $(pwd))/, \
+		 $(filter-out %-stamp .pc CVS debian builddir-% test-summary, $(wildcard *)))
+
+################################################################################
+
+#################
+# patch targets #
+#################
+
+patch: patch-stamp
+patch-stamp:
+ifneq ($(PATCHED_SOURCES),yes)
+	QUILT_PATCHES=$(CURDIR)/debian/patches \
+	  quilt --quiltrc /dev/null push -a || test $$? = 2
+endif
+	touch $@
+
+unpatch:
+	QUILT_PATCHES=$(CURDIR)/debian/patches \
+	  quilt --quiltrc /dev/null pop -a -R || test $$? = 2
+	rm -rf .pc
+
+update-patches:
+	export QUILT_PATCHES=$(CURDIR)/debian/patches; \
+	export QUILT_REFRESH_ARGS="--no-timestamps --no-index -pab"; \
+	export QUILT_DIFF_ARGS="--no-timestamps --no-index -pab"; \
+	while quilt push; do quilt refresh; done
+
+################################################################################
+
+################
+# clean target #
+################
+
+clean: unpatch
+	$(checkdir)
+	-rm -fr builddir-multi builddir-single builddir-hppa64 builddir-spu builddir-gold
+	-find . -name \*.gmo -o -name \*~ -o -name \*.info ! -name sysroff.info | xargs rm -f
+	-rm -f $(pwd)/test-summary*
+	-rm -fr $(d_bin) $(d_dev) $(d_mul) $(d_doc) $(d_hppa64) $(d_src) $(d_spu) $(d_gold)
+	-rm -rf debian/patched debian/tmp debian/files* debian/substvars
+	-rm -f debian/*.orig debian/*.rej
+	-rm -rf $(d_cross) debian/files debian/substvars 
+	-rm -rf builddir-$(TARGET) {configure,build,install}-cross-stamp
+	for i in debian/*.in; do \
+	    case "$$i" in debian/control*.in) continue; esac; \
+	    rm -f $${i%*.in}; \
+	done
+
+	-rm -f *-stamp
+
+################################################################################
+
+control-stamp: debian/control.in $(if $(TARGET),debian/control.cross.in)
+ifneq (,$(TARGET))
+	sed "/^$$/ q" < debian/control.in > debian/control
+	sed -e "s/__TARGET__/$$(echo -n $(TARGET) | sed s/_/-/g)/" \
+                 < debian/control.cross.in >> debian/control
+else
+	cp debian/control.in debian/control
+endif
+ifneq (,$(CROSS))
+	sed -e "s/__TARGET__/$$(echo -n $(CROSS) | sed s/_/-/g)/" \
+		< debian/strip.cross.in >> debian/strip.cross
+	chmod 755 debian/strip.cross
+endif
+	touch $@
+
+#######################
+# single-arch targets #
+#######################
+
+SINGLE_CONFARGS = $(CONFARGS)
+ifeq ($(with_gold),yes)
+	SINGLE_CONFARGS += --enable-ld=default --enable-gold
+endif
+
+configure-single-stamp: patch-stamp control-stamp
+	$(checkdir)
+
+ifeq ($(with_check),yes)
+	@if echo "spawn true" | /usr/bin/expect -f - >/dev/null; then \
+	  : ; \
+	else \
+	  echo "expect is failing on your system with the above error, which means the"; \
+	  echo "testsuite will fail.  Please resolve the above issues and retry the build."; \
+	  echo "-----------------------------------------------------------------------------"; \
+	  exit 1; \
+	fi
+endif
+
+	rm -rf configure-single-stamp \
+		builddir-single
+	mkdir builddir-single
+	cd builddir-single && env CC="$(CC)" CXX="$(CXX)" CFLAGS="$(CFLAGS)" \
+		../configure --with-sysroot=/ $(SINGLE_CONFARGS)
+	$(MAKE) -C builddir-single configure-host
+	touch configure-single-stamp
+
+build-single-stamp: configure-single-stamp
+	$(checkdir)
+	env MAKE="$(MAKE) VERSION=$(SINGLE_VERSION)" \
+	    $(MAKE) -C builddir-single/bfd headers
+	env MAKE="$(MAKE) VERSION=$(SINGLE_VERSION)" \
+	    $(MAKE) $(NJOBS) -C builddir-single
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+ifeq ($(with_check),yes)
+	-env MAKE="$(MAKE) VERSION=$(SINGLE_VERSION)" \
+	    $(MAKE) -C builddir-single -k check
+	cat builddir-single/binutils/binutils.sum \
+	    builddir-single/gas/testsuite/gas.sum \
+	    builddir-single/ld/ld.sum >> $(pwd)/test-summary
+	set -e; \
+	if [ ! -f /usr/share/doc/binutils/test-summary.gz ]; then \
+	  echo "No test results available for the installed binutils version"; \
+	elif [ -x /usr/bin/python ]; then \
+	  echo "Test results, compared with installed binutils:"; \
+	  zcat /usr/share/doc/binutils/test-summary.gz > test-summary-installed; \
+	  if python debian/test-suite-compare.py test-summary-installed test-summary; then \
+	    : ; \
+	  elif [ -n "$(ignore_regressions)" ]; then \
+	    echo "$(ignore_regressions)"; \
+	  else \
+	    false; \
+	  fi; \
+	else \
+	  echo "python not installed, not comparing test results."; \
+	fi
+endif
+endif
+	touch build-single-stamp
+
+
+################################################################################
+
+#####################
+# multiarch targets #
+#####################
+
+multiarch_targets = \
+	aarch64-linux-gnu \
+	alpha-linux-gnu \
+	arm-linux-gnueabi \
+	hppa-linux-gnu \
+	i486-linux-gnu \
+	ia64-linux-gnu \
+	m68k-linux-gnu \
+	m68k-rtems \
+	mips-linux-gnu \
+	mipsel-linux-gnu \
+	mips64-linux-gnu \
+	mips64el-linux-gnu \
+	powerpc-linux-gnu \
+	powerpc64-linux-gnu \
+	s390-linux-gnu \
+	s390x-linux-gnu \
+	sh-linux-gnu \
+	sh64-linux-gnu \
+	sparc-linux-gnu \
+	sparc64-linux-gnu \
+	x86_64-linux-gnu \
+	x86_64-linux-gnux32 \
+	m32r-linux-gnu \
+	spu \
+	x86_64-pep
+
+configure-multi-stamp: patch-stamp
+	$(checkdir)
+	rm -rf configure-multi-stamp \
+		builddir-multi
+	mkdir builddir-multi
+	cd builddir-multi \
+	    && env CC="$(CC)" CXX="$(CXX)" CFLAGS="$(CFLAGS)" ../configure $(CONFARGS) \
+		--with-sysroot=/ \
+		--enable-targets=$(subst $(SPACE),$(COMMA),$(multiarch_targets))
+	$(MAKE) -C builddir-multi configure-host
+	touch configure-multi-stamp
+
+build-multi-stamp: configure-multi-stamp
+	$(checkdir)
+	$(MAKE) -C builddir-multi/bfd headers
+	env MAKE="$(MAKE) VERSION=$(MULTI_VERSION)" \
+	  $(MAKE) $(NJOBS) -C builddir-multi
+	touch build-multi-stamp
+
+################################################################################
+
+#################
+# static target #
+#################
+
+configure-static-stamp: patch-stamp
+	$(checkdir)
+	rm -rf configure-static-stamp \
+		builddir-static
+	mkdir builddir-static
+	cd builddir-static \
+	    && env CC="$(CC)" CXX="$(CXX)" CFLAGS="-g0 -Os" ../configure \
+		$(filter-out --enable-shared --enable-plugins --enable-targets=%, $(CONFARGS))
+	$(MAKE) -C builddir-static configure-bfd
+	$(MAKE) -C builddir-static configure-ld
+	touch configure-static-stamp
+
+build-static-stamp: configure-static-stamp
+	$(checkdir)
+	$(MAKE) $(NJOBS) -C builddir-static/libiberty CCLD='$(CC) -all-static'
+	$(MAKE) $(NJOBS) -C builddir-static/bfd CCLD='$(CC) -all-static'
+	$(MAKE) $(NJOBS) -C builddir-static/ld CCLD='$(CC) -all-static'
+	touch build-static-stamp
+
+################################################################################
+
+#################
+# hppa64 target #
+#################
+
+configure-hppa64-stamp: patch-stamp
+	$(checkdir)
+	rm -rf configure-hppa64-stamp \
+		builddir-hppa64
+	mkdir builddir-hppa64
+	cd builddir-hppa64 \
+	    && env CC="$(CC)" CXX="$(CXX)" CFLAGS="$(CFLAGS)" ../configure \
+		$(CONFARGS) \
+		--target=hppa64-linux-gnu
+	$(MAKE) -C builddir-hppa64 configure-host
+	touch configure-hppa64-stamp
+
+build-hppa64-stamp: configure-hppa64-stamp
+	$(checkdir)
+	$(MAKE) -C builddir-hppa64/bfd headers
+	env MAKE="$(MAKE) VERSION=$(HPPA64_VERSION)" \
+	  $(MAKE) $(NJOBS) -C builddir-hppa64
+	touch build-hppa64-stamp
+
+################################################################################
+
+##############
+# spu target #
+##############
+
+configure-spu-stamp: patch-stamp
+	$(checkdir)
+	rm -rf configure-spu-stamp \
+		builddir-spu
+	mkdir builddir-spu
+	cd builddir-spu \
+	    && env CC="$(CC)" CFLAGS="$(CFLAGS)" ../configure \
+		$(CONFARGS) \
+		--program-prefix=spu- \
+		--target=spu-elf
+	$(MAKE) -C builddir-spu configure-host
+	touch configure-spu-stamp
+
+build-spu-stamp: configure-spu-stamp
+	$(checkdir)
+	$(MAKE) -C builddir-spu/bfd headers
+	env MAKE="$(MAKE) VERSION=$(SPU_VERSION)" \
+	  $(MAKE) $(NJOBS) -C builddir-spu
+	touch build-spu-stamp
+
+################################################################################
+
+pre-build:
+#ifneq (,$(filter $(DEB_HOST_ARCH), armel powerpc))
+#	@echo Build it ...
+#else
+#	@echo Explicitely fail the build for architecture $(DEB_HOST_ARCH)
+#	false
+#endif
+
+build_stamps = build-single-stamp
+ifeq ($(with_multiarch),yes)
+       build_stamps += build-multi-stamp
+endif
+ifeq ($(DEB_HOST_ARCH),hppa)
+       build_stamps += build-hppa64-stamp
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+       build_stamps += build-spu-stamp
+endif
+ifneq (,$(TARGET))
+  ifneq (,$(findstring static-cross,$(DEB_BUILD_OPTIONS)))
+       build_stamps = build-static-cross-stamp
+  else
+       build_stamps = build-cross-stamp
+  endif
+endif
+
+ifeq ($(BACKPORT),true)
+    build_stamps :=
+    with_check := no
+endif
+
+build: pre-build build-stamp
+build-arch: pre-build build-stamp
+build-indep: pre-build build-stamp
+build-stamp: $(build_stamps)
+	touch build-stamp
+
+################################################################################
+
+##################
+# install target #
+##################
+
+install_stamps = install-stamp
+ifeq ($(DEB_HOST_ARCH),hppa)
+       install_stamps += install-hppa64-stamp
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+       install_stamps += install-spu-stamp
+endif
+ifneq (,$(TARGET))
+  ifneq (,$(findstring static-cross,$(DEB_BUILD_OPTIONS)))
+        install_stamps = install-static-cross-stamp
+  else
+        install_stamps = install-cross-stamp
+  endif
+endif
+ifeq ($(BACKPORT),true)
+    install_stamps :=
+endif
+install: $(install_stamps)
+install-stamp: checkroot build-stamp
+	$(checkdir)
+
+	rm -fr $(d_bin) $(d_dev) $(d_mul) $(d_doc) $(d_src)
+	$(install_dir) $(d_bin) $(d_dev) $(d_mul) $(d_doc) $(d_src)
+
+	: # install binutils and -dev stuff
+	env MAKE="$(MAKE) VERSION=$(SINGLE_VERSION)" \
+	  $(MAKE) -C builddir-single \
+		CFLAGS="$(CFLAGS)" prefix=$(pwd)/$(d_bin)/$(PF) \
+		mandir=$(pwd)/$(d_bin)/$(PF)/share/man \
+		infodir=$(pwd)/$(d_doc)/$(PF)/share/info install
+
+ifeq ($(with_multiarch),yes)
+	: # now install binutils-multiarch stuff
+	env MAKE="$(MAKE) VERSION=$(MULTI_VERSION)" \
+          $(MAKE) -C builddir-multi \
+		CFLAGS="$(CFLAGS)" \
+		prefix=$(pwd)/$(d_mul)/$(PF) \
+		mandir=$(pwd)/$(d_mul)/$(PF)/share/man \
+		infodir=$(pwd)/$(d_doc)/$(PF)/share/info install
+endif
+
+	: # fix bfd.h, removing the safety inclusion guard
+	awk '/PR 14072/,/^#endif/ {next} {print}' $(d_bin)/$(PF)/include/bfd.h \
+	  > $(d_bin)/$(PF)/include/bfd.h.new
+	mv $(d_bin)/$(PF)/include/bfd.h.new $(d_bin)/$(PF)/include/bfd.h
+
+	: # fix multilib conflicts of generated values by __WORDSIZE-based expressions
+	sed -i -e '/^#include "ansidecl.h"/{p;s~^.*$$~#include <bits/wordsize.h>~;}' \
+	    -e 's/^#define BFD_DEFAULT_TARGET_SIZE \(32\|64\) *$$/#define BFD_DEFAULT_TARGET_SIZE __WORDSIZE/' \
+	    -e 's/^#define BFD_HOST_64BIT_LONG [01] *$$/#define BFD_HOST_64BIT_LONG (__WORDSIZE == 64)/' \
+	    -e 's/^#define BFD_HOST_64_BIT \(long \)\?long *$$/#if __WORDSIZE == 32\
+#define BFD_HOST_64_BIT long long\
+#else\
+#define BFD_HOST_64_BIT long\
+#endif/' \
+	    -e 's/^#define BFD_HOST_U_64_BIT unsigned \(long \)\?long *$$/#define BFD_HOST_U_64_BIT unsigned BFD_HOST_64_BIT/' \
+	    $(d_bin)/$(PF)/include/bfd.h
+
+	: # copy libiberty.h ... not too keen on this, but it was requested
+	cp -f include/libiberty.h $(d_bin)/$(PF)/include
+
+	: # copy demangle.h ... not too keen on this, but it was requested
+	cp -f include/demangle.h $(d_bin)/$(PF)/include
+
+	: # copy plugin-api.h ...
+	cp -f include/plugin-api.h $(d_bin)/$(PF)/include
+
+	: # We don't need to distribute everything in binutils and -dev
+	rm -rf $(d_bin)/$(PF)/include/obstack.h
+	rm -f $(d_bin)/$(PF)/man/man1/configure.1
+	rm -f $(d_doc)/$(PF)/share/info/configure.* $(d_doc)/$(PF)/share/info/standards.*
+	: # *sigh*, bugs.debian.org/213524
+	rm -f $(d_doc)/$(PF)/share/info/dir*
+
+ifeq ($(with_multiarch),yes)
+	: # Now get rid of just about everything in binutils-multiarch
+	rm -rf $(d_mul)/$(PF)/man $(d_mul)/$(PF)/info $(d_mul)/$(PF)/include
+	rm -rf $(d_mul)/$(PF)/share/man $(d_mul)/$(PF)/share/info $(d_mul)/$(PF)/share/locale
+
+	: # elfedit (even with its --input-mach option)
+	: # is the same for all targets.
+	rm -f $(d_mul)/$(PF)/bin/elfedit
+
+	: # c++filt does not link to libbfd for anything more than
+	: # the help message, and its behavior does not vary
+	: # between arches aside from the --version message.
+	rm -f $(d_mul)/$(PF)/bin/c++filt
+
+	: # As gas/README points out (search for --enable-targets),
+	: # multi-arch gas is not ready yet.
+	rm -f $(d_mul)/$(PF)/bin/as
+	rm -f $(d_mul)/$(PF)/bin/ld
+	rm -f $(d_mul)/$(PF)/bin/ld.bfd
+	rm -f $(d_mul)/$(PF)/bin/ld.gold
+	rm -fr $(d_mul)/$(PF)/lib/ldscripts
+
+  ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+	rm -f $(d_mul)/$(PF)/bin/embedspu
+  endif
+endif
+
+	$(install_dir) $(d_dev)/$(PF)/include/ $(d_dev)/$(PF)/lib/
+	mv $(d_bin)/$(PF)/include/* $(d_dev)/$(PF)/include/
+	mv $(d_bin)/$(PF)/lib/*.a $(d_bin)/$(PF)/lib/libbfd.so $(d_bin)/$(PF)/lib/libopcodes.so \
+	   $(d_dev)/$(PF)/lib/
+
+ifeq ($(with_multiarch),yes)
+	rm -f $(d_mul)/$(PF)/lib/libbfd.so $(d_mul)/$(PF)/lib/libopcodes.so
+	rm -f $(d_mul)/$(PF)/lib/*.la $(d_mul)/$(PF)/lib/*.a
+	rm -f $(d_mul)/$(PF)/lib*/libiberty*
+endif
+
+	: # Get rid of .la files since libtool obviously has no idea about transient paths
+	rm -f $(d_bin)/$(PF)/lib/*.la
+
+	chmod ugo-x $(d_bin)/$(PF)/lib/*.so
+	$(call strip_package, $(p_bin), $(d_bin))
+ifeq ($(with_multiarch),yes)
+	chmod ugo-x $(d_mul)/$(PF)/lib/*.so
+	$(call strip_package, $(p_mul), $(d_mul))
+endif
+
+	: # Don't want /usr/<arch>-linux to exist in any package
+	rm -rf $(d_bin)/$(PF)/$(DEB_HOST_GNU_TYPE)
+
+	: # Remove windres manpages
+	rm -f $(d_bin)/$(PF)/share/man/man1/windres.1
+
+ifeq ($(with_multiarch),yes)
+	rm -rf $(d_mul)/$(PF)/$(DEB_HOST_GNU_TYPE)
+	rm -f $(d_mul)/$(PF)/share/man/man1/windres.1
+endif
+
+	rm -f $(d_bin)/$(PF)/bin/ld
+	ln -s ld.bfd $(d_bin)/$(PF)/bin/ld
+ifeq ($(with_gold),yes)
+	ln -s ld.gold $(d_bin)/$(PF)/bin/gold
+	mv $(d_bin)/$(PF)/share/man/man1/ld.1 \
+		$(d_bin)/$(PF)/share/man/man1/ld.bfd.1
+	ln -s ld.bfd.1.gz $(d_bin)/$(PF)/share/man/man1/ld.1.gz
+  ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	if which help2man >/dev/null 2>&1; then \
+	  help2man -n 'The GNU ELF linker' $(d_bin)/$(PF)/bin/ld.gold \
+	    | sed 's,$(d_bin)/$(PF)/bin/,,g' > debian/ld.gold.1; \
+	fi
+  endif
+	cp debian/ld.gold.1 $(d_bin)/$(PF)/share/man/man1/
+	ln -s ld.gold.1.gz $(d_bin)/$(PF)/share/man/man1/gold.1.gz
+
+	: # install a symlink for the gold linker
+	$(install_dir) $(d_bin)/$(PF)/lib/gold-ld
+	ln -s ../../bin/ld.gold $(d_bin)/$(PF)/lib/gold-ld/ld
+
+	: # only keep the gold linker diversion to it's own package.
+	rm -fr $(d_gold)
+	$(install_dir) $(d_gold)
+	$(install_dir) $(d_gold)/$(PF)/bin
+	$(install_dir) $(d_gold)/$(PF)/share/man/man1
+	ln -s ld.gold $(d_gold)/$(PF)/bin/ld
+	ln -s ld.gold.1.gz $(d_gold)/$(PF)/share/man/man1/ld.1.gz
+endif
+	: # install a symlink for the old linker
+	$(install_dir) $(d_bin)/$(PF)/lib/compat-ld
+	ln -s ../../bin/ld.bfd $(d_bin)/$(PF)/lib/compat-ld/ld
+
+	: # Remove empty directory
+	rmdir $(d_bin)/$(PF)/include/
+
+	: # install libiberty PIC library
+	$(install_file) builddir-single/libiberty/pic/libiberty.a \
+		$(d_dev)/$(PF)/lib/libiberty_pic.a
+
+	touch install-stamp
+
+install-hppa64-stamp: checkroot build-hppa64-stamp
+	$(checkdir)
+
+	rm -fr $(d_hppa64)
+	$(install_dir) $(d_hppa64)
+	$(install_dir) $(d_hppa64)/$(PF)/lib
+
+	: # install binutils-hppa64 stuff
+	env MAKE="$(MAKE) VERSION=$(HPPA64_VERSION)" \
+          $(MAKE) -C builddir-hppa64 \
+		CFLAGS="$(CFLAGS)" \
+		prefix=$(pwd)/$(d_hppa64)/$(PF)/ \
+		mandir=$(pwd)/$(d_hppa64)/$(PF)/share/man \
+		infodir=$(pwd)/$(d_hppa64)/$(PF)/share/info install
+
+	: # move shared libs to the standard path
+	mv $(d_hppa64)/$(PF)/$(DEB_HOST_GNU_TYPE)/hppa64-linux-gnu/lib/lib*-*.so \
+		$(d_hppa64)/$(PF)/lib/.
+
+	: # Now get rid of just about everything in binutils-hppa64
+	rm -rf $(d_hppa64)/$(PF)/man
+	rm -rf $(d_hppa64)/$(PF)/info
+	rm -rf $(d_hppa64)/$(PF)/include
+	rm -rf $(d_hppa64)/$(PF)/share
+	rm -rf $(d_hppa64)/$(PF)/hppa-linux-gnu
+	rm -rf $(d_hppa64)/$(PF)/lib/libiberty.a
+
+	$(call strip_package, $(p_hppa64), $(d_hppa64))
+	chmod ugo-x $(d_hppa64)/$(PF)/lib/*.so
+
+	: # Don't want /usr/<arch>-linux to exist in any package
+	rm -rf $(d_hppa64)/$(PF)/hppa64-linux-gnu
+
+	touch install-hppa64-stamp
+
+install-static-stamp: checkroot build-static-stamp
+	$(checkdir)
+
+	rm -fr $(d_static) $(d_udeb)
+	$(install_dir) $(d_static) $(d_udeb)
+
+	: # Copy static ld-new into /bin for both -static and -static-udeb
+	$(install_dir) $(d_static)/bin
+	$(install_binary) builddir-static/ld/ld-new $(d_static)/bin/ld_static
+	$(install_dir) $(d_udeb)/bin
+	$(install_binary) builddir-static/ld/ld-new $(d_udeb)/bin/ld_static
+ifeq ($(with_strip),yes)
+	pkg_create_dbgsym $(p_static) $(d_static) || true
+	$(STRIP) --strip-unneeded $(d_static)/bin/ld_static $(d_udeb)/bin/ld_static
+endif
+
+	touch install-static-stamp
+
+install-spu-stamp: checkroot build-spu-stamp
+	$(checkdir)
+
+	rm -fr $(d_spu)
+	$(install_dir) $(d_spu)
+	$(install_dir) $(d_spu)/$(PF)/lib
+
+	: # install binutils-spu stuff
+	env MAKE="$(MAKE) VERSION=$(SPU_VERSION)" \
+          $(MAKE) -C builddir-spu \
+		CFLAGS="$(CFLAGS)" \
+		prefix=$(pwd)/$(d_spu)/$(PF)/ \
+		mandir=$(pwd)/$(d_spu)/$(PF)/share/man \
+		infodir=$(pwd)/$(d_spu)/$(PF)/share/info install
+
+	: # move shared libs to the standard path
+	mv $(d_spu)/$(PF)/$(DEB_HOST_GNU_TYPE)/spu-elf/lib/lib*-*.so \
+		$(d_spu)/$(PF)/lib/.
+
+	: # Now get rid of just about everything in binutils-spu
+	rm -rf $(d_spu)/$(PF)/man
+	rm -rf $(d_spu)/$(PF)/info
+	rm -rf $(d_spu)/$(PF)/include
+	rm -rf $(d_spu)/$(PF)/share
+	rm -rf $(d_spu)/$(PF)/$(DEB_HOST_GNU_TYPE)
+	rm -rf $(d_spu)/$(PF)/lib/libiberty.a
+	rm -rf $(d_spu)/$(PF)/lib/ldscripts
+
+	$(call strip_package, $(p_spu), $(d_spu))
+	chmod ugo-x $(d_spu)/$(PF)/lib/*.so
+
+	: # Don't want /usr/<arch>-linux to exist in any package
+	rm -rf $(d_spu)/$(PF)/spu-elf
+
+	touch install-spu-stamp
+
+################################################################################
+
+#######################
+# binary-indep target #
+#######################
+
+binary-indep: checkroot build install
+	$(checkdir)
+
+	rm -f debian/files debian/substvars
+
+# Cross builds do not have documentation packages
+ifeq (,$(TARGET))
+
+	$(install_dir) $(d_doc)/DEBIAN
+
+ifeq ($(GFDL_INVARIANT_FREE),yes)
+	rm -f $(d_doc)//usr/share/info/bfd.info*
+	rm -f $(d_doc)//usr/share/info/bfdint.info*
+	rm -f $(d_doc)//usr/share/info/ldint.info*
+endif
+
+ifneq ($(BACKPORT),true)
+	$(install_dir) $(d_doc)/$(PF)/share/doc/$(p_doc)/
+	$(install_file)	debian/changelog $(d_doc)/$(PF)/share/doc/$(p_doc)/changelog.Debian
+	$(install_file)	debian/copyright $(d_doc)/$(PF)/share/doc/$(p_doc)/
+	for i in bfd gas gprof ld; do \
+	  ln -sf ../$(p_bin)/$$i $(d_doc)/$(PF)/share/doc/$(p_doc)/$$i; \
+	done
+	find $(d_doc)/$(PF)/share/doc/$(p_doc) -maxdepth 1 -type f ! -name copyright | xargs gzip -9
+	gzip -9 $(d_doc)/$(PF)/share/info/*
+
+	dpkg-gencontrol -isp -P$(d_doc) -p$(p_doc)
+	chown -R root:root $(d_doc)
+	chmod -R go=rX  $(d_doc)
+	dpkg --build $(d_doc) ..
+
+	$(install_dir) $(d_src)/$(PF)/share/doc/$(p_src)/
+	$(install_file)	debian/changelog $(d_src)/$(PF)/share/doc/$(p_src)/changelog.Debian
+	$(install_file)	debian/copyright $(d_src)/$(PF)/share/doc/$(p_src)/
+	find $(d_src)/$(PF)/share/doc/$(p_src) -maxdepth 1 -type f ! -name copyright | xargs gzip -9
+endif # ifndef BACKPORT
+
+	$(install_dir) $(d_src)/DEBIAN
+	$(install_dir) $(d_src)/$(PF)/src/binutils/patches
+	$(install_file) debian/patches/* $(d_src)/$(PF)/src/binutils/patches/
+	tar -c --xz -C .. --exclude=CVS \
+		-f $(pwd)/$(d_src)/$(PF)/src/binutils/binutils-$(VERSION).tar.xz \
+		$(source_files)
+
+	tar cf - $$(find './debian' -mindepth 1 \( \
+		-path './debian/binutils*' -type d -prune -o \
+		-path './debian/patches' -prune -o \
+		-path './debian/tmp*' -prune -o \
+		-path './debian/.bzr*' -prune -o \
+		-path './debian/files' -prune -o \
+		-print \) ) \
+	  | tar -x -C $(d_src)/$(PF)/src/binutils -f -
+	-chmod 755 $(d_src)/$(PF)/src/binutils/debian/*.{pre,post}{inst,rm}
+	chmod 755 $(d_src)/$(PF)/src/binutils/debian/test-suite-compare.py
+
+	dpkg-gencontrol -isp -P$(d_src) -p$(p_src)
+	chown -R root:root $(d_src)
+	chmod -R go=rX  $(d_src)
+	dpkg --build $(d_src) ..
+
+endif
+
+################################################################################
+
+#######################
+# binary-arch target  #
+#######################
+
+binary-arch: checkroot build install
+	$(checkdir)
+
+ifneq ($(BACKPORT),true)
+# Process the following only if $(TARGET) is set
+ifneq (,$(TARGET))
+	test "" != "$(TARGET)"
+
+	rm -rf $(d_cross)/$(PF)/share/info $(d_cross)/$(PF)/share/man
+
+	$(install_dir) $(d_cross)/DEBIAN
+
+	$(install_dir) $(d_cross)/$(PF)/share/doc/$(p_cross)/
+	$(install_file)	debian/changelog $(d_cross)/$(PF)/share/doc/$(p_cross)/changelog.Debian
+	$(install_file)	debian/copyright debian/README.cross $(d_cross)/$(PF)/share/doc/$(p_cross)/
+	gzip -9f $(d_cross)/$(PF)/share/doc/$(p_cross)/changelog.Debian
+
+	for pkg in bfd gas gprof ld; do \
+	  ln -sf ../binutils/$$pkg $(d_cross)/$(PF)/share/doc/$(p_cross)/$$pkg; \
+	done
+
+	rm -f debian/substvars
+	dpkg-shlibdeps $(d_cross)/$(PF)/bin/*
+	dpkg-gencontrol -isp -P$(d_cross) -p$(p_cross)
+	dpkg --build $(d_cross) ..
+
+else
+	: # generate some control & helper files
+	nver=$$(echo $(DEB_UPSTREAM) | awk -F. '{ OFS="."; $$NF=$$NF+1; print }'); \
+	for i in debian/*.in; do \
+	    case "$$i" in debian/control.cross.in) continue; esac; \
+	    sed -e 's/@VER@/$(VERSION)/g' \
+		-e 's/@DEB_VER@/$(DEB_VERSION)/g' \
+		-e 's/@DEB_SVER@/$(DEB_SVERSION)/g' \
+		-e 's/@DEB_UVER@/$(DEB_UPSTREAM)/g' \
+		-e "s/@DEB_NVER@/$$nver/g" \
+		-e 's/@DATE_EXT@/$(DATE_EXT)/g' \
+		$$i > $${i%*.in}; \
+	done
+
+	: # install bug reporting information
+	$(install_file) -D debian/$(p_bin).presubj \
+		$(d_bin)/$(PF)/share/bug/$(p_bin)/presubj
+ifeq ($(with_multiarch),yes)
+	$(install_dir) $(d_mul)/$(PF)/share/bug
+	ln -sf $(p_bin) $(d_mul)/$(PF)/share/bug/$(p_mul)
+endif
+ifeq ($(with_gold),yes)
+	$(install_dir) $(d_gold)/$(PF)/share/bug
+	ln -sf $(p_bin) $(d_gold)/$(PF)/share/bug/$(p_gold)
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+	$(install_dir) $(d_spu)/$(PF)/share/bug
+	ln -sf $(p_bin) $(d_spu)/$(PF)/share/bug/$(p_spu)
+endif
+ifeq ($(DEB_HOST_ARCH),hppa)
+	$(install_dir) $(d_hppa64)/$(PF)/share/bug
+	ln -sf $(p_bin) $(d_hppa64)/$(PF)/share/bug/$(p_hppa64)
+endif
+
+	: # make lintian happy
+	$(install_file) -D debian/$(p_bin).overrides \
+		$(d_bin)/$(PF)/share/lintian/overrides/$(p_bin)
+ifeq ($(with_multiarch),yes)
+	$(install_file) -D debian/$(p_mul).overrides \
+		$(d_mul)/$(PF)/share/lintian/overrides/$(p_mul)
+endif
+ifeq ($(with_gold),yes)
+	$(install_file) -D debian/$(p_gold).overrides \
+		$(d_gold)/$(PF)/share/lintian/overrides/$(p_gold)
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+	$(install_file) -D debian/$(p_spu).overrides \
+		$(d_spu)/$(PF)/share/lintian/overrides/$(p_spu)
+endif
+ifeq ($(DEB_HOST_ARCH),hppa)
+	$(install_file) -D debian/$(p_hppa64).overrides \
+		$(d_hppa64)/$(PF)/share/lintian/overrides/$(p_hppa64)
+endif
+
+	: # install maintainer scrtips
+	$(install_dir) $(d_bin)/DEBIAN
+	$(install_script) debian/binutils.postinst $(d_bin)/DEBIAN/postinst
+	$(install_script) debian/binutils.postrm $(d_bin)/DEBIAN/postrm
+	$(install_file) debian/binutils.shlibs $(d_bin)/DEBIAN/shlibs
+
+	$(install_dir) $(d_dev)/DEBIAN
+
+ifeq ($(with_multiarch),yes)
+	$(install_dir) $(d_mul)/DEBIAN
+	$(install_script) debian/binutils-multiarch.preinst $(d_mul)/DEBIAN/preinst
+	$(install_script) debian/binutils-multiarch.postinst $(d_mul)/DEBIAN/postinst
+	$(install_script) debian/binutils-multiarch.prerm $(d_mul)/DEBIAN/prerm
+	$(install_script) debian/binutils-multiarch.postrm $(d_mul)/DEBIAN/postrm
+	$(install_file) debian/binutils-multiarch.shlibs $(d_mul)/DEBIAN/shlibs
+endif
+
+ifeq ($(with_gold),yes)
+	$(install_dir) $(d_gold)/DEBIAN
+	$(install_script) debian/binutils-gold.postrm $(d_gold)/DEBIAN/postrm
+	$(install_script) debian/binutils-gold.preinst $(d_gold)/DEBIAN/preinst
+endif
+
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+	$(install_dir) $(d_spu)/DEBIAN
+	$(install_script) debian/binutils-spu.postinst $(d_spu)/DEBIAN/postinst
+	$(install_script) debian/binutils-spu.postrm $(d_spu)/DEBIAN/postrm
+	$(install_file) debian/binutils-spu.shlibs $(d_spu)/DEBIAN/shlibs
+endif
+
+ifeq ($(DEB_HOST_ARCH),hppa)
+	$(install_dir) $(d_hppa64)/DEBIAN
+	$(install_script) debian/binutils-hppa64.postinst $(d_hppa64)/DEBIAN/postinst
+	$(install_script) debian/binutils-hppa64.postrm $(d_hppa64)/DEBIAN/postrm
+	$(install_file) debian/binutils-hppa64.shlibs $(d_hppa64)/DEBIAN/shlibs
+endif
+
+	: # install docs
+	$(install_dir) $(d_bin)/$(PF)/share/doc/$(p_bin)/
+	$(install_file)	debian/changelog $(d_bin)/$(PF)/share/doc/$(p_bin)/changelog.Debian
+	$(install_file)	debian/copyright $(d_bin)/$(PF)/share/doc/$(p_bin)/
+
+	$(install_dir) $(d_dev)/$(PF)/share/doc/
+	ln -sf $(p_bin) $(d_dev)/$(PF)/share/doc/$(p_dev)
+ifeq ($(with_multiarch),yes)
+	$(install_dir) $(d_mul)/$(PF)/share/doc/
+	ln -sf $(p_bin) $(d_mul)/$(PF)/share/doc/$(p_mul)
+endif
+ifeq ($(with_gold),yes)
+	$(install_dir) $(d_gold)/$(PF)/share/doc/
+	ln -sf $(p_bin) $(d_gold)/$(PF)/share/doc/$(p_gold)
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+	$(install_dir) $(d_spu)/$(PF)/share/doc/
+	ln -sf $(p_bin) $(d_spu)/$(PF)/share/doc/$(p_spu)
+endif
+ifeq ($(DEB_HOST_ARCH),hppa)
+	$(install_dir) $(d_hppa64)/$(PF)/share/doc/
+	ln -sf $(p_bin) $(d_hppa64)/$(PF)/share/doc/$(p_hppa64)
+endif
+
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+ifeq ($(with_check),yes)
+	$(install_file) $(pwd)/test-summary $(d_bin)/$(PF)/share/doc/$(p_bin)/
+endif
+endif
+	$(install_file) binutils/NEWS debian/README.cross \
+                        $(d_bin)/$(PF)/share/doc/$(p_bin)/
+
+	$(install_file) binutils/ChangeLog $(d_bin)/$(PF)/share/doc/$(p_bin)/changelog
+
+	for pkg in bfd gas gprof ld; do \
+	  $(install_dir) $(d_bin)/$(PF)/share/doc/$(p_bin)/$$pkg; \
+	done
+	$(install_file) bfd/ChangeLog bfd/PORTING bfd/TODO \
+			$(d_bin)/$(PF)/share/doc/$(p_bin)/bfd/
+	$(install_file) gas/ChangeLog gas/NEWS $(d_bin)/$(PF)/share/doc/$(p_bin)/gas/
+	$(install_file) gprof/ChangeLog gprof/TODO gprof/TEST \
+			$(d_bin)/$(PF)/share/doc/$(p_bin)/gprof/
+	$(install_file) ld/ChangeLog ld/TODO ld/NEWS \
+			$(d_bin)/$(PF)/share/doc/$(p_bin)/ld/
+
+	: # These only exist in H. J. Lu releases not GNU ones.
+	for dir in binutils bfd gas gprof ld; do \
+	  if [ -f $$dir/ChangeLog.linux ]; then \
+	    $(install_file) $$dir/ChangeLog.linux $(d_bin)/$(PF)/share/doc/$(p_bin)/$$dir/; \
+	  fi; \
+	done
+
+	: # Copy bbconv.pl to the doc dir for use by interested people
+	$(install_file) gprof/bbconv.pl $(d_bin)/$(PF)/share/doc/$(p_bin)/gprof/.
+
+	: # Compress stuff that needs it
+	gzip -9 $(d_bin)/$(PF)/share/man/man1/*.1
+	find $(d_bin)/$(PF)/share/doc/$(p_bin)/ -type f ! -name copyright -a ! -name bbconv.pl | xargs gzip -9
+
+	: # Finish it all up
+	find $(d_bin) -type f | xargs file | grep ELF | cut -d: -f 1 | xargs dpkg-shlibdeps
+	dpkg-gencontrol -isp -P$(d_bin) -p$(p_bin) $(CONFLICTS)
+	cd $(d_bin) && find -type f  ! -regex './DEBIAN/.*' -printf '%P\n' | xargs md5sum > DEBIAN/md5sums
+
+	rm -f debian/substvars
+	dpkg-gencontrol -isp -P$(d_dev) -p$(p_dev)
+	cd $(d_dev) && find -type f  ! -regex './DEBIAN/.*' -printf '%P\n' | xargs md5sum > DEBIAN/md5sums
+
+ifeq ($(with_multiarch),yes)
+	rm -f debian/substvars
+	find $(d_mul) -type f | xargs file | grep ELF | cut -d: -f 1 | xargs dpkg-shlibdeps
+	dpkg-gencontrol -isp -P$(d_mul) -p$(p_mul)
+	cd $(d_mul) && find -type f  ! -regex './DEBIAN/.*' -printf '%P\n' | xargs md5sum > DEBIAN/md5sums
+endif
+
+ifeq ($(with_gold),yes)
+	rm -f debian/substvars
+# no binary
+#	find $(d_gold) -type f | xargs file | grep ELF | cut -d: -f 1 | xargs dpkg-shlibdeps
+	dpkg-gencontrol -isp -P$(d_gold) -p$(p_gold)
+	cd $(d_gold) && find -type f  ! -regex './DEBIAN/.*' -printf '%P\n' | xargs md5sum > DEBIAN/md5sums
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+	rm -f debian/substvars
+	find $(d_spu) -type f | xargs file | grep ELF | cut -d: -f 1 | xargs dpkg-shlibdeps
+	dpkg-gencontrol -isp -P$(d_spu) -p$(p_spu)
+	cd $(d_spu) && find -type f  ! -regex './DEBIAN/.*' -printf '%P\n' | xargs md5sum > DEBIAN/md5sums
+endif
+ifeq ($(DEB_HOST_ARCH),hppa)
+	rm -f debian/substvars
+	find $(d_hppa64) -type f | xargs file | grep ELF | cut -d: -f 1 | xargs dpkg-shlibdeps
+	dpkg-gencontrol -isp -P$(d_hppa64) -p$(p_hppa64)
+	cd $(d_hppa64) && find -type f  ! -regex './DEBIAN/.*' -printf '%P\n' | xargs md5sum > DEBIAN/md5sums
+endif
+
+	chown -R root:root $(d_bin) $(d_dev)
+	chmod -R go=rX  $(d_bin) $(d_dev)
+	dpkg --build $(d_bin) ..
+	dpkg --build $(d_dev) ..
+ifeq ($(with_multiarch),yes)
+	chown -R root:root $(d_mul)
+	chmod -R go=rX  $(d_mul)
+	dpkg --build $(d_mul) ..
+endif
+ifeq ($(with_gold),yes)
+	chown -R root:root $(d_gold)
+	chmod -R go=rX  $(d_gold)
+	dpkg --build $(d_gold) ..
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc ppc64))
+	chown -R root:root $(d_spu)
+	chmod -R go=rX  $(d_spu)
+	dpkg --build $(d_spu) ..
+endif
+ifeq ($(DEB_HOST_ARCH),hppa)
+	chown -R root:root $(d_hppa64)
+	chmod -R go=rX  $(d_hppa64)
+	dpkg --build $(d_hppa64) ..
+endif
+
+endif # Process the following only if $(TARGET) is set
+endif # ifndef BACKPORT
+################################################################################
+
+#################
+# cross targets #
+#################
+
+# Process the following only if $(TARGET) is set
+ifneq (,$(TARGET))
+
+p_cross = $(subst _,-,binutils-$(TARGET))
+d_cross = debian/$(p_cross)
+
+#-----------------------------------------------------------------
+# sysroot options
+ifdef WITH_SYSROOT
+  with_sysroot = $(WITH_SYSROOT)
+endif
+ifdef WITH_BUILD_SYSROOT
+  with_build_sysroot = $(WITH_BUILD_SYSROOT)
+endif
+
+ifneq ($(with_sysroot),)
+  CONFARGS += --with-sysroot=$(with_sysroot)
+endif
+ifneq ($(with_build_sysroot),)
+  CONFARGS += --with-build-sysroot=$(with_build_sysroot)
+endif
+ifeq ($(with_gold),yes)
+  CONFARGS += --enable-ld=default --enable-gold
+endif
+
+configure-cross-stamp: patch-stamp control-stamp
+	$(checkdir)
+	test "" != "$(TARGET)"
+	rm -rf configure-cross-stamp builddir-$(TARGET)
+	mkdir builddir-$(TARGET)
+	cd builddir-$(TARGET) \
+	    && env CC="$(CC)" CXX="$(CXX)" ../configure \
+		$(CONFARGS) \
+		--target=$(TARGET)
+	touch $@
+
+build-cross-stamp: configure-cross-stamp
+	$(checkdir)
+	test "" != "$(TARGET)"
+	$(MAKE) -C builddir-$(TARGET) $(NJOBS) CFLAGS="$(CFLAGS)"
+	touch $@
+
+install-cross-stamp: build-cross-stamp
+	$(checkdir)
+	test "" != "$(TARGET)"
+	rm -rf $(d_cross)
+	$(MAKE) -C builddir-$(TARGET) prefix=$(pwd)/$(d_cross)/$(PF) \
+		mandir=$(pwd)/$(d_cross)/$(PF)/share/man install
+	rm -rf $(d_cross)/$(PF)/lib* $(d_cross)/$(PF)/info $(d_cross)/$(PF)/share/locale
+
+	$(call strip_package, $(p_cross), $(d_cross),$(DEB_HOST_GNU_TYPE)/$(TARGET))
+	chmod ugo-x $(d_cross)/$(PF)/$(DEB_HOST_GNU_TYPE)/$(TARGET)/lib/*.so
+
+	: # Get rid of .la files since libtool obviously has no idea about transient paths
+	rm -f $(d_cross)/$(PF)/$(DEB_HOST_GNU_TYPE)/$(TARGET)/lib/*.la
+
+	gzip -9 $(d_cross)/$(PF)/share/man/man1/*
+	touch $@
+
+configure-host-cross-stamp: configure-cross-stamp
+	$(checkdir)
+	test "" != "$(TARGET)"
+	$(MAKE) configure-host -C builddir-$(TARGET) $(NJOBS) CFLAGS="$(CFLAGS)"
+	touch $@
+
+build-static-cross-stamp: configure-host-cross-stamp
+	$(checkdir)
+	test "" != "$(TARGET)"
+	$(MAKE) -C builddir-$(TARGET) $(NJOBS) CFLAGS="$(CFLAGS)" LDFLAGS="-all-static"
+	touch $@
+
+install-static-cross-stamp: build-static-cross-stamp install-cross-stamp
+
+binary-cross: 
+	@echo "Please use dpkg-buildpackage instead of calling binary-cross directly; see README.cross"
+	@false
+
+endif # ifneq ($(TARGET),)
+
+################################################################################
+
+define checkdir
+        test -f bfd/elf32.c -a -f debian/rules
+endef
+
+ifeq ($(with_strip),yes)
+define strip_package
+	: # Strip shared libraries
+	if which pkg_create_dbgsym >/dev/null 2>&1; then \
+	  pkg_create_dbgsym $1 $2; \
+	fi
+	$(STRIP) --strip-unneeded $2/$(PF)/$3/lib/libbfd-*so
+	$(STRIP) --strip-unneeded $2/$(PF)/$3/lib/libopcodes-*so
+	$(STRIP) $$(file $2/$(PF)/bin/* |awk -F: '$$0 !~ /script/ {print $$1}')
+endef
+else
+define strip_package
+endef
+endif
+
+remove-gfdl-files:
+ifeq ($(GFDL_INVARIANT_FREE),yes)
+	for i in $(gfdl_toplevel_texinfo_files); do \
+	  if [ -f $$i ]; then \
+	    sed "s/@name@/$$(basename $$i)/g" debian/gfdl.texi > $$i; \
+	  fi; \
+	done
+	rm -f $(gfdl_generated_files)
+endif
+
+# Below here is fairly generic really
+
+binary:         binary-indep binary-arch
+
+checkroot:
+	$(checkdir)
+	test root = "`whoami`"
+
+.PHONY: binary binary-arch binary-indep clean checkroot

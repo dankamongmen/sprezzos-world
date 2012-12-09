@@ -1,0 +1,369 @@
+>From 0a02e2d8e2ffb551a3a3699dd09ec9f69393e327 Mon Sep 17 00:00:00 2001
+From: Steve McIntyre <steve.mcintyre@linaro.org>
+Date: Tue, 4 Sep 2012 17:48:06 +0100
+Subject: [PATCH] Add new ARM hard-float/soft-float ABI flags for EABI_VER5
+
+bfd:
+        * elf32-arm.c (elf32_arm_print_private_bfd_data): Recognise and
+        display the new ARM hard-float/soft-float ABI flags for EABI_VER5
+        (elf32_arm_post_process_headers): Add the hard-float/soft-float
+        ABI flag as appropriate for ET_DYN/ET_EXEC in EABI_VER5.
+
+binutils:
+        * readelf.c (decode_ARM_machine_flags): Recognise and display the
+        new ARM hard-float/soft-float ABI flags for EABI_VER5. Split out
+        the code for EABI_VER4 and EABI_VER5 to allow this.
+
+elfcpp:
+        * arm.h: New enum for EABI soft- and hard-float flags.
+
+gold:
+        * gold.cc (Target_arm::do_adjust_elf_header): Add the
+        hard-float/soft-float ABI flag as appropriate for ET_DYN/ET_EXEC
+        in EABI_VER5.
+
+include:
+        * elf/arm.h (EF_ARM_ABI_FLOAT_SOFT): New define.
+        (EF_ARM_ABI_FLOAT_HARD): Likewise.
+
+ld/testsuite:
+        * ld-arm/eabi-hard-float.s: New test source.
+        * ld-arm/eabi-soft-float.s: New test source.
+        * ld-arm/eabi-hard-float.d: New test.
+        * ld-arm/eabi-soft-float.d: New test.
+        * ld-arm/eabi-soft-float-ABI4.d: New test.
+        * ld-arm/eabi-soft-float-r.d: New test.
+        * ld-arm/arm-elf.xp: Use the new tests.
+---
+ bfd/elf32-arm.c                            |   19 +++++++++++++++
+ binutils/readelf.c                         |   35 ++++++++++++++++++++++++++--
+ elfcpp/arm.h                               |    8 +++++++
+ gold/arm.cc                                |   22 ++++++++++++++---
+ include/elf/arm.h                          |    5 ++++
+ ld/testsuite/ld-arm/arm-elf.exp            |   15 ++++++++++++
+ ld/testsuite/ld-arm/eabi-hard-float.d      |   12 ++++++++++
+ ld/testsuite/ld-arm/eabi-hard-float.s      |    9 +++++++
+ ld/testsuite/ld-arm/eabi-soft-float-ABI4.d |   12 ++++++++++
+ ld/testsuite/ld-arm/eabi-soft-float-r.d    |   12 ++++++++++
+ ld/testsuite/ld-arm/eabi-soft-float.d      |   12 ++++++++++
+ ld/testsuite/ld-arm/eabi-soft-float.s      |    8 +++++++
+ 18 files changed, 203 insertions(+), 5 deletions(-)
+ create mode 100644 ld/testsuite/ld-arm/eabi-hard-float.d
+ create mode 100644 ld/testsuite/ld-arm/eabi-hard-float.s
+ create mode 100644 ld/testsuite/ld-arm/eabi-soft-float-ABI4.d
+ create mode 100644 ld/testsuite/ld-arm/eabi-soft-float-r.d
+ create mode 100644 ld/testsuite/ld-arm/eabi-soft-float.d
+ create mode 100644 ld/testsuite/ld-arm/eabi-soft-float.s
+
+diff --git a/bfd/elf32-arm.c b/bfd/elf32-arm.c
+index 633bb64..fefc7db 100644
+--- a/bfd/elf32-arm.c
++++ b/bfd/elf32-arm.c
+@@ -12110,6 +12110,15 @@ elf32_arm_print_private_bfd_data (bfd *abfd, void * ptr)
+ 
+     case EF_ARM_EABI_VER5:
+       fprintf (file, _(" [Version5 EABI]"));
++
++      if (flags & EF_ARM_ABI_FLOAT_SOFT)
++	fprintf (file, _(" [soft-float ABI]"));
++
++      if (flags & EF_ARM_ABI_FLOAT_HARD)
++	fprintf (file, _(" [hard-float ABI]"));
++
++      flags &= ~(EF_ARM_ABI_FLOAT_SOFT | EF_ARM_ABI_FLOAT_HARD);
++
+     eabi:
+       if (flags & EF_ARM_BE8)
+ 	fprintf (file, _(" [BE8]"));
+@@ -14417,6 +14426,16 @@ elf32_arm_post_process_headers (bfd * abfd, struct bfd_link_info * link_info ATT
+       if (globals != NULL && globals->byteswap_code)
+ 	i_ehdrp->e_flags |= EF_ARM_BE8;
+     }
++
++  if (EF_ARM_EABI_VERSION (i_ehdrp->e_flags) == EF_ARM_EABI_VER5
++      && ((i_ehdrp->e_type == ET_DYN) || (i_ehdrp->e_type == ET_EXEC)))
++    {
++      int abi = bfd_elf_get_obj_attr_int (abfd, OBJ_ATTR_PROC, Tag_ABI_VFP_args);
++      if (abi)
++	i_ehdrp->e_flags |= EF_ARM_ABI_FLOAT_HARD;
++      else
++	i_ehdrp->e_flags |= EF_ARM_ABI_FLOAT_SOFT;
++    }
+ }
+ 
+ static enum elf_reloc_type_class
+diff --git a/binutils/readelf.c b/binutils/readelf.c
+index 2fbf2ae..d69dcfc 100644
+--- a/binutils/readelf.c
++++ b/binutils/readelf.c
+@@ -2104,11 +2104,34 @@ decode_ARM_machine_flags (unsigned e_flags, char buf[])
+ 
+     case EF_ARM_EABI_VER4:
+       strcat (buf, ", Version4 EABI");
+-      goto eabi;
++      while (e_flags)
++	{
++	  unsigned flag;
++
++	  /* Process flags one bit at a time.  */
++	  flag = e_flags & - e_flags;
++	  e_flags &= ~ flag;
++
++	  switch (flag)
++	    {
++	    case EF_ARM_BE8:
++	      strcat (buf, ", BE8");
++	      break;
++
++	    case EF_ARM_LE8:
++	      strcat (buf, ", LE8");
++	      break;
++
++	    default:
++	      unknown = 1;
++	      break;
++	    }
++      break;
++	}
++      break;
+ 
+     case EF_ARM_EABI_VER5:
+       strcat (buf, ", Version5 EABI");
+-    eabi:
+       while (e_flags)
+ 	{
+ 	  unsigned flag;
+@@ -2127,6 +2150,14 @@ decode_ARM_machine_flags (unsigned e_flags, char buf[])
+ 	      strcat (buf, ", LE8");
+ 	      break;
+ 
++	    case EF_ARM_ABI_FLOAT_SOFT: /* Conflicts with EF_ARM_SOFT_FLOAT.  */
++	      strcat (buf, ", soft-float ABI");
++	      break;
++
++	    case EF_ARM_ABI_FLOAT_HARD: /* Conflicts with EF_ARM_VFP_FLOAT.  */
++	      strcat (buf, ", hard-float ABI");
++	      break;
++
+ 	    default:
+ 	      unknown = 1;
+ 	      break;
+diff --git a/elfcpp/arm.h b/elfcpp/arm.h
+index cb85eeb..4cb79d6 100644
+--- a/elfcpp/arm.h
++++ b/elfcpp/arm.h
+@@ -222,6 +222,14 @@ inline Elf_Word
+ arm_eabi_version(Elf_Word flags)
+ { return flags & EF_ARM_EABIMASK; }
+ 
++// EABI_VER5 e_flags values for identifying soft- and hard-float ABI
++// choice.
++enum
++{
++  EF_ARM_ABI_FLOAT_SOFT = 0x200,
++  EF_ARM_ABI_FLOAT_HARD = 0x400,
++};
++
+ // Values for the Tag_CPU_arch EABI attribute.
+ enum
+ {
+diff --git a/gold/arm.cc b/gold/arm.cc
+index fa257a7..30db5a2 100644
+--- a/gold/arm.cc
++++ b/gold/arm.cc
+@@ -2476,7 +2476,7 @@ class Target_arm : public Sized_target<32, big_endian>
+   { return new Arm_output_section<big_endian>(name, type, flags); }
+ 
+   void
+-  do_adjust_elf_header(unsigned char* view, int len) const;
++  do_adjust_elf_header(unsigned char* view, int len);
+ 
+   // We only need to generate stubs, and hence perform relaxation if we are
+   // not doing relocatable linking.
+@@ -10011,15 +10011,16 @@ template<bool big_endian>
+ void
+ Target_arm<big_endian>::do_adjust_elf_header(
+     unsigned char* view,
+-    int len) const
++    int len)
+ {
+   gold_assert(len == elfcpp::Elf_sizes<32>::ehdr_size);
+ 
+   elfcpp::Ehdr<32, big_endian> ehdr(view);
++  elfcpp::Elf_Word flags = this->processor_specific_flags();
+   unsigned char e_ident[elfcpp::EI_NIDENT];
+   memcpy(e_ident, ehdr.get_e_ident(), elfcpp::EI_NIDENT);
+ 
+-  if (elfcpp::arm_eabi_version(this->processor_specific_flags())
++  if (elfcpp::arm_eabi_version(flags)
+       == elfcpp::EF_ARM_EABI_UNKNOWN)
+     e_ident[elfcpp::EI_OSABI] = elfcpp::ELFOSABI_ARM;
+   else
+@@ -10028,6 +10029,21 @@ Target_arm<big_endian>::do_adjust_elf_header(
+ 
+   // FIXME: Do EF_ARM_BE8 adjustment.
+ 
++  // If we're working in EABI_VER5, set the hard/soft float ABI flags
++  // as appropriate.
++  if (elfcpp::arm_eabi_version(flags) == elfcpp::EF_ARM_EABI_VER5)
++  {
++    elfcpp::Elf_Half type = ehdr.get_e_type();
++    if (type == elfcpp::ET_EXEC || type == elfcpp::ET_DYN)
++      {
++	Object_attribute* attr = this->get_aeabi_object_attribute(elfcpp::Tag_ABI_VFP_args);
++	if (attr->int_value())
++	  flags |= elfcpp::EF_ARM_ABI_FLOAT_HARD;
++	else
++	  flags |= elfcpp::EF_ARM_ABI_FLOAT_SOFT;
++	this->set_processor_specific_flags(flags);
++      }
++  }
+   elfcpp::Ehdr_write<32, big_endian> oehdr(view);
+   oehdr.put_e_ident(e_ident);
+ }
+diff --git a/include/elf/arm.h b/include/elf/arm.h
+index 8ea3fe8..d799303 100644
+--- a/include/elf/arm.h
++++ b/include/elf/arm.h
+@@ -46,6 +46,11 @@
+ #define EF_ARM_MAPSYMSFIRST 0x10	/* NB conflicts with EF_APCS_FLOAT.  */
+ #define EF_ARM_EABIMASK      0xFF000000
+ 
++/* New constants defined in the ARM ELF spec. version XXX.
++   Only valid in conjunction with EF_ARM_EABI_VER5. */
++#define EF_ARM_ABI_FLOAT_SOFT 0x200	/* NB conflicts with EF_ARM_SOFT_FLOAT.  */
++#define EF_ARM_ABI_FLOAT_HARD 0x400	/* NB conflicts with EF_ARM_VFP_FLOAT.  */
++
+ /* Constants defined in AAELF.  */
+ #define EF_ARM_BE8	    0x00800000
+ #define EF_ARM_LE8	    0x00400000
+diff --git a/ld/testsuite/ld-arm/arm-elf.exp b/ld/testsuite/ld-arm/arm-elf.exp
+index 8e15ffe..81ee0bd 100644
+--- a/ld/testsuite/ld-arm/arm-elf.exp
++++ b/ld/testsuite/ld-arm/arm-elf.exp
+@@ -271,6 +271,21 @@ set armelftests_common {
+     {"Simple non-PIC shared library (no PLT check)" "-shared" "" {arm-lib.s}
+      {{objdump -Rw arm-lib.r}}
+      "arm-lib.so"}
++    {"EABI soft-float ET_EXEC ABI flag" "-T arm.ld" "-mfloat-abi=soft -meabi=5" {eabi-soft-float.s}
++     {{readelf -h eabi-soft-float.d}}
++     "eabi-soft-float"}
++    {"EABI hard-float ET_EXEC ABI flag" "-T arm.ld" "-mfloat-abi=hard -meabi=5" {eabi-hard-float.s}
++     {{readelf -h eabi-hard-float.d}}
++     "eabi-hard-float"}
++    {"EABI hard-float ET_DYN ABI flag" "-shared" "-mfloat-abi=hard -meabi=5" {eabi-hard-float.s}
++     {{readelf -h eabi-hard-float.d}}
++     "eabi-hard-float.so"}
++    {"EABI ABI flags wrong ABI version" "-T arm.ld" "-mfloat-abi=soft -meabi=4" {eabi-soft-float.s}
++     {{readelf -h eabi-soft-float-ABI4.d}}
++     "eabi-soft-float-no-flags"}
++    {"EABI ABI flags ld -r" "-r" "-mfloat-abi=soft -meabi=5" {eabi-soft-float.s}
++     {{readelf -h eabi-soft-float-r.d}}
++     "eabi-soft-float-r.o"}
+ }
+ 
+ set armelftests_nonacl {
+diff --git a/ld/testsuite/ld-arm/eabi-hard-float.d b/ld/testsuite/ld-arm/eabi-hard-float.d
+new file mode 100644
+index 0000000..bc8cc3f
+--- /dev/null
++++ b/ld/testsuite/ld-arm/eabi-hard-float.d
+@@ -0,0 +1,12 @@
++#source: eabi-hard-float.s
++#as:
++#ld: -r
++#readelf: -h
++# This test is only valid on ELF based ports.
++# not-target: *-*-*coff *-*-pe *-*-wince *-*-*aout* *-*-netbsd *-*-riscix*
++# Check that we set the hard-float ABI flag directly
++
++ELF Header:
++#...
++  Flags:                             0x5000400, Version5 EABI, hard-float ABI
++#...
+diff --git a/ld/testsuite/ld-arm/eabi-hard-float.s b/ld/testsuite/ld-arm/eabi-hard-float.s
+new file mode 100644
+index 0000000..3d49794
+--- /dev/null
++++ b/ld/testsuite/ld-arm/eabi-hard-float.s
+@@ -0,0 +1,9 @@
++	.cpu cortex-a9
++	.fpu vfpv3
++	.eabi_attribute Tag_ABI_VFP_args, 1
++	.file	"eabi-hard-float.s"
++	.globl	_start
++	.type	_start,%function
++_start:
++	.size	_start,.-_start
++
+diff --git a/ld/testsuite/ld-arm/eabi-soft-float-ABI4.d b/ld/testsuite/ld-arm/eabi-soft-float-ABI4.d
+new file mode 100644
+index 0000000..1804826
+--- /dev/null
++++ b/ld/testsuite/ld-arm/eabi-soft-float-ABI4.d
+@@ -0,0 +1,12 @@
++#source: eabi-soft-float.s
++#as:
++#ld: -r
++#readelf: -h
++# This test is only valid on ELF based ports.
++# not-target: *-*-*coff *-*-pe *-*-wince *-*-*aout* *-*-netbsd *-*-riscix*
++# if we compile for EABI ver4, ld should *not* set either of the float ABI flags
++
++ELF Header:
++#...
++  Flags:                             0x4000000, Version4 EABI
++#...
+diff --git a/ld/testsuite/ld-arm/eabi-soft-float-r.d b/ld/testsuite/ld-arm/eabi-soft-float-r.d
+new file mode 100644
+index 0000000..262d482
+--- /dev/null
++++ b/ld/testsuite/ld-arm/eabi-soft-float-r.d
+@@ -0,0 +1,12 @@
++#source: eabi-soft-float.s
++#as:
++#ld: -r
++#readelf: -h
++# This test is only valid on ELF based ports.
++# not-target: *-*-*coff *-*-pe *-*-wince *-*-*aout* *-*-netbsd *-*-riscix*
++# if we call "ld -r", it should *not* set either of the float ABI flags
++
++ELF Header:
++#...
++  Flags:                             0x5000000, Version5 EABI
++#...
+diff --git a/ld/testsuite/ld-arm/eabi-soft-float.d b/ld/testsuite/ld-arm/eabi-soft-float.d
+new file mode 100644
+index 0000000..6cc7086
+--- /dev/null
++++ b/ld/testsuite/ld-arm/eabi-soft-float.d
+@@ -0,0 +1,12 @@
++#source: eabi-soft-float.s
++#as:
++#ld: -r
++#readelf: -h
++# This test is only valid on ELF based ports.
++# not-target: *-*-*coff *-*-pe *-*-wince *-*-*aout* *-*-netbsd *-*-riscix*
++# Check that we set the soft-float ABI flag directly
++
++ELF Header:
++#...
++  Flags:                             0x5000200, Version5 EABI, soft-float ABI
++#...
+diff --git a/ld/testsuite/ld-arm/eabi-soft-float.s b/ld/testsuite/ld-arm/eabi-soft-float.s
+new file mode 100644
+index 0000000..f23fb17
+--- /dev/null
++++ b/ld/testsuite/ld-arm/eabi-soft-float.s
+@@ -0,0 +1,8 @@
++	.cpu cortex-a9
++	.fpu vfpv3
++	.eabi_attribute Tag_ABI_VFP_args, 0
++	.file	"eabi-soft-float.s"
++	.globl	_start
++	.type	_start,%function
++_start:
++	.size	_start,.-_start
+-- 
+1.7.9.5
+
