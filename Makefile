@@ -173,7 +173,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
 	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
-	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON)
+	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) \
+	$(LIBWWWPERL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -621,7 +622,7 @@ $(BINUTILS): $(SPREZZ)/binutils/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf bind-$(binutils_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf binutils-$(binutils_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: bison
 bison:$(BISON)_$(ARCH).deb
@@ -2062,6 +2063,14 @@ $(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libwnck3-$(libwnck_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: libwww-perl
+libwww-perl:$(LIBWWWPERL)_$(ARCH).deb
+$(LIBWWWPERL): $(SPREZZ)/libwww-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libwww-perl-$(libwww-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxfixes
 libxfixes:$(LIBXFIXES)_$(ARCH).deb
