@@ -174,7 +174,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
 	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) \
-	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP)
+	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1007,6 +1007,14 @@ $(FBSET): $(SPREZZ)/fbset/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fbset-$(fbset_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: festival
+festival:$(FESTIVAL)_$(ARCH).deb
+$(FESTIVAL): $(SPREZZ)/festival/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf festival-$(festival_UPVER)-release.tar.gz $(TARARGS) $@
 
 .PHONY: file-roller
 file-roller:$(FILEROLLER)_$(ARCH).deb
@@ -3861,12 +3869,13 @@ $(ANNA): $(SPREZZ)/anna/debian/changelog
 base-files:$(BASEFILES)_$(ARCH).deb
 $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
 	cp -r $(<D)/.. $@
+	tar cJvf base-files_$(base-files_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
 .PHONY: meta-gnome
 meta-gnome:$(METAGNOME)_$(ARCH).deb
 $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
 	cp -r $(<D)/.. $@
-	tar cJf meta-gnome_$(meta-gnome_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
+	tar cJvf meta-gnome_$(meta-gnome_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
 .PHONY: console-setup
 console-setup:$(CONSOLESETUP)_$(ARCH).deb
