@@ -173,7 +173,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
 	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
-	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES)
+	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -274,6 +274,15 @@ frei0r:$(FREI0R)_$(ARCH).deb
 $(FREI0R): $(SPREZZ)/frei0r/debian/changelog
 	git clone git://code.dyne.org/frei0r.git $@
 	tar cJf $(FREI0RORIG) $@ --exclude-vcs
+	cp -r $(<D) $@/
+
+.PHONY: aptdaemon
+aptdaemon: $(APTDAEMON)_$(ARCH).deb
+$(APTDAEMON): $(SPREZZ)/aptdaemon/debian/changelog
+	bzr branch lp:aptdaemon $@
+	rm -rf $@/debian
+	tar cJf aptdaemon-$(aptdaemon_UPVER).tar.xz $@ --exclude-vcs
+	ln -s aptdaemon-$(aptdaemon_UPVER).tar.xz aptdaemon_$(aptdaemon_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: aptitude
@@ -605,6 +614,14 @@ $(BIND9): $(SPREZZ)/bind9/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bind-$(bind9_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: binutils
+binutils:$(BINUTILS)_$(ARCH).deb
+$(BINUTILS): $(SPREZZ)/binutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bind-$(binutils_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: bison
 bison:$(BISON)_$(ARCH).deb
