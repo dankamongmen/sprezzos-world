@@ -52,6 +52,7 @@ def updateConflicts(paragraph, oldPkgName):
     newPkgName = paragraph['Package']
     needsConflict = (newPkgName.endswith("-dev") and not newPkgName.endswith("-all-dev")) or conflictsWithPrevious(paragraph)
     if not needsConflict: return
+    paragraph['Provides'] = re.sub('\d.', '', paragraph['Package'])
     if paragraph.has_key('Conflicts'):
         if paragraph['Conflicts'].find(oldPkgName) == -1:
             paragraph['Conflicts'] += ', ' + oldPkgName
