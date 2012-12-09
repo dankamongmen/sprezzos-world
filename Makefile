@@ -26,7 +26,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && \
 	 echo -n "$(@F)_UPVER:=" && \
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr -d \~ | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
 
 APITRACEORIG:=apitrace_$(shell echo $(apitrace_UPVER) | cut -d- -f1).orig.tar.xz
@@ -174,8 +174,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
 	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) \
-	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) \
-	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS)
+	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
+	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -358,6 +358,15 @@ xbmc:$(XBMC)_$(ARCH).deb
 $(XBMC): $(SPREZZ)/xbmc/debian/changelog
 	git clone git://github.com/xbmc/xbmc.git $@
 	cp -r $(<D) $@/
+
+.PHONY: despotify
+despotify:$(DESPOTIFY)_$(ARCH).deb
+$(DESPOTIFY): $(SPREZZ)/despotify/debian/changelog
+	svn co https://despotify.svn.sourceforge.net/svnroot/despotify/src $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
+	tar cJf despotify-$(despotify_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -s despotify-$(despotify_UPVER).tar.xz despotify_$(despotify_UPVER).orig.tar.xz
 
 .PHONY: mplayer
 mplayer:$(MPLAYER)_$(ARCH).deb
@@ -553,13 +562,21 @@ $(AUTOCONF): $(SPREZZ)/autoconf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf autoconf-$(autoconf_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: autoconf-archive
+autoconf-archive:$(AUTOCONFARCHIVE)_$(ARCH).deb
+$(AUTOCONFARCHIVE): $(SPREZZ)/autoconf-archive/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf autoconf-archive_$(autoconf-archive_UPVER).orig.tar.xz $(TARARGS) $@
+
 .PHONY: autokey
 autokey:$(AUTOKEY)_$(ARCH).deb
 $(AUTOKEY): $(SPREZZ)/autokey/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf autokey-$(autokey_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf autokey_$(autokey_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: avahi
 avahi:$(AVAHI)_$(ARCH).deb
@@ -2586,6 +2603,14 @@ $(LIBPEAS): $(SPREZZ)/libpeas/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libpeas-$(libpeas_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: patch
+patch:$(PATCH)_$(ARCH).deb
+$(PATCH): $(SPREZZ)/patch/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf patch-$(patch_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: pciutils
 pciutils:$(PCIUTILS)_$(ARCH).deb
 $(PCIUTILS): $(SPREZZ)/pciutils/debian/changelog
@@ -2865,6 +2890,14 @@ $(SPACEFM): $(SPREZZ)/spacefm/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf spacefm-$(spacefm_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: speech-tools
+speech-tools:$(SPEECHTOOLS)_$(ARCH).deb
+$(SPEECHTOOLS): $(SPREZZ)/speech-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf speech-tools_$(speech-tools_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: startup-notification
 startup-notification:$(STARTUPNOTIFICATION)_$(ARCH).deb
