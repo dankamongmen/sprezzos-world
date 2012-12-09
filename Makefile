@@ -174,7 +174,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
 	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) \
-	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL)
+	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) \
+	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1992,6 +1993,14 @@ $(LIBIMOBILEDEVICE): $(SPREZZ)/libimobiledevice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libburn
+libburn:$(LIBBURN)_$(ARCH).deb
+$(LIBBURN): $(SPREZZ)/libburn/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libburn-$(libburn_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libisoburn
 libisoburn:$(LIBISOBURN)_$(ARCH).deb
 $(LIBISOBURN): $(SPREZZ)/libisoburn/debian/changelog
@@ -1999,6 +2008,14 @@ $(LIBISOBURN): $(SPREZZ)/libisoburn/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libisoburn-$(libisoburn_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libisofs
+libisofs:$(LIBISOFS)_$(ARCH).deb
+$(LIBISOFS): $(SPREZZ)/libisofs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libisofs-$(libisofs_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: usbmuxd
 usbmuxd:$(USBMUXD)_$(ARCH).deb
