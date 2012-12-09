@@ -93,7 +93,6 @@ MCELOGORIG:=mcelog_$(shell echo $(mcelog_UPVER) | cut -d- -f1).orig.tar.xz
 MPLAYER:=mplayer_$(shell echo $(mplayer_UPVER) | tr : .)
 NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_UPVER) | cut -d- -f1).orig.tar.xz
 FREI0RORIG:=frei0r_$(shell echo $(frei0r_UPVER) | cut -d- -f1).orig.tar.xz
-XMLSTARLETORIG:=xmlstarlet_$(shell echo $(xmlstarlet_UPVER) | cut -d- -f1).orig.tar.bz2
 PANGOUP:=pango-$(shell echo $(pango_UPVER) | cut -d- -f1)
 PANGOORIG:=pango1.0_$(shell echo $(PANGOUP) | cut -d- -f2 | tr - _).orig.tar.xz
 POPPLERUP:=poppler-$(shell echo $(poppler_UPVER) | cut -d- -f1)
@@ -301,13 +300,6 @@ Sick-Beard: $(SICKBEARD)_$(ARCH).deb
 $(SICKBEARD): $(SPREZZ)/Sick-Beard/debian/changelog
 	git clone git://github.com/midgetspy/Sick-Beard.git $@
 	tar cJf $(SICKBEARDORIG) $@ --exclude-vcs
-	cp -r $(<D) $@/
-
-.PHONY: xmlstarlet
-xmlstarlet:$(XMLSTARLET)_$(ARCH).deb
-$(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
-	git clone git://github.com/dankamongmen/xmlstarlet.git $@
-	tar cjf $(XMLSTARLETORIG) $@ --exclude-vcs --exclude=debian
 	cp -r $(<D) $@/
 
 .PHONY: spl
@@ -3365,6 +3357,14 @@ $(XINPUT): $(SPREZZ)/xinput/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xinput-$(xinput_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xmlstarlet
+xmlstarlet:$(XMLSTARLET)_$(ARCH).deb
+$(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xmlstarlet-$(xmlstarlet_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xorg
 xorg:$(XORG)_$(ARCH).deb
