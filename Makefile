@@ -174,7 +174,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
 	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) \
-	$(LIBWWWPERL) $(KLIBC)
+	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1503,6 +1503,14 @@ $(GNUPG): $(SPREZZ)/gnupg/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnupg-$(gnupg_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnupg2
+gnupg2:$(GNUPG2)_$(ARCH).deb
+$(GNUPG2): $(SPREZZ)/gnupg2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gnupg-$(gnupg2_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: gnutls
 gnutls:$(GNUTLS)_$(ARCH).deb
@@ -2912,6 +2920,14 @@ $(TRACKER): $(SPREZZ)/tracker/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf tracker_$(tracker_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: tulip
+tulip:$(TULIP)_$(ARCH).deb
+$(TULIP): $(SPREZZ)/tulip/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tulip-$(tulip_UPVER)-src.tar.gz $(TARARGS) $@
 
 .PHONY: uwsgi
 uwsgi:$(UWSGI)_$(ARCH).deb
