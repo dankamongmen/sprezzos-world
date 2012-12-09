@@ -174,13 +174,13 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
 	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) \
-	$(LIBWWWPERL)
+	$(LIBWWWPERL) $(KLIBC)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
 	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG) $(PCRE) $(WGET) $(OPENSSL) \
-	$(NCURSES)
+	$(NCURSES) $(KLIBC)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -1711,6 +1711,14 @@ $(KISMET): $(SPREZZ)/kismet/debian/changelog
 	cp -r $(<D) $@/
 	{ cd $@ && TARBALL=`uscan --force-download --download-current-version --dehs | xmlstarlet sel -t -v //target` && \
 	  cd - && tar xzvf $$TARBALL $(TARARGS) $@ ; }
+
+.PHONY: klibc
+klibc:$(KLIBC)_$(ARCH).deb
+$(KLIBC): $(SPREZZ)/klibc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf klibc-$(klibc_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: kmod
 kmod:$(KMOD)_$(ARCH).deb
