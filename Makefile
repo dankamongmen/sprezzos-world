@@ -172,7 +172,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
-	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH)
+	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
+	$(GIFLIB)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1090,6 +1091,14 @@ $(GHOSTSCRIPT): $(SPREZZ)/ghostscript/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ghostscript-$(ghostscript_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: giflib
+giflib:$(GIFLIB)_$(ARCH).deb
+$(GIFLIB): $(SPREZZ)/giflib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf giflib-$(giflib_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: git
 git:$(GIT)_$(ARCH).deb
