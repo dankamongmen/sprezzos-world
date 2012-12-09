@@ -214,6 +214,24 @@ $(EVERPAD): $(SPREZZ)/everpad/debian/changelog
 	ln -s everpad-$(everpad_UPVER).tar.xz everpad_$(everpad_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: software-properties
+software-properties:$(SOFTWAREPROPERTIES)_$(ARCH).deb
+$(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
+	bzr branch lp:~juliank/software-properties/debian $@
+	rm -rf $@/debian
+	tar cJf software-properties-$(software-properties_UPVER).tar.xz $@ --exclude-vcs
+	ln -s software-properties-$(software-properties_UPVER).tar.xz software-properties_$(software-properties_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+.PHONY: synaptic
+synaptic:$(SYNAPTIC)_$(ARCH).deb
+$(SYNAPTIC): $(SPREZZ)/synaptic/debian/changelog
+	bzr branch lp:synaptic $@
+	rm -rf $@/debian
+	tar cJf synaptic-$(synaptic_UPVER).tar.xz $@ --exclude-vcs
+	ln -s synaptic-$(synaptic_UPVER).tar.xz synaptic_$(synaptic_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: gnome-xcf-thumbnailer
 gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
 $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
@@ -1722,7 +1740,7 @@ $(EARTHORCA): $(SPREZZ)/earthorca/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf earthorca-$(earthorca_UPVER).tar.bz2 $(TARARGS) $@
+	tar xjvf firefox-$(earthorca_UPVER).source.tar.bz2 $(TARARGS) $@
 
 .PHONY: edbus
 edbus:$(EDBUS)_$(ARCH).deb
@@ -2764,14 +2782,6 @@ $(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf simple-scan_$(simple-scan_UPVER).orig.tar.gz $(TARARGS) $@
-
-.PHONY: software-properties
-software-properties:$(SOFTWAREPROPERTIES)_$(ARCH).deb
-$(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf software-properties-$(software-properties_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: spacefm
 spacefm:$(SPACEFM)_$(ARCH).deb
