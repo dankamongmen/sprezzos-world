@@ -1,0 +1,359 @@
+#!/usr/bin/make -f
+ifeq (,$(shell dh_testdir || echo no))
+include debian/make.mk
+# Use dpkg-buildflags to get hardening flags, exclude non-hardening flags,
+# and disable read-only relocations.
+dpkg_buildflags = $(and $(1),$(shell DEB_BUILD_MAINT_OPTIONS=hardening=-relro DEB_CFLAGS_MAINT_STRIP="$(shell DEB_BUILD_MAINT_OPTIONS=hardening=-all dpkg-buildflags --get $(1))" dpkg-buildflags --get $(1)))
+$(call lazy,CFLAGS,$$(call dpkg_buildflags,CFLAGS))
+$(call lazy,CPPFLAGS,$$(call dpkg_buildflags,CPPFLAGS))
+$(call lazy,LDFLAGS,$$(call dpkg_buildflags,LDFLAGS))
+
+$(call lazy,DEB_HOST_GNU_TYPE,$$(shell dpkg-architecture -qDEB_HOST_GNU_TYPE))
+$(call lazy,DEB_BUILD_GNU_TYPE,$$(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE))
+$(call lazy,DEB_BUILD_ARCH,$$(shell dpkg-architecture -qDEB_BUILD_ARCH))
+
+PYTHON := python -B
+
+PRODUCT := browser
+PRODUCT_NAME := firefox
+include debian/upstream.mk
+
+OFFICIAL_BRANDING := browser/branding/official
+BRANDING := debian/branding
+
+# Betas and Releases need to set MOZ_UA_BUILDID
+ifeq (,$(word 2,$(subst ~a, ,$(UPSTREAM_RELEASE))))
+include $(OFFICIAL_BRANDING)/configure.sh
+export MOZ_UA_BUILDID
+endif
+
+LIB_DIR := /usr/lib/earthorca
+SHARE_DIR := /usr/share/earthorca
+
+LDFLAGS := -Wl,--as-needed
+
+AUTOCONF_DIRS := build/autoconf js/src/build/autoconf
+
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CONFIGURE_FLAGS += --disable-optimize
+endif
+
+ifeq ($(DEB_BUILD_ARCH),ppc64)
+	CFLAGS += -mminimal-toc
+endif
+
+ifneq (,$(filter kfreebsd-% hurd-%,$(DEB_BUILD_ARCH)))
+	CONFIGURE_FLAGS += --disable-necko-wifi
+endif
+
+ifneq (,$(filter armel,$(DEB_BUILD_ARCH)))
+	CONFIGURE_FLAGS += --disable-methodjit
+	CFLAGS += -D__ARM_PCS
+endif
+
+ifeq (8.0_sparc,$(GRE_MILESTONE)_$(DEB_BUILD_ARCH))
+	CONFIGURE_FLAGS += --disable-methodjit
+endif
+
+ifneq (,$(filter ia64,$(DEB_BUILD_ARCH)))
+	CONFIGURE_FLAGS += --enable-optimize=-O2
+endif
+
+ifneq (,$(filter debug,$(DEB_BUILD_OPTIONS)))
+	CONFIGURE_FLAGS += --enable-debug
+endif
+ifeq (,$(filter debug noopt,$(DEB_BUILD_OPTIONS)))
+	GENSYMBOLS_FLAGS := -c4
+endif
+
+ifeq (default,$(origin CC))
+CC := gcc
+endif
+ifeq (default,$(origin CXX))
+CXX := g++
+endif
+CXXFLAGS = $(CFLAGS)
+
+EXPORTS := CC CXX CFLAGS CXXFLAGS CPPFLAGS
+$(call lazy,CONFIGURE_ENV,$$(foreach export,$(EXPORTS),$$(export)="$$($$(export))"))
+
+GENERATED_FILES += debian/dh/dh_xulrunner.1
+
+debian/dh/dh_xulrunner.1: debian/dh/dh_xulrunner
+	pod2man -c Debhelper -r $(GRE_VERSION) $^ > $@
+
+build-xulrunner/dist/bin/npapi_getinfo: debian/dh/npapi_getinfo.c
+	$(CC) -o $@ $< -Ibuild-xulrunner/dist/include -ldl -lpthread -Wl,-rpath,\$$ORIGIN
+
+IN_FILES := $(wildcard debian/*.in debian/dh/*.in)
+define preprocess
+$(subst JS_SO_VERSION,$(JS_SO_VERSION),$(subst GRE_VERSION,$(GRE_VERSION),$(1:.in=))): $(1)
+PREPROCESSED_FILES += $(subst JS_SO_VERSION,$(JS_SO_VERSION),$(subst GRE_VERSION,$(GRE_VERSION),$(1:.in=)))
+endef
+$(foreach f,$(IN_FILES),$(eval $(call preprocess, $(f))))
+
+GENERATED_FILES += $(filter-out debian/control,$(PREPROCESSED_FILES))
+debian/control: debian/rules debian/changelog debian/l10n/earthorca-l10n.control
+
+$(call lazy,L10N_PACKAGES,$$(foreach lang,$$(L10N_LANGS),earthorca-l10n-$$(call lc,$$(lang))))
+$(call lazy,L10N_PACKAGES_DEPS,$$(shell echo $$(L10N_PACKAGES) | sed 's/ /, /g'))
+
+debian/l10n/earthorca-l10n.control: %: %.in
+	$(PYTHON) debian/l10n/gen $(L10N_LANGS) > $@
+
+DICT_DIR := /usr/share/hunspell
+
+$(PREPROCESSED_FILES): VARS = GRE_VERSION JS_SO_VERSION DICT_DIR
+debian/control: VARS += L10N_PACKAGES_DEPS
+$(PREPROCESSED_FILES):
+	$(PYTHON) config/Preprocessor.py --marker % -Fsubstitution $(foreach var,$(VARS),-D$(var)="$($(var))" )$< > $@
+
+%/Makefile: DIR=$(firstword $(subst /, ,$@))
+%/Makefile:
+	make -C $(DIR) SUBMAKEFILES=$(@:$(DIR)/%=%) $(@:$(DIR)/%=%)
+
+%/package-manifest: %/Makefile
+	$(MAKE) -C $*
+
+override_dh_auto_configure:
+
+stamps/prepare-configure:: stamps/dummy
+	for dir in $(AUTOCONF_DIRS); do \
+		for file in config.guess config.sub; do \
+			sed -i '2!b;/^#/ i\exec "/usr/share/misc/'$$file'" "$$@"' $$dir/$$file; \
+		done; \
+	done
+	chmod 755 configure js/src/configure
+
+stamps/configure-xulrunner:: stamps/prepare-configure
+	$(if $(wildcard build-xulrunner),,mkdir build-xulrunner)
+	cd build-xulrunner && \
+	MOZCONFIG=$(CURDIR)/debian/xulrunner.mozconfig \
+	ASFLAGS="-g" \
+	$(CONFIGURE_ENV) \
+	../configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr $(CONFIGURE_FLAGS) \
+		--with-default-mozilla-five-home=/usr/lib/xulrunner-$(GRE_VERSION)
+	sed -i '/^OS_LDFLAGS/s|=|& $(LDFLAGS)|' build-xulrunner/config/autoconf.mk
+	sed -i '/^OS_LDFLAGS/s|=|& $(LDFLAGS)|' build-xulrunner/js/src/config/autoconf.mk
+
+stamps/configure-check-xulrunner:: stamps/configure-xulrunner
+# Ensure --{with,enable}-system options properly set expected variables
+# according to the definitions in the mozconfig file.
+	@awk -F' *# *| *$$' ' \
+	BEGIN { "find $(CURDIR)/build-xulrunner -name autoconf.mk -printf \"%p \"" | getline confs } \
+	$$1 ~ /system/ { \
+		if (! $$2) { \
+			print FILENAME ": Missing variable for",$$1; \
+			error=1; \
+		} else { \
+			split($$2,var,"="); \
+			cmd = "grep -l " var[1] " " confs; \
+			cmd | getline dir; \
+			sub(/\/[^\/]*$$/, "", dir); \
+			cmd = "$(MAKE) -C " dir " --no-print-directory echo-variable-" var[1]; \
+			cmd | getline value; \
+			if (value != var[2]) { print $$1, "triggered", var[1] "=" value,"instead of",$$2; error=1 } \
+		} \
+	} \
+	END { if (error) { exit 1 }}' debian/xulrunner.mozconfig
+
+stamps/build-xulrunner:: stamps/configure-check-xulrunner
+	dh_auto_build --parallel --builddirectory=build-xulrunner -- \
+		JS_READLINE=1
+
+stamps/build-xulrunner-extra:: stamps/build-xulrunner build-xulrunner/debian/extra-stuff/Makefile
+	$(MAKE) -C build-xulrunner/debian/extra-stuff
+
+stamps/configure-browser:: stamps/build-xulrunner-extra
+	$(if $(wildcard build-browser),,mkdir build-browser)
+	cd build-browser && \
+	MOZCONFIG=$(CURDIR)/debian/earthorca.mozconfig \
+	$(CONFIGURE_ENV) \
+	../configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr $(CONFIGURE_FLAGS) \
+		--with-libxul-sdk=$(CURDIR)/build-xulrunner/dist \
+		--with-branding=$(BRANDING) \
+		--with-system-libxul --with-system-nspr --with-system-nss
+	sed -i '/^OS_LDFLAGS/s|=|& $(LDFLAGS)|' build-browser/config/autoconf.mk
+
+stamps/build-browser:: stamps/configure-browser
+	dh_auto_build --builddirectory=build-browser
+
+build-browser/%/filelist: stamps/build-browser build-browser/%/Makefile
+	rm -rf build-browser/$*/dist
+	$(MAKE) -C build-browser/$* MOZ_CHROME_FILE_FORMAT=flat DIST=$(CURDIR)/build-browser/$*/dist BRANDING_TEST=1
+	cd build-browser/$*/dist/bin && find -type f | sort > $(CURDIR)/$@
+
+stamps/build-check-branding:: build-browser/$(OFFICIAL_BRANDING)/filelist build-browser/debian/branding/filelist
+# Ensure the earthorca branding contains everything it's supposed to
+	diff $^
+
+stamps/build-check-resources:: stamps/build-xulrunner stamps/build-browser
+	$(PYTHON) debian/check_resources.py -a build-browser/dist/bin -x build-xulrunner/dist/bin
+
+L10N_BUILD_STAMPS = $(foreach lang,$(L10N_LANGS),stamps/build-l10n-$(lang))
+stamps/build-l10n:: $(L10N_BUILD_STAMPS)
+
+$(L10N_BUILD_STAMPS):: stamps/build-l10n-%: stamps/build-xulrunner stamps/build-browser
+	$(if $(wildcard l10n),,mkdir -p l10n)
+	$(if $(wildcard l10n/$*),,ln -sf ../l10n-$* l10n/$*)
+	$(PYTHON) config/pythonpath.py -I$(CURDIR)/compare-locales/lib $(CURDIR)/compare-locales/scripts/compare-locales -m $(CURDIR)/build-browser/l10n-$* browser/locales/l10n.ini $(CURDIR)/l10n $*
+	$(MAKE) -C build-browser/browser/locales langpack-$* L10NBASEDIR=$(CURDIR)/l10n MOZ_CHROME_FILE_FORMAT=flat MOZ_LANGPACK_EID=langpack-$*@earthorca.mozilla.org PKG_LANGPACK_BASENAME='$$(MOZ_LANGPACK_EID)' PKG_LANGPACK_PATH=xpi/ LOCALE_MERGEDIR=$(CURDIR)/build-browser/l10n-$*
+
+override_dh_auto_build: stamps/build-check-branding stamps/build-check-resources
+
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+include debian/test.mk
+endif
+
+override_dh_auto_clean::
+	rm -f MPL
+	rm -f $(GENERATED_FILES) config/Expression.py[co]
+	rm -rf stamps l10n
+
+	dh_auto_clean --builddirectory=build-browser
+	dh_auto_clean --builddirectory=build-xulrunner
+	find . -name "*.pyc" | xargs rm -f
+
+	for dir in $(AUTOCONF_DIRS); do \
+		for file in config.guess config.sub; do \
+			sed -i '2!b;/^exec "/ d' $$dir/$$file; \
+		done; \
+	done
+
+override_dh_auto_install: stamps/install-browser stamps/install-xulrunner
+
+stamps/install-xulrunner:: build-xulrunner/debian/installer/package-manifest
+	dh_auto_install --sourcedirectory=build-xulrunner/xulrunner/installer -- \
+		MOZ_APP_BASE_VERSION=$(GRE_VERSION) \
+		MOZ_PKG_MANIFEST=$(CURDIR)/$< \
+		MOZ_NONLOCALIZED_PKG_LIST="xpcom xulrunner debian" \
+		MOZ_LOCALIZED_PKG_LIST=en-US \
+		SIGN_NSS=
+
+	mv debian/tmp/usr/bin/xulrunner debian/tmp/usr/bin/xulrunner-$(GRE_VERSION)
+
+	# Fixup permissions
+	find debian/tmp/usr/share debian/tmp/usr/include -type f -print0 | xargs -0 chmod 644
+
+	# Replace some installed files by symlinks
+	for d in lib bin; do \
+		cd "$(CURDIR)/debian/tmp/usr/lib/xulrunner-devel-$(GRE_VERSION)/sdk/$$d"; \
+		for f in *; do \
+			if [ -f "$(CURDIR)/debian/tmp/usr/lib/xulrunner-$(GRE_VERSION)/$$f" ]; then \
+				rm -f $$f ; ln -s /usr/lib/xulrunner-$(GRE_VERSION)/$$f $$f; \
+			fi; \
+		done; \
+	done
+
+	dh_auto_install --sourcedirectory=build-xulrunner/js/src -- prefix=/usr MODULE=mozjs FORCE_STATIC_LIB=
+	cp -r debian/tmp/usr/include/xulrunner-$(GRE_VERSION)/gc debian/tmp/usr/include/mozjs
+	cp -r debian/tmp/usr/include/xulrunner-$(GRE_VERSION)/ds debian/tmp/usr/include/mozjs
+	cp -r debian/tmp/usr/include/xulrunner-$(GRE_VERSION)/js debian/tmp/usr/include/mozjs
+	rm debian/tmp/usr/bin/js-config
+	find debian/tmp/usr/include/mozjs -type f -printf %P\\n | while read f; do \
+		file=$$(echo debian/tmp/usr/include/xulrunner-$(GRE_VERSION)/$$f); \
+		rm $$file; \
+		ln -s /usr/include/mozjs/$$f $$file; \
+	done
+	for f in /usr/include/nspr/* /usr/include/nss/*; do \
+		ln -s $$f debian/tmp/usr/include/xulrunner-$(GRE_VERSION)/$$(basename $$f); \
+	done
+	for h in $$(grep -l -r EXPORTS build-xulrunner/media | grep Makefile$ | \
+		while read f; do $(MAKE) --no-print-directory -C $$(dirname $$f) echo-variable-EXPORTS echo-variable-EXPORTS_NAMESPACES; done); do \
+		rm -rf debian/tmp/usr/include/xulrunner-$(GRE_VERSION)/$$h; \
+	done
+
+	mv debian/tmp/usr/bin/js debian/tmp/usr/bin/smjs
+
+	sed -i '/^Cflags/ s,$${includedir},/usr/include/mozjs,' debian/tmp/usr/lib/pkgconfig/mozilla-js.pc
+
+stamps/install-browser:: build-browser/debian/installer/package-manifest
+	dh_auto_install --builddirectory=build-browser -- installdir=$(LIB_DIR) \
+		MOZ_PKG_FATAL_WARNINGS=0 \
+		MOZ_PKG_MANIFEST=$(CURDIR)/$<
+	chmod 755 debian/earthorca-xremote-client
+	rm -f debian/tmp/usr/lib/earthorca/update-settings.ini
+
+MPL: LICENSE
+	cp -f $< $@
+
+override_dh_installdocs: MPL
+	dh_installdocs -A $^
+
+L10N_DH_INSTALL_STAMPS = $(foreach lang,$(L10N_LANGS),stamps/dh_install-l10n-$(lang))
+stamps/dh_install-l10n:: $(L10N_DH_INSTALL_STAMPS)
+
+$(L10N_DH_INSTALL_STAMPS):: stamps/dh_install-l10n-%: stamps/build-l10n-%
+	dh_install -pearthorca-l10n-$(call lc,$*) build-browser/dist/xpi/langpack-$*@earthorca.mozilla.org.xpi usr/lib/earthorca/extensions/
+	dh_install -pearthorca-l10n-$(call lc,$*) build-browser/dist/xpi-stage/locale-$*/searchplugins/* /etc/earthorca/searchplugins/locale/$*/
+
+stamps/dh_install:: debian/dh/dh_xulrunner debian/noinstall build-xulrunner/dist/bin/npapi_getinfo
+	awk '{print "debian/tmp/" $$1 }' < debian/noinstall | xargs rm -r
+	dh_install --fail-missing
+
+#Install helpers
+	install -m 755 debian/earthorca-runner \
+		debian/earthorca/$(LIB_DIR)/earthorca
+
+# Install icons
+	install -d -m 755 debian/earthorca/usr/share/icons/hicolor/16x16/apps
+	install -m 644 build-browser/debian/branding/default16.png \
+		debian/earthorca/usr/share/icons/hicolor/16x16/apps/earthorca.png
+	install -d -m 755 debian/earthorca/usr/share/icons/hicolor/32x32/apps
+	install -m 644 build-browser/debian/branding/default32.png \
+		debian/earthorca/usr/share/icons/hicolor/32x32/apps/earthorca.png
+	install -d -m 755 debian/earthorca/usr/share/icons/hicolor/64x64/apps
+	install -m 644 build-browser/debian/branding/default64.png \
+		debian/earthorca/usr/share/icons/hicolor/64x64/apps/earthorca.png
+	install -d -m 755 debian/earthorca/usr/share/icons/hicolor/scalable/apps
+	install -m 644 debian/branding/earthorca_icon.svg \
+		debian/earthorca/usr/share/icons/hicolor/scalable/apps/earthorca.svg
+
+# Remove unneeded configs
+	rm -f debian/earthorca/$(SHARE_DIR)/defaults/pref/firefox-l10n.js
+
+CMP_AWK := '$$0 !~ /^\t/ { txt = txt ? txt "\n" $$0 : $$0 } END { if (txt != expected) { print "Expected:\n" expected "\nGot:\n" txt; exit 1 }}'
+
+stamps/check-dh_xulrunner-glue:: stamps/dh_install debian/dh/dh_xulrunner
+	# Make sure dh_xulrunner is able to spot the current XPCOM standalone glue.
+	perl debian/dh/dh_xulrunner_test -pxulrunner-$(GRE_VERSION) | awk -v expected='addsubstvar("xulrunner-$(GRE_VERSION)", "shlibs:Depends", "xulrunner-$(GRE_VERSION)");' $(CMP_AWK)
+
+stamps/check-dh_xulrunner-npapi:: stamps/dh_install debian/dh/dh_xulrunner build-xulrunner/dist/bin/npapi_getinfo
+	$(if $(wildcard build-xulrunner/tmp/usr/lib/mozilla),,mkdir -p build-xulrunner/tmp/usr/lib/mozilla/)
+	$(if $(wildcard build-xulrunner/tmp/usr/lib/mozilla/plugins),,ln -s $(CURDIR)/build-xulrunner/dist/bin/plugins build-xulrunner/tmp/usr/lib/mozilla)
+	PATH=build-xulrunner/dist/bin:$(PATH) perl debian/dh/dh_xulrunner_test -pearthorca -Pbuild-xulrunner/tmp | awk -v expected='addsubstvar("earthorca", "npapi:Mimetypes", "application/x-second-test, application/x-test");' $(CMP_AWK)
+
+override_dh_install: stamps/check-dh_xulrunner-glue stamps/check-dh_xulrunner-npapi
+
+override_dh_strip:
+	dh_strip -a -Nearthorca -Nlibmozjs$(JS_SO_VERSION) -Nspidermonkey-bin --dbg-package=xulrunner-$(GRE_VERSION)-dbg
+	dh_strip -pearthorca --dbg-package=earthorca-dbg
+	dh_strip -plibmozjs$(JS_SO_VERSION) --dbg-package=libmozjs$(JS_SO_VERSION)-dbg
+	dh_strip -pspidermonkey-bin
+
+override_dh_shlibdeps:
+	dh_shlibdeps -a -l$(CURDIR)/debian/tmp/usr/lib/xulrunner-$(GRE_VERSION) -Xlibdbusservice
+	LD_LIBRARY_PATH=$(CURDIR)/debian/tmp/usr/lib/xulrunner-$(GRE_VERSION) dpkg-shlibdeps -Tdebian/xulrunner-$(GRE_VERSION).substvars -dDepends -pgnome $(foreach lib,dbusservice,debian/xulrunner-$(GRE_VERSION)/usr/lib/xulrunner-$(GRE_VERSION)/components/lib$(lib).so)
+
+override_dh_gencontrol:
+	dh_gencontrol$(foreach pkg,$(L10N_PACKAGES) earthorca-l10n-all, -p$(pkg)) -- -v1:$(DEBIAN_VERSION)
+	dh_gencontrol$(foreach pkg,$(L10N_PACKAGES) earthorca-l10n-all, -N$(pkg))
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
+
+install binary binary-arch binary-indep: $(GENERATED_FILES)
+
+binary binary-indep: stamps/dh_install-l10n
+
+binary binary-arch binary-indep build clean install:
+	dh $@
+
+.PHONY: build clean binary-indep binary-arch binary install
+
+.NOTPARALLEL:
+
+$(shell awk -F:: '$$1 ~ /^stamps\// && !/%/ { print $$1 }' debian/rules) stamps/dummy $(L10N_BUILD_STAMPS) $(L10N_DH_INSTALL_STAMPS)::
+	@mkdir -p stamps
+	$(if $(wildcard $@),,touch $@)
+endif

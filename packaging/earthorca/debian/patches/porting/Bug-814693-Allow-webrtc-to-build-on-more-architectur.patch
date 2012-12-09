@@ -1,0 +1,147 @@
+From: Mike Hommey <mh@glandium.org>
+Date: Sat, 1 Dec 2012 09:55:48 +0100
+Subject: Bug 814693 - Allow webrtc to build on more architectures
+
+---
+ media/webrtc/shared_libs.mk                        |    9 ++-
+ .../modules/audio_coding/codecs/pcm16b/pcm16b.c    |    8 +--
+ media/webrtc/trunk/src/typedefs.h                  |   64 ++++++++++++++++++++
+ 3 files changed, 73 insertions(+), 8 deletions(-)
+
+diff --git a/media/webrtc/shared_libs.mk b/media/webrtc/shared_libs.mk
+index 451879b..76d4395 100644
+--- a/media/webrtc/shared_libs.mk
++++ b/media/webrtc/shared_libs.mk
+@@ -29,13 +29,11 @@ SHARED_LIBRARY_LIBS += \
+   $(call EXPAND_LIBNAME_PATH,rtp_rtcp,$(DEPTH)/media/webrtc/trunk/src/modules/modules_rtp_rtcp) \
+   $(call EXPAND_LIBNAME_PATH,udp_transport,$(DEPTH)/media/webrtc/trunk/src/modules/modules_udp_transport) \
+   $(call EXPAND_LIBNAME_PATH,video_processing,$(DEPTH)/media/webrtc/trunk/src/modules/modules_video_processing) \
+-  $(call EXPAND_LIBNAME_PATH,video_processing_sse2,$(DEPTH)/media/webrtc/trunk/src/modules/modules_video_processing_sse2) \
+   $(call EXPAND_LIBNAME_PATH,voice_engine_core,$(DEPTH)/media/webrtc/trunk/src/voice_engine/voice_engine_voice_engine_core) \
+   $(call EXPAND_LIBNAME_PATH,audio_conference_mixer,$(DEPTH)/media/webrtc/trunk/src/modules/modules_audio_conference_mixer) \
+   $(call EXPAND_LIBNAME_PATH,audio_device,$(DEPTH)/media/webrtc/trunk/src/modules/modules_audio_device) \
+   $(call EXPAND_LIBNAME_PATH,audio_processing,$(DEPTH)/media/webrtc/trunk/src/modules/modules_audio_processing) \
+   $(call EXPAND_LIBNAME_PATH,aec,$(DEPTH)/media/webrtc/trunk/src/modules/modules_aec) \
+-  $(call EXPAND_LIBNAME_PATH,aec_sse2,$(DEPTH)/media/webrtc/trunk/src/modules/modules_aec_sse2) \
+   $(call EXPAND_LIBNAME_PATH,apm_util,$(DEPTH)/media/webrtc/trunk/src/modules/modules_apm_util) \
+   $(call EXPAND_LIBNAME_PATH,aecm,$(DEPTH)/media/webrtc/trunk/src/modules/modules_aecm) \
+   $(call EXPAND_LIBNAME_PATH,agc,$(DEPTH)/media/webrtc/trunk/src/modules/modules_agc) \
+@@ -43,3 +41,10 @@ SHARED_LIBRARY_LIBS += \
+   $(call EXPAND_LIBNAME_PATH,yuv,$(DEPTH)/media/webrtc/trunk/third_party/libyuv/libyuv_libyuv) \
+   $(call EXPAND_LIBNAME_PATH,webrtc_jpeg,$(DEPTH)/media/webrtc/trunk/src/common_video/common_video_webrtc_jpeg) \
+   $(NULL)
++
++ifneq (,$(INTEL_ARCHITECTURE))
++SHARED_LIBRARY_LIBS += \
++  $(call EXPAND_LIBNAME_PATH,video_processing_sse2,$(DEPTH)/media/webrtc/trunk/src/modules/modules_video_processing_sse2) \
++  $(call EXPAND_LIBNAME_PATH,aec_sse2,$(DEPTH)/media/webrtc/trunk/src/modules/modules_aec_sse2) \
++  $(NULL)
++endif
+diff --git a/media/webrtc/trunk/src/modules/audio_coding/codecs/pcm16b/pcm16b.c b/media/webrtc/trunk/src/modules/audio_coding/codecs/pcm16b/pcm16b.c
+index 0cff5dd..c0befb9 100644
+--- a/media/webrtc/trunk/src/modules/audio_coding/codecs/pcm16b/pcm16b.c
++++ b/media/webrtc/trunk/src/modules/audio_coding/codecs/pcm16b/pcm16b.c
+@@ -15,10 +15,6 @@
+ 
+ #include "typedefs.h"
+ 
+-#ifdef WEBRTC_BIG_ENDIAN
+-#include "signal_processing_library.h"
+-#endif
+-
+ #define HIGHEND 0xFF00
+ #define LOWEND    0xFF
+ 
+@@ -30,7 +26,7 @@ WebRtc_Word16 WebRtcPcm16b_EncodeW16(WebRtc_Word16 *speechIn16b,
+                                      WebRtc_Word16 *speechOut16b)
+ {
+ #ifdef WEBRTC_BIG_ENDIAN
+-    WEBRTC_SPL_MEMCPY_W16(speechOut16b, speechIn16b, len);
++    memcpy(speechOut16b, speechIn16b, len * sizeof(WebRtc_Word16));
+ #else
+     int i;
+     for (i=0;i<len;i++) {
+@@ -69,7 +65,7 @@ WebRtc_Word16 WebRtcPcm16b_DecodeW16(void *inst,
+                                      WebRtc_Word16* speechType)
+ {
+ #ifdef WEBRTC_BIG_ENDIAN
+-    WEBRTC_SPL_MEMCPY_W8(speechOut16b, speechIn16b, ((len*sizeof(WebRtc_Word16)+1)>>1));
++    memcpy(speechOut16b, speechIn16b, ((len*sizeof(WebRtc_Word16)+1)>>1));
+ #else
+     int i;
+     int samples=len>>1;
+diff --git a/media/webrtc/trunk/src/typedefs.h b/media/webrtc/trunk/src/typedefs.h
+index 53db408..fe293ce 100644
+--- a/media/webrtc/trunk/src/typedefs.h
++++ b/media/webrtc/trunk/src/typedefs.h
+@@ -48,6 +48,70 @@
+ #define WEBRTC_ARCH_32_BITS
+ #define WEBRTC_ARCH_LITTLE_ENDIAN
+ #define WEBRTC_LITTLE_ENDIAN
++#elif defined(__powerpc64__)
++#define WEBRTC_ARCH_PPC64 1
++#define WEBRTC_ARCH_64_BITS 1
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
++#elif defined(__ppc__) || defined(__powerpc__)
++#define WEBRTC_ARCH_PPC 1
++#define WEBRTC_ARCH_32_BITS 1
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
++#elif defined(__sparc64__)
++#define WEBRTC_ARCH_SPARC 1
++#define WEBRTC_ARCH_64_BITS 1
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
++#elif defined(__sparc__)
++#define WEBRTC_ARCH_SPARC 1
++#define WEBRTC_ARCH_32_BITS 1
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
++#elif defined(__mips__)
++#define WEBRTC_ARCH_MIPS 1
++#if defined(_ABI64) && _MIPS_SIM == _ABI64
++#define WEBRTC_ARCH_64_BITS 1
++#else
++#define WEBRTC_ARCH_32_BITS 1
++#endif
++#if defined(__MIPSEB__)
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
++#else
++#define WEBRTC_ARCH_LITTLE_ENDIAN
++#define WEBRTC_LITTLE_ENDIAN
++#endif
++#elif defined(__hppa__)
++#define WEBRTC_ARCH_HPPA 1
++#define WEBRTC_ARCH_32_BITS 1
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
++#elif defined(__ia64__)
++#define WEBRTC_ARCH_IA64 1
++#define WEBRTC_ARCH_64_BITS 1
++#define WEBRTC_ARCH_LITTLE_ENDIAN
++#define WEBRTC_LITTLE_ENDIAN
++#elif defined(__s390x__)
++#define WEBRTC_ARCH_S390X 1
++#define WEBRTC_ARCH_64_BITS 1
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
++#elif defined(__s390__)
++#define WEBRTC_ARCH_S390 1
++#define WEBRTC_ARCH_32_BITS 1
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
++#elif defined(__alpha__)
++#define WEBRTC_ARCH_ALPHA 1
++#define WEBRTC_ARCH_64_BITS 1
++#define WEBRTC_ARCH_LITTLE_ENDIAN
++#define WEBRTC_LITTLE_ENDIAN
++#elif defined(__avr32__)
++#define WEBRTC_ARCH_AVR32 1
++#define WEBRTC_ARCH_32_BITS 1
++#define WEBRTC_ARCH_BIG_ENDIAN
++#define WEBRTC_BIG_ENDIAN
+ #else
+ #error Please add support for your architecture in typedefs.h
+ #endif

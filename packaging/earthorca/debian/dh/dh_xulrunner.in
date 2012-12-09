@@ -1,0 +1,148 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+dh_xulrunner - sets xulrunner dependencies
+
+=cut
+
+use strict;
+use Fcntl qw(SEEK_SET);
+use Debian::Debhelper::Dh_Lib;
+
+=head1 SYNOPSIS
+
+B<dh_xulrunner> [S<I<debhelper options>>]
+
+=head1 DESCRIPTION
+
+dh_xulrunner is a debhelper program with two complementary features.
+
+dh_xulrunner adds the xulrunner binary package corresponding to the installed
+xulrunner-dev package to the B<shlibs:Depends> substvar. It only does so for
+packages containing an executable or a library that it detects as containing
+the XPCOM glue (please note the detection is really hackish and error prone,
+though most likely accurate in most cases).
+
+For this feature, dh_xulrunner must be run after dh_shlibdeps, and requires a
+build dependency on xulrunner-dev (>= 1.9.1.3-2).
+
+dh_xulrunner also gathers MIME types information from NPAPI plugins it can
+find in the I</usr/lib/mozilla/plugins> directory in packages. The gathered
+information is stored in the B<npapi:Mimetypes> substvar.
+
+For this feature, dh_xulrunner requires a build dependency on
+xulrunner-dev (>= 1.9.1.11-3~) | xulrunner-dev (>= 3.6.8-3~).
+
+You can also use the xulrunner dh sequence addon to integrate in a dh workflow:
+
+	dh --with xulrunner $@
+
+=cut
+
+init();
+
+$ENV{PATH} = join ':', '/usr/lib/xulrunner-@GRE_VERSION@', split ':', $ENV{PATH};
+
+my $ld_lib_path = $ENV{LD_LIBRARY_PATH};
+my @new_ld_lib_path = ();
+push @new_ld_lib_path, split ':', $ld_lib_path if defined $ld_lib_path;
+push @new_ld_lib_path, map { tmpdir($_) . "/usr/lib" } getpackages();
+my %seen;
+@new_ld_lib_path = grep { !$seen{$_}++ } @new_ld_lib_path;
+my $new_ld_lib_path = join ':', @new_ld_lib_path;
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+	# The following is partially stolen from dh_shlibdeps
+	my $tmp=tmpdir($package);
+	my $ff;
+
+	# Generate a list of ELF binaries in the package, ignoring any
+	# we were told to exclude.
+	my $find_options='';
+	if (defined($dh{EXCLUDE_FIND}) && $dh{EXCLUDE_FIND} ne '') {
+		$find_options="! \\( $dh{EXCLUDE_FIND} \\)";
+	}
+	# Check plugins ; only expect them in /usr/lib/mozilla/plugins
+	if (-d "$tmp/usr/lib/mozilla/plugins") {
+		my @filelist = ();
+		foreach my $file (split(/\n/,`find -L $tmp/usr/lib/mozilla/plugins -type f -name "*.so*" $find_options -print`)) {
+			push @filelist, $file;
+		}
+		my @mimetypes = ();
+		if ($new_ld_lib_path) {
+			$ENV{LD_LIBRARY_PATH} = $new_ld_lib_path;
+			verbose_print("LD_LIBRARY_PATH=$new_ld_lib_path");
+		}
+
+		foreach my $file (@filelist) {
+			# Plugins are not expected to contain the standalone glue
+			# On the other hand, they may contain information we want
+			open NPP, "npapi_getinfo '$file' 2>/dev/null |";
+			while (<NPP>) {
+				chomp;
+				next unless /^MimeTypes: (.*)$/;
+				push @mimetypes, map { s/:.*$//; $_; } split ';', $1;
+			}
+			close NPP;
+			next;
+		}
+		if (defined $ld_lib_path) {
+			$ENV{LD_LIBRARY_PATH} = $ld_lib_path;
+		} else {
+			delete $ENV{LD_LIBRARY_PATH};
+		}
+		addsubstvar($package, "npapi:Mimetypes", join(', ', sort @mimetypes)) if (@mimetypes);
+	}
+	foreach my $file (split(/\n/,`find $tmp -type f \\( -perm +111 -or -name "*.so*" -or -name "*.cmxs" \\) $find_options -print`)) {
+		# Prune directories that contain separated debug symbols.
+		next if $file=~m!^\Q$tmp\E/usr/lib/debug/(lib|lib64|usr|bin|sbin|opt|dev|emul)/!;
+		# TODO this is slow, optimize. Ie, file can run once on
+		# multiple files..
+		$ff=`file "$file"`;
+		if ($ff=~m/ELF/) {
+			my @strings = ( "NS_GetFrozenFunctions", "XRE_main", "/dependentlibs.list", "libxul.so" );
+			my($size, $offset);
+			open FILE, "objdump -h \"$file\" 2>&1 |";
+			while (<FILE>) {
+				my(@fields) = split /\s+/;
+				next if $#fields < 7;
+				if ($fields[2] eq ".rodata") {
+					$size = hex $fields[3];
+					$offset = hex $fields[6];
+					last;
+				}
+			}
+			close FILE;
+			if ($size) {
+				open FILE, $file;
+				my $buf;
+				seek FILE, $offset, SEEK_SET;
+				# I don't expect the .rodata to be so huge that it doesn't fit in RAM
+				read FILE, $buf, $size;
+				close FILE;
+				$buf = join ' ', split(/[^A-Za-z\.\/_]+/, $buf);
+				my $pattern = '(' . join('|', @strings) . ')';
+				my (@matches) = $buf =~ m{$pattern}g;
+				if (!grep { my $s = $_; ! grep { $_ eq $s } @matches } @strings) {
+					addsubstvar($package, "shlibs:Depends", "xulrunner-@GRE_VERSION@");
+					last;
+				}
+			}
+		}
+	}
+}
+
+1;
+
+=head1 SEE ALSO
+
+L<debhelper(7)>
+
+This program is a part of xulrunner-dev.
+
+=head1 AUTHOR
+
+Mike Hommey <glandium@debian.org>
+
+=cut

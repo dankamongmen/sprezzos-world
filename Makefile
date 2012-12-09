@@ -173,7 +173,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
 	$(BZIP2) $(ZLIB) $(JSONC) $(LIBPAMSSH) $(LIBX11PROTOCOLOTHERPERL) $(MOSH) \
-	$(GIFLIB)
+	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1716,6 +1716,14 @@ $(LYNX): $(SPREZZ)/lynx/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lynx-$(lynx_UPVER).tar.xg $(TARARGS) $@
 
+.PHONY: earthorca
+earthorca:$(EARTHORCA)_$(ARCH).deb
+$(EARTHORCA): $(SPREZZ)/earthorca/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf earthorca-$(earthorca_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: edbus
 edbus:$(EDBUS)_$(ARCH).deb
 $(EDBUS): $(SPREZZ)/edbus/debian/changelog
@@ -2756,6 +2764,14 @@ $(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf simple-scan_$(simple-scan_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: software-properties
+software-properties:$(SOFTWAREPROPERTIES)_$(ARCH).deb
+$(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf software-properties-$(software-properties_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: spacefm
 spacefm:$(SPACEFM)_$(ARCH).deb

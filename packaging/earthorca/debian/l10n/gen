@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+
+import re
+import sys
+import codecs
+sys.stdout = codecs.getwriter('utf8')(sys.stdout)
+
+from xml import sax
+
+class Iso3166(sax.handler.ContentHandler, dict):
+  def startElement(self, name, attrs):
+    if attrs.has_key('alpha_2_code'):
+      self[attrs['alpha_2_code'].lower()] = attrs['name']
+
+class Iso639(sax.handler.ContentHandler, dict):
+  def startElement(self, name, attrs):
+    if 'iso_639_1_code' in attrs:
+      self[attrs['iso_639_1_code']] = attrs['name']
+    if 'iso_639_2B_code' in attrs:
+      self[attrs['iso_639_2B_code']] = attrs['name']
+
+class Iso639_3(sax.handler.ContentHandler, dict):
+  def startElement(self, name, attrs):
+    if 'id' in attrs:
+      self[attrs['id']] = attrs['name']
+    if 'part1_code' in attrs:
+      self[attrs['part1_code']] = attrs['name']
+    if 'part2_code' in attrs and not attrs['part2_code'] in self:
+      self[attrs['part2_code']] = attrs['name']
+
+parser = sax.make_parser()
+iso639_3 = Iso639_3()
+parser.setContentHandler(iso639_3)
+parser.parse('/usr/share/xml/iso-codes/iso_639_3.xml')
+
+iso639 = Iso639()
+parser.setContentHandler(iso639)
+parser.parse('/usr/share/xml/iso-codes/iso_639.xml')
+
+iso3166 = Iso3166()
+parser.setContentHandler(iso3166)
+parser.parse('/usr/share/xml/iso-codes/iso_3166.xml')
+
+recommends = {}
+with open('debian/l10n/recommends') as f:
+  for line in f.readlines():
+    lang, value = line.split(':')
+    recommends[lang.strip()] = value.strip()
+
+RE = re.compile(r'^([^,\(]+)(?:, *([^\(]+) *)?(?: *\(.*\))?$')
+
+for code in sys.argv[1:]:
+  if '-' in code:
+    lang, country = code.split('-')
+  else:
+    lang = code
+    country = None
+
+  if lang in iso639_3:
+    str = iso639_3[lang.lower()]
+  else:
+    str = iso639[lang.lower()]
+  m = RE.match(str)
+  if m.group(2):
+    str = ' '.join([m.group(2).strip(), m.group(1).strip()])
+  else:
+    str = m.group(1).strip()
+  if country:
+    country = iso3166[country.lower()]
+    if ',' in country:
+      country = country[:country.index(',')]
+    str += ' (' + country + ')'
+  print
+  print '%define L10N_LANG', code.lower()
+  print '%define L10N_LANGUAGE', str
+  if code.lower() in recommends:
+    print '%define L10N_RECOMMENDS', recommends[code.lower()]
+  else:
+    print '%undef L10N_RECOMMENDS'
+  print '%include iceweasel-l10n.control.in'
