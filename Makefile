@@ -175,13 +175,13 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) $(IJS) \
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) \
-	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS)
+	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
 	$(FREETYPE) $(CURL) $(LIBXSLT) $(LIBXML) $(F2FSTOOLS) $(ZFS) $(SPL) \
 	$(WPA) $(LIBATASMART) $(LIBX86) $(LIBJPEG) $(PCRE) $(WGET) $(OPENSSL) \
-	$(NCURSES) $(KLIBC)
+	$(NCURSES) $(KLIBC) $(PERL)
 
 DEBS:=$(subst :,.,$(DEBS))
 UDEBS:=$(subst :,.,$(UDEBS))
@@ -2651,6 +2651,14 @@ $(PCRE): $(SPREZZ)/pcre/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf pcre-$(pcre_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: perl
+perl:$(PERL)_$(ARCH).deb
+$(PERL): $(SPREZZ)/perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf perl-$(perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: packagekit
 packagekit:$(PACKAGEKIT)_$(ARCH).deb
