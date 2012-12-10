@@ -1,0 +1,69 @@
+#!/bin/sh
+set -e
+
+# Copyright 2011 Niko Tyni
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the same terms as Perl itself.
+#
+# Given a list of patches in debian/patches, write out one line
+# per patch containing the patch description, bug pointers and
+# upstream commit information where available.
+#
+# The output format is designed to be included into Perl's patchlevel.h,
+# which eventually controls what 'perl -V' prints.
+
+prefix="DEBPKG:"
+version=""
+patchdir=debian/patches
+
+while getopts p:v: f
+do
+    case $f in
+    p) prefix=$OPTARG;;
+    v) version=$OPTARG;;
+    esac
+done
+shift `expr $OPTIND - 1`
+
+in=${1:-$patchdir/series}
+
+if [ -n "$version" ]; then
+    version=" for $version"
+fi
+
+while read patch strip
+do
+    patchname=$(echo $patch | sed 's/\.diff$//')
+    < $patchdir/$patch sed -e '/^Subject:/ { N; s/\n / / }' | sed -n -e '
+
+    # massage the patch headers
+    s|^Bug: .*https\?://rt\.perl\.org/.*id=\(.*\).*|[perl #\1]|; tprepend;
+    s|^Bug: .*https\?://rt\.cpan\.org/.*id=\(.*\).*|[rt.cpan.org #\1]|; tprepend;
+    s|^Bug-Debian: ||; tprepend;
+    s/^\(Subject\|Description\): //; tappend;
+    s|^Origin: .*http://perl5\.git\.perl\.org/perl\.git/commit\(diff\)\?/\(.......\).*|[\2]|; tprepend;
+
+    # post-process at the end of input
+    $ { x;
+        # include the version number in the patchlevel.h description (if available)
+        s/List packaged patches/&'"${version}"'/;
+
+        # escape any backslashes and double quotes
+        s|\\|\\\\|g; s|"|\\"|g;
+
+        # add a prefix
+        s|^|\t,"'"$prefix$patchname"' - |;
+        # newlines away
+        s/\n/ /g; s/  */ /g;
+        # add a suffix
+        s/ *$/"/; p
+    };
+    # stop all processing
+    d;
+    # label: append to the hold space
+    :append H; d;
+    # label: prepend to the hold space
+    :prepend x; H; d;
+    '
+done < $in

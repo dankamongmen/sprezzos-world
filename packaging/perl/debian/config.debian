@@ -1,0 +1,128 @@
+#!/bin/bash
+
+eval $(echo '#include "./patchlevel.h"
+SETver=PERL_REVISION.PERL_VERSION;
+SETsubver= PERL_SUBVERSION' | gcc -E -DPERL_PATCHLEVEL_H_IMPLICIT - \
+ | sed -n '/^SET/{s///;s/ //gp;}')
+
+fullver="$ver.$subver"
+nextver="$ver."$(($subver+1))
+ccflags=-DDEBIAN
+ldflags=
+arch_cpu=${DEB_BUILD_ARCH_CPU:-$(dpkg-architecture -qDEB_BUILD_ARCH_CPU)}
+gnu_type=${DEB_BUILD_GNU_TYPE:-$(dpkg-architecture -qDEB_BUILD_GNU_TYPE)}
+optimize=-O2
+debugging=-g
+
+case "$1" in
+    --static) # static perl
+    	build_type=static
+	opts="-Uuseshrplib";;
+
+    --debug) # debugperl
+    	build_type=debug
+	debugging=both # add -DDEBUGGING
+	opts="-Uuseshrplib";;
+
+    --shared) # shared library
+    	build_type=shared
+	opts="-Duseshrplib -Dlibperl=libperl.so.$fullver";;
+
+    --version)
+	exec echo $ver;;
+
+    --full-version)
+	exec echo $fullver;;
+
+    --next-version)
+	exec echo $nextver;;
+
+    --strip)
+    	case ",$DEB_BUILD_OPTIONS," in
+	    *[,\ ]nostrip[,\ ]*)	exec echo no;;
+	    *)				exec echo yes;;
+	esac;;
+
+    --test-target)
+    	case ",$DEB_BUILD_OPTIONS," in
+	    *[,\ ]nocheck[,\ ]*)	exit;;
+	    *[,\ ]x-perl-notest[,\ ]*)	exit;;
+	    *)				exec echo test;;
+	esac;;
+
+    --install-type)
+	# The default installation type for /usr/bin/perl of shared or
+	# static may be changed by including x-perl-static or x-perl-shared
+	# in DEB_BUILD_OPTIONS.  The default is shared except for i386 where
+	# there is a measurable performance penalty.
+	case ",$DEB_BUILD_OPTIONS," in
+	    *[,\ ]x-perl-static[,\ ]*)	exec echo static;;
+	    *[,\ ]x-perl-shared[,\ ]*)	exec echo shared;;
+	esac
+	case "$arch_cpu" in
+	    i386)			exec echo static;;
+	    *)				exec echo shared;;
+	esac;;
+
+    *)	echo "$0: need --shared, --static, or --debug option"
+    	exit 2;;
+esac
+
+case "$arch_cpu:$build_type" in
+    sh4:*) # required to correctly handle floating point on sh4
+    	ccflags="$ccflags -mieee";;
+
+    m68k:shared) # work around an optimiser bug
+	ccflags="$ccflags -fno-regmove";;
+esac
+
+case ",$DEB_BUILD_OPTIONS," in
+    *[,\ ]noopt[,\ ]*)
+	optimize="$optimize${optimize:+ }-O0";;
+esac
+
+if which dpkg-buildflags >/dev/null 2>&1; then
+    ccflags="$ccflags $(dpkg-buildflags --get CPPFLAGS)"
+    ccflags="$ccflags $(dpkg-buildflags --get CFLAGS)"
+    ldflags="$ldflags $(dpkg-buildflags --get LDFLAGS)"
+fi
+
+# post-configure tweaks
+cp debian/config.over .
+
+# need bash when sourcing config.over
+eval /bin/bash Configure			\
+    -Dusethreads				\
+    -Duselargefiles				\
+    -Dccflags=\'$ccflags\'			\
+    -Dldflags=\'$ldflags\'			\
+    -Dlddlflags=\'-shared $ldflags\'			\
+    -Dcccdlflags=-fPIC				\
+    -Darchname=$gnu_type			\
+    -Dprefix=/usr				\
+    -Dprivlib=/usr/share/perl/$ver		\
+    -Darchlib=/usr/lib/perl/$ver		\
+    -Dvendorprefix=/usr				\
+    -Dvendorlib=/usr/share/perl5		\
+    -Dvendorarch=/usr/lib/perl5			\
+    -Dsiteprefix=/usr/local			\
+    -Dsitelib=/usr/local/share/perl/$fullver	\
+    -Dsitearch=/usr/local/lib/perl/$fullver	\
+    -Dman1dir=/usr/share/man/man1		\
+    -Dman3dir=/usr/share/man/man3		\
+    -Dsiteman1dir=/usr/local/man/man1		\
+    -Dsiteman3dir=/usr/local/man/man3		\
+    -Duse64bitint                               \
+    -Dman1ext=1					\
+    -Dman3ext=3perl				\
+    -Dpager=/usr/bin/sensible-pager		\
+    -Uafs					\
+    -Ud_csh					\
+    -Ud_ualarm					\
+    -Uusesfio					\
+    -Uusenm					\
+    -Ui_libutil					\
+    -DDEBUGGING=$debugging			\
+    -Doptimize=\"$optimize\"			\
+    $extra_path					\
+    $opts -des

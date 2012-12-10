@@ -1,0 +1,118 @@
+From 2791c5a86ed4eee7229006f2ba4e657f7ad994d0 Mon Sep 17 00:00:00 2001
+From: Brendan O'Dea <bod@debian.org>
+Date: Tue, 8 Mar 2005 19:30:38 +1100
+Subject: Fiddle with *PREFIX and variables written to the makefile
+
+Fiddle with *PREFIX and variables written to the makefile so that
+install directories may be changed when make is run by passing
+PREFIX= to the "make install" command (used when packaging
+modules).
+
+Patch-Name: debian/prefix_changes.diff
+---
+ cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Any.pm  |   12 ++++++------
+ cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Unix.pm |    3 +--
+ cpan/ExtUtils-MakeMaker/t/INST.t                |    4 +---
+ cpan/ExtUtils-MakeMaker/t/INST_PREFIX.t         |   10 +++++-----
+ 4 files changed, 13 insertions(+), 16 deletions(-)
+
+diff --git a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Any.pm b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Any.pm
+index fd85612..909a78d 100644
+--- a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Any.pm
++++ b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Any.pm
+@@ -758,8 +758,6 @@ all POD files in MAN1PODS and MAN3PODS.
+ sub manifypods_target {
+     my($self) = shift;
+ 
+-    my $man1pods      = '';
+-    my $man3pods      = '';
+     my $dependencies  = '';
+ 
+     # populate manXpods & dependencies:
+@@ -775,7 +773,7 @@ END
+     foreach my $section (qw(1 3)) {
+         my $pods = $self->{"MAN${section}PODS"};
+         push @man_cmds, $self->split_command(<<CMD, %$pods);
+-	\$(NOECHO) \$(POD2MAN) --section=$section --perm_rw=\$(PERM_RW)
++	\$(NOECHO) \$(POD2MAN) --section=\$(MAN${section}EXT) --perm_rw=\$(PERM_RW)
+ CMD
+     }
+ 
+@@ -1681,9 +1679,11 @@ sub init_INSTALL_from_PREFIX {
+         $self->{SITEPREFIX}   ||= $sprefix;
+         $self->{VENDORPREFIX} ||= $vprefix;
+ 
+-        # Lots of MM extension authors like to use $(PREFIX) so we
+-        # put something sensible in there no matter what.
+-        $self->{PREFIX} = '$('.uc $self->{INSTALLDIRS}.'PREFIX)';
++	my $p = $self->{PREFIX} = $self->{PERLPREFIX};
++	for my $t (qw/PERL SITE VENDOR/)
++	{
++	    $self->{"${t}PREFIX"} =~ s!^\Q$p\E(?=/|$)!\$(PREFIX)!;
++	}
+     }
+ 
+     my $arch    = $Config{archname};
+diff --git a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Unix.pm b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Unix.pm
+index f66720f..24a80e9 100644
+--- a/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Unix.pm
++++ b/cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_Unix.pm
+@@ -2984,8 +2984,7 @@ sub prefixify {
+     print STDERR "  prefixify $var => $path\n" if $Verbose >= 2;
+     print STDERR "    from $sprefix to $rprefix\n" if $Verbose >= 2;
+ 
+-    if( $self->{ARGS}{PREFIX} &&
+-        $path !~ s{^\Q$sprefix\E\b}{$rprefix}s ) 
++    if( $path !~ s{^\Q$sprefix\E\b}{$rprefix}s && $self->{ARGS}{PREFIX} )
+     {
+ 
+         print STDERR "    cannot prefix, using default.\n" if $Verbose >= 2;
+diff --git a/cpan/ExtUtils-MakeMaker/t/INST.t b/cpan/ExtUtils-MakeMaker/t/INST.t
+index b5ece3e..83fa699 100644
+--- a/cpan/ExtUtils-MakeMaker/t/INST.t
++++ b/cpan/ExtUtils-MakeMaker/t/INST.t
+@@ -61,9 +61,7 @@ isa_ok( $mm, 'ExtUtils::MakeMaker' );
+ is( $mm->{NAME}, 'Big::Dummy',  'NAME' );
+ is( $mm->{VERSION}, 0.01,            'VERSION' );
+ 
+-my $config_prefix = $Config{installprefixexp} || $Config{installprefix} ||
+-                    $Config{prefixexp}        || $Config{prefix};
+-is( $mm->{PERLPREFIX}, $config_prefix,   'PERLPREFIX' );
++is( $mm->{PERLPREFIX}, '$(PREFIX)',   'PERLPREFIX' );
+ 
+ is( !!$mm->{PERL_CORE}, !!$ENV{PERL_CORE}, 'PERL_CORE' );
+ 
+diff --git a/cpan/ExtUtils-MakeMaker/t/INST_PREFIX.t b/cpan/ExtUtils-MakeMaker/t/INST_PREFIX.t
+index 5bd0a5d..3b4a1e3 100644
+--- a/cpan/ExtUtils-MakeMaker/t/INST_PREFIX.t
++++ b/cpan/ExtUtils-MakeMaker/t/INST_PREFIX.t
+@@ -10,7 +10,7 @@ BEGIN {
+ }
+ 
+ use strict;
+-use Test::More tests => 52;
++use Test::More tests => 47;
+ use MakeMaker::Test::Utils;
+ use MakeMaker::Test::Setup::BFD;
+ use ExtUtils::MakeMaker;
+@@ -58,16 +58,16 @@ like( $stdout->read, qr{
+                         (?:Writing\ MYMETA.yml\ and\ MYMETA.json\n)?
+ }x );
+ 
+-is( $mm->{PREFIX}, '$(SITEPREFIX)', 'PREFIX set based on INSTALLDIRS' );
++#is( $mm->{PREFIX}, '$(SITEPREFIX)', 'PREFIX set based on INSTALLDIRS' );
+ 
+ isa_ok( $mm, 'ExtUtils::MakeMaker' );
+ 
+ is( $mm->{NAME}, 'Big::Dummy',  'NAME' );
+ is( $mm->{VERSION}, 0.01,            'VERSION' );
+ 
+-foreach my $prefix (qw(PREFIX PERLPREFIX SITEPREFIX VENDORPREFIX)) {
+-    unlike( $mm->{$prefix}, qr/\$\(PREFIX\)/ );
+-}
++#foreach my $prefix (qw(PREFIX PERLPREFIX SITEPREFIX VENDORPREFIX)) {
++#    unlike( $mm->{$prefix}, qr/\$\(PREFIX\)/ );
++#}
+ 
+ 
+ my $PREFIX = File::Spec->catdir('foo', 'bar');

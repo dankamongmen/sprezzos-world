@@ -1,0 +1,97 @@
+#!./perl.static -w
+
+#
+# Split POD documentation out of base modules and remove auto-loaded
+# subroutines
+#
+
+BEGIN { unshift @INC, 'lib' }
+use strict;
+use File::Find;
+use File::Path;
+use IO::File;
+
+my @args = @ARGV;
+@ARGV = ();
+find sub { push @ARGV, $File::Find::name if -f and /\.pm$/ }, @args;
+die "$0: no modules under @args?\n" unless @ARGV;
+
+$^I = '';
+$/ = '';
+
+my %auto;
+my $in_pod;
+my $pod;
+
+while (<>)
+{
+    if ($in_pod ||= /^=\w/)
+    {
+	unless ($pod)
+	{
+	    my $file = $ARGV;
+	    my $dir;
+	    for ($file)
+	    {
+		s/\.pm$/.pod/;
+		s/perl-base/perl-doc/;
+		s!/usr/lib/!/usr/share/!;
+		($dir) = m!(.*)/!;
+	    }
+
+	    mkpath $dir unless -d $dir;
+	    $pod = IO::File->new(">$file")
+		or die "$0: can't create $file ($!)\n";
+	}
+
+	if (/^=cut\n/)
+	{
+	    $in_pod = 0;
+	}
+	else
+	{
+	    $pod->print($_);
+	}
+    }
+    else
+    {
+	$auto{$ARGV}++ if /(use|require)\s+AutoLoader\b/;
+	print;
+    }
+}
+continue
+{
+    if (eof)
+    {
+	close ARGV;
+	if ($pod)
+	{
+	    $pod->print("=cut\n");
+	    $pod->close;
+	    undef $pod;
+	}
+
+	$in_pod = 0;
+    }
+}
+
+# strip everyting following __END__ in modules which use AutoLoader
+$/ = "\n";
+my $end;
+
+exit unless @ARGV = keys %auto;
+
+while (<>)
+{
+    print unless $end ||= /^__END__$/;
+}
+continue
+{
+    if (eof)
+    {
+	close ARGV;
+	$end = 0;
+    }
+}
+
+exit

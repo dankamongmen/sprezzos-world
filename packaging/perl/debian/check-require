@@ -1,0 +1,83 @@
+#!perl
+
+# check that the Perl modules listed in STDIN can be used with only
+# modules under the current directory (or the one given as the
+# only argument)
+
+# Copyright 2010 Niko Tyni <ntyni@debian.org>
+#
+# This program is free software;
+# you may redistribute it and/or modify it under the same terms as Perl
+# itself.
+
+# only look under the specified directory, default to cwd
+BEGIN {
+	my $dir = shift || '.';
+	chdir $dir or die("chdir $dir: $!");
+	@INC=map { qq{.$_} } grep m|^/|, @INC;
+}
+
+# unbuffer output
+$| = 1;
+
+# supported input format variations:
+#  usr/share/perl/5.12/Tie/Hash.pm
+#  usr/*/perl/*/Tie/Hash.pm
+#  Tie::Hash
+#  usr/*/perl/*/File/Glob
+#  usr/share/perl/5.12/Config_heavy.pl
+#  Config_heavy.pl
+#  Config
+#  unicore/heavy.pl
+#  sys/ioctl.ph
+
+sub canonicalize {
+	local $_ = shift;
+	/\*/ and do {
+    		my @files = glob;
+    		die("no files globbed by $_") if !@files;
+		return map { canonicalize($_) } @files;
+	};
+	-d and do {
+		return canonicalize("$_/*");
+	};
+
+	# usr/*/perl/*/auto/File/Glob/Glob.so and the like should be ignored
+	return () if m|/| && !/\.p[hlm]$/;
+
+	s|usr/[^/]+/perl/[^/]+/||;
+
+	s|/|::|g if s/\.pm$//;
+	return ($_);
+}
+
+while (<>) {
+	chomp;
+	next if !/\S/ || /^\s*#/;
+	check($_) for canonicalize($_);
+}
+
+my %seen;
+sub check {
+	local $_ = shift;
+	return if $seen{$_}++;
+	# "use IO" and "use re" are deprecated and/or useless
+	return if $_ eq 'IO' || $_ eq 're';
+	# "use feature" dies without an argument
+	return if $_ eq 'feature';
+	# this file does not return a true value, and is not to be used
+	# directly
+	return if $_ eq 'unicore/To/Isc.pl';
+	if (m|([^/]+)_heavy\.pl|) {
+		# bytes_heavy.pl needs bytes.pm loaded first
+		check($1);
+	};
+	print "$_: ";
+	if (/\.p[hl]$/) { #  require "unicore/To/Upper.pl";
+		require $_;
+	} else { # require Fcntl; Fcntl->import;
+		eval qq{require $_; $_->import;};
+		die $@ if $@; 
+	}
+	print "ok\n";
+}

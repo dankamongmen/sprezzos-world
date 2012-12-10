@@ -1,0 +1,57 @@
+#!/bin/sh
+
+# convert install paths
+eval $(set | sed -n 's!^\(install.*\)=/usr/!\1='$(pwd)'/debian/tmp/usr/!p')
+
+# we use a different method to get old site versions into @INC
+sitelib_stem=
+
+# no versions under vendorlib
+vendorlib_stem=
+
+# remove -rpath (shared libperl is moved to /usr/lib by rules)
+tmp=
+for t in $ccdlflags
+do
+    case $t in
+	-Wl,-rpath,*) ;;
+	*) tmp="$tmp${tmp:+ }$t"
+    esac
+done
+
+ccdlflags="$tmp"
+
+# set previous version dirs
+inc_version_list=
+inc_version_list_init=0
+while read ver
+do
+    dpkg --compare-versions "$ver" lt "$version"	    || break
+    dpkg --compare-versions "$ver" lt "$api_versionstring"  && continue
+    inc_version_list="$ver${inc_version_list:+ }$inc_version_list"
+    inc_version_list_init="\"$ver\",$inc_version_list_init"
+done <debian/released-versions
+if [ -n "$inc_version_list" ]; then
+    d_inc_version_list=define
+fi
+
+# we always want the Berkeley DB support
+if [ "$i_db" != "$define" ]; then
+    echo "debian/config.over: Berkeley DB support not enabled, aborting!" 1>&2
+    exit 1
+fi
+
+# force /usr/lib/<triplet> into $Config{libpth} if it's not there yet
+# see #630399
+multiarch_dir=/usr/lib/`dpkg-architecture -qDEB_HOST_MULTIARCH`
+if ! echo $libpth | grep -q "$multiarch_dir"
+then
+    libpth="$libpth $multiarch_dir"
+fi
+
+# set generic email addresses, host/domain names
+cf_by='Debian Project'
+cf_email=perl@packages.debian.org
+perladmin=root@localhost
+mydomain=
+myhostname=localhost

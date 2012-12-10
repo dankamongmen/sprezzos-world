@@ -1,0 +1,305 @@
+From 147b49ad5ab28847e42233b2d285cc139130f384 Mon Sep 17 00:00:00 2001
+From: Daniel Kahn Gillmor <dkg@fifthhorseman.net>
+Date: Fri, 17 Feb 2012 14:29:14 -0800
+Subject: sockdomain and socktype undef on newly accepted sockets
+
+There appears to be a flaw in IO::Socket where some IO::Socket objects
+are unable to properly report their socktype, sockdomain, or protocol
+(they return undef, even when the underlying socket is sufficiently
+initialized to have these properties).
+
+The attached patch should cover IO::Socket objects created via accept(),
+new_from_fd(), new(), and anywhere else whose details haven't been
+properly cached.
+
+No new code should be executed on IO::Socket objects whose details are
+already cached and present.
+
+Bug: https://rt.perl.org/rt3/Ticket/Display.html?id=112736
+Bug: https://rt.cpan.org/Ticket/Display.html?id=61577
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=659075
+Origin: http://perl5.git.perl.org/perl.git/shortlog/refs/heads/smoke-me/cpan61577-dom
+Patch-Name: fixes/socket_cache_propagate.diff
+---
+ MANIFEST                        |    3 ++
+ META.yml                        |    3 ++
+ dist/IO/Makefile.PL             |    3 ++
+ dist/IO/lib/IO/Socket.pm        |    9 ++++
+ dist/IO/t/cachepropagate-tcp.t  |   56 +++++++++++++++++++++++++
+ dist/IO/t/cachepropagate-udp.t  |   34 +++++++++++++++
+ dist/IO/t/cachepropagate-unix.t |   88 +++++++++++++++++++++++++++++++++++++++
+ 7 files changed, 196 insertions(+)
+ create mode 100644 dist/IO/t/cachepropagate-tcp.t
+ create mode 100644 dist/IO/t/cachepropagate-udp.t
+ create mode 100644 dist/IO/t/cachepropagate-unix.t
+
+diff --git a/MANIFEST b/MANIFEST
+index 6982c11..add28e5 100644
+--- a/MANIFEST
++++ b/MANIFEST
+@@ -3240,6 +3240,9 @@ dist/IO/Makefile.PL		IO extension makefile writer
+ dist/IO/poll.c			IO poll() emulation using select()
+ dist/IO/poll.h			IO poll() emulation using select()
+ dist/IO/README			IO extension maintenance notice
++dist/IO/t/cachepropagate-tcp.t	See if IO::Socket duplication works
++dist/IO/t/cachepropagate-udp.t	See if IO::Socket duplication works
++dist/IO/t/cachepropagate-unix.t	See if IO::Socket duplication works
+ dist/IO/t/io_const.t		See if constants from IO work
+ dist/IO/t/io_dir.t		See if directory-related methods from IO work
+ dist/IO/t/io_dup.t		See if dup()-related methods from IO work
+diff --git a/META.yml b/META.yml
+index a057e07..426a0a6 100644
+--- a/META.yml
++++ b/META.yml
+@@ -78,6 +78,9 @@ no_index:
+     - dist/IO/poll.c
+     - dist/IO/poll.h
+     - dist/IO/README
++    - dist/IO/t/cachepropagate-tcp.t
++    - dist/IO/t/cachepropagate-udp.t
++    - dist/IO/t/cachepropagate-unix.t
+     - dist/IO/t/IO.t
+     - dist/IO/t/io_const.t
+     - dist/IO/t/io_dir.t
+diff --git a/dist/IO/Makefile.PL b/dist/IO/Makefile.PL
+index 2159f43..70ffe12 100644
+--- a/dist/IO/Makefile.PL
++++ b/dist/IO/Makefile.PL
+@@ -33,6 +33,9 @@ WriteMakefile(
+   OBJECT       => '$(O_FILES)',
+   ABSTRACT     => 'Perl core IO modules',
+   AUTHOR       => 'Graham Barr <gbarr@cpan.org>',
++  PREREQ_PM    => {
++    'Test::More' => 0,
++  },
+   ( $PERL_CORE
+     ? ()
+     : (
+diff --git a/dist/IO/lib/IO/Socket.pm b/dist/IO/lib/IO/Socket.pm
+index 529423b..31bf568 100644
+--- a/dist/IO/lib/IO/Socket.pm
++++ b/dist/IO/lib/IO/Socket.pm
+@@ -349,18 +349,27 @@ sub timeout {
+ sub sockdomain {
+     @_ == 1 or croak 'usage: $sock->sockdomain()';
+     my $sock = shift;
++    if (!defined(${*$sock}{'io_socket_domain'})) {
++	my $addr = $sock->sockname();
++	${*$sock}{'io_socket_domain'} = sockaddr_family($addr)
++	   if (defined($addr));
++    }
+     ${*$sock}{'io_socket_domain'};
+ }
+ 
+ sub socktype {
+     @_ == 1 or croak 'usage: $sock->socktype()';
+     my $sock = shift;
++    ${*$sock}{'io_socket_type'} = $sock->sockopt(Socket::SO_TYPE)
++	if (!defined(${*$sock}{'io_socket_type'}) && defined(eval{Socket::SO_TYPE}));
+     ${*$sock}{'io_socket_type'}
+ }
+ 
+ sub protocol {
+     @_ == 1 or croak 'usage: $sock->protocol()';
+     my($sock) = @_;
++    ${*$sock}{'io_socket_proto'} = $sock->sockopt(Socket::SO_PROTOCOL)
++	if (!defined(${*$sock}{'io_socket_proto'}) && defined(eval{Socket::SO_PROTOCOL}));
+     ${*$sock}{'io_socket_proto'};
+ }
+ 
+diff --git a/dist/IO/t/cachepropagate-tcp.t b/dist/IO/t/cachepropagate-tcp.t
+new file mode 100644
+index 0000000..cec9a7b
+--- /dev/null
++++ b/dist/IO/t/cachepropagate-tcp.t
+@@ -0,0 +1,56 @@
++#!/usr/bin/perl
++
++use warnings;
++use strict;
++
++use IO::Socket;
++use IO::Socket::INET;
++use Socket;
++use Config;
++use Test::More;
++
++plan tests => 8;
++
++my $listener = IO::Socket::INET->new(Listen => 1,
++                                     LocalAddr => '127.0.0.1',
++                                     Proto => 'tcp');
++ok(defined($listener), 'socket created');
++
++my $port = $listener->sockport();
++
++my $p = $listener->protocol();
++ok(defined($p), 'protocol defined');
++my $d = $listener->sockdomain();
++ok(defined($d), 'domain defined');
++my $s = $listener->socktype();
++ok(defined($s), 'type defined');
++
++SKIP: {
++  $Config{d_pseudofork} || $Config{d_fork}
++    or skip("no fork", 4);
++  my $cpid = fork();
++  if (0 == $cpid) {
++    # the child:
++    sleep(1);
++    my $connector = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
++                                          PeerPort => $port,
++                                          Proto => 'tcp');
++    exit(0);
++  } else {;
++    ok(defined($cpid), 'spawned a child');
++  }
++
++  my $new = $listener->accept();
++
++  is($new->sockdomain(), $d, 'domain match');
++  SKIP: {
++      skip "no Socket::SO_PROTOCOL", 1 if !defined(eval { Socket::SO_PROTOCOL });
++      is($new->protocol(), $p, 'protocol match');
++  }
++  SKIP: {
++      skip "no Socket::SO_TYPE", 1 if !defined(eval { Socket::SO_TYPE });
++      is($new->socktype(), $s, 'type match');
++  }
++
++  wait();
++}
+diff --git a/dist/IO/t/cachepropagate-udp.t b/dist/IO/t/cachepropagate-udp.t
+new file mode 100644
+index 0000000..91cff37
+--- /dev/null
++++ b/dist/IO/t/cachepropagate-udp.t
+@@ -0,0 +1,34 @@
++#!/usr/bin/perl
++
++use warnings;
++use strict;
++
++use IO::Socket;
++use IO::Socket::INET;
++use Socket;
++use Test::More;
++
++plan tests => 7;
++
++my $listener = IO::Socket::INET->new(LocalAddr => '127.0.0.1',
++                                     Proto => 'udp');
++ok(defined($listener), 'socket created');
++
++my $p = $listener->protocol();
++ok(defined($p), 'protocol defined');
++my $d = $listener->sockdomain();
++ok(defined($d), 'domain defined');
++my $s = $listener->socktype();
++ok(defined($s), 'type defined');
++
++my $new = IO::Socket::INET->new_from_fd($listener->fileno(), 'r+');
++
++is($new->sockdomain(), $d, 'domain match');
++SKIP: {
++    skip "no Socket::SO_PROTOCOL", 1 if !defined(eval { Socket::SO_PROTOCOL });
++    is($new->protocol(), $p, 'protocol match');
++}
++SKIP: {
++    skip "no Socket::SO_TYPE", 1 if !defined(eval { Socket::SO_TYPE });
++    is($new->socktype(), $s, 'type match');
++}
+diff --git a/dist/IO/t/cachepropagate-unix.t b/dist/IO/t/cachepropagate-unix.t
+new file mode 100644
+index 0000000..1b0ace7
+--- /dev/null
++++ b/dist/IO/t/cachepropagate-unix.t
+@@ -0,0 +1,88 @@
++#!/usr/bin/perl
++
++use warnings;
++use strict;
++
++use File::Temp qw(tempdir);
++use File::Spec::Functions;
++use IO::Socket;
++use IO::Socket::UNIX;
++use Socket;
++use Config;
++use Test::More;
++
++plan tests => 15;
++
++SKIP: {
++  skip "UNIX domain sockets not implemented on $^O", 15 if ($^O =~ m/^(?:qnx|nto|vos|MSWin32)$/);
++
++  my $socketpath = catfile(tempdir( CLEANUP => 1 ), 'testsock');
++
++  # start testing stream sockets:
++
++  my $listener = IO::Socket::UNIX->new(Type => SOCK_STREAM,
++				       Listen => 1,
++				       Local => $socketpath);
++  ok(defined($listener), 'stream socket created');
++
++  my $p = $listener->protocol();
++  ok(defined($p), 'protocol defined');
++  my $d = $listener->sockdomain();
++  ok(defined($d), 'domain defined');
++  my $s = $listener->socktype();
++  ok(defined($s), 'type defined');
++
++  SKIP: {
++    $Config{d_pseudofork} || $Config{d_fork}
++      or skip("no fork", 4);
++    my $cpid = fork();
++    if (0 == $cpid) {
++      # the child:
++      sleep(1);
++      my $connector = IO::Socket::UNIX->new(Peer => $socketpath);
++      exit(0);
++    } else {
++      ok(defined($cpid), 'spawned a child');
++    }
++
++    my $new = $listener->accept();
++
++    is($new->sockdomain(), $d, 'domain match');
++    SKIP: {
++      skip "no Socket::SO_PROTOCOL", 1 if !defined(eval { Socket::SO_PROTOCOL });
++      is($new->protocol(), $p, 'protocol match');
++    }
++    SKIP: {
++      skip "no Socket::SO_TYPE", 1 if !defined(eval { Socket::SO_TYPE });
++      is($new->socktype(), $s, 'type match');
++    }
++
++    unlink($socketpath);
++    wait();
++  }
++
++  # now test datagram sockets:
++  $listener = IO::Socket::UNIX->new(Type => SOCK_DGRAM,
++		      Local => $socketpath);
++  ok(defined($listener), 'datagram socket created');
++
++  $p = $listener->protocol();
++  ok(defined($p), 'protocol defined');
++  $d = $listener->sockdomain();
++  ok(defined($d), 'domain defined');
++  $s = $listener->socktype();
++  ok(defined($s), 'type defined');
++
++  my $new = IO::Socket::UNIX->new_from_fd($listener->fileno(), 'r+');
++
++  is($new->sockdomain(), $d, 'domain match');
++  SKIP: {
++    skip "no Socket::SO_PROTOCOL", 1 if !defined(eval { Socket::SO_PROTOCOL });
++    is($new->protocol(), $p, 'protocol match');
++  }
++  SKIP: {
++    skip "no Socket::SO_TYPE", 1 if !defined(eval { Socket::SO_TYPE });
++    is($new->socktype(), $s, 'type match');
++  }
++  unlink($socketpath);
++}
