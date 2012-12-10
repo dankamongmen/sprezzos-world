@@ -175,7 +175,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) $(IJS) \
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) \
-	$(DSNIFF) $(DCRAW)
+	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1210,6 +1210,14 @@ $(GLU): $(SPREZZ)/GLU/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf glu_$(GLU_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: gnome-applets
+gnome-applets:$(GNOMEAPPLETS)_$(ARCH).deb
+$(GNOMEAPPLETS): $(SPREZZ)/gnome-applets/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-applets-$(gnome-applets_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gnome-bluetooth
 gnome-bluetooth:$(GNOMEBLUETOOTH)_$(ARCH).deb
