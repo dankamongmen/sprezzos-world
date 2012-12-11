@@ -177,7 +177,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
-	$(PLIST)
+	$(LIBPLIST) $(GUCHARMAP)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1734,6 +1734,14 @@ $(GTKAM): $(SPREZZ)/gtkam/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gtkam-$(gtkam_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gucharmap
+gucharmap:$(GUCHARMAP)_$(ARCH).deb
+$(GUCHARMAP): $(SPREZZ)/gucharmap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gucharmap-$(gucharmap_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: guvcview
 guvcview:$(GUVCVIEW)_$(ARCH).deb
 $(GUVCVIEW): $(SPREZZ)/guvcview/debian/changelog
@@ -2783,13 +2791,13 @@ $(PKGCONFIG): $(SPREZZ)/pkg-config/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pkg-config-$(pkg-config_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: plist
-plist:$(PLIST)_$(ARCH).deb
-$(PLIST): $(SPREZZ)/plist/debian/changelog
+.PHONY: libplist
+libplist:$(LIBPLIST)_$(ARCH).deb
+$(LIBPLIST): $(SPREZZ)/libplist/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xjvf plist-$(plist_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf libplist-$(libplist_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: policykit
 policykit:$(POLICYKIT)_$(ARCH).deb
