@@ -175,7 +175,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) $(IJS) \
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
-	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL)
+	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2170,6 +2170,14 @@ $(LIBWWWPERL): $(SPREZZ)/libwww-perl/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libwww-perl-$(libwww-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxdamage
+libxdamage:$(LIBXDAMAGE)_$(ARCH).deb
+$(LIBXDAMAGE): $(SPREZZ)/libxdamage/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxdamage_$(libxdamage_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libxfixes
 libxfixes:$(LIBXFIXES)_$(ARCH).deb
