@@ -123,7 +123,6 @@ debian/stamp/install/flex:
 	$(install_file)      debian/libfl.shared_object $(LIBDIR)/libfl.so
 	$(MAKE) install      -C po                  infodir=$(INFODIR) prefix=$(TMPTOP)/usr
 	$(MAKE) install-info -C doc                 infodir=$(INFODIR) prefix=$(TMPTOP)/usr
-	ln -s                flex                   $(BINDIR)/flex++
 	test ! -e            $(INFODIR)/dir         || rm -f $(INFODIR)/dir
 	test ! -e            $(INFODIR)/dir.old     || rm -f $(INFODIR)/dir.old
 	$(install_file)      README                 $(DOCDIR)/README
