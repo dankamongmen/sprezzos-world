@@ -226,6 +226,15 @@ $(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
 	ln -s software-properties-$(software-properties_UPVER).tar.xz software-properties_$(software-properties_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: avant-window-navigator
+avant-window-navigator:$(AVANTWINDOWNAVIGATOR)_$(ARCH).deb
+$(AVANTWINDOWNAVIGATOR): $(SPREZZ)/avant-window-navigator/debian/changelog
+	bzr branch lp:awn $@
+	rm -rf $@/debian
+	tar cJf avant-window-navigator-$(avant-window-navigator_UPVER).tar.xz $@ --exclude-vcs
+	ln -s avant-window-navigator-$(avant-window-navigator_UPVER).tar.xz avant-window-navigator_$(avant-window-navigator_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: synaptic
 synaptic:$(SYNAPTIC)_$(ARCH).deb
 $(SYNAPTIC): $(SPREZZ)/synaptic/debian/changelog
@@ -587,14 +596,6 @@ $(AVIDEMUX): $(SPREZZ)/avidemux/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf avidemux_$(avidemux_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: avant-window-navigator
-avant-window-navigator:$(AVANTWINDOWNAVIGATOR)_$(ARCH).deb
-$(AVANTWINDOWNAVIGATOR): $(SPREZZ)/avant-window-navigator/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf awn-extras-$(avant-window-navigator_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: awn-extras-applets
 awn-extras-applets:$(AWNEXTRASAPPLETS)_$(ARCH).deb
