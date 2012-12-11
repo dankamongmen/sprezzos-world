@@ -1,0 +1,47 @@
+#!/bin/sh
+
+set -e
+
+# Move a conffile without triggering a dpkg question
+mv_conffile() {
+    local OLDCONFFILE="$1"
+    local NEWCONFFILE="$2"
+
+    [ -e "$OLDCONFFILE" ] || return 0
+
+    echo "Preserving user changes to $NEWCONFFILE ..."
+    mv -f "$NEWCONFFILE" "$NEWCONFFILE".dpkg-new
+    mv -f "$OLDCONFFILE" "$NEWCONFFILE"
+}
+
+get_pid() {
+    [ -n "$1" ] || return 0
+    [ -S /var/run/dbus/system_bus_socket ] || return 0
+
+    dbus-send --system --dest=org.freedesktop.DBus --print-reply \
+              /org/freedesktop/DBus org.freedesktop.DBus.GetConnectionUnixProcessID \
+              string:$1 2>/dev/null | awk '/uint32/ {print $2}'
+}
+
+if [ "$1" = "configure" ]; then
+    # migrate power history from DeviceKit-power
+    if dpkg --compare-versions "$2" lt-nl "0.9.1-1" && [ -d /var/lib/DeviceKit-power/ ]; then
+	if [ ! -d /var/lib/upower ] || rmdir /var/lib/upower 2>/dev/null; then
+	    echo "Migrating old DeviceKit-power history.."
+	    mv /var/lib/DeviceKit-power/ /var/lib/upower
+	fi
+    fi
+
+    if dpkg --compare-versions "$2" lt "0.9.4-2"; then
+        mv_conffile "/etc/UPower.conf" "/etc/UPower/UPower.conf"
+    fi
+
+    # restart upowerd if it was running before
+    pid=$(get_pid org.freedesktop.UPower)
+    if [ -n "$pid" ]; then
+        kill $pid 2>/dev/null || true
+        upower --version >/dev/null || true # will trigger through D-Bus activation
+    fi
+fi
+
+#DEBHELPER#
