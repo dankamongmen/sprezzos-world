@@ -175,7 +175,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) $(IJS) \
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
-	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) \
+	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -860,6 +860,14 @@ $(DCONF): $(SPREZZ)/d-conf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf dconf-$(d-conf_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: db5.3
+db5.3:$(DB5.3)_$(ARCH).deb
+$(DB5.3): $(SPREZZ)/db5.3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf db5.3-$(db5.3_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: db-defaults
 db-defaults:$(DBDEFAULTS)_$(ARCH).deb
