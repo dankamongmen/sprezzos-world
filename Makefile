@@ -176,7 +176,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
-	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER)
+	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1117,13 +1117,21 @@ $(GAWK): $(SPREZZ)/gawk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gawk-$(gawk_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gconf
+gconf:$(GCONF)_$(ARCH).deb
+$(GCONF): $(SPREZZ)/gconf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gconf-$(gconf_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gcr
 gcr:$(GCR)_$(ARCH).deb
 $(GCR): $(SPREZZ)/gcr/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gcr_$(gcr_UPVER).orig.tar.xz $(TARARGS) $@
+	tar xJvf gcr-$(gcr_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gcrypt
 gcrypt:$(GCRYPT)_$(ARCH).deb
@@ -1411,7 +1419,7 @@ $(LIBGWEATHER): $(SPREZZ)/libgweather/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf libgweather-$(libgweather_UPVER).tar.bz2 $(TARARGS) $@
+	tar xJvf libgweather-$(libgweather_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gnome-media
 gnome-media:$(GNOMEMEDIA)_$(ARCH).deb
