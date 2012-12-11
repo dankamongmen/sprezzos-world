@@ -178,7 +178,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
 	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER) \
-	$(IDEVICEINSTALLER) $(DOCKMANAGER)
+	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -216,7 +216,7 @@ $(EVERPAD): $(SPREZZ)/everpad/debian/changelog
 	git clone git@github.com:nvbn/everpad.git $@
 	rm -rf $@/debian
 	tar cJf everpad-$(everpad_UPVER).tar.xz $@ --exclude-vcs
-	ln -s everpad-$(everpad_UPVER).tar.xz everpad_$(everpad_UPVER).orig.tar.xz
+	ln -sf everpad-$(everpad_UPVER).tar.xz everpad_$(everpad_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: software-properties
@@ -225,7 +225,7 @@ $(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
 	bzr branch lp:~juliank/software-properties/debian $@
 	rm -rf $@/debian
 	tar cJf software-properties-$(software-properties_UPVER).tar.xz $@ --exclude-vcs
-	ln -s software-properties-$(software-properties_UPVER).tar.xz software-properties_$(software-properties_UPVER).orig.tar.xz
+	ln -sf software-properties-$(software-properties_UPVER).tar.xz software-properties_$(software-properties_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: avant-window-navigator
@@ -234,7 +234,7 @@ $(AVANTWINDOWNAVIGATOR): $(SPREZZ)/avant-window-navigator/debian/changelog
 	bzr branch lp:awn $@
 	rm -rf $@/debian
 	tar cJf avant-window-navigator-$(avant-window-navigator_UPVER).tar.xz $@ --exclude-vcs
-	ln -s avant-window-navigator-$(avant-window-navigator_UPVER).tar.xz avant-window-navigator_$(avant-window-navigator_UPVER).orig.tar.xz
+	ln -sf avant-window-navigator-$(avant-window-navigator_UPVER).tar.xz avant-window-navigator_$(avant-window-navigator_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: dockmanager
@@ -243,7 +243,7 @@ $(DOCKMANAGER): $(SPREZZ)/dockmanager/debian/changelog
 	bzr branch lp:dockmanager $@
 	rm -rf $@/debian
 	tar cJf dockmanager-$(dockmanager_UPVER).tar.xz $@ --exclude-vcs
-	ln -s dockmanager-$(dockmanager_UPVER).tar.xz dockmanager_$(dockmanager_UPVER).orig.tar.xz
+	ln -fs dockmanager-$(dockmanager_UPVER).tar.xz dockmanager_$(dockmanager_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: synaptic
@@ -252,7 +252,7 @@ $(SYNAPTIC): $(SPREZZ)/synaptic/debian/changelog
 	bzr branch lp:synaptic $@
 	rm -rf $@/debian
 	tar cJf synaptic-$(synaptic_UPVER).tar.xz $@ --exclude-vcs
-	ln -s synaptic-$(synaptic_UPVER).tar.xz synaptic_$(synaptic_UPVER).orig.tar.xz
+	ln -sf synaptic-$(synaptic_UPVER).tar.xz synaptic_$(synaptic_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: gnome-xcf-thumbnailer
@@ -260,7 +260,7 @@ gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
 $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
 	git clone git@github.com:dankamongmen/gnome-xcf-thumbnailer.git $@
 	tar cJf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz $@ --exclude-vcs
-	ln -s gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz gnome-xcf-thumbnailer_$(gnome-xcf-thumbnailer_UPVER).orig.tar.xz
+	ln -sf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz gnome-xcf-thumbnailer_$(gnome-xcf-thumbnailer_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: growlight
@@ -275,7 +275,7 @@ reportbug: $(REPORTBUG)_$(ARCH).deb
 $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
 	git clone git://anonscm.debian.org/reportbug/reportbug.git $@
 	tar cJf reportbug-$(reportbug_UPVER).tar.xz $@ --exclude-vcs
-	ln -s reportbug-$(reportbug_UPVER).tar.xz reportbug_$(reportbug_UPVER).orig.tar.xz
+	ln -sf reportbug-$(reportbug_UPVER).tar.xz reportbug_$(reportbug_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: mcelog
@@ -305,7 +305,7 @@ $(APTDAEMON): $(SPREZZ)/aptdaemon/debian/changelog
 	bzr branch lp:aptdaemon $@
 	rm -rf $@/debian
 	tar cJf aptdaemon-$(aptdaemon_UPVER).tar.xz $@ --exclude-vcs
-	ln -s aptdaemon-$(aptdaemon_UPVER).tar.xz aptdaemon_$(aptdaemon_UPVER).orig.tar.xz
+	ln -sf aptdaemon-$(aptdaemon_UPVER).tar.xz aptdaemon_$(aptdaemon_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: aptitude
@@ -380,7 +380,7 @@ $(DESPOTIFY): $(SPREZZ)/despotify/debian/changelog
 	rm -rf $@/debian
 	cp -r $(<D) $@/
 	tar cJf despotify-$(despotify_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
-	ln -s despotify-$(despotify_UPVER).tar.xz despotify_$(despotify_UPVER).orig.tar.xz
+	ln -sf despotify-$(despotify_UPVER).tar.xz despotify_$(despotify_UPVER).orig.tar.xz
 
 .PHONY: mplayer
 mplayer:$(MPLAYER)_$(ARCH).deb
@@ -389,7 +389,7 @@ $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	rm -rf $@/debian
 	cp -r $(<D) $@/
 	tar cJf mplayer-$(mplayer_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
-	ln -s mplayer-$(mplayer_UPVER).tar.xz mplayer_$(mplayer_UPVER).orig.tar.xz
+	ln -sf mplayer-$(mplayer_UPVER).tar.xz mplayer_$(mplayer_UPVER).orig.tar.xz
 
 .PHONY: ramen
 ramen:$(RAMEN)_$(ARCH).deb
@@ -437,7 +437,7 @@ $(USBVIEWUP).tar.gz:
 	wget -nc -O$@ http://www.kroah.com/linux/usb/$@
 
 $(USBVIEWORIG): $(USBVIEWUP).tar.gz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: usbview
 usbview:$(USBVIEW)_$(ARCH).deb
@@ -671,6 +671,14 @@ $(BISON): $(SPREZZ)/bison/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bison-$(bison_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: blender
+blender:$(BLENDER)_$(ARCH).deb
+$(BLENDER): $(SPREZZ)/blender/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blender-$(blender_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: bless
 bless:$(BLESS)_$(ARCH).deb
@@ -1869,7 +1877,7 @@ jbig2dec:$(JBIG2DEC)_$(ARCH).deb
 $(JBIG2DEC): $(SPREZZ)/jbig2dec/debian/changelog
 	git clone git://github.com/dankamongmen/jbig2dec.git $@
 	tar cJf jbig2dec-$(jbig2dec_UPVER).tar.xz $@ --exclude-vcs
-	ln -s jbig2dec-$(jbig2dec_UPVER).tar.xz jbig2dec_$(jbig2dec_UPVER).orig.tar.xz
+	ln -sf jbig2dec-$(jbig2dec_UPVER).tar.xz jbig2dec_$(jbig2dec_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: json-c
@@ -3656,7 +3664,7 @@ $(EGLIBCUP).tar.gz:
 	wget -nc -O$@ ftp://ftp.gnu.org/gnu/glibc/$@
 
 $(EGLIBCORIG): $(EGLIBCUP).tar.gz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: eglibc
 eglibc:$(EGLIBC)_$(ARCH).deb
@@ -3692,7 +3700,7 @@ $(FBTERMUP).tar.gz:
 	wget -nc -O$@ http://nick-black.com/pub/$@
 
 $(FBTERMORIG): $(FBTERMUP).tar.gz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: fbterm
 fbterm:$(FBTERM)_$(ARCH).deb
@@ -3706,7 +3714,7 @@ $(FONTCONFIGUP).tar.gz:
 	wget -nc -O$@ http://www.freedesktop.org/software/fontconfig/release/$@
 
 $(FONTCONFIGORIG): $(FONTCONFIGUP).tar.gz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: fontconfig
 fontconfig:$(FONTCONFIG)_$(ARCH).deb
@@ -3720,7 +3728,7 @@ $(FREETYPEUP).tar.gz:
 	wget -nc -O$@ http://download.savannah.gnu.org/releases/freetype/$@
 
 $(FREETYPEORIG): $(FREETYPEUP).tar.gz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: freetype
 freetype:$(FREETYPE)_$(ARCH).deb
@@ -3734,7 +3742,7 @@ $(GDKPIXBUFUP).tar.xz:
 	wget -nc -O$@ http://ftp.acc.umu.se/pub/gnome/sources/gdk-pixbuf/2.26/$@
 
 $(GDKPIXBUFORIG): $(GDKPIXBUFUP).tar.xz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: gdk-pixbuf
 gdk-pixbuf:$(GDKPIXBUF)_$(ARCH).deb
@@ -3748,7 +3756,7 @@ $(HARFBUZZUP).tar.gz:
 	wget -nc -O$@ http://cgit.freedesktop.org/harfbuzz/snapshot/$@
 
 $(HARFBUZZORIG): $(HARFBUZZUP).tar.gz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: harfbuzz
 harfbuzz:$(HARFBUZZ)_$(ARCH).deb
@@ -3762,7 +3770,7 @@ $(HFSUTILSUP).tar.gz:
 	wget -nc -O$@ ftp://ftp.mars.org/pub/hfs/$@
 
 $(HFSUTILSORIG): $(HFSUTILSUP).tar.gz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: hfsutils
 hfsutils:$(HFSUTILS)_$(ARCH).deb
@@ -3776,7 +3784,7 @@ $(HWLOCUP).tar.bz2:
 	wget -nc -O$@ http://www.open-mpi.org/software/hwloc/v1.5/downloads/$@
 
 $(HWLOCORIG): $(HWLOCUP).tar.bz2
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: hwloc
 hwloc:$(HWLOC)_$(ARCH).deb
@@ -3790,7 +3798,7 @@ $(LESSUP).tar.gz:
 	wget -nc -O$@ http://www.greenwoodsoftware.com/less/$@
 
 $(LESSORIG): $(LESSUP).tar.gz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: less
 less:$(LESS)_$(ARCH).deb
@@ -3804,7 +3812,7 @@ $(LIBDRMUP).tar.bz2:
 	wget -nc -O$@ http://dri.freedesktop.org/libdrm/$(LIBDRMUP).tar.bz2
 
 $(LIBDRMORIG): $(LIBDRMUP).tar.bz2
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: libdrm
 libdrm:$(LIBDRM)_$(ARCH).deb
@@ -3818,7 +3826,7 @@ $(LIBPNGUP).tar.bz2:
 	wget -nc -O$@ ftp://ftp.simplesystems.org/pub/libpng/png/src/$(LIBPNGUP).tar.bz2
 
 $(LIBPNGORIG): $(LIBPNGUP).tar.bz2
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: libpng
 libpng:$(LIBPNG)_$(ARCH).deb
@@ -3864,7 +3872,7 @@ $(PANGOUP).tar.xz:
 	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/pango/1.32/$@
 
 $(PANGOORIG): $(PANGOUP).tar.xz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: pango
 pango:$(PANGO)_$(ARCH).deb
@@ -3886,7 +3894,7 @@ $(PULSEAUDIOUP).tar.xz:
 	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(@F)
 
 $(PULSEAUDIOORIG): $(PULSEAUDIOUP).tar.xz
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: pulseaudio
 pulseaudio:$(PULSEAUDIO)_$(ARCH).deb
@@ -3908,7 +3916,7 @@ $(SOCATUP).tar.bz2:
 	wget -nc -O$@ http://www.dest-unreach.org/socat/download/$(@F)
 
 $(SOCATORIG): $(SOCATUP).tar.bz2
-	ln -s $< $@
+	ln -sf $< $@
 
 .PHONY: socat
 socat:$(SOCAT)_$(ARCH).deb
