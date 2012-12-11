@@ -1,0 +1,162 @@
+#!/usr/bin/make -f
+
+export MONO_DISABLE_SHM = 1
+
+DH = dh $(1) --parallel --with=autoreconf --with=python2
+
+SONAME=4
+VERSION = 0.7.94
+export LDFLAGS=-Wl,-O1 -Wl,--as-needed
+PYVERS = $(shell pyversions -v -r ./debian/control)
+confflags += --without-hal --enable-udev
+
+# targets are appended to $(BASE) to get the build directory
+targets = gtk nogtk $(foreach i, $(PYVERS), python$(i)) doc
+
+ifneq (,$(findstring -cil,$(shell dh_listpackages)))
+targets += mono
+DH += --with=cli
+endif
+
+BASE = build
+
+
+# configure stuff
+$(BASE)/gtk/config.status:
+	dh_auto_configure -B$(dir $@) -- \
+		--with-python=no \
+		--with-mono=no \
+		--disable-gtk-doc \
+		$(confflags)
+
+$(BASE)/nogtk/config.status:
+	dh_auto_configure -B$(dir $@) -- \
+		--with-python=no \
+		--with-mono=no \
+		--disable-gtk-doc \
+		--disable-gdk-pixbuf \
+		$(confflags)
+
+$(BASE)/mono/config.status:
+	dh_auto_configure -B$(dir $@) -- \
+		--with-python=no \
+		--with-mono=yes \
+		--disable-gtk-doc \
+		--enable-gdk-pixbuf \
+		--prefix=/usr \
+		--libdir=/usr/lib \
+		$(confflags) \
+		MCS=/usr/bin/mono-csc
+
+$(BASE)/python%/config.status:
+	dh_auto_configure -B$(dir $@) -- \
+		--with-python=$(notdir $(patsubst %/, %, $(dir $@))) \
+		--with-mono=no \
+		--enable-gtk-doc \
+		--enable-gdk-pixbuf \
+		$(confflags)
+
+$(BASE)/doc/config.status:
+	dh_auto_configure -B$(dir $@) -- \
+		--with-python=no \
+		--with-mono=no \
+		--enable-gtk-doc \
+		$(confflags)
+
+
+# build stuff
+$(BASE)/%/build-stamp: $(BASE)/%/config.status
+	dh_auto_build -B$(dir $@)
+	touch $@
+
+
+# install stuff
+$(BASE)/gtk/install-stamp: $(BASE)/gtk/build-stamp
+	dh_auto_install -B$(dir $@)
+	install \
+		build/gtk/tools/ipod-time-sync \
+		debian/tmp/usr/bin/ipod-time-sync
+	touch $@
+
+$(BASE)/mono/install-stamp: $(BASE)/mono/build-stamp
+	dh_auto_install -B$(dir $@)/bindings/mono
+	touch $@
+
+$(BASE)/python%/install-stamp: $(BASE)/python%/build-stamp \
+                               $(BASE)/gtk/build-stamp
+	dh_auto_install -B$(dir $@)/bindings/python
+	touch $@
+
+$(BASE)/nogtk/install-stamp: $(BASE)/nogtk/build-stamp
+	dh_auto_install -B$(dir $@) -- \
+		DESTDIR=$(CURDIR)/debian/tmp-nogtk
+	touch $@
+
+$(BASE)/doc/install-stamp: $(BASE)/doc/build-stamp
+	dh_auto_install -B$(dir $@)/docs
+	touch $@
+
+
+# hook in the configure, build, install and clean stages
+override_dh_auto_configure: $(foreach i, $(targets), $(BASE)/$(i)/config.status)
+
+override_dh_auto_build: $(foreach i, $(targets), $(BASE)/$(i)/build-stamp)
+
+override_dh_auto_install: $(foreach i, $(targets), $(BASE)/$(i)/install-stamp)
+	$(foreach i, \
+		$(wildcard debian/tmp*/usr/bin/*) \
+		$(wildcard debian/tmp/usr/lib/*/udev/*-info) \
+		$(wildcard debian/tmp/usr/lib/*/libgpod.so.$(SONAME)) \
+		$(wildcard debian/tmp/usr/lib/*/python*/*-packages/gpod/_gpod.so), \
+		chrpath -d $(i);)
+
+	find debian/tmp* -name '*.la' -delete
+
+	# Needed for syncing with ubuntu: launchpad needs .pot files
+	cd po; intltool-update --pot
+
+# autogenerate *-nogtk*.install files
+debian/libgpod$(SONAME)-nogtk.install: debian/libgpod$(SONAME).install
+	cp $< $@
+
+debian/libgpod-nogtk-dev.install: debian/libgpod-dev.install
+	cp $< $@
+
+override_dh_install: debian/libgpod$(SONAME)-nogtk.install \
+                     debian/libgpod-nogtk-dev.install
+	dh_install -Nlibgpod$(SONAME)-nogtk -Nlibgpod-nogtk-dev
+	dh_install \
+		--sourcedir=debian/tmp-nogtk \
+		-plibgpod$(SONAME)-nogtk \
+		-plibgpod-nogtk-dev
+
+
+# don't install things to /usr/share/doc/libgpod(-nogtk)-dev, as they're
+# symlinked
+override_dh_installdocs override_dh_installchangelogs:
+	$(subst override_,,$@) -Nlibgpod-dev -Nlibgpod-nogtk-dev
+
+# cleaning rules
+clean:
+	$(call DH, $@)
+	rm -f debian/libgpod-nogtk-dev.install debian/libgpod$(SONAME)-nogtk.install
+	rm -rf debian/tmp-*
+
+override_dh_auto_clean:
+	rm -rf build/
+
+override_dh_makeshlibs:
+	dpkg-gensymbols -c4 -Pdebian/libgpod$(SONAME)-nogtk -plibgpod$(SONAME)-nogtk
+	dpkg-gensymbols -c4 -Pdebian/libgpod$(SONAME) -plibgpod$(SONAME)
+	dh_makeshlibs -plibgpod$(SONAME) \
+		-V 'libgpod$(SONAME) (>= $(VERSION))'
+	dh_makeshlibs -plibgpod$(SONAME)-nogtk \
+		-V 'libgpod$(SONAME)-nogtk (>= $(VERSION)) | libgpod$(SONAME) (>= $(VERSION))'
+
+override_dh_python2:
+	dh_python2 --depends=mutagen --depends=gobject
+
+%:
+	$(call DH, $@)
+
+.PHONY: clean
