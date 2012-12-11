@@ -2688,6 +2688,15 @@ $(NVIDIACUDATOOLKIT): $(SPREZZ)/nvidia-cuda-toolkit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf nvidia-cuda-toolkit-$(nvidia-cuda-toolkit_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: nvidia-graphics-drivers
+nvidia-graphics-drivers:$(NVIDIAGRAPHICSDRIVERS)_$(ARCH).deb
+$(NVIDIAGRAPHICSDRIVERS): $(SPREZZ)/nvidia-graphics-drivers/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	mv NVIDIA-Linux-*.run $@
+	tar czvf nvidia-graphics-drivers_313.09.orig.tar.gz $@ --exclude-vcs --exclude=debian
+
 .PHONY: nvidia-kernel-dkms
 nvidia-kernel-dkms:$(NVIDIAKERNELDKMS)_$(ARCH).deb
 $(NVIDIAKERNELDKMS): $(SPREZZ)/nvidia-kernel-dkms/debian/changelog
@@ -2695,7 +2704,7 @@ $(NVIDIAKERNELDKMS): $(SPREZZ)/nvidia-kernel-dkms/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	mv NVIDIA-Linux-*.run $@
-	tar czvf nvidia-graphics-drivers_310.19.orig.tar.gz $@ --exclude-vcs --exclude=debian
+	tar czvf nvidia-kernel-dkms_313.09.orig.tar.gz $@ --exclude-vcs --exclude=debian
 
 .PHONY: nvidia-settings
 nvidia-settings:$(NVIDIASETTINGS)_$(ARCH).deb
