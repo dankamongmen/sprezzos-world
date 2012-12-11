@@ -1,0 +1,263 @@
+From: "Matteo F. Vescovi" <mfv.debian@gmail.com>
+Date: Sat, 28 Apr 2012 12:05:51 +0200
+Subject: look_for_droid_ttf_with_fontconfig
+
+ * Remove bad installation of fonts directory into locales.
+ * Avoid using the droid font shipped with upstream source
+   and use fontconfig to get it.
+
+Signed-off-by: Kevin Roy <kiniou@gmail.com>
+---
+ CMakeLists.txt                                   |   10 +++++
+ build_files/cmake/Modules/FindFontconfig.cmake   |   49 ++++++++++++++++++++++
+ build_files/cmake/macros.cmake                   |    4 ++
+ source/blender/blenfont/CMakeLists.txt           |    7 ++++
+ source/blender/blenfont/intern/blf_translation.c |   23 ++++++++++
+ source/blender/blenlib/BLI_fileops.h             |    1 +
+ source/blender/blenlib/intern/fileops.c          |   43 +++++++++++++++++++
+ source/creator/CMakeLists.txt                    |    1 -
+ 8 files changed, 137 insertions(+), 1 deletion(-)
+ create mode 100644 build_files/cmake/Modules/FindFontconfig.cmake
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7e9e50f..c6e55db 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -117,6 +117,9 @@ option(WITH_BLENDER "Build blender (disable to build only the blender player)" O
+ mark_as_advanced(WITH_BLENDER)
+ 
+ option(WITH_INTERNATIONAL "Enable I18N (International fonts and text)" ON)
++if(UNIX AND NOT APPLE)
++    option(WITH_FONTCONFIG "Enable Fontconfig (discovering fonts installed on linux)" OFF)
++endif()
+ 
+ option(WITH_PYTHON        "Enable Embedded Python API  (only disable for development)" ON)
+ option(WITH_PYTHON_SECURITY "Disables execution of scripts within blend files by default (recommend to leave off)" OFF)
+@@ -581,6 +584,13 @@ if(UNIX AND NOT APPLE)
+ 		endif()
+ 	endif()
+ 
++	if(WITH_FONTCONFIG)
++		find_package(Fontconfig)
++		if(NOT FONTCONFIG_FOUND)
++			set(WITH_FONTCONFIG OFF)
++		endif()
++	endif()
++
+ 	if(WITH_FFTW3)
+ 		find_package(Fftw3)
+ 		if(NOT FFTW3_FOUND)
+diff --git a/build_files/cmake/Modules/FindFontconfig.cmake b/build_files/cmake/Modules/FindFontconfig.cmake
+new file mode 100644
+index 0000000..337ece9
+--- /dev/null
++++ b/build_files/cmake/Modules/FindFontconfig.cmake
+@@ -0,0 +1,49 @@
++# - Try to find the  Fontconfig
++# Once done this will define
++#
++#  FONTCONFIG_FOUND - system has Fontconfig
++#  FONTCONFIG_INCLUDE_DIR - The include directory to use for the fontconfig headers
++#  FONTCONFIG_LIBRARIES - Link these to use FONTCONFIG
++#  FONTCONFIG_DEFINITIONS - Compiler switches required for using FONTCONFIG
++
++# Copyright (c) 2006,2007 Laurent Montel, <montel@kde.org>
++#
++# Redistribution and use is allowed according to the terms of the BSD license.
++# For details see the accompanying COPYING-CMAKE-SCRIPTS file.
++
++
++if (FONTCONFIG_LIBRARIES AND FONTCONFIG_INCLUDE_DIR)
++
++  # in cache already
++  set(FONTCONFIG_FOUND TRUE)
++
++else (FONTCONFIG_LIBRARIES AND FONTCONFIG_INCLUDE_DIR)
++
++  if (NOT WIN32)
++    # use pkg-config to get the directories and then use these values
++    # in the FIND_PATH() and FIND_LIBRARY() calls
++    find_package(PkgConfig)
++    pkg_check_modules(FONTCONFIG fontconfig)
++
++    set(FONTCONFIG_DEFINITIONS ${FONTCONFIG_CFLAGS_OTHER})
++  endif (NOT WIN32)
++
++  find_path(FONTCONFIG_INCLUDE_DIR fontconfig/fontconfig.h
++    PATHS
++    ${FONTCONFIG_INCLUDEDIR}
++    ${FONTCONFIG_INCLUDE_DIRS}
++    /usr/X11/include
++  )
++
++  find_library(FONTCONFIG_LIBRARIES NAMES fontconfig
++    PATHS
++    ${FONTCONFIG_LIBDIR}
++    ${FONTCONFIG_LIBRARY_DIRS}
++  )
++
++  include(FindPackageHandleStandardArgs)
++  FIND_PACKAGE_HANDLE_STANDARD_ARGS(Fontconfig DEFAULT_MSG FONTCONFIG_LIBRARIES FONTCONFIG_INCLUDE_DIR )
++
++  mark_as_advanced(FONTCONFIG_LIBRARIES FONTCONFIG_INCLUDE_DIR)
++
++endif (FONTCONFIG_LIBRARIES AND FONTCONFIG_INCLUDE_DIR)
+diff --git a/build_files/cmake/macros.cmake b/build_files/cmake/macros.cmake
+index eeefcf7..6de7fa8 100644
+--- a/build_files/cmake/macros.cmake
++++ b/build_files/cmake/macros.cmake
+@@ -242,6 +242,10 @@ macro(setup_liblinks
+ 		endif()
+ 	endif()
+ 
++	if(WITH_FONTCONFIG)
++		target_link_libraries(${target} ${FONTCONFIG_LIBRARIES})
++	endif()
++
+ 	if(WITH_OPENAL)
+ 		target_link_libraries(${target} ${OPENAL_LIBRARY})
+ 	endif()
+diff --git a/source/blender/blenfont/CMakeLists.txt b/source/blender/blenfont/CMakeLists.txt
+index ebf9ff4..550aa0d 100644
+--- a/source/blender/blenfont/CMakeLists.txt
++++ b/source/blender/blenfont/CMakeLists.txt
+@@ -57,6 +57,13 @@ if(WITH_INTERNATIONAL)
+ 	add_definitions(-DWITH_INTERNATIONAL)
+ endif()
+ 
++if(WITH_FONTCONFIG)
++	list(APPEND INC_SYS
++		${FONTCONFIG_INCLUDE_DIRS}
++	)
++	add_definitions(-DWITH_FONTCONFIG)
++endif()
++
+ add_definitions(-DGLEW_STATIC)
+ 
+ blender_add_lib(bf_blenfont "${SRC}" "${INC}" "${INC_SYS}")
+diff --git a/source/blender/blenfont/intern/blf_translation.c b/source/blender/blenfont/intern/blf_translation.c
+index 12fa15a..8100fad 100644
+--- a/source/blender/blenfont/intern/blf_translation.c
++++ b/source/blender/blenfont/intern/blf_translation.c
+@@ -57,13 +57,35 @@
+ #include "DNA_userdef_types.h" /* For user settings. */
+ 
+ #ifdef WITH_INTERNATIONAL
++#ifdef WITH_FONTCONFIG
++#include <fontconfig/fontconfig.h>
++#else
+ static const char unifont_filename[] ="droidsans.ttf.gz";
++#endif
+ static unsigned char *unifont_ttf = NULL;
+ static int unifont_size = 0;
+ 
+ unsigned char *BLF_get_unifont(int *unifont_size_r)
+ {
+ 	if (unifont_ttf == NULL) {
++#ifdef WITH_FONTCONFIG
++		FcFontSet *fontset = NULL;
++		FcValue v;
++		FcPattern *pattern = FcPatternBuild (0, FC_FAMILY, FcTypeString, "Droid Sans",FC_STYLE, FcTypeString, "Regular", (char *) 0);
++		fontset = FcFontList(0,pattern,0);
++		if (fontset->nfont > 0) {
++			//get the file of the first font in the fontset that match pattern
++			FcPatternGet(fontset->fonts[0], FC_FILE, 0, &v);
++			//load the file stored in the union of FcValue into memory
++			unifont_ttf = (unsigned char*)BLI_file_to_mem(
++				(const char *)v.u.s,
++				&unifont_size
++			);
++		}
++		else {
++			printf("%s: 'Droid Sans Regular' font not found with fontconfig\n",__func__);
++		}
++#else
+ 		char *fontpath = BLI_get_folder(BLENDER_DATAFILES, "fonts");
+ 		if (fontpath) {
+ 			char unifont_path[1024];
+@@ -75,6 +97,7 @@ unsigned char *BLF_get_unifont(int *unifont_size_r)
+ 		else {
+ 			printf("%s: 'fonts' data path not found for international font, continuing\n", __func__);
+ 		}
++#endif
+ 	}
+ 
+ 	*unifont_size_r = unifont_size;
+diff --git a/source/blender/blenlib/BLI_fileops.h b/source/blender/blenlib/BLI_fileops.h
+index 1bf4efc..5e4db1a 100644
+--- a/source/blender/blenlib/BLI_fileops.h
++++ b/source/blender/blenlib/BLI_fileops.h
+@@ -80,6 +80,7 @@ int    BLI_file_touch(const char *file);
+ 
+ int    BLI_file_gzip(const char *from, const char *to);
+ char  *BLI_file_ungzip_to_mem(const char *from_file, int *size_r);
++char  *BLI_file_to_mem(const char *from_file, int *size_r);
+ 
+ size_t BLI_file_descriptor_size(int file);
+ size_t BLI_file_size(const char *file);
+diff --git a/source/blender/blenlib/intern/fileops.c b/source/blender/blenlib/intern/fileops.c
+index 4b5ea44..2fa648b 100644
+--- a/source/blender/blenlib/intern/fileops.c
++++ b/source/blender/blenlib/intern/fileops.c
+@@ -152,6 +152,49 @@ char *BLI_file_ungzip_to_mem(const char *from_file, int *size_r)
+ 	return mem;
+ }
+ 
++/* read the file in from_file and write it to memory to_mem, at most size bytes.
++   return the file size
++  */
++char *BLI_file_to_mem(const char *from_file, int *size_r) {
++
++    FILE * file;
++    int readsize, size, alloc_size=0;
++    char *mem= NULL;
++    const int chunk_size= 512*1024;
++
++    size= 0;
++
++    file = fopen( from_file, "rb" );
++
++    for(;;) {
++        if(mem==NULL) {
++            mem= MEM_callocN(chunk_size, "BLI_file_to_mem");
++            alloc_size= chunk_size;
++        } else {
++            mem= MEM_reallocN(mem, size+chunk_size);
++            alloc_size+= chunk_size;
++        }
++
++        readsize= fread(mem+size, chunk_size,1,file);
++        if(readsize>0) {
++            size+= readsize;
++        }
++        else break;
++    }
++
++    if(size==0) {
++        MEM_freeN(mem);
++        mem= NULL;
++    }
++    else if(alloc_size!=size)
++        mem= MEM_reallocN(mem, size);
++
++    fclose(file);
++    *size_r= size;
++
++    return mem;
++
++}
+ 
+ /* return 1 when file can be written */
+ int BLI_file_is_writable(const char *filename)
+diff --git a/source/creator/CMakeLists.txt b/source/creator/CMakeLists.txt
+index 3cc5a62..cbced07 100644
+--- a/source/creator/CMakeLists.txt
++++ b/source/creator/CMakeLists.txt
+@@ -294,7 +294,6 @@ if(WITH_INTERNATIONAL)
+ 	install(
+ 		DIRECTORY
+ 			${CMAKE_SOURCE_DIR}/release/datafiles/locale/
+-			${CMAKE_SOURCE_DIR}/release/datafiles/fonts
+ 		DESTINATION ${CMAKE_INSTALL_PREFIX}/share/locale
+ 		PATTERN ".svn" EXCLUDE
+ 	)

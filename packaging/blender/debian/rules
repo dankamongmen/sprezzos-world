@@ -1,0 +1,68 @@
+#!/usr/bin/make -f
+
+INSTDIR = debian/tmp
+PROCESSORS:= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+
+# Adapted from http://wiki.debian.org/SandroTosi/Svn_get-orig-source
+PACKAGE = blender
+SRC_VERSION := $(shell dpkg-parsechangelog | sed -ne 's/^Version: \(\([0-9]\+\):\)\?\(.*\)-.*/\3/p')
+SVN_REVISION := $(shell echo $(SRC_VERSION) | sed 's,^.*svn,,')
+TARBALL = $(PACKAGE)_$(SRC_VERSION).orig.tar.bz2
+UPSTREAM_SVN_REPOSITORY = "https://svn.blender.org/svnroot/bf-blender/trunk/blender"
+.PHONY: get-orig-source
+
+get-orig-source:
+	rm -rf get-orig-source $(TARBALL)
+	mkdir get-orig-source
+	svn export -r $(SVN_REVISION) $(UPSTREAM_SVN_REPOSITORY) \
+	get-orig-source/$(PACKAGE)-$(SRC_VERSION).orig
+	BZIP2='--best --no-name' tar cjf $(TARBALL) -C get-orig-source $(PACKAGE)-$(SRC_VERSION).orig
+	rm -rf get-orig-source
+	@echo "  "$(TARBALL)" created; move it to the right destination to build the package"
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_SKIP_RPATH=ON \
+		-DCMAKE_VERBOSE_MAKEFILE=ON \
+		-DWITH_IMAGE_OPENJPEG=ON \
+		-DWITH_FFTW3=ON \
+		-DWITH_JACK=ON \
+		-DWITH_PLAYER=ON \
+		-DWITH_INSTALL_PORTABLE=OFF \
+		-DWITH_PYTHON_INSTALL=OFF \
+		-DWITH_CODEC_FFMPEG=ON \
+		-DWITH_CODEC_SNDFILE=ON \
+		-DWITH_BUILTIN_GLEW=OFF \
+		-DWITH_FONTCONFIG=ON \
+		-DWITH_CYCLES=ON \
+		-DWITH_MOD_OCEANSIM=ON
+
+override_dh_auto_install:
+	dh_auto_install --buildsystem=cmake
+	# Get rid of embedded python, blender should fall back to
+	# system python if it doesn't find the embedded one:
+	#rm -r $(INSTDIR)/usr/share/blender/*/python/
+	# Remove apparently-unneded dotfiles:
+	#rm $(INSTDIR)/usr/share/blender/*/.bfont.ttf
+	#rm $(INSTDIR)/usr/share/blender/*/.Blanguages
+	#mv $(INSTDIR)/usr/lib/blender/*/datafiles/locale $(INSTDIR)/usr/share/locale
+	#remove empty directory (e.g scripts/cfg)
+	find $(INSTDIR)/usr/share/blender/ -type d -empty -delete
+	#remove duplicated GPL license file and unneeded Python license since python is shipped externally
+	#rm $(INSTDIR)/usr/share/doc/blender/GPL-license.txt
+	#rm $(INSTDIR)/usr/share/doc/blender/Python-license.txt
+	
+
+override_dh_install:
+	dh_install --fail-missing --list-missing
+
+override_dh_strip:
+	dh_strip --dbg-package=blender-dbg
+
+override_dh_pysupport:
+	# Not supported yet: dh_pysupport -V 3.1
+	#dh_pysupport -V 3.1
+
+%:
+	dh --buildsystem=cmake --parallel=$(PROCESSORS) $@

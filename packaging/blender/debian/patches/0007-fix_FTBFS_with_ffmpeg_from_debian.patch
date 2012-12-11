@@ -1,0 +1,106 @@
+From: "Matteo F. Vescovi" <mfv.debian@gmail.com>
+Date: Tue, 21 Feb 2012 19:30:16 +0100
+Subject: fix_FTBFS_with_ffmpeg_from_debian
+
+avformat_alloc_output_context2() should be in
+the libavformat 53.2.0 but it isn't in Debian,
+so re-define it.
+
+Signed-off-by: Antonio Ospite <ospite@studenti.unina.it>
+---
+ intern/ffmpeg/ffmpeg_compat.h                  |   62 ++++++++++++++++++++++++
+ source/blender/blenkernel/intern/writeffmpeg.c |    1 +
+ 2 files changed, 63 insertions(+)
+
+diff --git a/intern/ffmpeg/ffmpeg_compat.h b/intern/ffmpeg/ffmpeg_compat.h
+index 9dbbb46..cbc510a 100644
+--- a/intern/ffmpeg/ffmpeg_compat.h
++++ b/intern/ffmpeg/ffmpeg_compat.h
+@@ -32,6 +32,7 @@
+ 
+ #include <libavcodec/avcodec.h>
+ #include <libavutil/rational.h>
++#include <libavutil/mathematics.h>
+ #include <libavutil/opt.h>
+ 
+ #if (LIBAVFORMAT_VERSION_MAJOR > 52) || ((LIBAVFORMAT_VERSION_MAJOR >= 52) && (LIBAVFORMAT_VERSION_MINOR >= 101))
+@@ -46,6 +47,67 @@
+ #define FFMPEG_HAVE_AVIO 1
+ #endif
+ 
++#if (LIBAVFORMAT_VERSION_MAJOR < 53) || ((LIBAVFORMAT_VERSION_MAJOR == 53) && (LIBAVFORMAT_VERSION_MINOR < 22))
++/* XXX The last check above should be (LIBAVFORMAT_VERSION_MINOR < 2),
++ * look at http://patches.libav.org/patch/3333/ but ffmpeg in Debian is
++ * strange: 53.2.0 should have avformat_alloc_output_context2() but it does
++ * not.
++ */
++#include <libavutil/avstring.h>
++static int avformat_alloc_output_context2(AVFormatContext **avctx, AVOutputFormat *oformat,
++                                   const char *format, const char *filename)
++{
++    AVFormatContext *s = avformat_alloc_context();
++    int ret = 0;
++
++    *avctx = NULL;
++    if (!s)
++        goto nomem;
++
++    if (!oformat) {
++        if (format) {
++            oformat = av_guess_format(format, NULL, NULL);
++            if (!oformat) {
++                av_log(s, AV_LOG_ERROR, "Requested output format '%s' is not a suitable output format\n", format);
++                ret = AVERROR(EINVAL);
++                goto error;
++            }
++        } else {
++            oformat = av_guess_format(NULL, filename, NULL);
++            if (!oformat) {
++                ret = AVERROR(EINVAL);
++                av_log(s, AV_LOG_ERROR, "Unable to find a suitable output format for '%s'\n",
++                       filename);
++                goto error;
++            }
++        }
++    }
++
++    s->oformat = oformat;
++    if (s->oformat->priv_data_size > 0) {
++        s->priv_data = av_mallocz(s->oformat->priv_data_size);
++        if (!s->priv_data)
++            goto nomem;
++        if (s->oformat->priv_class) {
++            *(const AVClass**)s->priv_data= s->oformat->priv_class;
++            av_opt_set_defaults(s->priv_data);
++        }
++    } else
++        s->priv_data = NULL;
++
++    if (filename)
++        av_strlcpy(s->filename, filename, sizeof(s->filename));
++    *avctx = s;
++    return 0;
++nomem:
++    av_log(s, AV_LOG_ERROR, "Out of memory\n");
++    ret = AVERROR(ENOMEM);
++error:
++    avformat_free_context(s);
++    return ret;
++}
++#endif
++
+ #if (LIBAVCODEC_VERSION_MAJOR > 53) || ((LIBAVCODEC_VERSION_MAJOR == 53) && (LIBAVCODEC_VERSION_MINOR > 1)) || ((LIBAVCODEC_VERSION_MAJOR == 53) && (LIBAVCODEC_VERSION_MINOR == 1) && (LIBAVCODEC_VERSION_MICRO >= 1)) || ((LIBAVCODEC_VERSION_MAJOR == 52) && (LIBAVCODEC_VERSION_MINOR >= 121))
+ #define FFMPEG_HAVE_DEFAULT_VAL_UNION 1
+ #endif
+diff --git a/source/blender/blenkernel/intern/writeffmpeg.c b/source/blender/blenkernel/intern/writeffmpeg.c
+index 59c3811..9dff954 100644
+--- a/source/blender/blenkernel/intern/writeffmpeg.c
++++ b/source/blender/blenkernel/intern/writeffmpeg.c
+@@ -36,6 +36,7 @@
+ #include <libavformat/avformat.h>
+ #include <libavcodec/avcodec.h>
+ #include <libavutil/rational.h>
++#include <libavutil/mathematics.h>
+ #include <libswscale/swscale.h>
+ #include <libavcodec/opt.h>
+ 
