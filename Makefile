@@ -175,7 +175,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GIFLIB) $(EARTHORCA) $(SOFTWAREPROPERTIES) $(BINUTILS) $(APTDAEMON) $(IJS) \
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
-	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULT) \
+	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) \
 	$(AVANTWINDOWNAVIGATOR)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
@@ -861,13 +861,13 @@ $(DCONF): $(SPREZZ)/d-conf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf dconf-$(d-conf_UPVER).tar.xz $(TARARGS) $@
 
-.PHONY: db-default
-db-default:$(DBDEFAULT)_$(ARCH).deb
-$(DBDEFAULT): $(SPREZZ)/db-default/debian/changelog
+.PHONY: db-defaults
+db-defaults:$(DBDEFAULTS)_$(ARCH).deb
+$(DBDEFAULTS): $(SPREZZ)/db-defaults/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf db-default-$(db-default_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf db-defaults-$(db-defaults_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: dbus
 dbus:$(DBUS)_$(ARCH).deb
