@@ -177,7 +177,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
-	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER)
+	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER) \
+	$(IDEVICEINSTALLER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1806,6 +1807,22 @@ $(ICU): $(SPREZZ)/icu/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf icu_$(icu_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ideviceinstaller
+ideviceinstaller:$(IDEVICEINSTALLER)_$(ARCH).deb
+$(IDEVICEINSTALLER): $(SPREZZ)/ideviceinstaller/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf ideviceinstaller-$(ideviceinstaller_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: ifuse
+ifuse:$(IFUSE)_$(ARCH).deb
+$(IFUSE): $(SPREZZ)/ifuse/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf ifuse-$(ifuse_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: ijs
 ijs:$(IJS)_$(ARCH).deb
 $(IJS): $(SPREZZ)/ijs/debian/changelog
@@ -1852,7 +1869,7 @@ $(JSONC): $(SPREZZ)/json-c/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf json-c-$(json-c_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf json-c_$(json-c_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: kismet
 kismet:$(KISMET)_$(ARCH).deb
