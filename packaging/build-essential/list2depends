@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+# -*- mode: python; coding: utf-8 -*-
+# Copyright © 2002 Colin Walters <walters@gnu.org>
+
+import sys, re, os, string, getopt
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:], 'd', ['debug'])
+except getopt.GetoptError, e:
+    sys.stderr.write("Error reading arguments: %s\n" % e)
+    sys.exit(1)
+
+debug = 0
+
+for (key, val) in opts:
+    if key in ('-d', '--debug'):
+        debug = 1
+
+target_arch = args[0]
+
+begin_header = 'BEGIN LIST OF PACKAGES\n'
+end_header = 'END LIST OF PACKAGES\n'
+
+comment_re = re.compile("^\s+")
+depends_re = re.compile('([-a-z0-9+.]+)\s*(\\(.+?\\))?\s*(\\[(.+?)\\])?')
+
+line = sys.stdin.readline()
+
+while (not len(line) == 0) and (not line == begin_header):
+    line = sys.stdin.readline()
+        
+if len(line) == 0:
+    sys.stderr.write("Couldn't find start token '%s'\n" % (begin_header,))
+    sys.exit(1)
+
+line = sys.stdin.readline()
+pkgs = []
+while (not len(line) == 0) and (not line == end_header):
+    if line == '\n' or comment_re.search(line):
+        line = sys.stdin.readline()
+        continue
+    orlist = line.strip().split('|')
+    orresult = []
+    for pkg in orlist:
+        if debug:
+            sys.stderr.write("processing pkg '%s'\n" %(pkg,))
+        match = depends_re.search(pkg)
+        if match:
+            pkgname = match.group(1).strip()
+            verdep = match.group(2)
+            if not verdep:
+                verdep = ''
+            verdep = verdep.strip()
+            archdeps = match.group(4) 
+            if debug:
+                sys.stderr.write("data: '%s' '%s' '%s'\n" % (pkgname, verdep, archdeps))
+            included = 1
+            if archdeps:
+                archdeps = match.group(4).strip().split()
+                included = 0
+                for arch in archdeps:
+                    if debug:
+                        sys.stderr.write('processing arch %s\n' % (arch,))
+                    negated = 0
+                    if arch[0] == '!':
+                        negated = 1
+                        arch = arch[1:]
+                    if target_arch == arch and negated:
+                        if debug:
+                            sys.stderr.write('not including ')
+                        included = 0
+                        break
+                    elif target_arch == arch and not negated:
+                        if debug:
+                            sys.stderr.write('including ')
+                        included = 1
+                    elif target_arch != arch and negated:
+                        if debug:
+                            sys.stderr.write('including ')
+                        included = 1
+            if included:
+                pkgval = pkgname + ' ' + verdep
+                if debug:
+                    sys.stderr.write('\norresult += ' + pkgval + '\n')
+                orresult.append(pkgval)
+    if len(orresult) > 0:
+        pkgs.append(orresult)
+    line = sys.stdin.readline()
+    
+if len(line) == 0:
+    sys.stderr.write("Couldn't find end token '%s'\n" % (end_header,))
+    sys.exit(1)
+
+sys.stdout.write(string.join(map(lambda x: string.join(map(string.strip, x), ' | '), pkgs), ', '))
