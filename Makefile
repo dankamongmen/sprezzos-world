@@ -177,7 +177,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
-	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY)
+	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -461,6 +461,14 @@ $(LIBAACPLUS): $(SPREZZ)/libaacplus/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libaacplus-$(libaacplus_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libaacs
+libaacs:$(LIBAACS)_$(ARCH).deb
+$(LIBAACS): $(SPREZZ)/libaacs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libaacs-$(libaacs_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: aften
 aften:$(AFTEN)_$(ARCH).deb
@@ -1421,6 +1429,14 @@ $(LIBGNOMEKEYRING): $(SPREZZ)/libgnome-keyring/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgnome-keyring_$(libgnome-keyring_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: libgpod
+libgpod:$(LIBGPOD)_$(ARCH).deb
+$(LIBGPOD): $(SPREZZ)/libgpod/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libgpod-$(libgpod_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libgweather
 libgweather:$(LIBGWEATHER)_$(ARCH).deb
