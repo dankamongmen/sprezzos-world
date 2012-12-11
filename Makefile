@@ -177,7 +177,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
-	$(LIBPLIST) $(GUCHARMAP)
+	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2109,6 +2109,14 @@ $(LIBIMOBILEDEVICE): $(SPREZZ)/libimobiledevice/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: libbluray
+libbluray:$(LIBBLURAY)_$(ARCH).deb
+$(LIBBLURAY): $(SPREZZ)/libbluray/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libbluray-$(libbluray_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libburn
 libburn:$(LIBBURN)_$(ARCH).deb
