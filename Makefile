@@ -3563,6 +3563,14 @@ $(XORGXSERVER): $(SPREZZ)/xorg-xserver/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xorg-server-$(xorg-xserver_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-video-geode
+xserver-xorg-video-geode:$(XSERVERXORGVIDEOGEODE)_$(ARCH).deb
+$(XSERVERXORGVIDEOGEODE): $(SPREZZ)/xserver-xorg-video-geode/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-video-geode-$(xserver-xorg-video-geode_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xserver-xorg-video-intel
 xserver-xorg-video-intel:$(XSERVERXORGVIDEOINTEL)_$(ARCH).deb
 $(XSERVERXORGVIDEOINTEL): $(SPREZZ)/xserver-xorg-video-intel/debian/changelog
