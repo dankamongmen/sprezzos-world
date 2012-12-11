@@ -1,0 +1,136 @@
+#!/usr/bin/make -f
+# This is fairly complicated since it can be called either to build the
+# source package, or to build a kernel module package.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+CFLAGS += $(shell dpkg-buildflags --get CFLAGS)
+CPPFLAGS += $(shell dpkg-buildflags --get CPPFLAGS)
+LDFLAGS += $(shell dpkg-buildflags --get LDFLAGS)
+
+clean:
+	dh_testdir
+	dh_testroot
+	
+	$(MAKE) clean PROG_EXTRA=sensord
+	
+	rm -f *-stamp
+	dh_clean 
+
+build: build-arch build-indep
+
+build-arch: build-arch-stamp
+build-arch-stamp:
+	dh_testdir
+
+	# binary programs and librairies
+	$(MAKE) user \
+		PREFIX=/usr \
+		LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		MANDIR=/usr/share/man \
+		PROG_EXTRA=sensord \
+		CFLAGS="$(CFLAGS)" \
+		CPPFLAGS="$(CPPFLAGS)" \
+		LDFLAGS="$(LDFLAGS)" \
+		EXLDFLAGS="$(LDFLAGS)"
+
+
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp:
+	dh_testdir 
+	touch $@
+
+install: install-stamp
+install-stamp: build
+	dh_testdir 
+	dh_testroot 
+	dh_clean -s -k 
+	dh_installdirs -s
+
+	$(MAKE) user_install \
+		DESTDIR=$(CURDIR)/debian/tmp \
+		PREFIX=/usr \
+		LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		MANDIR=/usr/share/man \
+		PROG_EXTRA=sensord \
+		CFLAGS="$(CFLAGS)" \
+		CPPFLAGS="$(CPPFLAGS)" \
+		LDFLAGS="$(LDFLAGS)" \
+		EXLDFLAGS="$(LDFLAGS)"
+
+
+	# Install extra files as needed
+	install -m 0644 debian/sensord.logcheck debian/sensord/etc/logcheck/ignore.d.server/sensord
+	install -m 0644 debian/sensord.logcheck debian/sensord/etc/logcheck/ignore.d.workstation/sensord
+	install -m 0644 debian/lm-sensors.service debian/lm-sensors/lib/systemd/system/
+
+	# Make sure /etc/sensors.d/ is not removed
+	touch debian/tmp/etc/sensors.d/.placeholder
+
+	# Install isadump only if it has been built (on x86/x86_64 archs only)
+	if [ -x prog/dump/isadump ] ; then \
+	        cp -f prog/dump/isadump debian/lm-sensors/usr/sbin ; \
+		mkdir -p debian/lm-sensors/usr/share/man/man8 ; \
+	        cp -f prog/dump/isadump.8 debian/lm-sensors/usr/share/man/man8 ; \
+	fi
+	# Install isaset only if it has been built (on x86/x86_64 archs only)
+	if [ -x prog/dump/isaset ] ; then \
+	        cp -f prog/dump/isaset debian/lm-sensors/usr/sbin ; \
+		mkdir -p debian/lm-sensors/usr/share/man/man8 ; \
+	        cp -f prog/dump/isaset.8 debian/lm-sensors/usr/share/man/man8 ; \
+	fi
+
+	dh_install --sourcedir=debian/tmp
+
+	touch install-stamp
+
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir 
+	dh_testroot
+	dh_installchangelogs -i CHANGES
+	dh_installdocs -i -XCVS
+	dh_installinit -pfancontrol --restart-after-upgrade -- start 20 2 3 4 5 .
+	dh_installman -i
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependant files that arn't kernel modules here.
+binary-arch: build install
+	dh_testdir 
+	dh_testroot
+	dh_installchangelogs -s CHANGES
+	dh_installdocs -s -XCVS
+	dh_installexamples -s -XCVS -XModule.mk
+	dh_installinit -plm-sensors --no-start -- start 47 S .
+	dh_installinit -psensord -- start 20 2 3 4 5 .
+	dh_installman -s
+	dh_link -s
+	dh_strip -s
+	dh_compress -s -X.pl
+	dh_fixperms -s
+	dh_perl -s
+	dh_makeshlibs -s
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-arch binary-indep
+.PHONY: clean build install binary-indep binary-arch binary

@@ -178,7 +178,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
 	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER) \
-	$(IDEVICEINSTALLER)
+	$(IDEVICEINSTALLER) $(DOCKMANAGER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -235,6 +235,15 @@ $(AVANTWINDOWNAVIGATOR): $(SPREZZ)/avant-window-navigator/debian/changelog
 	rm -rf $@/debian
 	tar cJf avant-window-navigator-$(avant-window-navigator_UPVER).tar.xz $@ --exclude-vcs
 	ln -s avant-window-navigator-$(avant-window-navigator_UPVER).tar.xz avant-window-navigator_$(avant-window-navigator_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+.PHONY: dockmanager
+dockmanager:$(DOCKMANAGER)_$(ARCH).deb
+$(DOCKMANAGER): $(SPREZZ)/dockmanager/debian/changelog
+	bzr branch lp:dockmanager $@
+	rm -rf $@/debian
+	tar cJf dockmanager-$(dockmanager_UPVER).tar.xz $@ --exclude-vcs
+	ln -s dockmanager-$(dockmanager_UPVER).tar.xz dockmanager_$(dockmanager_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: synaptic
