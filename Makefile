@@ -176,7 +176,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
-	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF)
+	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1388,6 +1388,14 @@ $(LIBGLADE2): $(SPREZZ)/libglade2/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libglade-$(libglade2_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libgnomecanvas
+libgnomecanvas:$(LIBGNOMECANVAS)_$(ARCH).deb
+$(LIBGNOMECANVAS): $(SPREZZ)/libgnomecanvas/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libgnomecanvas-$(libgnomecanvas_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libgnomecups
 libgnomecups:$(LIBGNOMECUPS)_$(ARCH).deb
