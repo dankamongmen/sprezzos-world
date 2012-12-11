@@ -176,7 +176,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBWWWPERL) $(KLIBC) $(GNUPG2) $(TULIP) $(FESTIVAL) $(LIBISOBURN) $(PATCH) \
 	$(LIBBURN) $(DESPOTIFY) $(LIBISOFS) $(SPEECHTOOLS) $(AUTOCONFARCHIVE) $(GOCR) \
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
-	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS)
+	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1468,6 +1468,14 @@ $(GNOMEPAINT): $(SPREZZ)/gnome-paint/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-paint-$(gnome-paint_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnome-panel
+gnome-panel:$(GNOMEPANEL)_$(ARCH).deb
+$(GNOMEPANEL): $(SPREZZ)/gnome-panel/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-panel-$(gnome-panel_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gnome-photo-printer
 gnome-photo-printer:$(GNOMEPHOTOPRINTER)_$(ARCH).deb
