@@ -179,7 +179,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
 	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER) $(FLEX) \
 	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) \
-	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(LIBFLAC)
+	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -833,6 +833,14 @@ $(TERMINOLOGY): $(SPREZZ)/terminology/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf terminology-$(terminology_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: ttfautohint
+ttfautohint:$(TTFAUTOHINT)_$(ARCH).deb
+$(TTFAUTOHINT): $(SPREZZ)/ttfautohint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ttfautohint-$(ttfautohint_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cogl
 cogl:$(COGL)_$(ARCH).deb
@@ -2748,13 +2756,21 @@ $(LIBVORBIS): $(SPREZZ)/libvorbis/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libvorbis-$(libvorbis_UPVER).tar.xz $(TARARGS) $@
 
-.PHONY: libflac
-libflac:$(LIBFLAC)_$(ARCH).deb
-$(LIBFLAC): $(SPREZZ)/libflac/debian/changelog
+.PHONY: flac
+flac:$(FLAC)_$(ARCH).deb
+$(FLAC): $(SPREZZ)/flac/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf libflac-$(libflac_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf flac-$(flac_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: id3lib
+id3lib:$(ID3LIB)_$(ARCH).deb
+$(ID3LIB): $(SPREZZ)/id3lib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf id3lib-$(id3lib_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: opal
 opal:$(OPAL)_$(ARCH).deb
