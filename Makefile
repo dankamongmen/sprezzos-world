@@ -180,7 +180,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER) $(FLEX) \
 	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) \
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
-	$(LIBGWIBBER)
+	$(GWIBBER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1499,13 +1499,13 @@ $(LIBGWEATHER): $(SPREZZ)/libgweather/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgweather-$(libgweather_UPVER).tar.xz $(TARARGS) $@
 
-.PHONY: libgwibber
-libgwibber:$(LIBGWIBBER)_$(ARCH).deb
-$(LIBGWIBBER): $(SPREZZ)/libgwibber/debian/changelog
+.PHONY: gwibber
+gwibber:$(GWIBBER)_$(ARCH).deb
+$(GWIBBER): $(SPREZZ)/gwibber/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gwibber-$(libgwibber_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf gwibber-$(gwibber_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gnome-media
 gnome-media:$(GNOMEMEDIA)_$(ARCH).deb
