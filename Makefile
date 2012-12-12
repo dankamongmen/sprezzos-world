@@ -178,7 +178,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
 	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER) $(FLEX) \
-	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER)
+	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2985,6 +2985,14 @@ $(QPDF): $(SPREZZ)/qpdf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf qpdf-$(qpdf_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: qrencode
+qrencode:$(QRENCODE)_$(ARCH).deb
+$(QRENCODE): $(SPREZZ)/qrencode/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf qrencode-$(qrencode_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: ratpoison
 ratpoison:$(RATPOISON)_$(ARCH).deb
