@@ -178,7 +178,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(DSNIFF) $(DCRAW) $(GNOMEAPPLETS) $(PERL) $(LIBXDAMAGE) $(DBDEFAULTS) $(DB) \
 	$(AVANTWINDOWNAVIGATOR) $(LIBGWEATHER) $(GCONF) $(LIBGNOMECANVAS) $(GNOMEPANEL) \
 	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER) $(FLEX) \
-	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) \
+	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) $(M4) \
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
@@ -2508,6 +2508,14 @@ $(LFTP): $(SPREZZ)/lftp/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf lftp_$(lftp_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: m4
+m4:$(M4)_$(ARCH).deb
+$(M4): $(SPREZZ)/m4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf m4-$(m4_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: mash
 mash:$(MASH)_$(ARCH).deb
