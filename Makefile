@@ -183,7 +183,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
-	$(NEWT) $(ACCOUNTSSERVICE)
+	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -3375,6 +3375,14 @@ $(SYSTEMD): $(SPREZZ)/systemd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf systemd_$(systemd_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: system-config-printer
+system-config-printer:$(SYSTEMCONFIGPRINTER)_$(ARCH).deb
+$(SYSTEMCONFIGPRINTER): $(SPREZZ)/system-config-printer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf system-config-printer-$(system-config-printer_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: util-linux
 util-linux:$(UTILLINUX)_$(ARCH).deb
