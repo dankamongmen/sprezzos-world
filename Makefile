@@ -181,7 +181,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) \
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) \
-	$(PIDGINOTR)
+	$(PIDGINOTR) $(NOTIFYPYTHON)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -3069,6 +3069,14 @@ $(PYTHONGNUTLS): $(SPREZZ)/python-gnutls/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-gnutls-$(python-gnutls_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: notify-python
+notify-python:$(NOTIFYPYTHON)_$(ARCH).deb
+$(NOTIFYPYTHON): $(SPREZZ)/notify-python/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf notify-python-$(notify-python_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: qemu-kvm
 qemu-kvm:$(QEMUKVM)_$(ARCH).deb
