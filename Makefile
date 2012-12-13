@@ -180,8 +180,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBPLIST) $(GUCHARMAP) $(LIBBLURAY) $(LIBAACS) $(LIBGPOD) $(UPOWER) $(FLEX) \
 	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) \
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
-	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) \
-	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY)
+	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
+	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2396,6 +2396,14 @@ $(LIBXSPF): $(SPREZZ)/libxspf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libxspf-$(libxspf_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libxvmc
+libxvmc:$(LIBXVMC)_$(ARCH).deb
+$(LIBXVMC): $(SPREZZ)/libxvmc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXvMC-$(libxvmc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libx11
 libx11:$(LIBX11)_$(ARCH).deb
 $(LIBX11): $(SPREZZ)/libx11/debian/changelog
@@ -3751,6 +3759,14 @@ $(XSERVERXORGVIDEOVESA): $(SPREZZ)/xserver-xorg-video-vesa/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86-video-vesa-$(xserver-xorg-video-vesa_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xterm
+xterm:$(XTERM)_$(ARCH).deb
+$(XTERM): $(SPREZZ)/xterm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xterm-$(xterm_UPVER).tgz $(TARARGS) $@
 
 .PHONY: udisks
 udisks:$(UDISKS)_$(ARCH).deb
