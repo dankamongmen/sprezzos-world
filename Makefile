@@ -182,7 +182,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
-	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE)
+	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2188,6 +2188,14 @@ $(LIBCAP2): $(SPREZZ)/libcap2/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libcap-$(libcap2_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libev
+libev:$(LIBEV)_$(ARCH).deb
+$(LIBEV): $(SPREZZ)/libev/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libev-$(libev_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libedit
 libedit:$(LIBEDIT)_$(ARCH).deb
