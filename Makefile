@@ -182,7 +182,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
-	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE)
+	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2396,6 +2396,14 @@ $(LIBXSPF): $(SPREZZ)/libxspf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libxspf-$(libxspf_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xvidcore
+xvidcore:$(XVIDCORE)_$(ARCH).deb
+$(XVIDCORE): $(SPREZZ)/xvidcore/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xvidcore-$(xvidcore_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxvmc
 libxvmc:$(LIBXVMC)_$(ARCH).deb
