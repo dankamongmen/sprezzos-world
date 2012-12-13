@@ -1,0 +1,66 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/simple-patchsys.mk
+
+CFLAGS += -Wall -g -O$(if $(findstring noopt,$(DEB_BUILD_OPTIONS)),0,2)
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+configure_flags += --prefix=/usr --build=$(DEB_BUILD_GNU_TYPE)
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	configure_flags += --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+PYVERS := $(shell pyversions --requested --version debian/control)
+
+build-%/configure-stamp: debian/stamp-patched
+	dh_testdir
+	mkdir -p build-$*
+	cd build-$* && \
+		PYTHON=/usr/bin/python$* CFLAGS="$(CFLAGS)" \
+			$(CURDIR)/configure $(configure_flags)
+	touch $@
+
+build-%/build-stamp: build-%/configure-stamp
+	dh_testdir
+	$(MAKE) -C build-$*
+	touch $@
+
+build: $(PYVERS:%=build-%/build-stamp)
+
+install-%: build-%/build-stamp
+	dh_testdir
+	dh_testroot
+	$(MAKE) -C build-$* install DESTDIR=$(CURDIR)/debian/python-notify
+	rm -f $(CURDIR)/debian/python-notify/usr/lib/python*/*-packages/gtk-2.0/pynotify/*.la
+
+install: $(PYVERS:%=install-%)
+
+clean:: reverse-patches
+	dh_testdir
+	dh_testroot
+	rm -rf $(PYVERS:%=build-%)
+	dh_clean src/pynotify.c
+
+binary-indep: install
+
+binary-arch: install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -s AUTHORS NEWS
+	dh_installexamples -s
+	dh_installchangelogs -s ChangeLog
+	dh_strip -s
+	dh_compress -s
+	dh_fixperms -s
+	dh_python2 -s
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-arch binary-indep
+.PHONY: build install clean binary-indep binary-arch binary
