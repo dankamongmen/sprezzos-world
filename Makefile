@@ -181,7 +181,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) \
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) \
-	$(PIDGINOTR) $(NOTIFYPYTHON)
+	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2731,6 +2731,14 @@ $(LIBNICE): $(SPREZZ)/libnice/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libnice-$(libnice_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libnotify
+libnotify:$(LIBNOTIFY)_$(ARCH).deb
+$(LIBNOTIFY): $(SPREZZ)/libnotify/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libnotify-$(libnotify_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: nmap
 nmap:$(NMAP)_$(ARCH).deb

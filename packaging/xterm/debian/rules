@@ -1,0 +1,139 @@
+#!/usr/bin/make -f
+# Debian rules file for xterm source package
+
+# Copyright 2005 David Martínez Moreno
+#
+# Licensed under the GNU General Public License, version 2.  See the file
+# /usr/share/common-licenses/GPL or <http://www.gnu.org/copyleft/gpl.txt>.
+
+include debian/xsfbs/xsfbs.mk
+
+# debhelper
+export DH_OPTIONS
+
+DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+	confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
+CFLAGS += -Wall
+
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS)
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+HTML2TEXT:=lynx -dump -nolist
+
+DESKTOP_FLAGS = --vendor debian \
+		--dir=$(DEBTREEDIR)/usr/share/applications
+
+# disable some unsafe operations
+CPPFLAGS += \
+	-DDEF_ALLOW_FONT=False \
+	-DDEF_ALLOW_TCAP=False \
+	-DDEF_DISALLOWED_WINDOW=\\\"1,2,3,4,5,6,7,8,9,11,13,14,18,19,20,21,GetSelection,SetSelection,SetWinLines,SetXprop\\\"
+
+.PHONY: configure
+configure: $(STAMP_DIR)/configure
+$(STAMP_DIR)/configure: $(STAMP_DIR)/patch
+	dh_testdir
+	[ -d build ] || mkdir build
+	cd build && \
+	../configure \
+		--prefix=/usr \
+		--exec-prefix=/usr \
+		--mandir=/usr/share/man \
+		--with-app-defaults=/etc/X11/app-defaults \
+		--with-icondir=/usr/share/icons \
+		--with-icon-theme=yes \
+		--with-tty-group=tty \
+		--enable-logging \
+		--enable-wide-chars \
+		--enable-luit \
+		--enable-256-color \
+		--disable-imake \
+		--enable-narrowproto \
+		--enable-exec-xterm \
+		--enable-dabbrev \
+		--enable-backarrow-is-erase \
+		--with-utempter \
+		--with-desktop-category='System;TerminalEmulator;' \
+		$(confflags) \
+		DESKTOP_FLAGS="$(DESKTOP_FLAGS)" \
+		CFLAGS="$(CFLAGS)" \
+		CPPFLAGS="$(CPPFLAGS)" \
+		LDFLAGS="$(LDFLAGS)" \
+		LUIT=/usr/bin/luit
+	>$@
+
+
+.PHONY: build
+build: $(STAMP_DIR)/build
+$(STAMP_DIR)/build: $(STAMP_DIR)/configure debian/local/xterm.faq
+	dh_testdir
+	cd build && $(MAKE)
+	>$@
+
+.PHONY: clean
+clean: xsfclean
+	dh_testdir
+	rm -rf $(STAMP_DIR)
+	rm -rf build
+	dh_clean debian/local/xterm.faq
+
+.PHONY: install
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	# General installation
+	cd build && \
+	$(MAKE) install install-desktop mandir=/usr/share/man/man1 libdir=/etc DESTDIR=$(DEBTREEDIR)
+	
+	## Install lxterm command and manual page.
+	install -m 755 debian/local/lxterm $(DEBTREEDIR)/usr/bin
+	install -m 755 debian/local/lxterm.1 $(DEBTREEDIR)/usr/share/man/man1
+	## Install terminfo and termcap precompiled definitions.
+	install -d $(DEBTREEDIR)/usr/lib
+	install -m 644 termcap  $(DEBTREEDIR)/usr/lib/xterm.termcap
+	install -m 644 terminfo $(DEBTREEDIR)/usr/lib/xterm.terminfo
+	dh_installdocs
+	dh_installchangelogs
+	dh_installmenu
+	dh_install --sourcedir=debian/tmp --list-missing
+
+# Generate plain text XTerm FAQ from HTML.
+debian/local/xterm.faq: debian/local/xterm.faq.html
+	$(HTML2TEXT) $< >debian/local/xterm.faq
+
+.PHONY: binary
+binary: binary-arch
+
+.PHONY: binary-arch
+binary-arch: install
+	dh_testdir
+	dh_testroot
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# this target is required by policy
+.PHONY: binary-indep
+binary-indep:
+
+# vim:set ai noet sw=8 ts=8 tw=0:
