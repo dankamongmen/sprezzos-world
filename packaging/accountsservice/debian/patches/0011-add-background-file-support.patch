@@ -1,0 +1,383 @@
+---
+ data/org.freedesktop.Accounts.User.xml |   45 +++++++++++++
+ src/libaccountsservice/act-user.c      |   69 ++++++++++++++++++++
+ src/user.c                             |  111 +++++++++++++++++++++++++++++++++
+ src/user.h                             |    3 
+ 4 files changed, 228 insertions(+)
+
+--- accountsservice.orig/data/org.freedesktop.Accounts.User.xml
++++ accountsservice/data/org.freedesktop.Accounts.User.xml
+@@ -331,6 +331,41 @@
+     </doc:doc>
+   </method>
+ 
++  <method name="SetBackgroundFile">
++    <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
++    <arg name="filename" direction="in" type="s">
++      <doc:doc>
++        <doc:summary>
++          The absolute filename of a png file to use as the users background.
++        </doc:summary>
++      </doc:doc>
++    </arg>
++    <doc:doc>
++      <doc:description>
++        <doc:para>
++          Sets the users background.
++        </doc:para>
++      </doc:description>
++      <doc:permission>
++        The caller needs one of the following PolicyKit authorizations:
++        <doc:list>
++          <doc:item>
++            <doc:term>org.freedesktop.accounts.change-own-user-data</doc:term>
++            <doc:definition>To change his own background</doc:definition>
++          </doc:item>
++          <doc:item>
++            <doc:term>org.freedesktop.accounts.user-administration</doc:term>
++            <doc:definition>To change the background of another user</doc:definition>
++          </doc:item>
++        </doc:list>
++      </doc:permission>
++      <doc:errors>
++        <doc:error name="org.freedesktop.Accounts.Error.PermissionDenied">if the caller lacks the appropriate PolicyKit authorization</doc:error>
++        <doc:error name="org.freedesktop.Accounts.Error.Failed">if the operation failed</doc:error>
++      </doc:errors>
++    </doc:doc>
++  </method>
++
+   <method name="SetIconFile">
+     <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+     <arg name="filename" direction="in" type="s">
+@@ -696,6 +731,16 @@
+         </doc:para>
+       </doc:description>
+     </doc:doc>
++  </property>
++
++  <property name="BackgroundFile" type="s" access="read">
++    <doc:doc>
++      <doc:description>
++        <doc:para>
++           The filename of a png file containing the users background.
++        </doc:para>
++      </doc:description>
++    </doc:doc>
+   </property>
+ 
+   <property name="IconFile" type="s" access="read">
+--- accountsservice.orig/src/libaccountsservice/act-user.c
++++ accountsservice/src/libaccountsservice/act-user.c
+@@ -57,6 +57,7 @@ enum {
+         PROP_AUTOMATIC_LOGIN,
+         PROP_SYSTEM_ACCOUNT,
+         PROP_LOGIN_FREQUENCY,
++        PROP_BACKGROUND_FILE,
+         PROP_ICON_FILE,
+         PROP_LANGUAGE,
+         PROP_FORMATS_LOCALE,
+@@ -87,6 +88,7 @@ struct _ActUser {
+         char           *shell;
+         char           *email;
+         char           *location;
++        char           *background_file;
+         char           *icon_file;
+         char           *language;
+         char           *formats_locale;
+@@ -233,6 +235,9 @@ act_user_get_property (GObject    *objec
+         case PROP_LOCATION:
+                 g_value_set_string (value, user->location);
+                 break;
++        case PROP_BACKGROUND_FILE:
++                g_value_set_string (value, user->background_file);
++                break;
+         case PROP_ICON_FILE:
+                 g_value_set_string (value, user->icon_file);
+                 break;
+@@ -362,6 +367,13 @@ act_user_class_init (ActUserClass *class
+                                                            0,
+                                                            G_PARAM_READABLE));
+         g_object_class_install_property (gobject_class,
++                                         PROP_BACKGROUND_FILE,
++                                         g_param_spec_string ("background-file",
++                                                              "Background File",
++                                                              "The path to a background for this user.",
++                                                              NULL,
++                                                              G_PARAM_READABLE));
++        g_object_class_install_property (gobject_class,
+                                          PROP_ICON_FILE,
+                                          g_param_spec_string ("icon-file",
+                                                               "Icon File",
+@@ -464,6 +476,7 @@ act_user_finalize (GObject *object)
+ 
+         g_free (user->user_name);
+         g_free (user->real_name);
++        g_free (user->background_file);
+         g_free (user->icon_file);
+         g_free (user->language);
+         g_free (user->object_path);
+@@ -815,6 +828,22 @@ act_user_is_system_account (ActUser *use
+ }
+ 
+ /**
++ * act_user_get_background_file:
++ * @user: a #ActUser
++ *
++ * Returns the path to the account background belonging to @user.
++ *
++ * Returns: (transfer none): a path to a background
++ */
++const char *
++act_user_get_background_file (ActUser *user)
++{
++        g_return_val_if_fail (ACT_IS_USER (user), NULL);
++
++        return user->background_file;
++}
++
++/**
+  * act_user_get_icon_file:
+  * @user: a #ActUser
+  *
+@@ -1044,6 +1073,15 @@ collect_props (const gchar    *key,
+                         user->login_frequency = new_login_frequency;
+                         g_object_notify (G_OBJECT (user), "login-frequency");
+                 }
++        } else if (strcmp (key, "BackgroundFile") == 0) {
++                const char *new_background_file;
++
++                new_background_file = g_value_get_string (value);
++                if (g_strcmp0 (user->background_file, new_background_file) != 0) {
++                        g_free (user->background_file);
++                        user->background_file = g_value_dup_string (value);
++                        g_object_notify (G_OBJECT (user), "background-file");
++                }
+         } else if (strcmp (key, "IconFile") == 0) {
+                 const char *new_icon_file;
+ 
+@@ -1420,6 +1458,37 @@ act_user_set_user_name (ActUser    *user
+                 g_error_free (error);
+                 return;
+         }
++}
++
++/**
++ * act_user_set_background_file:
++ * @user: the user object to alter.
++ * @background_file: path to an background
++ *
++ * Assigns a new background for @user.
++ *
++ * Note this function is synchronous and ignores errors.
++ **/
++void
++act_user_set_background_file (ActUser    *user,
++                              const char *background_file)
++{
++        GError *error = NULL;
++
++        g_return_if_fail (ACT_IS_USER (user));
++        g_return_if_fail (background_file != NULL);
++        g_return_if_fail (DBUS_IS_G_PROXY (user->accounts_proxy));
++
++        if (!dbus_g_proxy_call (user->accounts_proxy,
++                                "SetBackgroundFile",
++                                &error,
++                                G_TYPE_STRING, background_file,
++                                G_TYPE_INVALID,
++                                G_TYPE_INVALID)) {
++                g_warning ("SetBackgroundFile call failed: %s", error->message);
++                g_error_free (error);
++                return;
++        }
+ }
+ 
+ /**
+--- accountsservice.orig/src/user.c
++++ accountsservice/src/user.c
+@@ -66,6 +66,7 @@ enum {
+         PROP_PASSWORD_MODE,
+         PROP_PASSWORD_HINT,
+         PROP_LOGIN_FREQUENCY,
++        PROP_BACKGROUND_FILE,
+         PROP_ICON_FILE,
+         PROP_LOCKED,
+         PROP_AUTOMATIC_LOGIN,
+@@ -102,6 +103,7 @@ struct User {
+         gchar        *x_session;
+         gchar        *location;
+         guint64       login_frequency;
++        gchar        *background_file;
+         gchar        *icon_file;
+         gboolean      locked;
+         gboolean      automatic_login;
+@@ -212,6 +214,9 @@ user_get_property (GObject    *object,
+         case PROP_LOCATION:
+                 g_value_set_string (value, user->location);
+                 break;
++        case PROP_BACKGROUND_FILE:
++                g_value_set_string (value, user->background_file);
++                break;
+         case PROP_ICON_FILE:
+                 if (user->icon_file)
+                         g_value_set_string (value, user->icon_file);
+@@ -372,6 +377,13 @@ user_class_init (UserClass *class)
+                                                               0,
+                                                               G_PARAM_READWRITE));
+         g_object_class_install_property (gobject_class,
++                                         PROP_BACKGROUND_FILE,
++                                         g_param_spec_string ("background-file",
++                                                              "Background file",
++                                                              "The background file to use for this user.",
++                                                              NULL,
++                                                              G_PARAM_READABLE));
++        g_object_class_install_property (gobject_class,
+                                          PROP_ICON_FILE,
+                                          g_param_spec_string ("icon-file",
+                                                               "Icon file",
+@@ -415,6 +427,7 @@ user_init (User *user)
+         user->account_type = ACCOUNT_TYPE_STANDARD;
+         user->home_dir = NULL;
+         user->shell = NULL;
++        user->background_file = NULL;
+         user->icon_file = NULL;
+         user->email = NULL;
+         user->language = NULL;
+@@ -440,6 +453,7 @@ user_finalize (GObject *object)
+         g_free (user->real_name);
+         g_free (user->home_dir);
+         g_free (user->shell);
++        g_free (user->background_file);
+         g_free (user->icon_file);
+         g_free (user->email);
+         g_free (user->language);
+@@ -689,6 +703,12 @@ user_local_update_from_keyfile (User
+                 user->password_hint = s;
+         }
+ 
++        s = g_key_file_get_string (keyfile, "User", "Background", NULL);
++        if (s != NULL) {
++                g_free (user->background_file);
++                user->background_file = s;
++        }
++
+         s = g_key_file_get_string (keyfile, "User", "Icon", NULL);
+         if (s != NULL) {
+                 g_free (user->icon_file);
+@@ -720,6 +740,9 @@ user_local_save_to_keyfile (User     *us
+         if (user->password_hint)
+                 g_key_file_set_string (keyfile, "User", "PasswordHint", user->password_hint);
+ 
++        if (user->background_file)
++                g_key_file_set_string (keyfile, "User", "Background", user->background_file);
++
+         if (user->icon_file)
+                 g_key_file_set_string (keyfile, "User", "Icon", user->icon_file);
+ }
+@@ -1932,6 +1955,94 @@ become_user (gpointer data)
+ }
+ 
+ static void
++user_change_background_file_authorized_cb (Daemon                *daemon,
++                                           User                  *user,
++                                           DBusGMethodInvocation *context,
++                                           gpointer               data)
++{
++        gchar *filename;
++        GFile *file;
++        GFileInfo *info;
++        GFileType type;
++
++        filename = g_strdup (data);
++
++        if (filename == NULL ||
++            *filename == '\0') {
++                g_free (filename);
++                filename = NULL;
++
++                goto background_saved;
++        }
++
++        file = g_file_new_for_path (filename);
++        info = g_file_query_info (file, G_FILE_ATTRIBUTE_STANDARD_TYPE,
++                                  0, NULL, NULL);
++        type = g_file_info_get_file_type (info);
++
++        g_object_unref (info);
++        g_object_unref (file);
++
++        if (type != G_FILE_TYPE_REGULAR) {
++                g_debug ("not a regular file\n");
++                throw_error (context, ERROR_FAILED, "file '%s' is not a regular file", filename);
++                g_free (filename);
++                return;
++        }
++
++background_saved:
++        g_free (user->background_file);
++        user->background_file = filename;
++
++        save_extra_data (user);
++
++        g_signal_emit (user, signals[CHANGED], 0);
++
++        g_object_notify (G_OBJECT (user), "background-file");
++
++        dbus_g_method_return (context);
++}
++
++gboolean
++user_set_background_file (User                  *user,
++                         const gchar           *filename,
++                         DBusGMethodInvocation *context)
++{
++        gchar *sender;
++        DBusConnection *connection;
++        DBusError dbus_error;
++        uid_t uid;
++        const gchar *action_id;
++
++        connection = dbus_g_connection_get_connection (user->system_bus_connection);
++        sender = dbus_g_method_get_sender (context);
++        dbus_error_init (&dbus_error);
++        uid = dbus_bus_get_unix_user (connection, sender, &dbus_error);
++        if (dbus_error_is_set (&dbus_error)) {
++                throw_error (context, ERROR_FAILED, dbus_error.message);
++                dbus_error_free (&dbus_error);
++
++                return TRUE;
++        }
++
++        if (user->uid == uid)
++                action_id = "org.freedesktop.accounts.change-own-user-data";
++        else
++                action_id = "org.freedesktop.accounts.user-administration";
++
++        daemon_local_check_auth (user->daemon,
++                                 user,
++                                 action_id,
++                                 TRUE,
++                                 user_change_background_file_authorized_cb,
++                                 context,
++                                 g_strdup (filename),
++                                 (GDestroyNotify)g_free);
++
++        return TRUE;
++}
++
++static void
+ user_change_icon_file_authorized_cb (Daemon                *daemon,
+                                      User                  *user,
+                                      DBusGMethodInvocation *context,
+--- accountsservice.orig/src/user.h
++++ accountsservice/src/user.h
+@@ -95,6 +95,9 @@ gboolean       user_set_home_directory (
+ gboolean       user_set_shell          (User                  *user,
+                                         const gchar           *shell,
+                                         DBusGMethodInvocation *context);
++gboolean       user_set_background_file(User                  *user,
++                                        const gchar           *filename,
++                                        DBusGMethodInvocation *context);
+ gboolean       user_set_icon_file      (User                  *user,
+                                         const gchar           *filename,
+                                         DBusGMethodInvocation *context);
