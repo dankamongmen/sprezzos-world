@@ -181,7 +181,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) \
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
-	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC)
+	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -3718,7 +3718,7 @@ $(XORG): $(SPREZZ)/xorg/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xorg-server-$(xorg_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf xorg-server-$(xorg_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: xorg-xserver
 xorg-xserver:$(XORGXSERVER)_$(ARCH).deb
@@ -3767,6 +3767,14 @@ $(XTERM): $(SPREZZ)/xterm/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xterm-$(xterm_UPVER).tgz $(TARARGS) $@
+
+.PHONY: xtrace
+xtrace:$(XTRACE)_$(ARCH).deb
+$(XTRACE): $(SPREZZ)/xtrace/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xtrace_$(xtrace_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: udisks
 udisks:$(UDISKS)_$(ARCH).deb
