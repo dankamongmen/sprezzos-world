@@ -181,7 +181,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(IDEVICEINSTALLER) $(DOCKMANAGER) $(BLENDER) $(QRENCODE) $(PENGUINTV) \
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
-	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE)
+	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
+	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2732,6 +2733,14 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf nfs-utils_$(nfs-utils_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libnfsidmap
+libnfsidmap:$(LIBNFSIDMAP)_$(ARCH).deb
+$(LIBNFSIDMAP): $(SPREZZ)/libnfsidmap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnfsidmap-$(libnfsidmap_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnice
 libnice:$(LIBNICE)_$(ARCH).deb
 $(LIBNICE): $(SPREZZ)/libnice/debian/changelog
@@ -3134,6 +3143,30 @@ $(RATPOISON): $(SPREZZ)/ratpoison/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ratpoison-$(ratpoison_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: librsvg
+librsvg:$(LIBRSVG)_$(ARCH).deb
+$(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf librsvg-$(librsvg_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libgssglue
+libgssglue:$(LIBGSSGLUE)_$(ARCH).deb
+$(LIBGSSGLUE): $(SPREZZ)/libgssglue/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libgssglue-$(libgssglue_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: librpcsecgss
+librpcsecgss:$(LIBRPCSECGSS)_$(ARCH).deb
+$(LIBRPCSECGSS): $(SPREZZ)/librpcsecgss/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf librpcsecgss-$(librpcsecgss_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rawstudio
 rawstudio:$(RAWSTUDIO)_$(ARCH).deb
 $(RAWSTUDIO): $(SPREZZ)/rawstudio/debian/changelog
@@ -3197,6 +3230,14 @@ $(SBC): $(SPREZZ)/sbc/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf sbc-$(sbc_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: sqlite3
+sqlite3:$(SQLITE3)_$(ARCH).deb
+$(SQLITE3): $(SPREZZ)/sqlite3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf sqlite3_$(sqlite3_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
@@ -4283,17 +4324,6 @@ lightdm:$(LIGHTDM)_$(ARCH).deb
 $(LIGHTDM): $(SPREZZ)/lightdm/debian/changelog $(LIGHTDMORIG)
 	mkdir -p $@
 	tar xzvf $(LIGHTDMORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(LIBRSVGORIG)
-$(LIBRSVGORIG):
-	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/librsvg/2.36/$(LIBRSVGUP).tar.xz
-
-.PHONY: librsvg
-librsvg:$(LIBRSVG)_$(ARCH).deb
-$(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog $(LIBRSVGORIG)
-	mkdir -p $@
-	tar xJvf $(LIBRSVGORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 CONPAL:=App-ConPalette-0.1.5
