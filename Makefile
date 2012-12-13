@@ -3586,6 +3586,14 @@ $(WPA): $(SPREZZ)/wpa/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf wpa_$(wpa_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: x11-xkb-utils
+x11-xkb-utils:$(X11XKBUTILS)_$(ARCH).deb
+$(X11XKBUTILS): $(SPREZZ)/x11-xkb-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xproto-$(x11-xkb-utils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: x11proto-core
 x11proto-core:$(X11PROTOCORE)_$(ARCH).deb
 $(X11PROTOCORE): $(SPREZZ)/x11proto-core/debian/changelog
