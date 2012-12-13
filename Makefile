@@ -183,7 +183,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
-	$(NEWT)
+	$(NEWT) $(ACCOUNTSSERVICE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -477,6 +477,14 @@ $(AACPLUSENC): $(SPREZZ)/aacplusenc/debian/changelog
 	tar xzvf aacplusenc_$(aacplusenc_UPVER).tar.gz $(TARARGS) $@
 	rm -rf $@/debian
 	cp -r $(<D) $@/
+
+.PHONY: accountsservice
+accountsservice:$(ACCOUNTSSERVICE)_$(ARCH).deb
+$(ACCOUNTSSERVICE): $(SPREZZ)/accountsservice/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf accountsservice-$(accountsservice_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libaacplus
 libaacplus:$(LIBAACPLUS)_$(ARCH).deb
