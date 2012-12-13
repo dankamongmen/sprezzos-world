@@ -182,7 +182,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(SPEEX) $(LIBOGG) $(LIBVORBIS) $(FLAC) $(ID3LIB) $(TTFAUTOHINT) $(DARKTABLE) \
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
-	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV)
+	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2839,6 +2839,14 @@ $(NVIDIASETTINGS): $(SPREZZ)/nvidia-settings/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf nvidia-settings-$(nvidia-settings_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libonig
+libonig:$(LIBONIG)_$(ARCH).deb
+$(LIBONIG): $(SPREZZ)/libonig/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf onig-$(libonig_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libogg
 libogg:$(LIBOGG)_$(ARCH).deb
 $(LIBOGG): $(SPREZZ)/libogg/debian/changelog
@@ -4163,7 +4171,7 @@ $(SLANG2): $(SPREZZ)/slang2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf slang2-$(slang2_UPVER).tar.bz2 $(TARARGS) $@
+	tar xjvf slang-$(slang2_UPVER).tar.bz2 $(TARARGS) $@
 
 FETCHED:=$(FETCHED) $(SOCATUP).tar.bz2
 $(SOCATUP).tar.bz2:
