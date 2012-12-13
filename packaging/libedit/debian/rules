@@ -1,0 +1,109 @@
+#! /usr/bin/make -f
+## debian/rules for libedit, mostly a pmake workaround..
+## hacked together by Gergely Nagy <algernon@debian.org>
+## $MadHouse: Debian/libedit/debian/rules,v 1.3 2001/11/04 01:57:26 algernon Exp $
+
+# This is the debhelper compatability version to use.
+
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+PACKAGE		 = libedit
+PKGDIR		 = ${CURDIR}/debian/tmp
+PMAKE_ARGS	 = MKPROFILE=no MKCATPAGES=no MLINKS= MANPAGES= \
+		 SHLIB_SHFLAGS="-Wl,-soname,libedit.so.${major}" \
+		 LDADD="$(LDFLAGS) -lbsd -ltinfo"
+EDITLINE_3_LINKS = el_init el_end el_reset el_gets el_getc el_push \
+		 el_parse el_set el_get el_source el_resize el_line \
+		 el_insertstr el_deletestr history_init history_end history
+
+version		 = 2.11
+major		 = 2
+## For automatic update from CVS
+CVSROOT		 = :pserver:anoncvs@anoncvs.netbsd.org:/cvsroot
+DATE		 = $(shell date +%Y%m%d)
+ROOT		 = basesrc
+
+DEB_HOST_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH	?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS=CC=$(DEB_HOST_GNU_TYPE)-gcc LD=$(DEB_HOST_GNU_TYPE)-ld
+endif
+
+# Workaround for pmake fussiness
+ifeq (mips-linux,$(DEB_HOST_GNU_TYPE))
+PMAKE_ARGS += MACHINE_ARCH=mipseb
+endif
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp:
+	dh_testdir
+	chmod 755 libedit/makelist	# workaround a bug in upstream source
+	cd libedit && $(CROSS) pmake ${PMAKE_ARGS}
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	dh_clean build-stamp
+	-cd libedit && pmake distclean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean
+	install -d ${PKGDIR}/usr/lib/$(DEB_HOST_MULTIARCH)
+	install -d ${PKGDIR}/usr/include/readline
+	install -d ${PKGDIR}/usr/include/libedit
+	install -d ${PKGDIR}/usr/share/man/man3
+	install -d ${PKGDIR}/usr/share/man/man5
+	install -d ${PKGDIR}/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig
+	install -m 644 $(CURDIR)/debian/libedit.pc ${PKGDIR}/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig
+	sed -i '/^libdir=/s,$$,/$(DEB_HOST_MULTIARCH),' ${PKGDIR}/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig/libedit.pc
+	cd libedit && \
+	 pmake install incinstall DESTDIR=${PKGDIR} ${PMAKE_ARGS}
+## pmake workaround
+	cd libedit/readline && \
+	 pmake incinstall DESTDIR=${PKGDIR} ${PMAKE_ARGS}
+	mv ${PKGDIR}/usr/include/readline ${PKGDIR}/usr/include/editline
+	ln -sf libedit.so.${version} ${PKGDIR}/usr/lib/$(DEB_HOST_MULTIARCH)/libedit.so.${major}
+	ln -sf libedit.so.${major} ${PKGDIR}/usr/lib/$(DEB_HOST_MULTIARCH)/libedit.so
+
+binary-indep: build install
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+## Install manpages
+	install -m 0644 libedit/editline.3 ${PKGDIR}/usr/share/man/man3/editline.3el
+	install -m 0644 libedit/editrc.5 ${PKGDIR}/usr/share/man/man5/editrc.5el
+## End
+	dh_movefiles
+	@list="${EDITLINE_3_LINKS}"; for l in $$list; do \
+		echo "ln -sf editline.3el ${CURDIR}/debian/libedit-dev/usr/share/man/man3/$$l.3el"; \
+		ln -sf editline.3el ${CURDIR}/debian/libedit-dev/usr/share/man/man3/$$l.3el; \
+	done
+	dh_installdocs
+	dh_installchangelogs
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -plibedit2
+	dh_builddeb -plibedit-dev -- -Zbzip2 -z9
+
+binary: binary-indep binary-arch
+
+cvs-update:
+	cvs -d ${CVSROOT} export -D now -d libedit-${DATE} ${ROOT}/lib/libedit
+
+.PHONY: build clean binary-indep binary-arch binary install cvs-update
