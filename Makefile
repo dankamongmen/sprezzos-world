@@ -183,7 +183,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GWIBBER) $(LIBSIGNONGLIB) $(LIBACCOUNTSGLIB) $(LIBEDIT) $(P11KIT) $(XTERM) \
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
-	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER)
+	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2301,6 +2301,22 @@ $(USBMUXD): $(SPREZZ)/usbmuxd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf usbmuxd_$(usbmuxd_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: vlc
+vlc:$(VLC)_$(ARCH).deb
+$(VLC): $(SPREZZ)/vlc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf vlc-$(vlc_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: xfsprogs
+xfsprogs:$(XFSPROGS)_$(ARCH).deb
+$(XFSPROGS): $(SPREZZ)/xfsprogs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xfsprogs-$(xfsprogs_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libjpeg
 libjpeg:$(LIBJPEG)_$(ARCH).deb
