@@ -3376,7 +3376,7 @@ $(SHADOW): $(SPREZZ)/shadow/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf shadow_$(shadow_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf shadow-$(shadow_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: shotwell
 shotwell:$(SHOTWELL)_$(ARCH).deb
