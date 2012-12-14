@@ -1,0 +1,98 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+LIBRARY = libunbound2
+
+CFLAGS = `dpkg-buildflags --get CFLAGS`
+CFLAGS += -fPIC
+LDFLAGS = `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS = `dpkg-buildflags --get CPPFLAGS`
+
+clean:
+	dh clean
+
+build:
+build-arch:
+build-indep:
+
+binary-arch: build
+	dh_testdir
+
+	autoreconf -fvi
+
+	# first build -- build unbound daemon
+	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure \
+		--prefix=/usr \
+		--sysconfdir=/etc \
+		--disable-rpath \
+		--with-pidfile=/var/run/unbound.pid \
+		--with-libevent \
+		--with-pythonmodule \
+		--with-pyunbound
+	$(MAKE) unbound
+	install -D -m 0755 unbound debian/unbound/usr/sbin/unbound
+
+	# XXX gross hack to prevent python module from linking against everything
+	rm -f _unbound.la
+	sed -i -e 's/^dependency_libs=.*/dependency_libs=''/' libunbound.la
+	make _unbound.la LIBS=""
+	install -D -m 0644 .libs/_unbound.so.2.*.* \
+		debian/python-unbound/usr/lib/$(shell pyversions -d)/dist-packages/_unbound.so
+	install -m 0644 \
+		pythonmod/unboundmodule.py \
+		libunbound/python/unbound.py \
+		debian/python-unbound/usr/lib/$(shell pyversions -d)/dist-packages
+
+	$(MAKE) clean
+
+	# second build -- build libunbound and utilities, without extra dependencies
+	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure \
+		--prefix=/usr \
+		--sysconfdir=/etc \
+		--disable-rpath \
+		--without-libevent \
+		--without-pythonmodule \
+		--without-pyunbound \
+		--libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+	$(MAKE)
+	$(MAKE) install DESTDIR="$(CURDIR)/debian/tmp"
+
+	dh_installdirs
+
+	dh_installinit --error-handler=true --restart-after-upgrade
+
+	echo '$$named unbound' > debian/unbound/etc/insserv.conf.d/unbound
+	install -m 0755 debian/resolvconf debian/unbound/etc/resolvconf/update.d/unbound
+	install -m 0644 doc/example.conf debian/unbound/usr/share/doc/unbound/examples/unbound.conf
+
+	mkdir -p debian/libunbound-dev/usr/lib/$(DEB_HOST_MULTIARCH)
+	mv \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libunbound.a \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libunbound.so \
+		debian/libunbound-dev/usr/lib/$(DEB_HOST_MULTIARCH)
+
+	mkdir -p debian/$(LIBRARY)/usr/lib/$(DEB_HOST_MULTIARCH)
+	mv \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.so.* \
+		debian/$(LIBRARY)/usr/lib/$(DEB_HOST_MULTIARCH)
+	chmod 0644 debian/$(LIBRARY)/usr/lib/$(DEB_HOST_MULTIARCH)/*
+
+	dh_install
+	dh_installchangelogs
+	dh_installdocs
+	dh_installman
+	dh_python2 --no-guessing-versions
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-indep:
+binary: binary-arch binary-indep

@@ -1,0 +1,47 @@
+#!/bin/sh -e
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+if [ ! -x /usr/sbin/unbound ]; then
+    exit 0
+fi
+
+if [ ! -f /etc/unbound/unbound_control.key ]; then
+    exit 0
+fi
+
+if [ ! -x /lib/resolvconf/list-records ]; then
+    exit 1
+fi
+
+RESOLVCONF_FORWARDERS=false
+
+if [ -f /etc/default/unbound ]; then
+    . /etc/default/unbound
+    case "x$RESOLVCONF_FORWARDERS" in
+        xtrue|x1|xyes)
+            RESOLVCONF_FORWARDERS=true
+            ;;
+        *)
+            RESOLVCONF_FORWARDERS=false
+            ;;
+    esac
+fi
+
+if $RESOLVCONF_FORWARDERS; then
+    RESOLVCONF_FILES="$(/lib/resolvconf/list-records)"
+
+    if [ -n "$RESOLVCONF_FILES" ]; then
+        NS_IPS="$(sed -rne 's/^[[:space:]]*nameserver[[:space:]]+//p' $RESOLVCONF_FILES \
+            | egrep -v '^(127\.|::1)' | sort -u)"
+    else
+        NS_IPS=""
+    fi
+
+    if [ -n "$NS_IPS" ]; then
+        FWD="$(echo $NS_IPS | tr '\n' ' ')"
+        unbound-control forward $FWD 1>/dev/null 2>&1 || true
+    else
+        unbound-control forward off 1>/dev/null 2>&1 || true
+    fi
+fi

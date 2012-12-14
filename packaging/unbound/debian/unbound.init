@@ -1,0 +1,160 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:          unbound
+# Required-Start:    $network $remote_fs $syslog
+# Required-Stop:     $network $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+
+NAME=unbound
+DESC="recursive DNS server"
+DAEMON=/usr/sbin/unbound
+PIDFILE="/var/run/unbound.pid"
+
+test -x $DAEMON || exit 0
+test -x ${DAEMON}-checkconf || exit 0
+
+. /lib/lsb/init-functions
+
+UNBOUND_ENABLE=true
+ROOT_TRUST_ANCHOR_UPDATE=false
+ROOT_TRUST_ANCHOR_FILE=/var/lib/unbound/root.key
+RESOLVCONF=false
+RESOLVCONF_FORWARDERS=false
+
+if [ -f /etc/default/$NAME ]; then
+    . /etc/default/$NAME
+    case "x$UNBOUND_ENABLE" in
+        xtrue|x1|xyes)
+            UNBOUND_ENABLE=true
+            ;;
+        *)
+            UNBOUND_ENABLE=false
+            ;;
+    esac
+    case "x$ROOT_TRUST_ANCHOR_UPDATE" in
+        xtrue|x1|xyes)
+            ROOT_TRUST_ANCHOR_UPDATE=true
+            ;;
+        *)
+            ROOT_TRUST_ANCHOR_UPDATE=false
+            ;;
+    esac
+    case "x$RESOLVCONF" in
+        xtrue|x1|xyes)
+            RESOLVCONF=true
+            ;;
+        *)
+            RESOLVCONF=false
+    esac
+    case "x$RESOLVCONF_FORWARDERS" in
+        xtrue|x1|xyes)
+            RESOLVCONF_FORWARDERS=true
+            ;;
+        *)
+            RESOLVCONF_FORWARDERS=false
+    esac
+fi
+
+do_resolvconf_start() {
+    if $RESOLVCONF; then
+        if [ -x /sbin/resolvconf ]; then
+            unbound-checkconf -o interface | (
+                default=yes
+                while read interface; do
+                    default=no
+                    if [ "x$interface" = x0.0.0.0 -o "x$interface" = x127.0.0.1 ]; then
+                        echo "nameserver 127.0.0.1"
+                    elif [ "x$interface" = x::0 -o "x$interface" = x::1 ]; then
+                        echo "nameserver ::1"
+                    fi
+                done
+                if [ $default = yes ]; then
+                    # unbound defaults to listening on localhost
+                    echo "nameserver 127.0.0.1"
+                fi
+            ) | /sbin/resolvconf -a lo.unbound
+        fi
+    fi
+}
+
+do_resolvconf_stop() {
+    if $RESOLVCONF; then
+        if [ -x /sbin/resolvconf ]; then
+            /sbin/resolvconf -d lo.unbound
+        fi
+    fi
+}
+
+case "$1" in
+    start)
+        if $UNBOUND_ENABLE; then
+            if $ROOT_TRUST_ANCHOR_UPDATE; then
+                unbound-anchor -a $ROOT_TRUST_ANCHOR_FILE -v 2>&1 | logger -p daemon.info -t unbound-anchor
+                chown unbound:unbound $ROOT_TRUST_ANCHOR_FILE
+            fi
+            log_daemon_msg "Starting $DESC" "$NAME"
+            if start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --name $NAME --startas $DAEMON -- $DAEMON_OPTS; then
+                do_resolvconf_start
+                log_end_msg 0
+            else
+                log_end_msg 1
+            fi
+        else
+            log_warning_msg "Not starting $DESC $NAME, disabled via /etc/default/$NAME"
+        fi
+        ;;
+
+    stop)
+        if $UNBOUND_ENABLE; then
+            log_daemon_msg "Stopping $DESC" "$NAME"
+            if start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --name $NAME; then
+                do_resolvconf_stop
+                log_end_msg 0
+            else
+                log_end_msg 1
+            fi
+        fi
+        ;;
+
+    restart|force-reload)
+        if $UNBOUND_ENABLE; then
+            log_daemon_msg "Restarting $DESC" "$NAME"
+            start-stop-daemon --stop --quiet --pidfile $PIDFILE --name $NAME --retry 5
+            do_resolvconf_stop
+            if start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --name $NAME --startas $DAEMON -- $DAEMON_OPTS; then
+                do_resolvconf_start
+                log_end_msg 0
+            else
+                log_end_msg 1
+            fi
+        fi
+        ;;
+
+    reload)
+        if $UNBOUND_ENABLE; then
+            log_daemon_msg "Reloading $DESC" "$NAME"
+            if start-stop-daemon --stop --pidfile $PIDFILE --signal 1; then
+                log_end_msg 0
+            else
+                log_end_msg 1
+            fi
+        fi
+        ;;
+
+    status)
+        status="4"
+        status_of_proc -p $PIDFILE $DAEMON $NAME || status="$?"
+        exit $status
+        ;;
+
+    *)
+        N=/etc/init.d/$NAME
+        echo "Usage: $N {start|stop|restart|status|reload|force-reload}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0;
