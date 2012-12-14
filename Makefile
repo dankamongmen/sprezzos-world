@@ -184,7 +184,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
-	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO)
+	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
+	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -895,6 +896,14 @@ $(TTFAUTOHINT): $(SPREZZ)/ttfautohint/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ttfautohint-$(ttfautohint_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: codeblocks
+codeblocks:$(CODEBLOCKS)_$(ARCH).deb
+$(CODEBLOCKS): $(SPREZZ)/codeblocks/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf codeblocks_$(codeblocks_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cogl
 cogl:$(COGL)_$(ARCH).deb
@@ -2439,6 +2448,22 @@ $(LIBVPX): $(SPREZZ)/libvpx/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libvpx-v$(libvpx_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: wxwidgets2.8
+wxwidgets2.8:$(WXWIDGETS2.8)_$(ARCH).deb
+$(WXWIDGETS2.8): $(SPREZZ)/wxwidgets2.8/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf wxwidgets2.8-$(wxwidgets2.8_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: wxwidgets2.9
+wxwidgets2.9:$(WXWIDGETS2.9)_$(ARCH).deb
+$(WXWIDGETS2.9): $(SPREZZ)/wxwidgets2.9/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf wxWidgets-$(wxwidgets2.9_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libwacom
 libwacom:$(LIBWACOM)_$(ARCH).deb
