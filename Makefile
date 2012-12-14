@@ -184,7 +184,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
-	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS)
+	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -3369,6 +3369,14 @@ $(SCREENLETS): $(SPREZZ)/screenlets/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf screenlets-$(screenlets_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: shadow
+shadow:$(SHADOW)_$(ARCH).deb
+$(SHADOW): $(SPREZZ)/shadow/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf shadow_$(shadow_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: shotwell
 shotwell:$(SHOTWELL)_$(ARCH).deb
