@@ -1,0 +1,84 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+
+DEB_HOST_ARCH_OS := $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+ifeq ($(DEB_HOST_ARCH_OS),hurd)
+# Do not build login on The Hurd
+override DEB_ARCH_PACKAGES=passwd
+endif
+
+# Enable PIE, BINDNOW, and possible future flags.
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+# Specify where dh_install will find the files that it needs to move:
+DEB_DH_INSTALL_SOURCEDIR=debian/tmp
+# Specify the destination of shadow's "make install"
+# (This is only needed on The Hurd, where only one package is built. On
+# the other arch, DEB_DESTDIR already points to debian/tmp)
+DEB_DESTDIR=$(CURDIR)/debian/tmp
+
+include /usr/share/cdbs/1/class/autotools.mk
+# Automatically update autoconf, etc.
+DEB_AUTO_UPDATE_ACLOCAL  = 1.9
+DEB_AUTO_UPDATE_AUTOCONF = 1.9
+DEB_AUTO_UPDATE_AUTOMAKE = 1.9
+DEB_AUTO_UPDATE_LIBTOOL = pre
+
+# Adds extra options when calling the configure script:
+DEB_CONFIGURE_EXTRA_FLAGS := --disable-shared --without-libcrack --without-audit --mandir=/usr/share/man --with-libpam --enable-shadowgrp --enable-man --disable-account-tools-setuid --with-group-name-max-length=32 --without-acl --without-attr --without-tcb
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+  DEB_CONFIGURE_EXTRA_FLAGS += --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+# Automatically controls patching at build time:
+include /usr/share/cdbs/1/rules/patchsys-quilt.mk
+
+# Add extras to the install process:
+binary-install/login::
+	dh_installpam -p login
+	dh_installpam -p login --name=su
+	install -c -m 444 debian/login.defs debian/login/etc/login.defs
+	install -c -m 444 debian/securetty.$(DEB_HOST_ARCH_OS) debian/login/etc/securetty
+	dh_lintian -p login
+
+binary-install/passwd::
+	install -c -m 444 man/shadowconfig.8 debian/passwd/usr/share/man/man8
+	install -c -m 444 man/ja/shadowconfig.8 debian/passwd/usr/share/man/ja/man8
+	install -c -m 444 man/pl/shadowconfig.8 debian/passwd/usr/share/man/pl/man8
+	install -c -m 444 man/fr/shadowconfig.8 debian/passwd/usr/share/man/fr/man8
+	# Distribute the pam.d files; unless for the commands with disabled PAM
+	# support
+	dh_installpam -p passwd --name=passwd
+	dh_installpam -p passwd --name=chfn
+	dh_installpam -p passwd --name=chsh
+	dh_installpam -p passwd --name=chpasswd
+	dh_installpam -p passwd --name=newusers
+ifeq ($(DEB_HOST_ARCH_OS),hurd)
+# login is not built on The Hurd, but some utilities of passwd depends on
+# /etc/login.defs.
+	install -c -m 444 debian/login.defs debian/passwd/etc/login.defs
+endif
+	install -c -m 644 debian/useradd.default debian/passwd/etc/default/useradd
+	install -d debian/passwd/sbin
+	install -c -m 555 debian/shadowconfig.sh debian/passwd/sbin/shadowconfig
+	install -c -m 444 debian/cpgr.8 debian/passwd/usr/share/man/man8
+	install -c -m 444 debian/cppw.8 debian/passwd/usr/share/man/man8
+	dh_lintian -p passwd
+
+binary-predeb/login::
+	# No real need for login to be setuid root
+	# chmod u+s debian/login/bin/login
+	chmod u+s debian/login/bin/su
+	chmod u+s debian/login/usr/bin/newgrp
+
+binary-predeb/passwd::
+	chmod u+s debian/passwd/usr/bin/chfn
+	chmod u+s debian/passwd/usr/bin/chsh
+	chmod u+s debian/passwd/usr/bin/gpasswd
+	chmod u+s debian/passwd/usr/bin/passwd
+	chgrp shadow debian/passwd/usr/bin/chage
+	chgrp shadow debian/passwd/usr/bin/expiry
+	chmod g+s debian/passwd/usr/bin/chage
+	chmod g+s debian/passwd/usr/bin/expiry
