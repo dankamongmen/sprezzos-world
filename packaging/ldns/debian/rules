@@ -1,0 +1,99 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_BUILD_OPTIONS=nocheck
+
+export DEB_BUILD_HARDENING=1 
+
+PYVERS=$(shell pyversions -vs)
+
+OPENSSLVER=$(shell pkg-config --modversion libssl)
+
+BUILD_GOST=$(shell dpkg --compare-versions $(OPENSSLVER) gt 1.0.0 && echo "--enable-gost" || echo "--disable-gost")
+
+%:
+	dh --with quilt --with python2 ${@}
+
+override_dh_auto_clean:
+	[ -e $(CURDIR)/libtool ] || ln -s /usr/bin/libtool
+	dh_auto_clean;
+	if test -f debian/config.sub; then \
+		mv debian/config.sub config.sub ; \
+	fi
+	if test -f debian/config.guess; then \
+		mv debian/config.guess config.guess ; \
+	fi
+
+	rm -f debian/libldns1.symbols
+	rm -f config.log
+	rm -f examples/config.sub examples/config.guess examples/config.log
+	rm -f drill/config.sub drill/config.guess drill/config.log
+	rm -f libtool
+	rm -f examples/debian drill/debian
+
+override_dh_auto_configure:
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	cp config.sub debian/config.sub
+	cp -f /usr/share/misc/config.sub config.sub
+	cp -f /usr/share/misc/config.sub examples/config.sub
+	cp -f /usr/share/misc/config.sub drill/config.sub
+endif
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	cp config.guess debian/config.guess
+	cp -f /usr/share/misc/config.guess config.guess
+	cp -f /usr/share/misc/config.guess examples/config.guess
+	cp -f /usr/share/misc/config.guess drill/config.guess
+endif
+	autoreconf -fi
+	DEB_BUILD_HARDENING=1 PYTHON_VERSION=$$v dh_auto_configure -- --disable-rpath $(BUILD_GOST) --without-pyldns --with-examples --with-drill;
+	$(MAKE) setup-builddir;
+	for v in $(PYVERS); do \
+	  DEB_BUILD_HARDENING=1 PYTHON_VERSION=$$v dh_auto_configure -Bbuild-python$$v -- --disable-rpath $(BUILD_GOST) --with-pyldns; \
+	  dh_auto_build -Bbuild-python$$v -- setup-builddir; \
+	done
+
+override_dh_auto_build:
+	DEB_BUILD_HARDENING=1 dh_auto_build;
+
+	for v in $(PYVERS); do \
+	  ln -s $(CURDIR)/libldns.la build-python$$v; \
+	  mkdir build-python$$v/.libs/; \
+          ln -s $(CURDIR)/.libs/libldns.la* $(CURDIR)/.libs/libldns.so* $(CURDIR)/.libs/libldns.a build-python$$v/.libs/; \
+	done
+
+	for v in $(PYVERS); do \
+	  DEB_BUILD_HARDENING=1 dh_auto_build -Bbuild-python$$v -- _ldns.la; \
+	done
+
+override_dh_auto_install:
+	dh_auto_install -- DESTDIR=$(CURDIR)/debian/tmp;
+
+	for v in $(PYVERS); do \
+	  PYTHON_DIR=$$(python$$v -c "import distutils.sysconfig; print distutils.sysconfig.get_python_lib(0,0);"); \
+	  make -C build-python$$v DESTDIR=$(CURDIR)/debian/tmp install-pyldns; \
+	  mv $(CURDIR)/debian/tmp$${PYTHON_DIR}/$$(readlink $(CURDIR)/debian/tmp$${PYTHON_DIR}/_ldns.so) $(CURDIR)/debian/tmp$${PYTHON_DIR}/_ldns.so; \
+	  chrpath -d $(CURDIR)/debian/tmp$${PYTHON_DIR}/_ldns.so; \
+	done
+	mkdir $(CURDIR)/debian/tmp/usr/sbin
+	mv $(CURDIR)/debian/tmp/usr/bin/ldns-config $(CURDIR)/debian/tmp/usr/sbin/
+
+override_dh_strip:
+	dh_strip -p libldns1 --dbg-package=libldns1-dbg
+	dh_strip -a --remaining-packages
+
+override_dh_install:
+	dh_install -p libldns-dev
+	rm $(CURDIR)/debian/tmp/usr/share/man/man1/ldns-config.*
+	dh_install -a --remaining-packages
+
+override_dh_makeshlibs:
+	if dpkg --compare-versions $(OPENSSLVER) gt 1.0.0; \
+	then \
+		cp -f debian/libldns1.symbols.in debian/libldns1.symbols; \
+	else \
+		grep -v gost debian/libldns1.symbols.in > debian/libldns1.symbols; \
+	fi
+	dh_makeshlibs
