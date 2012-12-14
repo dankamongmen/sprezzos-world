@@ -184,7 +184,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
-	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW)
+	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -495,6 +495,14 @@ $(AACPLUSENC): $(SPREZZ)/aacplusenc/debian/changelog
 	tar xzvf aacplusenc_$(aacplusenc_UPVER).tar.gz $(TARARGS) $@
 	rm -rf $@/debian
 	cp -r $(<D) $@/
+
+.PHONY: acetoneiso
+acetoneiso:$(ACETONEISO)_$(ARCH).deb
+$(ACETONEISO): $(SPREZZ)/acetoneiso/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf acetoneiso-$(acetoneiso_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: accountsservice
 accountsservice:$(ACCOUNTSSERVICE)_$(ARCH).deb
