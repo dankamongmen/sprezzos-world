@@ -184,7 +184,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
-	$(GNOMESCAN) $(BABL) $(LIBVPX)
+	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2656,6 +2656,14 @@ $(PENGUINTV): $(SPREZZ)/penguintv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf penguintv_$(penguintv_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ldns
+ldns:$(LDNS)_$(ARCH).deb
+$(LDNS): $(SPREZZ)/ldns/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ldns-$(ldns_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: mon
 mon:$(MON)_$(ARCH).deb
 $(MON): $(SPREZZ)/mon/debian/changelog
@@ -3441,6 +3449,14 @@ $(SYSTEMCONFIGPRINTER): $(SPREZZ)/system-config-printer/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf system-config-printer-$(system-config-printer_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: unbound
+unbound:$(UNBOUND)_$(ARCH).deb
+$(UNBOUND): $(SPREZZ)/unbound/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unbound-$(unbound_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: util-linux
 util-linux:$(UTILLINUX)_$(ARCH).deb
