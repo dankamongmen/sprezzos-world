@@ -205,7 +205,7 @@ world: $(DEBS) $(UDEBS)
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY)
+	cd $< && debuild -j8 -k$(DEBKEY)
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -502,7 +502,7 @@ $(ACETONEISO): $(SPREZZ)/acetoneiso/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf acetoneiso-$(acetoneiso_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf acetoneiso_$(acetoneiso_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: accountsservice
 accountsservice:$(ACCOUNTSSERVICE)_$(ARCH).deb
