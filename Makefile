@@ -184,7 +184,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(PIDGINOTR) $(NOTIFYPYTHON) $(LIBNOTIFY) $(LIBXVMC) $(XTRACE) $(SQLITE3) \
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
-	$(GNOMESCAN)
+	$(GNOMESCAN) $(BABL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -215,6 +215,23 @@ $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
 	git clone git://github.com/apitrace/apitrace.git $@
 	tar cJf $(APITRACEORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
+
+.PHONY: babl
+babl:$(BABL)_$(ARCH).deb
+$(BABL): $(SPREZZ)/babl/debian/changelog
+	git clone git@github.com:dankamongmen/babl.git $@
+	tar cJf babl-$(babl_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf babl-$(babl_UPVER).tar.xz babl_$(babl_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+.PHONY: gegl
+gegl:$(GEGL)_$(ARCH).deb
+$(GEGL): $(SPREZZ)/gegl/debian/changelog
+	git clone git@github.com:dankamongmen/gegl.git $@
+	tar cJf gegl-$(gegl_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf gegl-$(gegl_UPVER).tar.xz gegl_$(gegl_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 
 .PHONY: everpad
 everpad:$(EVERPAD)_$(ARCH).deb
@@ -1262,14 +1279,6 @@ $(GDM3): $(SPREZZ)/gdm3/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gdm-$(gdm3_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: gegl
-gegl:$(GEGL)_$(ARCH).deb
-$(GEGL): $(SPREZZ)/gegl/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf gegl-$(gegl_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: gettext
 gettext:$(GETTEXT)_$(ARCH).deb
