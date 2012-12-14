@@ -1,0 +1,168 @@
+#!/usr/bin/make -f
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_ARCH_CPU  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+configure_flags += \
+  --prefix=/usr \
+  --enable-pic \
+  --enable-shared \
+  --disable-install-bins \
+  --disable-install-srcs
+
+ifeq ($(DEB_HOST_ARCH_CPU),arm)
+configure_flags_neon := $(configure_flags) --target=armv7-linux-gcc
+BUILD_NEON=Yes
+endif
+
+ifeq ($(DEB_HOST_ARCH), armel)
+ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
+configure_flags += --target=armv6-linux-gcc --enable-small
+else
+configure_flags += --target=generic-gnu
+endif
+else
+ifeq ($(DEB_HOST_ARCH), armhf)
+# now armhf is ARMv7, but ARMv7 in vpx means NEON, which is not mandatory on armhf
+# thus we use ARMv6 and -marm (since no thumb2 on ARMv6) to ensure compatability
+# with all ARMv7 cores we support.
+CFLAGS += -marm
+configure_flags += --target=armv6-linux-gcc --enable-small
+else
+ifeq ($(DEB_HOST_ARCH), amd64)
+configure_flags += --target=x86_64-linux-gcc
+else
+ifeq ($(DEB_HOST_ARCH), kfreebsd-amd64)
+configure_flags += --target=x86_64-linux-gcc
+else
+ifeq ($(DEB_HOST_ARCH), i386)
+configure_flags += --target=x86-linux-gcc
+else
+ifeq ($(DEB_HOST_ARCH), kfreebsd-i386)
+configure_flags += --target=x86-linux-gcc
+else
+ifeq ($(DEB_HOST_ARCH), hurd-i386)
+configure_flags += --target=x86-linux-gcc
+else
+ifeq ($(DEB_HOST_ARCH), powerpc)
+configure_flags += --target=ppc32-linux-gcc
+else
+configure_flags += --target=generic-gnu
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+CROSS=$(DEB_HOST_GNU_TYPE)-
+export CROSS
+endif
+
+CFLAGS += -Wall -g
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+
+builddir := $(CURDIR)/builddir
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	mkdir -p $(builddir); \
+	cd $(builddir); \
+	CFLAGS="$(CFLAGS)" $(CURDIR)/configure \
+		$(configure_flags)
+	touch $@
+ifeq ($(BUILD_NEON), Yes)
+	mkdir -p $(builddir)-neon; \
+	cd $(builddir)-neon; \
+	CFLAGS="$(CFLAGS)" $(CURDIR)/configure \
+		$(configure_flags_neon)
+	touch $@
+endif
+
+build: build-stamp
+
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE) -C $(builddir) verbose=yes
+ifeq ($(BUILD_NEON), Yes)
+	$(MAKE) -C $(builddir)-neon verbose=yes
+endif
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f *-stamp
+	rm -rf $(builddir)
+	rm -rf $(builddir)-neon
+	dh_clean
+
+install: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	$(MAKE) -C $(builddir) verbose=yes dist
+ifeq ($(BUILD_NEON), Yes)
+	$(MAKE) -C $(builddir)-neon verbose=yes dist
+endif
+	# don't use stripped library...
+	cp -v $(builddir)/libvpx_g.a \
+	  $(builddir)/vpx-vp8-*/lib/libvpx.a
+
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_install -i
+	dh_installchangelogs -i CHANGELOG
+	dh_installdocs -i -A README AUTHORS
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install -s
+	mkdir -p debian/libvpx1/usr/lib/$(DEB_HOST_MULTIARCH)
+	cp -a builddir/vpx-vp8-*/lib/libvpx.so.* debian/libvpx1/usr/lib/$(DEB_HOST_MULTIARCH)
+ifeq ($(BUILD_NEON), Yes)
+	mkdir -p debian/libvpx1/usr/lib/$(DEB_HOST_MULTIARCH)/vfp/neon
+	cp -a builddir-neon/vpx-vp8-*/lib/libvpx.so.* debian/libvpx1/usr/lib/$(DEB_HOST_MULTIARCH)/vfp/neon
+endif
+	mkdir -p debian/libvpx-dev/usr/lib/$(DEB_HOST_MULTIARCH)
+	cp -a builddir/vpx-vp8-*/lib/libvpx.so builddir/vpx-vp8-*/lib/libvpx.a debian/libvpx-dev/usr/lib/$(DEB_HOST_MULTIARCH)
+	dh_installdocs -s -A README AUTHORS
+	dh_installchangelogs -s CHANGELOG
+	dh_link -s
+	dh_strip -s --dbg-package=libvpx1-dbg
+	# Make sure not to conflict with past SONAMEs:
+	rm -rf debian/libvpx1-dbg/usr/lib/debug/usr/bin
+	dh_compress -s
+	dh_fixperms -s
+	dh_makeshlibs -plibvpx1 -V 'libvpx1 (>= 1.1.0)' -- -c4
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-indep binary-arch
+
+.PHONY: build clean binary-indep binary-arch binary install clean
