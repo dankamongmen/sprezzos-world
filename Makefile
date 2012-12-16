@@ -185,7 +185,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
 	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL) $(LIBV8) \
-	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47)
+	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47) $(SILGRAPHITE)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -3534,6 +3534,14 @@ $(SHUTTER): $(SPREZZ)/shutter/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf shutter_$(shutter_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: silgraphite
+silgraphite:$(SILGRAPHITE)_$(ARCH).deb
+$(SILGRAPHITE): $(SPREZZ)/silgraphite/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf graphite2-$(silgraphite_UPVER).tgz $(TARARGS) $@
 
 .PHONY: simple-scan
 simple-scan:$(SIMPLESCAN)_$(ARCH).deb
