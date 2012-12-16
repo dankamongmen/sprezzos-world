@@ -186,7 +186,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
-	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES)
+	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2761,6 +2761,14 @@ $(MPD): $(SPREZZ)/mpd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mpd_$(mpd_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libmnl
+libmnl:$(LIBMNL)_$(ARCH).deb
+$(LIBMNL): $(SPREZZ)/libmnl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libmnl-$(libmnl_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libmpd
 libmpd:$(LIBMPD)_$(ARCH).deb
