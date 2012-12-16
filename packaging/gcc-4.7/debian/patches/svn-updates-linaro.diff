@@ -1,0 +1,1016 @@
+# DP: updates from the 4.7 branch upto 20121211 (r194382).
+
+last_updated()
+{
+	cat > ${dir}LAST_UPDATED <<EOF
+Tue Dec 11 07:32:45 CET 2012
+Tue Dec 11 06:32:45 UTC 2012 (revision 194382)
+EOF
+}
+
+LANG=C svn diff svn://gcc.gnu.org/svn/gcc/branches/gcc-4_7-branch@194184 svn://gcc.gnu.org/svn/gcc/branches/gcc-4_7-branch \
+	| sed -r 's,^--- (\S+)\t(\S+)(.*)$,--- a/src/\1\t\2,;s,^\+\+\+ (\S+)\t(\S+)(.*)$,+++ b/src/\1\t\2,' \
+	| awk '/^Index:.*\.(class|texi)/ {skip=1; next} /^Index:/ { skip=0 } skip==0'
+
+Index: libstdc++-v3/src/Makefile.in
+===================================================================
+--- a/src/libstdc++-v3/src/Makefile.in	(revision
++++ b/src/libstdc++-v3/src/Makefile.in	(revision
+@@ -879,7 +879,7 @@
+ @ENABLE_SYMVERS_TRUE@	  fi; \
+ @ENABLE_SYMVERS_TRUE@	fi
+ @ENABLE_SYMVERS_TRUE@	$(EGREP) -v '^[ 	]*#(#| |$$)' $@.tmp | \
+-@ENABLE_SYMVERS_TRUE@	  $(CC) -E -P -include ../config.h - > $@ || (rm -f $@ ; exit 1)
++@ENABLE_SYMVERS_TRUE@	  $(CC) -E -P -include $(CONFIG_HEADER) - > $@ || (rm -f $@ ; exit 1)
+ @ENABLE_SYMVERS_TRUE@	rm -f $@.tmp
+ @ENABLE_SYMVERS_SUN_TRUE@@ENABLE_SYMVERS_TRUE@libstdc++-symbols.ver-sun : libstdc++-symbols.ver \
+ @ENABLE_SYMVERS_SUN_TRUE@@ENABLE_SYMVERS_TRUE@		$(toplevel_srcdir)/contrib/make_sunver.pl \
+Index: libstdc++-v3/src/Makefile.am
+===================================================================
+--- a/src/libstdc++-v3/src/Makefile.am	(revision
++++ b/src/libstdc++-v3/src/Makefile.am	(revision
+@@ -213,7 +213,7 @@
+ 	  fi; \
+ 	fi
+ 	$(EGREP) -v '^[ 	]*#(#| |$$)' $@.tmp | \
+-	  $(CC) -E -P -include ../config.h - > $@ || (rm -f $@ ; exit 1)
++	  $(CC) -E -P -include $(CONFIG_HEADER) - > $@ || (rm -f $@ ; exit 1)
+ 	rm -f $@.tmp
+ 
+ CLEANFILES = libstdc++-symbols.ver
+Index: libstdc++-v3/doc/xsl/customization.xsl.in
+===================================================================
+--- a/src/libstdc++-v3/doc/xsl/customization.xsl.in	(revision
++++ b/src/libstdc++-v3/doc/xsl/customization.xsl.in	(revision
+
+Property changes on: libstdc++-v3/doc/xsl/customization.xsl.in
+___________________________________________________________________
+Modified: svn:mime-type
+## -1 +1 ##
+-application/xml
++text/xml
+\ No newline at end of property
+Index: libstdc++-v3/ChangeLog
+===================================================================
+--- a/src/libstdc++-v3/ChangeLog	(revision
++++ b/src/libstdc++-v3/ChangeLog	(revision
+@@ -1,3 +1,8 @@
++2012-12-10  Matthias Klose  <doko@ubuntu.com>
++
++	* src/Makefile.am (libstdc++-symbols.ver): Use CONFIG_HEADER.
++	* src/Makefile.in: Regenerate.
++
+ 2012-12-01  John David Anglin  <dave.anglin@nrc-cnrc.gc.ca>
+ 
+ 	PR libstdc++/55503
+Index: libgcc/ChangeLog
+===================================================================
+--- a/src/libgcc/ChangeLog	(revision
++++ b/src/libgcc/ChangeLog	(revision
+@@ -1,3 +1,8 @@
++2012-12-09  Uros Bizjak  <ubizjak@gmail.com>
++
++	PR target/55344
++	* config/alpha/linux-unwind.h: Disable when inhibit_libc is defined.
++
+ 2012-12-04  Richard Henderson  <rth@redhat.com>
+ 
+ 	PR bootstrap/55571
+Index: libgcc/config/alpha/linux-unwind.h
+===================================================================
+--- a/src/libgcc/config/alpha/linux-unwind.h	(revision
++++ b/src/libgcc/config/alpha/linux-unwind.h	(revision
+@@ -22,6 +22,7 @@
+ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+ <http://www.gnu.org/licenses/>.  */
+ 
++#ifndef inhibit_libc
+ /* Do code reading to identify a signal frame, and set the frame
+    state data appropriately.  See unwind-dw2.c for the structs.  */
+ 
+@@ -97,3 +98,4 @@
+ 	  || pc[1] == 0x201f015f))	/* lda $0,NR_rt_sigreturn */
+     _Unwind_SetSignalFrame (context, 1);
+ }
++#endif
+Index: gcc/DATESTAMP
+===================================================================
+--- a/src/gcc/DATESTAMP	(revision
++++ b/src/gcc/DATESTAMP	(revision
+@@ -1 +1 @@
+-20121205
++20121211
+Index: gcc/tree.c
+===================================================================
+--- a/src/gcc/tree.c	(revision
++++ b/src/gcc/tree.c	(revision
+@@ -7409,10 +7409,15 @@
+ 
+   if (shared)
+     {
++      tree old_t = t;
+       hashval_t hashcode = iterative_hash_object (TYPE_HASH (elt_type), 0);
+       if (index_type)
+ 	hashcode = iterative_hash_object (TYPE_HASH (index_type), hashcode);
+       t = type_hash_canon (hashcode, t);
++      if (t != old_t)
++	/* Lay it out again in case the element type has been completed since
++	   the array was added to the hash table.  */
++	layout_type (t);
+     }
+ 
+   if (TYPE_CANONICAL (t) == t)
+Index: gcc/ChangeLog
+===================================================================
+--- a/src/gcc/ChangeLog	(revision
++++ b/src/gcc/ChangeLog	(revision
+@@ -1,3 +1,29 @@
++2012-12-10 Kai Tietz  <ktietz@redhat.com>
++
++	PR target/53912
++	* print-tree.c (print_node): Cast from pointer via uintptr_t.
++
++2012-12-07  Uros Bizjak  <ubizjak@gmail.com>
++
++	Backport from mainline
++	2012-12-06  Uros Bizjak  <ubizjak@gmail.com>
++		    H.J. Lu  <hongjiu.lu@intel.com>
++
++	PR target/55597
++	* config/i386/i386.c (legitimize_tls_address): Zero-extend x to Pmode,
++	before using it as insn or call equivalent.
++
++2012-12-06  Jason Merrill  <jason@redhat.com>
++
++	PR c++/55032
++	* tree.c (build_array_type_1): Re-layout if we found it in the
++	hash table.
++
++2012-12-05  John David Anglin  <dave.anglin@nrc-cnrc.gc.ca>
++
++	* config/pa/pa.md: Use "const_int 0" instead of match_test to simplify
++	opaque cond in all call insns.
++
+ 2012-12-03  Eric Botcazou  <ebotcazou@adacore.com>
+ 
+ 	* config/ia64/ia64.c (ia64_compute_frame_size): Allocate the scratch
+Index: gcc/testsuite/stack_check3.ads
+===================================================================
+--- a/src/gcc/testsuite/stack_check3.ads	(revision
++++ b/src/gcc/testsuite/stack_check3.ads	(revision
+@@ -1,5 +0,0 @@
+-package Stack_Check3 is
+-
+-  procedure Reset;
+-
+-end Stack_Check3;
+Index: gcc/testsuite/stack_check3.adb
+===================================================================
+--- a/src/gcc/testsuite/stack_check3.adb	(revision
++++ b/src/gcc/testsuite/stack_check3.adb	(revision
+@@ -1,36 +0,0 @@
+--- { dg-do compile }
+--- { dg-options "-O -fstack-check" }
+-
+-package body Stack_Check3 is
+-
+-  type Int_Arr is array (1 .. 34) of Integer;
+-
+-  type Rec (D : Boolean := False) is
+-    record
+-      case D is
+-        when True  => IA : Int_Arr;
+-        when False => null;
+-      end case;
+-    end record;
+-
+-  type Rec_Arr is array (1 .. 256) of Rec;
+-
+-  protected Prot_Arr is
+-    procedure Reset;
+-  private
+-    A : Rec_Arr;
+-  end Prot_Arr;
+-
+-  protected body Prot_Arr is
+-    procedure Reset is
+-    begin
+-      A := (others => (D => False));
+-    end Reset;
+-  end Prot_Arr;
+-
+-  procedure Reset is
+-  begin
+-    Prot_Arr.Reset;
+-  end Reset;
+-
+-end Stack_Check3;
+Index: gcc/testsuite/gcc.target/i386/pr55597.c
+===================================================================
+--- a/src/gcc/testsuite/gcc.target/i386/pr55597.c	(revision
++++ b/src/gcc/testsuite/gcc.target/i386/pr55597.c	(revision
+@@ -0,0 +1,18 @@
++/* { dg-do compile { target { ! { ia32 } } } } */
++/* { dg-require-effective-target fpic } */
++/* { dg-options "-O2 -fPIC -mx32" } */
++
++struct initial_sp
++{
++  void *sp;
++  int mask;
++};
++
++__thread struct initial_sp __morestack_initial_sp;
++
++void foo (int *);
++
++void __morestack_release_segments (void)
++{
++  foo (&__morestack_initial_sp.mask);
++}
+Index: gcc/testsuite/gnat.dg/stack_check3.adb
+===================================================================
+--- a/src/gcc/testsuite/gnat.dg/stack_check3.adb	(revision
++++ b/src/gcc/testsuite/gnat.dg/stack_check3.adb	(revision
+@@ -0,0 +1,36 @@
++-- { dg-do compile }
++-- { dg-options "-O -fstack-check" }
++
++package body Stack_Check3 is
++
++  type Int_Arr is array (1 .. 34) of Integer;
++
++  type Rec (D : Boolean := False) is
++    record
++      case D is
++        when True  => IA : Int_Arr;
++        when False => null;
++      end case;
++    end record;
++
++  type Rec_Arr is array (1 .. 256) of Rec;
++
++  protected Prot_Arr is
++    procedure Reset;
++  private
++    A : Rec_Arr;
++  end Prot_Arr;
++
++  protected body Prot_Arr is
++    procedure Reset is
++    begin
++      A := (others => (D => False));
++    end Reset;
++  end Prot_Arr;
++
++  procedure Reset is
++  begin
++    Prot_Arr.Reset;
++  end Reset;
++
++end Stack_Check3;
+Index: gcc/testsuite/gnat.dg/stack_check3.ads
+===================================================================
+--- a/src/gcc/testsuite/gnat.dg/stack_check3.ads	(revision
++++ b/src/gcc/testsuite/gnat.dg/stack_check3.ads	(revision
+@@ -0,0 +1,5 @@
++package Stack_Check3 is
++
++  procedure Reset;
++
++end Stack_Check3;
+Index: gcc/testsuite/ChangeLog
+===================================================================
+--- a/src/gcc/testsuite/ChangeLog	(revision
++++ b/src/gcc/testsuite/ChangeLog	(revision
+@@ -1,3 +1,11 @@
++2012-12-07  Uros Bizjak  <ubizjak@gmail.com>
++
++	Backport from mainline
++	2012-12-06  Uros Bizjak  <ubizjak@gmail.com>
++
++	PR target/55597
++	* gcc.target/i386/pr55597.c: New test.
++
+ 2012-12-03  Richard Biener  <rguenther@suse.de>
+ 
+ 	Backport from mainline
+Index: gcc/testsuite/g++.dg/other/abstract3.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/other/abstract3.C	(revision
++++ b/src/gcc/testsuite/g++.dg/other/abstract3.C	(revision
+@@ -8,5 +8,5 @@
+ struct B
+ {
+   A a;           // { dg-error "abstract" }
+-  B() : a() {}   // { dg-error "abstract" }
++  B() : a() {}
+ };
+Index: gcc/testsuite/g++.dg/cpp0x/lambda/lambda-initlist2.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/cpp0x/lambda/lambda-initlist2.C	(revision
++++ b/src/gcc/testsuite/g++.dg/cpp0x/lambda/lambda-initlist2.C	(revision
+@@ -0,0 +1,27 @@
++// PR c++/54947
++// { dg-options -std=gnu++11 }
++
++struct X
++{
++  template<typename L>
++    X(L)
++    { }
++};
++
++template<typename A>
++  void
++  test()
++  {
++    int i = 0;
++
++    A a_ok_1( [=] { return i; } );  // OK
++    A a_ok_2( [i] { return i; } );  // OK
++
++    A a_err_1{ [i] { return i; } };  // error
++    A a_err_2{ [=] { return i; } };  // error
++  }
++
++int main()
++{
++  test<X>();
++}
+Index: gcc/testsuite/g++.dg/cpp0x/lambda/lambda-conv6.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/cpp0x/lambda/lambda-conv6.C	(revision
++++ b/src/gcc/testsuite/g++.dg/cpp0x/lambda/lambda-conv6.C	(revision
+@@ -0,0 +1,7 @@
++// PR c++/55015
++// { dg-do link }
++// { dg-options -std=c++11 }
++
++typedef void (*VoidFunc)();
++inline VoidFunc GetFunc() { return [](){}; }
++int main() { VoidFunc func = GetFunc(); }
+Index: gcc/testsuite/g++.dg/cpp0x/constexpr-initlist6.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/cpp0x/constexpr-initlist6.C	(revision
++++ b/src/gcc/testsuite/g++.dg/cpp0x/constexpr-initlist6.C	(revision
+@@ -0,0 +1,27 @@
++// PR c++/55419
++// { dg-options -std=c++11 }
++
++struct P
++{
++  P () = default;
++  explicit constexpr P (int x) : p (x) {}
++  int p;
++};
++
++struct Q
++{
++  constexpr Q () : q (0x7f) {}
++  int q;
++};
++
++struct R
++{
++  Q q;
++  P p;
++};
++
++void
++foo (R *x)
++{
++  *x = {};
++}
+Index: gcc/testsuite/g++.dg/cpp0x/initlist-pure.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/cpp0x/initlist-pure.C	(revision
++++ b/src/gcc/testsuite/g++.dg/cpp0x/initlist-pure.C	(revision
+@@ -0,0 +1,25 @@
++// PR c++/54325
++// { dg-options -std=c++11 }
++
++class Base {
++public:
++  Base() {};
++  virtual ~Base() {};
++
++  virtual void do_stuff() = 0;
++};
++
++class Derived: public Base {
++public:
++  Derived() : Base{} {};
++  virtual ~Derived() {};
++
++  virtual void do_stuff() {};
++};
++
++int
++main() {
++  Derived d;
++
++  return 0;
++}
+Index: gcc/testsuite/g++.dg/template/array25.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/template/array25.C	(revision
++++ b/src/gcc/testsuite/g++.dg/template/array25.C	(revision
+@@ -0,0 +1,18 @@
++// PR c++/55249
++
++template <typename _Tp> struct A
++{
++  _Tp _M_instance[1];
++};
++template <class> struct inner_type
++{
++    inner_type () {}
++    inner_type (inner_type &);
++    inner_type (const inner_type &) {}
++};
++
++int
++main ()
++{
++    A <inner_type <int> > a, b = a;
++}
+Index: gcc/testsuite/g++.dg/template/meminit3.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/template/meminit3.C	(revision
++++ b/src/gcc/testsuite/g++.dg/template/meminit3.C	(revision
+@@ -0,0 +1,12 @@
++// PR c++/54744
++
++template <typename T>
++struct base {
++  typedef base base_type;
++};
++
++template <typename T>
++struct derived : base<T> {
++  typedef typename derived::base_type::base_type base_type;
++  derived() : base_type() {}
++};
+Index: gcc/testsuite/g++.dg/template/typedef40.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/template/typedef40.C	(revision
++++ b/src/gcc/testsuite/g++.dg/template/typedef40.C	(revision
+@@ -0,0 +1,21 @@
++// PR c++/55058
++
++template <typename T>
++struct A { };
++
++template <typename T>
++struct B {
++  B(const A<T> T::* p);
++  typedef A<T> D;
++};
++
++template <typename T>
++B<T>::B(const D T::* p) { }
++
++struct C {
++  C() : e() {};
++
++  const A<C> e;
++};
++
++B<C> g(&C::e);
+Index: gcc/testsuite/g++.dg/template/array24.C
+===================================================================
+--- a/src/gcc/testsuite/g++.dg/template/array24.C	(revision
++++ b/src/gcc/testsuite/g++.dg/template/array24.C	(revision
+@@ -0,0 +1,22 @@
++// PR c++/55032
++
++template<typename T>
++struct vec3t {
++  T c[3];
++};
++
++typedef vec3t<float> vec3;
++
++class Bounds {
++  public:
++    Bounds(const vec3 bb[2]);
++    void foo(const vec3 & v) { v.c[0]; }
++};
++
++template<typename T>
++void work(T& value);
++
++void foo() {
++  vec3 bb[2];
++  work(bb);
++}
+Index: gcc/cp/decl.c
+===================================================================
+--- a/src/gcc/cp/decl.c	(revision
++++ b/src/gcc/cp/decl.c	(revision
+@@ -12928,10 +12928,9 @@
+       if (DECL_NOT_REALLY_EXTERN (decl1))
+ 	DECL_EXTERNAL (decl1) = 0;
+ 
+-      if (ctx != NULL_TREE && DECL_DECLARED_INLINE_P (ctx)
+-	  && TREE_PUBLIC (ctx))
++      if (ctx != NULL_TREE && vague_linkage_p (ctx))
+ 	/* This is a function in a local class in an extern inline
+-	   function.  */
++	   or template function.  */
+ 	comdat_linkage (decl1);
+     }
+   /* If this function belongs to an interface, it is public.
+Index: gcc/cp/tree.c
+===================================================================
+--- a/src/gcc/cp/tree.c	(revision
++++ b/src/gcc/cp/tree.c	(revision
+@@ -318,8 +318,6 @@
+      side-effects, then the optimizer should be able to get rid of
+      whatever code is generated anyhow.  */
+   TREE_SIDE_EFFECTS (t) = 1;
+-  if (literal_type_p (type))
+-    TREE_CONSTANT (t) = TREE_CONSTANT (value);
+ 
+   return t;
+ }
+@@ -396,18 +394,14 @@
+    callable.  */
+ 
+ tree
+-build_aggr_init_expr (tree type, tree init, tsubst_flags_t complain)
++build_aggr_init_expr (tree type, tree init,
++		      tsubst_flags_t complain ATTRIBUTE_UNUSED)
+ {
+   tree fn;
+   tree slot;
+   tree rval;
+   int is_ctor;
+ 
+-  /* Make sure that we're not trying to create an instance of an
+-     abstract class.  */
+-  if (abstract_virtuals_error_sfinae (NULL_TREE, type, complain))
+-    return error_mark_node;
+-
+   if (TREE_CODE (init) == CALL_EXPR)
+     fn = CALL_EXPR_FN (init);
+   else if (TREE_CODE (init) == AGGR_INIT_EXPR)
+@@ -466,6 +460,11 @@
+   tree rval = build_aggr_init_expr (type, init, complain);
+   tree slot;
+ 
++  /* Make sure that we're not trying to create an instance of an
++     abstract class.  */
++  if (abstract_virtuals_error_sfinae (NULL_TREE, type, complain))
++    return error_mark_node;
++
+   if (TREE_CODE (rval) == AGGR_INIT_EXPR)
+     slot = AGGR_INIT_EXPR_SLOT (rval);
+   else if (TREE_CODE (rval) == CALL_EXPR
+@@ -513,7 +512,8 @@
+   argvec = make_tree_vector ();
+   if (init)
+     {
+-      tree dummy = build_dummy_object (inner_type);
++      tree init_type = strip_array_types (TREE_TYPE (init));
++      tree dummy = build_dummy_object (init_type);
+       if (!real_lvalue_p (init))
+ 	dummy = move (dummy);
+       VEC_quick_push (tree, argvec, dummy);
+Index: gcc/cp/ChangeLog
+===================================================================
+--- a/src/gcc/cp/ChangeLog	(revision
++++ b/src/gcc/cp/ChangeLog	(revision
+@@ -1,3 +1,38 @@
++2012-12-07  Jason Merrill  <jason@redhat.com>
++
++	PR c++/55419
++	* tree.c (build_target_expr): Don't set TREE_CONSTANT.
++
++2012-12-07  Matthias Klose  <doko@ubuntu.com>
++
++	* tree.c (build_aggr_init_expr): Add parameter name, mark as unused.
++
++2012-12-06  Jason Merrill  <jason@redhat.com>
++
++	PR c++/54325
++	* tree.c (build_aggr_init_expr): Don't check for abstract class.
++	(build_cplus_new): Check here instead.
++
++	PR c++/55058
++	* pt.c (tsubst): Keep the quals when looking through a typedef.
++
++	PR c++/55249
++	* tree.c (build_vec_init_elt): Use the type of the initializer.
++
++	PR c++/54744
++	* pt.c (resolve_typename_type): Check TYPENAME_IS_RESOLVING_P on scope.
++
++	PR c++/54947
++	* parser.c (cp_parser_initializer_list): Don't require an
++	expression in [] to be constant until we know it's a C99
++	designator.
++
++	PR c++/55015
++	PR c++/53821
++	* semantics.c (maybe_add_lambda_conv_op): Revert earlier change.
++	* decl.c (start_preparsed_function): Make local class methods comdat
++	in templates, too.
++
+ 2012-11-29  Jason Merrill  <jason@redhat.com>
+ 
+ 	PR c++/53137
+Index: gcc/cp/pt.c
+===================================================================
+--- a/src/gcc/cp/pt.c	(revision
++++ b/src/gcc/cp/pt.c	(revision
+@@ -10908,8 +10908,13 @@
+ 	  return r;
+ 	}
+       else
+-	/* We don't have an instantiation yet, so drop the typedef.  */
+-	t = DECL_ORIGINAL_TYPE (decl);
++	{
++	  /* We don't have an instantiation yet, so drop the typedef.  */
++	  int quals = cp_type_quals (t);
++	  t = DECL_ORIGINAL_TYPE (decl);
++	  t = cp_build_qualified_type_real (t, quals,
++					    complain | tf_ignore_bad_quals);
++	}
+     }
+ 
+   if (type
+@@ -19806,7 +19811,16 @@
+   /* If the SCOPE is itself a TYPENAME_TYPE, then we need to resolve
+      it first before we can figure out what NAME refers to.  */
+   if (TREE_CODE (scope) == TYPENAME_TYPE)
+-    scope = resolve_typename_type (scope, only_current_p);
++    {
++      if (TYPENAME_IS_RESOLVING_P (scope))
++	/* Given a class template A with a dependent base with nested type C,
++	   typedef typename A::C::C C will land us here, as trying to resolve
++	   the initial A::C leads to the local C typedef, which leads back to
++	   A::C::C.  So we break the recursion now.  */
++	return type;
++      else
++	scope = resolve_typename_type (scope, only_current_p);
++    }
+   /* If we don't know what SCOPE refers to, then we cannot resolve the
+      TYPENAME_TYPE.  */
+   if (TREE_CODE (scope) == TYPENAME_TYPE)
+Index: gcc/cp/semantics.c
+===================================================================
+--- a/src/gcc/cp/semantics.c	(revision
++++ b/src/gcc/cp/semantics.c	(revision
+@@ -9311,6 +9311,8 @@
+   DECL_NOT_REALLY_EXTERN (fn) = 1;
+   DECL_DECLARED_INLINE_P (fn) = 1;
+   DECL_ARGUMENTS (fn) = build_this_parm (fntype, TYPE_QUAL_CONST);
++  if (nested)
++    DECL_INTERFACE_KNOWN (fn) = 1;
+ 
+   add_method (type, fn, NULL_TREE);
+ 
+@@ -9341,6 +9343,8 @@
+   DECL_ARGUMENTS (fn) = copy_list (DECL_CHAIN (DECL_ARGUMENTS (callop)));
+   for (arg = DECL_ARGUMENTS (fn); arg; arg = DECL_CHAIN (arg))
+     DECL_CONTEXT (arg) = fn;
++  if (nested)
++    DECL_INTERFACE_KNOWN (fn) = 1;
+ 
+   add_method (type, fn, NULL_TREE);
+ 
+Index: gcc/cp/parser.c
+===================================================================
+--- a/src/gcc/cp/parser.c	(revision
++++ b/src/gcc/cp/parser.c	(revision
+@@ -17666,11 +17666,14 @@
+ 	  /* In C++11, [ could start a lambda-introducer.  */
+ 	  cp_parser_parse_tentatively (parser);
+ 	  cp_lexer_consume_token (parser->lexer);
+-	  designator = cp_parser_constant_expression (parser, false, NULL);
++	  bool non_const = false;
++	  designator = cp_parser_constant_expression (parser, true, &non_const);
+ 	  cp_parser_require (parser, CPP_CLOSE_SQUARE, RT_CLOSE_SQUARE);
+ 	  cp_parser_require (parser, CPP_EQ, RT_EQ);
+ 	  if (!cp_parser_parse_definitely (parser))
+ 	    designator = NULL_TREE;
++	  else if (non_const)
++	    require_potential_rvalue_constant_expression (designator);
+ 	}
+       else
+ 	designator = NULL_TREE;
+Index: gcc/print-tree.c
+===================================================================
+--- a/src/gcc/print-tree.c	(revision
++++ b/src/gcc/print-tree.c	(revision
+@@ -255,7 +255,7 @@
+   /* Allow this function to be called if the table is not there.  */
+   if (table)
+     {
+-      hash = ((unsigned long) node) % HASH_SIZE;
++      hash = ((uintptr_t) node) % HASH_SIZE;
+ 
+       /* If node is in the table, just mention its address.  */
+       for (b = table[hash]; b; b = b->next)
+Index: gcc/config/i386/i386.c
+===================================================================
+--- a/src/gcc/config/i386/i386.c	(revision
++++ b/src/gcc/config/i386/i386.c	(revision
+@@ -12675,6 +12675,9 @@
+ 	  tp = get_thread_pointer (true);
+ 	  dest = force_reg (Pmode, gen_rtx_PLUS (Pmode, tp, dest));
+ 
++	  if (GET_MODE (x) != Pmode)
++	    x = gen_rtx_ZERO_EXTEND (Pmode, x);
++
+ 	  set_unique_reg_note (get_last_insn (), REG_EQUAL, x);
+ 	}
+       else
+@@ -12683,13 +12686,17 @@
+ 
+ 	  if (TARGET_64BIT)
+ 	    {
+-	      rtx rax = gen_rtx_REG (Pmode, AX_REG), insns;
++	      rtx rax = gen_rtx_REG (Pmode, AX_REG);
++	      rtx insns;
+ 
+ 	      start_sequence ();
+ 	      emit_call_insn (gen_tls_global_dynamic_64 (rax, x, caddr));
+ 	      insns = get_insns ();
+ 	      end_sequence ();
+ 
++	      if (GET_MODE (x) != Pmode)
++		x = gen_rtx_ZERO_EXTEND (Pmode, x);
++
+ 	      RTL_CONST_CALL_P (insns) = 1;
+ 	      emit_libcall_block (insns, dest, rax, x);
+ 	    }
+@@ -12731,7 +12738,8 @@
+ 
+ 	  if (TARGET_64BIT)
+ 	    {
+-	      rtx rax = gen_rtx_REG (Pmode, AX_REG), insns, eqv;
++	      rtx rax = gen_rtx_REG (Pmode, AX_REG);
++	      rtx insns, eqv;
+ 
+ 	      start_sequence ();
+ 	      emit_call_insn (gen_tls_local_dynamic_base_64 (rax, caddr));
+@@ -12759,6 +12767,9 @@
+ 	{
+ 	  dest = force_reg (Pmode, gen_rtx_PLUS (Pmode, dest, tp));
+ 
++	  if (GET_MODE (x) != Pmode)
++	    x = gen_rtx_ZERO_EXTEND (Pmode, x);
++
+ 	  set_unique_reg_note (get_last_insn (), REG_EQUAL, x);
+ 	}
+       break;
+Index: gcc/config/pa/pa.md
+===================================================================
+--- a/src/gcc/config/pa/pa.md	(revision
++++ b/src/gcc/config/pa/pa.md	(revision
+@@ -5341,7 +5341,7 @@
+   "* return pa_output_mul_insn (0, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_insn ""
+@@ -5354,7 +5354,7 @@
+   "* return pa_output_mul_insn (0, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_expand "muldi3"
+@@ -5447,7 +5447,7 @@
+    return pa_output_div_insn (operands, 0, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_insn ""
+@@ -5463,7 +5463,7 @@
+    return pa_output_div_insn (operands, 0, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_expand "udivsi3"
+@@ -5508,7 +5508,7 @@
+    return pa_output_div_insn (operands, 1, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_insn ""
+@@ -5524,7 +5524,7 @@
+    return pa_output_div_insn (operands, 1, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_expand "modsi3"
+@@ -5565,7 +5565,7 @@
+   return pa_output_mod_insn (0, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_insn ""
+@@ -5580,7 +5580,7 @@
+   return pa_output_mod_insn (0, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_expand "umodsi3"
+@@ -5621,7 +5621,7 @@
+   return pa_output_mod_insn (1, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ (define_insn ""
+@@ -5636,7 +5636,7 @@
+   return pa_output_mod_insn (1, insn);"
+   [(set_attr "type" "milli")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_millicode_call (insn)")))])
+ 
+ ;;- and instructions
+@@ -7214,7 +7214,7 @@
+ }"
+   [(set_attr "type" "call")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 0)")))])
+ 
+ (define_insn "call_symref_pic"
+@@ -7293,7 +7293,7 @@
+ }"
+   [(set_attr "type" "call")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 0)")))])
+ 
+ ;; This pattern is split if it is necessary to save and restore the
+@@ -7380,7 +7380,7 @@
+ }"
+   [(set_attr "type" "call")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 0)")))])
+ 
+ (define_insn "call_reg"
+@@ -7396,7 +7396,7 @@
+ }"
+   [(set_attr "type" "dyncall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_indirect_call (insn)")))])
+ 
+ ;; This pattern is split if it is necessary to save and restore the
+@@ -7476,7 +7476,7 @@
+ }"
+   [(set_attr "type" "dyncall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_indirect_call (insn)")))])
+ 
+ ;; This pattern is split if it is necessary to save and restore the
+@@ -7562,7 +7562,7 @@
+ }"
+   [(set_attr "type" "dyncall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 12)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 12)]
+ 	      (symbol_ref "pa_attr_length_indirect_call (insn)")))])
+ 
+ (define_expand "call_value"
+@@ -7690,7 +7690,7 @@
+ }"
+   [(set_attr "type" "call")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 0)")))])
+ 
+ (define_insn "call_val_symref_pic"
+@@ -7775,7 +7775,7 @@
+ }"
+   [(set_attr "type" "call")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 0)")))])
+ 
+ ;; This pattern is split if it is necessary to save and restore the
+@@ -7868,7 +7868,7 @@
+ }"
+   [(set_attr "type" "call")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 0)")))])
+ 
+ (define_insn "call_val_reg"
+@@ -7885,7 +7885,7 @@
+ }"
+   [(set_attr "type" "dyncall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_indirect_call (insn)")))])
+ 
+ ;; This pattern is split if it is necessary to save and restore the
+@@ -7971,7 +7971,7 @@
+ }"
+   [(set_attr "type" "dyncall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_indirect_call (insn)")))])
+ 
+ ;; This pattern is split if it is necessary to save and restore the
+@@ -8063,7 +8063,7 @@
+ }"
+   [(set_attr "type" "dyncall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 12)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 12)]
+ 	      (symbol_ref "pa_attr_length_indirect_call (insn)")))])
+ 
+ ;; Call subroutine returning any type.
+@@ -8159,7 +8159,7 @@
+ }"
+   [(set_attr "type" "sibcall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 1)")))])
+ 
+ (define_insn "sibcall_internal_symref_64bit"
+@@ -8176,7 +8176,7 @@
+ }"
+   [(set_attr "type" "sibcall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 1)")))])
+ 
+ (define_expand "sibcall_value"
+@@ -8247,7 +8247,7 @@
+ }"
+   [(set_attr "type" "sibcall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 1)")))])
+ 
+ (define_insn "sibcall_value_internal_symref_64bit"
+@@ -8265,7 +8265,7 @@
+ }"
+   [(set_attr "type" "sibcall")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 8)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 8)]
+ 	      (symbol_ref "pa_attr_length_call (insn, 1)")))])
+ 
+ (define_insn "nop"
+@@ -9304,7 +9304,7 @@
+ }"
+   [(set_attr "type" "sh_func_adrs")
+    (set (attr "length")
+-	(cond [(and (match_test "0") (eq (const_int 0) (pc))) (const_int 28)]
++	(cond [(and (const_int 0) (eq (const_int 0) (pc))) (const_int 28)]
+ 	      (plus (symbol_ref "pa_attr_length_millicode_call (insn)")
+ 		    (const_int 20))))])
+ 

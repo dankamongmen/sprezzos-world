@@ -1,0 +1,1686 @@
+# DP: - Introduce a new shared library named libgnatprj, containing
+# DP:   the GNAT project file manager licensed under the pure GPL, for
+# DP:   use in GNAT tools, GLADE and GPS.  Link the GNAT tools against
+# DP:   this new library.
+
+# This patch seems large, but the hunks in Makefile.in are actually
+# generated from Makefile.def using autogen.
+
+# !!! Must be applied after ada-libgnatvsn.dpatch
+
+Index: b/src/gcc/ada/gcc-interface/config-lang.in
+===================================================================
+--- a/src/gcc/ada/gcc-interface/config-lang.in
++++ b/src/gcc/ada/gcc-interface/config-lang.in
+@@ -36,8 +36,8 @@
+ 
+ outputs="ada/gcc-interface/Makefile ada/Makefile"
+ 
+-target_libs="target-libada target-libgnatvsn"
+-lang_dirs="libada libgnatvsn gnattools"
++target_libs="target-libada target-libgnatvsn target-libgnatprj"
++lang_dirs="libada libgnatvsn libgnatprj gnattools"
+ 
+ # Ada is not enabled by default for the time being.
+ build_by_default=no
+Index: b/src/gnattools/Makefile.in
+===================================================================
+--- a/src/gnattools/Makefile.in
++++ b/src/gnattools/Makefile.in
+@@ -36,13 +36,13 @@
+ target_noncanonical=@target_noncanonical@
+ 
+ CFLAGS=-O2 -Wall
+-INCLUDES = -I@srcdir@/../gcc/ada -I@srcdir@/../gcc
+ ADA_CFLAGS=-O2 -gnatn
+-ADA_INCLUDES=-nostdinc -I- -I. -I../gcc/ada/rts -I../libgnatvsn
++ADA_INCLUDES=-nostdinc -I- -I. -I../gcc/ada/rts -I../libgnatvsn -I../libgnatprj
+ LIB_VERSION=$(strip $(shell grep ' Library_Version :' \
+               ../libgnatvsn/gnatvsn.ads | sed -e 's/.*"\(.*\)".*/\1/'))
+ ADA_LIBS := -L../gcc/ada/rts -lgnat-$(LIB_VERSION)
+ ADA_LIBS += -L../libgnatvsn -lgnatvsn
++ADA_LIBS += -L../libgnatprj -lgnatprj
+ 
+ # We will use the just-built compiler to compile and link everything.
+ GCC=../gcc/xgcc -B../gcc/
+@@ -67,74 +67,18 @@
+ 
+ # Since we don't have gnatmake, we must specify the full list of
+ # object files necessary to build gnatmake and gnatlink.
+-# TODO: remove from these lists the objects that are part of
+-# libgnatprj.
+ GNATLINK_OBJS = \
+-ali.o \
+-butil.o \
+-fmap.o \
+ gnatlink.o \
+ indepsw.o \
+-osint.o \
+-prefix.o \
+-rident.o \
+-sdefault.o \
+-stylesw.o \
+-switch.o \
+-targparm.o \
+ validsw.o
+ 
+ GNATMAKE_OBJS = \
+-ali-util.o \
+-ali.o \
+-binderr.o \
+-butil.o \
+-err_vars.o \
+-erroutc.o \
+-errutil.o \
+-fmap.o \
+ fname-sf.o \
+-fname-uf.o \
+ gnatmake.o \
+ make.o \
+ makeusg.o \
+-makeutl.o \
+-mlib-fil.o \
+ mlib-prj.o \
+-mlib-tgt.o \
+-mlib-tgt-specific.o \
+-mlib-utl.o \
+-mlib.o \
+ osint-m.o \
+-osint.o \
+-prefix.o \
+-prj-attr-pm.o \
+-prj-attr.o \
+-prj-com.o \
+-prj-dect.o \
+-prj-env.o \
+-prj-err.o \
+-prj-ext.o \
+-prj-nmsc.o \
+-prj-pars.o \
+-prj-part.o \
+-prj-proc.o \
+-prj-strt.o \
+-prj-tree.o \
+-prj-util.o \
+-prj.o \
+-rident.o \
+-scng.o \
+-sdefault.o \
+-sfn_scan.o \
+-sinput-c.o \
+-sinput-p.o \
+-styleg.o \
+-stylesw.o \
+-switch-m.o \
+-switch.o \
+-targparm.o \
+-tempdir.o \
+ usage.o \
+ validsw.o \
+ $(EXTRA_GNATMAKE_OBJS)
+@@ -176,11 +120,6 @@
+ 	for file in $(BODIES) $(SPECS); do \
+ 	   $(LN_S) -f $$file .; \
+ 	done
+-	rm -f sdefault.adb; $(LN_S) ../gcc/ada/sdefault.adb .
+-	$(foreach PAIR,$(TOOLS_TARGET_PAIRS), \
+-	          rm -f $(word 1,$(subst <, ,$(PAIR)));\
+-	          $(LN_S) @srcdir@/../gcc/ada/$(word 2,$(subst <, ,$(PAIR))) \
+-	                  $(word 1,$(subst <, ,$(PAIR)));)
+ 	touch $@
+ 
+ gnattools-native: ../gcc/ada/rts/libgnat-$(LIB_VERSION).so
+@@ -193,19 +132,16 @@
+ vpath %.c @srcdir@/../gcc/ada:@srcdir@/../gcc
+ vpath %.h @srcdir@/../gcc/ada
+ 
+-# Because the just-built gcc is a host tool like us, we can use some
+-# of its object files, e.g. prefix.o.
+-vpath prefix.o ../gcc
+-
+ # gnatlink
+ 
+-gnatlink-static: $(GNATLINK_OBJS) b_gnatl.o link.o
++gnatlink-static: $(GNATLINK_OBJS) b_gnatl.o
+ 	$(GCC) -o $@ $^ \
++	   ../libgnatprj/libgnatprj.a \
+ 	   ../libgnatvsn/libgnatvsn.a \
+ 	   ../gcc/ada/rts/libgnat.a \
+ 	   ../libiberty/libiberty.a
+ 
+-gnatlink: $(GNATLINK_OBJS) b_gnatl.o link.o
++gnatlink: $(GNATLINK_OBJS) b_gnatl.o
+ 	$(GCC) -o $@ $^ $(ADA_LIBS) ../libiberty/libiberty.a
+ 
+ b_gnatl.o: b_gnatl.c adaint.h
+@@ -216,13 +152,14 @@
+ 
+ # gnatmake
+ 
+-gnatmake-static: $(GNATMAKE_OBJS) b_gnatm.o link.o
++gnatmake-static: $(GNATMAKE_OBJS) b_gnatm.o
+ 	$(GCC) -o $@ $(ADA_CFLAGS) $^ \
++	   ../libgnatprj/libgnatprj.a \
+ 	   ../libgnatvsn/libgnatvsn.a \
+ 	   ../gcc/ada/rts/libgnat.a \
+ 	   ../libiberty/libiberty.a
+ 
+-gnatmake: $(GNATMAKE_OBJS) b_gnatm.o link.o
++gnatmake: $(GNATMAKE_OBJS) b_gnatm.o
+ 	$(GCC) -o $@ $(ADA_CFLAGS) $^ $(ADA_LIBS) ../libiberty/libiberty.a
+ 
+ b_gnatm.o: b_gnatm.c adaint.h
+@@ -232,19 +169,11 @@
+ 	../gcc/gnatbind -C -o $@ $(ADA_INCLUDES) gnatmake.ali
+ 
+ # Other tools
+-gnatkr:
+-	if [ ! -f $@.adb ] ; then $(LN_S) ../../src/gcc/ada/$@.ad[bs] .; fi
+-	./gnatmake-static -c -b $@ $(ADA_CFLAGS) $(ADA_INCLUDES) \
+-	   --GCC="$(GCC)" \
+-	   --GNATBIND=../gcc/gnatbind
+-	./gnatlink-static -o $@ $@.ali $^ $(ADA_INCLUDES) $(ADA_LIBS) \
+-	   --GCC="$(GCC) $(ADA_INCLUDES)"
+-
+ gnat: gnatcmd
+ 	cp -lp $< $@
+ 
+-gnatbind gnatchop gnatclean gnatcmd gnatfind gnatls gnatname gnatprep gnatxref: \
+-link.o prefix.o
++gnatbind gnatchop gnatclean gnatcmd gnatfind gnatkr gnatls gnatname gnatprep \
++gnatxref:
+ 	if [ ! -f $@.adb ] ; then $(LN_S) ../../src/gcc/ada/$@.ad[bs] .; fi
+ 	./gnatmake-static -c -b $@ $(ADA_CFLAGS) $(ADA_INCLUDES) \
+ 	   --GCC="$(GCC)" \
+@@ -253,22 +182,12 @@
+ 	   ../libiberty/libiberty.a \
+ 	   --GCC="$(GCC) $(ADA_INCLUDES)"
+ 
+-# Force compiling sdefault.adb, not .ads, to produce sdefault.o
+-sdefault.o: sdefault.adb
+-
+-sdefault.adb: stamp-gnattools-sources
+-
+ %.o: %.adb
+ 	$(GCC) -c -o $@ $< $(ADA_CFLAGS) $(ADA_INCLUDES)
+ 
+ %.o: %.ads
+ 	$(GCC) -c -o $@ $< $(ADA_CFLAGS) $(ADA_INCLUDES)
+ 
+-%.o: %.c
+-	$(GCC) -c -o $@ $< $(CFLAGS) $(INCLUDES)
+-
+-prefix.o:
+-
+ # Other
+ # -----
+ 
+Index: b/src/libgnatprj/Makefile.in
+===================================================================
+--- /dev/null
++++ b/src/libgnatprj/Makefile.in
+@@ -0,0 +1,178 @@
++# Makefile for libgnatprj.
++#   Copyright (c) 2006 Ludovic Brenta <ludovic@ludovic-brenta.org>
++#
++# This file is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++# 
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++# 
++# You should have received a copy of the GNU General Public License
++# along with this program; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++
++# Default target; must be first.
++all: libgnatprj
++
++.SUFFIXES:
++
++CPUS := $(shell getconf _NPROCESSORS_ONLN)
++LIB_VERSION := $(strip $(shell grep ' Library_Version :' \
++                 @srcdir@/../gcc/ada/gnatvsn.ads | \
++	         sed -e 's/.*"\(.*\)".*/\1/'))
++GCC:=../gcc/xgcc -B../gcc/
++LIBGNAT_JUST_BUILT := -nostdinc -I../gcc/ada/rts
++LIBGNATVSN := -I../libgnatvsn
++CFLAGS := -g -O2
++ADAFLAGS := -g -O2 -gnatn
++BASEVER := $(shell cat @srcdir@/../gcc/BASE-VER)
++DEVPHASE := $(shell cat @srcdir@/../gcc/DEV-PHASE)
++DATESTAMP := $(shell cat @srcdir@/../gcc/DATESTAMP)
++TOOLS_TARGET_PAIRS := @TOOLS_TARGET_PAIRS@
++LN_S := @LN_S@
++
++ifneq (@build@,@host@)
++   CFLAGS += -b @host@
++endif
++
++.PHONY: libgnatprj install
++libgnatprj: libgnatprj.so.$(LIB_VERSION) libgnatprj.a
++
++# Here we list one file per Ada unit: the body file if the unit has a
++# body, the spec file otherwise.
++PRJ_SOURCES := ali.adb ali-util.adb butil.adb binderr.adb errout.adb \
++erroutc.adb errutil.adb err_vars.ads fname-uf.adb fmap.adb impunit.adb \
++lib-util.adb makeutl.adb mlib.adb mlib-fil.adb mlib-tgt.adb \
++mlib-tgt-specific.adb mlib-utl.adb osint.adb osint-c.adb prj.adb prj-attr.adb \
++prj-attr-pm.adb prj-com.ads prj-conf.adb prj-dect.adb prj-env.adb prj-err.adb \
++prj-ext.adb prj-nmsc.adb prj-pars.adb prj-part.adb prj-pp.adb prj-proc.adb \
++prj-strt.adb prj-tree.adb prj-util.adb rident.ads scng.adb sfn_scan.adb \
++sinfo-cn.adb sinput-c.adb sinput-p.adb style.adb styleg.adb stylesw.adb \
++switch.adb switch-m.adb targparm.adb tempdir.adb
++
++# Source files generated in build/gcc/ada, not src/gcc/ada.
++GENERATED_SOURCES := sdefault.adb
++
++SOURCES := $(PRJ_SOURCES) $(GENERATED_SOURCES)
++
++OBJECTS := $(patsubst %.ads,%.o,$(SOURCES:.adb=.o))
++
++# Add some object files compiled from C sources.  prefix.o requires
++# some objects from libiberty.
++OBJECTS += concat.o link.o prefix.o xexit.o xmalloc.o xstrdup.o
++
++vpath %.c @srcdir@/../gcc/ada
++
++libgnatprj.so.$(LIB_VERSION): $(addprefix obj-shared/,$(OBJECTS))
++	: # Make libgnatprj.so
++	$(GCC) -o $@ -shared -fPIC -Wl,--soname,$@ $^ \
++	   -L../gcc/ada/rts -lgnat-$(LIB_VERSION) \
++	   -L../libgnatvsn -lgnatvsn
++	$(LN_S) -f libgnatprj.so.$(LIB_VERSION) libgnatprj.so
++	chmod a=r obj-shared/*.ali
++# Make the .ali files, but not the .o files, visible to the gnat tools.
++	cp -lp obj-shared/*.ali .
++
++$(addprefix obj-shared/,$(OBJECTS)): | stamp-libgnatprj-sources obj-shared
++
++obj-shared/%.o: %.adb
++	$(GCC) -c -fPIC $(ADAFLAGS) $(LIBGNAT_JUST_BUILT) $(LIBGNATVSN) $< -o $@
++
++obj-shared/%.o: %.ads
++	$(GCC) -c -fPIC $(ADAFLAGS) $(LIBGNAT_JUST_BUILT) $(LIBGNATVSN) $< -o $@
++
++obj-shared/%.o: %.c
++	$(GCC) -c -fPIC $(CFLAGS) -I@srcdir@/../gcc $< -o $@
++
++obj-shared/prefix.o: @srcdir@/../gcc/prefix.c
++	$(GCC) -c -fPIC $(CFLAGS) -DPREFIX=\"@prefix@\" -DBASEVER=\"$(BASEVER)\" \
++	   -I@srcdir@/../gcc -I@srcdir@/../include -I../gcc -I../libiberty \
++	   $< -o $@
++
++obj-shared/%.o: @srcdir@/../libiberty/%.c
++	$(GCC) -c -fPIC $(CFLAGS) \
++	   -I@srcdir@/../libiberty -I@srcdir@/../include $< -o $@
++
++obj-shared:
++	-mkdir $@
++
++libgnatprj.a: $(addprefix obj-static/,$(OBJECTS))
++	: # Make libgnatprj.a
++	ar rc $@ $^
++	ranlib $@
++
++$(addprefix obj-static/,$(OBJECTS)): | stamp-libgnatprj-sources obj-static
++
++obj-static/%.o: %.adb
++	$(GCC) -c $(ADAFLAGS) $(LIBGNAT_JUST_BUILT) $(LIBGNATVSN) $< -o $@
++
++obj-static/%.o: %.ads
++	$(GCC) -c $(ADAFLAGS) $(LIBGNAT_JUST_BUILT) $(LIBGNATVSN) $< -o $@
++
++obj-static/%.o: %.c
++	$(GCC) -c $(CFLAGS) -I@srcdir@/../gcc $< -o $@
++
++obj-static/prefix.o: @srcdir@/../gcc/prefix.c
++	$(GCC) -c $(CFLAGS) -DPREFIX=\"@prefix@\" -DBASEVER=\"$(BASEVER)\" \
++	   -I@srcdir@/../gcc -I@srcdir@/../include -I../gcc -I../libiberty \
++	   $< -o $@
++
++obj-static/%.o: @srcdir@/../libiberty/%.c
++	$(GCC) -c -fPIC $(CFLAGS) \
++	   -I@srcdir@/../libiberty -I@srcdir@/../include $< -o $@
++
++obj-static:
++	-mkdir $@
++
++$(SOURCES): stamp-libgnatprj-sources
++
++stamp-libgnatprj-sources:
++	for file in $(PRJ_SOURCES); do \
++	   ads=$$(echo $$file | sed 's/\.adb/.ads/'); \
++	   if [ -f @srcdir@/../gcc/ada/$$file -a ! -L $$file ] ; then $(LN_S) @srcdir@/../gcc/ada/$$file .; fi; \
++	   if [ -f @srcdir@/../gcc/ada/$$ads -a ! -L $$ads ] ; then $(LN_S) @srcdir@/../gcc/ada/$$ads .; fi; \
++	done
++	for file in $(GENERATED_SOURCES); do \
++	   ads=$$(echo $$file | sed 's/\.adb/.ads/'); \
++	   if [ -f ../gcc/ada/$$file -a ! -L $$file ] ; then $(LN_S) ../gcc/ada/$$file .; fi; \
++	   if [ -f ../gcc/ada/$$ads -a ! -L $$ads ] ; then $(LN_S) ../gcc/ada/$$ads .; \
++	   else \
++	      if [ -f @srcdir@/../gcc/ada/$$ads -a ! -L $$ads ] ; then $(LN_S) @srcdir@/../gcc/ada/$$ads .; fi; \
++	   fi; \
++	done
++	$(foreach PAIR,$(TOOLS_TARGET_PAIRS), \
++	          rm -f $(word 1,$(subst <, ,$(PAIR)));\
++	          $(LN_S) @srcdir@/../gcc/ada/$(word 2,$(subst <, ,$(PAIR))) \
++	                  $(word 1,$(subst <, ,$(PAIR)));)
++	touch $@
++
++# Generate a list of source files (.ads and .adb) to install.  Almost
++# all of them are in src/gcc/ada, but some are generated during build
++# and are in build/gcc/ada.
++BODIES := $(filter %.adb,$(PRJ_SOURCES))
++SPECS := $(filter %.ads,$(PRJ_SOURCES)) $(patsubst %.adb,%.ads,$(BODIES) $(GENERATED_SOURCES))
++SOURCES_TO_INSTALL := \
++$(addprefix  @srcdir@/../gcc/ada/,$(SPECS) $(BODIES)) \
++$(addprefix ../gcc/ada/,$(GENERATED_SOURCES))
++
++libdir = @libdir@
++
++install: libgnatprj
++	$(INSTALL_DATA) libgnatprj.a $(DESTDIR)$(libdir)
++	$(INSTALL_DATA) libgnatprj.so.$(LIB_VERSION) $(DESTDIR)$(libdir)
++	cd $(DESTDIR)$(libdir); ln -sf libgnatprj.so.$(LIB_VERSION) libgnatprj.so
++	mkdir -p $(DESTDIR)$(prefix)/share/ada/adainclude/gnatprj
++	$(INSTALL_DATA) $(SOURCES_TO_INSTALL) \
++	   $(DESTDIR)$(prefix)/share/ada/adainclude/gnatprj
++	mkdir -p $(DESTDIR)$(prefix)/lib/ada/adalib/gnatprj
++	$(INSTALL) -m 0444 obj-shared/*.ali \
++	   $(DESTDIR)$(prefix)/lib/ada/adalib/gnatprj
++	chmod a=r $(DESTDIR)$(prefix)/lib/ada/adalib/gnatprj/*.ali
++
++.PHONY: clean
++clean:
++	rm -rf *.ali obj-static obj-shared libgnatprj* *.adb *.ads stamp*
+Index: b/src/Makefile.def
+===================================================================
+--- a/src/Makefile.def
++++ b/src/Makefile.def
+@@ -158,6 +158,13 @@
+ 		missing= TAGS;
+ 		missing= install-info;
+ 		missing= installcheck; };
++host_modules= { module= libgnatprj; no_check=true;
++		missing= info;
++		missing= dvi;
++		missing= html;
++		missing= TAGS;
++		missing= install-info;
++		missing= installcheck; };
+ host_modules= { module= gnattools; no_check=true;
+ 		missing= info;
+ 		missing= dvi;
+@@ -210,6 +217,13 @@
+ 		   missing= TAGS;
+ 		   missing= install-info;
+ 		   missing= installcheck; };
++target_modules = { module= libgnatprj; no_check=true;
++		   missing= info;
++		   missing= dvi;
++		   missing= html;
++		   missing= TAGS;
++		   missing= install-info;
++		   missing= installcheck; };
+ target_modules = { module= libgomp; bootstrap= true; lib_path=.libs; };
+ 
+ // These are (some of) the make targets to be done in each subdirectory.
+@@ -397,7 +411,10 @@
+ 
+ dependencies = { module=all-gnattools; on=all-libada; };
+ dependencies = { module=all-gnattools; on=all-libgnatvsn; };
++dependencies = { module=all-gnattools; on=all-libgnatprj; };
+ dependencies = { module=all-libgnatvsn; on=all-libada; };
++dependencies = { module=all-libgnatprj; on=all-libada; };
++dependencies = { module=all-libgnatprj; on=all-libgnatvsn; };
+ 
+ dependencies = { module=all-lto-plugin; on=all-libiberty; };
+ 
+Index: b/src/Makefile.in
+===================================================================
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -952,6 +952,7 @@
+     maybe-configure-utils \
+     maybe-configure-libada \
+     maybe-configure-libgnatvsn \
++    maybe-configure-libgnatprj \
+     maybe-configure-gnattools \
+     maybe-configure-lto-plugin
+ .PHONY: configure-target
+@@ -979,6 +980,7 @@
+     maybe-configure-target-rda \
+     maybe-configure-target-libada \
+     maybe-configure-target-libgnatvsn \
++    maybe-configure-target-libgnatprj \
+     maybe-configure-target-libgomp
+ 
+ # The target built for a native non-bootstrap build.
+@@ -1132,6 +1134,7 @@
+ all-host: maybe-all-utils
+ all-host: maybe-all-libada
+ all-host: maybe-all-libgnatvsn
++all-host: maybe-all-libgnatprj
+ all-host: maybe-all-gnattools
+ @if lto-plugin-no-bootstrap
+ all-host: maybe-all-lto-plugin
+@@ -1166,6 +1169,7 @@
+ all-target: maybe-all-target-rda
+ all-target: maybe-all-target-libada
+ all-target: maybe-all-target-libgnatvsn
++all-target: maybe-all-target-libgnatprj
+ @if target-libgomp-no-bootstrap
+ all-target: maybe-all-target-libgomp
+ @endif target-libgomp-no-bootstrap
+@@ -1264,6 +1268,7 @@
+ info-host: maybe-info-utils
+ info-host: maybe-info-libada
+ info-host: maybe-info-libgnatvsn
++info-host: maybe-info-libgnatprj
+ info-host: maybe-info-gnattools
+ info-host: maybe-info-lto-plugin
+ 
+@@ -1292,6 +1297,7 @@
+ info-target: maybe-info-target-rda
+ info-target: maybe-info-target-libada
+ info-target: maybe-info-target-libgnatvsn
++info-target: maybe-info-target-libgnatprj
+ info-target: maybe-info-target-libgomp
+ 
+ .PHONY: do-dvi
+@@ -1383,6 +1389,7 @@
+ dvi-host: maybe-dvi-utils
+ dvi-host: maybe-dvi-libada
+ dvi-host: maybe-dvi-libgnatvsn
++dvi-host: maybe-dvi-libgnatprj
+ dvi-host: maybe-dvi-gnattools
+ dvi-host: maybe-dvi-lto-plugin
+ 
+@@ -1411,6 +1418,7 @@
+ dvi-target: maybe-dvi-target-rda
+ dvi-target: maybe-dvi-target-libada
+ dvi-target: maybe-dvi-target-libgnatvsn
++dvi-target: maybe-dvi-target-libgnatprj
+ dvi-target: maybe-dvi-target-libgomp
+ 
+ .PHONY: do-pdf
+@@ -1502,6 +1510,7 @@
+ pdf-host: maybe-pdf-utils
+ pdf-host: maybe-pdf-libada
+ pdf-host: maybe-pdf-libgnatvsn
++pdf-host: maybe-pdf-libgnatprj
+ pdf-host: maybe-pdf-gnattools
+ pdf-host: maybe-pdf-lto-plugin
+ 
+@@ -1530,6 +1539,7 @@
+ pdf-target: maybe-pdf-target-rda
+ pdf-target: maybe-pdf-target-libada
+ pdf-target: maybe-pdf-target-libgnatvsn
++pdf-target: maybe-pdf-target-libgnatprj
+ pdf-target: maybe-pdf-target-libgomp
+ 
+ .PHONY: do-html
+@@ -1621,6 +1631,7 @@
+ html-host: maybe-html-utils
+ html-host: maybe-html-libada
+ html-host: maybe-html-libgnatvsn
++html-host: maybe-html-libgnatprj
+ html-host: maybe-html-gnattools
+ html-host: maybe-html-lto-plugin
+ 
+@@ -1649,6 +1660,7 @@
+ html-target: maybe-html-target-rda
+ html-target: maybe-html-target-libada
+ html-target: maybe-html-target-libgnatvsn
++html-target: maybe-html-target-libgnatprj
+ html-target: maybe-html-target-libgomp
+ 
+ .PHONY: do-TAGS
+@@ -1740,6 +1752,7 @@
+ TAGS-host: maybe-TAGS-utils
+ TAGS-host: maybe-TAGS-libada
+ TAGS-host: maybe-TAGS-libgnatvsn
++TAGS-host: maybe-TAGS-libgnatprj
+ TAGS-host: maybe-TAGS-gnattools
+ TAGS-host: maybe-TAGS-lto-plugin
+ 
+@@ -1768,6 +1781,7 @@
+ TAGS-target: maybe-TAGS-target-rda
+ TAGS-target: maybe-TAGS-target-libada
+ TAGS-target: maybe-TAGS-target-libgnatvsn
++TAGS-target: maybe-TAGS-target-libgnatprj
+ TAGS-target: maybe-TAGS-target-libgomp
+ 
+ .PHONY: do-install-info
+@@ -1859,6 +1873,7 @@
+ install-info-host: maybe-install-info-utils
+ install-info-host: maybe-install-info-libada
+ install-info-host: maybe-install-info-libgnatvsn
++install-info-host: maybe-install-info-libgnatprj
+ install-info-host: maybe-install-info-gnattools
+ install-info-host: maybe-install-info-lto-plugin
+ 
+@@ -1887,6 +1902,7 @@
+ install-info-target: maybe-install-info-target-rda
+ install-info-target: maybe-install-info-target-libada
+ install-info-target: maybe-install-info-target-libgnatvsn
++install-info-target: maybe-install-info-target-libgnatprj
+ install-info-target: maybe-install-info-target-libgomp
+ 
+ .PHONY: do-install-pdf
+@@ -1978,6 +1994,7 @@
+ install-pdf-host: maybe-install-pdf-utils
+ install-pdf-host: maybe-install-pdf-libada
+ install-pdf-host: maybe-install-pdf-libgnatvsn
++install-pdf-host: maybe-install-pdf-libgnatprj
+ install-pdf-host: maybe-install-pdf-gnattools
+ install-pdf-host: maybe-install-pdf-lto-plugin
+ 
+@@ -2006,6 +2023,7 @@
+ install-pdf-target: maybe-install-pdf-target-rda
+ install-pdf-target: maybe-install-pdf-target-libada
+ install-pdf-target: maybe-install-pdf-target-libgnatvsn
++install-pdf-target: maybe-install-pdf-target-libgnatprj
+ install-pdf-target: maybe-install-pdf-target-libgomp
+ 
+ .PHONY: do-install-html
+@@ -2097,6 +2115,7 @@
+ install-html-host: maybe-install-html-utils
+ install-html-host: maybe-install-html-libada
+ install-html-host: maybe-install-html-libgnatvsn
++install-html-host: maybe-install-html-libgnatprj
+ install-html-host: maybe-install-html-gnattools
+ install-html-host: maybe-install-html-lto-plugin
+ 
+@@ -2125,6 +2144,7 @@
+ install-html-target: maybe-install-html-target-rda
+ install-html-target: maybe-install-html-target-libada
+ install-html-target: maybe-install-html-target-libgnatvsn
++install-html-target: maybe-install-html-target-libgnatprj
+ install-html-target: maybe-install-html-target-libgomp
+ 
+ .PHONY: do-installcheck
+@@ -2216,6 +2236,7 @@
+ installcheck-host: maybe-installcheck-utils
+ installcheck-host: maybe-installcheck-libada
+ installcheck-host: maybe-installcheck-libgnatvsn
++installcheck-host: maybe-installcheck-libgnatprj
+ installcheck-host: maybe-installcheck-gnattools
+ installcheck-host: maybe-installcheck-lto-plugin
+ 
+@@ -2244,6 +2265,7 @@
+ installcheck-target: maybe-installcheck-target-rda
+ installcheck-target: maybe-installcheck-target-libada
+ installcheck-target: maybe-installcheck-target-libgnatvsn
++installcheck-target: maybe-installcheck-target-libgnatprj
+ installcheck-target: maybe-installcheck-target-libgomp
+ 
+ .PHONY: do-mostlyclean
+@@ -2335,6 +2357,7 @@
+ mostlyclean-host: maybe-mostlyclean-utils
+ mostlyclean-host: maybe-mostlyclean-libada
+ mostlyclean-host: maybe-mostlyclean-libgnatvsn
++mostlyclean-host: maybe-mostlyclean-libgnatprj
+ mostlyclean-host: maybe-mostlyclean-gnattools
+ mostlyclean-host: maybe-mostlyclean-lto-plugin
+ 
+@@ -2363,6 +2386,7 @@
+ mostlyclean-target: maybe-mostlyclean-target-rda
+ mostlyclean-target: maybe-mostlyclean-target-libada
+ mostlyclean-target: maybe-mostlyclean-target-libgnatvsn
++mostlyclean-target: maybe-mostlyclean-target-libgnatprj
+ mostlyclean-target: maybe-mostlyclean-target-libgomp
+ 
+ .PHONY: do-clean
+@@ -2454,6 +2478,7 @@
+ clean-host: maybe-clean-utils
+ clean-host: maybe-clean-libada
+ clean-host: maybe-clean-libgnatvsn
++clean-host: maybe-clean-libgnatprj
+ clean-host: maybe-clean-gnattools
+ clean-host: maybe-clean-lto-plugin
+ 
+@@ -2482,6 +2507,7 @@
+ clean-target: maybe-clean-target-rda
+ clean-target: maybe-clean-target-libada
+ clean-target: maybe-clean-target-libgnatvsn
++clean-target: maybe-clean-target-libgnatprj
+ clean-target: maybe-clean-target-libgomp
+ 
+ .PHONY: do-distclean
+@@ -2573,6 +2599,7 @@
+ distclean-host: maybe-distclean-utils
+ distclean-host: maybe-distclean-libada
+ distclean-host: maybe-distclean-libgnatvsn
++distclean-host: maybe-distclean-libgnatprj
+ distclean-host: maybe-distclean-gnattools
+ distclean-host: maybe-distclean-lto-plugin
+ 
+@@ -2601,6 +2628,7 @@
+ distclean-target: maybe-distclean-target-rda
+ distclean-target: maybe-distclean-target-libada
+ distclean-target: maybe-distclean-target-libgnatvsn
++distclean-target: maybe-distclean-target-libgnatprj
+ distclean-target: maybe-distclean-target-libgomp
+ 
+ .PHONY: do-maintainer-clean
+@@ -2692,6 +2720,7 @@
+ maintainer-clean-host: maybe-maintainer-clean-utils
+ maintainer-clean-host: maybe-maintainer-clean-libada
+ maintainer-clean-host: maybe-maintainer-clean-libgnatvsn
++maintainer-clean-host: maybe-maintainer-clean-libgnatprj
+ maintainer-clean-host: maybe-maintainer-clean-gnattools
+ maintainer-clean-host: maybe-maintainer-clean-lto-plugin
+ 
+@@ -2720,6 +2749,7 @@
+ maintainer-clean-target: maybe-maintainer-clean-target-rda
+ maintainer-clean-target: maybe-maintainer-clean-target-libada
+ maintainer-clean-target: maybe-maintainer-clean-target-libgnatvsn
++maintainer-clean-target: maybe-maintainer-clean-target-libgnatprj
+ maintainer-clean-target: maybe-maintainer-clean-target-libgomp
+ 
+ 
+@@ -2866,6 +2896,7 @@
+     maybe-check-utils \
+     maybe-check-libada \
+     maybe-check-libgnatvsn \
++    maybe-check-libgnatprj \
+     maybe-check-gnattools \
+     maybe-check-lto-plugin
+ 
+@@ -2894,6 +2925,7 @@
+     maybe-check-target-rda \
+     maybe-check-target-libada \
+     maybe-check-target-libgnatvsn \
++    maybe-check-target-libgnatprj \
+     maybe-check-target-libgomp
+ 
+ do-check:
+@@ -3011,6 +3043,7 @@
+     maybe-install-utils \
+     maybe-install-libada \
+     maybe-install-libgnatvsn \
++    maybe-install-libgnatprj \
+     maybe-install-gnattools \
+     maybe-install-lto-plugin
+ 
+@@ -3094,6 +3127,7 @@
+     maybe-install-utils \
+     maybe-install-libada \
+     maybe-install-libgnatvsn \
++    maybe-install-libgnatprj \
+     maybe-install-gnattools \
+     maybe-install-lto-plugin
+ 
+@@ -3122,6 +3156,7 @@
+     maybe-install-target-rda \
+     maybe-install-target-libada \
+     maybe-install-target-libgnatvsn \
++    maybe-install-target-libgnatprj \
+     maybe-install-target-libgomp
+ 
+ uninstall:
+@@ -3232,6 +3267,7 @@
+     maybe-install-strip-utils \
+     maybe-install-strip-libada \
+     maybe-install-strip-libgnatvsn \
++    maybe-install-strip-libgnatprj \
+     maybe-install-strip-gnattools \
+     maybe-install-strip-lto-plugin
+ 
+@@ -3260,6 +3296,7 @@
+     maybe-install-strip-target-rda \
+     maybe-install-strip-target-libada \
+     maybe-install-strip-target-libgnatvsn \
++    maybe-install-strip-target-libgnatprj \
+     maybe-install-strip-target-libgomp
+ 
+ 
+@@ -45502,6 +45539,343 @@
+ 
+ 
+ 
++.PHONY: configure-libgnatprj maybe-configure-libgnatprj
++maybe-configure-libgnatprj:
++@if gcc-bootstrap
++configure-libgnatprj: stage_current
++@endif gcc-bootstrap
++@if libgnatprj
++maybe-configure-libgnatprj: configure-libgnatprj
++configure-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	test ! -f $(HOST_SUBDIR)/libgnatprj/Makefile || exit 0; \
++	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/libgnatprj ; \
++	$(HOST_EXPORTS)  \
++	echo Configuring in $(HOST_SUBDIR)/libgnatprj; \
++	cd "$(HOST_SUBDIR)/libgnatprj" || exit 1; \
++	case $(srcdir) in \
++	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
++	  *) topdir=`echo $(HOST_SUBDIR)/libgnatprj/ | \
++		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
++	esac; \
++	srcdiroption="--srcdir=$${topdir}/libgnatprj"; \
++	libsrcdir="$$s/libgnatprj"; \
++	$(SHELL) $${libsrcdir}/configure \
++	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
++	  --target=${target_alias} $${srcdiroption}  \
++	  || exit 1
++@endif libgnatprj
++
++
++
++
++
++.PHONY: all-libgnatprj maybe-all-libgnatprj
++maybe-all-libgnatprj:
++@if gcc-bootstrap
++all-libgnatprj: stage_current
++@endif gcc-bootstrap
++@if libgnatprj
++TARGET-libgnatprj=all
++maybe-all-libgnatprj: all-libgnatprj
++all-libgnatprj: configure-libgnatprj
++	@: $(MAKE); $(unstage)
++	@r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS)  \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) $(EXTRA_HOST_FLAGS)  \
++		$(TARGET-libgnatprj))
++@endif libgnatprj
++
++
++
++
++.PHONY: check-libgnatprj maybe-check-libgnatprj
++maybe-check-libgnatprj:
++@if libgnatprj
++maybe-check-libgnatprj: check-libgnatprj
++
++check-libgnatprj:
++
++@endif libgnatprj
++
++.PHONY: install-libgnatprj maybe-install-libgnatprj
++maybe-install-libgnatprj:
++@if libgnatprj
++maybe-install-libgnatprj: install-libgnatprj
++
++install-libgnatprj: installdirs
++	@: $(MAKE); $(unstage)
++	@r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(FLAGS_TO_PASS)  install)
++
++@endif libgnatprj
++
++.PHONY: install-strip-libgnatprj maybe-install-strip-libgnatprj
++maybe-install-strip-libgnatprj:
++@if libgnatprj
++maybe-install-strip-libgnatprj: install-strip-libgnatprj
++
++install-strip-libgnatprj: installdirs
++	@: $(MAKE); $(unstage)
++	@r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(FLAGS_TO_PASS)  install-strip)
++
++@endif libgnatprj
++
++# Other targets (info, dvi, pdf, etc.)
++
++.PHONY: maybe-info-libgnatprj info-libgnatprj
++maybe-info-libgnatprj:
++@if libgnatprj
++maybe-info-libgnatprj: info-libgnatprj
++
++# libgnatprj doesn't support info.
++info-libgnatprj:
++
++@endif libgnatprj
++
++.PHONY: maybe-dvi-libgnatprj dvi-libgnatprj
++maybe-dvi-libgnatprj:
++@if libgnatprj
++maybe-dvi-libgnatprj: dvi-libgnatprj
++
++# libgnatprj doesn't support dvi.
++dvi-libgnatprj:
++
++@endif libgnatprj
++
++.PHONY: maybe-pdf-libgnatprj pdf-libgnatprj
++maybe-pdf-libgnatprj:
++@if libgnatprj
++maybe-pdf-libgnatprj: pdf-libgnatprj
++
++pdf-libgnatprj: \
++    configure-libgnatprj 
++	@: $(MAKE); $(unstage)
++	@[ -f ./libgnatprj/Makefile ] || exit 0; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	for flag in $(EXTRA_HOST_FLAGS) ; do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	echo "Doing pdf in libgnatprj" ; \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	          pdf) \
++	  || exit 1
++
++@endif libgnatprj
++
++.PHONY: maybe-html-libgnatprj html-libgnatprj
++maybe-html-libgnatprj:
++@if libgnatprj
++maybe-html-libgnatprj: html-libgnatprj
++
++# libgnatprj doesn't support html.
++html-libgnatprj:
++
++@endif libgnatprj
++
++.PHONY: maybe-TAGS-libgnatprj TAGS-libgnatprj
++maybe-TAGS-libgnatprj:
++@if libgnatprj
++maybe-TAGS-libgnatprj: TAGS-libgnatprj
++
++# libgnatprj doesn't support TAGS.
++TAGS-libgnatprj:
++
++@endif libgnatprj
++
++.PHONY: maybe-install-info-libgnatprj install-info-libgnatprj
++maybe-install-info-libgnatprj:
++@if libgnatprj
++maybe-install-info-libgnatprj: install-info-libgnatprj
++
++# libgnatprj doesn't support install-info.
++install-info-libgnatprj:
++
++@endif libgnatprj
++
++.PHONY: maybe-install-pdf-libgnatprj install-pdf-libgnatprj
++maybe-install-pdf-libgnatprj:
++@if libgnatprj
++maybe-install-pdf-libgnatprj: install-pdf-libgnatprj
++
++install-pdf-libgnatprj: \
++    configure-libgnatprj \
++    pdf-libgnatprj 
++	@: $(MAKE); $(unstage)
++	@[ -f ./libgnatprj/Makefile ] || exit 0; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	for flag in $(EXTRA_HOST_FLAGS) ; do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	echo "Doing install-pdf in libgnatprj" ; \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	          install-pdf) \
++	  || exit 1
++
++@endif libgnatprj
++
++.PHONY: maybe-install-html-libgnatprj install-html-libgnatprj
++maybe-install-html-libgnatprj:
++@if libgnatprj
++maybe-install-html-libgnatprj: install-html-libgnatprj
++
++install-html-libgnatprj: \
++    configure-libgnatprj \
++    html-libgnatprj 
++	@: $(MAKE); $(unstage)
++	@[ -f ./libgnatprj/Makefile ] || exit 0; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	for flag in $(EXTRA_HOST_FLAGS) ; do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	echo "Doing install-html in libgnatprj" ; \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	          install-html) \
++	  || exit 1
++
++@endif libgnatprj
++
++.PHONY: maybe-installcheck-libgnatprj installcheck-libgnatprj
++maybe-installcheck-libgnatprj:
++@if libgnatprj
++maybe-installcheck-libgnatprj: installcheck-libgnatprj
++
++# libgnatprj doesn't support installcheck.
++installcheck-libgnatprj:
++
++@endif libgnatprj
++
++.PHONY: maybe-mostlyclean-libgnatprj mostlyclean-libgnatprj
++maybe-mostlyclean-libgnatprj:
++@if libgnatprj
++maybe-mostlyclean-libgnatprj: mostlyclean-libgnatprj
++
++mostlyclean-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@[ -f ./libgnatprj/Makefile ] || exit 0; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	for flag in $(EXTRA_HOST_FLAGS) ; do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	echo "Doing mostlyclean in libgnatprj" ; \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	          mostlyclean) \
++	  || exit 1
++
++@endif libgnatprj
++
++.PHONY: maybe-clean-libgnatprj clean-libgnatprj
++maybe-clean-libgnatprj:
++@if libgnatprj
++maybe-clean-libgnatprj: clean-libgnatprj
++
++clean-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@[ -f ./libgnatprj/Makefile ] || exit 0; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	for flag in $(EXTRA_HOST_FLAGS) ; do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	echo "Doing clean in libgnatprj" ; \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	          clean) \
++	  || exit 1
++
++@endif libgnatprj
++
++.PHONY: maybe-distclean-libgnatprj distclean-libgnatprj
++maybe-distclean-libgnatprj:
++@if libgnatprj
++maybe-distclean-libgnatprj: distclean-libgnatprj
++
++distclean-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@[ -f ./libgnatprj/Makefile ] || exit 0; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	for flag in $(EXTRA_HOST_FLAGS) ; do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	echo "Doing distclean in libgnatprj" ; \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	          distclean) \
++	  || exit 1
++
++@endif libgnatprj
++
++.PHONY: maybe-maintainer-clean-libgnatprj maintainer-clean-libgnatprj
++maybe-maintainer-clean-libgnatprj:
++@if libgnatprj
++maybe-maintainer-clean-libgnatprj: maintainer-clean-libgnatprj
++
++maintainer-clean-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@[ -f ./libgnatprj/Makefile ] || exit 0; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(HOST_EXPORTS) \
++	for flag in $(EXTRA_HOST_FLAGS) ; do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	echo "Doing maintainer-clean in libgnatprj" ; \
++	(cd $(HOST_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	          maintainer-clean) \
++	  || exit 1
++
++@endif libgnatprj
++
++
++
+ .PHONY: configure-gnattools maybe-configure-gnattools
+ maybe-configure-gnattools:
+ @if gcc-bootstrap
+@@ -57992,6 +58366,361 @@
+ 
+ 
+ 
++.PHONY: configure-target-libgnatprj maybe-configure-target-libgnatprj
++maybe-configure-target-libgnatprj:
++@if gcc-bootstrap
++configure-target-libgnatprj: stage_current
++@endif gcc-bootstrap
++@if target-libgnatprj
++maybe-configure-target-libgnatprj: configure-target-libgnatprj
++configure-target-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	echo "Checking multilib configuration for libgnatprj..."; \
++	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libgnatprj ; \
++	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libgnatprj/multilib.tmp 2> /dev/null ; \
++	if test -r $(TARGET_SUBDIR)/libgnatprj/multilib.out; then \
++	  if cmp -s $(TARGET_SUBDIR)/libgnatprj/multilib.tmp $(TARGET_SUBDIR)/libgnatprj/multilib.out; then \
++	    rm -f $(TARGET_SUBDIR)/libgnatprj/multilib.tmp; \
++	  else \
++	    rm -f $(TARGET_SUBDIR)/libgnatprj/Makefile; \
++	    mv $(TARGET_SUBDIR)/libgnatprj/multilib.tmp $(TARGET_SUBDIR)/libgnatprj/multilib.out; \
++	  fi; \
++	else \
++	  mv $(TARGET_SUBDIR)/libgnatprj/multilib.tmp $(TARGET_SUBDIR)/libgnatprj/multilib.out; \
++	fi; \
++	test ! -f $(TARGET_SUBDIR)/libgnatprj/Makefile || exit 0; \
++	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libgnatprj ; \
++	$(NORMAL_TARGET_EXPORTS)  \
++	echo Configuring in $(TARGET_SUBDIR)/libgnatprj; \
++	cd "$(TARGET_SUBDIR)/libgnatprj" || exit 1; \
++	case $(srcdir) in \
++	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
++	  *) topdir=`echo $(TARGET_SUBDIR)/libgnatprj/ | \
++		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
++	esac; \
++	srcdiroption="--srcdir=$${topdir}/libgnatprj"; \
++	libsrcdir="$$s/libgnatprj"; \
++	rm -f no-such-file || : ; \
++	CONFIG_SITE=no-such-file $(SHELL) $${libsrcdir}/configure \
++	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
++	  --target=${target_alias} $${srcdiroption}  \
++	  || exit 1
++@endif target-libgnatprj
++
++
++
++
++
++.PHONY: all-target-libgnatprj maybe-all-target-libgnatprj
++maybe-all-target-libgnatprj:
++@if gcc-bootstrap
++all-target-libgnatprj: stage_current
++@endif gcc-bootstrap
++@if target-libgnatprj
++TARGET-target-libgnatprj=all
++maybe-all-target-libgnatprj: all-target-libgnatprj
++all-target-libgnatprj: configure-target-libgnatprj
++	@: $(MAKE); $(unstage)
++	@r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS)  \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) $(EXTRA_TARGET_FLAGS)  \
++		$(TARGET-target-libgnatprj))
++@endif target-libgnatprj
++
++
++
++
++
++.PHONY: check-target-libgnatprj maybe-check-target-libgnatprj
++maybe-check-target-libgnatprj:
++@if target-libgnatprj
++maybe-check-target-libgnatprj: check-target-libgnatprj
++
++# Dummy target for uncheckable module.
++check-target-libgnatprj:
++
++@endif target-libgnatprj
++
++.PHONY: install-target-libgnatprj maybe-install-target-libgnatprj
++maybe-install-target-libgnatprj:
++@if target-libgnatprj
++maybe-install-target-libgnatprj: install-target-libgnatprj
++
++install-target-libgnatprj: installdirs
++	@: $(MAKE); $(unstage)
++	@r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install)
++
++@endif target-libgnatprj
++
++.PHONY: install-strip-target-libgnatprj maybe-install-strip-target-libgnatprj
++maybe-install-strip-target-libgnatprj:
++@if target-libgnatprj
++maybe-install-strip-target-libgnatprj: install-strip-target-libgnatprj
++
++install-strip-target-libgnatprj: installdirs
++	@: $(MAKE); $(unstage)
++	@r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install-strip)
++
++@endif target-libgnatprj
++
++# Other targets (info, dvi, pdf, etc.)
++
++.PHONY: maybe-info-target-libgnatprj info-target-libgnatprj
++maybe-info-target-libgnatprj:
++@if target-libgnatprj
++maybe-info-target-libgnatprj: info-target-libgnatprj
++
++# libgnatprj doesn't support info.
++info-target-libgnatprj:
++
++@endif target-libgnatprj
++
++.PHONY: maybe-dvi-target-libgnatprj dvi-target-libgnatprj
++maybe-dvi-target-libgnatprj:
++@if target-libgnatprj
++maybe-dvi-target-libgnatprj: dvi-target-libgnatprj
++
++# libgnatprj doesn't support dvi.
++dvi-target-libgnatprj:
++
++@endif target-libgnatprj
++
++.PHONY: maybe-pdf-target-libgnatprj pdf-target-libgnatprj
++maybe-pdf-target-libgnatprj:
++@if target-libgnatprj
++maybe-pdf-target-libgnatprj: pdf-target-libgnatprj
++
++pdf-target-libgnatprj: \
++    configure-target-libgnatprj 
++	@: $(MAKE); $(unstage)
++	@[ -f $(TARGET_SUBDIR)/libgnatprj/Makefile ] || exit 0 ; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	echo "Doing pdf in $(TARGET_SUBDIR)/libgnatprj" ; \
++	for flag in $(EXTRA_TARGET_FLAGS); do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	           pdf) \
++	  || exit 1
++
++@endif target-libgnatprj
++
++.PHONY: maybe-html-target-libgnatprj html-target-libgnatprj
++maybe-html-target-libgnatprj:
++@if target-libgnatprj
++maybe-html-target-libgnatprj: html-target-libgnatprj
++
++# libgnatprj doesn't support html.
++html-target-libgnatprj:
++
++@endif target-libgnatprj
++
++.PHONY: maybe-TAGS-target-libgnatprj TAGS-target-libgnatprj
++maybe-TAGS-target-libgnatprj:
++@if target-libgnatprj
++maybe-TAGS-target-libgnatprj: TAGS-target-libgnatprj
++
++# libgnatprj doesn't support TAGS.
++TAGS-target-libgnatprj:
++
++@endif target-libgnatprj
++
++.PHONY: maybe-install-info-target-libgnatprj install-info-target-libgnatprj
++maybe-install-info-target-libgnatprj:
++@if target-libgnatprj
++maybe-install-info-target-libgnatprj: install-info-target-libgnatprj
++
++# libgnatprj doesn't support install-info.
++install-info-target-libgnatprj:
++
++@endif target-libgnatprj
++
++.PHONY: maybe-install-pdf-target-libgnatprj install-pdf-target-libgnatprj
++maybe-install-pdf-target-libgnatprj:
++@if target-libgnatprj
++maybe-install-pdf-target-libgnatprj: install-pdf-target-libgnatprj
++
++install-pdf-target-libgnatprj: \
++    configure-target-libgnatprj \
++    pdf-target-libgnatprj 
++	@: $(MAKE); $(unstage)
++	@[ -f $(TARGET_SUBDIR)/libgnatprj/Makefile ] || exit 0 ; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	echo "Doing install-pdf in $(TARGET_SUBDIR)/libgnatprj" ; \
++	for flag in $(EXTRA_TARGET_FLAGS); do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	           install-pdf) \
++	  || exit 1
++
++@endif target-libgnatprj
++
++.PHONY: maybe-install-html-target-libgnatprj install-html-target-libgnatprj
++maybe-install-html-target-libgnatprj:
++@if target-libgnatprj
++maybe-install-html-target-libgnatprj: install-html-target-libgnatprj
++
++install-html-target-libgnatprj: \
++    configure-target-libgnatprj \
++    html-target-libgnatprj 
++	@: $(MAKE); $(unstage)
++	@[ -f $(TARGET_SUBDIR)/libgnatprj/Makefile ] || exit 0 ; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	echo "Doing install-html in $(TARGET_SUBDIR)/libgnatprj" ; \
++	for flag in $(EXTRA_TARGET_FLAGS); do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	           install-html) \
++	  || exit 1
++
++@endif target-libgnatprj
++
++.PHONY: maybe-installcheck-target-libgnatprj installcheck-target-libgnatprj
++maybe-installcheck-target-libgnatprj:
++@if target-libgnatprj
++maybe-installcheck-target-libgnatprj: installcheck-target-libgnatprj
++
++# libgnatprj doesn't support installcheck.
++installcheck-target-libgnatprj:
++
++@endif target-libgnatprj
++
++.PHONY: maybe-mostlyclean-target-libgnatprj mostlyclean-target-libgnatprj
++maybe-mostlyclean-target-libgnatprj:
++@if target-libgnatprj
++maybe-mostlyclean-target-libgnatprj: mostlyclean-target-libgnatprj
++
++mostlyclean-target-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@[ -f $(TARGET_SUBDIR)/libgnatprj/Makefile ] || exit 0 ; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	echo "Doing mostlyclean in $(TARGET_SUBDIR)/libgnatprj" ; \
++	for flag in $(EXTRA_TARGET_FLAGS); do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	           mostlyclean) \
++	  || exit 1
++
++@endif target-libgnatprj
++
++.PHONY: maybe-clean-target-libgnatprj clean-target-libgnatprj
++maybe-clean-target-libgnatprj:
++@if target-libgnatprj
++maybe-clean-target-libgnatprj: clean-target-libgnatprj
++
++clean-target-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@[ -f $(TARGET_SUBDIR)/libgnatprj/Makefile ] || exit 0 ; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	echo "Doing clean in $(TARGET_SUBDIR)/libgnatprj" ; \
++	for flag in $(EXTRA_TARGET_FLAGS); do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	           clean) \
++	  || exit 1
++
++@endif target-libgnatprj
++
++.PHONY: maybe-distclean-target-libgnatprj distclean-target-libgnatprj
++maybe-distclean-target-libgnatprj:
++@if target-libgnatprj
++maybe-distclean-target-libgnatprj: distclean-target-libgnatprj
++
++distclean-target-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@[ -f $(TARGET_SUBDIR)/libgnatprj/Makefile ] || exit 0 ; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	echo "Doing distclean in $(TARGET_SUBDIR)/libgnatprj" ; \
++	for flag in $(EXTRA_TARGET_FLAGS); do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	           distclean) \
++	  || exit 1
++
++@endif target-libgnatprj
++
++.PHONY: maybe-maintainer-clean-target-libgnatprj maintainer-clean-target-libgnatprj
++maybe-maintainer-clean-target-libgnatprj:
++@if target-libgnatprj
++maybe-maintainer-clean-target-libgnatprj: maintainer-clean-target-libgnatprj
++
++maintainer-clean-target-libgnatprj: 
++	@: $(MAKE); $(unstage)
++	@[ -f $(TARGET_SUBDIR)/libgnatprj/Makefile ] || exit 0 ; \
++	r=`${PWD_COMMAND}`; export r; \
++	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
++	$(NORMAL_TARGET_EXPORTS) \
++	echo "Doing maintainer-clean in $(TARGET_SUBDIR)/libgnatprj" ; \
++	for flag in $(EXTRA_TARGET_FLAGS); do \
++	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
++	done; \
++	(cd $(TARGET_SUBDIR)/libgnatprj && \
++	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
++	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
++	          "RANLIB=$${RANLIB}" \
++	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
++	           maintainer-clean) \
++	  || exit 1
++
++@endif target-libgnatprj
++
++
++
++
++
+ .PHONY: configure-target-libgomp maybe-configure-target-libgomp
+ maybe-configure-target-libgomp:
+ @if gcc-bootstrap
+@@ -61056,6 +61785,7 @@
+ configure-target-rda: stage_last
+ configure-target-libada: stage_last
+ configure-target-libgnatvsn: stage_last
++configure-target-libgnatprj: stage_last
+ configure-stage1-target-libgomp: maybe-all-stage1-gcc
+ configure-stage2-target-libgomp: maybe-all-stage2-gcc
+ configure-stage3-target-libgomp: maybe-all-stage3-gcc
+@@ -61088,6 +61818,7 @@
+ configure-target-rda: maybe-all-gcc
+ configure-target-libada: maybe-all-gcc
+ configure-target-libgnatvsn: maybe-all-gcc
++configure-target-libgnatprj: maybe-all-gcc
+ configure-target-libgomp: maybe-all-gcc
+ @endif gcc-no-bootstrap
+ 
+@@ -61389,7 +62120,10 @@
+ all-fixincludes: maybe-all-libiberty
+ all-gnattools: maybe-all-libada
+ all-gnattools: maybe-all-libgnatvsn
++all-gnattools: maybe-all-libgnatprj
+ all-libgnatvsn: maybe-all-libada
++all-libgnatprj: maybe-all-libada
++all-libgnatprj: maybe-all-libgnatvsn
+ all-lto-plugin: maybe-all-libiberty
+ 
+ all-stage1-lto-plugin: maybe-all-stage1-libiberty
+@@ -61935,6 +62669,7 @@
+ configure-target-rda: maybe-all-target-libgcc
+ configure-target-libada: maybe-all-target-libgcc
+ configure-target-libgnatvsn: maybe-all-target-libgcc
++configure-target-libgnatprj: maybe-all-target-libgcc
+ configure-target-libgomp: maybe-all-target-libgcc
+ @endif gcc-no-bootstrap
+ 
+@@ -61983,6 +62718,8 @@
+ 
+ configure-target-libgnatvsn: maybe-all-target-newlib maybe-all-target-libgloss
+ 
++configure-target-libgnatprj: maybe-all-target-newlib maybe-all-target-libgloss
++
+ configure-target-libgomp: maybe-all-target-newlib maybe-all-target-libgloss
+ 
+ 
+Index: b/src/configure.ac
+===================================================================
+--- a/src/configure.ac
++++ b/src/configure.ac
+@@ -168,7 +168,7 @@
+ 
+ # these libraries are used by various programs built for the host environment
+ #
+-host_libs="intl mmalloc libiberty opcodes bfd readline tcl tk itcl libgui zlib libcpp libdecnumber gmp mpfr mpc ppl cloog libelf libiconv libada libgnatvsn"
++host_libs="intl mmalloc libiberty opcodes bfd readline tcl tk itcl libgui zlib libcpp libdecnumber gmp mpfr mpc ppl cloog libelf libiconv libada libgnatvsn libgnatprj"
+ 
+ # these tools are built for the host environment
+ # Note, the powerpc-eabi build depends on sim occurring before gdb in order to
+@@ -202,6 +202,7 @@
+ 		target-libobjc \
+ 		target-libada \
+ 		target-libgnatvsn \
++		target-libgnatprj \
+ 		target-libgo"
+ 
+ # these tools are built using the target libraries, and are intended to
+@@ -303,7 +304,7 @@
+ 
+ # Similarly, some are only suitable for cross toolchains.
+ # Remove these if host=target.
+-cross_only="target-libgloss target-newlib target-opcodes target-libada target-libgnatvsn"
++cross_only="target-libgloss target-newlib target-opcodes target-libada target-libgnatvsn target-libgnatprj"
+ 
+ case $is_cross_compiler in
+   no) skipdirs="${skipdirs} ${cross_only}" ;;
+@@ -487,7 +488,7 @@
+ ENABLE_LIBADA=$enableval,
+ ENABLE_LIBADA=yes)
+ if test "${ENABLE_LIBADA}" != "yes" ; then
+-  noconfigdirs="$noconfigdirs libgnatvsn gnattools"
++  noconfigdirs="$noconfigdirs libgnatvsn libgnatprj gnattools"
+ fi
+ 
+ AC_ARG_ENABLE(libssp,
+Index: b/src/libgnatprj/configure.ac
+===================================================================
+--- /dev/null
++++ b/src/libgnatprj/configure.ac
+@@ -0,0 +1,149 @@
++# Configure script for libada.
++#   Copyright 2003, 2004 Free Software Foundation, Inc.
++#
++# This file is free software; you can redistribute it and/or modify it
++# under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful, but
++# WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program; if not, write to the Free Software
++# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
++
++AC_INIT
++AC_PREREQ([2.59])
++
++AC_CONFIG_SRCDIR([Makefile.in])
++
++# Start of actual configure tests
++
++AC_PROG_INSTALL
++
++AC_CANONICAL_BUILD
++AC_CANONICAL_HOST
++AC_CANONICAL_TARGET
++
++sinclude(../config/acx.m4)
++ACX_NONCANONICAL_TARGET
++
++# Need to pass this down for now :-P
++AC_PROG_LN_S
++
++# Determine x_ada_cflags
++case $host in
++  hppa*) x_ada_cflags=-mdisable-indexing ;;
++  *) x_ada_cflags= ;;
++esac
++AC_SUBST([x_ada_cflags])
++
++# Determine what to build for 'gnattools'
++if test $build = $target ; then
++  # Note that build=target is almost certainly the wrong test; FIXME
++  default_gnattools_target="gnattools-native"
++else
++  default_gnattools_target="gnattools-cross"
++fi
++AC_SUBST([default_gnattools_target])
++
++# Target-specific stuff (defaults)
++TOOLS_TARGET_PAIRS=
++AC_SUBST(TOOLS_TARGET_PAIRS)
++
++# Per-target case statement
++# ---/----------------------
++case "${target}" in
++  alpha*-dec-vx*) # Unlike all other Vxworks
++    ;;
++  m68k*-wrs-vx* \
++  | powerpc*-wrs-vxworks \
++  | sparc*-wrs-vx* \
++  | *86-wrs-vxworks \
++  | xscale*-wrs-vx* \
++  | xscale*-wrs-coff \
++  | mips*-wrs-vx*)
++    TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-vxworks.adb"
++    ;;
++  sparc-sun-solaris*)
++    TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-solaris.adb"
++    ;;
++  *86-*-solaris2*)
++    TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-solaris.adb"
++    ;;
++  *86-*-linux* \
++  | arm*-*-linux* \
++  | powerpc*-*-linux* \
++  | *ia64-*-linux* \
++  | alpha*-*-linux* \
++  | sparc*-*-linux* \
++  | hppa*-*-linux* \
++  | mips*-*-linux* \
++  | *x86_64-*-linux* \
++  | *86-*-kfreebsd*-gnu \
++  | *86-*-gnu \
++  | *x86_64-*-kfreebsd*-gnu )
++    TOOLS_TARGET_PAIRS="\
++    mlib-tgt-specific.adb<mlib-tgt-specific-linux.adb \
++    indepsw.adb<indepsw-gnu.adb"
++    ;;
++  s390*-*-linux*)
++    TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-linux.adb"
++    ;;
++  *86-*-freebsd*)
++    TOOLS_TARGET_PAIRS="\
++    mlib-tgt-specific.adb<mlib-tgt-specific-linux.adb \
++    indepsw.adb<indepsw-gnu.adb"
++    ;;
++  mips-sgi-irix*)
++    TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-irix.adb"
++    ;;
++  hppa*-hp-hpux10*) # Unlike hpux11
++    ;;
++  hppa*-hp-hpux11*)
++    TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-hpux.adb"
++    ;;
++  *-ibm-aix*)
++    TOOLS_TARGET_PAIRS="\
++    mlib-tgt-specific.adb<mlib-tgt-specific-aix.adb \
++    indepsw.adb<indepsw-aix.adb"
++    ;;
++  alpha*-dec-osf*)
++    TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-tru64.adb"
++    ;;
++  alpha*-dec-vms* | alpha*-dec-openvms* | alpha*-dec-vms* \
++  | alpha*-hp-vms* | alpha*-hp-openvms* | alpha*-hp-vms*)
++    TOOLS_TARGET_PAIRS="\
++    mlib-tgt-specific.adb<mlib-tgt-specific-vms-alpha.adb \
++    symbols.adb<symbols-vms.adb \
++    symbols-processing.adb<symbols-processing-vms-alpha.adb"
++    ;;
++  ia64*-dec-vms* | ia64*-dec-openvms* | ia64*-dec-vms* \
++  | ia64*-hp-vms* | ia64*-hp-openvms* | ia64*-hp-vms*)
++    TOOLS_TARGET_PAIRS="\
++    mlib-tgt-specific.adb<mlib-tgt-vms-ia64.adb \
++    symbols.adb<symbols-vms.adb \
++    symbols-processing.adb<symbols-processing-vms-ia64.adb"
++    ;;
++  *-*-cygwin32* | *-*-mingw32* | *-*-pe)
++    TOOLS_TARGET_PAIRS="\
++    mlib-tgt-specific.adb<mlib-tgt-specific-mingw.adb \
++    indepsw.adb<indepsw-mingw.adb"
++    ;;
++  powerpc-*-darwin*)
++    TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-darwin.adb"
++    ;;
++  *-*-lynxos)
++    TOOLS_TARGET_PAIRS="\
++    mlib-tgt-specific.adb<mlib-tgt-specific-lynxos.adb \
++    indepsw.adb<indepsw-gnu.adb"
++    ;;
++esac
++
++# Output: create a Makefile.
++AC_CONFIG_FILES([Makefile])
++
++AC_OUTPUT

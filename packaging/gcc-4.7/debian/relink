@@ -1,0 +1,74 @@
+#! /bin/sh
+#
+# Relink GNAT utilities using the shared library
+#
+
+set -e
+
+pwd=`pwd`
+
+# why?
+chmod a-w build/gcc/ada/rts/*.ali
+
+rm -rf tmp
+ln -s $pwd/build/gcc/ada/rts/libgnat.so.1 tmp/libgnat.so
+
+LD_LIBRARY_PATH=$pwd/tmp
+export LD_LIBRARY_PATH
+
+PATH=$pwd/debian:$pwd/tmp:$PATH
+export PATH
+
+echo "#! /bin/sh" > tmp/dgcc
+echo "$pwd/build/gcc/xgcc -B$pwd/build/gcc/ "'"$@"' >> tmp/dgcc
+chmod 755 tmp/dgcc
+
+echo "#! /bin/sh" > tmp/dgnatlink
+echo "$pwd/build/gcc/gnatlink --GCC=dgcc "'"$@"' >> tmp/dgnatlink
+chmod 755 tmp/dgnatlink
+
+GMCMD="$pwd/build/gcc/gnatmake -I- -Irts -I. -a -m --GNATBIND=$pwd/build/gcc/gnatbind --GNATLINK=dgnatlink --GCC=dgcc"
+
+#cd $pwd/build/gcc/ada
+#make CFLAGS="-O2" CC="../xgcc -B../" STAGE_PREFIX=../ a-link.o a-gmem.o
+#cd $pwd
+
+[ -f build/gcc/gnatmake.old ] || cp -p build/gcc/gnatmake build/gcc/gnatmake.old
+[ -f build/gcc/gnatlink.old ] || cp -p build/gcc/gnatlink build/gcc/gnatlink.old
+
+make -C build/gcc/ada \
+	CFLAGS='-gnatp -gnata -O2 ' \
+	ADA_INCLUDES="-I." \
+	CC="../xgcc -B../" \
+	STAGE_PREFIX=../ \
+    ../gnatmake ../gnatlink
+
+mv gnatmake bgnatmake
+mv gnatlink bgnatlink
+exit 0
+
+cd build/gcc/ada
+for i in ../gnatchop ../gnatcmd \
+    ../gnatkr ../gnatlbr \
+    ../gnatls ../gnatmake \
+    ../gnatprep ../gnatpsys \
+    ../gnatxref ../gnatfind
+do
+  rm -f $i
+  $GMCMD -O2 -gnatp -o $i `basename $i`.adb -largs -L..
+done
+
+rm -f ../gnatmem
+$GMCMD -O2 -gnatp -o ../gnatmem gnatmem.adb -largs -L.. a-gmem.o
+$GMCMD -O2 -gnatp -o ../gnatlink gnatlink -largs -L.. a-link.o
+rm -f ../gnatpsta
+
+make CFLAGS="-O2" CC="../xgcc -B../" a-gettty.o a-deftar.o
+$GMCMD -O2 -gnatp -o ../gnatpsta gnatpsta -largs -L.. a-gettty.o a-deftar.o
+rm -f ../gnatbl
+
+make CFLAGS="-O2" CC="../xgcc -B../" gnatbl.o
+../xgcc -B../ -o ../gnatbl gnatbl.o -L.. -lgnat
+rm -f ../bgnatmake ../bgnatlink ../debian/dgcc ../debian/dgnatlink
+
+chmod +w rts/*.ali

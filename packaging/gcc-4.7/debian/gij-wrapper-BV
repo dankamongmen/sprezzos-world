@@ -1,0 +1,98 @@
+#!/usr/bin/perl -w
+#
+# Starts the GNU Java interpreter.
+#
+# Command-line arguments should be in the style of Sun's Java runtime;
+# these will be converted to gij arguments before being passed to the
+# gij itself.
+#
+# The Debian JNI module directory and any other specified JNI
+# directories will be included on the JNI search path.
+#
+# Copyright (C) 2002-2003 by Ben Burton <bab@debian.org>
+# Based on the original gij-wrapper-3.2 shell script.
+
+use strict;
+
+# The real Java runtime:
+my $javaRuntime = '/usr/bin/gij-@BV@';
+
+# The debian JNI module directory:
+my $debianJNIDir = '/usr/lib/jni';
+
+# The command-line arguments to pass to the real Java runtime:
+my @commandLine;
+
+# The full JNI search path to use:
+my $JNIPath = '';
+
+# Build the command-line from the arguments given.
+my $parsingOptions = 1;
+
+# Flag used to copy argument to -classpath or -cp.
+my $copyNext = 0;
+foreach my $arg (@ARGV) {
+  if (not $parsingOptions) {
+    # We're done parsing options; just copy all remaining arguments directly.
+    push @commandLine, $arg;
+    next;
+  }
+  if ($copyNext) {
+    push @commandLine, $arg;
+    $copyNext = 0;
+    next;
+  }
+
+  # Try to interpret Sun-style options.
+  if ($arg eq '-version') {
+    push @commandLine, '--version';
+  } elsif ($arg eq '-h' or $arg eq '-help') {
+    push @commandLine, '--help';
+  } elsif ($arg eq '-cp' or $arg eq '--cp') {
+    push @commandLine, '-cp';
+    $copyNext = 1;
+  } elsif ($arg eq '-classpath' or $arg eq '--classpath') {
+    push @commandLine, '-classpath';
+    $copyNext = 1;
+  } elsif ($arg =~ /^-Djava.library.path=(.+)$/) {
+    # A component of the JNI search path has been given.
+    if ($JNIPath) {
+      $JNIPath = $JNIPath . ':' . $1;
+    } else {
+      $JNIPath = $1;
+    }
+  } elsif ($arg eq '-jar' or $arg =~ /^-D/) {
+    # Copy the argument directly.
+    push @commandLine, $arg;
+  } elsif ($arg =~ /^-/) {
+    # An unrecognised option has been passed - just drop it.
+  } else {
+    # Some non-option argument has been given.
+    # Stop parsing options at this point.
+    push @commandLine, $arg;
+    $parsingOptions = 0;
+  }
+}
+
+# Add the debian JNI module directory to the JNI search path if it's not
+# already there.
+if ($JNIPath !~ /(^|:)$debianJNIDir($|:)/) {
+  if ($JNIPath) {
+    $JNIPath = $JNIPath . ':' . $debianJNIDir;
+  } else {
+    $JNIPath = $debianJNIDir;
+  }
+}
+
+# Use environment variable $LTDL_LIBRARY_PATH to store the JNI path,
+# since gij uses libltdl to dlopen JNI modules.
+if ($ENV{LTDL_LIBRARY_PATH}) {
+    $ENV{LTDL_LIBRARY_PATH} = $ENV{LTDL_LIBRARY_PATH} . ':' . $JNIPath;
+} else {
+    $ENV{LTDL_LIBRARY_PATH} = $JNIPath;
+}
+
+# Call the real Java runtime.
+my @fullCommandLine = ( $javaRuntime );
+push @fullCommandLine, @commandLine;
+exec @fullCommandLine or exit(1);
