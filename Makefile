@@ -24,7 +24,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
 	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && cut -d- -f-2 \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | cut -d- -f1 && \
 	 echo -n "$(@F)_UPVER:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
@@ -2274,7 +2274,7 @@ $(LIBAV): $(SPREZZ)/libav/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libav-$(libav_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xzvf $(LIBAV).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libcap2
 libcap2:$(LIBCAP2)_$(ARCH).deb
