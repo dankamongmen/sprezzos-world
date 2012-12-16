@@ -1,0 +1,54 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+LDFLAGS += -Wl,-z,defs -Wl,--as-needed
+
+# leave it to the upstream configure to select the opt flag, presumably -O3
+ifeq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+    DEB_OPT_FLAG :=
+endif
+
+# override misc optimization flags which are enabled in configure.ac
+# XXX (LM) I was told sparc32 isn't so hot these days; ultrasparc might be ok
+
+# a) (all arches) this CPU override might not be needed for x86, as $host is
+#    used which should imply i486, but is probably needed for sparc as Debian's
+#    sparc port supports sun4m which is older than ultrasparc and this is
+#    safest anyway; -march should be used instead of -mcpu, but as upstream
+#    uses -mcpu, this is safest
+# XXX -mcpu=base not supported despite gcc(1) claiming so
+#CFLAGS += -mcpu=base
+ifeq ($(DEB_HOST_ARCH),i386)
+CFLAGS += -mcpu=i486
+endif
+ifeq ($(DEB_HOST_ARCH),sparc)
+CFLAGS += -mcpu=v7
+endif
+
+ifeq ($(DEB_HOST_ARCH),powerpc)
+# b) (powerpc) G3s and other OldWorld systems are still supported and don't
+#    have altivec
+CFLAGS += -mno-altivec -UARCH_PPC
+endif
+ifeq ($(DEB_HOST_ARCH),sparc)
+# c) (sparc) Debian's sparc port supports sun4m which is older than ultrasparc;
+#    VIS is an UltraSPARC extension
+CFLAGS += -mno-vis
+endif
+
+# retrieve the shared library package name (with SONAME) from control
+libmpeg2N := $(shell sed -rn 's/^Package:[[:space:]]*(libmpeg2-[0-9]+)[[:space:]]*$$/\1/p' debian/control)
+
+DEB_CONFIGURE_EXTRA_FLAGS += --enable-shared
+DEB_CONFIGURE_EXTRA_FLAGS += --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH)
+DEB_SHLIBDEPS_INCLUDE += debian/$(libmpeg2N)/usr/lib/$(DEB_HOST_MULTIARCH)
+DEB_AC_AUX_DIR := autotools
+DEB_DH_INSTALL_ARGS += --sourcedir=debian/tmp
+
+DEB_MAKE_CHECK_TARGET := check
+
