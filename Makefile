@@ -186,7 +186,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
-	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL)
+	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL) $(LIBV8) \
+	$(XCBUTILKEYSYMS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2594,6 +2595,14 @@ $(XCBUTIL): $(SPREZZ)/xcb-util/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xcb-util_$(xcb-util_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xcb-util-keysyms
+xcb-util-keysyms:$(XCBUTILKEYSYMS)_$(ARCH).deb
+$(XCBUTILKEYSYMS): $(SPREZZ)/xcb-util-keysyms/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xcb-util-keysyms-$(xcb-util-keysyms_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxcb
 libxcb:$(LIBXCB)_$(ARCH).deb
 $(LIBXCB): $(SPREZZ)/libxcb/debian/changelog
@@ -3643,6 +3652,14 @@ $(UWSGI): $(SPREZZ)/uwsgi/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf uwsgi-$(uwsgi_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libv8
+libv8:$(LIBV8)_$(ARCH).deb
+$(LIBV8): $(SPREZZ)/libv8/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libv8_$(libv8_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: valgrind
 valgrind:$(VALGRIND)_$(ARCH).deb
