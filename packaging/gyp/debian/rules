@@ -1,0 +1,65 @@
+#!/usr/bin/make -f
+
+DEB_PYTHON_SYSTEM = pysupport
+
+DEB_REVISION := $(shell echo $(DEB_UPSTREAM_VERSION) | sed 's/^.*svn\(.*\)/\1/')
+DEB_PYTHON_INSTALL_ARGS_ALL += --prefix=/usr
+
+# We can follow gyp either on trunk or use the revision required by Chromium
+FOLLOW_CHROMIUM ?= 0
+
+###############################################################################
+# Tarball (get-orig-source & get-current-source)
+
+ifeq (1,$(FOLLOW_CHROMIUM))
+DEPS    = http://src.chromium.org/svn/trunk/src/DEPS
+URL     = $(shell wget -qO- $(DEPS) | grep gyp.googlecode.com | cut -d\" -f2)
+GYP_URL = $(shell echo $(URL) | cut -d@ -f1)
+GYP_REV = $(shell echo $(URL) | cut -d@ -f2)
+else
+GYP_URL = http://gyp.googlecode.com/svn/trunk
+GYP_REV = $(shell svn info $(GYP_URL) | grep ^Revision: | cut -d' ' -f2)
+endif
+
+TMP_DIR := $(DEB_SOURCE_PACKAGE)-$(shell echo $$$$)
+
+get-orig-source: REVISION = $(GYP_REV)
+get-orig-source: TAG      = $(NULL)
+ifneq (,$(DEBIAN_TAG))
+get-orig-source: TAG      = $(DEBIAN_TAG)
+else
+ifneq (,$(DEBIAN_REV))
+get-orig-source: REVISION = $(DEBIAN_REV)
+endif
+endif
+get-orig-source: gos-all
+
+get-current-source: TAG      = $(NULL)
+get-current-source: REVISION = $(DEB_REVISION)
+ifneq (,$(DEBIAN_REV))
+get-current-source: REVISION = $(DEBIAN_REV)
+endif
+get-current-source: gos-all
+
+gos-all: gos-co gos-pack
+gos-co:
+	rm -rf $(TMP_DIR)
+	mkdir -p $(TMP_DIR)
+	cd $(TMP_DIR) && svn co $(GYP_URL)@$(REVISION)
+
+ifneq (,$(DEBIAN_TAG))
+gos-pack: VERSION  = $(shell echo $(DEBIAN_TAG) | cut -d= -f2)
+else
+gos-pack: REVISION = $(shell cd $(TMP_DIR)/trunk && svn info | grep ^Revision: | cut -d' ' -f2)
+gos-pack: VERSION  = $(shell grep version= $(TMP_DIR)/trunk/setup.py | cut -d\' -f2)~svn$(REVISION)
+endif
+gos-pack:
+	# Pack
+	mv $(TMP_DIR)/trunk $(TMP_DIR)/$(DEB_SOURCE_PACKAGE)-$(VERSION)
+	cd $(TMP_DIR) && tar zcf ../$(DEB_SOURCE_PACKAGE)_$(VERSION).orig.tar.gz --exclude=.svn $(DEB_SOURCE_PACKAGE)-$(VERSION)
+	rm -rf $(TMP_DIR)
+	@echo "# Done (created $(DEB_SOURCE_PACKAGE)_$(VERSION).orig.tar.gz)"
+	@ls -l $(DEB_SOURCE_PACKAGE)_$(VERSION).orig.tar.gz
+
+%:
+	dh $@
