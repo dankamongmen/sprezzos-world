@@ -11,6 +11,14 @@ define logme
 (exec 3>&1; exit `( ( ( $(2) ) 2>&1 3>&-; echo $$? >&4) | tee $(1) >&3) 4>&1`)
 endef
 
+ifeq ($(DEB_BUILD_PROFILE),bootstrap)
+    libc_extra_config_options = $(extra_config_options) --disable-sanity-checks \
+                               --enable-hacker-mode
+endif
+
+ifdef WITH_SYSROOT
+    libc_extra_config_options += --with-headers=$(WITH_SYSROOT)/$(includedir)
+endif
 
 $(patsubst %,mkbuilddir_%,$(EGLIBC_PASSES)) :: mkbuilddir_% : $(stamp)mkbuilddir_%
 $(stamp)mkbuilddir_%: $(stamp)patch $(KERNEL_HEADER_DIR)
@@ -22,37 +30,36 @@ $(patsubst %,configure_%,$(EGLIBC_PASSES)) :: configure_% : $(stamp)configure_%
 $(stamp)configure_%: $(stamp)mkbuilddir_%
 	@echo Configuring $(curpass)
 	rm -f $(DEB_BUILDDIR)/configparms
-	echo "CC = $(call xx,CC)"		>> $(DEB_BUILDDIR)/configparms
-	echo "CXX = $(call xx,CXX)"		>> $(DEB_BUILDDIR)/configparms
-	echo "BUILD_CC = $(BUILD_CC)"		>> $(DEB_BUILDDIR)/configparms
-	echo "BUILD_CXX = $(BUILD_CXX)"		>> $(DEB_BUILDDIR)/configparms
-	echo "CFLAGS = $(HOST_CFLAGS)"		>> $(DEB_BUILDDIR)/configparms
-	echo "ASFLAGS = $(HOST_CFLAGS)"		>> $(DEB_BUILDDIR)/configparms
-	echo "BUILD_CFLAGS = $(BUILD_CFLAGS)" 	>> $(DEB_BUILDDIR)/configparms
-	echo "LDFLAGS = "		 	>> $(DEB_BUILDDIR)/configparms
-	echo "BASH := /bin/bash"		>> $(DEB_BUILDDIR)/configparms
-	echo "KSH := /bin/bash"			>> $(DEB_BUILDDIR)/configparms
-	echo "SHELL := /bin/bash"		>> $(DEB_BUILDDIR)/configparms
-	echo "LIBGD = no"			>> $(DEB_BUILDDIR)/configparms
-	echo "have-fpie = $(fpie)"              >> $(DEB_BUILDDIR)/configparms
-	echo "bindir = $(bindir)"		>> $(DEB_BUILDDIR)/configparms
-	echo "datadir = $(datadir)"		>> $(DEB_BUILDDIR)/configparms
-	echo "localedir = $(localedir)" 	>> $(DEB_BUILDDIR)/configparms
-	echo "sysconfdir = $(sysconfdir)" 	>> $(DEB_BUILDDIR)/configparms
-	echo "libexecdir = $(libexecdir)" 	>> $(DEB_BUILDDIR)/configparms
-	echo "rootsbindir = $(rootsbindir)" 	>> $(DEB_BUILDDIR)/configparms
+	echo "CC = $(call xx,CC)"                 >> $(DEB_BUILDDIR)/configparms
+	echo "CXX = $(call xx,CXX)"               >> $(DEB_BUILDDIR)/configparms
+	echo "BUILD_CC = $(BUILD_CC)"             >> $(DEB_BUILDDIR)/configparms
+	echo "BUILD_CXX = $(BUILD_CXX)"           >> $(DEB_BUILDDIR)/configparms
+	echo "CFLAGS = $(HOST_CFLAGS)"            >> $(DEB_BUILDDIR)/configparms
+	echo "ASFLAGS = $(HOST_CFLAGS)"           >> $(DEB_BUILDDIR)/configparms
+	echo "BUILD_CFLAGS = $(BUILD_CFLAGS)"     >> $(DEB_BUILDDIR)/configparms
+	echo "LDFLAGS = "                         >> $(DEB_BUILDDIR)/configparms
+	echo "BASH := /bin/bash"                  >> $(DEB_BUILDDIR)/configparms
+	echo "KSH := /bin/bash"                   >> $(DEB_BUILDDIR)/configparms
+	echo "SHELL := /bin/bash"                 >> $(DEB_BUILDDIR)/configparms
+	echo "LIBGD = no"                         >> $(DEB_BUILDDIR)/configparms
+	echo "bindir = $(bindir)"                 >> $(DEB_BUILDDIR)/configparms
+	echo "datadir = $(datadir)"               >> $(DEB_BUILDDIR)/configparms
+	echo "localedir = $(localedir)"           >> $(DEB_BUILDDIR)/configparms
+	echo "sysconfdir = $(sysconfdir)"         >> $(DEB_BUILDDIR)/configparms
+	echo "libexecdir = $(libexecdir)"         >> $(DEB_BUILDDIR)/configparms
+	echo "rootsbindir = $(rootsbindir)"       >> $(DEB_BUILDDIR)/configparms
 	echo "includedir = $(call xx,includedir)" >> $(DEB_BUILDDIR)/configparms
-	echo "docdir = $(docdir)"		>> $(DEB_BUILDDIR)/configparms
-	echo "mandir = $(mandir)"		>> $(DEB_BUILDDIR)/configparms
-	echo "sbindir = $(sbindir)"		>> $(DEB_BUILDDIR)/configparms
-	echo "libdir = $(call xx,libdir)"	>> $(DEB_BUILDDIR)/configparms
-	echo "slibdir = $(call xx,slibdir)"	>> $(DEB_BUILDDIR)/configparms
-	echo "rtlddir = $(call xx,rtlddir)"	>> $(DEB_BUILDDIR)/configparms
+	echo "docdir = $(docdir)"                 >> $(DEB_BUILDDIR)/configparms
+	echo "mandir = $(mandir)"                 >> $(DEB_BUILDDIR)/configparms
+	echo "sbindir = $(sbindir)"               >> $(DEB_BUILDDIR)/configparms
+	echo "vardbdir = $(vardbdir)"             >> $(DEB_BUILDDIR)/configparms
+	echo "libdir = $(call xx,libdir)"         >> $(DEB_BUILDDIR)/configparms
+	echo "slibdir = $(call xx,slibdir)"       >> $(DEB_BUILDDIR)/configparms
+	echo "rtlddir = $(call xx,rtlddir)"       >> $(DEB_BUILDDIR)/configparms
 
 	# Prevent autoconf from running unexpectedly by setting it to false.
 	# Also explicitly pass CC down - this is needed to get -m64 on
 	# Sparc, et cetera.
-
 	configure_build=$(call xx,configure_build); \
 	if [ $(call xx,configure_target) = $$configure_build ]; then \
 	  echo "Checking that we're running at least kernel version: $(call xx,MIN_KERNEL_SUPPORTED)"; \
@@ -75,7 +82,8 @@ $(stamp)configure_%: $(stamp)mkbuilddir_%
 		--enable-profile \
 		--without-selinux \
 		--enable-stackguard-randomization \
-		--with-pkgversion="SprezzOS EGLIBC $(DEB_VERSION)" \
+		--enable-obsolete-rpc \
+		--with-pkgversion="Debian EGLIBC $(DEB_VERSION)" \
 		--with-bugurl="http://www.debian.org/Bugs/" \
 		$(call xx,with_headers) $(call xx,extra_config_options))
 	touch $@
@@ -83,6 +91,10 @@ $(stamp)configure_%: $(stamp)mkbuilddir_%
 $(patsubst %,build_%,$(EGLIBC_PASSES)) :: build_% : $(stamp)build_%
 $(stamp)build_%: $(stamp)configure_%
 	@echo Building $(curpass)
+
+ifeq ($(DEB_BUILD_PROFILE),bootstrap)
+	$(MAKE) cross-compiling=yes -C $(DEB_BUILDDIR) $(NJOBS) csu/subdir_lib
+else
 	$(call logme, -a $(log_build), $(MAKE) -C $(DEB_BUILDDIR) $(NJOBS))
 	$(call logme, -a $(log_build), echo "---------------" ; echo -n "Build ended: " ; date --rfc-2822)
 	if [ $(curpass) = libc ]; then \
@@ -92,6 +104,7 @@ $(stamp)build_%: $(stamp)configure_%
 	  $(MAKE) -C $(DEB_BUILDDIR) $(NJOBS) \
 	    objdir=$(DEB_BUILDDIR) install_root=$(CURDIR)/build-tree/locales-all \
 	    localedata/install-locales; \
+	  sync; \
 	  cd $(CURDIR)/build-tree/locales-all/usr/lib/locale ; \
 	  fdupes -1 -H -q -R . | while read line ; do \
 	    set -- $${line} ; \
@@ -105,6 +118,7 @@ $(stamp)build_%: $(stamp)configure_%
 	    done ; \
 	  done ; \
 	fi
+endif
 	touch $@
 
 $(patsubst %,check_%,$(EGLIBC_PASSES)) :: check_% : $(stamp)check_%
@@ -121,7 +135,7 @@ $(stamp)check_%: $(stamp)build_%
 	  echo "Testsuite disabled for $(curpass), skipping tests."; \
 	  echo "Tests have been disabled." > $(log_results) ; \
 	else \
-	  echo Testing $(curpass); \
+	  echo Testing $(curpass) / $(log_results); \
 	  find $(DEB_BUILDDIR) -name '*.out' -exec rm {} ';' ; \
 	  LANG="" TIMEOUTFACTOR="50" $(MAKE) -C $(DEB_BUILDDIR) -k check 2>&1 | tee $(log_test); \
 	  chmod +x debian/testsuite-checking/convertlog.sh ; \
@@ -129,25 +143,45 @@ $(stamp)check_%: $(stamp)build_%
 	  if test -f $(log_expected) ; then \
 	    echo "***************" ; \
 	    chmod +x debian/testsuite-checking/compare.sh ; \
-	    debian/testsuite-checking/compare.sh $(log_expected) $(log_results) ; \
+	    debian/testsuite-checking/compare.sh $(log_expected) $(log_results) $(DEB_BUILDDIR) ; \
 	    echo "***************" ; \
 	  else \
 	    echo "*** WARNING ***" ; \
-	    echo "Please generate expected testsuite results for this arch!" ; \
+	    echo "Please generate expected testsuite results for this arch ($(log_expected))!" ; \
 	    echo "*** WARNING ***" ; \
 	  fi ; \
 	fi
+	@n=$$(grep '^make.* Error' $(log_test) | wc -l || true); \
+	  echo "TEST SUMMARY $(log_test) ($$n matching lines)"; \
+	  grep '^make.* Error' $(log_test) || true; \
+	  echo "END TEST SUMMARY $(log_test)"
 	touch $@
 
 $(patsubst %,install_%,$(EGLIBC_PASSES)) :: install_% : $(stamp)install_%
 $(stamp)install_%: $(stamp)check_%
 	@echo Installing $(curpass)
 	rm -rf $(CURDIR)/debian/tmp-$(curpass)
+ifeq ($(DEB_BUILD_PROFILE),bootstrap)
+	$(call logme, -a $(log_build), $(MAKE) -C $(DEB_BUILDDIR) $(NJOBS)	\
+	    cross-compiling=yes install_root=$(CURDIR)/debian/tmp-$(curpass)	\
+	    install-bootstrap-headers=yes install-headers )
+
+	install -d $(CURDIR)/debian/tmp-$(curpass)/lib
+	install -m 644 $(DEB_BUILDDIR)/csu/crt[1in].o $(CURDIR)/debian/tmp-$(curpass)/lib
+	${CC} -nostdlib -nostartfiles -shared -x c /dev/null \
+	        -o $(CURDIR)/debian/tmp-$(curpass)/lib/libc.so
+else
+	case "$(curpass)" in \
+	        armhf) \
+	                cp -p /lib/arm-linux-gnueabihf/libgcc_s.so.1 $(DEB_BUILDDIR)/ ;; \
+	        armel) \
+	                cp -p /lib/arm-linux-gnueabi/libgcc_s.so.1 $(DEB_BUILDDIR)/ ;; \
+	esac
 	$(MAKE) -C $(DEB_BUILDDIR) \
 	  install_root=$(CURDIR)/debian/tmp-$(curpass) install
 
 	# Generate gconv-modules.cache
-	case $(curpass)-$(call xx,slibdir) in libc-* | *-/lib32 | *-/lib64) \
+	case $(curpass)-$(call xx,slibdir) in libc-* | *-/lib32 | *-/lib64 | *-/libx32) \
 	  /usr/sbin/iconvconfig --nostdlib --prefix=$(CURDIR)/debian/tmp-$(curpass) \
 				-o $(CURDIR)/debian/tmp-$(curpass)/$(call xx,libdir)/gconv/gconv-modules.cache \
 				$(call xx,libdir)/gconv \
@@ -185,7 +219,7 @@ $(stamp)install_%: $(stamp)check_%
 	# the multiarch ld.so doesn't look at the (non-standard) /lib32, so we
 	# need path compatibility when biarch and multiarch packages are both
 	# installed.
-	case $(call xx,slibdir) in /lib32 | /lib64) \
+	case $(call xx,slibdir) in /lib32 | /lib64 | /libx32) \
 	  mkdir -p debian/tmp-$(curpass)/etc/ld.so.conf.d; \
 	  conffile="debian/tmp-$(curpass)/etc/ld.so.conf.d/zz_$(curpass)-biarch-compat.conf"; \
 	  echo "# Legacy biarch compatibility support" > $$conffile; \
@@ -223,6 +257,7 @@ $(stamp)install_%: $(stamp)check_%
 	fi
 	
 	$(call xx,extra_install)
+endif
 	touch $@
 
 $(stamp)doc: $(stamp)patch

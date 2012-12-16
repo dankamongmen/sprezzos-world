@@ -1,11 +1,5 @@
 libc_add-ons = ports nptl $(add-ons)
 
-# Use gcc-4.6 on armhf to get correct atomic operations in thumb-2 mode
-ifeq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
-CC     = gcc-4.6
-CXX    = g++-4.6
-endif
-
 # Install a compat symlink so old binaries keep working:
 define libc6_extra_pkg_install
 mkdir -p debian/libc6/lib/arm-linux-gnueabihf

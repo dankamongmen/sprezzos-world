@@ -1,21 +1,3 @@
-# This is so horribly wrong.  libc-pic does a whole pile of gratuitous
-# renames.  There's very little we can do for now.  Maybe after
-# Sarge releases we can consider breaking packages, but certainly not now.
-
-$(stamp)binaryinst_$(libc)-pic:: debhelper
-	@echo Running special kludge for $(libc)-pic
-	dh_testroot
-	dh_installdirs -p$(curpass)
-	install --mode=0644 build-tree/$(DEB_HOST_ARCH)-libc/libc_pic.a debian/$(libc)-pic/$(libdir)/.
-	install --mode=0644 build-tree/$(DEB_HOST_ARCH)-libc/libc.map debian/$(libc)-pic/$(libdir)/libc_pic.map
-	install --mode=0644 build-tree/$(DEB_HOST_ARCH)-libc/elf/soinit.os debian/$(libc)-pic/$(libdir)/libc_pic/soinit.o
-	install --mode=0644 build-tree/$(DEB_HOST_ARCH)-libc/elf/sofini.os debian/$(libc)-pic/$(libdir)/libc_pic/sofini.o
-
-	install --mode=0644 build-tree/$(DEB_HOST_ARCH)-libc/math/libm_pic.a debian/$(libc)-pic/$(libdir)/.
-	install --mode=0644 build-tree/$(DEB_HOST_ARCH)-libc/libm.map debian/$(libc)-pic/$(libdir)/libm_pic.map
-	install --mode=0644 build-tree/$(DEB_HOST_ARCH)-libc/resolv/libresolv_pic.a debian/$(libc)-pic/$(libdir)/.
-	install --mode=0644 build-tree/$(DEB_HOST_ARCH)-libc/libresolv.map debian/$(libc)-pic/$(libdir)/libresolv_pic.map
-
 # Some per-package extra files to install.
 define libc-bin_extra_debhelper_pkg_install
   	# dh_installmanpages thinks that .so is a language.
@@ -50,6 +32,13 @@ $(patsubst %,$(stamp)binaryinst_%,$(DEB_ARCH_REGULAR_PACKAGES) $(DEB_INDEP_REGUL
 	dh_lintian -p $(curpass)
 	dh_link -p$(curpass)
 	dh_bugfiles -p$(curpass)
+
+	if test "$(curpass)" = "libc-bin"; then			\
+	  mv debian/$(curpass)/sbin/ldconfig			\
+	    debian/$(curpass)/sbin/ldconfig.real;		\
+	  install -m755 -o0 -g0 debian/local/ldconfig_wrap	\
+	    debian/$(curpass)/sbin/ldconfig;			\
+	fi
 
 	# extra_debhelper_pkg_install is used for debhelper.mk only.
 	# when you want to install extra packages, use extra_pkg_install.
@@ -92,6 +81,18 @@ ifeq ($(filter nostrip,$(DEB_BUILD_OPTIONS)),)
 	    dh_strip -p$(curpass) -Xlibpthread;					\
 	  fi									\
 	fi
+
+	# ARM archs always use multiarch locations, don't let libc6-dbg conflict
+	if test "$(curpass)" = "$(libc)-dbg"; then				\
+	  if test "$(DEB_HOST_ARCH)" = "armel"; then				\
+	    rm -rf debian/$(curpass)/usr/lib/debug/lib/arm-linux-gnueabihf;	\
+	    rm -rf debian/$(curpass)/usr/lib/debug/usr/lib/arm-linux-gnueabihf;	\
+	  fi;									\
+	  if test "$(DEB_HOST_ARCH)" = "armhf"; then				\
+	    rm -rf debian/$(curpass)/usr/lib/debug/lib/arm-linux-gnueabi;	\
+	    rm -rf debian/$(curpass)/usr/lib/debug/usr/lib/arm-linux-gnueabi;	\
+	  fi;									\
+	fi
 endif
 
 	dh_compress -p$(curpass)
@@ -118,10 +119,12 @@ endif
 	dh_md5sums -p$(curpass)
 
 	# We adjust the compression format depending on the package:
-	# - libc*-dbg and locales-all contains highly compressible data
+	# - libc* contains highly compressible data, but packages needed during
+	#   debootstrap have to be compressed with gzip
+	# - locales-all and locales contains highly compressible data
 	# - other packages use the default gzip format
 	case $(curpass) in \
-	libc*-dbg | locales-all) \
+	libc*-dbg | libc*-pic | libc*-prof | locales-all | locales) \
 		dh_builddeb -p$(curpass) -- -Zxz -z7 ;; \
 	*) \
 		dh_builddeb -p$(curpass) ;; \
@@ -186,6 +189,32 @@ $(stamp)debhelper-common:
 
 	touch $@
 
+ifeq ($(DEB_BUILD_PROFILE),bootstrap)
+$(patsubst %,debhelper_%,$(EGLIBC_PASSES)) :: debhelper_% : $(stamp)debhelper_%
+$(stamp)debhelper_%: $(stamp)debhelper-common $(stamp)install_%
+	libdir=$(call xx,libdir) ; \
+	slibdir=$(call xx,slibdir) ; \
+	rtlddir=$(call xx,rtlddir) ; \
+	curpass=$(curpass) ; \
+	templates="libc-dev" ;\
+	pass="" ; \
+	suffix="" ;\
+	for t in $$templates ; do \
+	  for s in debian/$$t$$pass.* ; do \
+	    t=`echo $$s | sed -e "s#libc\(.*\)$$pass#$(libc)\1$$suffix#"` ; \
+	    if [ "$$s" != "$$t" ] ; then \
+	      cp $$s $$t ; \
+	    fi ; \
+	    sed -e "s#TMPDIR#debian/tmp-$$curpass#g" -i $$t; \
+	    sed -e "s#RTLDDIR#$$rtlddir#g" -i $$t; \
+	    sed -e "s#SLIBDIR#$$slibdir#g" -i $$t; \
+	  done ; \
+	done
+
+	egrep -v "LIBDIR.*.a " debian/$(libc)-dev.install >debian/$(libc)-dev.install-
+	mv debian/$(libc)-dev.install- debian/$(libc)-dev.install
+	sed -e "s#LIBDIR#lib#g" -i debian/$(libc)-dev.install
+else
 $(patsubst %,debhelper_%,$(EGLIBC_PASSES)) :: debhelper_% : $(stamp)debhelper_%
 $(stamp)debhelper_%: $(stamp)debhelper-common $(stamp)install_%
 	libdir=$(call xx,libdir) ; \
@@ -199,7 +228,7 @@ $(stamp)debhelper_%: $(stamp)debhelper-common $(stamp)install_%
 	    pass="" \
 	    suffix="" \
 	    ;; \
-	  *:/lib32 | *:/lib64) \
+	  *:/lib32 | *:/lib64 | *:/libx32 | *:/lib/arm-linux-gnueabi*) \
 	    templates="libc libc-dev" \
 	    pass="-alt" \
 	    suffix="-$(curpass)" \
@@ -222,15 +251,17 @@ $(stamp)debhelper_%: $(stamp)debhelper-common $(stamp)install_%
 	    sed -e "s#LIBDIR#$$libdir#g" -i $$t; \
 	    sed -e "s#FLAVOR#$$curpass#g" -i $$t; \
 	    sed -e "s#RTLD_SO#$$rtld_so#g" -i $$t ; \
+	    sed -e "s#MULTIARCHDIR#$$DEB_HOST_MULTIARCH#g" -i $$t ; \
 	  done ; \
 	done
+endif
 
 	touch $@
 
 clean::
 	dh_clean 
 
-	rm -f debian/*.install*
+	rm -f debian/*.install
 	rm -f debian/*.install.*
 	rm -f debian/*.manpages
 	rm -f debian/*.links
@@ -250,5 +281,6 @@ clean::
 	rm -f debian/*.lintian-overrides
 	rm -f debian/*.NEWS
 	rm -f debian/*.README.Debian
+	rm -f debian/*.triggers
 
 	rm -f $(stamp)binaryinst*

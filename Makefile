@@ -186,7 +186,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
 	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL) $(LIBV8) \
 	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47) $(SILGRAPHITE) $(EWEBKIT) \
-	$(OBEXFS) $(LIBTIRPC)
+	$(OBEXFS) $(LIBTIRPC) $(KEYUTILS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2053,6 +2053,14 @@ $(KBD): $(SPREZZ)/kbd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf kbd-$(kbd_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: keyutils
+keyutils:$(KEYUTILS)_$(ARCH).deb
+$(KEYUTILS): $(SPREZZ)/keyutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf keyutils-$(keyutils_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: kismet
 kismet:$(KISMET)_$(ARCH).deb

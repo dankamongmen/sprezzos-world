@@ -76,6 +76,13 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 NJOBS := -j $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 endif
 
+# use the package settings, not the settings from the environment
+define unsetenv
+  unexport $(1)
+  $(1) =
+endef
+$(foreach v, CPPFLAGS CFLAGS CXXFLAGS LDFLAGS, $(if $(filter environment,$(origin $(v))),$(eval $(call unsetenv, $(v)))))
+
 # Default setup
 EGLIBC_PASSES ?= libc
 
@@ -90,24 +97,23 @@ includedir=$(prefix)/include
 docdir=$(prefix)/share/doc
 mandir=$(prefix)/share/man
 sbindir=$(prefix)/sbin
+vardbdir=/var/lib/misc
 rtlddir=/lib
 slibdir=/lib/$(DEB_HOST_MULTIARCH)
 libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
 
-BUILD_CC = gcc
-BUILD_CXX = g++
+
+BASE_CC = gcc
+BASE_CXX = g++
+DEB_GCC_VERSION ?= -4.6
 
 RUN_TESTSUITE = yes
 
-# Set CC and CXX for cross-compiling
-ifneq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
-CC     = $(DEB_HOST_GNU_TYPE)-gcc$(DEB_GCC_VERSION)
-CXX    = $(DEB_HOST_GNU_TYPE)-g++$(DEB_GCC_VERSION)
-else
-DEB_GCC_VERSION ?= -4.4
-CC     = gcc$(DEB_GCC_VERSION)
-CXX    = g++$(DEB_GCC_VERSION)
-endif
+# Set cross and native compiler names, including version
+CC     = $(DEB_HOST_GNU_TYPE)-$(BASE_CC)$(DEB_GCC_VERSION)
+CXX    = $(DEB_HOST_GNU_TYPE)-$(BASE_CXX)$(DEB_GCC_VERSION)
+BUILD_CC = $(DEB_BUILD_GNU_TYPE)-$(BASE_CC)
+BUILD_CXX = $(DEB_BUILD_GNU_TYPE)-$(BASE_CXX)
 
 BUILD_CFLAGS = -O2 -g
 HOST_CFLAGS = -pipe -O2 -fstrict-aliasing -g $(call xx,extra_cflags)
@@ -128,13 +134,22 @@ log_expected = debian/testsuite-checking/expected-results-$(call xx,configure_ta
 # Which build pass are we on?
 curpass = $(filter-out %_,$(subst _,_ ,$@))
 
-DEB_ARCH_REGULAR_PACKAGES = $(libc) $(libc)-dev $(libc)-dbg $(libc)-prof $(libc)-pic libc-bin libc-dev-bin multiarch-support
-DEB_INDEP_REGULAR_PACKAGES = glibc-doc eglibc-source locales
-DEB_UDEB_PACKAGES = $(libc)-udeb libnss-dns-udeb libnss-files-udeb
-
-## Locales can only be pre-generated during native compiles
-ifeq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
-DEB_ARCH_REGULAR_PACKAGES += locales-all
+# Provide backward compatibility for the old DEB_STAGE for now
+ifeq ($(DEB_STAGE),stage1)
+  DEB_BUILD_PROFILE = bootstrap
+endif
+ifeq ($(DEB_BUILD_PROFILE),bootstrap)
+  DEB_ARCH_REGULAR_PACKAGES = $(libc)-dev
+  DEB_INDEP_REGULAR_PACKAGES = 
+  DEB_UDEB_PACKAGES = 
+else
+  DEB_ARCH_REGULAR_PACKAGES = $(libc) $(libc)-dev $(libc)-dbg $(libc)-prof $(libc)-pic libc-bin libc-dev-bin multiarch-support
+  DEB_INDEP_REGULAR_PACKAGES = glibc-doc eglibc-source locales
+  DEB_UDEB_PACKAGES = $(libc)-udeb libnss-dns-udeb libnss-files-udeb
+  ## Locales can only be pre-generated during native compiles
+  ifeq ($(DEB_HOST_ARCH),$(DEB_BUILD_ARCH))
+    DEB_ARCH_REGULAR_PACKAGES += locales-all
+  endif
 endif
 
 # Generic kernel version check
@@ -144,7 +159,7 @@ define kernel_check
 fi)
 endef
 
-# Include libidn for the NPTL target.
+# Include libidn for both NPTL and LinuxThreads targets.
 standard-add-ons = libidn,
 
 # Pull in all the per-arch magic!
@@ -169,20 +184,25 @@ NODEBUG_libc6-sparc64 = 1
 NODEBUG_libc6-mips64 = 1
 NODEBUG_nscd = 1
 
-ifeq ($(threads),yes)
-DEB_ARCH_REGULAR_PACKAGES += nscd
+ifneq ($(DEB_BUILD_PROFILE),bootstrap)
+  ifeq ($(threads),yes)
+  DEB_ARCH_REGULAR_PACKAGES += nscd
+  endif
 endif
 
 # And now the rules...
 include debian/rules.d/*.mk
 
 clean:: unpatch
-	make -C $(CURDIR)/debian/local/memcpy-wrapper clean
+	make -C $(CURDIR)/linuxthreads/man clean
 	rm -f $(CURDIR)/po/*.mo
 	rm -rf $(patsubst %,debian/tmp-%,$(EGLIBC_PASSES))
 	rm -rf $(build-tree)
 	rm -rf $(stamp)
 	rm -rf debian/include
+	rm -f debian/control.in/libc0.1 debian/control.in/libc0.3 \
+		debian/control.in/libc6 debian/control.in/libc6.1 \
+		debian/*.preinst.* debian/locales.bug-presubj
 
 # Required Debian targets
 build-arch: $(stamp)info \

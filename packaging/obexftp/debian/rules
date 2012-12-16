@@ -1,0 +1,162 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g -DOBEXFTP_DEBUG=5
+endif
+
+bindings_configure_flags=
+static_build_flags=
+compile_shared_libs=yes
+COMPILE_PERL_BINDING=yes
+COMPILE_PYTHON_BINDING=yes
+COMPILE_RUBY_BINDING=yes
+COMPILE_TCL_BINDING=no
+ifeq ($(COMPILE_PERL_BINDING),yes)
+	bindings_configure_flags += --enable-perl
+	compile_shared_libs=yes
+else
+	bindings_configure_flags += --disable-perl
+endif
+ifeq ($(COMPILE_PYTHON_BINDING),yes)
+	bindings_configure_flags += --enable-python
+	compile_shared_libs=yes
+else
+	bindings_configure_flags += --disable-python
+endif
+ifeq ($(COMPILE_RUBY_BINDING),yes)
+	bindings_configure_flags += --enable-ruby
+	compile_shared_libs=yes
+else
+	bindings_configure_flags += --disable-ruby
+endif
+ifeq ($(COMPILE_TCL_BINDING),yes)
+	CFLAGS += -I/usr/include/tcl8.4
+	bindings_configure_flags += --enable-tcl
+	compile_shared_libs=yes
+else
+	bindings_configure_flags += --disable-tcl
+endif
+
+ifneq ($(compile_shared_libs),yes)
+	static_build_flags += --enable-static --disable-shared --with-pic
+endif
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+else
+CROSS= --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+include /usr/share/quilt/quilt.make
+
+config.status: configure $(QUILT_STAMPFN)
+	dh_testdir
+	CFLAGS="$(CFLAGS)" ./configure $(CROSS) \
+	            --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info \
+	            $(bindings_configure_flags) \
+	            $(static_build_flags) \
+	            --disable-rpath --enable-swig
+
+build: build-stamp
+build-stamp: config.status
+	dh_testdir
+	$(MAKE)
+	doxygen
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	debian/rules unpatch
+	rm -rf doc/api
+	$(MAKE) -C doc clean || true
+	$(MAKE) distclean || true
+	rm -f swig/python/__init__.py[co]
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp mandir=/usr/share/man INSTALLDIRS=vendor
+
+ifeq ($(COMPILE_RUBY_BINDING),yes)
+	-rm -rf debian/tmp/usr/lib/ruby
+	mv debian/tmp/usr/local/lib/site_ruby debian/tmp/usr/lib/ruby
+	rm -rf debian/tmp/usr/local/ 
+endif
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install --sourcedir=debian/tmp --autodest --fail-missing -X.la
+	dh_installdocs -XCOPYING -XINSTALL -Xobexftp.1
+	dh_installman
+	dh_installchangelogs ChangeLog
+	dh_compress
+	dh_link
+#running dh_fixperms is needed here to fix permission of the perl module
+	dh_fixperms
+	dh_strip
+
+ifeq ($(COMPILE_PERL_BINDING),yes)
+	find $(CURDIR)/debian/*/usr/lib/perl5 -name *.so -type f -exec chrpath -d {} \;
+#run it again to make sure that permissions are correct
+	dh_fixperms
+	dh_perl -plibobexftp-perl
+	dh_installexamples -plibobexftp-perl examples/perl_*.pl
+endif
+
+ifeq ($(COMPILE_PYTHON_BINDING),yes)
+	dh_pycentral -ppython-obexftp
+	dh_installexamples -ppython-obexftp examples/python_*.py
+endif
+
+ifeq ($(COMPILE_RUBY_BINDING),yes)
+	dh_installexamples -plibobexftp-ruby examples/ruby_*.rb
+endif
+
+ifeq ($(COMPILE_TCL_BINDING),yes)
+	dh_installexamples -plibobexftp0-dev examples/tcl_*.tcl
+endif
+
+	dh_installexamples -plibobexftp0-dev examples/c_example*.c
+	chmod 0644 debian/libobexftp0-dev/usr/share/doc/libobexftp0-dev/examples/c_example*.c
+
+ifeq ($(compile_shared_libs),yes)
+	dh_makeshlibs
+	dh_shlibdeps -L libbfb0 -L libmulticobex1 -L libobexftp0 \
+	             -l debian/libbfb0/usr/lib:debian/libmulticobex1/usr/lib:debian/libobexftp0/usr/lib
+else
+	dh_shlibdeps
+endif
+
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install patch unpatch

@@ -1,0 +1,234 @@
+Add pthread_hurd_cond_wait_np, needed by translators with pthreads.
+
+diff --git a/libpthread/Makefile b/libpthread/Makefile
+index c1d8d33..2c7645d 100644
+--- a/libpthread/Makefile
++++ b/libpthread/Makefile
+@@ -114,6 +114,7 @@ libpthread-routines := pt-attr pt-attr-destroy pt-attr-getdetachstate	    \
+ 	pt-cond-signal							    \
+ 	pt-cond-wait							    \
+ 	pt-cond-timedwait						    \
++	pt-hurd-cond-wait						    \
+ 									    \
+ 	pt-stack-alloc							    \
+ 	pt-thread-alloc							    \
+--- a/Versions.def
++++ b/Versions.def
+@@ -98,6 +98,7 @@ libpthread {
+   GLIBC_2.6
+   GLIBC_2.11
+   GLIBC_2.12
++  GLIBC_2.13_DEBIAN_38
+   GLIBC_PRIVATE
+ }
+ libresolv {
+index 77eb870..ca975e0 100644
+--- a/libpthread/Versions
++++ b/libpthread/Versions
+@@ -129,4 +129,7 @@ libpthread {
+     __pthread_spin_lock; __pthread_spin_trylock; __pthread_spin_unlock;
+     _pthread_spin_lock;
+   }
++  GLIBC_2.13_DEBIAN_38 {
++    pthread_hurd_cond_wait_np;
++  }
+ }
+diff --git a/libpthread/pthread/pt-internal.h b/libpthread/pthread/pt-internal.h
+index 067fb73..291baf5 100644
+--- a/libpthread/pthread/pt-internal.h
++++ b/libpthread/pthread/pt-internal.h
+@@ -292,8 +292,9 @@ extern error_t __pthread_sigstate (struct __pthread *__restrict thread, int how,
+ 				   int clear_pending);
+ 
+ 
+-/* Default thread attributes.  */
+-extern const struct __pthread_attr __pthread_default_attr;
++/* Default thread attributes.
++   FIXME Normally const, see sysdeps/mach/hurd/pt-sysdep.c.  */
++extern struct __pthread_attr __pthread_default_attr;
+ 
+ /* Default barrier attributes.  */
+ extern const struct __pthread_barrierattr __pthread_default_barrierattr;
+diff --git a/libpthread/sysdeps/generic/pt-attr.c b/libpthread/sysdeps/generic/pt-attr.c
+index e501dc7..4f95918 100644
+--- a/libpthread/sysdeps/generic/pt-attr.c
++++ b/libpthread/sysdeps/generic/pt-attr.c
+@@ -24,7 +24,8 @@
+ 
+ #include <pt-internal.h>
+ 
+-const struct __pthread_attr __pthread_default_attr =
++/* FIXME Normally const, see sysdeps/mach/hurd/pt-sysdep.c.  */
++struct __pthread_attr __pthread_default_attr =
+ {
+   schedparam: { sched_priority: 0 },
+   stacksize: PTHREAD_STACK_DEFAULT,
+diff --git a/libpthread/sysdeps/mach/hurd/bits/pthread-np.h b/libpthread/sysdeps/mach/hurd/bits/pthread-np.h
+new file mode 100644
+index 0000000..9817a06
+--- /dev/null
++++ b/libpthread/sysdeps/mach/hurd/bits/pthread-np.h
+@@ -0,0 +1,32 @@
++/* Non-portable functions. Hurd on Mach version.
++   Copyright (C) 2008 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Library General Public License as
++   published by the Free Software Foundation; either version 2 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Library General Public License for more details.
++
++   You should have received a copy of the GNU Library General Public
++   License along with the GNU C Library; see the file COPYING.LIB.  If not,
++   write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
++   Boston, MA 02111-1307, USA.  */
++
++/*
++ * Never include this file directly; use <pthread.h> or <cthreads.h> instead.
++ */
++
++#ifndef _BITS_PTHREAD_NP_H
++#define _BITS_PTHREAD_NP_H	1
++
++/* Same as pthread_cond_wait, but for Hurd-specific cancellation.
++   See hurd_thread_cancel.  */
++extern int pthread_hurd_cond_wait_np (pthread_cond_t *__restrict __cond,
++				      pthread_mutex_t *__restrict __mutex);
++
++#endif /* bits/pthread-np.h */
+diff --git a/libpthread/sysdeps/mach/hurd/pt-hurd-cond-wait.c b/libpthread/sysdeps/mach/hurd/pt-hurd-cond-wait.c
+new file mode 100644
+index 0000000..d2b5847
+--- /dev/null
++++ b/libpthread/sysdeps/mach/hurd/pt-hurd-cond-wait.c
+@@ -0,0 +1,93 @@
++/* pthread_hurd_cond_wait.  Hurd-specific wait on a condition.
++   Copyright (C) 2012 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Library General Public License as
++   published by the Free Software Foundation; either version 2 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Library General Public License for more details.
++
++   You should have received a copy of the GNU Library General Public
++   License along with the GNU C Library; see the file COPYING.LIB.  If not,
++   write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
++   Boston, MA 02111-1307, USA.  */
++
++#include <pthread.h>
++#include <assert.h>
++#include <hurd/signal.h>
++
++#include <pt-internal.h>
++
++int
++pthread_hurd_cond_wait_np (pthread_cond_t *cond, pthread_mutex_t *mutex)
++{
++  /* This function will be called by hurd_thread_cancel while we are blocked
++     We wake up all threads blocked on COND, so our thread will wake up and
++     notice the cancellation flag.  */
++  void cancel_me (void)
++    {
++      pthread_cond_broadcast (cond);
++    }
++  struct hurd_sigstate *ss = _hurd_self_sigstate ();
++  struct __pthread *self = _pthread_self ();
++  int cancel;
++
++  assert (ss->intr_port == MACH_PORT_NULL); /* Sanity check for signal bugs. */
++
++  /* Atomically enqueue our thread on the condition variable's queue of
++     waiters, and mark our sigstate to indicate that `cancel_me' must be
++     called to wake us up.  We must hold the sigstate lock while acquiring
++     the condition variable's lock and tweaking it, so that
++     hurd_thread_cancel can never suspend us and then deadlock in
++     pthread_cond_broadcast waiting for the condition variable's lock.  */
++
++  __spin_lock (&ss->lock);
++  __pthread_spin_lock (&cond->__lock);
++  cancel = ss->cancel;
++  if (cancel)
++    /* We were cancelled before doing anything.  Don't block at all.  */
++    ss->cancel = 0;
++  else
++    {
++      /* Put us on the queue so that pthread_cond_broadcast will know to wake
++         us up.  */
++      __pthread_enqueue (&cond->__queue, self);
++      /* Tell hurd_thread_cancel how to unblock us.  */
++      ss->cancel_hook = &cancel_me;
++    }
++  __pthread_spin_unlock (&cond->__lock);
++  __spin_unlock (&ss->lock);
++
++
++  if (cancel)
++    /* Cancelled on entry.  Just leave the mutex locked.  */
++    mutex = NULL;
++  else
++    {
++      /* Now unlock the mutex and block until woken.  */
++      __pthread_mutex_unlock (mutex);
++      __pthread_block (self);
++    }
++
++  __spin_lock (&ss->lock);
++  /* Clear the hook, now that we are done blocking.  */
++  ss->cancel_hook = NULL;
++  /* Check the cancellation flag; we might have unblocked due to
++     cancellation rather than a normal pthread_cond_signal or
++     pthread_cond_broadcast (or we might have just happened to get cancelled
++     right after waking up).  */
++  cancel |= ss->cancel;
++  ss->cancel = 0;
++  __spin_unlock (&ss->lock);
++
++  if (mutex)
++    /* Reacquire the mutex and return.  */
++    __pthread_mutex_lock (mutex);
++
++  return cancel;
++}
+diff --git a/libpthread/sysdeps/mach/hurd/pt-sysdep.c b/libpthread/sysdeps/mach/hurd/pt-sysdep.c
+index f40fee5..882af69 100644
+--- a/sysdeps/mach/hurd/pt-sysdep.c
++++ b/libpthread/sysdeps/mach/hurd/pt-sysdep.c
+@@ -30,6 +30,16 @@
+ 
+ #include <pt-internal.h>
+ 
++/* Allow programs that know about this library to override the default stack
++   size.
++
++   FIXME Stack sizes should normally be set at thread creation time using the
++   standard interface, but Hurd threadvars have special alignment constraints.
++   Until they are completely replaced with correct TLS, make this hack
++   available.  */
++extern size_t __pthread_stack_default_size;
++weak_extern(__pthread_stack_default_size);
++
+ /* Forward.  */
+ static void *init_routine (void);
+ 
+@@ -46,6 +56,10 @@ init_routine (void)
+   struct __pthread *thread;
+   int err;
+ 
++  /* FIXME */
++  if (&__pthread_stack_default_size != NULL)
++    __pthread_default_attr.stacksize = __pthread_stack_default_size;
++
+   /* Initialize the library.  */
+   __pthread_init ();
+ 

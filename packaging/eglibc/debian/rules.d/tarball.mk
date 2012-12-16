@@ -2,7 +2,7 @@ EGLIBC_SVN = svn://svn.eglibc.org
 EGLIBC_BRANCH = branches/eglibc-$(shell echo $(EGLIBC_VERSION) | sed -e 's/\([0-9]\+\)\.\([0-9]\+\).*/\1_\2/')
 EGLIBC_CHECKOUT = eglibc-checkout
 EGLIBC_DIR = eglibc-$(EGLIBC_VERSION)
-DEB_ORIG = ../eglibc_$(EGLIBC_VERSION).orig.tar.gz
+DEB_ORIG = ../eglibc_$(EGLIBC_VERSION).orig.tar.xz
 DEB_ORIG_REVISION = $(shell cat .svn-revision 2> /dev/null)
 SVN_UPDATES_DIFF = debian/patches/svn-updates.diff
 
@@ -16,7 +16,7 @@ $(DEB_ORIG):
 	svn export $(EGLIBC_CHECKOUT)/ports $(EGLIBC_DIR)/ports
 	svn status -v $(EGLIBC_CHECKOUT)/libc/ChangeLog | sed '1,1s/^ \+\([0-9]\+\).*/\1/g' > $(EGLIBC_DIR)/.svn-revision
 	rm -fr $(EGLIBC_DIR)/manual
-	tar -zcf $(DEB_ORIG) $(EGLIBC_DIR)
+	tar -Jcf $(DEB_ORIG) $(EGLIBC_DIR)
 	rm -rf $(EGLIBC_DIR) $(EGLIBC_CHECKOUT)
 
 update-from-upstream-svn:
