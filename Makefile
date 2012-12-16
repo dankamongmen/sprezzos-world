@@ -185,7 +185,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
-	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29)
+	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2520,6 +2520,22 @@ $(XVIDCORE): $(SPREZZ)/xvidcore/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xvidcore-$(xvidcore_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxkbcommon
+libxkbcommon:$(LIBXKBCOMMON)_$(ARCH).deb
+$(LIBXKBCOMMON): $(SPREZZ)/libxkbcommon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxkbcommon-xkbcommon-$(libxkbcommon_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxv
+libxv:$(LIBXV)_$(ARCH).deb
+$(LIBXV): $(SPREZZ)/libxv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXv-$(libxv_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxvmc
 libxvmc:$(LIBXVMC)_$(ARCH).deb
