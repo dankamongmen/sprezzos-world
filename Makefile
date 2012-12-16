@@ -949,6 +949,14 @@ $(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf compiz-$(compiz9_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: conpalette
+conpalette:$(CONPALETTE)_$(ARCH).deb
+$(CONPALETTE): $(SPREZZ)/conpalette/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf conpalette_$(conpalette_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: cups
 cups:$(CUPS)_$(ARCH).deb
 $(CUPS): $(SPREZZ)/cups/debian/changelog
@@ -4479,10 +4487,6 @@ $(IBUS): $(SPREZZ)/ibus/debian/changelog $(IBUSORIG)
 	tar xzvf $(IBUSORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) App-ConPalette-0.1.5.tar.gz
-App-ConPalette-0.1.5.tar.gz:
-	wget -nc -O$@ http://search.cpan.org/CPAN/authors/id/H/HI/HINRIK/App-ConPalette-0.1.5.tar.gz
-
 FETCHED:=$(FETCHED) $(LVM2UP).tgz
 $(LVM2UP).tgz:
 	wget -nc -O$@ ftp://sources.redhat.com/pub/lvm2/$@
@@ -4612,14 +4616,6 @@ lightdm:$(LIGHTDM)_$(ARCH).deb
 $(LIGHTDM): $(SPREZZ)/lightdm/debian/changelog $(LIGHTDMORIG)
 	mkdir -p $@
 	tar xzvf $(LIGHTDMORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-CONPAL:=App-ConPalette-0.1.5
-.PHONY: conpalette
-conpalette:$(CONPALETTE)_$(ARCH).deb
-$(CONPALETTE): $(SPREZZ)/conpalette/debian/changelog $(CONPAL).tar.gz
-	tar xzvf $(CONPAL).tar.gz
-	mv $(CONPAL) $@
 	cp -r $(<D) $@/
 
 # Native packages (those containing their own source)
