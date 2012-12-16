@@ -1,0 +1,103 @@
+#!/usr/bin/make -f
+
+# This needs to run before inclusion of CDBS snippets
+debian/control:: debian/control.in
+DEB_PHONY_RULES += debian/control.in
+debian/control.in::
+	sed -e 's/__LIBPKGNAME__/$(LIBPKGNAME)/g' -e 's/__ARCHS__/$(ARCHS)/g' \
+		< debian/control.in.in > debian/control.in
+
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/class/makefile.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+SONAME = $(DEB_UPSTREAM_VERSION)
+LIBPKGNAME = libv8-$(SONAME)
+libSoname = libv8.so.$(SONAME)
+
+# Supported archs
+#  * TODO: Add mipsel when mips3 (not only mips32r2) is supported
+ARCHS = i386 amd64 armel armhf
+
+# allow parallel builds
+DEB_BUILD_PARALLEL=1
+
+# suppress checking binary files, to not upset dpkg-source
+DEB_COPYRIGHT_CHECK_IGNORE_REGEX = ^(benchmarks/v8-logo\.png|test/mjsunit/unicode-test\.js|debian/(changelog|copyright(|_hints|_newhints)))$
+
+# dpkg-gensymbols(1) - this is not needed since we are not using symbols
+# DEB_DH_MAKESHLIBS_ARGS = -- -c4
+
+# map HOST ARCH AND OS to v8 options
+v8arch := $(or $(v8arch),$(if $(filter i386,$(DEB_HOST_ARCH)),ia32))
+v8arch := $(or $(v8arch),$(if $(filter amd64,$(DEB_HOST_ARCH)),x64))
+v8arch := $(or $(v8arch),$(if $(filter armel,$(DEB_HOST_ARCH)),arm))
+v8arch := $(or $(v8arch),$(if $(filter armhf,$(DEB_HOST_ARCH)),arm))
+v8arch := $(or $(v8arch),$(if $(filter mipsel,$(DEB_HOST_ARCH)),mips))
+v8arch := $(or $(v8arch),$(DEB_HOST_ARCH))
+v8os := $(or $(v8os),$(if $(filter linux,$(DEB_HOST_ARCH_OS)),linux))
+v8os := $(or $(v8os),$(if $(filter kfreebsd,$(DEB_HOST_ARCH_OS)),freebsd))
+v8os := $(or $(v8os),$(DEB_HOST_ARCH_OS))
+
+GYPFLAGS += -Dhost_arch=$(v8arch)
+
+# still not compatible with GCC 4.6 defaults (at 3.8.9.16 mipsel)
+CXXFLAGS += -Wno-unused-but-set-variable
+
+# armel and armhf arches need flags to work around those issues :
+# -fno-tree-sink: http://gcc.gnu.org/bugzilla/show_bug.cgi?id=39604
+# -Wno-psabi: http://gcc.gnu.org/bugzilla/show_bug.cgi?id=42748
+ifeq (armhf, $(DEB_HOST_ARCH))
+CXXFLAGS += -fno-tree-sink
+CXXFLAGS += -Wno-psabi
+# enable armv7 vfpv3
+GYPFLAGS += -Darmv7=1 -Darm_fpu=vfpv3 -Darm_neon=0 -Dv8_use_arm_eabi_hardfloat=true
+endif
+
+ifeq (armel, $(DEB_HOST_ARCH))
+CXXFLAGS += -fno-tree-sink
+CXXFLAGS += -Wno-psabi
+ifeq ($(shell dpkg-vendor --is ubuntu && echo true),true)
+# Ubuntu targets armv7+ with VFP and thumb2 support by default for armel
+GYPFLAGS += -Darmv7=1 -Darm_fpu=vfpv3 -Darm_neon=0 -Dv8_use_arm_eabi_hardfloat=false
+else
+DEB_MAKE_EXTRA_ARGS += vfp3=off
+# Disable thumb-interworking because v8 supports it only on >= armv5t.
+# http://code.google.com/p/v8/issues/detail?id=590
+CXXFLAGS += -mno-thumb-interwork
+# disable armv7, use softfloat
+GYPFLAGS += -Darmv7=0 -Dv8_use_arm_eabi_hardfloat=false
+endif
+endif
+
+export GYPFLAGS
+export CXXFLAGS
+
+DEB_MAKE_EXTRA_ARGS += library=shared snapshot=off soname_version=$(SONAME) OS=$(v8os) V=1 
+DEB_MAKE_CLEAN_TARGET = clean
+DEB_MAKE_BUILD_TARGET = $(v8arch).release
+
+v8out = $(CURDIR)/out/$(v8arch).release/lib.target/$(libSoname)
+
+# regression tests
+#  * relax regression tests when targeted experimental suite
+#  * run only javascript tests, cctests are for development purposes
+DEB_MAKE_CHECK_TARGET = $(v8arch).release.check \
+	LD_PRELOAD=$(v8out) \
+	TESTFLAGS="mjsunit message preparser" \
+	TESTJOBS="$(DEB_MAKE_PARALLEL) --timeout=180" \
+	$(if $(shell dpkg-parsechangelog | grep -Fx 'Distribution: experimental'),|| true)
+
+
+DEB_DH_INSTALL_ARGS_$(LIBPKGNAME) = usr/lib/$(libSoname)
+
+clean::
+	rm -rf out
+	rm -f tools/*.pyc
+	rm -f test/*/*.pyc
+
+common-install-impl::
+	mkdir -p debian/tmp/usr/lib ; \
+	cd debian/tmp/usr/lib ; \
+	cp $(v8out) . ; \
+	ln -s -T $(libSoname) libv8.so
