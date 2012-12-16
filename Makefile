@@ -101,8 +101,6 @@ PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_UPVER) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 SOCATUP:=socat-$(shell echo $(socat_UPVER) | cut -d- -f1 | tr \~ -)
 SOCATORIG:=socat_$(shell echo $(socat_UPVER) | cut -d- -f1).orig.tar.bz2
-USBVIEWUP:=usbview-$(shell echo $(usbview_UPVER) | cut -d= -f2- | cut -d- -f1)
-USBVIEWORIG:=usbview_$(shell echo $(usbview_UPVER) | cut -d- -f1).orig.tar.gz
 
 DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(ICU) \
 	$(UTILLINUX) $(LINUXLATEST) $(LIBJPEG8TURBO) $(OMPHALOS) $(SUDO) $(VTE) \
@@ -187,7 +185,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
 	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL) $(LIBV8) \
-	$(XCBUTILKEYSYMS) $(LIBVA)
+	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -208,7 +206,7 @@ world: $(DEBS) $(UDEBS)
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -j8 -k$(DEBKEY)
+	cd $< && debuild -k$(DEBKEY)
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -475,20 +473,6 @@ lsb:$(LSB)_$(ARCH).deb
 $(LSB): $(SPREZZ)/lsb/debian/changelog
 	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
 	cp -r $(<D)/.. $@
-
-FETCHED:=$(FETCHED) $(USBVIEWUP).tar.gz
-$(USBVIEWUP).tar.gz:
-	wget -nc -O$@ http://www.kroah.com/linux/usb/$@
-
-$(USBVIEWORIG): $(USBVIEWUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: usbview
-usbview:$(USBVIEW)_$(ARCH).deb
-$(USBVIEW): $(SPREZZ)/usbview/debian/changelog $(USBVIEWORIG)
-	mkdir $@
-	tar xzvf $(USBVIEWUP).tar.gz $(TARARGS) $@
-	cp -r $(<D) $@/
 
 .PHONY: abcde
 abcde:$(ABCDE)_$(ARCH).deb
@@ -2379,6 +2363,22 @@ $(USBMUXD): $(SPREZZ)/usbmuxd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf usbmuxd_$(usbmuxd_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: usbutils
+usbutils:$(USBUTILS)_$(ARCH).deb
+$(USBUTILS): $(SPREZZ)/usbutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf usbutils_$(usbutils_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: usbview
+usbview:$(USBVIEW)_$(ARCH).deb
+$(USBVIEW): $(SPREZZ)/usbview/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf usbview-$(usbview_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: vlc
 vlc:$(VLC)_$(ARCH).deb
