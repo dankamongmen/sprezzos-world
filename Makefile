@@ -233,6 +233,15 @@ $(GEGL): $(SPREZZ)/gegl/debian/changelog
 	ln -sf gegl-$(gegl_UPVER).tar.xz gegl_$(gegl_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: usbutils
+usbutils:$(USBUTILS)_$(ARCH).deb
+$(USBUTILS): $(SPREZZ)/usbutils/debian/changelog
+	git clone git@github.com:gregkh/usbutils.git $@
+	rm -rf $@/debian
+	cd $@ && git submodule init usbhid-dump && git submodule update usbhid-dump
+	tar cJf usbutils-$(usbutils_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf usbutils-$(usbutils_UPVER).tar.xz usbutils_$(usbutils_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
 
 .PHONY: everpad
 everpad:$(EVERPAD)_$(ARCH).deb
@@ -2363,14 +2372,6 @@ $(USBMUXD): $(SPREZZ)/usbmuxd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf usbmuxd_$(usbmuxd_UPVER).orig.tar.bz2 $(TARARGS) $@
-
-.PHONY: usbutils
-usbutils:$(USBUTILS)_$(ARCH).deb
-$(USBUTILS): $(SPREZZ)/usbutils/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf usbutils_$(usbutils_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: usbview
 usbview:$(USBVIEW)_$(ARCH).deb
