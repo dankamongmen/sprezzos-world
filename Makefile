@@ -185,7 +185,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
 	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL) $(LIBV8) \
-	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47) $(SILGRAPHITE) $(EWEBKIT)
+	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47) $(SILGRAPHITE) $(EWEBKIT) \
+	$(OBEXFS)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -3110,6 +3111,14 @@ $(ID3LIB): $(SPREZZ)/id3lib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf id3lib-$(id3lib_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: obexfs
+obexfs:$(OBEXFS)_$(ARCH).deb
+$(OBEXFS): $(SPREZZ)/obexfs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf obexfs-$(obexfs_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: opal
 opal:$(OPAL)_$(ARCH).deb
