@@ -24,7 +24,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
 	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- && cut -d- -f-2 \
 	 echo -n "$(@F)_UPVER:=" && \
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
@@ -167,7 +167,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
 	$(JAVASCRIPTCOMMON) $(GNOMEGMAIL) $(GNOMEXCFTHUMBNAILER) $(PICARD) $(EVERPAD) \
-	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) \
+	$(FONTSCANTARELL) $(FONTSADOBESOURCESANSPRO) $(FONTSLIBERATION) $(MIRO) $(GYP) \
 	$(GMPC) $(LIBMPD) $(LIBMPDCLIENT) $(GDISK) $(AVAHI) $(LIBGLADE2) $(LIBXSPF) \
 	$(AWNEXTRAAPPLETS) $(CPPTEST) $(V4LUTILS) $(GUVCVIEW) $(GTKAM) $(DIA) $(OPUS) \
 	$(EMERILLON) $(LIBPEAS) $(PKGCONFIG) $(POLICYKITGNOME) $(PINENTRY) $(GNUPG) \
@@ -407,6 +407,15 @@ xbmc:$(XBMC)_$(ARCH).deb
 $(XBMC): $(SPREZZ)/xbmc/debian/changelog
 	git clone git://github.com/xbmc/xbmc.git $@
 	cp -r $(<D) $@/
+
+.PHONY: gyp
+gyp:$(GYP)_$(ARCH).deb
+$(GYP): $(SPREZZ)/gyp/debian/changelog
+	svn co http://gyp.googlecode.com/svn/trunk/ $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
+	tar cJf gyp-$(gyp_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -sf gyp-$(gyp_UPVER).tar.xz gyp_$(gyp_UPVER).orig.tar.xz
 
 .PHONY: despotify
 despotify:$(DESPOTIFY)_$(ARCH).deb
@@ -2265,7 +2274,7 @@ $(LIBAV): $(SPREZZ)/libav/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libav-$(libav_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libav-$(libav_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libcap2
 libcap2:$(LIBCAP2)_$(ARCH).deb
