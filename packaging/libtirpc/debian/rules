@@ -1,0 +1,71 @@
+#!/usr/bin/make -f
+
+# Parsing of DEB_BUILD_OPTIONS flags.
+# Note that nostrip is handled automatically by debhelper.
+CFLAGS := -g -Wall
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+    CFLAGS += -O0
+else
+    CFLAGS += -O2
+endif
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# Temporary root
+DEBTMP := $(CURDIR)/debian/tmp
+
+build: build-stamp
+build-stamp:
+	dh_testdir
+	CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs" ./configure --enable-gss --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH)
+	$(MAKE) $(MAKEFLAGS)
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	rm -rf $(DEBTMP)
+	[ ! -f Makefile ] || $(MAKE) distclean
+	$(RM) config.log
+	dh_clean
+
+binary-indep: build
+binary-arch: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	mkdir $(DEBTMP)
+	$(MAKE) DESTDIR='$(DEBTMP)' install
+	
+	# Move libtirpc.so.* to /lib
+	mkdir -p $(DEBTMP)/lib/$(DEB_HOST_MULTIARCH)
+	mv $(DEBTMP)/usr/lib/*/libtirpc.so.* $(DEBTMP)/lib/$(DEB_HOST_MULTIARCH)
+	
+	# Fix up the -dev symlink
+	LINKTARGET=`readlink $(DEBTMP)/usr/lib/$(DEB_HOST_MULTIARCH)/libtirpc.so`; \
+	ln -sf /lib/$(DEB_HOST_MULTIARCH)/$$LINKTARGET $(DEBTMP)/usr/lib/$(DEB_HOST_MULTIARCH)/libtirpc.so
+	
+	dh_install
+	dh_installchangelogs ChangeLog
+	dh_installdocs THANKS TODO
+	dh_installinit
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary
+
