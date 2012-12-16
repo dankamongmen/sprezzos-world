@@ -138,7 +138,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(NAUTILUSSENDTO) $(LIBGNOMEKEYRING) $(MP4V2) $(GNOMETERMINAL) $(XFCE4TERMINAL) \
 	$(LIBXFCE4UI) $(LIBXFCE4UTIL) $(XFCONF) $(GTKHTML) $(GNOMEONLINEACCOUNTS) \
 	$(PYGOBJECT) $(YELPTOOL) $(RTMPDUMP) $(GNOMEMENUS) $(GNOMEICONTHEMESYMBOLIC) \
-	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) \
+	$(GNOMEICONTHEME) $(AUDIT) $(MDADM) $(IPROUTE) $(ANJUTA) $(ZSH) $(BASH) $(NSS) \
 	$(RATPOISON) $(GHOSTSCRIPT) $(JBIG2DEC) $(CUPS) $(XORGXSERVER) $(POSTGRESQL) \
 	$(LIBEXIF) $(NUMACTL) $(LIBCAP2) $(DEVHELP) $(LIBSECRET) $(CINNAMON) $(W3M) \
 	$(FILEROLLER) $(ALACARTE) $(X11PROTOXEXT) $(X11PROTOFONTS) $(X11PROTOCORE) \
@@ -185,7 +185,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
-	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON)
+	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) \
+	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2889,6 +2890,22 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf nfs-utils_$(nfs-utils_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libnetfilter-conntrack
+libnetfilter-conntrack:$(LIBNETFILTERCONNTRACK)_$(ARCH).deb
+$(LIBNETFILTERCONNTRACK): $(SPREZZ)/libnetfilter-conntrack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libnetfilter_conntrack-$(libnetfilter-conntrack_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libnfnetlink
+libnfnetlink:$(LIBNFNETLINK)_$(ARCH).deb
+$(LIBNFNETLINK): $(SPREZZ)/libnfnetlink/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libnfnetlink-$(libnfnetlink_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libnfsidmap
 libnfsidmap:$(LIBNFSIDMAP)_$(ARCH).deb
 $(LIBNFSIDMAP): $(SPREZZ)/libnfsidmap/debian/changelog
@@ -2928,6 +2945,14 @@ $(NOTIFICATIONDAEMON): $(SPREZZ)/notification-daemon/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf notification-daemon-$(notification-daemon_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: nss
+nss:$(NSS)_$(ARCH).deb
+$(NSS): $(SPREZZ)/nss/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nss-$(nss_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: numactl
 numactl:$(NUMACTL)_$(ARCH).deb
