@@ -185,8 +185,8 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBNFSIDMAP) $(LIBRPCSECGSS) $(LIBGSSGLUE) $(XVIDCORE) $(LIBEV) $(LIBONIG) \
 	$(NEWT) $(ACCOUNTSSERVICE) $(SYSTEMCONFIGPRINTER) $(VLC) $(XFSPROGS) $(GEGL) \
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
-	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) \
-	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK)
+	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
+	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1234,6 +1234,14 @@ $(FREEGLUT): $(SPREZZ)/freeglut/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf freeglut_$(freeglut_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fuseiso
+fuseiso:$(FUSEISO)_$(ARCH).deb
+$(FUSEISO): $(SPREZZ)/fuseiso/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf fuseiso-$(fuseiso_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: gawk
 gawk:$(GAWK)_$(ARCH).deb
 $(GAWK): $(SPREZZ)/gawk/debian/changelog
@@ -1393,6 +1401,14 @@ $(GNOMEBLUETOOTH): $(SPREZZ)/gnome-bluetooth/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-bluetooth_$(gnome-bluetooth_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-boxes
+gnome-boxes:$(GNOMEBOXES)_$(ARCH).deb
+$(GNOMEBOXES): $(SPREZZ)/gnome-boxes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-boxes_$(gnome-boxes_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: gnome-color-manager
 gnome-color-manager:$(GNOMECOLORMANAGER)_$(ARCH).deb
