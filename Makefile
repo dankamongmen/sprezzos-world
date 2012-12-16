@@ -185,7 +185,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(GNOMESCAN) $(BABL) $(LIBVPX) $(UNBOUND) $(LDNS) $(SHADOW) $(ACETONEISO) \
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
 	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL) $(LIBV8) \
-	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47) $(SILGRAPHITE)
+	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47) $(SILGRAPHITE) $(EWEBKIT)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -2228,6 +2228,14 @@ $(EVASGENERICLOADERS): $(SPREZZ)/evas-generic-loaders/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf evas-generic-loaders_$(evas-generic-loaders_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: ewebkit
+ewebkit:$(EWEBKIT)_$(ARCH).deb
+$(EWEBKIT): $(SPREZZ)/ewebkit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf webkit-efl-svn-r$(ewebkit_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: exactimage
 exactimage:$(EXACTIMAGE)_$(ARCH).deb
