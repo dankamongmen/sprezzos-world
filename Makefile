@@ -1309,6 +1309,14 @@ $(GJS): $(SPREZZ)/gjs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gjs-$(gjs_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: glew
+glew:$(GLEW)_$(ARCH).deb
+$(GLEW): $(SPREZZ)/glew/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf glew-$(glew_UPVER).tgz $(TARARGS) $@
+
 .PHONY: glib
 glib:$(GLIB)_$(ARCH).deb
 $(GLIB): $(SPREZZ)/glib/debian/changelog
@@ -2525,6 +2533,22 @@ $(LIBXFIXES): $(SPREZZ)/libxfixes/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxfixes_$(libxfixes_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libxi
+libxi:$(LIBXI)_$(ARCH).deb
+$(LIBXI): $(SPREZZ)/libxi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXi-$(libxi_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxmu
+libxmu:$(LIBXMU)_$(ARCH).deb
+$(LIBXMU): $(SPREZZ)/libxmu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXmu-$(libxmu_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxspf
 libxspf:$(LIBXSPF)_$(ARCH).deb
 $(LIBXSPF): $(SPREZZ)/libxspf/debian/changelog
@@ -2532,6 +2556,14 @@ $(LIBXSPF): $(SPREZZ)/libxspf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libxspf-$(libxspf_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libxt
+libxt:$(LIBXT)_$(ARCH).deb
+$(LIBXT): $(SPREZZ)/libxt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXt-$(libxt_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xvidcore
 xvidcore:$(XVIDCORE)_$(ARCH).deb
@@ -3295,6 +3327,14 @@ $(PTLIB): $(SPREZZ)/ptlib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf ptlib-$(ptlib_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: pycairo
+pycairo:$(PYCAIRO)_$(ARCH).deb
+$(PYCAIRO): $(SPREZZ)/pycairo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pycairo-$(pycairo_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: py3cairo
 py3cairo:$(PY3CAIRO)_$(ARCH).deb
 $(PY3CAIRO): $(SPREZZ)/py3cairo/debian/changelog
@@ -4016,6 +4056,22 @@ $(LIBXFCE4UTIL): $(SPREZZ)/libxfce4util/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libxfce4util-$(libxfce4util_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libxinerama
+libxinerama:$(LIBXINERAMA)_$(ARCH).deb
+$(LIBXINERAMA): $(SPREZZ)/libxinerama/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXinerama-$(libxinerama_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxcursor
+libxcursor:$(LIBXCURSOR)_$(ARCH).deb
+$(LIBXCURSOR): $(SPREZZ)/libxcursor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXcursor-$(libxcursor_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxrandr
 libxrandr:$(LIBXRANDR)_$(ARCH).deb
