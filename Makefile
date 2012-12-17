@@ -70,8 +70,6 @@ HARFBUZZUP:=harfbuzz-$(shell echo $(harfbuzz_UPVER) | cut -d- -f1 | cut -d= -f2-
 HARFBUZZORIG:=harfbuzz_$(shell echo $(harfbuzz_UPVER) | cut -d- -f1).orig.tar.gz
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_UPVER) | cut -d- -f1).orig.tar.gz
-HWLOCUP:=hwloc-$(shell echo $(hwloc_UPVER) | cut -d- -f1)
-HWLOCORIG:=hwloc_$(shell echo $(hwloc_UPVER) | cut -d- -f1).orig.tar.bz2
 IBUSUP:=ibus-$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1)
 IBUSORIG:=ibus_$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.gz
 LESSUP:=less-$(shell echo $(less_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -102,7 +100,7 @@ SOCATORIG:=socat_$(shell echo $(socat_UPVER) | cut -d- -f1).orig.tar.bz2
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -j8 -k$(DEBKEY)
+	cd $< && debuild -k$(DEBKEY)
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -780,6 +778,14 @@ $(CINNAMON): $(SPREZZ)/cinnamon/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cinnamon_$(cinnamon_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: cmake
+cmake:$(CMAKE)_$(ARCH).deb
+$(CMAKE): $(SPREZZ)/cmake/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cmake-$(cmake_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cpptest
 cpptest:$(CPPTEST)_$(ARCH).deb
@@ -1789,6 +1795,14 @@ $(GPERF): $(SPREZZ)/gperf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gperf-$(gperf_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gpm
+gpm:$(GPM)_$(ARCH).deb
+$(GPM): $(SPREZZ)/gpm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpm-$(gpm_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gphoto2
 gphoto2:$(GPHOTO2)_$(ARCH).deb
 $(GPHOTO2): $(SPREZZ)/gphoto2/debian/changelog
@@ -1812,6 +1826,14 @@ $(GSTPLUGINSBASE): $(SPREZZ)/gst-plugins-base/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gst-plugins-base-$(gst-plugins-base_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gssdp
+gssdp:$(GSSDP)_$(ARCH).deb
+$(GSSDP): $(SPREZZ)/gssdp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gssdp-$(gssdp_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gstreamer
 gstreamer:$(GSTREAMER)_$(ARCH).deb
@@ -1877,6 +1899,14 @@ $(GUCHARMAP): $(SPREZZ)/gucharmap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gucharmap-$(gucharmap_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gupnp
+gupnp:$(GUPNP)_$(ARCH).deb
+$(GUPNP): $(SPREZZ)/gupnp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gupnp-$(gupnp_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: guvcview
 guvcview:$(GUVCVIEW)_$(ARCH).deb
 $(GUVCVIEW): $(SPREZZ)/guvcview/debian/changelog
@@ -1916,6 +1946,14 @@ $(HTOP): $(SPREZZ)/htop/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf htop-$(htop_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: hwloc
+hwloc:$(HWLOC)_$(ARCH).deb
+$(HWLOC): $(SPREZZ)/hwloc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf hwloc-$(hwloc_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: icu
 icu:$(ICU)_$(ARCH).deb
@@ -4457,20 +4495,6 @@ hfsutils:$(HFSUTILS)_$(ARCH).deb
 $(HFSUTILS): $(SPREZZ)/hfsutils/debian/changelog $(HFSUTILSORIG)
 	mkdir $@
 	tar xzvf $(HFSUTILSORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(HWLOCUP).tar.bz2
-$(HWLOCUP).tar.bz2:
-	wget -nc -O$@ http://www.open-mpi.org/software/hwloc/v1.5/downloads/$@
-
-$(HWLOCORIG): $(HWLOCUP).tar.bz2
-	ln -sf $< $@
-
-.PHONY: hwloc
-hwloc:$(HWLOC)_$(ARCH).deb
-$(HWLOC): $(SPREZZ)/hwloc/debian/changelog $(HWLOCORIG)
-	mkdir $@
-	tar xjvf $(HWLOCORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LESSUP).tar.gz
