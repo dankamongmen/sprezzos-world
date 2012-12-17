@@ -47,8 +47,6 @@ CLUTTERGSTUP:=clutter-gst-$(shell echo $(clutter-gst_UPVER) | cut -d: -f2- | cut
 CLUTTERGSTORIG:=clutter-gst_$(shell echo $(clutter-gst_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CLUTTERGTKUP:=clutter-gtk-$(shell echo $(clutter-gtk_UPVER) | cut -d: -f2- | cut -d- -f1)
 CLUTTERGTKORIG:=clutter-gtk_$(shell echo $(clutter-gtk_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-EGLIBCUP:=glibc-$(shell echo $(eglibc_UPVER) | cut -d- -f1)
-EGLIBCORIG:=eglibc_$(shell echo $(eglibc_UPVER) | cut -d- -f1).orig.tar.gz
 EVINCEUP:=evince-$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1)
 EVINCEORIG:=evince_$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 FBIUP:=fbida-$(shell echo $(fbi_UPVER) | cut -d= -f2- | cut -d- -f1)
@@ -186,7 +184,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
 	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL) $(LIBV8) \
 	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47) $(SILGRAPHITE) $(EWEBKIT) \
-	$(OBEXFS) $(LIBTIRPC) $(KEYUTILS)
+	$(OBEXFS) $(LIBTIRPC) $(KEYUTILS) $(LIBOSINFO) $(LIBVIRTGLIB)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -1077,6 +1075,14 @@ $(DSNIFF): $(SPREZZ)/dsniff/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dsniff-$(dsniff_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: eglibc
+eglibc:$(EGLIBC)_$(ARCH).deb
+$(EGLIBC): $(SPREZZ)/eglibc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf glibc-$(eglibc_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: emerillon
 emerillon:$(EMERILLON)_$(ARCH).deb
@@ -2518,6 +2524,14 @@ $(LIBVIRT): $(SPREZZ)/libvirt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libvirt-$(libvirt_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libvirt-glib
+libvirt-glib:$(LIBVIRTGLIB)_$(ARCH).deb
+$(LIBVIRTGLIB): $(SPREZZ)/libvirt-glib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libvirt-glib-$(libvirt-glib_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libvpx
 libvpx:$(LIBVPX)_$(ARCH).deb
 $(LIBVPX): $(SPREZZ)/libvpx/debian/changelog
@@ -3087,6 +3101,14 @@ $(NVIDIASETTINGS): $(SPREZZ)/nvidia-settings/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf nvidia-settings-$(nvidia-settings_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libosinfo
+libosinfo:$(LIBOSINFO)_$(ARCH).deb
+$(LIBOSINFO): $(SPREZZ)/libosinfo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libosinfo-$(libosinfo_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libonig
 libonig:$(LIBONIG)_$(ARCH).deb
@@ -4233,20 +4255,6 @@ $(ZSH): $(SPREZZ)/zsh/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf zsh-$(zsh_UPVER).tar.bz2 $(TARARGS) $@
-
-FETCHED:=$(FETCHED) $(EGLIBCUP).tar.gz
-$(EGLIBCUP).tar.gz:
-	wget -nc -O$@ ftp://ftp.gnu.org/gnu/glibc/$@
-
-$(EGLIBCORIG): $(EGLIBCUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: eglibc
-eglibc:$(EGLIBC)_$(ARCH).deb
-$(EGLIBC): $(SPREZZ)/eglibc/debian/changelog $(EGLIBCORIG)
-	mkdir $@
-	tar xzvf $(EGLIBCORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(FBIUP).tar.gz
 $(FBIUP).tar.gz:
