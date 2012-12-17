@@ -1,0 +1,183 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# debian/rules for Berkeley DB defaults
+# Copyright (C) 2011 Ondřej Surý
+# Published under the GNU GPL license
+# Partially based on previous work by Clint Adams
+#
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+export DH_ALWAYS_EXCLUDE=.arch-ids
+
+DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEB_BUILD_GNU_CPU ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_CPU)
+DEB_BUILD_GNU_SYSTEM ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_SYSTEM)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_CPU ?= $(shell dpkg-architecture -qDEB_HOST_GNU_CPU)
+DEB_HOST_GNU_SYSTEM ?= $(shell dpkg-architecture -qDEB_HOST_GNU_SYSTEM)
+DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# Don't try to build this file if missing
+/usr/share/gcj/debian_defaults /usr/share/javahelper/java-vars.mk:
+	:
+
+-include /usr/share/gcj/debian_defaults
+-include /usr/share/javahelper/java-vars.mk
+
+JAVA_BROKEN_ARCHS =
+GCJ_BROKEN_ARCHS = ia64 sparc mips sh4
+GCJ_NATIVE_ARCHS = $(filter-out $(GCJ_BROKEN_ARCHS), $(gcj_native_archs))
+
+ENABLE_JAVA=no
+ENABLE_GJ=no
+
+ifeq (,$(filter $(DEB_HOST_ARCH), $(JAVA_BROKEN_ARCHS)))
+ENABLE_JAVA=yes
+ifneq (,$(filter $(DEB_HOST_ARCH), $(GCJ_NATIVE_ARCHS)))
+ENABLE_GCJ=yes
+endif
+endif
+
+CONFIGURE_SWITCHES =    --prefix=/usr \
+			--mandir=\$${prefix}/share/man \
+			--localstatedir=/var \
+			--sysconfdir=/etc \
+			--libexecdir=/usr/lib \
+			--enable-cxx \
+			--enable-compat185 \
+			--enable-sql \
+			--enable-stl \
+			--enable-tcl \
+			--with-tcl=/usr/lib \
+			--enable-test
+
+ifeq (zx86_64-linux-gnuz,z$(DEB_HOST_GNU_TYPE)z)
+CONFIGURE_SWITCHES += --with-mutex=POSIX/pthreads/library
+endif
+ifeq (zavr32-linux-gnuz,z$(DEB_HOST_GNU_TYPE)z)
+CONFIGURE_SWITCHES += --enable-posixmutexes
+endif
+
+ifeq (yes,$(ENABLE_JAVA))
+JAVAC_FLAGS=-source 1.5 -target 1.5
+JAVA_HOME ?= /usr/lib/jvm/default-java
+CFLAGS += -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux
+CONFIGURE_SWITCHES += --enable-java
+DH_PLUGINS += --with=javahelper
+else
+CONFIGURE_SWITCHES += --disable-java
+DH_OPTIONS += -Nlibdb5.1-java -Nlibdb5.1-java-dev -Nlibdb5.1-java-gcj -Nlibdb5.1-java-jni
+endif
+
+ifeq (no,$(ENABLE_GCJ))
+DH_OPTIONS += -Nlibdb5.1-java-gcj
+endif
+
+
+BROKEN_CPUS = zs390z
+VERY_BROKEN_CPUS = zm68kz zhppaz
+BROKEN_SYSTEMS = zgnuz
+VERY_BROKEN_SYSTEMS =
+
+export DH_OPTIONS
+
+package=db5.1
+bdbversion=5.1
+
+version=$(shell expr `pwd` : '.*-\([0-9.]*\)')
+version_major=$(shell expr `pwd` : '.*-\([0-9]*\).[0-9.]*')
+
+%:
+	dh $@ $(DH_PLUGINS)
+
+override_dh_auto_configure:
+	dh_auto_configure -Ddist -Bbuild -- $(CONFIGURE_SWITCHES)
+
+override_dh_auto_build:
+	JAVAC_FLAGS="$(JAVAC_FLAGS)" dh_auto_build
+
+override_dh_auto_clean:
+	dh_auto_clean -Ddist -Bbuild
+	rm -f $(CURDIR)/debian/build_signature.txt
+
+override_dh_auto_test:
+ifeq (,$(findstring z$(DEB_BUILD_GNU_CPU)z,$(VERY_BROKEN_CPUS))$(findstring z$(DEB_BUILD_GNU_SYSTEM)z,$(VERY_BROKEN_SYSTEMS)))
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	chmod +x ./debian/runtests.tclsh
+	cd build && ../debian/runtests.tclsh || true
+
+ifeq (,$(findstring z$(DEB_BUILD_GNU_CPU)z,$(BROKEN_CPUS))$(findstring z$(DEB_BUILD_GNU_SYSTEM)z,$(BROKEN_SYSTEMS)))
+	! grep ^FAIL build/ALL.OUT
+else
+# Testsuite failures are marked as non-fatal on $(DEB_BUILD_GNU_SYSTEM)-$(DEB_BUILD_GNU_CPU)
+	grep ^FAIL build/ALL.OUT || true
+endif
+else
+# Testsuite has been disabled by DEB_BUILD_OPTIONS=$(DEB_BUILD_OPTIONS)
+endif
+else
+# Testsuite has been disabled on $(DEB_BUILD_GNU_SYSTEM)-$(DEB_BUILD_GNU_CPU)
+endif
+
+override_dh_auto_install:
+	dh_auto_install -Ddist -Bbuild
+
+# Remove .la files
+	rm -f $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.la
+
+# Remove libdb*-5.so from all packages, we don't provide generic libdb5 packages
+	rm -f $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libdb*5.so
+
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libdb.a
+	ln -s libdb-$(bdbversion).a $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libdb.a
+
+# Compare built-in signature and fail build if it is different
+	cc -o$(CURDIR)/debian/db_signature \
+	   -I$(CURDIR)/debian/tmp/usr/include \
+	     $(CURDIR)/debian/db_signature.c \
+	     $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libdb.a
+
+	$(CURDIR)/debian/db_signature > $(CURDIR)/debian/build_signature_$(DEB_HOST_ARCH).txt
+
+	echo -n "Berkeley DB signature is:"; $(CURDIR)/debian/db_signature
+
+	if [ -f $(CURDIR)/debian/saved_signature_$(DEB_HOST_ARCH).txt ]; then \
+	    cmp $(CURDIR)/debian/saved_signature_$(DEB_HOST_ARCH).txt         \
+	        $(CURDIR)/debian/build_signature_$(DEB_HOST_ARCH).txt         \
+	    || ( echo "Region environment signatures differ."; exit 1; );     \
+	fi
+
+	mv $(CURDIR)/debian/tmp/usr/bin/dbsql $(CURDIR)/debian/tmp/usr/bin/db_sql
+	rm -f $(CURDIR)/debian/tmp/usr/bin/sqlite3
+
+	for i in $(CURDIR)/debian/tmp/usr/bin/db_*; do \
+	  mv $$i $$(echo $$i | sed -e 's{usr/bin/db_{usr/bin/$(package)_{'); \
+	done
+
+override_dh_install:
+	dh_install -a -Xusr/doc --list-missing
+	tcltk-depends
+
+override_dh_installdocs:
+	dh_installdocs -pdb5.1-doc
+	dh_installdocs --remaining-packages --link-doc=libdb5.1
+
+override_dh_strip:
+	dh_strip -s --dbg-package=libdb5.1-dbg
+
+override_dh_clean:
+	DH_OPTIONS="" dh_clean
+
+override_jh_build:
+	jh_build --javacopts='-target 1.5' --javacopts='-source 1.5'
+
+override_jh_installlibs:
+ifeq (yes,$(ENABLE_JAVA))
+	jh_installlibs
+endif
+ifeq (yes,$(ENABLE_GCJ))
+	dh_nativejava
+endif
