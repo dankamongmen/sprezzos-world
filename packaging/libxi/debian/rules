@@ -1,0 +1,110 @@
+#!/usr/bin/make -f
+# debian/rules for the Debian libxi package.
+# Copyright © 2004 Scott James Remnant <scott@netsplit.com>
+# Copyright © 2005 Daniel Stone <daniel@fooishbar.org>
+# Copyright © 2005 David Nusinow <dnusinow@debian.org>
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# set this to the name of the main shlib's binary package
+PACKAGE = libxi6
+
+include debian/xsfbs/xsfbs.mk
+
+CFLAGS = -Wall -g
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build=$(DEB_HOST_GNU_TYPE)
+else
+	confflags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+configure: $(STAMP_DIR)/patch
+	autoreconf -vfi
+
+build/config.status: configure
+	mkdir -p build
+	cd build && \
+	../configure --prefix=/usr --mandir=\$${prefix}/share/man \
+	             --infodir=\$${prefix}/share/info $(confflags) \
+	             --with-xmlto \
+	             --without-fop \
+	             --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+	             CFLAGS="$(CFLAGS)" 
+
+
+build: build-indep build-arch
+build-indep:
+build-arch: build-stamp
+.PHONY: build build-indep build-arch
+
+build-stamp: build/config.status
+	dh_testdir
+	cd build && $(MAKE)
+
+	touch build-stamp
+
+clean: xsfclean
+	dh_testdir
+	rm -f build-stamp
+	rm -f config.cache config.log config.status
+	rm -f */config.cache */config.log */config.status
+	rm -f conftest* */conftest*
+	rm -rf autom4te.cache */autom4te.cache
+	rm -rf build
+	find -name Makefile.in -delete
+	rm -f INSTALL compile config.guess config.sub configure config.h.in
+	rm -f depcomp install-sh ltmain.sh missing aclocal.m4 mkinstalldirs
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	cd build && $(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+
+	dh_installdocs
+	find debian/tmp -name '*.xml' -delete
+	find debian/tmp -name '*.db' -delete
+	dh_install --sourcedir=debian/tmp --fail-missing --exclude=libXi.la --exclude=usr/share/man/man3
+	dh_installman
+	dh_installchangelogs ChangeLog
+	dh_link
+	dh_strip -p$(PACKAGE) --dbg-package=$(PACKAGE)-dbg
+	dh_strip -N$(PACKAGE)
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs -V'libxi6 (>= 2:1.5.99.2)' --add-udeb=$(PACKAGE)-udeb -- -c4
+	dh_shlibdeps
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-independent files here.
+binary-indep: build install
+# Nothing to do
+
+binary: binary-indep binary-arch
+.PHONY: clean binary-indep binary-arch binary install
