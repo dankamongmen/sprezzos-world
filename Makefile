@@ -156,7 +156,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
 	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
 	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
-	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) $(DC) \
+	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
 	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) $(BC) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
@@ -722,7 +722,7 @@ $(BC): $(SPREZZ)/bc/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf bc-$(bc_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf bc-$(bc_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: bind9
 bind9:$(BIND9)_$(ARCH).deb
@@ -1035,14 +1035,6 @@ $(DBUSPYTHON): $(SPREZZ)/dbus-python/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-python-$(dbus-python_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: dc
-dc:$(DC)_$(ARCH).deb
-$(DC): $(SPREZZ)/dc/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf dc-$(dc_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: dcraw
 dcraw:$(DCRAW)_$(ARCH).deb
