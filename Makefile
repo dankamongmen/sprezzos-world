@@ -41,12 +41,6 @@ BRASEROUP:=brasero-$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1)
 BRASEROORIG:=brasero_$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 CHEESEUP:=cheese-$(shell echo $(cheese_UPVER) | cut -d: -f2- | cut -d- -f1)
 CHEESEORIG:=cheese_$(shell echo $(cheese_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CLUTTERUP:=clutter-$(shell echo $(clutter_UPVER) | cut -d: -f2- | cut -d- -f1)
-CLUTTERORIG:=clutter-1.0_$(shell echo $(clutter_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CLUTTERGSTUP:=clutter-gst-$(shell echo $(clutter-gst_UPVER) | cut -d: -f2- | cut -d- -f1)
-CLUTTERGSTORIG:=clutter-gst_$(shell echo $(clutter-gst_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CLUTTERGTKUP:=clutter-gtk-$(shell echo $(clutter-gtk_UPVER) | cut -d: -f2- | cut -d- -f1)
-CLUTTERGTKORIG:=clutter-gtk_$(shell echo $(clutter-gtk_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 EVINCEUP:=evince-$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1)
 EVINCEORIG:=evince_$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 FBIUP:=fbida-$(shell echo $(fbi_UPVER) | cut -d= -f2- | cut -d- -f1)
@@ -810,6 +804,30 @@ $(TTFAUTOHINT): $(SPREZZ)/ttfautohint/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ttfautohint-$(ttfautohint_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: clutter
+clutter:$(CLUTTER)_$(ARCH).deb
+$(CLUTTER): $(SPREZZ)/clutter/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf clutter-$(clutter_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: clutter-gst
+clutter-gst:$(CLUTTERGST)_$(ARCH).deb
+$(CLUTTERGST): $(SPREZZ)/clutter-gst/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf clutter-gst-$(clutter-gst_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: clutter-gtk
+clutter-gtk:$(CLUTTERGTK)_$(ARCH).deb
+$(CLUTTERGTK): $(SPREZZ)/clutter-gtk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf clutter-gtk-$(clutter-gtk_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: codeblocks
 codeblocks:$(CODEBLOCKS)_$(ARCH).deb
@@ -4727,48 +4745,6 @@ cheese:$(CHEESE)_$(ARCH).deb
 $(CHEESE): $(SPREZZ)/cheese/debian/changelog $(CHEESEORIG)
 	mkdir -p $@
 	tar xJvf $(CHEESEORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(CLUTTERUP).tar.xz
-$(CLUTTERUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter/1.12/$@
-
-$(CLUTTERORIG): $(CLUTTERUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: clutter
-clutter:$(CLUTTER)_$(ARCH).deb
-$(CLUTTER): $(SPREZZ)/clutter/debian/changelog $(CLUTTERORIG)
-	mkdir -p $@
-	tar xJvf $(CLUTTERORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(CLUTTERGSTUP).tar.xz
-$(CLUTTERGSTUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter-gst/1.9/$@
-
-$(CLUTTERGSTORIG): $(CLUTTERGSTUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: clutter-gst
-clutter-gst:$(CLUTTERGST)_$(ARCH).deb
-$(CLUTTERGST): $(SPREZZ)/clutter-gst/debian/changelog $(CLUTTERGSTORIG)
-	mkdir -p $@
-	tar xJvf $(CLUTTERGSTORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(CLUTTERGTKUP).tar.xz
-$(CLUTTERGTKUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/clutter-gtk/1.4/$@
-
-$(CLUTTERGTKORIG): $(CLUTTERGTKUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: clutter-gtk
-clutter-gtk:$(CLUTTERGTK)_$(ARCH).deb
-$(CLUTTERGTK): $(SPREZZ)/clutter-gtk/debian/changelog $(CLUTTERGTKORIG)
-	mkdir -p $@
-	tar xJvf $(CLUTTERGTKORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GSETSCHEMASUP).tar.xz
