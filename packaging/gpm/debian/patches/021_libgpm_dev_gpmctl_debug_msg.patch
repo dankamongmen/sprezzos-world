@@ -1,0 +1,73 @@
+From 8b8a4593918fbf42a5e9505ba311881ff77c5af7 Mon Sep 17 00:00:00 2001
+From: Jonathan Nieder <jrnieder@uchicago.edu>
+Date: Wed, 28 May 2008 14:41:14 -0500
+Subject: [PATCH] libgpm: Make "/dev/gpmctl: No such file" into a debug message
+
+Programs using libgpm should function without complaint
+even on systems without the gpm daemon installed. Thus,
+not finding /dev/gpmctl is not an error, nor even something
+unexpected. Change the message priority accordingly.
+
+(We introduce a new variable gpm_is_disabled to remember
+whether failure is due to ENOENT or some other condition.
+I would rather avoid this kind of thing. If we did not have
+to check separately for GPM_NODE_CTL and GPM_NODE_DEV, then
+the variable would be unnecessary. Actually, by default
+GPM_NODE_CTL and GPM_NODE_DEV are the same. Something to
+think about...)
+
+Nico: Resolved conflict, because did not apply TERM_H patch before.
+
+diff --git a/src/lib/liblow.c b/src/lib/liblow.c
+index 25a1d5c..e789d09 100644
+--- a/src/lib/liblow.c
++++ b/src/lib/liblow.c
+@@ -197,6 +197,7 @@ int Gpm_Open(Gpm_Connect *conn, int flag)
+    Gpm_Stst *new = NULL;
+    char* sock_name = 0;
+    static char *consolename = NULL;
++   int gpm_is_disabled = 0;
+ 
+    /*....................................... First of all, check xterm */
+ 
+@@ -311,15 +312,28 @@ int Gpm_Open(Gpm_Connect *conn, int flag)
+       if(connect(gpm_fd,(struct sockaddr *)(&addr),i)<0 ) {
+          struct stat stbuf;
+ 
+-         gpm_report(GPM_PR_INFO,GPM_MESS_DOUBLE_S,GPM_NODE_CTL,strerror(errno));
++         if (errno == ENOENT) {
++            gpm_report(GPM_PR_DEBUG,"cannot find %s; ignoring (gpm disabled?)",
++                            GPM_NODE_CTL);
++            gpm_is_disabled++;
++         } else {
++            gpm_report(GPM_PR_INFO,GPM_MESS_DOUBLE_S,GPM_NODE_CTL,
++                            strerror(errno));
++         }
+           /*
+            * Well, try to open a chr device called /dev/gpmctl. This should
+            * be forward-compatible with a kernel server
+            */
+           close(gpm_fd); /* the socket */
+           if ((gpm_fd=open(GPM_NODE_DEV,O_RDWR))==-1) {
+-            gpm_report(GPM_PR_ERR,GPM_MESS_DOUBLE_S,GPM_NODE_DEV
++            if (errno == ENOENT) {
++               gpm_report(GPM_PR_DEBUG,"Cannot find %s; ignoring (gpm disabled?)",
++                               GPM_NODE_DEV);
++               gpm_is_disabled++;
++            } else {
++               gpm_report(GPM_PR_ERR,GPM_MESS_DOUBLE_S,GPM_NODE_DEV
+                                                    ,strerror(errno));
++            }
+             goto err;
+           }
+          if (fstat(gpm_fd,&stbuf)==-1 || (stbuf.st_mode&S_IFMT)!=S_IFCHR) {
+@@ -362,7 +376,8 @@ int Gpm_Open(Gpm_Connect *conn, int flag)
+ 
+   /*....................................... Error: free all memory */
+    err:
+-   gpm_report(GPM_PR_ERR,"Oh, oh, it's an error! possibly I die! ");
++   if (gpm_is_disabled < 2) /* be quiet if no gpmctl socket found */
++      gpm_report(GPM_PR_ERR,"Oh, oh, it's an error! possibly I die! ");
+    while(gpm_stack) {
+       new=gpm_stack->next;
+       free(gpm_stack);

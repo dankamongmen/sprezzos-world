@@ -1,0 +1,102 @@
+#! /bin/sh
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+cfg=`mktemp -t` || exit 1
+
+create_gpm_conf ()
+{
+  cat > $cfg <<EOF
+#  /etc/gpm.conf - configuration file for gpm(1)
+#
+#  If mouse response seems to be to slow, try using
+#  responsiveness=15. append can contain any random arguments to be
+#  appended to the commandline.
+#
+#  If you edit this file by hand, please be aware it is sourced by
+#  /etc/init.d/gpm and thus all shell meta characters must be
+#  protected from evaluation (i.e. by quoting them).
+#
+#  This file is used by /etc/init.d/gpm and can be modified by
+#  "dpkg-reconfigure gpm" or by hand at your option.
+#
+device=$device
+responsiveness=$responsiveness
+repeat_type=$repeat_type
+type=$type
+append='$append'
+sample_rate=
+
+EOF
+  chown root:root $cfg
+  chmod 644 $cfg
+}
+
+check_gpm_conf ()
+{
+  if grep -q "^append.*~/00-2630-6670-77" $cfg; then
+    sed -e "s/^append=.*/append=\"-l \\\\\"a-zA-Z0-9_.:~\/\\\\300-\\\\326\\\\330-\\\\366\\\\370-\\\\377\\\\\"\"/" < $cfg > $cfg.new
+    mv -f $cfg.new $cfg
+  fi
+}
+
+update_symlinks ()
+{
+  if [ -e /dev/mouse ] || [ -h /dev/mouse ] ||
+     [ -z "$device" ] || [ "$device" = /dev/mouse ]; then
+    return 0
+  fi
+  if [ -n "$repeat_type" ] && [ "$repeat_type" != "none" ]; then
+    ln -s gpmdata /dev/mouse
+  else
+    ln -s ${device#/dev/} /dev/mouse
+  fi
+}
+
+get_debconf_values ()
+{
+  db_get gpm/device
+  device="$RET"
+  db_get gpm/responsiveness
+  responsiveness="$RET"
+  db_get gpm/repeat_type
+  repeat_type="$RET"
+  db_get gpm/sample_rate
+  sample_rate="$RET"
+  db_get gpm/type
+  type="$RET"
+  db_get gpm/append
+  # this is a special case because append can get shell metachars in it
+  append=$(echo "$RET" | sed -e "s/'/'\\\\''/g")
+}
+
+case "$1" in
+  configure|reconfigure)
+      # The config file was sourced by gpm.config, so the debconf values
+      # should match it except where the user changed them.
+      get_debconf_values
+      update_symlinks
+      create_gpm_conf
+      check_gpm_conf
+      ucf --debconf-ok $cfg /etc/gpm.conf
+      rm $cfg
+    ;;
+esac
+
+update-rc.d gpm defaults >/dev/null
+
+db_get gpm/restart
+if [ "$RET" = true ] || /usr/lib/gpm/gpm_has_mouse_control; then
+  # Note, yes, this is restart, its ment to be..
+  invoke-rc.d gpm restart
+fi
+
+db_stop
+
+# Remove leftover file from an old version
+if [ -e /etc/gpm-root.conf ]; then
+  rm -f /etc/gpm-root.conf || true
+fi
+

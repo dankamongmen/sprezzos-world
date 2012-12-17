@@ -1,0 +1,116 @@
+#!/usr/bin/make -f
+# debian/rules for gpm
+
+include /usr/share/quilt/quilt.make
+
+INSTALL=install
+INSTALL_DATA=$(INSTALL) -m 644
+INSTALL_PROGRAM=$(INSTALL) -m 755
+
+export CFLAGS = -Wall -g -D_REENTRANT
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+lib := usr/lib/$(DEB_HOST_MULTIARCH)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build $(DEB_HOST_GNU_TYPE)
+	host_cc = gcc
+else
+	confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+	host_cc = $(DEB_HOST_GNU_TYPE)-gcc
+endif
+
+configure: patch configure.in
+	autoconf
+
+config.status: configure
+	env CC=$(host_cc) ./configure $(confflags) --prefix=/usr --sysconfdir=/etc
+
+# Serialize to support parallel make
+pre-patch: patch
+	$(RM) config.sub config.guess
+	ln -s /usr/share/misc/config.sub /usr/share/misc/config.guess .
+	$(MAKE) -f debian/rules config.status
+
+build: build-arch build-indep
+build-indep: pre-patch
+build-arch: pre-patch
+	dh_testdir
+
+	# for gpm_has_mouse_control
+	$(MAKE) -C contrib/control CC=$(host_cc)
+	$(MAKE)
+
+clean: unpatch clean-unpatched
+clean-unpatched:
+	dh_testdir
+
+	[ ! -f Makefile ] || $(MAKE) clean
+	$(RM) Makefile	
+	$(RM) -r contrib/control
+	$(RM) config.sub config.guess
+	dh_clean
+
+checkpo:
+	debconf-updatepo
+	@for i in debian/po/*.po; do \
+	  echo -n "Checking: $$i "; \
+	  msgfmt -o /dev/null -c --statistics $$i; \
+	done
+
+# No binary indep packages
+binary-indep:
+
+binary-arch: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+
+	dh_installdirs
+	dh_install
+
+	$(INSTALL_PROGRAM) debian/gpm.apm \
+	                   debian/gpm/etc/apm/event.d/gpm
+	$(INSTALL_PROGRAM) src/prog/mouse-test \
+	                   debian/gpm/usr/sbin/gpm-mouse-test
+	$(INSTALL_PROGRAM) contrib/scripts/microtouch-setup \
+	                   debian/gpm/usr/sbin/gpm-microtouch-setup
+
+	mkdir -p debian/libgpm2/$(lib)
+	$(INSTALL_DATA) src/lib/libgpm.so.2.0.0 debian/libgpm2/$(lib)/libgpm.so.2
+
+	mkdir -p debian/libgpm-dev/$(lib)
+	ln -s libgpm.so.2 debian/libgpm-dev/$(lib)/libgpm.so
+	$(INSTALL_DATA) src/lib/libgpm.a debian/libgpm-dev/$(lib)/
+
+	dh_installinfo
+	dh_installman
+	dh_installdocs
+	dh_installchangelogs Changes
+	dh_installexamples
+	dh_installinit
+	dh_installdebconf
+	dh_lintian
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+.PHONY: build binary binary-arch binary-indep clean
+
