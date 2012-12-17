@@ -1,0 +1,34 @@
+#!/usr/bin/make -f
+
+DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+%:
+	dh $@ --with autoreconf --builddirectory=build
+
+override_dh_auto_configure: debian/copyright
+ifeq ($(DEB_HOST_ARCH_OS), hurd)
+	# libc.so pulls in libpthread-stubs.so, defeating our configure checks
+	# by making them think the stubs are already in libc.  Point ld at an
+	# empty libpthread-stubs instead.
+	echo 'OUTPUT_FORMAT(elf32-i386)' > debian/libpthread-stubs.so
+	LDFLAGS='-L$(CURDIR)/debian' dh_auto_configure --builddirectory=build
+else
+	dh_auto_configure --builddirectory=build
+endif
+
+override_dh_makeshlibs:
+	dh_makeshlibs -plibpthread-stubs0 --add-udeb=libpthread-stubs0-udeb
+
+override_dh_auto_install:
+	dh_auto_install --builddirectory=build
+	find debian/tmp -name '*.la' -delete
+ifeq ($(DEB_HOST_ARCH_OS), hurd)
+	install -d debian/tmp/lib/$(DEB_HOST_MULTIARCH)
+	mv debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libpthread-stubs.so.0* debian/tmp/lib/$(DEB_HOST_MULTIARCH)
+	ln -sf /lib/$(DEB_HOST_MULTIARCH)/libpthread-stubs.so.0 debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libpthread-stubs.so
+endif
+
+debian/copyright: debian/copyright.debian COPYING
+	cat $+ > $@
+
