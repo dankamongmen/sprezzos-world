@@ -4281,14 +4281,6 @@ $(XTRANS): $(SPREZZ)/xtrans/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xtrans_$(xtrans_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: udisks
-udisks:$(UDISKS)_$(ARCH).deb
-$(UDISKS): $(SPREZZ)/udisks/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf udisks_$(udisks_UPVER).orig.tar.bz2 $(TARARGS) $@
-
 .PHONY: udisks2
 udisks2:$(UDISKS2)_$(ARCH).deb
 $(UDISKS2): $(SPREZZ)/udisks2/debian/changelog
