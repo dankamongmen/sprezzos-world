@@ -156,9 +156,9 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(LIBNICE) $(XSERVERXORGVIDEOVESA) $(LIBX11) $(ARGYLL) $(X11PROTOXF86BIGFONT) \
 	$(XCBUTIL) $(GAWK) $(STARTUPNOTIFICATION) $(NOTIFICATIONDAEMON) $(LSSCSI) \
 	$(LSHW) $(ALSAUTILS) $(ALSATOOLS) $(ALSALIB) $(FAKEROOT) $(GETTEXT) $(CCLIVE) \
-	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) \
+	$(OPENSSL) $(LIBSSH) $(LIBCRYPTSSLEAYPERL) $(GNOMEJSCOMMON) $(BOOST152) $(DC) \
 	$(YASM) $(GSTPLUGINSBASE) $(PYTHONCOVERAGE) $(AUTOCONF) $(BIND9) $(MESADEMOS) \
-	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) \
+	$(OPENVPN) $(RPCBIND) $(NETSNMP) $(PCIUTILS) $(LIBPCIACCESS) $(NCURSES) $(BC) \
 	$(AVIDEMUX) $(BLESS) $(POLICYKIT) $(AFTEN) $(LIBCHAMPLAIN) $(CELESTIAGNOME) \
 	$(NGINX) $(LIBGD2) $(LIBXFIXES) $(SHUTTER) $(VIRTUOSO) $(DNSMASQ) $(SPACEFM) \
 	$(KMOD) $(LIBTORRENT) $(RTORRENT) $(GNOMEPAINT) $(MON) $(APACHE) $(APACHETOP) \
@@ -184,7 +184,7 @@ DEBS:=$(GROWLIGHT) $(LIBRSVG) $(GRUB2) $(LVM2) $(OPENSSH) $(LIBPNG) $(FWTS) $(IC
 	$(CODEBLOCKS) $(LIBWXGTK28) $(LIBWXGTK29) $(LIBXV) $(LIBXKBCOMMON) $(FUSEISO) \
 	$(LIBNETFILTERCONNTRACK) $(LIBNFNETLINK) $(GNOMEBOXES) $(LIBMNL) $(LIBV8) \
 	$(XCBUTILKEYSYMS) $(LIBVA) $(USBUTILS) $(GCC47) $(SILGRAPHITE) $(EWEBKIT) \
-	$(OBEXFS) $(LIBTIRPC) $(KEYUTILS) $(LIBOSINFO) $(LIBVIRTGLIB)
+	$(OBEXFS) $(LIBTIRPC) $(KEYUTILS) $(LIBOSINFO) $(LIBVIRTGLIB) $(SPICEGTK)
 UDEBS:=$(FIRMWAREALL) $(ANNA) $(LIBDEBIANINSTALLER)
 DUPUDEBS:=$(GROWLIGHT) $(FBTERM) $(CONPALETTE) $(STRACE) $(SPLITVT) $(FBV) \
 	$(NETHOROLOGIST) $(FWTS) $(UTILLINUX) $(HFSUTILS) $(LIBPNG) $(EGLIBC) \
@@ -716,6 +716,14 @@ $(BASH): $(SPREZZ)/bash/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bash-$(bash_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: bc
+bc:$(BC)_$(ARCH).deb
+$(BC): $(SPREZZ)/bc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bc-$(bc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: bind9
 bind9:$(BIND9)_$(ARCH).deb
 $(BIND9): $(SPREZZ)/bind9/debian/changelog
@@ -1027,6 +1035,14 @@ $(DBUSPYTHON): $(SPREZZ)/dbus-python/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-python-$(dbus-python_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: dc
+dc:$(DC)_$(ARCH).deb
+$(DC): $(SPREZZ)/dc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dc-$(dc_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: dcraw
 dcraw:$(DCRAW)_$(ARCH).deb
@@ -3629,6 +3645,14 @@ $(SPEEX): $(SPREZZ)/speex/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf speex-$(speex_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: spice-gtk
+spice-gtk:$(SPICEGTK)_$(ARCH).deb
+$(SPICEGTK): $(SPREZZ)/spice-gtk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf spice-gtk-$(spice-gtk_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: startup-notification
 startup-notification:$(STARTUPNOTIFICATION)_$(ARCH).deb
