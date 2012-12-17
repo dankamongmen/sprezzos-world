@@ -1,0 +1,100 @@
+#!/usr/bin/make -f
+# spice-gtk debian/rules using debhelper
+# Copyright (C) 2011 Liang Guo <bluestonechina@gmail.com>
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+  CXXFLAGS += -g
+endif
+
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+ 
+build-arch: build
+build-indep: build
+
+build: build-stamp
+build-stamp: build-gtk3-stamp build-gtk2-stamp
+	touch build-stamp
+
+build-gtk2-stamp:
+	mkdir build-gtk2
+	ls |grep -v debian|grep -v build-gtk2|grep -v build-gtk3|xargs -i cp -r {} build-gtk2/
+	cp .version .tarball-version build-gtk2/
+	cd build-gtk2 && autoreconf
+	cd build-gtk2 && ./configure --prefix=/usr --libdir=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		--enable-smartcard=no --with-gtk=2.0 --disable-static \
+		--enable-introspection --enable-vala --enable-celt=no \
+		--enable-usbredir=yes --enable-polkit=yes \
+		--with-usb-acl-helper-dir=/usr/lib/$(DEB_HOST_MULTIARCH)/spice-gtk
+	$(MAKE) -C build-gtk2
+	touch build-gtk2-stamp
+
+build-gtk3-stamp:
+	mkdir build-gtk3
+	ls |grep -v debian|grep -v build-gtk2|grep -v build-gtk3|xargs -i cp -r {} build-gtk3/
+	cp .version .tarball-version build-gtk3/
+	cd build-gtk3 && autoreconf
+	cd build-gtk3 && ./configure --prefix=/usr --libdir=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		--enable-smartcard=no --with-gtk=3.0 --disable-static \
+		--enable-introspection --enable-vala --enable-celt=no \
+		--enable-usbredir=yes --enable-polkit=yes \
+		--with-usb-acl-helper-dir=/usr/lib/$(DEB_HOST_MULTIARCH)/spice-gtk
+	$(MAKE) -C build-gtk3
+	touch build-gtk3-stamp
+
+clean: clean-patched 
+clean-patched: 
+	dh_testdir
+	dh_testroot
+	[ ! -d $(CURDIR)/build-gtk3 ] || rm -rf $(CURDIR)/build-gtk3
+	[ ! -d $(CURDIR)/build-gtk2 ] || rm -rf $(CURDIR)/build-gtk2
+	dh_clean 
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	$(MAKE) -C $(CURDIR)/build-gtk3 install DESTDIR=$(CURDIR)/debian/tmp
+	$(MAKE) -C $(CURDIR)/build-gtk2 install DESTDIR=$(CURDIR)/debian/tmp
+	mv $(CURDIR)/debian/tmp/usr/bin/snappy $(CURDIR)/debian/tmp/usr/bin/spicy-snapshot
+	dh_install --sourcedir=debian/tmp
+	touch install-stamp
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install  --list-missing
+	dh_installchangelogs
+	dh_installdocs 
+	dh_installexamples
+	dh_installman
+	dh_python2 --no-guessing-versions
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_girepository
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
+
