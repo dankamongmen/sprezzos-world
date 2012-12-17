@@ -1,0 +1,116 @@
+#!/usr/bin/make -f
+# debian/rules for the Debian libice package.
+# Copyright © 2004 Scott James Remnant <scott@netsplit.com>
+# Copyright © 2005 Daniel Stone <daniel@fooishbar.org>
+# Copyright © 2005 David Nusinow <dnusinow@debian.org>
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# set this to the name of the main shlib's binary package
+PACKAGE = libice6
+
+include debian/xsfbs/xsfbs.mk
+
+CFLAGS = -Wall -g
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build=$(DEB_HOST_GNU_TYPE)
+else
+	confflags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+configure: $(STAMP_DIR)/patch
+	dh_testdir
+	autoreconf -vfi
+
+build: build-indep
+build-arch: build-stamp
+build-arch: docflags = --disable-docs --disable-specs
+build-indep: build-stamp
+build-indep: docflags = --enable-docs --enable-specs
+build-stamp: configure
+	dh_testdir
+	mkdir -p build
+	cd build && \
+	../configure --prefix=/usr --mandir=\$${prefix}/share/man \
+	             --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+	             --infodir=\$${prefix}/share/info $(confflags) \
+		     --docdir=\$${datadir}/doc/libice-dev \
+		     $(docflags) \
+	             CFLAGS="$(CFLAGS)" 
+	cd build && $(MAKE)
+	>$@
+
+clean: xsfclean
+	dh_testdir
+	rm -f build-stamp
+	rm -f config.cache config.log config.status
+	rm -f */config.cache */config.log */config.status
+	rm -f conftest* */conftest*
+	rm -rf autom4te.cache */autom4te.cache
+	rm -rf build
+	rm -f aclocal.m4 config.guess config.sub config.h.in configure
+	rm -f depcomp install-sh ltmain.sh missing mkinstalldirs INSTALL
+	find -name Makefile.in -delete
+	dh_clean
+
+install: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	cd build && $(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+
+# Build architecture-dependent files here.
+binary-arch: build-arch install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -a
+	dh_install -a --sourcedir=debian/tmp --fail-missing --exclude=libICE.la
+	dh_installchangelogs -a ChangeLog
+	dh_link -a
+	dh_strip -p$(PACKAGE) --dbg-package=$(PACKAGE)-dbg
+	dh_strip -a -N$(PACKAGE)
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a -V'$(PACKAGE) (>= 1:1.0.0)'
+	dh_shlibdeps -a
+	dh_installdeb -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+# Build architecture-independent files here.
+binary-indep: build-indep install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -i
+	dh_install -i --sourcedir=debian/tmp --fail-missing --exclude=libICE.la
+	dh_installchangelogs -i ChangeLog
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary: binary-indep binary-arch
+
+.PHONY: build-indep build-arch build
+.PHONY: binary-indep binary-arch binary
+.PHONY: install clean
