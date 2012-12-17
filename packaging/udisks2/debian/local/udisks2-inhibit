@@ -1,0 +1,45 @@
+#!/bin/sh
+# Disallow udisks2 mount operations for anyone but root while a program is running.
+# This is similar to udisks 1.x's "udisks --inhibit .." command.
+# Author: Martin Pitt <martin.pitt@ubuntu.com>
+
+set -e
+
+RULE="[Inhibit udisks2]
+Identity=unix-user:*
+Action=org.freedesktop.udisks2.filesystem*;
+ResultActive=no
+ResultInactive=no
+ResultAny=no
+"
+
+[ -n "$1" ] || {
+    echo "Usage: $0 <command> [<arguments> ...]" >&2
+    exit 1
+}
+
+[ "`id -u`" = 0 ] || {
+    echo "You need to run this script as root" >&2
+    exit 1
+}
+
+DIR=/var/lib/polkit-1/localauthority/90-mandatory.d
+[ -d $DIR ] || {
+    echo "$DIR does not exist. Please install policykit-1" >&2
+    exit 1
+}
+
+# mount a tmpfs over $DIR and place our rule in there, together with the
+# already existing ones; this will guarantee that the file will not
+# accidentally stay around across reboot, etc.
+mkdir -p /run/udisks2/inhibit-polkit
+mount -t tmpfs tmpfs /run/udisks2/inhibit-polkit
+find "$DIR" -mindepth 1 -exec cp -a '{}' /run/udisks2/inhibit-polkit \;
+echo "$RULE" > /run/udisks2/inhibit-polkit/udisks2-inhibit.pkla
+mount --move /run/udisks2/inhibit-polkit "$DIR"
+trap "umount $DIR; pkill --signal HUP polkitd" 0 HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE ALRM TERM BUS
+rmdir /run/udisks2/inhibit-polkit
+pkill --signal HUP polkitd || :
+
+# run wrapped command
+"$@"
