@@ -1,0 +1,56 @@
+#!/usr/bin/make -f
+
+export DEB_CPPFLAGS_MAINT_APPEND := $(shell dpkg-buildflags --get CPPFLAGS)
+export DEB_CFLAGS_MAINT_APPEND := $(shell dpkg-buildflags --get CPPFLAGS)
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    BOOTSTRAP_PARALLEL = --parallel=$(NUMJOBS)
+endif
+
+
+BUILD_FLAGS_FILE = build-flags.cmake
+set_build_flag = echo 'set($(1) $(2) CACHE \
+    $(if $(filter $(2),YES ON TRUE NO OFF FALSE),BOOL,STRING) \
+    $(or $(3),"") FORCE)' >> $(BUILD_FLAGS_FILE)
+verify_build_flag = @grep \
+    --include=CMakeLists.txt --include=*.cmake \
+    --exclude=$(BUILD_FLAGS_FILE) -rqs '\b$(1)\b' . || echo '$(1) flag is obsolete'
+
+$(BUILD_FLAGS_FILE) verify-build-flags:
+	$(call $(flag_action),CMAKE_SKIP_RPATH,ON,"Skip rpath")
+	$(call $(flag_action),CMAKE_USE_RELATIVE_PATHS,ON,"Use relative paths")
+	$(call $(flag_action),CMAKE_VERBOSE_MAKEFILE,ON,"Verbose build")
+	$(call $(flag_action),CMAKE_C_FLAGS,"$(CFLAGS)","C flags")
+	$(call $(flag_action),CMAKE_CXX_FLAGS,"$(CFLAGS)","C++ flags")
+	$(call $(flag_action),CMAKE_SKIP_BOOTSTRAP_TEST,ON,"Skip BootstrapTest")
+	$(call $(flag_action),BUILD_CursesDialog,ON,"Build curses GUI")
+	$(call $(flag_action),BUILD_QtDialog,ON,"Build Qt4 GUI")
+#	$(call $(flag_action),BUILD_DOCUMENTATION,ON)
+	$(call $(flag_action),CMAKE_USE_SYSTEM_LIBARCHIVE,ON)
+	$(call $(flag_action),CTEST_USE_XMLRPC,ON)
+
+$(BUILD_FLAGS_FILE): flag_action := set_build_flag
+verify-build-flags: flag_action := verify_build_flag
+.PHONY: verify-build-flags
+
+override_dh_auto_configure: $(BUILD_FLAGS_FILE)
+	rm -rf Build && mkdir -p Build
+	cd Build && ../bootstrap --prefix=/usr --docdir=/share/doc/cmake --mandir=/share/man \
+	                         --init=../$(BUILD_FLAGS_FILE) --system-libs $(CONFIGURE_PARALLEL) \
+	                         $(BOOTSTRAP_PARALLEL) --verbose
+
+override_dh_auto_test:
+	HOME="`pwd`/Build" dh_auto_test -- ARGS="-E CTestTestUpload"
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -f $(BUILD_FLAGS_FILE)
+
+override_dh_installdocs:
+	dh_installdocs --link-doc=cmake-data
+
+%:
+	dh $@ --parallel --builddirectory=Build --dbg-package=cmake-dbg
+
+.PHONY: override_dh_auto_configure override_dh_auto_clean
