@@ -1,0 +1,492 @@
+Description: Impose IPv6-capacities on ftp.c.
+ Super structure 'struct sockaddr_storage' is replacing 'struct sockaddr_in'
+ .
+ For peer address strings, a first try aims at IPv4. That failing, next
+ try is for IPv6, and ultimatively a host lookup follows as last resort.
+ .
+ Use a SIGALRM mechanism to decrease the default TCP handshake timeout
+ to a value better suited for interactive use. The macro can be set
+ externally to change the suggested FTP_CONNECT_TIMEOUT=10
+ .
+ Use a command EPSV with explicit request for IPv6 address family as soon
+ as parsing concluded that the control socket is using IPv6.
+ .
+ Make IP_TOS conditioned on AF_INET.
+Author: Mats Erik Andersson <debian@gisladisker.se>
+Forwarded: no
+Last-Update: 2011-06-17
+--- netkit-ftp-0.17.debian/ftp/ftp.c
++++ netkit-ftp-0.17/ftp/ftp.c
+@@ -71,9 +71,11 @@
+ int data = -1;
+ off_t restart_point = 0;
+ 
+-static struct sockaddr_in hisctladdr;
+-static struct sockaddr_in data_addr;
+-static struct sockaddr_in myctladdr;
++static char ipstring[INET6_ADDRSTRLEN]; /* Scribble area for resolver. */
++
++static struct sockaddr_storage hisctladdr;
++static struct sockaddr_storage data_addr;
++static struct sockaddr_storage myctladdr;
+ static int ptflag = 0;
+ static int ptabflg = 0;
+ 
+@@ -95,40 +97,56 @@
+ static FILE *dataconn(const char *);
+ static void printbytes(off_t);
+ 
++#if ! defined(FTP_CONNECT_TIMEOUT) || FTP_CONNECT_TIMEOUT < 1
++# define FTP_CONNECT_TIMEOUT 10
++#endif
++
++static void
++trivial_alarm(int sig)
++{
++	/* Only used to generate an EINTR error. */
++	return;
++}
++
+ char *
+ hookup(char *host, int port)
+ {
+-	register struct hostent *hp = 0;
++	struct addrinfo hints, *ai = NULL, *aiptr = NULL;
++	struct sigaction sigact, oldsigact;
++	int status;
+ 	volatile int s = -1;
+-	int tos;
++	int tos, af_in_use;
+ 	socklen_t len;
+ 	static char hostnamebuf[256];
+ 	sigjmp_buf jmploc;
+ 	sigjmp_buf *volatile oldtoplevel;
+ 	int dupfd;
++	struct sockaddr_in *hisctl_sa4 = (struct sockaddr_in *) &hisctladdr;
++	struct sockaddr_in6 *hisctl_sa6 = (struct sockaddr_in6 *) &hisctladdr;
+ 
+ 	memset(&hisctladdr, 0, sizeof(hisctladdr));
+-	if (inet_aton(host, &hisctladdr.sin_addr)) {
+-		hisctladdr.sin_family = AF_INET;
+-		strncpy(hostnamebuf, host, sizeof(hostnamebuf));
+-		hostnamebuf[sizeof(hostnamebuf)-1]=0;
+-	} 
+-	else {
+-		hp = gethostbyname(host);
+-		if (hp == NULL) {
+-			fprintf(stderr, "ftp: %s: ", host);
+-			herror((char *)NULL);
+-			code = -1;
+-			return((char *) 0);
+-		}
+-		hisctladdr.sin_family = hp->h_addrtype;
+-		if (hp->h_length > (int)sizeof(hisctladdr.sin_addr)) {
+-			hp->h_length = sizeof(hisctladdr.sin_addr);
+-		}
+-		memcpy(&hisctladdr.sin_addr, hp->h_addr_list[0], hp->h_length);
+-		(void) strncpy(hostnamebuf, hp->h_name, sizeof(hostnamebuf));
+-		hostnamebuf[sizeof(hostnamebuf)-1] = 0;
++
++	sigact.sa_handler = trivial_alarm;
++	sigemptyset(&sigact.sa_mask);
++	sigact.sa_flags = 0;
++
++	memset(&hints, 0, sizeof(hints));
++	hints.ai_flags = AI_ADDRCONFIG | AI_CANONNAME;
++	hints.ai_family = AF_UNSPEC;
++	hints.ai_socktype = SOCK_STREAM;
++
++	if ( (status = getaddrinfo(host, NULL, &hints, &ai)) ) {
++		fprintf(stderr, "ftp: %s: %s\n", host,
++				gai_strerror(status));
++		code = -1;
++		return((char *) 0);
+ 	}
++
++	aiptr = ai;
++	memcpy(&hisctladdr, aiptr->ai_addr, aiptr->ai_addrlen);
++	(void) strncpy(hostnamebuf, aiptr->ai_canonname,
++			sizeof(hostnamebuf));
++	hostnamebuf[sizeof(hostnamebuf)-1] = 0;
+ 	hostname = hostnamebuf;
+ 
+ 	oldtoplevel = toplevel;
+@@ -141,53 +159,127 @@
+ 	toplevel = &jmploc;
+ 
+ 	INTOFF;
+-	s = socket(hisctladdr.sin_family, SOCK_STREAM, 0);
++	s = socket(hisctladdr.ss_family, SOCK_STREAM, 0);
++	af_in_use = hisctladdr.ss_family;
+ 	INTON;
+ 	if (s < 0) {
+ 		perror("ftp: socket");
++		freeaddrinfo(ai);
+ 		code = -1;
+ 		goto out;
+ 	}
+-	hisctladdr.sin_port = port;
+-	while (connect(s, (struct sockaddr *)&hisctladdr, sizeof (hisctladdr)) < 0) {
+-		if (hp && hp->h_addr_list[1]) {
++	switch (hisctladdr.ss_family) {
++		case AF_INET:
++			hisctl_sa4->sin_port = port;
++			break;
++		case AF_INET6:
++			hisctl_sa6->sin6_port = port;
++	}
++
++	sigaction(SIGALRM, &sigact, &oldsigact);
++	alarm(FTP_CONNECT_TIMEOUT);
++
++	while (connect(s, (struct sockaddr *)&hisctladdr,
++				(hisctladdr.ss_family == AF_INET)
++				? sizeof(struct sockaddr_in)
++				: sizeof(struct sockaddr_in6))
++			< 0)
++	{
++		alarm(0);
++		sigaction(SIGALRM, &oldsigact, NULL);
++		if (errno == EINTR)
++			errno = ETIMEDOUT;
++
++		if (aiptr && aiptr->ai_next)
++		{
+ 			int oerrno = errno;
++			struct in_addr *ctladdr4 = &hisctl_sa4->sin_addr;
++			struct in6_addr *ctladdr6 = &hisctl_sa6->sin6_addr;
+ 
+-			fprintf(stderr, "ftp: connect to address %s: ",
+-				inet_ntoa(hisctladdr.sin_addr));
++			switch (aiptr->ai_family) {
++			    case AF_INET:
++				fprintf(stderr, "ftp: connect to address %s: ",
++					inet_ntop(aiptr->ai_family,
++							ctladdr4,
++							ipstring,
++							sizeof(ipstring)));
++				break;
++			    case AF_INET6:
++				fprintf(stderr, "ftp: connect to address %s: ",
++					inet_ntop(aiptr->ai_family,
++							ctladdr6,
++							ipstring,
++							sizeof(ipstring)));
++			}
+ 			errno = oerrno;
+ 			perror((char *) 0);
+-			hp->h_addr_list++;
+-			memcpy(&hisctladdr.sin_addr, hp->h_addr_list[0], 
+-			       hp->h_length);
+-			fprintf(stdout, "Trying %s...\n",
+-				inet_ntoa(hisctladdr.sin_addr));
++
++			aiptr = aiptr->ai_next;
++			memcpy(&hisctladdr, aiptr->ai_addr,
++					aiptr->ai_addrlen);
++			switch (hisctladdr.ss_family) {
++				case AF_INET:
++					hisctl_sa4->sin_port = port;
++					break;
++				case AF_INET6:
++					hisctl_sa6->sin6_port = port;
++			}
++
++			switch (aiptr->ai_family) {
++			    case AF_INET:
++				fprintf(stdout, "Trying %s...\n",
++					inet_ntop(aiptr->ai_family,
++							ctladdr4,
++							ipstring,
++							sizeof(ipstring)));
++				break;
++			    case AF_INET6:
++				fprintf(stdout, "Trying %s...\n",
++					inet_ntop(aiptr->ai_family,
++							ctladdr6,
++							ipstring,
++							sizeof(ipstring)));
++			}
+ 			INTOFF;
+ 			(void) close(s);
+-			s = socket(hisctladdr.sin_family, SOCK_STREAM, 0);
++			s = socket(aiptr->ai_family, SOCK_STREAM, 0);
++			af_in_use = aiptr->ai_family;
+ 			INTON;
+ 			if (s < 0) {
+ 				perror("ftp: socket");
++				freeaddrinfo(ai);
+ 				code = -1;
+ 				goto out;
+ 			}
++			/* Try next server candidate. */
+ 			continue;
+ 		}
++		/* No answer to any call. */
+ 		perror("ftp: connect");
++		freeaddrinfo(ai);
+ 		code = -1;
+ 		goto bad;
+ 	}
++	alarm(0);
++	sigaction(SIGALRM, &oldsigact, NULL);
++
+ 	len = sizeof (myctladdr);
+ 	if (getsockname(s, (struct sockaddr *)&myctladdr, &len) < 0) {
+ 		perror("ftp: getsockname");
++		if (ai)
++			freeaddrinfo(ai);
+ 		code = -1;
+ 		goto bad;
+ 	}
++	if (ai)
++		freeaddrinfo(ai);
+ #ifdef IP_TOS
+ 	tos = IPTOS_LOWDELAY;
+-	if (setsockopt(s, IPPROTO_IP, IP_TOS, (char *)&tos, sizeof(int)) < 0)
++	if ( (af_in_use == AF_INET) &&
++		(setsockopt(s, IPPROTO_IP, IP_TOS, (char *)&tos,
++	  		  sizeof(tos)) < 0) )
+ 		perror("ftp: setsockopt TOS (ignored)");
+-#endif
++#endif /* IP_TOS */
+ 	INTOFF;
+ 	if (cin)
+ 		fclose(cin);
+@@ -458,7 +550,7 @@
+ 			}
+ 			if (dig < 4 && isdigit(c))
+ 				code = code * 10 + (c - '0');
+-			if (!pflag && code == 227)
++			if (!pflag && (code == 227 || code == 229))
+ 				pflag = 1;
+ 			if (dig > 4 && pflag == 1 && isdigit(c))
+ 				pflag = 2;
+@@ -1198,18 +1290,21 @@
+ static int
+ initconn(void)
+ {
+-	register char *p, *a;
++	register char *p = NULL, *a = NULL;
+ 	int result, tmpno = 0;
+ 	socklen_t len;
+ 	int on = 1;
+ 	int tos;
+ 	u_long a1,a2,a3,a4,p1,p2;
++	unsigned short int port;
++	struct sockaddr_in *data_addr_sa4 = (struct sockaddr_in *) &data_addr;
++	struct sockaddr_in6 *data_addr_sa6 = (struct sockaddr_in6 *) &data_addr;
+ 
+ 	if (passivemode) {
+ 		INTOFF;
+ 		if (data >= 0)
+ 			close(data);
+-		data = socket(AF_INET, SOCK_STREAM, 0);
++		data = socket(hisctladdr.ss_family, SOCK_STREAM, 0);
+ 		INTON;
+ 		if (data < 0) {
+ 			perror("ftp: socket");
+@@ -1219,32 +1314,67 @@
+ 		    setsockopt(data, SOL_SOCKET, SO_DEBUG, (char *)&on,
+ 			       sizeof (on)) < 0)
+ 			perror("ftp: setsockopt (ignored)");
+-		if (command("PASV") != COMPLETE) {
+-			printf("Passive mode refused.\n");
+-			return(1);
+-		}
+-
+-		/*
+-		 * What we've got at this point is a string of comma separated
+-		 * one-byte unsigned integer values, separated by commas.
+-		 * The first four are the an IP address. The fifth is the MSB
+-		 * of the port number, the sixth is the LSB. From that we'll
+-		 * prepare a sockaddr_in.
+-		 */
+-
+-		if (sscanf(pasv,"%ld,%ld,%ld,%ld,%ld,%ld",
+-			   &a1,&a2,&a3,&a4,&p1,&p2)
+-		    != 6) 
+-		{
+-			printf("Passive mode address scan failure. Shouldn't happen!\n");
+-			return(1);
++		switch (hisctladdr.ss_family) {
++			case AF_INET:
++				if (command("PASV") != COMPLETE) {
++					printf("Passive mode refused.\n");
++					return(1);
++				}
++				break;
++			case AF_INET6:
++				if (command("EPSV 2") != COMPLETE) {
++					printf("Passive mode refused.\n");
++					return(1);
++				}
+ 		}
+ 
+-		data_addr.sin_family = AF_INET;
+-		data_addr.sin_addr.s_addr = htonl((a1 << 24) | (a2 << 16) |
+-						  (a3 << 8) | a4);
+-		data_addr.sin_port = htons((p1 << 8) | p2);
+-
++		if (hisctladdr.ss_family == AF_INET) {
++			/*
++			 * IPv4
++			 *
++			 * What we've got at this point is a string of
++			 * comma separated one-byte unsigned integer
++			 * values, separated by commas. The first four
++			 * are the an IP address. The fifth is the MSB
++			 * of the port number, the sixth is the LSB.
++			 * From that we will prepare a sockaddr_in.
++			 */
++
++			if (sscanf(pasv,"%ld,%ld,%ld,%ld,%ld,%ld",
++				   &a1,&a2,&a3,&a4,&p1,&p2)
++			    != 6) 
++			{
++				printf("Passive mode address scan failure."
++					"Shouldn't happen!\n");
++				return(1);
++			}
++
++			data_addr.ss_family = AF_INET;
++			data_addr_sa4->sin_addr.s_addr =
++				htonl((a1 << 24) | (a2 << 16) |
++						(a3 << 8) | a4);
++			data_addr_sa4->sin_port = htons((p1 << 8) | p2);
++		} /* Old IPv4 command PASV */
++		else {
++			/* EPSV for IPv6
++			 *
++			 * Expected: pasv =~ "%u|"
++			 *
++			 * This is a shortcut based on the old code
++			 * for getreply(), only altered to accept
++			 * return code "229" for ESPV, in addition
++			 * to "227" which goes with PASV.
++			 */
++			if (sscanf(pasv, "%hu", &port) != 1) {
++				printf("Extended passive mode address "
++					"scan failure. Unfortunate!\n");
++				return(1);
++			}
++			data_addr = hisctladdr;
++			data_addr.ss_family = AF_INET6;
++			data_addr_sa6->sin6_port = htons(port);
++		} /* EPSV for IPv6 */
++	
+ 		if (connect(data, (struct sockaddr *) &data_addr,
+ 		    sizeof(data_addr))<0) {
+ 			perror("ftp: connect");
+@@ -1252,20 +1382,28 @@
+ 		}
+ #ifdef IP_TOS
+ 		tos = IPTOS_THROUGHPUT;
+-		if (setsockopt(data, IPPROTO_IP, IP_TOS, (char *)&tos,
+-		    sizeof(tos)) < 0)
++		if ( (hisctladdr.ss_family == AF_INET) &&
++			(setsockopt(data, IPPROTO_IP, IP_TOS, (char *)&tos,
++		  		  sizeof(tos)) < 0) )
+ 			perror("ftp: setsockopt TOS (ignored)");
+-#endif
++#endif /* IP_TOS */
+ 		return(0);
+ 	}
+ noport:
+ 	data_addr = myctladdr;
+ 	if (sendport)
+-		data_addr.sin_port = 0;	/* let system pick one */ 
++		/* let the system pick a port */ 
++		switch (data_addr.ss_family) {
++			case AF_INET:
++				data_addr_sa4->sin_port = 0;
++				break;
++			case AF_INET6:
++				data_addr_sa6->sin6_port = 0;
++		}
+ 	INTOFF;
+ 	if (data != -1)
+ 		(void) close(data);
+-	data = socket(AF_INET, SOCK_STREAM, 0);
++	data = socket(data_addr.ss_family, SOCK_STREAM, 0);
+ 	INTON;
+ 	if (data < 0) {
+ 		perror("ftp: socket");
+@@ -1293,13 +1431,23 @@
+ 	if (listen(data, 1) < 0)
+ 		perror("ftp: listen");
+ 	if (sendport) {
+-		a = (char *)&data_addr.sin_addr;
+-		p = (char *)&data_addr.sin_port;
+ #define	UC(b)	(((int)b)&0xff)
+-		result =
+-		    command("PORT %d,%d,%d,%d,%d,%d",
+-		      UC(a[0]), UC(a[1]), UC(a[2]), UC(a[3]),
+-		      UC(p[0]), UC(p[1]));
++		switch (data_addr.ss_family) {
++			case AF_INET:
++				a = (char *)&data_addr_sa4->sin_addr;
++				p = (char *)&data_addr_sa4->sin_port;
++				result = command("PORT %d,%d,%d,%d,%d,%d",
++					    UC(a[0]), UC(a[1]), UC(a[2]),
++					    UC(a[3]), UC(p[0]), UC(p[1]));
++				break;
++			case AF_INET6:
++				result = command("EPRT |2|%s|%d|",
++						inet_ntop(data_addr.ss_family,
++							&data_addr_sa6->sin6_addr,
++							ipstring,
++							sizeof(ipstring)),
++						ntohs(data_addr_sa6->sin6_port));
++		}
+ 		if (result == ERROR && sendport == -1) {
+ 			sendport = 0;
+ 			tmpno = 1;
+@@ -1311,9 +1459,11 @@
+ 		sendport = 1;
+ #ifdef IP_TOS
+ 	on = IPTOS_THROUGHPUT;
+-	if (setsockopt(data, IPPROTO_IP, IP_TOS, (char *)&on, sizeof(int)) < 0)
++	if ( (data_addr.ss_family == AF_INET) &&
++		(setsockopt(data, IPPROTO_IP, IP_TOS, (char *)&tos,
++	  		  sizeof(tos)) < 0) )
+ 		perror("ftp: setsockopt TOS (ignored)");
+-#endif
++#endif /* IP_TOS */
+ 	return (0);
+ bad:
+ 	INTOFF;
+@@ -1327,7 +1477,7 @@
+ static FILE *
+ dataconn(const char *lmode)
+ {
+-	struct sockaddr_in from;
++	struct sockaddr_storage from;
+ 	int s, tos;
+ 	socklen_t fromlen = sizeof(from);
+ 
+@@ -1344,9 +1494,11 @@
+ 	data = s;
+ #ifdef IP_TOS
+ 	tos = IPTOS_THROUGHPUT;
+-	if (setsockopt(s, IPPROTO_IP, IP_TOS, (char *)&tos, sizeof(int)) < 0)
++	if ( (from.ss_family == AF_INET) &&
++		(setsockopt(s, IPPROTO_IP, IP_TOS, (char *)&tos,
++	  		  sizeof(tos)) < 0) )
+ 		perror("ftp: setsockopt TOS (ignored)");
+-#endif
++#endif /* IP_TOS */
+ 	return (fdopen(data, lmode));
+ }
+ 
+@@ -1398,8 +1550,8 @@
+ 	static struct comvars {
+ 		int connect;
+ 		char name[MAXHOSTNAMELEN];
+-		struct sockaddr_in mctl;
+-		struct sockaddr_in hctl;
++		struct sockaddr_storage mctl;
++		struct sockaddr_storage hctl;
+ 		FILE *in;
+ 		FILE *out;
+ 		int tpe;

@@ -1,0 +1,2929 @@
+Description: Source patches applied to release Sarge.
+ Multiple patches.
+X-Comment: Recovered from package netkit-ftp_0.17-12.diff.gz
+Author: Herbert Xu <herbert@debian.org>
+Forwarded: no
+Last-Update: 2003-06-29
+--- netkit-ftp-0.17.orig/ftp/Makefile
++++ netkit-ftp-0.17/ftp/Makefile
+@@ -8,7 +8,7 @@
+ LIBS += -lreadline $(LIBTERMCAP)
+ endif
+ 
+-ftp: cmds.o cmdtab.o domacro.o ftp.o glob.o main.o ruserpass.o
++ftp: cmds.o cmdtab.o domacro.o ftp.o main.o ruserpass.o
+ 	$(CC) $(LDFLAGS) $^ $(LIBS) -o $@
+ 
+ domacro.o ftp.o glob.o main.o ruserpass.o: ftp_var.h pathnames.h
+--- netkit-ftp-0.17.orig/ftp/cmds.c
++++ netkit-ftp-0.17/ftp/cmds.c
+@@ -50,6 +50,7 @@
+ 
+ #include <signal.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include <stdlib.h>
+ #include <errno.h>
+ #include <netdb.h>
+@@ -58,6 +59,7 @@
+ #include <time.h>
+ #include <string.h>
+ #include <unistd.h>
++#include <glob.h>
+ #ifdef __USE_READLINE__
+ #include <readline/readline.h>
+ #include <readline/history.h>
+@@ -66,9 +68,7 @@
+ #include "ftp_var.h"
+ #include "pathnames.h"
+ #include "cmds.h"
+-#include "glob.h"
+-
+-void intr(int);
++#include "main.h"
+ 
+ extern FILE *cout;
+ extern int data;
+@@ -77,17 +77,16 @@
+ extern char reply_string[];
+ 
+ static char *mname;
+-static sigjmp_buf jabort;
+-static sigjmp_buf abortprox;
+ 
+ static char *remglob(char *argv[], int doswitch);
+-static int checkglob(int fd, const char *pattern);
++static int checkglob(FILE *fp, const char *pattern);
+ static char *dotrans(char *name);
+ static char *domap(char *name);
+ static char *globulize(char *str);
+ static int confirm(const char *cmd, const char *file);
+ static int getit(int argc, char *argv[], int restartit, const char *modestr);
+ static void quote1(const char *initial, int argc, char **argv);
++static void dosyst(void);
+ 
+ 
+ /*
+@@ -101,13 +100,9 @@
+ 		return name;
+ 	}
+ 
+-	/* We're going to leak this memory. XXX. */
+-	nu = malloc(strlen(name)+3);
+-	if (nu==NULL) {
+-		perror("malloc");
+-		code = -1;
+-		return NULL;
+-	}
++	INTOFF;
++	nu = obstack_alloc(&mainobstack, strlen(name)+3);
++	INTON;
+ 	strcpy(nu, ".");
+ 	if (*name != '/') strcat(nu, "/");
+ 	strcat(nu, name);
+@@ -163,18 +158,38 @@
+ 
+ 	unsigned len = strlen(line);
+ 	int ret;
++	size_t lynesize;
++	ssize_t lynelen;
++	char *lyne;
++
++	/* We need obstack_unfinish() badly! */
++	INTOFF;
++	lyne = obstack_copy(&mainobstack, line, len);
++	obstack_free(&lineobstack, line);
++	obstack_grow(&lineobstack, lyne, len);
++	obstack_1grow(&lineobstack, ' ');
++	INTON;
++	obstack_free(&mainobstack, lyne);
+ 
+-	if (len >= sizeof(line) - 3) {
+-		printf("sorry, arguments too long\n");
+-		intr(0);
+-	}
+ 	printf("(%s) ", prompt);
+-	line[len++] = ' ';
+-	if (fgets(&line[len], sizeof(line) - len, stdin) == NULL)
++	lyne = NULL;
++	lynesize = 0;
++	INTOFF;
++	if ((lynelen = getline(&lyne, &lynesize, stdin)) == -1) {
++		if (lyne)
++			free(lyne);
++		suppressint = 0;
+ 		intr(0);
+-	len += strlen(&line[len]);
+-	if (len > 0 && line[len - 1] == '\n')
+-		line[len - 1] = '\0';
++	}
++	if (lynelen > 0) {
++		obstack_grow0(&lineobstack, lyne, lyne[lynelen - 1] == '\n' ?
++						  lynelen - 1 : lynelen);
++	} else {
++		obstack_1grow(&lineobstack, '\0');
++	}
++	free(lyne);
++	INTON;
++	line = obstack_finish(&lineobstack);
+ 	margv = makeargv(&margc, NULL);
+ 	ret = margc > *pargc;
+ 	*pargc = margc;
+@@ -218,8 +233,6 @@
+ 	}
+ 	host = hookup(argv[1], port);
+ 	if (host) {
+-		int overbose;
+-
+ 		connected = 1;
+ 		/*
+ 		 * Set up defaults for FTP.
+@@ -232,62 +245,7 @@
+ 		(void) strcpy(bytename, "8"), bytesize = 8;
+ 		if (autologin)
+ 			(void) dologin(argv[1]);
+-
+-#if defined(__unix__) && CHAR_BIT == 8
+-/*
+- * this ifdef is to keep someone form "porting" this to an incompatible
+- * system and not checking this out. This way they have to think about it.
+- */
+-		overbose = verbose;
+-		if (debug == 0)
+-			verbose = -1;
+-		if (command("SYST") == COMPLETE && overbose) {
+-			register char *cp, c = 0;
+-			cp = index(reply_string+4, ' ');
+-			if (cp == NULL)
+-				cp = index(reply_string+4, '\r');
+-			if (cp) {
+-				if (cp[-1] == '.')
+-					cp--;
+-				c = *cp;
+-				*cp = '\0';
+-			}
+-
+-			printf("Remote system type is %s.\n",
+-				reply_string+4);
+-			if (cp)
+-				*cp = c;
+-		}
+-		if (!strncmp(reply_string, "215 UNIX Type: L8", 17)) {
+-			if (proxy)
+-				unix_proxy = 1;
+-			else
+-				unix_server = 1;
+-			/*
+-			 * Set type to 0 (not specified by user),
+-			 * meaning binary by default, but don't bother
+-			 * telling server.  We can use binary
+-			 * for text files unless changed by the user.
+-			 */
+-			type = 0;
+-			(void) strcpy(typename, "binary");
+-			if (overbose)
+-			    printf("Using %s mode to transfer files.\n",
+-				typename);
+-		} else {
+-			if (proxy)
+-				unix_proxy = 0;
+-			else
+-				unix_server = 0;
+-			if (overbose && 
+-			    !strncmp(reply_string, "215 TOPS20", 10))
+-				printf(
+-"Remember to set tenex mode when transfering binary files from this machine.\n");
+-		}
+-		verbose = overbose;
+-#else
+-#warning "Unix auto-mode code skipped"
+-#endif /* unix */
++		dosyst();
+ 	}
+ }
+ 
+@@ -513,9 +471,13 @@
+ mput(int argc, char *argv[])
+ {
+ 	register int i;
+-	void (*oldintr)(int);
+ 	int ointer;
+ 	char *tp;
++	glob_t pglob;
++	volatile int glob_called = 0;
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
++	int globerr;
+ 
+ 	if (argc < 2 && !another(&argc, &argv, "local-files")) {
+ 		printf("usage: %s local-files\n", argv[0]);
+@@ -524,8 +486,16 @@
+ 	}
+ 	mname = argv[0];
+ 	mflag = 1;
+-	oldintr = signal(SIGINT, mabort);
+-	(void) sigsetjmp(jabort, 1);
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 1)) {
++		if (glob_called) {
++			globfree(&pglob);
++			glob_called = 0;
++		}
++		mabort(SIGINT);
++	} else {
++		toplevel = &jmploc;
++	}
+ 	if (proxy) {
+ 		char *cp, *tp2, tmpbuf[PATH_MAX];
+ 
+@@ -571,12 +541,10 @@
+ 				}
+ 			}
+ 		}
+-		(void) signal(SIGINT, oldintr);
+-		mflag = 0;
+-		return;
++		goto out;
+ 	}
+ 	for (i = 1; i < argc; i++) {
+-		register char **cpp, **gargs;
++		char **cpp;
+ 
+ 		if (!doglob) {
+ 			if (mflag && confirm(argv[0], argv[i])) {
+@@ -595,16 +563,23 @@
+ 			}
+ 			continue;
+ 		}
+-		gargs = ftpglob(argv[i]);
+-		if (globerr != NULL) {
+-			printf("%s\n", globerr);
+-			if (gargs) {
+-				blkfree(gargs);
+-				free((char *)gargs);
+-			}
++		INTOFF;
++		globerr = glob(argv[i], GLOB_BRACE | GLOB_ERR | GLOB_NOCHECK |
++					GLOB_NOESCAPE | GLOB_TILDE, 0, &pglob);
++		switch (globerr) {
++		case GLOB_NOSPACE:
++			errno = ENOMEM;
++			goto err;
++		case GLOB_ABORTED:
++			globfree(&pglob);
++err:
++			INTON;
++			puts(strerror(errno));
+ 			continue;
+ 		}
+-		for (cpp = gargs; cpp && *cpp != NULL; cpp++) {
++		glob_called = 1;
++		INTON;
++		for (cpp = pglob.gl_pathv; *cpp; cpp++) {
+ 			if (mflag && confirm(argv[0], *cpp)) {
+ 				tp = (ntflag) ? dotrans(*cpp) : *cpp;
+ 				tp = (mapflag) ? domap(tp) : tp;
+@@ -620,12 +595,13 @@
+ 				}
+ 			}
+ 		}
+-		if (gargs != NULL) {
+-			blkfree(gargs);
+-			free((char *)gargs);
+-		}
++		INTOFF;
++		globfree(&pglob);
++		glob_called = 0;
++		INTON;
+ 	}
+-	(void) signal(SIGINT, oldintr);
++out:
++	toplevel = oldtoplevel;
+ 	mflag = 0;
+ }
+ 
+@@ -657,10 +633,6 @@
+ 		 * local names.
+ 		 */
+ 		argv[2] = pipeprotect(argv[1]);
+-		if (!argv[2]) {
+-			code = -1;
+-			return 0;
+-		}
+ 		loc++;
+ 	}
+ 	if (argc < 2 && !another(&argc, &argv, "remote-file"))
+@@ -785,12 +757,11 @@
+ 		interactive = 1;
+ 		if (confirm("Continue with", mname)) {
+ 			interactive = ointer;
+-			siglongjmp(jabort,0);
++			return;
+ 		}
+ 		interactive = ointer;
+ 	}
+ 	mflag = 0;
+-	siglongjmp(jabort,0);
+ }
+ 
+ /*
+@@ -799,9 +770,10 @@
+ void
+ mget(int argc, char **argv)
+ {
+-	void (*oldintr)(int);
+ 	int ointer;
+ 	char *cp, *tp, *tp2, tmpbuf[PATH_MAX];
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
+ 
+ 	if (argc < 2 && !another(&argc, &argv, "remote-files")) {
+ 		printf("usage: %s remote-files\n", argv[0]);
+@@ -810,8 +782,12 @@
+ 	}
+ 	mname = argv[0];
+ 	mflag = 1;
+-	oldintr = signal(SIGINT,mabort);
+-	(void) sigsetjmp(jabort, 1);
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 1)) {
++		mabort(SIGINT);
++	} else {
++		toplevel = &jmploc;
++	}
+ 	while ((cp = remglob(argv,proxy)) != NULL) {
+ 		if (*cp == '\0') {
+ 			mflag = 0;
+@@ -847,14 +823,8 @@
+ 
+ 			/* Prepend ./ to "-" or "!*" or leading "/" */
+ 			tp = pipeprotect(tp);
+-			if (tp == NULL) {
+-				/* hmm... how best to handle this? */
+-				mflag = 0;
+-			}
+-			else {
+-				recvrequest("RETR", tp, cp, "w",
+-					    tp != cp || !interactive);
+-			}
++			recvrequest("RETR", tp, cp, "w",
++				    tp != cp || !interactive);
+ 			if (!mflag && fromatty) {
+ 				ointer = interactive;
+ 				interactive = 1;
+@@ -865,14 +835,13 @@
+ 			}
+ 		}
+ 	}
+-	(void) signal(SIGINT,oldintr);
++	toplevel = oldtoplevel;
+ 	mflag = 0;
+ }
+ 
+ char *
+ remglob(char *argv[], int doswitch)
+ {
+-	char temp[16];
+ 	static char buf[PATH_MAX];
+ 	static FILE *ftemp = NULL;
+ 	static char **args;
+@@ -885,8 +854,10 @@
+ 		}
+ 		else {
+ 			if (ftemp) {
++				INTOFF;
+ 				(void) fclose(ftemp);
+ 				ftemp = NULL;
++				INTON;
+ 			}
+ 		}
+ 		return(NULL);
+@@ -899,34 +870,88 @@
+ 		return (cp);
+ 	}
+ 	if (ftemp == NULL) {
+-		int oldumask, fd;
++		char temp[16] = "";
++#if !defined(__GLIBC__) || !(__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 0))
++		int oldumask;
++#endif
++		volatile int fd = -1;
++		sigjmp_buf jmploc;
++		sigjmp_buf *volatile oldtoplevel;
++
+ 		(void) strcpy(temp, _PATH_TMP);
+ 
++		oldtoplevel = toplevel;
++		if (sigsetjmp(jmploc, 0)) {
++			if (fd >= 0) {
++				unlink(temp);
++				close(fd);
++			}
++			toplevel = oldtoplevel;
++			siglongjmp(*toplevel, 1);
++		}
++		toplevel = &jmploc;
++
+ 		/* libc 5.2.18 creates with mode 0666, which is dumb */
++		INTOFF;
++#if !defined(__GLIBC__) || !(__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 0))
+ 		oldumask = umask(077);
++#endif
+ 		fd = mkstemp(temp);
++#if !defined(__GLIBC__) || !(__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 0))
+ 		umask(oldumask);
++#endif
++		INTON;
+ 
+ 		if (fd<0) {
++			toplevel = oldtoplevel;
+ 			printf("Error creating temporary file, oops\n");
+ 			return NULL;
+ 		}
+-		
++
+ 		oldverbose = verbose, verbose = 0;
+ 		oldhash = hash, hash = 0;
+ 		if (doswitch) {
+ 			pswitch(!proxy);
+ 		}
+ 		while (*++argv != NULL) {
+-			int	dupfd = dup(fd);
++			int dupfd;
+ 
+ 			recvrequest ("NLST", temp, *argv, "a", 0);
+-			if (!checkglob(dupfd, *argv)) {
+-				badglob = 1;
++
++			INTOFF;
++			if ((dupfd = dup(fd)) < 0) {
++				INTON;
++				perror("remglob: dup");
++duperr:
++				INTOFF;
++				unlink(temp);
++				close(fd);
++				fd = -1;
++				INTON;
++				toplevel = oldtoplevel;
++				return NULL;
++			}
++			if ((ftemp = fdopen(dupfd, "r")) == NULL) {
++				int olderrno = errno;
++				close(dupfd);
++				INTON;
++				errno = olderrno;
++				perror("remglob: fdopen");
++				goto duperr;
++			}
++			INTON;
++
++			badglob = !checkglob(ftemp, *argv);
++
++			INTOFF;
++			fclose(ftemp);
++			ftemp = NULL;
++			INTON;
++
++			if (badglob) {
+ 				break;
+ 			}
+ 		}
+-		unlink(temp);
+ 
+ 		if (doswitch) {
+ 			pswitch(!proxy);
+@@ -934,18 +959,27 @@
+ 		verbose = oldverbose; hash = oldhash;
+ 		if (badglob) {
+ 			printf("Refusing to handle insecure file list\n");
+-			close(fd);
+-			return NULL;
++			goto duperr;
+ 		}
++
++		INTOFF;
++		unlink(temp);
+ 		ftemp = fdopen(fd, "r");
++		fd = -1;
++		INTON;
++		toplevel = oldtoplevel;
++
+ 		if (ftemp == NULL) {
+ 			printf("fdopen failed, oops\n");
+ 			return NULL;
+ 		}
++
+ 		rewind(ftemp);
+ 	}
+ 	if (fgets(buf, sizeof (buf), ftemp) == NULL) {
++		INTOFF;
+ 		(void) fclose(ftemp), ftemp = NULL;
++		INTON;
+ 		return (NULL);
+ 	}
+ 	if ((cp = index(buf, '\n')) != NULL)
+@@ -993,12 +1027,11 @@
+  *						--okir
+  */
+ static int
+-checkglob(int fd, const char *pattern)
++checkglob(FILE *fp, const char *pattern)
+ {
+ 	const char	*sp;
+ 	char		buffer[MAXPATHLEN], dotdot[MAXPATHLEN];
+ 	int		okay = 1, nrslash, initial, nr;
+-	FILE		*fp;
+ 
+ 	/* Find slashes in glob pattern, and verify whether component
+ 	 * matches `..'
+@@ -1014,7 +1047,6 @@
+ 		dotdot[nrslash++] = isdotdotglob(sp);
+ 	}
+ 
+-	fp = fdopen(fd, "r");
+ 	while (okay && fgets(buffer, sizeof(buffer), fp) != NULL) {
+ 		char	*sp;
+ 
+@@ -1043,7 +1075,6 @@
+ 		printf("Filename provided by server "
+ 		       "doesn't match pattern `%s': %s\n", pattern, buffer);
+ 
+-	fclose(fp);
+ 	return okay;
+ }
+ 
+@@ -1083,6 +1114,7 @@
+ 	printf("Store unique: %s; Receive unique: %s\n", onoff(sunique),
+ 		onoff(runique));
+ 	printf("Case: %s; CR stripping: %s\n",onoff(mcase),onoff(crflag));
++	printf("Quote control characters: %s\n", onoff(qcflag));
+ 	if (ntflag) {
+ 		printf("Ntrans: (in) %s (out) %s\n", ntin,ntout);
+ 	}
+@@ -1316,9 +1348,10 @@
+ void
+ mdelete(int argc, char *argv[])
+ {
+-	void (*oldintr)(int);
+ 	int ointer;
+ 	char *cp;
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
+ 
+ 	if (argc < 2 && !another(&argc, &argv, "remote-files")) {
+ 		printf("usage: %s remote-files\n", argv[0]);
+@@ -1327,8 +1360,12 @@
+ 	}
+ 	mname = argv[0];
+ 	mflag = 1;
+-	oldintr = signal(SIGINT, mabort);
+-	(void) sigsetjmp(jabort, 1);
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 1)) {
++		mabort(SIGINT);
++	} else {
++		toplevel = &jmploc;
++	}
+ 	while ((cp = remglob(argv,0)) != NULL) {
+ 		if (*cp == '\0') {
+ 			mflag = 0;
+@@ -1346,7 +1383,7 @@
+ 			}
+ 		}
+ 	}
+-	(void) signal(SIGINT, oldintr);
++	toplevel = oldtoplevel;
+ 	mflag = 0;
+ }
+ 
+@@ -1390,16 +1427,15 @@
+ 		code = -1;
+ 		return;
+ 	}
++
+ 	cmd = argv[0][0] == 'n' ? "NLST" : "LIST";
+-	if (strcmp(argv[2], "-") && (argv[2] = globulize(argv[2]))==NULL) {
+-		code = -1;
+-		return;
+-	}
+-	if (strcmp(argv[2], "-") && *argv[2] != '|')
+-		if ((argv[2] = globulize(argv[2]))==NULL || 
++	if (strcmp(argv[2], "-") && *argv[2] != '|') {
++		argv[2] = globulize(argv[2]);
++		if (argv[2] == NULL || 
+ 		    !confirm("output to local-file:", argv[2])) {
+ 			code = -1;
+ 			return;
++		}
+ 	}
+ 	recvrequest(cmd, argv[2], argv[1], "w", 0);
+ }
+@@ -1411,11 +1447,12 @@
+ void
+ mls(int argc, char *argv[])
+ {
+-	void (*oldintr)(int);
+ 	int ointer, i;
+ 	const char *volatile cmd;
+ 	char *volatile dest;
+ 	const char *modestr;
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
+ 
+ 	if (argc < 2 && !another(&argc, &argv, "remote-files"))
+ 		goto usage;
+@@ -1425,23 +1462,30 @@
+ 		code = -1;
+ 		return;
+ 	}
++
+ 	dest = argv[argc - 1];
+ 	argv[argc - 1] = NULL;
+-	if (strcmp(dest, "-") && *dest != '|')
+-		if ((dest = globulize(dest))==NULL ||
+-		    !confirm("output to local-file:", dest)) {
++
++	if (strcmp(dest, "-") && *dest != '|') {
++		dest = globulize(dest);
++		if (dest == NULL || !confirm("output to local-file:", dest)) {
+ 			code = -1;
+ 			return;
++		}
+ 	}
+ 	cmd = argv[0][1] == 'l' ? "NLST" : "LIST";
+ 	mname = argv[0];
+ 	mflag = 1;
+-	oldintr = signal(SIGINT, mabort);
+ 
+ 	/*
+ 	 * This just plain seems wrong.
+ 	 */
+-	(void) sigsetjmp(jabort, 1);
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 1)) {
++		mabort(SIGINT);
++	} else {
++		toplevel = &jmploc;
++	}
+ 
+ 	for (i = 1; mflag && i < argc-1; ++i) {
+ 		modestr = (i == 1) ? "w" : "a";
+@@ -1455,7 +1499,7 @@
+ 			interactive = ointer;
+ 		}
+ 	}
+-	(void) signal(SIGINT, oldintr);
++	toplevel = oldtoplevel;
+ 	mflag = 0;
+ }
+ 
+@@ -1555,6 +1599,7 @@
+ 	if (!aflag && argc == 4) {
+ 		(void) command("ACCT %s", argv[3]);
+ 	}
++	dosyst();
+ }
+ 
+ /*
+@@ -1651,19 +1696,28 @@
+ static void
+ quote1(const char *initial, int argc, char **argv)
+ {
+-	register int i, len;
+-	char buf[BUFSIZ];		/* must be >= sizeof(line) */
++	register int i;
++	char *buf;
+ 
+-	(void) strcpy(buf, initial);
++	INTOFF;
++	obstack_grow(&mainobstack, initial, strlen(initial));
+ 	if (argc > 1) {
+-		len = strlen(buf);
+-		len += strlen(strcpy(&buf[len], argv[1]));
++		obstack_grow(&mainobstack, argv[1], strlen(argv[1]));
+ 		for (i = 2; i < argc; i++) {
+-			buf[len++] = ' ';
+-			len += strlen(strcpy(&buf[len], argv[i]));
++			obstack_1grow(&mainobstack, ' ');
++			obstack_grow(&mainobstack, argv[i], strlen(argv[i]));
+ 		}
+ 	}
+-	if (command("%s", buf) == PRELIM) {
++	INTON;
++
++	obstack_1grow(&mainobstack, '\0');
++	buf = obstack_finish(&mainobstack);
++	i = command("%s", buf);
++	INTOFF;
++	obstack_free(&mainobstack, buf);
++	INTON;
++
++	if (i == PRELIM) {
+ 		while (getreply(0) == PRELIM);
+ 	}
+ }
+@@ -1742,11 +1796,18 @@
+ 		return;
+ 	(void) command("QUIT");
+ 	if (cout) {
++		INTOFF;
+ 		(void) fclose(cout);
++		cout = NULL;
++		INTON;
++	}
++	if (data >= 0) {
++		INTOFF;
++		close(data);
++		data = -1;
++		INTON;
+ 	}
+-	cout = NULL;
+ 	connected = 0;
+-	data = -1;
+ 	if (!proxy) {
+ 		macnum = 0;
+ 	}
+@@ -1764,10 +1825,16 @@
+ 	if (fromatty && !rl_inhibit) {
+ 		char *lineread;
+ 		snprintf(lyne, BUFSIZ, "%s %s? ", cmd, file);
++		/* XXX readline memory leak */
+ 		lineread = readline(lyne);
+-		if (!lineread) return 0;
+-		strcpy(lyne, lineread);
++		if (!lineread) {
++			return 0;
++		}
++		INTOFF;
++		lyne[0] = lineread[0];
+ 		free(lineread);
++		INTON;
++		lyne[1] = 0;
+ 	}
+ 	else {
+ #endif
+@@ -1800,28 +1867,28 @@
+ char *
+ globulize(char *cpp)
+ {
+-	char **globbed;
+-	char *rv = cpp;
++	char *rv;
++	glob_t pglob;
+ 
+ 	if (!doglob) return cpp;
+ 
+-	globbed = ftpglob(cpp);
+-	if (globerr != NULL) {
+-		printf("%s: %s\n", cpp, globerr);
+-		if (globbed) {
+-			blkfree(globbed);
+-			free(globbed);
+-		}
++	INTOFF;
++	switch(glob(cpp, GLOB_BRACE | GLOB_ERR | GLOB_NOCHECK |
++			 GLOB_NOESCAPE | GLOB_TILDE, 0, &pglob)) {
++	case GLOB_NOSPACE:
++		errno = ENOMEM;
++		goto err;
++	case GLOB_ABORTED:
++		globfree(&pglob);
++err:
++		INTON;
++		puts(strerror(errno));
+ 		return NULL;
+ 	}
+-	if (globbed) {
+-		rv = globbed[0];
+-		/* don't waste too much memory */
+-		if (globbed[0]) {
+-			blkfree(globbed+1);
+-		}
+-		free(globbed);
+-	}
++	rv = pglob.gl_pathv[0];
++	rv = obstack_copy0(&mainobstack, rv, strlen(rv));
++	globfree(&pglob);
++	INTON;
+ 	return rv;
+ }
+ 
+@@ -1862,14 +1929,14 @@
+ 		proxflag = 0;
+ 	}
+ 	pswitch(0);
+-	siglongjmp(abortprox,1);
+ }
+ 
+ void
+ doproxy(int argc, char *argv[])
+ {
+ 	register struct cmd *c;
+-	void (*oldintr)(int);
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
+ 
+ 	if (argc < 2 && !another(&argc, &argv, "command")) {
+ 		printf("usage: %s command\n", argv[0]);
+@@ -1895,17 +1962,20 @@
+ 		code = -1;
+ 		return;
+ 	}
+-	if (sigsetjmp(abortprox, 1)) {
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 1)) {
++		proxabort(SIGINT);
++		toplevel = oldtoplevel;
+ 		code = -1;
+ 		return;
+ 	}
+-	oldintr = signal(SIGINT, proxabort);
++	toplevel = &jmploc;
+ 	pswitch(1);
+ 	if (c->c_conn && !connected) {
+ 		printf("Not connected\n");
+ 		(void) fflush(stdout);
+ 		pswitch(0);
+-		(void) signal(SIGINT, oldintr);
++		toplevel = oldtoplevel;
+ 		code = -1;
+ 		return;
+ 	}
+@@ -1921,7 +1991,7 @@
+ 		proxflag = 0;
+ 	}
+ 	pswitch(0);
+-	(void) signal(SIGINT, oldintr);
++	toplevel = oldtoplevel;
+ }
+ 
+ void
+@@ -1941,6 +2011,14 @@
+ }
+ 
+ void
++setqc(void)
++{
++	qcflag = !qcflag;
++	printf("Quote control characters %s.\n", onoff(qcflag));
++	code = qcflag;
++}
++
++void
+ setntrans(int argc, char *argv[])
+ {
+ 	if (argc == 1) {
+@@ -2225,8 +2303,8 @@
+ 	if (argc != 2)
+ 		printf("restart: offset not specified\n");
+ 	else {
+-		restart_point = atol(argv[1]);
+-		printf("restarting at %ld. %s\n", restart_point,
++		restart_point = atoll(argv[1]);
++		printf("restarting at %jd. %s\n", (intmax_t) restart_point,
+ 		    "execute get, put or append to initiate transfer");
+ 	}
+ }
+@@ -2374,3 +2452,69 @@
+ 			argv[2], argv[1]);
+ 	}
+ }
++
++/*
++ * initialise file types etc
++ */
++static void
++dosyst()
++{
++#if defined(__unix__) && CHAR_BIT == 8
++/*
++ * this ifdef is to keep someone form "porting" this to an incompatible
++ * system and not checking this out. This way they have to think about it.
++ */
++
++	int overbose;
++
++	overbose = verbose;
++	if (debug == 0)
++		verbose = -1;
++	if (command("SYST") == COMPLETE && overbose) {
++		register char *cp, c = 0;
++		cp = index(reply_string+4, ' ');
++		if (cp == NULL)
++			cp = index(reply_string+4, '\r');
++		if (cp) {
++			if (cp[-1] == '.')
++				cp--;
++			c = *cp;
++			*cp = '\0';
++		}
++
++		printf("Remote system type is %s.\n",
++			reply_string+4);
++		if (cp)
++			*cp = c;
++	}
++	if (!strncmp(reply_string, "215 UNIX Type: L8", 17)) {
++		if (proxy)
++			unix_proxy = 1;
++		else
++			unix_server = 1;
++		/*
++		 * Set type to 0 (not specified by user),
++		 * meaning binary by default, but don't bother
++		 * telling server.  We can use binary
++		 * for text files unless changed by the user.
++		 */
++		type = 0;
++		(void) strcpy(typename, "binary");
++		if (overbose)
++		    printf("Using %s mode to transfer files.\n",
++			typename);
++	} else {
++		if (proxy)
++			unix_proxy = 0;
++		else
++			unix_server = 0;
++		if (overbose && 
++		    !strncmp(reply_string, "215 TOPS20", 10))
++			printf(
++"Remember to set tenex mode when transfering binary files from this machine.\n");
++	}
++	verbose = overbose;
++#else
++#warning "Unix auto-mode code skipped"
++#endif /* unix */
++}
+--- netkit-ftp-0.17.orig/ftp/cmds.h
++++ netkit-ftp-0.17/ftp/cmds.h
+@@ -42,6 +42,7 @@
+ void makedir(int argc, char *argv[]);
+ void removedir(int argc, char *argv[]);
+ void setcr(void);
++void setqc(void);
+ void account(int argc, char *argv[]);
+ void doproxy(int argc, char *argv[]);
+ void reset(void);
+--- netkit-ftp-0.17.orig/ftp/cmdtab.c
++++ netkit-ftp-0.17/ftp/cmdtab.c
+@@ -56,6 +56,7 @@
+ const char chmodhelp[] =   "change file permissions of remote file";
+ const char connecthelp[] = "connect to remote ftp";
+ const char crhelp[] =      "toggle carriage return stripping on ascii gets";
++const char qchelp[] =      "print ? in place of control characters on stdout";
+ const char deletehelp[] =  "delete remote file";
+ const char debughelp[] =   "toggle/set debugging mode";
+ const char dirhelp[] =     "list contents of remote directory";
+@@ -160,6 +161,7 @@
+ 	{ "prompt",	prompthelp,	0, 0, 0, NULL, setprompt, NULL },
+         { "passive",    passivehelp,    0, 0, 0, NULL, setpassive, NULL },
+ 	{ "proxy",	proxyhelp,	0, 0, 1, doproxy, NULL, NULL },
++	{ "qc",		qchelp,		0, 0, 0, NULL, setqc, NULL },
+ 	{ "sendport",	porthelp,	0, 0, 0, NULL, setport, NULL },
+ 	{ "put",	sendhelp,	1, 1, 1, put, NULL, NULL },
+ 	{ "pwd",	pwdhelp,	0, 1, 1, NULL, pwd, NULL },
+--- netkit-ftp-0.17.orig/ftp/domacro.c
++++ netkit-ftp-0.17/ftp/domacro.c
+@@ -40,9 +40,21 @@
+ #include <errno.h>
+ #include <ctype.h>
+ #include <stdio.h>
++#include <stdlib.h>
+ #include <string.h>
+ 
+ #include "ftp_var.h"
++#include "main.h"
++
++static char *append(char *p, const char *s) {
++	size_t slen = strlen(s);
++
++	INTOFF;
++	obstack_blank(&lineobstack, slen);
++	INTON;
++	memcpy(p, s, slen);
++	return p + slen;
++}
+ 
+ void
+ domacro(int argc, char *argv[])
+@@ -53,8 +65,9 @@
+ 	register int i, j;
+ 	register char *cp1, *cp2;
+ 	int count = 2, loopflg = 0;
+-	char line2[200];
++	char *line2;
+ 	struct cmd *c;
++	size_t len;
+ 
+ 	if (argc < 2 && !another(&argc, &argv, "macro name")) {
+ 		printf("Usage: %s macro_name.\n", argv[0]);
+@@ -71,14 +84,18 @@
+ 		code = -1;
+ 		return;
+ 	}
+-	(void) strcpy(line2, line);
++	line2 = line;
+ TOP:
+ 	cp1 = macros[i].mac_start;
+ 	while (cp1 != macros[i].mac_end) {
+ 		while (isspace(*cp1)) {
+ 			cp1++;
+ 		}
+-		cp2 = line;
++		len = strlen(cp1) + 1;
++		INTOFF;
++		obstack_blank(&lineobstack, len);
++		INTON;
++		cp2 = obstack_base(&lineobstack);
+ 		while (*cp1 != '\0') {
+ 		      switch(*cp1) {
+ 		   	    case '\\':
+@@ -92,8 +109,7 @@
+ 				    }
+ 				    cp1--;
+ 				    if (argc - 2 >= j) {
+-					(void) strcpy(cp2, argv[j+1]);
+-					cp2 += strlen(argv[j+1]);
++					cp2 = append(cp2, argv[j+1]);
+ 				    }
+ 				    break;
+ 				 }
+@@ -101,8 +117,7 @@
+ 					loopflg = 1;
+ 					cp1++;
+ 					if (count < argc) {
+-					   (void) strcpy(cp2, argv[count]);
+-					   cp2 += strlen(argv[count]);
++					    cp2 = append(cp2, argv[count]);
+ 					}
+ 					break;
+ 				}
+@@ -116,6 +131,7 @@
+ 		      }
+ 		}
+ 		*cp2 = '\0';
++		line = obstack_finish(&lineobstack);
+ 		margv = makeargv(&margc, &marg);
+ 		c = getcmd(margv[0]);
+ 		if (c == (struct cmd *)-1) {
+@@ -141,11 +157,19 @@
+ 			if (bell && c->c_bell) {
+ 				(void) putchar('\007');
+ 			}
+-			(void) strcpy(line, line2);
++			INTOFF;
++			obstack_free(&lineobstack, line);
++			INTON;
++			line = line2;
+ 			margv = makeargv(&margc, &marg);
+ 			argc = margc;
+ 			argv = margv;
+ 		}
++		if (line != line2) {
++			INTOFF;
++			obstack_free(&lineobstack, line);
++			INTON;
++		}
+ 		if (cp1 != macros[i].mac_end) {
+ 			cp1++;
+ 		}
+@@ -153,4 +177,5 @@
+ 	if (loopflg && ++count < argc) {
+ 		goto TOP;
+ 	}
++	line = line2;
+ }
+--- netkit-ftp-0.17.orig/ftp/ftp.1
++++ netkit-ftp-0.17/ftp/ftp.1
+@@ -43,10 +43,10 @@
+ .Sh SYNOPSIS
+ .Nm ftp
+ .Op Fl pinegvd
+-.Op Ar host
++.Op Ar host Op Ar port
+ .Nm pftp
+ .Op Fl inegvd
+-.Op Ar host
++.Op Ar host Op Ar port
+ .Sh DESCRIPTION
+ .Nm Ftp
+ is the user interface to the
+@@ -99,7 +99,7 @@
+ Enables debugging.
+ .El
+ .Pp
+-The client host with which
++The client host and an optional port number with which
+ .Nm ftp
+ is to communicate may be specified on the command line.
+ If this is done,
+@@ -218,6 +218,13 @@
+ distinguished from a record delimiter only when
+ .Ic \&cr
+ is off.
++.It Ic qc
++Toggle the printing of control characters in the output of
++.Tn ASCII
++type commands.  When this is turned on, control characters
++are replaced with a question mark if the output file is the
++standard output.  This is the default when the standard
++output is a tty.
+ .It Ic delete Ar remote-file
+ Delete the file
+ .Ar remote-file
+@@ -698,6 +705,9 @@
+ .Ar remote-file
+ and the transfer
+ is continued from the apparent point of failure.
++If
++.Ar local-file
++does not exist ftp won't fetch the file.
+ This command
+ is useful when transferring very large files over networks that
+ are prone to dropping connections.
+@@ -1030,6 +1040,7 @@
+ .El
+ .Sh SEE ALSO
+ .Xr ftpd 8 ,
++.Xr netrc 5 ,
+ RFC 959
+ .Sh HISTORY
+ The
+--- netkit-ftp-0.17.orig/ftp/ftp.c
++++ netkit-ftp-0.17/ftp/ftp.c
+@@ -50,6 +50,7 @@
+ #include <arpa/inet.h>
+ #include <arpa/telnet.h>
+ 
++#include <ctype.h>
+ #include <stdio.h>
+ #include <signal.h>
+ #include <string.h>
+@@ -59,9 +60,11 @@
+ #include <netdb.h>
+ #include <pwd.h>
+ #include <stdarg.h>
++#include <stdint.h>
+ 
+ #include "ftp_var.h"
+ #include "cmds.h"
++#include "main.h"
+ 
+ #include "../version.h"
+ 
+@@ -72,11 +75,7 @@
+ static struct sockaddr_in data_addr;
+ static struct sockaddr_in myctladdr;
+ static int ptflag = 0;
+-static sigjmp_buf recvabort;
+-static sigjmp_buf sendabort;
+-static sigjmp_buf ptabort;
+ static int ptabflg = 0;
+-static int abrtflag = 0;
+ 
+ void lostpeer(int);
+ extern int connected;
+@@ -84,7 +83,7 @@
+ static char *gunique(char *);
+ static void proxtrans(const char *cmd, char *local, char *remote);
+ static int initconn(void);
+-static void ptransfer(const char *direction, long bytes, 
++static void ptransfer(const char *direction, off_t bytes, 
+ 		      const struct timeval *t0, 
+ 		      const struct timeval *t1);
+ static void tvsub(struct timeval *tdiff, 
+@@ -94,14 +93,19 @@
+ 
+ FILE *cin, *cout;
+ static FILE *dataconn(const char *);
++static void printbytes(off_t);
+ 
+ char *
+ hookup(char *host, int port)
+ {
+ 	register struct hostent *hp = 0;
+-	int s, tos;
++	volatile int s = -1;
++	int tos;
+ 	socklen_t len;
+ 	static char hostnamebuf[256];
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
++	int dupfd;
+ 
+ 	memset(&hisctladdr, 0, sizeof(hisctladdr));
+ 	if (inet_aton(host, &hisctladdr.sin_addr)) {
+@@ -126,11 +130,23 @@
+ 		hostnamebuf[sizeof(hostnamebuf)-1] = 0;
+ 	}
+ 	hostname = hostnamebuf;
++
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 0)) {
++		if (s >= 0)
++			close(s);
++		toplevel = oldtoplevel;
++		siglongjmp(*toplevel, 1);
++	}
++	toplevel = &jmploc;
++
++	INTOFF;
+ 	s = socket(hisctladdr.sin_family, SOCK_STREAM, 0);
++	INTON;
+ 	if (s < 0) {
+ 		perror("ftp: socket");
+ 		code = -1;
+-		return (0);
++		goto out;
+ 	}
+ 	hisctladdr.sin_port = port;
+ 	while (connect(s, (struct sockaddr *)&hisctladdr, sizeof (hisctladdr)) < 0) {
+@@ -146,12 +162,14 @@
+ 			       hp->h_length);
+ 			fprintf(stdout, "Trying %s...\n",
+ 				inet_ntoa(hisctladdr.sin_addr));
++			INTOFF;
+ 			(void) close(s);
+ 			s = socket(hisctladdr.sin_family, SOCK_STREAM, 0);
++			INTON;
+ 			if (s < 0) {
+ 				perror("ftp: socket");
+ 				code = -1;
+-				return (0);
++				goto out;
+ 			}
+ 			continue;
+ 		}
+@@ -170,26 +188,49 @@
+ 	if (setsockopt(s, IPPROTO_IP, IP_TOS, (char *)&tos, sizeof(int)) < 0)
+ 		perror("ftp: setsockopt TOS (ignored)");
+ #endif
++	INTOFF;
++	if (cin)
++		fclose(cin);
++	if (cout)
++		fclose(cout);
+ 	cin = fdopen(s, "r");
+-	cout = fdopen(s, "w");
++	if (cin == NULL)
++		close(s);
++	dupfd = dup(s);
++	cout = fdopen(dup(s), "w");
++	if (cout == NULL && dupfd >= 0)
++		close(dupfd);
++	s = -1;
++	toplevel = oldtoplevel;
++	INTON;
+ 	if (cin == NULL || cout == NULL) {
+ 		fprintf(stderr, "ftp: fdopen failed.\n");
+-		if (cin)
++		if (cin) {
++			INTOFF;
+ 			(void) fclose(cin);
+-		if (cout)
++			cin = NULL;
++			INTON;
++		}
++		if (cout) {
++			INTOFF;
+ 			(void) fclose(cout);
++			cout = NULL;
++			INTON;
++		}
+ 		code = -1;
+-		goto bad;
++		goto out;
+ 	}
+ 	if (verbose)
+ 		printf("Connected to %s.\n", hostname);
+ 	if (getreply(0) > 2) { 	/* read startup message from server */
+-		if (cin)
+-			(void) fclose(cin);
+-		if (cout)
+-			(void) fclose(cout);
++		INTOFF;
++		fclose(cin);
++		fclose(cout);
++		cin = NULL;
++		cout = NULL;
++		INTON;
+ 		code = -1;
+-		goto bad;
++		goto out;
+ 	}
+ #ifdef SO_OOBINLINE
+ 	{
+@@ -204,7 +245,12 @@
+ 
+ 	return (hostname);
+ bad:
++	INTOFF;
+ 	(void) close(s);
++	s = -1;
++	INTON;
++out:
++	toplevel = oldtoplevel;
+ 	return ((char *)0);
+ }
+ 
+@@ -216,10 +262,13 @@
+ 	int n, aflag = 0;
+ 
+ 	luser = pass = zacct = 0;
++	INTOFF;
+ 	if (xruserpass(host, &luser, &pass, &zacct) < 0) {
++		INTON;
+ 		code = -1;
+ 		return(0);
+ 	}
++	INTON;
+ 	while (luser == NULL) {
+ 		char *myname = getlogin();
+ 
+@@ -233,11 +282,13 @@
+ 			printf("Name (%s:%s): ", host, myname);
+ 		else
+ 			printf("Name (%s): ", host);
+-		if (fgets(tmp, sizeof(tmp) - 1, stdin)==NULL) {
++		if (fgets(tmp, sizeof(tmp), stdin)==NULL) {
+ 			fprintf(stderr, "\nLogin failed.\n");
+ 			return 0;
+ 		}
+-		tmp[strlen(tmp) - 1] = '\0';
++		n = strlen(tmp);
++		if (tmp[n - 1] == '\n')
++			tmp[n - 1] = 0;
+ 		if (*tmp == '\0')
+ 			luser = myname;
+ 		else
+@@ -269,42 +320,35 @@
+ 		if (!strcmp("init", macros[n].mac_name)) {
+ 			int margc;
+ 			char **margv;
+-			strcpy(line, "$init");
++			char *oldline = line;
++			INTOFF;
++			line = obstack_copy(&lineobstack, "$init", 6);
++			INTON;
+ 			margv = makeargv(&margc, NULL);
+ 			domacro(margc, margv);
++			INTOFF;
++			obstack_free(&lineobstack, line);
++			INTON;
++			line = oldline;
+ 			break;
+ 		}
+ 	}
+ 	return (1);
+ }
+ 
+-
+-static void
+-cmdabort(int ignore)
+-{
+-	(void)ignore;
+-
+-	printf("\n");
+-	fflush(stdout);
+-	abrtflag++;
+-	if (ptflag) siglongjmp(ptabort,1);
+-}
+-
+ int
+ command(const char *fmt, ...)
+ {
+ 	va_list ap;
+ 	int r;
+-	void (*oldintr)(int);
+ 
+-	abrtflag = 0;
+ 	if (debug) {
+ 		printf("---> ");
+ 		va_start(ap, fmt);
+ 		if (strncmp("PASS ", fmt, 5) == 0)
+ 			printf("PASS XXXX");
+ 		else 
+-			vfprintf(stdout, fmt, ap);
++			vprintf(fmt, ap);
+ 		va_end(ap);
+ 		printf("\n");
+ 		(void) fflush(stdout);
+@@ -314,18 +358,28 @@
+ 		code = -1;
+ 		return (0);
+ 	}
+-	oldintr = signal(SIGINT, cmdabort);
++	INTOFF;
++	intrnewline++;
+ 	va_start(ap, fmt);
+ 	vfprintf(cout, fmt, ap);
+ 	va_end(ap);
+-	fprintf(cout, "\r\n");
+-	(void) fflush(cout);
++	fputs("\r\n", cout);
++	if (fflush(cout) == EOF)
++		goto outerr;
+ 	cpend = 1;
+ 	r = getreply(!strcmp(fmt, "QUIT"));
+-	if (abrtflag && oldintr != SIG_IGN)
+-		(*oldintr)(SIGINT);
+-	(void) signal(SIGINT, oldintr);
++	intrnewline--;
++	INTON;
+ 	return(r);
++outerr:
++	lostpeer(0);
++	INTON;
++	if (verbose) {
++		printf("421 Service not available, remote server has closed connection\n");
++		fflush(stdout);
++	}
++	code = 421;
++	return 4;
+ }
+ 
+ char reply_string[BUFSIZ];		/* last line of previous reply */
+@@ -339,12 +393,16 @@
+ 	register int dig;
+ 	register char *cp;
+ 	int originalcode = 0, continuation = 0;
+-	void (*oldintr)(int);
+ 	int pflag = 0;
+ 	size_t px = 0;
+ 	size_t psize = sizeof(pasv);
+ 
+-	oldintr = signal(SIGINT, cmdabort);
++	if (!cin || !cout) {
++		cpend = 0;
++		return 4;
++	}
++	INTOFF;
++	intrnewline++;
+ 	for (;;) {
+ 		dig = n = code = 0;
+ 		cp = reply_string;
+@@ -353,15 +411,19 @@
+ 				switch (c = getc(cin)) {
+ 				case WILL:
+ 				case WONT:
+-					c = getc(cin);
++					if ((c = getc(cin)) == EOF)
++						goto goteof;
+ 					fprintf(cout, "%c%c%c", IAC, DONT, c);
+-					(void) fflush(cout);
++					if (fflush(cout) == EOF)
++						goto goteof;
+ 					break;
+ 				case DO:
+ 				case DONT:
+-					c = getc(cin);
++					if ((c = getc(cin)) == EOF)
++						goto goteof;
+ 					fprintf(cout, "%c%c%c", IAC, WONT, c);
+-					(void) fflush(cout);
++					if (fflush(cout) == EOF)
++						goto goteof;
+ 					break;
+ 				default:
+ 					break;
+@@ -371,11 +433,15 @@
+ 			dig++;
+ 			if (c == EOF) {
+ 				if (expecteof) {
+-					(void) signal(SIGINT,oldintr);
++					intrnewline--;
++					INTON;
+ 					code = 221;
+ 					return (0);
+ 				}
++goteof:
+ 				lostpeer(0);
++				intrnewline--;
++				INTON;
+ 				if (verbose) {
+ 					printf("421 Service not available, remote server has closed connection\n");
+ 					(void) fflush(stdout);
+@@ -427,11 +493,13 @@
+ 		*cp = '\0';
+ 		if (n != '1')
+ 			cpend = 0;
+-		(void) signal(SIGINT,oldintr);
+-		if (code == 421 || originalcode == 421)
++		intrnewline--;
++		INTON;
++		if (code == 421 || originalcode == 421) {
++			INTOFF;
+ 			lostpeer(0);
+-		if (abrtflag && oldintr != cmdabort && oldintr != SIG_IGN)
+-			(*oldintr)(SIGINT);
++			INTON;
++		}
+ 		return (n - '0');
+ 	}
+ }
+@@ -452,10 +520,8 @@
+ 	(void)ignore;
+ 
+ 	mflag = 0;
+-	abrtflag = 0;
+ 	printf("\nsend aborted\nwaiting for remote to finish abort\n");
+ 	(void) fflush(stdout);
+-	siglongjmp(sendabort, 1);
+ }
+ 
+ #define HASHBYTES 1024
+@@ -466,13 +532,13 @@
+ 	struct stat st;
+ 	struct timeval start, stop;
+ 	register int c, d;
+-	FILE *volatile fin, *volatile dout = 0;
++	FILE *volatile fin = 0, *volatile dout = 0;
+ 	int (*volatile closefunc)(FILE *);
+-	void (*volatile oldintr)(int);
+-	void (*volatile oldintp)(int);
+-	volatile long bytes = 0, hashbytes = HASHBYTES;
++	volatile off_t bytes = 0, hashbytes = HASHBYTES;
+ 	char buf[BUFSIZ], *bufp;
+ 	const char *volatile lmode;
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
+ 
+ 	if (verbose && printnames) {
+ 		if (local && *local != '-')
+@@ -487,84 +553,104 @@
+ 	if (curtype != type)
+ 		changetype(type, 0);
+ 	closefunc = NULL;
+-	oldintr = NULL;
+-	oldintp = NULL;
+ 	lmode = "w";
+-	if (sigsetjmp(sendabort, 1)) {
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 1)) {
++		abortsend(SIGINT);
+ 		while (cpend) {
+ 			(void) getreply(0);
+ 		}
+ 		if (data >= 0) {
++			INTOFF;
+ 			(void) close(data);
+ 			data = -1;
++			INTON;
+ 		}
+-		if (oldintr)
+-			(void) signal(SIGINT,oldintr);
+-		if (oldintp)
+-			(void) signal(SIGPIPE,oldintp);
++		if (fin != NULL && closefunc != NULL)
++			(*closefunc)(fin);
++		toplevel = oldtoplevel;
+ 		code = -1;
+ 		return;
+ 	}
+-	oldintr = signal(SIGINT, abortsend);
++	toplevel = &jmploc;
+ 	if (strcmp(local, "-") == 0)
+ 		fin = stdin;
+ 	else if (*local == '|') {
+-		oldintp = signal(SIGPIPE,SIG_IGN);
++		closefunc = pclose;
++		INTOFF;
+ 		fin = popen(local + 1, "r");
++		INTON;
+ 		if (fin == NULL) {
+ 			perror(local + 1);
+-			(void) signal(SIGINT, oldintr);
+-			(void) signal(SIGPIPE, oldintp);
++			toplevel = oldtoplevel;
+ 			code = -1;
+ 			return;
+ 		}
+-		closefunc = pclose;
+ 	} else {
++		closefunc = fclose;
++		INTOFF;
+ 		fin = fopen(local, "r");
++		INTON;
+ 		if (fin == NULL) {
+ 			fprintf(stderr, "local: %s: %s\n", local,
+ 				strerror(errno));
+-			(void) signal(SIGINT, oldintr);
++			toplevel = oldtoplevel;
+ 			code = -1;
+ 			return;
+ 		}
+-		closefunc = fclose;
+ 		if (fstat(fileno(fin), &st) < 0 ||
+ 		    (st.st_mode&S_IFMT) != S_IFREG) {
+ 			fprintf(stdout, "%s: not a plain file.\n", local);
+-			(void) signal(SIGINT, oldintr);
++			INTOFF;
+ 			fclose(fin);
++			fin = NULL;
++			INTON;
++			toplevel = oldtoplevel;
+ 			code = -1;
+ 			return;
+ 		}
+ 	}
+ 	if (initconn()) {
+-		(void) signal(SIGINT, oldintr);
+-		if (oldintp)
+-			(void) signal(SIGPIPE, oldintp);
+ 		code = -1;
+-		if (closefunc != NULL)
++		if (closefunc != NULL) {
++			INTOFF;
+ 			(*closefunc)(fin);
++			fin = NULL;
++			INTON;
++		}
++		toplevel = oldtoplevel;
+ 		return;
+ 	}
+-	if (sigsetjmp(sendabort, 1))
++	if (sigsetjmp(jmploc, 1)) {
++		abortsend(SIGINT);
+ 		goto abort;
++	}
+ 
+ 	if (restart_point &&
+ 	    (strcmp(cmd, "STOR") == 0 || strcmp(cmd, "APPE") == 0)) {
+-		if (fseek(fin, (long) restart_point, 0) < 0) {
++		if (fseek(fin, restart_point, 0) < 0) {
+ 			fprintf(stderr, "local: %s: %s\n", local,
+ 				strerror(errno));
+ 			restart_point = 0;
+-			if (closefunc != NULL)
++			if (closefunc != NULL) {
++				INTOFF;
+ 				(*closefunc)(fin);
++				fin = NULL;
++				INTON;
++			}
++			toplevel = oldtoplevel;
+ 			return;
+ 		}
+-		if (command("REST %ld", (long) restart_point)
++		if (command("REST %jd", (intmax_t) restart_point)
+ 			!= CONTINUE) {
+ 			restart_point = 0;
+-			if (closefunc != NULL)
++			if (closefunc != NULL) {
++				INTOFF;
+ 				(*closefunc)(fin);
++				fin = NULL;
++				INTON;
++			}
++			toplevel = oldtoplevel;
+ 			return;
+ 		}
+ 		restart_point = 0;
+@@ -572,27 +658,32 @@
+ 	}
+ 	if (remote) {
+ 		if (command("%s %s", cmd, remote) != PRELIM) {
+-			(void) signal(SIGINT, oldintr);
+-			if (oldintp)
+-				(void) signal(SIGPIPE, oldintp);
+-			if (closefunc != NULL)
++			if (closefunc != NULL) {
++				INTOFF;
+ 				(*closefunc)(fin);
++				fin = NULL;
++				INTON;
++			}
++			toplevel = oldtoplevel;
+ 			return;
+ 		}
+ 	} else
+ 		if (command("%s", cmd) != PRELIM) {
+-			(void) signal(SIGINT, oldintr);
+-			if (oldintp)
+-				(void) signal(SIGPIPE, oldintp);
+-			if (closefunc != NULL)
++			if (closefunc != NULL) {
++				INTOFF;
+ 				(*closefunc)(fin);
++				fin = NULL;
++				INTON;
++			}
++			toplevel = oldtoplevel;
+ 			return;
+ 		}
++	INTOFF;
+ 	dout = dataconn(lmode);
++	INTON;
+ 	if (dout == NULL)
+ 		goto abort;
+ 	(void) gettimeofday(&start, (struct timezone *)0);
+-	oldintp = signal(SIGPIPE, SIG_IGN);
+ 	switch (curtype) {
+ 
+ 	case TYPE_I:
+@@ -601,8 +692,10 @@
+ 		while ((c = read(fileno(fin), buf, sizeof (buf))) > 0) {
+ 			bytes += c;
+ 			for (bufp = buf; c > 0; c -= d, bufp += d)
+-				if ((d = write(fileno(dout), bufp, c)) <= 0)
++				if ((d = write(fileno(dout), bufp, c)) <= 0) {
++					perror("netout");
+ 					break;
++				}
+ 			if (hash) {
+ 				while (bytes >= hashbytes) {
+ 					(void) putchar('#');
+@@ -611,11 +704,12 @@
+ 				(void) fflush(stdout);
+ 			}
+ 			if (tick && (bytes >= hashbytes)) {
+-				printf("\rBytes transferred: %ld", bytes);
+-				(void) fflush(stdout);
++				printbytes(bytes);
+ 				while (bytes >= hashbytes)
+ 					hashbytes += TICKBYTES;
+ 			}
++			if (d <= 0)
++				break;
+ 		}
+ 		if (hash && (bytes > 0)) {
+ 			if (bytes < HASHBYTES)
+@@ -624,17 +718,13 @@
+ 			(void) fflush(stdout);
+ 		}
+ 		if (tick) {
+-			(void) printf("\rBytes transferred: %ld\n", bytes);
+-			(void) fflush(stdout);
++			printbytes(bytes);
+ 		}
+ 		if (c < 0)
+ 			fprintf(stderr, "local: %s: %s\n", local,
+ 				strerror(errno));
+-		if (d < 0) {
+-			if (errno != EPIPE) 
+-				perror("netout");
++		if (d <= 0)
+ 			bytes = -1;
+-		}
+ 		break;
+ 
+ 	case TYPE_A:
+@@ -646,18 +736,20 @@
+ 					hashbytes += HASHBYTES;
+ 				}
+ 				if (tick && (bytes >= hashbytes)) {
+-					(void) printf("\rBytes transferred: %ld",
+-						bytes);
+-					(void) fflush(stdout);
++					printbytes(bytes);
+ 					while (bytes >= hashbytes)
+ 						hashbytes += TICKBYTES;
+ 				}
+-				if (ferror(dout))
++				if (putc('\r', dout) == EOF) {
++					perror("netout");
+ 					break;
+-				(void) putc('\r', dout);
++				}
+ 				bytes++;
+ 			}
+-			(void) putc(c, dout);
++			if (putc(c, dout) == EOF) {
++				perror("netout");
++				break;
++			}
+ 			bytes++;
+ 	/*		if (c == '\r') {			  	*/
+ 	/*		(void)	putc('\0', dout);  (* this violates rfc */
+@@ -671,53 +763,63 @@
+ 			(void) fflush(stdout);
+ 		}
+ 		if (tick) {
+-			(void) printf("\rBytes transferred: %ld\n", bytes);
+-			(void) fflush(stdout);
++			printbytes(bytes);
+ 		}
+ 		if (ferror(fin))
+ 			fprintf(stderr, "local: %s: %s\n", local,
+ 				strerror(errno));
+-		if (ferror(dout)) {
+-			if (errno != EPIPE)
+-				perror("netout");
++		if (ferror(dout))
+ 			bytes = -1;
+-		}
+ 		break;
+ 	}
+ 	(void) gettimeofday(&stop, (struct timezone *)0);
+-	if (closefunc != NULL)
++	if (closefunc != NULL) {
++		INTOFF;
+ 		(*closefunc)(fin);
++		fin = NULL;
++		INTON;
++	}
++	INTOFF;
+ 	(void) fclose(dout);
++	dout = NULL;
+ 	/* closes data as well, so discard it */
+ 	data = -1;
++	INTON;
+ 	(void) getreply(0);
+-	(void) signal(SIGINT, oldintr);
+-	if (oldintp)
+-		(void) signal(SIGPIPE, oldintp);
++	toplevel = oldtoplevel;
+ 	if (bytes > 0)
+ 		ptransfer("sent", bytes, &start, &stop);
+ 	return;
+ abort:
+ 	(void) gettimeofday(&stop, (struct timezone *)0);
+-	(void) signal(SIGINT, oldintr);
+-	if (oldintp)
+-		(void) signal(SIGPIPE, oldintp);
+ 	if (!cpend) {
+ 		code = -1;
++		toplevel = oldtoplevel;
+ 		return;
+ 	}
+ 	if (dout) {
++		INTOFF;
++		if (data == fileno(dout))
++			data = -1;
+ 		(void) fclose(dout);
++		dout = NULL;
++		INTON;
+ 	}
+ 	if (data >= 0) {
+-		/* if it just got closed with dout, again won't hurt */
++		INTOFF;
+ 		(void) close(data);
+ 		data = -1;
++		INTON;
+ 	}
+ 	(void) getreply(0);
+ 	code = -1;
+-	if (closefunc != NULL && fin != NULL)
++	if (closefunc != NULL && fin != NULL) {
++		INTOFF;
+ 		(*closefunc)(fin);
++		fin = NULL;
++		INTON;
++	}
++	toplevel = oldtoplevel;
+ 	if (bytes > 0)
+ 		ptransfer("sent", bytes, &start, &stop);
+ }
+@@ -728,10 +830,8 @@
+ 	(void)ignore;
+ 
+ 	mflag = 0;
+-	abrtflag = 0;
+ 	printf("\nreceive aborted\nwaiting for remote to finish abort\n");
+ 	(void) fflush(stdout);
+-	siglongjmp(recvabort, 1);
+ }
+ 
+ void
+@@ -739,17 +839,18 @@
+ 	    char *volatile local, char *remote, 
+ 	    const char *lmode, int printnames)
+ {
+-	FILE *volatile fout, *volatile din = 0;
++	FILE *volatile fout = 0, *volatile din = 0;
+ 	int (*volatile closefunc)(FILE *);
+-	void (*volatile oldintp)(int);
+-	void (*volatile oldintr)(int);
+ 	volatile int is_retr, tcrflag, bare_lfs = 0;
+-	static unsigned bufsize;
+-	static char *buf;
+-	volatile long bytes = 0, hashbytes = HASHBYTES;
++	int tqcflag = 0;
++	unsigned bufsize;
++	char *buf;
++	volatile off_t bytes = 0, hashbytes = HASHBYTES;
+ 	register int c, d;
+ 	struct timeval start, stop;
+ 	struct stat st;
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
+ 
+ 	is_retr = strcmp(cmd, "RETR") == 0;
+ 	if (is_retr && verbose && printnames) {
+@@ -763,23 +864,24 @@
+ 		return;
+ 	}
+ 	closefunc = NULL;
+-	oldintr = NULL;
+-	oldintp = NULL;
+ 	tcrflag = !crflag && is_retr;
+-	if (sigsetjmp(recvabort, 1)) {
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 1)) {
++		abortrecv(SIGINT);
+ 		while (cpend) {
+ 			(void) getreply(0);
+ 		}
+ 		if (data >= 0) {
++			INTOFF;
+ 			(void) close(data);
+ 			data = -1;
++			INTON;
+ 		}
+-		if (oldintr)
+-			(void) signal(SIGINT, oldintr);
++		toplevel = oldtoplevel;
+ 		code = -1;
+ 		return;
+ 	}
+-	oldintr = signal(SIGINT, abortrecv);
++	toplevel = &jmploc;
+ 	if (strcmp(local, "-") && *local != '|') {
+ 		if (access(local, W_OK) < 0) {
+ 			char *dir = rindex(local, '/');
+@@ -787,7 +889,7 @@
+ 			if (errno != ENOENT && errno != EACCES) {
+ 				fprintf(stderr, "local: %s: %s\n", local,
+ 					strerror(errno));
+-				(void) signal(SIGINT, oldintr);
++				toplevel = oldtoplevel;
+ 				code = -1;
+ 				return;
+ 			}
+@@ -799,7 +901,7 @@
+ 			if (d < 0) {
+ 				fprintf(stderr, "local: %s: %s\n", local,
+ 					strerror(errno));
+-				(void) signal(SIGINT, oldintr);
++				toplevel = oldtoplevel;
+ 				code = -1;
+ 				return;
+ 			}
+@@ -807,24 +909,20 @@
+ 			    chmod(local, 0600) < 0) {
+ 				fprintf(stderr, "local: %s: %s\n", local,
+ 					strerror(errno));
+-				/*
+-				 * Believe it or not, this was actually
+-				 * repeated in the original source.
+-				 */
+-				(void) signal(SIGINT, oldintr);
+-				/*(void) signal(SIGINT, oldintr);*/
++				toplevel = oldtoplevel;
+ 				code = -1;
+ 				return;
+ 			}
+ 			if (runique && errno == EACCES &&
+ 			   (local = gunique(local)) == NULL) {
+-				(void) signal(SIGINT, oldintr);
++				toplevel = oldtoplevel;
+ 				code = -1;
+ 				return;
+ 			}
+ 		}
+-		else if (runique && (local = gunique(local)) == NULL) {
+-			(void) signal(SIGINT, oldintr);
++		else if (runique && (strcmp(cmd,"NLST") != 0) &&
++			 (local = gunique(local)) == NULL) {
++			toplevel = oldtoplevel;
+ 			code = -1;
+ 			return;
+ 		}
+@@ -837,74 +935,84 @@
+ 		changetype(type, 0);
+ 	}
+ 	if (initconn()) {
+-		(void) signal(SIGINT, oldintr);
++		toplevel = oldtoplevel;
+ 		code = -1;
+ 		return;
+ 	}
+-	if (sigsetjmp(recvabort, 1))
++	if (sigsetjmp(jmploc, 1)) {
++		abortrecv(SIGINT);
+ 		goto abort;
++	}
+ 	if (is_retr && restart_point &&
+-	    command("REST %ld", (long) restart_point) != CONTINUE)
++	    command("REST %jd", (intmax_t) restart_point) != CONTINUE) {
++		toplevel = oldtoplevel;
+ 		return;
++	}
+ 	if (remote) {
+ 		if (command("%s %s", cmd, remote) != PRELIM) {
+-			(void) signal(SIGINT, oldintr);
++			toplevel = oldtoplevel;
+ 			return;
+ 		}
+ 	} 
+ 	else {
+ 		if (command("%s", cmd) != PRELIM) {
+-			(void) signal(SIGINT, oldintr);
++			toplevel = oldtoplevel;
+ 			return;
+ 		}
+ 	}
++	INTOFF;
+ 	din = dataconn("r");
++	INTON;
+ 	if (din == NULL)
+ 		goto abort;
+-	if (strcmp(local, "-") == 0)
++	if (strcmp(local, "-") == 0) {
+ 		fout = stdout;
++		tqcflag = qcflag;
++	}
+ 	else if (*local == '|') {
+-		oldintp = signal(SIGPIPE, SIG_IGN);
++		closefunc = pclose;
++		INTOFF;
+ 		fout = popen(local + 1, "w");
++		INTON;
+ 		if (fout == NULL) {
+ 			perror(local+1);
+ 			goto abort;
+ 		}
+-		closefunc = pclose;
+ 	} 
+ 	else {
++		closefunc = fclose;
++		INTOFF;
+ 		fout = fopen(local, lmode);
++		INTON;
+ 		if (fout == NULL) {
+ 			fprintf(stderr, "local: %s: %s\n", local,
+ 				strerror(errno));
+ 			goto abort;
+ 		}
+-		closefunc = fclose;
+ 	}
+ 	if (fstat(fileno(fout), &st) < 0 || st.st_blksize == 0)
+-		st.st_blksize = BUFSIZ;
+-	if (st.st_blksize > bufsize) {
+-		if (buf)
+-			(void) free(buf);
+-		buf = malloc((unsigned)st.st_blksize);
+-		if (buf == NULL) {
+-			perror("malloc");
+-			bufsize = 0;
+-			goto abort;
+-		}
++		bufsize = BUFSIZ;
++	else
+ 		bufsize = st.st_blksize;
+-	}
++	INTOFF;
++	buf = obstack_alloc(&mainobstack, bufsize);
++	INTON;
+ 	(void) gettimeofday(&start, (struct timezone *)0);
+ 	switch (curtype) {
+ 
+ 	case TYPE_I:
+ 	case TYPE_L:
+ 		if (restart_point &&
+-		    lseek(fileno(fout), (long) restart_point, L_SET) < 0) {
++		    lseek(fileno(fout), restart_point, L_SET) < 0) {
+ 			fprintf(stderr, "local: %s: %s\n", local,
+ 				strerror(errno));
+-			if (closefunc != NULL)
++			if (closefunc != NULL) {
++				INTOFF;
+ 				(*closefunc)(fout);
++				fout = NULL;
++				INTON;
++			}
++			toplevel = oldtoplevel;
+ 			return;
+ 		}
+ 		errno = d = 0;
+@@ -920,9 +1028,7 @@
+ 				(void) fflush(stdout);
+ 			}
+ 			if (tick && (bytes >= hashbytes) && is_retr) {
+-				(void) printf("\rBytes transferred: %ld",
+-					bytes);
+-				(void) fflush(stdout);
++				printbytes(bytes);
+ 				while (bytes >= hashbytes)
+ 					hashbytes += TICKBYTES;
+ 			}
+@@ -934,12 +1040,10 @@
+ 			(void) fflush(stdout);
+ 		}
+ 		if (tick && is_retr) {
+-			(void) printf("\rBytes transferred: %ld\n", bytes);
+-			(void) fflush(stdout);
++			printbytes(bytes);
+ 		}
+ 		if (c < 0) {
+-			if (errno != EPIPE)
+-				perror("netin");
++			perror("netin");
+ 			bytes = -1;
+ 		}
+ 		if (d < c) {
+@@ -968,8 +1072,13 @@
+ done:
+ 				fprintf(stderr, "local: %s: %s\n", local,
+ 					strerror(errno));
+-				if (closefunc != NULL)
++				if (closefunc != NULL) {
++					INTOFF;
+ 					(*closefunc)(fout);
++					fout = NULL;
++					INTON;
++				}
++				toplevel = oldtoplevel;
+ 				return;
+ 			}
+ 		}
+@@ -984,9 +1093,7 @@
+ 					hashbytes += HASHBYTES;
+ 				}
+ 				if (tick && (bytes >= hashbytes) && is_retr) {
+-					printf("\rBytes transferred: %ld",
+-						bytes);
+-					fflush(stdout);
++					printbytes(bytes);
+ 					while (bytes >= hashbytes)
+ 						hashbytes += TICKBYTES;
+ 				}
+@@ -1003,6 +1110,8 @@
+ 						goto contin2;
+ 				}
+ 			}
++			if (tqcflag && !isprint(c) && !isspace(c))
++				c = '?';
+ 			(void) putc(c, fout);
+ 			bytes++;
+ 	contin2:	;
+@@ -1015,16 +1124,14 @@
+ 			(void) fflush(stdout);
+ 		}
+ 		if (tick && is_retr) {
+-			(void) printf("\rBytes transferred: %ld\n", bytes);
+-			(void) fflush(stdout);
++			printbytes(bytes);
+ 		}
+ 		if (bare_lfs) {
+ 			printf("WARNING! %d bare linefeeds received in ASCII mode\n", bare_lfs);
+ 			printf("File may not have transferred correctly.\n");
+ 		}
+ 		if (ferror(din)) {
+-			if (errno != EPIPE)
+-				perror("netin");
++			perror("netin");
+ 			bytes = -1;
+ 		}
+ 		if (ferror(fout))
+@@ -1032,15 +1139,19 @@
+ 				strerror(errno));
+ 		break;
+ 	}
+-	if (closefunc != NULL)
++	if (closefunc != NULL) {
++		INTOFF;
+ 		(*closefunc)(fout);
+-	(void) signal(SIGINT, oldintr);
+-	if (oldintp)
+-		(void) signal(SIGPIPE, oldintp);
+-	(void) gettimeofday(&stop, (struct timezone *)0);
++		fout = NULL;
++		INTON;
++	}
++	INTOFF;
+ 	(void) fclose(din);
+ 	/* closes data as well, so discard it */
+ 	data = -1;
++	INTON;
++	toplevel = oldtoplevel;
++	(void) gettimeofday(&stop, (struct timezone *)0);
+ 	(void) getreply(0);
+ 	if (bytes > 0 && is_retr)
+ 		ptransfer("received", bytes, &start, &stop);
+@@ -1050,30 +1161,34 @@
+ /* abort using RFC959 recommended IP,SYNC sequence  */
+ 
+ 	(void) gettimeofday(&stop, (struct timezone *)0);
+-	if (oldintp)
+-		(void) signal(SIGPIPE, oldintp);
+-	(void) signal(SIGINT, SIG_IGN);
++	INTOFF;
+ 	if (!cpend) {
+ 		code = -1;
+-		(void) signal(SIGINT, oldintr);
++		INTON;
++		toplevel = oldtoplevel;
+ 		return;
+ 	}
+ 
+ 	abort_remote(din);
+ 	code = -1;
+-	if (closefunc != NULL && fout != NULL)
++	if (closefunc != NULL && fout != NULL) {
+ 		(*closefunc)(fout);
++		fout = NULL;
++	}
+ 	if (din) {
++		if (data == fileno(din))
++			data = -1;
+ 		(void) fclose(din);
++		din = NULL;
+ 	}
+ 	if (data >= 0) {
+-		/* if it just got closed with din, again won't hurt */
+ 		(void) close(data);
+ 		data = -1;
+ 	}
+ 	if (bytes > 0)
+ 		ptransfer("received", bytes, &start, &stop);
+-	(void) signal(SIGINT, oldintr);
++	toplevel = oldtoplevel;
++	INTON;
+ }
+ 
+ /*
+@@ -1091,7 +1206,11 @@
+ 	u_long a1,a2,a3,a4,p1,p2;
+ 
+ 	if (passivemode) {
++		INTOFF;
++		if (data >= 0)
++			close(data);
+ 		data = socket(AF_INET, SOCK_STREAM, 0);
++		INTON;
+ 		if (data < 0) {
+ 			perror("ftp: socket");
+ 			return(1);
+@@ -1143,9 +1262,11 @@
+ 	data_addr = myctladdr;
+ 	if (sendport)
+ 		data_addr.sin_port = 0;	/* let system pick one */ 
++	INTOFF;
+ 	if (data != -1)
+ 		(void) close(data);
+ 	data = socket(AF_INET, SOCK_STREAM, 0);
++	INTON;
+ 	if (data < 0) {
+ 		perror("ftp: socket");
+ 		if (tmpno)
+@@ -1195,7 +1316,9 @@
+ #endif
+ 	return (0);
+ bad:
++	INTOFF;
+ 	(void) close(data), data = -1;
++	INTON;
+ 	if (tmpno)
+ 		sendport = 1;
+ 	return (1);
+@@ -1228,7 +1351,7 @@
+ }
+ 
+ static void
+-ptransfer(const char *direction, long bytes, 
++ptransfer(const char *direction, off_t bytes, 
+ 	  const struct timeval *t0, 
+ 	  const struct timeval *t1)
+ {
+@@ -1240,8 +1363,8 @@
+ 		s = td.tv_sec + (td.tv_usec / 1000000.);
+ #define	nz(x)	((x) == 0 ? 1 : (x))
+ 		bs = bytes / nz(s);
+-		printf("%ld bytes %s in %.3g secs (%.2g Kbytes/sec)\n",
+-		    bytes, direction, s, bs / 1024.0);
++		printf("%jd bytes %s in %.2f secs (%.1f kB/s)\n",
++		    (intmax_t) bytes, direction, s, bs / 1024.0);
+ 	}
+ }
+ 
+@@ -1269,18 +1392,9 @@
+ 		tdiff->tv_sec--, tdiff->tv_usec += 1000000;
+ }
+ 
+-static 
+-void
+-psabort(int ignore)
+-{
+-	(void)ignore;
+-	abrtflag++;
+-}
+-
+ void
+ pswitch(int flag)
+ {
+-	void (*oldintr)(int);
+ 	static struct comvars {
+ 		int connect;
+ 		char name[MAXHOSTNAMELEN];
+@@ -1303,11 +1417,10 @@
+ 	} proxstruct, tmpstruct;
+ 	struct comvars *ip, *op;
+ 
+-	abrtflag = 0;
+-	oldintr = signal(SIGINT, psabort);
+ 	if (flag) {
+ 		if (proxy)
+ 			return;
++		INTOFF;
+ 		ip = &tmpstruct;
+ 		op = &proxstruct;
+ 		proxy++;
+@@ -1315,6 +1428,7 @@
+ 	else {
+ 		if (!proxy)
+ 			return;
++		INTOFF;
+ 		ip = &proxstruct;
+ 		op = &tmpstruct;
+ 		proxy = 0;
+@@ -1323,7 +1437,7 @@
+ 	connected = op->connect;
+ 	if (hostname) {
+ 		(void) strncpy(ip->name, hostname, sizeof(ip->name) - 1);
+-		ip->name[strlen(ip->name)] = '\0';
++		ip->name[sizeof(ip->name) - 1] = '\0';
+ 	} 
+ 	else {
+ 		ip->name[0] = 0;
+@@ -1351,25 +1465,21 @@
+ 	mcase = op->mcse;
+ 	ip->ntflg = ntflag;
+ 	ntflag = op->ntflg;
+-	(void) strncpy(ip->nti, ntin, 16);
+-	(ip->nti)[strlen(ip->nti)] = '\0';
++	(void) strncpy(ip->nti, ntin, sizeof(ip->nti) - 1);
++	(ip->nti)[sizeof(ip->nti) - 1] = '\0';
+ 	(void) strcpy(ntin, op->nti);
+-	(void) strncpy(ip->nto, ntout, 16);
+-	(ip->nto)[strlen(ip->nto)] = '\0';
++	(void) strncpy(ip->nto, ntout, sizeof(ip->nto) - 1);
++	(ip->nto)[sizeof(ip->nto) - 1] = '\0';
+ 	(void) strcpy(ntout, op->nto);
+ 	ip->mapflg = mapflag;
+ 	mapflag = op->mapflg;
+-	(void) strncpy(ip->mi, mapin, MAXPATHLEN - 1);
+-	(ip->mi)[strlen(ip->mi)] = '\0';
++	(void) strncpy(ip->mi, mapin, sizeof(ip->mi) - 1);
++	(ip->mi)[sizeof(ip->mi) - 1] = '\0';
+ 	(void) strcpy(mapin, op->mi);
+-	(void) strncpy(ip->mo, mapout, MAXPATHLEN - 1);
+-	(ip->mo)[strlen(ip->mo)] = '\0';
++	(void) strncpy(ip->mo, mapout, sizeof(ip->mo) - 1);
++	(ip->mo)[sizeof(ip->mo) - 1] = '\0';
+ 	(void) strcpy(mapout, op->mo);
+-	(void) signal(SIGINT, oldintr);
+-	if (abrtflag) {
+-		abrtflag = 0;
+-		(*oldintr)(SIGINT);
+-	}
++	INTON;
+ }
+ 
+ static
+@@ -1381,17 +1491,16 @@
+ 	fflush(stdout);
+ 	ptabflg++;
+ 	mflag = 0;
+-	abrtflag = 0;
+-	siglongjmp(ptabort, 1);
+ }
+ 
+ static void
+ proxtrans(const char *cmd, char *local, char *remote)
+ {
+-	void (*volatile oldintr)(int);
+ 	volatile int secndflag = 0, prox_type, nfnd;
+ 	const char *volatile cmd2;
+ 	fd_set mask;
++	sigjmp_buf jmploc;
++	sigjmp_buf *volatile oldtoplevel;
+ 
+ 	if (strcmp(cmd, "RETR"))
+ 		cmd2 = "RETR";
+@@ -1422,11 +1531,14 @@
+ 		pswitch(1);
+ 		return;
+ 	}
+-	if (sigsetjmp(ptabort, 1))
++	oldtoplevel = toplevel;
++	if (sigsetjmp(jmploc, 1)) {
++		abortpt(SIGINT);
+ 		goto abort;
+-	oldintr = signal(SIGINT, abortpt);
++	}
++	toplevel = &jmploc;
+ 	if (command("%s %s", cmd, remote) != PRELIM) {
+-		(void) signal(SIGINT, oldintr);
++		toplevel = oldtoplevel;
+ 		pswitch(1);
+ 		return;
+ 	}
+@@ -1439,13 +1551,13 @@
+ 	(void) getreply(0);
+ 	pswitch(0);
+ 	(void) getreply(0);
+-	(void) signal(SIGINT, oldintr);
++	toplevel = oldtoplevel;
+ 	pswitch(1);
+ 	ptflag = 0;
+ 	printf("local: %s remote: %s\n", local, remote);
+ 	return;
+ abort:
+-	(void) signal(SIGINT, SIG_IGN);
++	INTOFF;
+ 	ptflag = 0;
+ 	if (strcmp(cmd, "RETR") && !proxy)
+ 		pswitch(1);
+@@ -1460,7 +1572,8 @@
+ 		pswitch(1);
+ 		if (ptabflg)
+ 			code = -1;
+-		(void) signal(SIGINT, oldintr);
++		toplevel = oldtoplevel;
++		INTON;
+ 		return;
+ 	}
+ 	if (cpend)
+@@ -1474,7 +1587,8 @@
+ 			pswitch(1);
+ 			if (ptabflg)
+ 				code = -1;
+-			(void) signal(SIGINT, oldintr);
++			toplevel = oldtoplevel;
++			INTON;
+ 			return;
+ 		}
+ 	}
+@@ -1500,7 +1614,8 @@
+ 	pswitch(1);
+ 	if (ptabflg)
+ 		code = -1;
+-	(void) signal(SIGINT, oldintr);
++	toplevel = oldtoplevel;
++	INTON;
+ }
+ 
+ void
+@@ -1515,7 +1630,9 @@
+ 		if ((nfnd = empty(&mask, fileno(cin), 0)) < 0) {
+ 			perror("reset");
+ 			code = -1;
++			INTOFF;
+ 			lostpeer(0);
++			INTON;
+ 		}
+ 		else if (nfnd) {
+ 			(void) getreply(0);
+@@ -1572,26 +1689,30 @@
+ abort_remote(FILE *din)
+ {
+ 	char buf[BUFSIZ];
+-	int nfnd, hifd;
++	int nfnd, hifd = -1;
+ 	fd_set mask;
+ 
+ 	/*
+ 	 * send IAC in urgent mode instead of DM because 4.3BSD places oob mark
+ 	 * after urgent byte rather than before as is protocol now
+ 	 */
+-	snprintf(buf, sizeof(buf), "%c%c%c", IAC, IP, IAC);
+-	if (send(fileno(cout), buf, 3, MSG_OOB) != 3)
+-		perror("abort");
+-	fprintf(cout,"%cABOR\r\n", DM);
+-	(void) fflush(cout);
++	if (cout) {
++		snprintf(buf, sizeof(buf), "%c%c%c", IAC, IP, IAC);
++		if (send(fileno(cout), buf, 3, MSG_OOB) != 3)
++			perror("abort");
++		fprintf(cout,"%cABOR\r\n", DM);
++		(void) fflush(cout);
++	}
+ 	FD_ZERO(&mask);
+-	FD_SET(fileno(cin), &mask);
+-	hifd = fileno(cin);
++	if (cin) {
++		FD_SET(fileno(cin), &mask);
++		hifd = fileno(cin);
++	}
+ 	if (din) { 
+ 		FD_SET(fileno(din), &mask);
+ 		if (hifd < fileno(din)) hifd = fileno(din);
+ 	}
+-	if ((nfnd = empty(&mask, hifd, 10)) <= 0) {
++	if (hifd >= 0 && (nfnd = empty(&mask, hifd, 10)) <= 0) {
+ 		if (nfnd < 0) {
+ 			perror("abort");
+ 		}
+@@ -1609,3 +1730,10 @@
+ 	}
+ 	(void) getreply(0);
+ }
++
++static void
++printbytes(off_t bytes)
++{
++	printf("\rBytes transferred: %jd", (intmax_t) bytes);
++	fflush(stdout);
++}
+--- netkit-ftp-0.17.orig/ftp/ftp_var.h
++++ netkit-ftp-0.17/ftp/ftp_var.h
+@@ -76,6 +76,7 @@
+ Extern int	mapflag;	/* use mapin mapout templates on file names */
+ Extern int	code;		/* return/reply code for ftp command */
+ Extern int	crflag;		/* if 1, strip car. rets. on ascii gets */
++Extern int	qcflag;		/* if 1, print ? instead of control chars */
+ Extern char     pasv[64];       /* passive port for proxy data connection */
+ Extern int      passivemode;    /* passive mode enabled */
+ Extern char	*altarg;	/* argv[1] with no shell-like preprocessing  */
+@@ -102,11 +103,11 @@
+ /*Extern struct	servent *sp;*/	/* service spec for tcp/ftp */
+ Extern int	ftp_port;	/* htons'd port number for ftp service */
+ 
+-Extern sigjmp_buf toplevel;	/* non-local goto stuff for cmd scanner */
++Extern sigjmp_buf *toplevel;	/* non-local goto stuff for cmd scanner */
+ 
+-Extern char	line[200];	/* input line buffer */
++Extern char	*line;		/* input line buffer */
+ Extern char	*stringbase;	/* current scan point in line buffer */
+-Extern char	argbuf[200];	/* argument storage buffer */
++Extern char	*argbuf;	/* argument storage buffer */
+ Extern char	*argbase;	/* current storage point in arg buffer */
+ Extern int	cpend;		/* flag: if != 0, then pending server reply */
+ Extern int	mflag;		/* flag: if != 0, then active multi command */
+--- netkit-ftp-0.17.orig/ftp/main.c
++++ netkit-ftp-0.17/ftp/main.c
+@@ -60,6 +60,7 @@
+ #include <ctype.h>
+ #include <netdb.h>
+ #include <pwd.h>
++#include <obstack.h>
+ #ifdef	__USE_READLINE__
+ #include <readline/readline.h>
+ #include <readline/history.h>
+@@ -67,9 +68,21 @@
+ 
+ #define Extern
+ #include "ftp_var.h"
++#include "main.h"
++
++#define obstack_chunk_alloc malloc
++#define obstack_chunk_free free
++
+ int traceflag = 0;
+ const char *home = "/";
+ 
++int suppressint;
++volatile int intpending;
++int intrnewline;
++struct obstack mainobstack;
++struct obstack lineobstack;
++
++extern FILE *cin;
+ extern FILE *cout;
+ extern int data;
+ extern struct cmd cmdtab[];
+@@ -79,8 +92,10 @@
+ void lostpeer(int);
+ void help(int argc, char *argv[]);
+ 
++static void inthandler(int);
+ static void cmdscanner(int top);
+ static char *slurpstring(void);
++static void resetstack(struct obstack *);
+ 
+ static
+ void
+@@ -106,6 +121,7 @@
+ 	int top;
+ 	struct passwd *pw = NULL;
+ 	char homedir[MAXPATHLEN];
++	sigjmp_buf jmploc;
+ 
+ 	tick = 0;
+ 
+@@ -125,13 +141,6 @@
+         if (strcmp(cp, "pftp") == 0)
+             passivemode = 1;
+ 
+-#ifdef __USE_READLINE__
+-	/* 
+-	 * Set terminal type so libreadline can parse .inputrc correctly
+-	 */
+-	rl_terminal_name = getenv("TERM");
+-#endif
+-
+ 	argc--, argv++;
+ 	while (argc > 0 && **argv == '-') {
+ 		for (cp = *argv + 1; *cp; cp++)
+@@ -182,12 +191,23 @@
+ 		argc--, argv++;
+ 	}
+ 	fromatty = isatty(fileno(stdin));
++
++#ifdef __USE_READLINE__
++	/* 
++	 * Set terminal type so libreadline can parse .inputrc correctly
++	 */
++	if (fromatty && !rl_inhibit) {
++		rl_terminal_name = getenv("TERM");
++	}
++#endif
++
+ 	if (fromatty)
+ 		verbose++;
+ 	cpend = 0;	/* no pending replies */
+ 	proxy = 0;	/* proxy not active */
+ 	crflag = 1;	/* strip c.r. on ascii gets */
+ 	sendport = -1;	/* not using ports */
++	qcflag = isatty(fileno(stdout));
+ 	/*
+ 	 * Set up the home directory in case we're globbing.
+ 	 */
+@@ -202,17 +222,33 @@
+ 		homedir[sizeof(homedir)-1] = 0;
+ 		home = homedir;
+ 	}
++	/*
++	 * We need this since we want to return from unsafe library calls ASAP
++	 * when a SIGINT happens.
++	 */
++	siginterrupt(SIGINT, 1);
++	toplevel = &jmploc;
++	obstack_init(&mainobstack);
++	obstack_init(&lineobstack);
+ 	if (argc > 0) {
+-		if (sigsetjmp(toplevel, 1))
++		if (sigsetjmp(jmploc, 1))
+ 			exit(0);
+-		(void) signal(SIGINT, intr);
+-		(void) signal(SIGPIPE, lostpeer);
++		(void) signal(SIGINT, inthandler);
++		(void) signal(SIGPIPE, SIG_IGN);
+ 		setpeer(argc + 1, argv - 1);
++		resetstack(&mainobstack);
++		resetstack(&lineobstack);
+ 	}
+-	top = sigsetjmp(toplevel, 1) == 0;
++	top = sigsetjmp(jmploc, 1) == 0;
+ 	if (top) {
+-		(void) signal(SIGINT, intr);
+-		(void) signal(SIGPIPE, lostpeer);
++		(void) signal(SIGINT, inthandler);
++		(void) signal(SIGPIPE, SIG_IGN);
++	} else {
++		INTOFF;
++		resetstack(&mainobstack);
++		resetstack(&lineobstack);
++		INTON;
++		pswitch(0);
+ 	}
+ 	for (;;) {
+ 		cmdscanner(top);
+@@ -224,9 +260,28 @@
+ intr(int ignore)
+ {
+ 	(void)ignore;
+-	siglongjmp(toplevel, 1);
++
++	intpending = 0;
++	siglongjmp(*toplevel, 1);
++}
++
++static void
++inthandler(int sig)
++{
++	if (intrnewline) {
++		putchar('\n');
++		fflush(stdout);
++	}
++	if (suppressint) {
++		intpending++;
++		return;
++	}
++	intr(sig);
+ }
+ 
++/*
++ * Must be called with interrupts off.
++ */
+ void
+ lostpeer(int ignore)
+ {
+@@ -238,6 +293,10 @@
+ 			fclose(cout);
+ 			cout = NULL;
+ 		}
++		if (cin != NULL) {
++			fclose(cin);
++			cin = NULL;
++		}
+ 		if (data >= 0) {
+ 			shutdown(data, 1+1);
+ 			close(data);
+@@ -252,6 +311,10 @@
+ 			fclose(cout);
+ 			cout = NULL;
+ 		}
++		if (cin != NULL) {
++			fclose(cin);
++			cin = NULL;
++		}
+ 		connected = 0;
+ 	}
+ 	proxflag = 0;
+@@ -276,24 +339,40 @@
+ }
+ */
+ 
+-static char *get_input_line(char *buf, int buflen)
++static char *get_input_line(void)
+ {
++	char *lineread;
++	size_t size;
++	ssize_t len;
++
+ #ifdef __USE_READLINE__
+ 	if (fromatty && !rl_inhibit) {
+-		char *lineread = readline("ftp> ");
+-		if (!lineread) return NULL;
+-		strncpy(buf, lineread, buflen);
+-		buf[buflen-1] = 0;
++		lineread = readline("ftp> ");
++		INTOFF;
++		if (!lineread) goto err;
+ 		if (lineread[0]) add_history(lineread);
+-		free(lineread);
+-		return buf;
++		len = strlen(lineread);
++		goto out;
+ 	}
+ #endif
+ 	if (fromatty) {
+ 		printf("ftp> ");
+ 		fflush(stdout);
+ 	}
+-	return fgets(buf, buflen, stdin);
++	size = 0;
++	lineread = 0;
++	INTOFF;
++	len = getline(&lineread, &size, stdin);
++	if (len == -1 || !lineread) {
++err:
++		INTON;
++		return NULL;
++	}
++out:
++	line = obstack_copy(&lineobstack, lineread, len + 1);
++	free (lineread);
++	INTON;
++	return line;
+ }
+ 
+ 
+@@ -308,11 +387,19 @@
+ 	char **margv;
+ 	register struct cmd *c;
+ 	register int l;
++	int first = 1;
+ 
+ 	if (!top)
+ 		(void) putchar('\n');
+ 	for (;;) {
+-		if (!get_input_line(line, sizeof(line))) {
++		if (!first) {
++			INTOFF;
++			obstack_free(&lineobstack, line);
++			resetstack(&mainobstack);
++			INTON;
++		}
++		first = 0;
++		if (!get_input_line()) {
+ 			quit();
+ 		}
+ 		l = strlen(line);
+@@ -323,12 +410,6 @@
+ 				break;
+ 			line[l] = '\0';
+ 		} 
+-		else if (l == sizeof(line) - 2) {
+-			printf("sorry, input line too long\n");
+-			while ((l = getchar()) != '\n' && l != EOF)
+-				/* void */;
+-			break;
+-		} /* else it was a line without a newline */
+ 		margv = makeargv(&margc, &marg);
+ 		if (margc == 0) {
+ 			continue;
+@@ -354,8 +435,10 @@
+ 		if (c->c_handler_v != help)
+ 			break;
+ 	}
+-	(void) signal(SIGINT, intr);
+-	(void) signal(SIGPIPE, lostpeer);
++	INTOFF;
++	obstack_free(&lineobstack, line);
++	resetstack(&mainobstack);
++	INTON;
+ }
+ 
+ struct cmd *
+@@ -399,6 +482,9 @@
+ 	int rargc = 0;
+ 	char **argp;
+ 
++	INTOFF;
++	argbuf = obstack_alloc(&mainobstack, strlen(line) + 1);
++	INTON;
+ 	argp = rargv;
+ 	stringbase = line;		/* scan from first of buffer */
+ 	argbase = argbuf;		/* store from first of buffer */
+@@ -602,3 +688,10 @@
+ 				c->c_name, c->c_help);
+ 	}
+ }
++
++static void
++resetstack(struct obstack *stack)
++{
++	obstack_free(stack, 0);
++	obstack_init(stack);
++}
+--- netkit-ftp-0.17.orig/ftp/netrc.5
++++ netkit-ftp-0.17/ftp/netrc.5
+@@ -37,8 +37,10 @@
+ .Dt NETRC 5
+ .Os "Linux NetKit (0.17)"
+ .Sh NAME
+-.Nm netrc, .netrc
++.Nm netrc
+ .Nd user configuration for ftp
++.Sh SYNOPSIS
++.Nm ~/.netrc
+ .Sh DESCRIPTION
+ This file contains configuration and autologin information for the 
+ File Transfer Protocol client 
+--- netkit-ftp-0.17.orig/ftp/ruserpass.c
++++ netkit-ftp-0.17/ftp/ruserpass.c
+@@ -46,6 +46,7 @@
+ #include <string.h>
+ #include <unistd.h>
+ #include "ftp_var.h"
++#include "main.h"
+ 
+ static FILE *cfile;
+ static int token(void);
+@@ -136,8 +137,7 @@
+ 		case LOGIN:
+ 			if (token()) {
+ 				if (*aname == 0) { 
+-					*aname = malloc((unsigned) strlen(tokval) + 1);
+-					(void) strcpy(*aname, tokval);
++					*aname = obstack_copy(&mainobstack, tokval, strlen(tokval) + 1);
+ 				} else {
+ 					if (strcmp(*aname, tokval))
+ 						goto next;
+@@ -157,8 +157,7 @@
+ 				goto bad;
+ 			}
+ 			if (token() && *apass == 0) {
+-				*apass = malloc((unsigned) strlen(tokval) + 1);
+-				(void) strcpy(*apass, tokval);
++				*apass = obstack_copy(&mainobstack, tokval, strlen(tokval) + 1);
+ 			}
+ 			break;
+ 		case ACCOUNT:
+@@ -169,8 +168,7 @@
+ 				goto bad;
+ 			}
+ 			if (token() && *aacct == 0) {
+-				*aacct = malloc((unsigned) strlen(tokval) + 1);
+-				(void) strcpy(*aacct, tokval);
++				*aacct = obstack_copy(&mainobstack, tokval, strlen(tokval) + 1);
+ 			}
+ 			break;
+ 		case MACDEF:
+--- netkit-ftp-0.17.orig/ftp/main.h
++++ netkit-ftp-0.17/ftp/main.h
+@@ -0,0 +1,20 @@
++#include <obstack.h>
++#include <signal.h>
++
++extern int suppressint;
++extern volatile int intpending;
++extern int intrnewline;
++extern struct obstack mainobstack;
++extern struct obstack lineobstack;
++
++#ifdef __GNUC__
++void intr(int) __attribute__ ((noreturn));
++#else
++void intr(int);
++#endif
++
++#define INTOFF suppressint++;
++#define INTON do { if (--suppressint == 0 && intpending) intr(SIGINT); } \
++	      while(0)
++#define CHECKINT do { if (suppressint == 1 && intpending) { \
++		 suppressint = 0; intr(SIGINT); }} while(0)

@@ -1,0 +1,82 @@
+Description: Multiple flaws in ftp/main.c.
+ There are several flaws in the current code of the makeargv function
+ in ftp/main.c. It certainly errs, but not on the side of caution.
+ .
+ 1. The 'count' variable is supposed to count the number of arguments on
+ the command line. In fact it counts the number of arguments less one, so
+ malloc is often called with an argument of zero.
+ .
+ 2. The argument to malloc is completely wrong. Space needs to be
+ reserved for a certain number of pointers; the length of the command
+ line string is irrelevant.
+ .
+ 3. The slurpstring parsing function accepts both space and tab as
+ delimiters. The 'count' variable is calculated assuming spaces only.
+ .
+ 4. It appears to me that the memory allocated for rargv is never freed,
+ leading to a memory leak. I may be wrong about this, and I do not know
+ the code well enough to suggest where the free should take place if it
+ does not happen already. My patch does not address this.
+ .
+ Attempting to count parameters in advance is not the best solution in
+ my opinion. It is duplicating part of the effort of slurpstring.
+ My preference would have been to allocate memory for 20 pointers, as in
+ the original code, then realloc() for a larger size if more than 20
+ parameters are returned from slurpstring.
+X-Closes: Closes #508378, #505533, #510009
+X-Comment: debdiff netkit-ftp_0.17-{18,19}.dsc
+ Description collected from #508378
+Author: Mark Calderbank <m.calderbank@iname.com>
+Forwarded: no
+Last-Update: 2009-09-14
+diff -u netkit-ftp-0.17/ftp/main.c netkit-ftp-0.17/ftp/main.c
+--- netkit-ftp-0.17/ftp/main.c
++++ netkit-ftp-0.17/ftp/main.c
+@@ -479,23 +479,15 @@
+ makeargv(int *pargc, char **parg)
+ {
+         static char **rargv = NULL;
++       static int arglimit = 0;
+ 	int rargc = 0;
+-        int i = 0, count = 0;
+ 	char **argp;
+ 
+-
+-        /* Allocate enough space: err on the side of caution */
+-        while ( line[i] != '\0' ) {
+-                if ( line[i] == ' ' )
+-                        count += 1 ;
+-                i+= 1;
+-        }
+-
+-        /* allocate memory for $count-sized array of chars */
+-        rargv = (char **) malloc( count * strlen(line));
+-   if (rargv == NULL)
+-                fatal("Out of memory");
+-
++       if (arglimit == 0) {
++               arglimit = 10;
++               rargv = malloc(arglimit * sizeof(char*));
++               if (rargv == NULL) fatal ("Out of memory");
++       }
+ 	INTOFF;
+ 	argbuf = obstack_alloc(&mainobstack, strlen(line) + 1);
+ 	INTON;
+@@ -503,9 +495,15 @@
+ 	stringbase = line;		/* scan from first of buffer */
+ 	argbase = argbuf;		/* store from first of buffer */
+ 	slrflag = 0;
+-	while ((*argp++ = slurpstring())!=NULL)
++       while ((*argp++ = slurpstring())!=NULL) {
+ 		rargc++;
+-
++               if (rargc == arglimit) {
++                       rargv = realloc(rargv, (arglimit+10) * sizeof(char*));
++                       if (rargv == NULL) fatal ("Out of memory");
++                       argp = rargv + arglimit;
++                       arglimit += 10;
++               }
++       }
+ 	*pargc = rargc;
+ 	if (parg) *parg = altarg;
+ 	return rargv;

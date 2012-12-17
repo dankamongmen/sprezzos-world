@@ -1,0 +1,198 @@
+Description: Improve user interface with address family selection.
+ Implement command line options for selecting IPv4 or IPv6.
+ .
+ Implement runtime command 'ipany', 'ipv4', and 'ipv6'.
+ These allow repeatedly new selection of addressing mode.
+Author: Mats Erik Andersson <debian@gisladisker.se>
+Forwarded: no
+Last-Update: 2011-04-19
+
+diff -Nru netkit-ftp-0.17.debian/ftp/cmds.c netkit-ftp-0.17/ftp/cmds.c
+--- netkit-ftp-0.17.debian/ftp/cmds.c
++++ netkit-ftp-0.17/ftp/cmds.c
+@@ -1106,6 +1106,9 @@
+ 		}
+ 		pswitch(0);
+ 	}
++	printf("Connecting using address family: %s.\n",
++		(usefamily == AF_UNSPEC) ? "any"
++			: (usefamily == AF_INET6) ? "IPv6" : "IPv4");
+ 	printf("Mode: %s; Type: %s; Form: %s; Structure: %s\n",
+ 		modename, typename, formname, structname);
+ 	printf("Verbose: %s; Bell: %s; Prompting: %s; Globbing: %s\n", 
+@@ -2389,6 +2392,39 @@
+ }
+ 
+ /*
++ * Set unrestricted address resolving
++ */
++void
++setipany(void)
++{
++	usefamily = AF_UNSPEC;
++	printf("Chosen addressing: %s.\n", "any");
++	code = usefamily;
++}
++
++/*
++ * Resolve only to IPv4 addressing
++ */
++void
++setipv4(void)
++{
++	usefamily = AF_INET;
++	printf("Chosen addressing: %s.\n", "IPv4");
++	code = usefamily;
++}
++
++/*
++ * Resolve only to IPv4 addressing
++ */
++void
++setipv6(void)
++{
++	usefamily = AF_INET6;
++	printf("Chosen addressing: %s.\n", "IPv6");
++	code = usefamily;
++}
++
++/*
+  * get size of file on remote machine
+  */
+ void
+diff -Nru netkit-ftp-0.17.debian/ftp/cmds.h netkit-ftp-0.17/ftp/cmds.h
+--- netkit-ftp-0.17.debian/ftp/cmds.h
++++ netkit-ftp-0.17/ftp/cmds.h
+@@ -8,6 +8,9 @@
+ void setform(void);
+ void setglob(void);
+ void sethash(void);
++void setipany(void);
++void setipv4(void);
++void setipv6(void);
+ void setmode(void);
+ void setport(void);
+ void setprompt(void);
+diff -Nru netkit-ftp-0.17.debian/ftp/cmdtab.c netkit-ftp-0.17/ftp/cmdtab.c
+--- netkit-ftp-0.17.debian/ftp/cmdtab.c
++++ netkit-ftp-0.17/ftp/cmdtab.c
+@@ -67,6 +67,9 @@
+ const char hashhelp[] =	"toggle printing `#' for each buffer transferred";
+ const char helphelp[] =	"print local help information";
+ const char idlehelp[] =	"get (set) idle timer on remote side";
++const char ipanyhelp[] = "allow use of any address family";
++const char ipv4help[] = "restrict address usage to IPv4";
++const char ipv6help[] = "restrict address usage to IPv6";
+ const char lcdhelp[] =	"change local working directory";
+ const char lshelp[] =	"list contents of remote directory";
+ const char macdefhelp[] =  "define a macro";
+@@ -142,6 +145,9 @@
+ 	{ "help",	helphelp,	0, 0, 1, help, NULL, NULL },
+ 	{ "idle",	idlehelp,	0, 1, 1, idle_cmd, NULL, NULL },
+ 	{ "image",	binaryhelp,	0, 1, 1, NULL, setbinary, NULL },
++	{ "ipany",	ipanyhelp,	0, 0, 0, NULL, setipany, NULL },
++	{ "ipv4",	ipv4help,	0, 0, 0, NULL, setipv4, NULL },
++	{ "ipv6",	ipv6help,	0, 0, 0, NULL, setipv6, NULL },
+ 	{ "lcd",	lcdhelp,	0, 0, 0, lcd, NULL, NULL },
+ 	{ "ls",		lshelp,		1, 1, 1, ls, NULL, NULL },
+ 	{ "macdef",	macdefhelp,	0, 0, 0, macdef, NULL, NULL },
+diff -Nru netkit-ftp-0.17.debian/ftp/ftp.1 netkit-ftp-0.17/ftp/ftp.1
+--- netkit-ftp-0.17.debian/ftp/ftp.1
++++ netkit-ftp-0.17/ftp/ftp.1
+@@ -42,10 +42,10 @@
+ file transfer program
+ .Sh SYNOPSIS
+ .Nm ftp
+-.Op Fl pinegvd
++.Op Fl 46pinegvd
+ .Op Ar host Op Ar port
+ .Nm pftp
+-.Op Fl inegvd
++.Op Fl 46inegvd
+ .Op Ar host Op Ar port
+ .Sh DESCRIPTION
+ .Nm Ftp
+@@ -58,6 +58,10 @@
+ Options may be specified at the command line, or to the
+ command interpreter.
+ .Bl -tag -width flag
++.It Fl 4
++Use only IPv4 to contact any host.
++.It Fl 6
++Use IPv6 only.
+ .It Fl p
+ Use passive mode for data transfers. Allows use of ftp in environments
+ where a firewall prevents connections from the outside world back to
+@@ -344,6 +348,12 @@
+ If
+ .Ar seconds
+ is omitted, the current inactivity timer is printed.
++.It Ic ipany
++Allow the address resolver to return any address family.
++.It Ic ipv4
++Restrict the address resolver to look only for IPv4 addresses.
++.It Ic ipv6
++Restrict host adressing to IPv6 only.
+ .It Ic lcd Op Ar directory
+ Change the working directory on the local machine.
+ If
+diff -Nru netkit-ftp-0.17.debian/ftp/ftp.c netkit-ftp-0.17/ftp/ftp.c
+--- netkit-ftp-0.17.debian/ftp/ftp.c
++++ netkit-ftp-0.17/ftp/ftp.c
+@@ -132,7 +132,7 @@
+ 
+ 	memset(&hints, 0, sizeof(hints));
+ 	hints.ai_flags = AI_ADDRCONFIG | AI_CANONNAME;
+-	hints.ai_family = AF_UNSPEC;
++	hints.ai_family = usefamily;
+ 	hints.ai_socktype = SOCK_STREAM;
+ 
+ 	if ( (status = getaddrinfo(host, NULL, &hints, &ai)) ) {
+diff -Nru netkit-ftp-0.17.debian/ftp/ftp_var.h netkit-ftp-0.17/ftp/ftp_var.h
+--- netkit-ftp-0.17.debian/ftp/ftp_var.h
++++ netkit-ftp-0.17/ftp/ftp_var.h
+@@ -61,6 +61,7 @@
+ Extern int	sendport;	/* use PORT cmd for each data connection */
+ Extern int	verbose;	/* print messages coming back from server */
+ Extern int	connected;	/* connected to server */
++Extern int	usefamily;	/* address family for resolving */
+ Extern int	fromatty;	/* input is from a terminal */
+ Extern int	interactive;	/* interactively prompt on m* cmds */
+ Extern int	debug;		/* debugging level */
+diff -Nru netkit-ftp-0.17.debian/ftp/main.c netkit-ftp-0.17/ftp/main.c
+--- netkit-ftp-0.17.debian/ftp/main.c
++++ netkit-ftp-0.17/ftp/main.c
+@@ -101,7 +101,9 @@
+ void
+ usage(void)
+ {
+-	printf("\n\tUsage: { ftp | pftp } [-pinegvtd] [hostname]\n");
++	printf("\n\tUsage: { ftp | pftp } [-46pinegvtd] [hostname]\n");
++	printf("\t   -4: use IPv4 addresses only\n");
++	printf("\t   -6: use IPv6, nothing else\n");
+ 	printf("\t   -p: enable passive mode (default for pftp)\n");
+ 	printf("\t   -i: turn off prompting during mget\n");
+ 	printf("\t   -n: inhibit auto-login\n");
+@@ -135,6 +137,7 @@
+ 	interactive = 1;
+ 	autologin = 1;
+ 	passivemode = 0;
++	usefamily = AF_UNSPEC;	/* the default is to allow any family */
+ 
+         cp = strrchr(argv[0], '/');
+         cp = (cp == NULL) ? argv[0] : cp+1;
+@@ -146,6 +149,14 @@
+ 		for (cp = *argv + 1; *cp; cp++)
+ 			switch (*cp) {
+ 
++			case '4':
++				usefamily = AF_INET;
++				break;
++
++			case '6':
++				usefamily = AF_INET6;
++				break;
++
+ 			case 'd':
+ 				options |= SO_DEBUG;
+ 				debug++;
