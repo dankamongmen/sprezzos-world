@@ -779,7 +779,7 @@ $(CINNAMON): $(SPREZZ)/cinnamon/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf cinnamon-$(cinnamon_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf cinnamon_$(cinnamon_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: cpptest
 cpptest:$(CPPTEST)_$(ARCH).deb
@@ -2309,6 +2309,14 @@ $(LIBBURN): $(SPREZZ)/libburn/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libburn-$(libburn_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libice
+libice:$(LIBICE)_$(ARCH).deb
+$(LIBICE): $(SPREZZ)/libice/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libICE-$(libice_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libisoburn
 libisoburn:$(LIBISOBURN)_$(ARCH).deb
 $(LIBISOBURN): $(SPREZZ)/libisoburn/debian/changelog
@@ -2540,6 +2548,30 @@ $(LIBXI): $(SPREZZ)/libxi/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXi-$(libxi_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxdmcp
+libxdmcp:$(LIBXDMCP)_$(ARCH).deb
+$(LIBXDMCP): $(SPREZZ)/libxdmcp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXdmcp-$(libxdmcp_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxext
+libxext:$(LIBXEXT)_$(ARCH).deb
+$(LIBXEXT): $(SPREZZ)/libxext/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXext-$(libxext_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxau
+libxau:$(LIBXAU)_$(ARCH).deb
+$(LIBXAU): $(SPREZZ)/libxau/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXau-$(libxau_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxmu
 libxmu:$(LIBXMU)_$(ARCH).deb
@@ -3190,6 +3222,14 @@ $(LIBPEAS): $(SPREZZ)/libpeas/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libpeas-$(libpeas_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libpthread-stubs
+libpthread-stubs:$(LIBPTHREADSTUBS)_$(ARCH).deb
+$(LIBPTHREADSTUBS): $(SPREZZ)/libpthread-stubs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libpthread-stubs-$(libpthread-stubs_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: patch
 patch:$(PATCH)_$(ARCH).deb
@@ -4128,6 +4168,14 @@ $(XORG): $(SPREZZ)/xorg/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf xorg-server-$(xorg_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: xorg-sgml-doctools
+xorg-sgml-doctools:$(XORGSGMLDOCTOOLS)_$(ARCH).deb
+$(XORGSGMLDOCTOOLS): $(SPREZZ)/xorg-sgml-doctools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xorg-sgml-doctools-$(xorg-sgml-doctools_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xorg-xserver
 xorg-xserver:$(XORGXSERVER)_$(ARCH).deb
