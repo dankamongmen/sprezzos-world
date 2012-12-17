@@ -1197,6 +1197,14 @@ $(GCONF): $(SPREZZ)/gconf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gconf-$(gconf_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gconf-editor
+gconf-editor:$(GCONFEDITOR)_$(ARCH).deb
+$(GCONFEDITOR): $(SPREZZ)/gconf-editor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gconf-editor-$(gconf-editor_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gcc-4.7
 gcc-4.7:$(GCC4.7)_$(ARCH).deb
 $(GCC4.7): $(SPREZZ)/gcc-4.7/debian/changelog
@@ -2365,6 +2373,14 @@ $(VLC): $(SPREZZ)/vlc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vlc-$(vlc_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: xft
+xft:$(XFT)_$(ARCH).deb
+$(XFT): $(SPREZZ)/xft/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXft-$(xft_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xfsprogs
 xfsprogs:$(XFSPROGS)_$(ARCH).deb
 $(XFSPROGS): $(SPREZZ)/xfsprogs/debian/changelog
@@ -2989,6 +3005,22 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf nfs-utils_$(nfs-utils_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libnetfilter-cthelper
+libnetfilter-cthelper:$(LIBNETFILTERCTHELPER)_$(ARCH).deb
+$(LIBNETFILTERCTHELPER): $(SPREZZ)/libnetfilter-cthelper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libnetfilter_cthelper-$(libnetfilter-cthelper_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libnetfilter-cttimeout
+libnetfilter-cttimeout:$(LIBNETFILTERCTTIMEOUT)_$(ARCH).deb
+$(LIBNETFILTERCTTIMEOUT): $(SPREZZ)/libnetfilter-cttimeout/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libnetfilter_cttimeout-$(libnetfilter-cttimeout_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libnetfilter-conntrack
 libnetfilter-conntrack:$(LIBNETFILTERCONNTRACK)_$(ARCH).deb
 $(LIBNETFILTERCONNTRACK): $(SPREZZ)/libnetfilter-conntrack/debian/changelog
@@ -2996,6 +3028,14 @@ $(LIBNETFILTERCONNTRACK): $(SPREZZ)/libnetfilter-conntrack/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libnetfilter_conntrack-$(libnetfilter-conntrack_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libnetfilter-queue
+libnetfilter-queue:$(LIBNETFILTERQUEUE)_$(ARCH).deb
+$(LIBNETFILTERQUEUE): $(SPREZZ)/libnetfilter-queue/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libnetfilter_queue-$(libnetfilter-queue_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libnfnetlink
 libnfnetlink:$(LIBNFNETLINK)_$(ARCH).deb
@@ -4248,6 +4288,14 @@ $(UDISKS): $(SPREZZ)/udisks/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf udisks_$(udisks_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: udisks2
+udisks2:$(UDISKS2)_$(ARCH).deb
+$(UDISKS2): $(SPREZZ)/udisks2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf udisks-$(udisks2_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: yasm
 yasm:$(YASM)_$(ARCH).deb
