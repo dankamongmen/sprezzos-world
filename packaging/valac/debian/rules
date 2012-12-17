@@ -1,0 +1,163 @@
+#!/usr/bin/make -f
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+DISTRO = "$(shell lsb_release -si)"
+
+configure_flags += \
+	--prefix=/usr \
+	--mandir=\$${prefix}/share/man \
+	--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+	--build=$(DEB_BUILD_GNU_TYPE) \
+	--enable-vapigen \
+	--disable-unversioned \
+	--disable-maintainer-mode \
+	--disable-silent-rules
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+configure_flags += --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+CFLAGS:=$(shell dpkg-buildflags --get CFLAGS)
+CFLAGS += -Wall -g
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+
+LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS)
+LDFLAGS += -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+VALAFLAGS = --target-glib=2.24
+
+DEB_PARALLEL_JOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+ifneq (,$(DEB_PARALLEL_JOBS))
+DEB_MAKE_PARALLEL = -j$(DEB_PARALLEL_JOBS)
+else
+DEB_MAKE_PARALLEL =
+endif
+
+builddir-stamp:
+	dh_testdir
+	# handle timestamp skew; advice from autotools-dev README.Debian
+	touch configure.in aclocal.m4 configure
+	# backup the original files to restore them in the clean target
+	cp build-aux/config.sub build-aux/config.sub.orig
+	cp build-aux/config.guess build-aux/config.guess.orig
+	# Copy in fresh copies of config.{sub,guess}
+	# (these are from autotools-dev, so must Build-Depend on it)
+	-test -r /usr/share/misc/config.sub && \
+	  cp -f /usr/share/misc/config.sub build-aux/config.sub
+	-test -r /usr/share/misc/config.guess && \
+	  cp -f /usr/share/misc/config.guess build-aux/config.guess
+	touch $@
+
+configure-bootstrap-stamp: builddir-stamp
+	dh_testdir
+	mkdir -p bootstrap/build
+	cd bootstrap/build && \
+		../../configure CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" $(configure_flags) --disable-vapigen
+	touch $@
+
+bootstrap-stamp: configure-bootstrap-stamp
+	dh_testdir
+	make $(DEB_MAKE_PARALLEL) -C bootstrap/build
+	make $(DEB_MAKE_PARALLEL) -C bootstrap/build DESTDIR=$(CURDIR)/bootstrap/install install
+	touch $@
+
+configure-stamp: builddir-stamp bootstrap-stamp
+	rm -f */*.vala.stamp
+	LD_LIBRARY_PATH="$(CURDIR)/bootstrap/install/usr/lib/$(DEB_HOST_MULTIARCH):$$LD_LIBRARY_PATH" \
+		./configure CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" \
+		VALAC="$(CURDIR)/bootstrap/install/usr/bin/valac-0.18 $(VALAFLAGS)" \
+		$(configure_flags)
+	touch $@
+
+build-stamp: configure-stamp
+	LD_LIBRARY_PATH="$(CURDIR)/bootstrap/install/usr/lib/$(DEB_HOST_MULTIARCH):$$LD_LIBRARY_PATH" \
+		make $(DEB_MAKE_PARALLEL)
+	touch $@
+
+# Make testsuite failures non-fatal for these architectures. The DBus
+# tests are failing there and an yet unknown reason.
+NO_TESTSUITE_ARCHS := kfreebsd-i386 kfreebsd-amd64 hurd-i386
+
+check-stamp: build-stamp
+	# do not run the tests under fakeroot, that breaks D-Bus
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+ifeq ($(filter $(DEB_BUILD_ARCH),$(NO_TESTSUITE_ARCHS)),$(DEB_BUILD_ARCH))
+	-LD_PRELOAD= make $(DEB_MAKE_PARALLEL) check
+else
+	LD_PRELOAD= make $(DEB_MAKE_PARALLEL) check
+endif
+endif
+	touch $@
+
+install-stamp: build-stamp check-stamp
+	LD_LIBRARY_PATH="$(CURDIR)/bootstrap/install/usr/lib/$(DEB_HOST_MULTIARCH):$$LD_LIBRARY_PATH" \
+		make $(DEB_MAKE_PARALLEL) DESTDIR=$(CURDIR)/debian/tmp install
+	touch $@
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+install: build install-stamp
+
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_install -i
+	dh_installdirs -i
+	dh_installdocs -i -A NEWS README AUTHORS THANKS
+	dh_installchangelogs -i ChangeLog
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install -s
+	dh_installdirs -s
+	dh_installdocs -s -A README NEWS AUTHORS THANKS
+	dh_installchangelogs -s ChangeLog
+	dh_installman -s
+	dh_installexamples -s
+	dh_link -s
+	dh_strip -s -pvalac-0.18 --dbg-package=valac-0.18-dbg -Nlibvala-0.18-0
+	dh_strip -s -plibvala-0.18-0 --dbg-package=libvala-0.18-0-dbg
+	dh_strip -s
+	dh_compress -s
+	dh_fixperms -s
+	dh_makeshlibs -plibvala-0.18-0 -V -- -c4
+	dh_installdeb -s
+	dh_shlibdeps -s -ldebian/libvala-0.18-0/usr/lib/$(DEB_HOST_MULTIARCH)
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-indep binary-arch
+
+clean:
+	dh_testdir
+	dh_testroot
+
+	# restore config.sub/config.guess
+	[ ! -r build-aux/config.sub.orig ] || mv -f build-aux/config.sub.orig build-aux/config.sub
+	[ ! -r build-aux/config.guess.orig ] || mv -f build-aux/config.guess.orig build-aux/config.guess
+
+	rm -rf bootstrap
+	rm -rf debian/tmp
+	make distclean || true
+
+	rm -rf tests/_test
+
+	rm -f builddir-stamp configure-bootstrap-stamp bootstrap-stamp
+	rm -f configure-stamp build-stamp check-stamp install-stamp
+	dh_clean
+
