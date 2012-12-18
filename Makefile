@@ -1957,6 +1957,14 @@ $(HANDBRAKE): $(SPREZZ)/handbrake/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf HandBrake-$(handbrake_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: hdparm
+hdparm:$(HDPARM)_$(ARCH).deb
+$(HDPARM): $(SPREZZ)/hdparm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hdparm-$(hdparm_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: hicolor-icon-theme
 hicolor-icon-theme:$(HICOLORICONTHEME)_$(ARCH).deb
 $(HICOLORICONTHEME): $(SPREZZ)/hicolor-icon-theme/debian/changelog
