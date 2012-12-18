@@ -19,7 +19,7 @@ def rnd_string(min_l,max_l):
 
 def get_arch_distinfo():
 	# Copied verbatim from guess_debian_release; sucks but unavoidable.
-	distinfo = {'ID' : 'Debian'}
+	distinfo = {'ID' : 'SprezzOS'}
 	kern = os.uname()[0]
 	if kern in ('Linux', 'Hurd', 'NetBSD'):
 		distinfo['OS'] = 'GNU/'+kern
@@ -248,7 +248,7 @@ class TestLSBRelease(unittest.TestCase):
 		os.environ.pop('LSB_ETC_DEBIAN_VERSION')
 
 		# Test "unstable releases" that end in /sid, go read invalid apt-cache policy
-		distinfo['RELEASE'] = 'testing/unstable'
+		distinfo['RELEASE'] = 'unstable'
 		distinfo['DESCRIPTION'] = '%(ID)s %(OS)s %(RELEASE)s' % distinfo
 		for rno in lr.RELEASE_CODENAME_LOOKUP:
 			fn = 'test/debian_version_' + rnd_string(5,12)
@@ -309,7 +309,7 @@ class TestLSBRelease(unittest.TestCase):
 	def test_get_distro_information(self):
 		# Test that an inexistant /etc/lsb-release leads to empty output
 		supposed_output = get_arch_distinfo()
-		supposed_output['RELEASE']     = 'testing/unstable';
+		supposed_output['RELEASE']     = 'unstable';
 		supposed_output['DESCRIPTION'] = '%(ID)s %(OS)s %(RELEASE)s' % supposed_output
 
 		os.environ['LSB_ETC_LSB_RELEASE'] = 'test/inexistant_file_' + rnd_string(2,5)

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# LSB release detection module for Debian
+# LSB release detection module for SprezzOS
 # (C) 2005-10 Chris Lawrence <lawrencc@debian.org>
 
 #    This package is free software; you can redistribute it and/or modify
@@ -218,9 +218,9 @@ def parse_apt_policy():
 
     return data
 
-def guess_release_from_apt(origin='Debian', component='main',
+def guess_release_from_apt(origin='SprezzOS', component='main',
                            ignoresuites=('experimental'),
-                           label='Debian',
+                           label='SprezzOS',
                            alternate_olabels={'Debian Ports':'ftp.debian-ports.org'}):
     releases = parse_apt_policy()
 
@@ -251,7 +251,7 @@ def guess_release_from_apt(origin='Debian', component='main',
     return releases[0][1]
 
 def guess_debian_release():
-    distinfo = {'ID' : 'Debian'}
+    distinfo = {'ID' : 'SprezzOS'}
 
     kern = os.uname()[0]
     if kern in ('Linux', 'Hurd', 'NetBSD'):
@@ -278,11 +278,6 @@ def guess_debian_release():
             # /etc/debian_version should be numeric
             codename = lookup_codename(release, 'n/a')
             distinfo.update({ 'RELEASE' : release, 'CODENAME' : codename })
-        elif release.endswith('/sid'):
-            if release.rstrip('/sid').lower().isalpha() != 'testing':
-                global TESTING_CODENAME
-                TESTING_CODENAME = release.rstrip('/sid')
-            distinfo['RELEASE'] = 'testing/unstable'
         else:
             distinfo['RELEASE'] = release
 
