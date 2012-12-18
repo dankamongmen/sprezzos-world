@@ -3512,6 +3512,14 @@ $(POLICYKITGNOME): $(SPREZZ)/policykit-gnome/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf polkit-gnome-$(policykit-gnome_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: popt
+popt:$(POPT)_$(ARCH).deb
+$(POPT): $(SPREZZ)/popt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf popt-$(popt_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: postgresql
 postgresql:$(POSTGRESQL)_$(ARCH).deb
 $(POSTGRESQL): $(SPREZZ)/postgresql/debian/changelog
