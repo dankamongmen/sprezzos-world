@@ -103,7 +103,10 @@ define __do_fortran
 	$(cross_makeshlibs) dh_makeshlibs -p$(p_l)
 	$(call cross_mangle_shlibs,$(p_l))
 	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
-		-L$(p_l$(2)quadmath) -l:$(d)/$(usr_lib$(2)): || echo FIXME libgfortran symbols
+		$(call shlibdirs_to_search, \
+			$(subst gfortran$(FORTRAN_SONAME),gcc$(GCC_SONAME),$(p_l)) \
+			$(subst gfortran$(FORTRAN_SONAME),gcc$(QUADMATH_SONAME),$(p_l)) \
+		)
 	$(call cross_mangle_substvars,$(p_l))
 	$(cross_gencontrol) dh_gencontrol -p$(p_l) -p$(p_d) \
 		-- -v$(DEB_VERSION) $(common_substvars)
@@ -138,7 +141,7 @@ define __do_libgfortran_dev
 	dh_compress -p$(p_l)
 	dh_fixperms -p$(p_l)
 	dh_shlibdeps -p$(p_l)
-	dh_gencontrol -p$(p_l) -- -v$(DEB_VERSION) $(common_substvars)
+	$(cross_gencontrol) dh_gencontrol -p$(p_l) -- -v$(DEB_VERSION) $(common_substvars)
 	dh_installdeb -p$(p_l)
 	dh_md5sums -p$(p_l)
 	dh_builddeb -p$(p_l)

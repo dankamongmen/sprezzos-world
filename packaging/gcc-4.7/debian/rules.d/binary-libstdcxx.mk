@@ -199,7 +199,7 @@ define __do_libstdcxx
 	$(cross_makeshlibs) dh_makeshlibs -p$(p_l) || echo FIXME: libstdc++ symbols
 	$(call cross_mangle_shlibs,$(p_l))
 	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
-		-L$(p_l$(2)gcc) -l:$(d)/$(usr_lib$(2)):
+		$(call shlibdirs_to_search,$(subst stdc++$(CXX_SONAME),gcc$(GCC_SONAME),$(p_l)))
 	$(call cross_mangle_substvars,$(p_l))
 
 	$(cross_gencontrol) dh_gencontrol -p$(p_l) -- -v$(DEB_VERSION) $(common_substvars)
@@ -241,7 +241,7 @@ define __do_libstdcxx_dbg
 	)
 
 	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_d) \
-		$(if $(filter yes,$(with_libgcc)),-L$(p_l$(2)gcc) -l:$(d)/$(usr_lib$(2)):)
+		$(call shlibdirs_to_search,$(subst $(pkg_ver),,$(subst stdc++$(CXX_SONAME),gcc$(GCC_SONAME),$(p_l))))
 	$(call cross_mangle_substvars,$(p_d))
 
 	debian/dh_doclink -p$(p_d) $(p_base)

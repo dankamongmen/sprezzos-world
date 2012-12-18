@@ -150,7 +150,9 @@ define __do_gcc_devels
 	dh_installdirs -p$(2) $(docdir) #TODO
 	dh_installdirs -p$(2) $(3)
 
-	$(call __do_gcc_devels2,$(1),$(2),$(3),$(4))
+	$(if $(filter $(DEB_STAGE),stage1),,
+		$(call __do_gcc_devels2,$(1),$(2),$(3),$(4))
+	)
 
 	debian/dh_doclink -p$(2) $(p_base)
 	debian/dh_rmemptydirs -p$(2)

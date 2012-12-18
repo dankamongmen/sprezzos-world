@@ -143,16 +143,21 @@ endif
 
 ifdef DEB_STAGE
   CONFARGS += \
+	--disable-decimal-float \
 	--disable-libgomp  \
 	--disable-libmudflap  \
 	--disable-libssp \
-	--disable-multilib  \
 	--disable-libquadmath \
 	--disable-threads \
 	--libexecdir=/$(libexecdir) \
 	--libdir=/$(PF)/$(configured_libdir) \
-	--with-build-sysroot=$(with_build_sysroot) \
-	--with-sysroot=$(with_sysroot)
+	$(if $(with_build_sysroot),--with-build-sysroot=$(with_build_sysroot)) \
+	$(if $(with_sysroot),--with-sysroot=$(with_sysroot))
+
+  ifeq ($(with_multiarch_lib),yes)
+    CONFARGS += \
+	--enable-multiarch
+  endif
 
   ifeq ($(DEB_STAGE),stage1)
     CONFARGS += \
@@ -242,6 +247,8 @@ endif
 #CONFARGS += --with-plugin-ld=ld.gold
 #CONFARGS += --with-plugin-ld
 
+endif # !DEB_STAGE
+
 jvm_name_short = java-1.5.0-gcj-$(BASE_VERSION)$(if $(findstring snap,$(PKGSOURCE)),-snap)
 jvm_name_long = $(jvm_name_short)-1.5.0.0
 
@@ -282,8 +289,10 @@ ifeq ($(with_objc)-$(with_objc_gc),yes-yes)
 endif
 
 ifneq (,$(filter $(DEB_TARGET_GNU_TYPE), i486-linux-gnu i586-linux-gnu i686-linux-gnu))
-    ifeq ($(biarch64),yes)
-      CONFARGS += --enable-targets=all
+    ifeq ($(multilib),yes)
+      ifeq ($(biarch64),yes)
+        CONFARGS += --enable-targets=all
+      endif
     endif
 endif
 
@@ -296,8 +305,11 @@ endif
 ifneq (,$(filter $(DEB_TARGET_GNU_TYPE), powerpc-linux-gnu powerpc-linux-gnuspe))
     CONFARGS += --enable-secureplt
     ifeq ($(biarch64),yes)
-      CONFARGS += --disable-softfloat \
-	--enable-targets=powerpc-linux,powerpc64-linux --with-cpu=default32
+      CONFARGS += --disable-softfloat --with-cpu=default32
+      ifeq ($(multilib),yes)
+        CONFARGS += --disable-softfloat \
+	  --enable-targets=powerpc-linux,powerpc64-linux
+      endif
     else
       CONFARGS += --disable-multilib
     endif
@@ -306,7 +318,9 @@ endif
 ifneq (,$(findstring powerpc64-linux,$(DEB_TARGET_GNU_TYPE)))
     CONFARGS += --enable-secureplt
     ifeq ($(biarch32),yes)
-      CONFARGS += --disable-softfloat --enable-targets=powerpc64-linux,powerpc-linux
+      ifeq ($(multilib),yes)
+        CONFARGS += --disable-softfloat --enable-targets=powerpc64-linux,powerpc-linux
+      endif
     else
       CONFARGS += --disable-multilib
     endif
@@ -325,10 +339,13 @@ ifeq ($(REVERSE_CROSS),yes)
   # FIXME: build currently fails build the precompiled headers
   CONFARGS += --disable-libstdcxx-pch
 endif
-endif # !DEB_STAGE
+
+ifeq ($(with_multiarch_lib),yes)
+  CONFARGS += --enable-multiarch
+endif
 
 ifeq ($(findstring powerpcspe,$(DEB_TARGET_ARCH)),powerpcspe)
-  CONFARGS += --with-cpu=8548 --enable-e500_double --with-long-double-128
+  CONFARGS += --with-cpu=8548 --enable-e500_double
 endif
 
 ifneq (,$(findstring softfloat,$(DEB_TARGET_GNU_CPU)))
@@ -406,7 +423,10 @@ ifneq (,$(findstring ia64-linux,$(DEB_TARGET_GNU_TYPE)))
 endif
 
 ifneq (,$(findstring sh4-linux,$(DEB_TARGET_GNU_TYPE)))
-  CONFARGS += --with-multilib-list=m4,m4-nofpu --with-cpu=sh4
+  ifeq ($(multilib),yes)
+    CONFARGS += --with-multilib-list=m4,m4-nofpu
+  endif
+  CONFARGS += --with-cpu=sh4
 endif
 
 ifneq (,$(findstring m68k-linux,$(DEB_TARGET_GNU_TYPE)))
@@ -415,16 +435,7 @@ endif
 
 ifeq ($(DEB_TARGET_ARCH_OS),linux)
   ifneq (,$(findstring $(DEB_TARGET_ARCH), alpha powerpc ppc64 s390 s390x sparc sparc64))
-    qualifier := $(shell dpkg --assert-multi-arch >/dev/null 2>&1 && echo ':$(DEB_TARGET_ARCH)')
-    ifeq ($(DEB_TARGET_ARCH),alpha)
-      glibc_version := $(shell dpkg -s libc6.1$(qualifier) | awk '/^Version:/ {print $$2}')
-    else
-      glibc_version := $(shell dpkg -s libc6$(qualifier) | awk '/^Version:/ {print $$2}')
-    endif
-    with_ldbl128 := $(shell dpkg --compare-versions $(glibc_version) gt 2.3.99 && echo yes)
-    ifeq ($(with_ldbl128),yes)
-      CONFARGS += --with-long-double-128
-    endif
+    CONFARGS += --with-long-double-128
   endif
 endif
 
@@ -438,13 +449,15 @@ ifneq (,$(filter $(DEB_TARGET_ARCH), amd64 i386 kfreebsd-i386 kfreebsd-amd64))
   endif
 endif
 
-ifneq (,$(filter $(DEB_TARGET_ARCH), amd64 i386))
-  ifeq ($(DEB_TARGET_ARCH),amd64)
-    CONFARGS += --with-abi=m64
+ifeq ($(DEB_TARGET_ARCH),amd64)
+  CONFARGS += --with-abi=m64
+endif
+ifeq ($(multilib),yes)
+  ifneq (,$(filter $(DEB_TARGET_ARCH), amd64 i386))
+    CONFARGS += --with-multilib-list=m32,m64$(if $(filter yes,$(biarchx32)),$(COMMA)mx32)
+  else ifeq ($(DEB_TARGET_ARCH),x32)
+    CONFARGS += --with-abi=mx32 --with-multilib-list=mx32,m64,m32
   endif
-  CONFARGS += --with-multilib-list=m32,m64$(if $(filter yes,$(biarchx32)),$(COMMA)mx32)
-else ifeq ($(DEB_TARGET_ARCH),x32)
-  CONFARGS += --with-abi=mx32 --with-multilib-list=mx32,m64,m32
 endif
 
 ifneq (,$(filter $(DEB_TARGET_ARCH), hurd-i386))
@@ -462,24 +475,30 @@ endif
 ifneq (,$(findstring mips-linux,$(DEB_TARGET_GNU_TYPE)))
   CONFARGS += --with-mips-plt
   CONFARGS += --with-arch-32=mips2 --with-tune-32=mips32
-  ifeq ($(biarchn32)-$(biarch64),yes-yes)
-    CONFARGS += --enable-targets=all
-    CONFARGS += --with-arch-64=mips3 --with-tune-64=mips64
+  ifeq ($(multilib),yes)
+    ifeq ($(biarchn32)-$(biarch64),yes-yes)
+      CONFARGS += --enable-targets=all
+      CONFARGS += --with-arch-64=mips3 --with-tune-64=mips64
+    endif
   endif
 endif
 
 ifneq (,$(findstring mipsel-linux,$(DEB_TARGET_GNU_TYPE)))
   CONFARGS += --with-mips-plt
   CONFARGS += --with-arch-32=mips2 --with-tune-32=mips32
-  ifeq ($(biarchn32)-$(biarch64),yes-yes)
-    CONFARGS += --enable-targets=all
-    CONFARGS += --with-arch-64=mips3 --with-tune-64=mips64
+  ifeq ($(multilib),yes)
+    ifeq ($(biarchn32)-$(biarch64),yes-yes)
+      CONFARGS += --enable-targets=all
+      CONFARGS += --with-arch-64=mips3 --with-tune-64=mips64
+    endif
   endif
 endif
 
 ifneq (,$(findstring s390-linux,$(DEB_TARGET_GNU_TYPE)))
-  ifeq ($(biarch64),yes)
-    CONFARGS += --enable-targets=all
+  ifeq ($(multilib),yes)
+    ifeq ($(biarch64),yes)
+      CONFARGS += --enable-targets=all
+    endif
   endif
 endif
 
@@ -509,19 +528,6 @@ ifeq ($(DEB_CROSS),yes)
   CONFARGS += \
 	--program-prefix=$(TARGET_ALIAS)- \
 	--includedir=/$(PFL)/include
-  ifndef DEB_STAGE
-  CONFARGS += \
-	--with-headers=/$(PFL)/include \
-	--with-libs=/$(PFL)/lib
-  endif
-  # FIXME: dpkg-shlibdeps doesn't work without this
-  SET_CROSS_LIB_PATH = LD_LIBRARY_PATH=/lib:/usr/lib:$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}/$(PF)/$(DEB_TARGET_GNU_TYPE)/lib$${DIRNAME}
-  ifeq ($(DEB_TARGET_ARCH),armel)
-    SET_CROSS_LIB_PATH = LD_LIBRARY_PATH=/lib:/usr/lib:$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}/$(PF)/$(DEB_TARGET_GNU_TYPE)/lib$${DIRNAME}:/$(PF)/arm-linux-gnueabihf/lib
-  endif
-  ifeq ($(DEB_TARGET_ARCH),armhf)
-    SET_CROSS_LIB_PATH = LD_LIBRARY_PATH=/lib:/usr/lib:$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}/$(PF)/$(DEB_TARGET_GNU_TYPE)/lib$${DIRNAME}:/$(PF)/arm-linux-gnueabi/lib
-  endif
 endif
 
 ifeq ($(with_bootstrap),off)
@@ -931,6 +937,12 @@ endif
 		$(SET_SHELL) \
 	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}$(builddir)/gcc/ada/rts \
 		../src/configure $(subst ___, ,$(CONFARGS))
+
+	: # multilib builds without b-d on gcc-multilib (used in FLAGS_FOR_TARGET)
+	if [ -d /usr/include/$(DEB_TARGET_MULTIARCH)/asm ]; then \
+	  mkdir -p $(builddir)/sys-include; \
+	  ln -sf /usr/include/$(DEB_TARGET_MULTIARCH)/asm $(builddir)/sys-include/asm; \
+	fi
 
 	touch $(configure_stamp)
 
@@ -2084,15 +2096,18 @@ endif
 #	done
 #  endif
 
-ifeq ($(DEB_CROSS),yes)
-  ifeq ($(DEB_TARGET_ARCH)-$(biarch64),s390-yes)
+ifeq ($(DEB_CROSS)-$(multilib),yes-yes)
+  ifneq ($(DEB_STAGE),stage1)
+    ifeq ($(DEB_TARGET_ARCH)-$(biarch64),s390-yes)
 	: # s390 64bit stuff happens to be in s390x-linux-gnu/lib64/
 	mkdir -p $(d)/$(PF)/s390-linux-gnu/lib64
 	cp -a $(d)/$(PF)/s390x-linux-gnu/lib64/* $(d)/$(PF)/s390-linux-gnu/lib64/
-  endif
-  ifeq ($(DEB_TARGET_ARCH)-$(biarch64),powerpc-yes)
+    endif
+    ifeq ($(DEB_TARGET_ARCH)-$(biarch64),powerpc-yes)
 	: # ppc 64bit build slaps libgcc and libstdc++ to powerpc64-linux-gnu
+	mkdir -p $(d)/$(PF)/powerpc-linux-gnu/lib64
 	cp -a $(d)/$(PF)/powerpc64-linux-gnu/lib64/* $(d)/$(PF)/powerpc-linux-gnu/lib64/
+    endif
   endif
 endif
 

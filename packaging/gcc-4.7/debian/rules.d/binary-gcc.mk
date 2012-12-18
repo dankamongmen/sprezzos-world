@@ -63,11 +63,6 @@ $(binary_stamp)-gcc: $(install_dependencies)
 	rm -rf $(d_gcc)
 	dh_installdirs -p$(p_gcc) $(dirs_gcc)
 
-ifeq ($(DEB_STAGE),stage1)
-	$(call __do_gcc_devels2,,$(p_gcc),$(gcc_lib_dir),$(d)/$(usr_lib))
-	find $(d_gcc)/$(gcc_lib_dir) -name '*.so' | xargs -r rm -f
-endif
-
 ifeq ($(with_linaro_branch),yes)
 	if [ -f $(srcdir)/ChangeLog.linaro ]; then \
 	  cp -p $(srcdir)/ChangeLog.linaro \
