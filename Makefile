@@ -206,6 +206,15 @@ $(MCELOG): $(SPREZZ)/mcelog/debian/changelog
 	tar cJf $(MCELOGORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
+.PHONY: gtkpod
+gtkpod:$(GTKPOD)_$(ARCH).deb
+$(GTKPOD): $(SPREZZ)/gtkpod/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	git clone git@github.com:Sprezzatech/gtkpod.git $@
+	tar cJf gtkpod-$(gtkpod_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf gtkpod-$(gtkpod_UPVER).tar.xz gtkpod_$(gtkpod_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: miro
 miro:$(MIRO)_$(ARCH).deb
 $(MIRO): $(SPREZZ)/miro/debian/changelog
@@ -1884,14 +1893,6 @@ $(GTKHTML): $(SPREZZ)/gtkhtml/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gtkhtml4.0-$(gtkhtml_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: gtkpod
-gtkpod:$(GTKPOD)_$(ARCH).deb
-$(GTKPOD): $(SPREZZ)/gtkpod/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gtkpod-$(gtkpod_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gtk-vnc
 gtk-vnc:$(GTKVNC)_$(ARCH).deb
