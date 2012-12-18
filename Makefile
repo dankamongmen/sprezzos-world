@@ -1965,6 +1965,14 @@ $(HANDBRAKE): $(SPREZZ)/handbrake/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf HandBrake-$(handbrake_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: hddtemp
+hddtemp:$(HDDTEMP)_$(ARCH).deb
+$(HDDTEMP): $(SPREZZ)/hddtemp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf hddtemp-$(hddtemp_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: hdparm
 hdparm:$(HDPARM)_$(ARCH).deb
 $(HDPARM): $(SPREZZ)/hdparm/debian/changelog
