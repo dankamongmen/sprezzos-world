@@ -1,0 +1,141 @@
+--- a/src/comsat.c
++++ b/src/comsat.c
+@@ -92,7 +92,7 @@
+    }
+   if(newvalid)						  /* so far, so good */
+    { int s;
+-     if(!*chp)						       /* no service */
++     if(!chad||!*chp)					       /* no service */
+ 	chp=BIFF_serviceport;				/* new balls please! */
+      s=strtol(chp,&chad,10);
+      if(chp!=chad)			       /* the service is not numeric */
+@@ -120,7 +120,7 @@
+ { int s;const char*p;
+   if(!csvalid||!buf)		  /* is comat on and set to a valid address? */
+      return;
+-  if(!*cslgname||strlen(cslgname)+2>linebuf)	       /* is $LOGNAME bogus? */
++  if(!cslgname||!*cslgname||strlen(cslgname)+2>linebuf)/* is $LOGNAME bogus? */
+      return;
+   if(!(p=folder?folder:cslastf))		     /* do we have a folder? */
+      return;
+--- a/src/lmtp.c
++++ b/src/lmtp.c
+@@ -708,7 +708,7 @@
+      got-=in-p;				     /* correct for what disappeared */
+    }
+   while(left-=got);				/* change listed buffer size */
+-  *(long*)statep=state;					       /* save state */
++  *(int*)statep=state;					       /* save state */
+   return 0;
+ }
+ 
+@@ -765,7 +765,7 @@
+      got-=in-p;				     /* correct for what disappeared */
+    }
+   while(left-=got);				/* change listed buffer size */
+-  *(long*)statep=state;					       /* save state */
++  *(int*)statep=state;					       /* save state */
+   return 0;
+ }
+ 
+--- a/src/memblk.c
++++ b/src/memblk.c
+@@ -51,11 +51,11 @@
+ {
+ #ifdef USE_MMAP
+   if(mb->fd>=0)
+-   { long len=mb->len+1;
+-     if(munmap(mb->p,len))
+-	mmapfailed(len);		      /* don't want to continue here */
+-     if((mb->p=mmap(0,len,PROT_READ,MAP_PRIVATE,mb->fd,(off_t)0))==MAP_FAILED)
+-	mmapfailed(len);
++   { long mlen=mb->len+1;
++     if(munmap(mb->p,mlen))
++	mmapfailed(mlen);		      /* don't want to continue here */
++     if((mb->p=mmap(0,mlen,PROT_READ,MAP_PRIVATE,mb->fd,(off_t)0))==MAP_FAILED)
++	mmapfailed(mlen);
+      close(mb->fd);
+      mb->fd=ropen(devnull,O_RDWR,0);		/* XXX Perhaps -1 is better? */
+    }
+@@ -77,8 +77,8 @@
+      strcpy(filename,MMAP_DIR);
+      if(unique(filename,strchr(filename,'\0'),MMAP_FILE_LEN,MMAP_PERM,0,0)&&
+ 	(mb->fd=ropen(filename,O_RDWR,MMAP_PERM),unlink(filename),mb->fd>=0))
+-      { mb->filelen=len;
+-	if(lseek(mb->fd,mb->filelen-1,SEEK_SET)<0||1!=rwrite(mb->fd,empty,1))
++      { mb->filelen=len+1;
++	if(lseek(mb->fd,len,SEEK_SET)<0||1!=rwrite(mb->fd,empty,1))
+ dropf:	 { close(mb->fd);mb->fd= -1;
+ 	   if(verbose)nlog("Unable to extend or use tempfile");
+ 	 }
+@@ -98,9 +98,9 @@
+       }
+    }
+   if(mb->fd>=0)
+-   { if(len>mb->filelen)				  /* need to extend? */
+-      { mb->filelen=len;
+-	if(lseek(mb->fd,mb->filelen-1,SEEK_SET)<0||1!=rwrite(mb->fd,empty,1))
++   { if(len>=mb->filelen)				  /* need to extend? */
++      { mb->filelen=len+1;
++	if(lseek(mb->fd,len,SEEK_SET)<0||1!=rwrite(mb->fd,empty,1))
+ 	 { char*p=malloc(len+1);	   /* can't extend, switch to malloc */
+ 	   tmemmove(p,mb->p,mb->len);
+ 	   munmap(mb->p,mb->len+1);
+@@ -124,9 +124,9 @@
+    }
+   else
+      mb->p=realloc(mb->p,len+1);
+-  mb->len=len+1;
+-  mb->p[len]='\0';
++  mb->len=len;
+ ret1:
++  mb->p[len]='\0';
+   return 1;
+ }
+ 
+--- a/src/memblk.h
++++ b/src/memblk.h
+@@ -1,6 +1,6 @@
+ typedef struct memblk {
+     char*p;						  /* where it starts */
+-    long len;					 /* currently allocated size */
++    long len;			 /* current size, not including trailing NUL */
+ #ifdef USE_MMAP
+     off_t filelen;				     /* how long is the file */
+     int fd;					   /* file which is mmap()ed */
+--- a/src/pipes.c
++++ b/src/pipes.c
+@@ -145,7 +145,9 @@
+   if(Stdout)
+    { *(eq=strchr(Stdout,'\0')-1)='\0';			     /* chop the '=' */
+      if(!(backblock=getenv(Stdout)))			/* no current value? */
+-	PRDB=PWRB= -1;
++      { PRDB=PWRB= -1;
++	backlen=0;
++      }
+      else
+       { backlen=strlen(backblock);
+ 	goto pip;
+@@ -155,9 +157,7 @@
+ pip: rpipe(pbackfd);
+   rpipe(pinfd);						 /* main pipes setup */
+   if(!(pidchild=sfork()))			/* create a sending procmail */
+-   { if(Stdout&&backblock)
+-	backlen=strlen(backblock);
+-     else
++   { if(!Stdout)
+ 	backblock=source,backlen=len;
+      childsetup();rclose(PRDI);rclose(PRDB);
+      rpipe(poutfd);rclose(STDOUT);
+--- a/src/procmail.c
++++ b/src/procmail.c
+@@ -652,8 +652,7 @@
+ 	      nrcond= -1;
+ 	   if(tolock)		 /* clear temporary buffer for lockfile name */
+ 	      free(tolock);
+-	   for(i=maxindex(flags);i;i--)			  /* clear the flags */
+-	      flags[i]=0;
++	   bbzero(flags,maxindex(flags));		  /* clear the flags */
+ 	   for(tolock=0,locknext=0;;)
+ 	    { chp=skpspace(chp);
+ 	      switch(i= *chp++)

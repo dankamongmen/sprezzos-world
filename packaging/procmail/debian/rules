@@ -1,0 +1,69 @@
+#!/usr/bin/make -f
+
+package = procmail
+docdir = debian/tmp/usr/share/doc/$(package)
+
+CC = gcc
+CFLAGS := $(shell dpkg-buildflags --get CFLAGS) $$(getconf LFS_CFLAGS)
+LDFLAGS := `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS := `dpkg-buildflags --get CPPFLAGS`
+SEARCHLIBS = -lm
+STRIP = true
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+  STRIP = strip --remove-section=.comment --remove-section=.note
+endif
+
+build:
+	$(MAKE) CC="$(CC)" CFLAGS0="" \
+		LDFLAGS0="$(LDFLAGS)" SEARCHLIBS="$(SEARCHLIBS)" autoconf.h
+	$(MAKE) CC="$(CC)" CFLAGS0="$(CFLAGS) $(CPPFLAGS)" \
+		LDFLAGS0="$(LDFLAGS)" SEARCHLIBS="$(SEARCHLIBS)"
+	touch build
+
+clean:
+	rm -f build
+	$(MAKE) realclean SEARCHLIBS=""
+	rm -f `find . -name "*~"`
+	rm -rf debian/tmp debian/files* core debian/substvars
+
+binary-indep: build
+
+binary-arch: build
+	rm -rf debian/tmp
+	install -d debian/tmp/DEBIAN $(docdir)/examples
+	cd debian/tmp && install -d usr/bin usr/share/lintian/overrides
+	$(MAKE) BASENAME=`pwd`/debian/tmp/usr install.man install-suid
+	$(STRIP) debian/tmp/usr/bin/procmail
+	$(STRIP) debian/tmp/usr/bin/lockfile
+	$(STRIP) debian/tmp/usr/bin/formail
+	cp -p debian/copyright $(docdir)
+	cp -p debian/changelog $(docdir)/changelog.Debian
+	cp -p debian/lintian debian/tmp/usr/share/lintian/overrides/$(package)
+	install -m 644 debian/mailstat.1 debian/tmp/usr/man/man1
+	cp -p FEATURES HISTORY README FAQ KNOWN_BUGS \
+		debian/QuickStart debian/README.Maildir $(docdir)
+	cp -p examples/* $(docdir)/examples
+	cd $(docdir)/examples && rm -f dirname mailstat procmail-rpm.spec
+	cd $(docdir) && gzip -9 HISTORY changelog.Debian
+	ln -s HISTORY.gz $(docdir)/changelog.gz
+	mv debian/tmp/usr/man debian/tmp/usr/share
+	gzip -r9 debian/tmp/usr/share/man
+	dpkg-shlibdeps debian/tmp/usr/bin/*
+	dpkg-gencontrol
+	cd debian/tmp && \
+		md5sum `find * -type f ! -regex "DEBIAN/.*"` > DEBIAN/md5sums
+	chown -R 0:0 debian/tmp
+	chmod -R go=rX debian/tmp
+	chgrp mail debian/tmp/usr/bin/procmail debian/tmp/usr/bin/lockfile
+	chmod 6755 debian/tmp/usr/bin/procmail
+	chmod 2755 debian/tmp/usr/bin/lockfile
+	dpkg --build debian/tmp ..
+
+binary: binary-indep binary-arch
+
+build-arch: build
+
+build-indep: build
+
+.PHONY: binary binary-arch binary-indep clean
