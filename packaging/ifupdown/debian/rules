@@ -1,0 +1,93 @@
+#!/usr/bin/make -f
+
+######################################################################
+# BUILD NOTES
+#
+# ifupdown's written in litprog using noweb. noweb is written in icon.
+# icon isn't as portable as one might hope (it needs to have bits recoded
+# for each arch and OS it's ported to. ugh).
+#
+# So. The "upstream" source is made to not include any of the generated
+# files. That's neat and tidy. If you want to modify anything, you edit
+# the .nw file.
+#
+# Once you've done all the Debian changes, you run debian/rules binary,
+# and get all the .c files and such updated. Once you're done, you
+# run debian/rules clean, which leaves the generated .c files around
+# for porters. You then generate a .diff.gz, and all should be well.
+#
+# Useful targets of the toplevel makefile:
+# clobber:
+#   * gets rid of all the generated files except Makefile,
+#     make{c,nw}dep.sh, which are needed to bootstrap
+#
+# distclean:
+#   * removes ALL generated files.  Use with care.
+#
+# docs: 
+#   * builds the documentation. Note that this is not done per
+#     default (only executables are built). If this is added to
+#     the default build process (which will not be done in the near
+#     future since dia requires an X display even if using the -e option) 
+#     the 'tetex-base' and 'dia' packages would need to be added to the
+#     Build-Dep
+#
+######################################################################
+
+export VERSION := $(shell dpkg-parsechangelog|grep Version|cut -d' ' -f2|sed s/.*really//g)
+export CFLAGS := -Wall -W $(shell dpkg-buildflags --get CFLAGS) $(shell dpkg-buildflags --get CPPFLAGS) -D'IFUPDOWN_VERSION="$(VERSION)"'
+export LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS)
+ifeq "$(origin CC)" "default"
+export CC := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)-gcc
+endif
+export ARCH := $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+export DESTDIR := debian/$(shell dh_listpackages)
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	chmod a+rx makecdep.sh makenwdep.sh
+
+override_dh_installinit:
+	dh_installinit --name=networking --no-start -- start 40 S . start 35 0 6 .
+	install -p -m 0644 debian/networking.defaults $(DESTDIR)/etc/default/networking
+	dh_installinit --name=network-interface-container --noscripts
+	dh_installinit --name=network-interface-security --noscripts
+	dh_installinit --name=network-interface --noscripts
+	dh_installinit --name=networking --noscripts
+
+override_dh_installifupdown:
+	dh_installifupdown --name=upstart
+
+override_dh_auto_clean:
+	$(MAKE) clean
+	$(MAKE) clobber
+	rm -rf tests/
+
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+override_dh_auto_test:
+	chmod a+rx debian/testbuild
+	@echo running debian/testbuild
+	@if ! debian/testbuild; then \
+	     echo '=================================================='; \
+	     echo 'AUTOMATIC TESTS FAILED -- Something built wrong or'; \
+	     echo 'there is a bug in the code!!! Either way something'; \
+	     echo 'is completely screwed up!!! File a bug!'; \
+	     echo ''; \
+	     echo 'Aborting build.'; \
+	     echo '=================================================='; \
+	     exit 1; \
+	fi
+endif
+endif
+
+override_dh_gencontrol:
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+	dh_gencontrol -- -V'net:Depends=iproute (>= 20071016-1)' -V'net:Suggests=net-tools'
+else ifeq ($(DEB_HOST_ARCH_OS),kfreebsd)
+	dh_gencontrol -- -V'net:Depends=net-tools' -V'net:Suggests='
+else ifeq ($(DEB_HOST_ARCH_OS),hurd)
+	dh_gencontrol -- -V'net:Depends=inetutils-tools' -V'net:Suggests='
+endif
