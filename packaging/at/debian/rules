@@ -1,0 +1,74 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS=hardening=+pie,+bindnow
+
+confflags = --prefix=/usr --with-loadavg_mx=1.5 \
+            --with-jobdir=/var/spool/cron/atjobs \
+            --with-atspool=/var/spool/cron/atspool \
+            SENDMAIL=/usr/sbin/sendmail
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-stamp:
+	[ -f config.sub.ori ] || mv config.sub config.sub.ori
+	[ -f config.guess.ori ] || mv config.guess config.guess.ori
+	ln -sf /usr/share/misc/config.sub .
+	ln -sf /usr/share/misc/config.guess .
+
+	dh_auto_configure -- $(confflags)
+	dh_auto_build
+	dh_auto_test
+	touch $@
+
+build-indep:
+# Nothing to be done here.
+
+clean:
+	[ ! -f Makefile ] || $(MAKE) distclean
+	[ ! -f config.sub.ori ] || mv -f config.sub.ori config.sub
+	[ ! -f config.guess.ori ] || mv -f config.guess.ori config.guess
+	dh_clean
+
+binary-indep:
+# Nothing to be done here
+
+binary-arch: build-stamp
+	dh_testroot
+	dh_prep
+	# Install docs:
+	dh_installchangelogs ChangeLog
+	dh_installdocs README
+	# Install everything:
+	$(MAKE) IROOT=$(CURDIR)/debian/at mandir=/usr/share/man docdir=/usr/share/doc install
+	# Remove (duplicate) changelog and copyright:
+	rm debian/at/usr/share/doc/at/Copyright
+	rm debian/at/usr/share/doc/at/ChangeLog
+	# TODO: Take care of those:
+	rm -f debian/at/var/spool/cron/atjobs/.SEQ
+	chown daemon:daemon debian/at/var/spool/cron/atjobs debian/at/var/spool/cron/atspool
+	# TODO: Why removing those?
+	rm debian/at/usr/sbin/atrun
+	rm debian/at/usr/share/man/man8/atrun.8
+	# Install/rename pam config file:
+	dh_install pam.conf etc/pam.d
+	mv debian/at/etc/pam.d/pam.conf \
+		debian/at/etc/pam.d/atd
+	# Install/rename init script:
+	dh_install rc etc/init.d
+	mv debian/at/etc/init.d/rc \
+		debian/at/etc/init.d/atd
+	chmod a+x debian/at/etc/init.d/atd
+	dh_installinit --name=atd --onlyscripts -- defaults 89 11
+	# Needed to keep in line with the previous upload:
+	chown root:daemon debian/at/etc/at.deny
+	dh_compress
+	dh_installdeb
+	dh_shlibdeps
+	dh_strip
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -- -Zxz
+
+binary: binary-indep binary-arch
+
+.PHONY: binary binary-arch binary-indep clean
