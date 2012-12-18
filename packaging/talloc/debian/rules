@@ -1,0 +1,62 @@
+#!/usr/bin/make -f
+
+CFLAGS = -g -Wall
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+
+LDFLAGS += -Wl,--as-needed
+
+DESTDIR=$(CURDIR)/debian/tmp
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+conf_args = --prefix=/usr --disable-rpath-install --disable-rpath --bundled-libraries=NONE
+conf_args += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+conf_args += --libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+export PYTHON="$(shell which `pyversions -d`)"
+export PYTHON_CONFIG=$(PYTHON)-config
+
+%:
+	dh $* --with python2 
+
+override_dh_python2:
+	dh_python2 --no-guessing-versions
+
+override_dh_auto_configure:
+	LDFLAGS="-Wl,--as-needed" PYTHON="$(PYTHON)" PYTHON_CONFIG="$(PYTHON_CONFIG)" CFLAGS="$(CFLAGS)" ./configure $(conf_args)
+
+override_dh_auto_build:
+	$(MAKE) all
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	LD_LIBRARY_PATH=bin/shared ./bin/talloc_testsuite
+endif
+
+get-packaged-orig-source:
+	./debian/build-orig.sh
+
+override_dh_auto_clean:
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f buildtools/wafsamba/*.pyc \
+		buildtools/wafadmin/*.pyc \
+		buildtools/wafadmin/Tools/*.pyc
+
+override_dh_auto_install:
+	mkdir -p $(DESTDIR)`swig -swiglib`
+	$(MAKE) install DESTDIR=$(DESTDIR)
+	# Waf really should be doing this:
+	ar -rc libtalloc.a bin/default/talloc_*.o
+	cp libtalloc.a $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
+
+override_dh_strip:
+	dh_strip -plibtalloc2 --dbg-package=libtalloc2-dbg
+	dh_strip -ppython-talloc --dbg-package=python-talloc-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs -- -c4
