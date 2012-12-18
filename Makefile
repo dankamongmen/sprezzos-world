@@ -517,6 +517,14 @@ $(AUDIT): $(SPREZZ)/audit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf audit-$(audit_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: at
+at:$(AT)_$(ARCH).deb
+$(AT): $(SPREZZ)/at/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf at_$(at_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: atk-bridge
 atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
 $(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog
@@ -3447,6 +3455,14 @@ $(POSTGRESQL): $(SPREZZ)/postgresql/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf postgresql-$(postgresql_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: procmail
+procmail:$(PROCMAIL)_$(ARCH).deb
+$(PROCMAIL): $(SPREZZ)/procmail/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf procmail-$(procmail_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: procps
 procps:$(PROCPS)_$(ARCH).deb
 $(PROCPS): $(SPREZZ)/procps/debian/changelog
@@ -3662,6 +3678,14 @@ $(SQLITE3): $(SPREZZ)/sqlite3/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf sqlite3_$(sqlite3_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: scowl
+scowl:$(SCOWL)_$(ARCH).deb
+$(SCOWL): $(SPREZZ)/scowl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf scowl-$(scowl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
