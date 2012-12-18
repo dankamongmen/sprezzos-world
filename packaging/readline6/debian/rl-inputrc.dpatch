@@ -1,0 +1,102 @@
+#! /bin/sh -e
+
+if [ $# -eq 3 -a "$2" = '-d' ]; then
+    pdir="-d $3"
+elif [ $# -ne 1 ]; then
+    echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+    exit 1
+fi
+case "$1" in
+    -patch) patch $pdir -f --no-backup-if-mismatch -p3 < $0;;
+    -unpatch) patch $pdir -f --no-backup-if-mismatch -R -p3 < $0;;
+    *)
+	echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+	exit 1
+esac
+exit 0
+
+# DP: Support for /etc/inputrc in addition to ~/inputrc
+
+diff -ur bash.saved/lib/readline/bind.c bash/lib/readline/bind.c
+--- bash.saved/lib/readline/bind.c	2005-01-16 13:18:30.000000000 +0100
++++ bash/lib/readline/bind.c	2005-01-16 13:21:43.000000000 +0100
+@@ -713,6 +713,9 @@
+ /* The last key bindings file read. */
+ static char *last_readline_init_file = (char *)NULL;
+ 
++/* Flag to read system init file */
++static int read_system_init_file = 0;
++
+ /* The file we're currently reading key bindings from. */
+ static const char *current_readline_init_file;
+ static int current_readline_init_include_level;
+@@ -780,7 +783,7 @@
+    to the first non-null filename from this list:
+      1. the filename used for the previous call
+      2. the value of the shell variable `INPUTRC'
+-     3. ~/.inputrc
++     3. /etc/inputrc and ~/.inputrc
+    If the file existed and could be opened and read, 0 is returned,
+    otherwise errno is returned. */
+ int
+@@ -791,14 +794,31 @@
+   if (filename == 0)
+     {
+       filename = last_readline_init_file;
+-      if (filename == 0)
++      if (filename == 0) {
+         filename = sh_get_env_value ("INPUTRC");
+-      if (filename == 0)
++	read_system_init_file = 0;
++      }
++      if (filename == 0) {
+ 	filename = DEFAULT_INPUTRC;
++	read_system_init_file = 1;
++      }
+     }
+ 
+-  if (*filename == 0)
++  if (*filename == 0) {
+     filename = DEFAULT_INPUTRC;
++    read_system_init_file = 1;
++  }
++
++  if (read_system_init_file)
++    if (filename == last_readline_init_file)
++      {
++	filename = savestring (filename);
++	_rl_read_init_file (SYSTEM_INPUTRC, 0);
++	free (last_readline_init_file);
++	last_readline_init_file = filename;
++      }
++    else
++      _rl_read_init_file (SYSTEM_INPUTRC, 0);
+ 
+ #if defined (__MSDOS__)
+   if (_rl_read_init_file (filename, 0) == 0)
+Only in bash/lib/readline: bind.c.orig
+Only in bash/lib/readline: bind.c.rej
+diff -ur bash.saved/lib/readline/doc/rluser.texi bash/lib/readline/doc/rluser.texi
+--- bash.saved/lib/readline/doc/rluser.texi	2005-01-16 13:18:30.000000000 +0100
++++ bash/lib/readline/doc/rluser.texi	2005-01-16 13:21:28.000000000 +0100
+@@ -336,7 +336,8 @@
+ @ifclear BashFeatures
+ file is taken from the value of the environment variable @env{INPUTRC}.  If
+ @end ifclear
+-that variable is unset, the default is @file{~/.inputrc}.
++that variable is unset, Readline will read both @file{/etc/inputrc} and 
++@file{~/.inputrc}.
+ 
+ When a program which uses the Readline library starts up, the
+ init file is read, and the key bindings are set.
+diff -ur bash.saved/lib/readline/rlconf.h bash/lib/readline/rlconf.h
+--- bash.saved/lib/readline/rlconf.h	2005-01-16 13:18:30.000000000 +0100
++++ bash/lib/readline/rlconf.h	2005-01-16 13:21:28.000000000 +0100
+@@ -39,6 +39,7 @@
+ 
+ /* The final, last-ditch effort file name for an init file. */
+ #define DEFAULT_INPUTRC "~/.inputrc"
++#define SYSTEM_INPUTRC "/etc/inputrc"
+ 
+ /* If defined, expand tabs to spaces. */
+ #define DISPLAY_TABS
