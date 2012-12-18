@@ -2269,6 +2269,14 @@ $(EXACTIMAGE): $(SPREZZ)/exactimage/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf exactimage_$(exactimage_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: exempi
+exempi:$(EXEMPI)_$(ARCH).deb
+$(EXEMPI): $(SPREZZ)/exempi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf exempi-$(exempi_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: exo
 exo:$(EXO)_$(ARCH).deb
 $(EXO): $(SPREZZ)/exo/debian/changelog
