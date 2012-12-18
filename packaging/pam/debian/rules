@@ -1,0 +1,59 @@
+#!/usr/bin/make -f
+
+DEB_LDFLAGS_MAINT_APPEND := -Wl,-z,defs
+DEB_CFLAGS_MAINT_APPEND  := $(shell getconf LFS_CFLAGS)
+export DEB_LDFLAGS_MAINT_APPEND DEB_CFLAGS_MAINT_APPEND
+
+DEB_HOST_MULTIARCH	:= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+LC_COLLATE=C
+export LC_COLLATE
+
+export QUILT_PATCH_DIR = debian/patches-applied
+
+d = $(CURDIR)/debian
+dl = $(d)/local
+
+%:
+	dh $@ --with quilt
+
+override_dh_auto_configure:
+	dh_auto_configure -- --enable-static --enable-shared \
+		--libdir=/lib/$(DEB_HOST_MULTIARCH) \
+		--enable-isadir=/lib/security --disable-audit
+
+# make sure the SAG, MWG, ADG are readable with a browser.
+override_dh_compress:
+	dh_compress -Xhtml
+
+# .install files don't have "except for" handling, so we need to exclude
+# our module that doesn't match right here
+override_dh_install:
+	sed -e"s/@DEB_HOST_MULTIARCH@/$(DEB_HOST_MULTIARCH)/g" $(d)/libpam0g-dev.install.in > $(d)/libpam0g-dev.install
+ifneq (,$(findstring libpam-modules, $(shell dh_listpackages)))
+	dh_install -plibpam-modules -Xpam_cracklib
+endif
+	dh_install -Nlibpam-modules
+
+# again, excluding files by hand; also, build our local manpage for pam_getenv
+# from the XML
+override_dh_installman:
+	pod2man --section 8 --release="Debian GNU/Linux" $(dl)/pam_getenv >$(dl)/pam_getenv.8
+	dh_installman
+	rm -f $(d)/libpam-modules/usr/share/man/man5/pam.conf.5
+	rm -f $(d)/libpam-modules/usr/share/man/man8/pam_cracklib.8
+
+# dh_link doesn't do wildcards, so we can't auto-link to the right per-arch
+# directory
+override_dh_link:
+	sed -e"s/@DEB_HOST_MULTIARCH@/$(DEB_HOST_MULTIARCH)/g" $(d)/libpam0g-dev.links.in > $(d)/libpam0g-dev.links
+	dh_link
+
+# using perms that differ from upstream (sgid instead of suid) /and/ that
+# dh_fixperms doesn't want
+override_dh_fixperms:
+	dh_fixperms
+ifneq (,$(findstring libpam-modules, $(shell dh_listpackages)))
+	chgrp shadow $(d)/libpam-modules-bin/sbin/unix_chkpwd
+	chmod 02755 $(d)/libpam-modules-bin/sbin/unix_chkpwd
+endif

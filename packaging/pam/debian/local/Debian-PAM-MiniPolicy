@@ -1,0 +1,145 @@
+Author: Ben Collins <bcollins@debian.org>
+Modified by: Sam Hartman <hartmans@debian.org>,
+	Steve Langasek <vorlon@debian.org>
+
+Objective: To document a base set of policies regarding PAM (Pluggable
+Authentication Modules) usage in Debian packages.
+
+===========================================================================
+
+In order to have a consistent and stable implementation across packages
+that use PAM, these guidelines will help to avoid some common mistakes and
+be usable as a cross reference for FAQ's.
+
+This document will not go into the details of how to add PAM usage to
+existing code; please read the documentation in the libpam-doc package for
+info on that.  However, it does specify behavior needed to make sure PAM
+modules in Debian will work with your application. 
+
+==================
+ PAM Applications
+==================
+
+Each application that uses PAM also must contain a file in /etc/pam.d/.
+This file specifies which PAM modules will be used for the common PAM
+functions in that application. There are several notes concerning what
+modules to use in this file. Most commonly, this file should use the
+@include directive to include common-auth, common-account, and
+common-password, and one of either common-session or
+common-session-noninteractive.
+
+The selection of common-session or common-session-noninteractive is based
+on whether the service provides "shell-like" interactive capabilities to
+the user (e.g.: login, ssh, gdm) or is a non-interactive session or a
+session mediated by a structured protocol (e.g.: cron, cups, samba, ppp).
+This allows a service to avoid calling some modules, such as
+pam_ck_connector, that only make sense in an interactive context and should
+be avoided otherwise.  It is expected that the modules used for
+noninteractive sessions will always be a subset of those used for
+interactive sessions.
+
+Under some circumstances (such as ftp auth, or auth based on tty) other
+service-specific modules will need to be listed in the service's /etc/pam.d
+file.
+
+Here is an example of a PAM configuration file that just includes the
+common module fragments:
+
+    #
+    # /etc/pam.d/other - specify the PAM fallback behaviour
+    #
+    # Note that this file is used for any unspecified service; for example
+    #if /etc/pam.d/cron  specifies no session modules but cron calls
+    #pam_open_session, the session module out of /etc/pam.d/other is
+    #used.  If you really want nothing to happen then use pam_permit.so or
+    #pam_deny.so as appropriate.
+
+    # We fall back to the system default in /etc/pam.d/common-*
+    # 
+
+    @include common-auth
+    @include common-account
+    @include common-password
+    @include common-session
+
+The name of this file is determined by the call to pam_start() in the
+application source code. The first parameter will be a string containing
+the "service" name (eg. "login", "httpd", etc..). Please make sure that
+the filename coincides with the value of this parameter used in your
+application.
+
+The file should _not_ reference the full path of the modules. It only needs
+to reference the basename (eg. "pam_unix.so"). This will ensure that the
+program continues to work even if the module location changes, since
+libpam itself will resolve the location.
+
+
+Packages which configure their services by default to use modules other than
+those provided by /etc/pam.d/common-* must depend on the package providing
+those modules.  E.g., /etc/pam.d/login includes the line:
+
+   session    required   pam_limits.so
+
+therefore it must depend on libpam-modules, which provides
+/lib/security/pam_limits.so.
+
+Applications need to depend on libpam-runtime (>= 0.76-14) to
+guarantee that /etc/pam.d/common-* exist.
+
+Applications that use common-session-noninteractive must depend
+on libpam-runtime (>= 1.0.1-11) for this file.
+
+
+The pam_unix.so module allows programs to authenticate the uid of the
+calling process without being setuid or setgid. NOTE: this means the user
+executing the program; you cannot authenticate other users without suid
+root (root makes sure the NIS and NIS+ works too) or at least sgid shadow
+(won't work in the above cases). Most notably this affects programs like
+apache being able to use PAM since it runs as www-data which has no
+privileges and cannot use pam_unix.so to authenticate other users. On the
+other hand it does allow programs like vlock to authenticate.
+
+The application needs to follow the following rules to make sure PAM
+modules work:
+
+1) Use the same PAM handle for all operations.  This means it is not OK to
+call pam_start once for authentication and then later for session
+management.  Modules need to be able to store pam_data between entry
+points.
+
+2) The pam_open_session and pam_setcred calls must be made in a parent
+process of the eventual session.  They need to be able to influence the
+environment of the session.
+
+3) If you are started as root or have root privs for some other reason,
+pam_open_session and pam_setcred should be called while still root.
+
+4) Implied by 1, make sure that pam_close_session and pam_end are called in
+the same process or a process descended from the execution context as
+pam_open_session and pam_setcred.  The pam_close_session call may need
+state stored in the handle by the open session entry point to clean up
+properly.  The pam_end call may need to free data (thus influencing system
+state in some cases) allocated in the earlier calls.
+
+
+
+=============
+ PAM Modules
+=============
+
+Separately packaged PAM modules should adhere to a few basic setup rules:
+
+  1) Packages should use the naming scheme of `libpam-<name>' (eg.
+  libpam-ldap).
+
+  2) The modules should be located in the directory of the most recent
+  libpam-modules (currently /lib/security).
+
+  3) The module should be named as pam_<name>.so. The module should not
+  contain a version suffix.
+
+  4) The module should be linked to libpam (-lpam) when compiled so that
+  proper version dependencies will work.
+
+  5) Any config files should be located in /etc/security. The filename
+  will be in the form of <name>.conf.

@@ -1,0 +1,365 @@
+Index: pam-debian/modules/pam_limits/pam_limits.c
+===================================================================
+--- pam-debian.orig/modules/pam_limits/pam_limits.c	2011-10-10 16:22:04.834687620 -0700
++++ pam-debian/modules/pam_limits/pam_limits.c	2011-10-10 16:35:22.120782459 -0700
+@@ -79,6 +79,7 @@
+     int flag_numsyslogins; /* whether to limit logins only for a
+ 			      specific user or to count all logins */
+     int priority;	 /* the priority to run user process with */
++    char chroot_dir[8092]; /* directory to chroot into */
+     struct user_limits_struct limits[RLIM_NLIMITS];
+     const char *conf_file;
+     int utmp_after_pam_call;
+@@ -89,6 +90,7 @@
+ #define LIMIT_NUMSYSLOGINS RLIM_NLIMITS+2
+ 
+ #define LIMIT_PRI RLIM_NLIMITS+3
++#define LIMIT_CHROOT RLIM_NLIMITS+4
+ 
+ #define LIMIT_SOFT  1
+ #define LIMIT_HARD  2
+@@ -317,6 +319,8 @@
+     pl->login_limit = -2;
+     pl->login_limit_def = LIMITS_DEF_NONE;
+ 
++    pl->chroot_dir[0] = '\0';
++    
+     return retval;
+ }
+ 
+@@ -387,6 +391,8 @@
+ 	pl->flag_numsyslogins = 1;
+     } else if (strcmp(lim_item, "priority") == 0) {
+ 	limit_item = LIMIT_PRI;
++    } else if (strcmp(lim_item, "chroot") == 0) {
++	limit_item = LIMIT_CHROOT;
+     } else {
+         pam_syslog(pamh, LOG_DEBUG, "unknown limit item '%s'", lim_item);
+         return;
+@@ -424,9 +430,9 @@
+ 			pam_syslog(pamh, LOG_DEBUG,
+ 				   "wrong limit value '%s' for limit type '%s'",
+ 				   lim_value, lim_type);
+-            return;
++			return;
+ 		}
+-	} else {
++	} else if (limit_item != LIMIT_CHROOT) {
+ #ifdef __USE_FILE_OFFSET64
+ 		rlimit_value = strtoull (lim_value, &endptr, 10);
+ #else
+@@ -487,7 +493,11 @@
+ #endif
+     }
+ 
+-    if ( (limit_item != LIMIT_LOGIN)
++    if (limit_item == LIMIT_CHROOT) {
++	strncpy(pl->chroot_dir, value_orig, sizeof(pl->chroot_dir)-1);
++        pl->chroot_dir[sizeof(pl->chroot_dir)-1]='\0';
++    }
++    else if ( (limit_item != LIMIT_LOGIN)
+ 	 && (limit_item != LIMIT_NUMSYSLOGINS)
+ 	 && (limit_item != LIMIT_PRI) ) {
+         if (limit_type & LIMIT_SOFT) {
+@@ -689,6 +699,15 @@
+         retval |= LOGIN_ERR;
+     }
+ 
++    if (!retval && pl->chroot_dir[0]) {
++	i = chdir(pl->chroot_dir);
++	if (i == 0)
++	    i = chroot(pl->chroot_dir);
++	if (i == 0)
++	    i = chdir("/");
++	if (i != 0)
++	    retval = LIMIT_ERR;
++    }
+     return retval;
+ }
+ 
+Index: pam-debian/modules/pam_limits/limits.conf.5.xml
+===================================================================
+--- pam-debian.orig/modules/pam_limits/limits.conf.5.xml	2011-10-10 16:22:04.782686961 -0700
++++ pam-debian/modules/pam_limits/limits.conf.5.xml	2011-10-10 16:25:59.789664947 -0700
+@@ -224,6 +224,12 @@
+                   (Linux 2.6.12 and higher)</para>
+               </listitem>
+             </varlistentry>
++            <varlistentry>
++              <term><option>chroot</option></term>
++              <listitem>
++                <para>the directory to chroot the user to</para>
++              </listitem>
++            </varlistentry>
+           </variablelist>
+         </listitem>
+       </varlistentry>
+Index: pam-debian/modules/pam_limits/limits.conf.5
+===================================================================
+--- pam-debian.orig/modules/pam_limits/limits.conf.5	2011-10-10 16:22:04.770686808 -0700
++++ pam-debian/modules/pam_limits/limits.conf.5	2011-10-10 16:25:59.789664947 -0700
+@@ -1,161 +1,22 @@
++'\" t
+ .\"     Title: limits.conf
+ .\"    Author: [see the "AUTHOR" section]
+-.\" Generator: DocBook XSL Stylesheets v1.74.0 <http://docbook.sf.net/>
+-.\"      Date: 10/27/2010
++.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
++.\"      Date: 05/31/2011
+ .\"    Manual: Linux-PAM Manual
+ .\"    Source: Linux-PAM Manual
+ .\"  Language: English
+ .\"
+-.TH "LIMITS\&.CONF" "5" "10/27/2010" "Linux-PAM Manual" "Linux\-PAM Manual"
++.TH "LIMITS\&.CONF" "5" "05/31/2011" "Linux-PAM Manual" "Linux\-PAM Manual"
+ .\" -----------------------------------------------------------------
+-.\" * (re)Define some macros
++.\" * Define some portability stuff
+ .\" -----------------------------------------------------------------
+ .\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.\" toupper - uppercase a string (locale-aware)
++.\" http://bugs.debian.org/507673
++.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+ .\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.de toupper
+-.tr aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ
+-\\$*
+-.tr aabbccddeeffgghhiijjkkllmmnnooppqqrrssttuuvvwwxxyyzz
+-..
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.\" SH-xref - format a cross-reference to an SH section
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.de SH-xref
+-.ie n \{\
+-.\}
+-.toupper \\$*
+-.el \{\
+-\\$*
+-.\}
+-..
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.\" SH - level-one heading that works better for non-TTY output
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.de1 SH
+-.\" put an extra blank line of space above the head in non-TTY output
+-.if t \{\
+-.sp 1
+-.\}
+-.sp \\n[PD]u
+-.nr an-level 1
+-.set-an-margin
+-.nr an-prevailing-indent \\n[IN]
+-.fi
+-.in \\n[an-margin]u
+-.ti 0
+-.HTML-TAG ".NH \\n[an-level]"
+-.it 1 an-trap
+-.nr an-no-space-flag 1
+-.nr an-break-flag 1
+-\." make the size of the head bigger
+-.ps +3
+-.ft B
+-.ne (2v + 1u)
+-.ie n \{\
+-.\" if n (TTY output), use uppercase
+-.toupper \\$*
+-.\}
+-.el \{\
+-.nr an-break-flag 0
+-.\" if not n (not TTY), use normal case (not uppercase)
+-\\$1
+-.in \\n[an-margin]u
+-.ti 0
+-.\" if not n (not TTY), put a border/line under subheading
+-.sp -.6
+-\l'\n(.lu'
+-.\}
+-..
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.\" SS - level-two heading that works better for non-TTY output
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.de1 SS
+-.sp \\n[PD]u
+-.nr an-level 1
+-.set-an-margin
+-.nr an-prevailing-indent \\n[IN]
+-.fi
+-.in \\n[IN]u
+-.ti \\n[SN]u
+-.it 1 an-trap
+-.nr an-no-space-flag 1
+-.nr an-break-flag 1
+-.ps \\n[PS-SS]u
+-\." make the size of the head bigger
+-.ps +2
+-.ft B
+-.ne (2v + 1u)
+-.if \\n[.$] \&\\$*
+-..
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.\" BB/BE - put background/screen (filled box) around block of text
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.de BB
+-.if t \{\
+-.sp -.5
+-.br
+-.in +2n
+-.ll -2n
+-.gcolor red
+-.di BX
+-.\}
+-..
+-.de EB
+-.if t \{\
+-.if "\\$2"adjust-for-leading-newline" \{\
+-.sp -1
+-.\}
+-.br
+-.di
+-.in
+-.ll
+-.gcolor
+-.nr BW \\n(.lu-\\n(.i
+-.nr BH \\n(dn+.5v
+-.ne \\n(BHu+.5v
+-.ie "\\$2"adjust-for-leading-newline" \{\
+-\M[\\$1]\h'1n'\v'+.5v'\D'P \\n(BWu 0 0 \\n(BHu -\\n(BWu 0 0 -\\n(BHu'\M[]
+-.\}
+-.el \{\
+-\M[\\$1]\h'1n'\v'-.5v'\D'P \\n(BWu 0 0 \\n(BHu -\\n(BWu 0 0 -\\n(BHu'\M[]
+-.\}
+-.in 0
+-.sp -.5v
+-.nf
+-.BX
+-.in
+-.sp .5v
+-.fi
+-.\}
+-..
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.\" BM/EM - put colored marker in margin next to block of text
+-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-.de BM
+-.if t \{\
+-.br
+-.ll -2n
+-.gcolor red
+-.di BX
+-.\}
+-..
+-.de EM
+-.if t \{\
+-.br
+-.di
+-.ll
+-.gcolor
+-.nr BH \\n(dn
+-.ne \\n(BHu
+-\M[\\$1]\D'P -.75n 0 0 \\n(BHu -(\\n[.i]u - \\n(INu - .75n) 0 0 -\\n(BHu'\M[]
+-.in 0
+-.nf
+-.BX
+-.in
+-.fi
+-.\}
+-..
++.ie \n(.g .ds Aq \(aq
++.el       .ds Aq '
+ .\" -----------------------------------------------------------------
+ .\" * set default formatting
+ .\" -----------------------------------------------------------------
+@@ -166,7 +27,7 @@
+ .\" -----------------------------------------------------------------
+ .\" * MAIN CONTENT STARTS HERE *
+ .\" -----------------------------------------------------------------
+-.SH "Name"
++.SH "NAME"
+ limits.conf \- configuration file for the pam_limits module
+ .SH "DESCRIPTION"
+ .PP
+@@ -263,7 +124,7 @@
+ \fBhard\fR
+ resource limits together\&.
+ .sp
+-Note, if you specify a type of \'\-\' but neglect to supply the item and value fields then the module will never enforce any limits on the specified user/group etc\&. \&.
++Note, if you specify a type of \*(Aq\-\*(Aq but neglect to supply the item and value fields then the module will never enforce any limits on the specified user/group etc\&. \&.
+ .RE
+ .RE
+ .PP
+@@ -360,6 +221,11 @@
+ .RS 4
+ maximum realtime priority allowed for non\-privileged processes (Linux 2\&.6\&.12 and higher)
+ .RE
++.PP
++\fBchroot\fR
++.RS 4
++the directory to chroot the user to
++.RE
+ .RE
+ .PP
+ All items support the values
+@@ -385,27 +251,19 @@
+ .PP
+ In the
+ \fIlimits\fR
+-configuration file, the \'\fB#\fR\' character introduces a comment \- after which the rest of the line is ignored\&.
++configuration file, the \*(Aq\fB#\fR\*(Aq character introduces a comment \- after which the rest of the line is ignored\&.
+ .PP
+ The pam_limits module does report configuration problems found in its configuration file and errors via
+ \fBsyslog\fR(3)\&.
+ .SH "EXAMPLES"
+ .PP
+ These are some example lines which might be specified in
+-\FC/etc/security/limits\&.conf\F[]\&.
++/etc/security/limits\&.conf\&.
+ .sp
+ .if n \{\
+ .RS 4
+ .\}
+-.fam C
+-.ps -1
+ .nf
+-.if t \{\
+-.sp -1
+-.\}
+-.BB lightgray adjust-for-leading-newline
+-.sp -1
+-
+ *               soft    core            0
+ *               hard    rss             10000
+ @student        hard    nproc           20
+@@ -414,13 +272,7 @@
+ ftp             hard    nproc           0
+ @student        \-       maxlogins       4
+     
+-.EB lightgray adjust-for-leading-newline
+-.if t \{\
+-.sp 1
+-.\}
+ .fi
+-.fam
+-.ps +1
+ .if n \{\
+ .RE
+ .\}
+Index: pam-debian/modules/pam_limits/limits.conf
+===================================================================
+--- pam-debian.orig/modules/pam_limits/limits.conf	2011-10-10 16:22:04.806687265 -0700
++++ pam-debian/modules/pam_limits/limits.conf	2011-10-10 16:25:59.789664947 -0700
+@@ -35,6 +35,7 @@
+ #        - msgqueue - max memory used by POSIX message queues (bytes)
+ #        - nice - max nice priority allowed to raise to values: [-20, 19]
+ #        - rtprio - max realtime priority
++#        - chroot - change root to directory (Debian-specific)
+ #
+ #<domain>      <type>  <item>         <value>
+ #
+@@ -45,6 +46,7 @@
+ #@faculty        soft    nproc           20
+ #@faculty        hard    nproc           50
+ #ftp             hard    nproc           0
++#ftp             -       chroot          /ftp
+ #@student        -       maxlogins       4
+ 
+ # End of file

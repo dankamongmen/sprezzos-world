@@ -1,0 +1,423 @@
+Description: Allow explicit limits for root and reset limits on each session
+ When crossing session boundaries (such as when su'ing from one user to
+ another), if the target account has no limit specified in limits.conf we
+ want to use the default, not the current value configured for the
+ source account.
+ .
+ On Linux, we query default limits by parsing /proc/1/limits, so that we
+ can sanely inherit kernel defaults that vary with system resources (such as
+ nproc).  If /proc/1/limits is unavailable, fall back to a set of
+ hard-coded values that shadow the currently known defaults on Linux.
+ .
+ Also, don't apply wildcard limits to the root account; only apply limits to
+ root that reference root by name.
+Author: Peter Paluch <peterp@frcatel.fri.utc.sk>,
+ Ben Collins <bcollins@debian.org>,
+ Steve Langasek <vorlon@debian.org>,
+ Kees Cook <kees@ubuntu.com>
+Bug-Ubuntu: https://launchpad.net/bugs/746655
+Bug-Debian: http://bugs.debian.org/63230
+Bug-Debian: http://bugs.debian.org/620302
+Forwarded: https://fedorahosted.org/pipermail/pam-developers/2011-March/000017.html
+Index: pam-debian/modules/pam_limits/pam_limits.c
+===================================================================
+--- pam-debian.orig/modules/pam_limits/pam_limits.c
++++ pam-debian/modules/pam_limits/pam_limits.c
+@@ -45,15 +45,24 @@
+ #include <libaudit.h>
+ #endif
+ 
++#ifndef MLOCK_LIMIT
++#ifdef __FreeBSD_kernel__
++#define MLOCK_LIMIT RLIM_INFINITY
++#else
++#define MLOCK_LIMIT (64*1024)
++#endif
++#endif
++
+ /* Module defines */
+ #define LINE_LENGTH 1024
+ 
+ #define LIMITS_DEF_USER     0 /* limit was set by an user entry */
+ #define LIMITS_DEF_GROUP    1 /* limit was set by a group entry */
+ #define LIMITS_DEF_ALLGROUP 2 /* limit was set by a group entry */
+-#define LIMITS_DEF_ALL      3 /* limit was set by an default entry */
+-#define LIMITS_DEF_DEFAULT  4 /* limit was set by an default entry */
+-#define LIMITS_DEF_NONE     5 /* this limit was not set yet */
++#define LIMITS_DEF_ALL      3 /* limit was set by an all entry */
++#define LIMITS_DEF_DEFAULT  4 /* limit was set by an internal default entry */
++#define LIMITS_DEF_KERNEL   5 /* limit was set from /proc/1/limits */
++#define LIMITS_DEF_NONE     6 /* this limit was not set yet */
+ 
+ static const char *limits_def_names[] = {
+        "USER",
+@@ -61,6 +70,7 @@
+        "ALLGROUP",
+        "ALL",
+        "DEFAULT",
++       "KERNEL",
+        "NONE",
+        NULL
+ };
+@@ -74,6 +84,7 @@
+ 
+ /* internal data */
+ struct pam_limit_s {
++    int root;            /* running as root? */
+     int login_limit;     /* the max logins limit */
+     int login_limit_def; /* which entry set the login limit */
+     int flag_numsyslogins; /* whether to limit logins only for a
+@@ -291,13 +302,155 @@
+     return 0;
+ }
+ 
+-static int init_limits(struct pam_limit_s *pl)
++static const char * lnames[RLIM_NLIMITS] = {
++        [RLIMIT_CPU] = "Max cpu time",
++        [RLIMIT_FSIZE] = "Max file size",
++        [RLIMIT_DATA] = "Max data size",
++        [RLIMIT_STACK] = "Max stack size",
++        [RLIMIT_CORE] = "Max core file size",
++        [RLIMIT_RSS] = "Max resident set",
++        [RLIMIT_NPROC] = "Max processes",
++        [RLIMIT_NOFILE] = "Max open files",
++        [RLIMIT_MEMLOCK] = "Max locked memory",
++#ifdef RLIMIT_AS
++        [RLIMIT_AS] = "Max address space",
++#endif
++#ifdef RLIMIT_LOCKS
++        [RLIMIT_LOCKS] = "Max file locks",
++#endif
++#ifdef RLIMIT_SIGPENDING
++        [RLIMIT_SIGPENDING] = "Max pending signals",
++#endif
++#ifdef RLIMIT_MSGQUEUE
++        [RLIMIT_MSGQUEUE] = "Max msgqueue size",
++#endif
++#ifdef RLIMIT_NICE
++        [RLIMIT_NICE] = "Max nice priority",
++#endif
++#ifdef RLIMIT_RTPRIO
++        [RLIMIT_RTPRIO] = "Max realtime priority",
++#endif
++#ifdef RLIMIT_RTTIME
++        [RLIMIT_RTTIME] = "Max realtime timeout",
++#endif
++};
++
++static int str2rlimit(char *name) {
++    int i;
++    if (!name || *name == '\0')
++        return -1;
++    for(i = 0; i < RLIM_NLIMITS; i++) {
++        if (strcmp(name, lnames[i]) == 0) return i;
++    }
++    return -1;
++}
++
++static rlim_t str2rlim_t(char *value) {
++    unsigned long long rlimit = 0;
++
++    if (!value) return (rlim_t)rlimit;
++    if (strcmp(value, "unlimited") == 0) {
++        return RLIM_INFINITY;
++    }
++    rlimit = strtoull(value, NULL, 10);
++    return (rlim_t)rlimit;
++}
++
++#define LIMITS_SKIP_WHITESPACE { \
++        /* step backwards over spaces */ \
++        pos--; \
++        while (pos && line[pos] == ' ') pos--; \
++        if (!pos) continue; \
++        line[pos+1] = '\0'; \
++}
++#define LIMITS_MARK_ITEM(item) { \
++        /* step backwards over non-spaces */ \
++        pos--; \
++        while (pos && line[pos] != ' ') pos--; \
++        if (!pos) continue; \
++        item = line + pos + 1; \
++}
++
++static void parse_kernel_limits(pam_handle_t *pamh, struct pam_limit_s *pl, int ctrl)
++{
++    int i, maxlen = 0;
++    FILE *limitsfile;
++    const char *proclimits = "/proc/1/limits";
++    char line[256];
++    char *units, *hard, *soft, *name;
++
++    if (!(limitsfile = fopen(proclimits, "r"))) {
++        pam_syslog(pamh, LOG_WARNING, "Could not read %s (%s), using PAM internal defaults", proclimits, strerror(errno));
++        return;
++    }
++
++    while (fgets(line, 256, limitsfile)) {
++        int pos = strlen(line);
++        if (pos < 2) continue;
++
++        /* drop trailing newline */
++        if (line[pos-1] == '\n') {
++            pos--;
++            line[pos] = '\0';
++        }
++
++        /* determine formatting boundry of limits report */
++        if (!maxlen && strncmp(line, "Limit", 5) == 0) {
++            maxlen = pos;
++            continue;
++        }
++
++        if (pos == maxlen) {
++            /* step backwards over "Units" name */
++            LIMITS_SKIP_WHITESPACE;
++            LIMITS_MARK_ITEM(units);
++        }
++        else {
++            units = "";
++        }
++
++        /* step backwards over "Hard Limit" value */
++        LIMITS_SKIP_WHITESPACE;
++        LIMITS_MARK_ITEM(hard);
++
++        /* step backwards over "Soft Limit" value */
++        LIMITS_SKIP_WHITESPACE;
++        LIMITS_MARK_ITEM(soft);
++
++        /* step backwards over name of limit */
++        LIMITS_SKIP_WHITESPACE;
++        name = line;
++
++        i = str2rlimit(name);
++        if (i < 0 || i >= RLIM_NLIMITS) {
++            if (ctrl & PAM_DEBUG_ARG)
++                pam_syslog(pamh, LOG_DEBUG, "Unknown kernel rlimit '%s' ignored", name);
++            continue;
++        }
++        pl->limits[i].limit.rlim_cur = str2rlim_t(soft);
++        pl->limits[i].limit.rlim_max = str2rlim_t(hard);
++        pl->limits[i].src_soft = LIMITS_DEF_KERNEL;
++        pl->limits[i].src_hard = LIMITS_DEF_KERNEL;
++    }
++    fclose(limitsfile);
++}
++
++static int init_limits(pam_handle_t *pamh, struct pam_limit_s *pl, int ctrl)
+ {
+     int i;
+     int retval = PAM_SUCCESS;
++    static int mlock_limit = 0;
+ 
+     D(("called."));
+ 
++    pl->root = 0;
++
++    if (mlock_limit == 0) {
++	mlock_limit = sysconf(_SC_PAGESIZE);
++	if (mlock_limit < MLOCK_LIMIT)
++		mlock_limit = MLOCK_LIMIT;
++    }
++
+     for(i = 0; i < RLIM_NLIMITS; i++) {
+ 	int r = getrlimit(i, &pl->limits[i].limit);
+ 	if (r == -1) {
+@@ -312,6 +465,71 @@
+ 	}
+     }
+ 
++#ifdef __linux__
++    parse_kernel_limits(pamh, pl, ctrl);
++#endif
++
++    for(i = 0; i < RLIM_NLIMITS; i++) {
++	if (pl->limits[i].supported &&
++	    (pl->limits[i].src_soft == LIMITS_DEF_NONE ||
++	     pl->limits[i].src_hard == LIMITS_DEF_NONE)) {
++#ifdef __linux__
++	    pam_syslog(pamh, LOG_WARNING, "Did not find kernel RLIMIT for %s, using PAM internal default", rlimit2str(i));
++#endif
++
++	    pl->limits[i].src_soft = LIMITS_DEF_DEFAULT;
++	    pl->limits[i].src_hard = LIMITS_DEF_DEFAULT;
++	    switch(i) {
++		case RLIMIT_CPU:
++		case RLIMIT_FSIZE:
++		case RLIMIT_DATA:
++		case RLIMIT_RSS:
++		case RLIMIT_NPROC:
++#ifdef RLIMIT_AS
++		case RLIMIT_AS:
++#endif
++#ifdef RLIMIT_LOCKS
++		case RLIMIT_LOCKS:
++#endif
++		    pl->limits[i].limit.rlim_cur = RLIM_INFINITY;
++		    pl->limits[i].limit.rlim_max = RLIM_INFINITY;
++		    break;
++		case RLIMIT_MEMLOCK:
++		    pl->limits[i].limit.rlim_cur = mlock_limit;
++		    pl->limits[i].limit.rlim_max = mlock_limit;
++		    break;
++#ifdef RLIMIT_SIGPENDING
++		case RLIMIT_SIGPENDING:
++		    pl->limits[i].limit.rlim_cur = 16382;
++		    pl->limits[i].limit.rlim_max = 16382;
++		    break;
++#endif
++#ifdef RLIMIT_MSGQUEUE
++		case RLIMIT_MSGQUEUE:
++		    pl->limits[i].limit.rlim_cur = 819200;
++		    pl->limits[i].limit.rlim_max = 819200;
++		    break;
++#endif
++		case RLIMIT_CORE:
++		    pl->limits[i].limit.rlim_cur = 0;
++		    pl->limits[i].limit.rlim_max = RLIM_INFINITY;
++		    break;
++		case RLIMIT_STACK:
++		    pl->limits[i].limit.rlim_cur = 8192*1024;
++		    pl->limits[i].limit.rlim_max = RLIM_INFINITY;
++		    break;
++		case RLIMIT_NOFILE:
++		    pl->limits[i].limit.rlim_cur = 1024;
++		    pl->limits[i].limit.rlim_max = 1024;
++		    break;
++		default:
++		    pl->limits[i].src_soft = LIMITS_DEF_NONE;
++		    pl->limits[i].src_hard = LIMITS_DEF_NONE;
++		    break;
++	    }
++	}
++    }
++
+     errno = 0;
+     pl->priority = getpriority (PRIO_PROCESS, 0);
+     if (pl->priority == -1 && errno != 0)
+@@ -591,7 +809,7 @@
+ 
+             if (strcmp(uname, domain) == 0) /* this user have a limit */
+                 process_limit(pamh, LIMITS_DEF_USER, ltype, item, value, ctrl, pl);
+-            else if (domain[0]=='@') {
++            else if (domain[0]=='@' && !pl->root) {
+ 		    if (ctrl & PAM_DEBUG_ARG) {
+ 			pam_syslog(pamh, LOG_DEBUG,
+ 				   "checking if %s is in group %s",
+@@ -600,7 +818,7 @@
+                 if (pam_modutil_user_in_group_nam_nam(pamh, uname, domain+1))
+                     process_limit(pamh, LIMITS_DEF_GROUP, ltype, item, value, ctrl,
+ 				  pl);
+-            } else if (domain[0]=='%') {
++            } else if (domain[0]=='%' && !pl->root) {
+ 		    if (ctrl & PAM_DEBUG_ARG) {
+ 			pam_syslog(pamh, LOG_DEBUG,
+ 				   "checking if %s is in group %s",
+@@ -614,7 +832,7 @@
+                     process_limit(pamh, LIMITS_DEF_ALLGROUP, ltype, item, value, ctrl,
+ 				  pl);
+ 		}
+-            } else if (strcmp(domain, "*") == 0)
++            } else if (strcmp(domain, "*") == 0 && !pl->root)
+                 process_limit(pamh, LIMITS_DEF_DEFAULT, ltype, item, value, ctrl,
+ 			      pl);
+ 	} else if (i == 2 && ltype[0] == '-') { /* Probably a no-limit line */
+@@ -743,12 +961,14 @@
+         return PAM_USER_UNKNOWN;
+     }
+ 
+-    retval = init_limits(pl);
++    retval = init_limits(pamh, pl, ctrl);
+     if (retval != PAM_SUCCESS) {
+         pam_syslog(pamh, LOG_WARNING, "cannot initialize");
+         return PAM_ABORT;
+     }
+ 
++    if (pwd->pw_uid == 0)
++        pl->root = 1;
+     retval = parse_config_file(pamh, pwd->pw_name, ctrl, pl);
+     if (retval == PAM_IGNORE) {
+ 	D(("the configuration file ('%s') has an applicable '<domain> -' entry", CONF_FILE));
+Index: pam-debian/modules/pam_limits/limits.conf
+===================================================================
+--- pam-debian.orig/modules/pam_limits/limits.conf
++++ pam-debian/modules/pam_limits/limits.conf
+@@ -11,6 +11,9 @@
+ #        - the wildcard *, for default entry
+ #        - the wildcard %, can be also used with %group syntax,
+ #                 for maxlogin limit
++#        - NOTE: group and wildcard limits are not applied to root.
++#          To apply a limit to the root user, <domain> must be
++#          the literal username root.
+ #
+ #<type> can have the two values:
+ #        - "soft" for enforcing the soft limits
+@@ -41,6 +44,7 @@
+ #
+ 
+ #*               soft    core            0
++#root            hard    core            100000
+ #*               hard    rss             10000
+ #@student        hard    nproc           20
+ #@faculty        soft    nproc           20
+Index: pam-debian/modules/pam_limits/limits.conf.5.xml
+===================================================================
+--- pam-debian.orig/modules/pam_limits/limits.conf.5.xml
++++ pam-debian/modules/pam_limits/limits.conf.5.xml
+@@ -57,6 +57,11 @@
+               </para>
+             </listitem>
+           </itemizedlist>
++	  <para>
++	    <emphasis remap='B'>NOTE:</emphasis> group and wildcard limits are not
++	    applied to the root user.  To set a limit for the root user, this field
++	    must contain the literal username <emphasis remap='B'>root</emphasis>.
++	  </para>
+         </listitem>
+       </varlistentry>
+ 
+@@ -278,6 +283,7 @@
+     </para>
+     <programlisting>
+ *               soft    core            0
++root            hard    core            100000
+ *               hard    rss             10000
+ @student        hard    nproc           20
+ @faculty        soft    nproc           20
+Index: pam-debian/modules/pam_limits/limits.conf.5
+===================================================================
+--- pam-debian.orig/modules/pam_limits/limits.conf.5
++++ pam-debian/modules/pam_limits/limits.conf.5
+@@ -93,6 +93,11 @@
+ \fI%group\fR
+ syntax\&.
+ .RE
++.RS 4
++
++\fBNOTE:\fR
++group and wildcard limits are not applied to the root user\&. To set a limit for the root user, this field must contain the literal username
++\fBroot\fR\&.
+ .RE
+ .PP
+ \fB<type>\fR
+@@ -265,6 +270,7 @@
+ .\}
+ .nf
+ *               soft    core            0
++root            hard    core            100000
+ *               hard    rss             10000
+ @student        hard    nproc           20
+ @faculty        soft    nproc           20
+Index: pam-debian/modules/pam_limits/README
+===================================================================
+--- pam-debian.orig/modules/pam_limits/README
++++ pam-debian/modules/pam_limits/README
+@@ -55,6 +55,7 @@
+ limits.conf.
+ 
+ *               soft    core            0
++root            hard    core            100000
+ *               hard    rss             10000
+ @student        hard    nproc           20
+ @faculty        soft    nproc           20
