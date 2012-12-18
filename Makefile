@@ -1014,6 +1014,14 @@ $(DIA): $(SPREZZ)/dia/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf dia-$(dia_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: djmount
+djmount:$(DJMOUNT)_$(ARCH).deb
+$(DJMOUNT): $(SPREZZ)/djmount/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf djmount-$(djmount_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: dnsmasq
 dnsmasq:$(DNSMASQ)_$(ARCH).deb
 $(DNSMASQ): $(SPREZZ)/dnsmasq/debian/changelog
@@ -1213,6 +1221,22 @@ $(FREEGLUT): $(SPREZZ)/freeglut/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf freeglut_$(freeglut_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: fuse-umfuse-fat
+fuse-umfuse-fat:$(FUSEUMFUSEFAT)_$(ARCH).deb
+$(FUSEUMFUSEFAT): $(SPREZZ)/fuse-umfuse-fat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fuse-umfuse-fat-$(fuse-umfuse-fat_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: unionfs-fuse
+unionfs-fuse:$(UNIONFSFUSE)_$(ARCH).deb
+$(UNIONFSFUSE): $(SPREZZ)/unionfs-fuse/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf unionfs-fuse-$(unionfs-fuse_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: fuseiso
 fuseiso:$(FUSEISO)_$(ARCH).deb
@@ -4409,6 +4433,14 @@ $(XTRANS): $(SPREZZ)/xtrans/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xtrans_$(xtrans_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libupnp
+libupnp:$(LIBUPNP)_$(ARCH).deb
+$(LIBUPNP): $(SPREZZ)/libupnp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libupnp-$(libupnp_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: udisks2
 udisks2:$(UDISKS2)_$(ARCH).deb
