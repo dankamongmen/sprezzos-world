@@ -1,0 +1,672 @@
+Description: Neaten debugging so it's safe to leave it compiled in:
+ * Don't keep pointers to passed-in filenames, they might have been temporaries.
+ * Replace some anonymous comparisons by the appropriate enum name.
+ * Replace big file+line banner by a line-based format including timestamp,
+   and add/remove newlines or white space where appropriate.
+ * Comment out the noisy "Adding a string" prints from the debug.
+ * Remove print_http_headers() which wrote to stdout, they are already
+   logged via UpnpPrintf from everywhere that called print_http_headers().
+Author: Nick Leverton <nick@leverton.org>
+
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/api/upnpdebug.c
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/api/upnpdebug.c	2012-01-24 23:35:34.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/api/upnpdebug.c	2012-03-17 23:35:48.000000000 +0000
+@@ -40,6 +40,7 @@
+ #include "upnp.h"
+ #include "upnpdebug.h"
+ 
++#include <libgen.h>
+ #include <stdarg.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+@@ -60,19 +61,19 @@
+ static FILE *InfoFileHnd = NULL;
+ 
+ /*! Name of the error file */
+-static const char *errFileName = "IUpnpErrFile.txt";
++static const char *errFileName = strdup("IUpnpErrFile.txt");
+ 
+ /*! Name of the info file */
+-static const char *infoFileName = "IUpnpInfoFile.txt";
++static const char *infoFileName = strdup("IUpnpInfoFile.txt");
+ 
+ int UpnpInitLog(void)
+ {
+ 	ithread_mutex_init(&GlobalDebugMutex, NULL);
+ 	if (DEBUG_TARGET == 1) {
+-		if ((ErrFileHnd = fopen(errFileName, "a")) == NULL) {
++		if ( errFileName && *errFileName && (ErrFileHnd = fopen(errFileName, "a")) == NULL) {
+ 			return -1;
+ 		}
+-		if ((InfoFileHnd = fopen(infoFileName, "a")) == NULL) {
++		if (infoFileName && *infoFileName && (InfoFileHnd = fopen(infoFileName, "a")) == NULL) {
+ 			return -1;
+ 		}
+ 	}
+@@ -87,21 +88,33 @@
+ void UpnpCloseLog(void)
+ {
+ 	if (DEBUG_TARGET == 1) {
+-		fflush(ErrFileHnd);
+-		fflush(InfoFileHnd);
+-		fclose(ErrFileHnd);
+-		fclose(InfoFileHnd);
++		if (ErrFileHnd) {
++			fflush(ErrFileHnd);
++			fclose(ErrFileHnd);
++		}
++		if (InfoFileHnd) {
++			fflush(InfoFileHnd);
++			fclose(InfoFileHnd);
++		}
+ 	}
+ 	ithread_mutex_destroy(&GlobalDebugMutex);
+ }
+ 
+ void UpnpSetLogFileNames(const char *ErrFileName, const char *InfoFileName)
+ {
++	if (errFileName) {
++		free((void*)errFileName);
++		errFileName = NULL;
++	}
+ 	if (ErrFileName) {
+-		errFileName = ErrFileName;
++		errFileName = strdup(ErrFileName);
++	}
++	if (infoFileName) {
++		free((void*)infoFileName);
++		infoFileName = NULL;
+ 	}
+ 	if (InfoFileName) {
+-		infoFileName = InfoFileName;
++		infoFileName = strdup(InfoFileName);
+ 	}
+ }
+ 
+@@ -136,24 +149,29 @@
+ 			UpnpDisplayFileAndLine(stdout, DbgFileName, DbgLineNo);
+ 		vfprintf(stdout, FmtStr, ArgList);
+ 		fflush(stdout);
+-	} else if (DLevel == 0) {
+-		if (DbgFileName)
+-			UpnpDisplayFileAndLine(ErrFileHnd, DbgFileName,
+-					       DbgLineNo);
+-		vfprintf(ErrFileHnd, FmtStr, ArgList);
+-		fflush(ErrFileHnd);
+ 	} else {
+-		if (DbgFileName)
+-			UpnpDisplayFileAndLine(InfoFileHnd, DbgFileName,
+-					       DbgLineNo);
+-		vfprintf(InfoFileHnd, FmtStr, ArgList);
+-		fflush(InfoFileHnd);
++		if (ErrFileHnd && DLevel == UPNP_CRITICAL) {
++			if (DbgFileName) {
++				UpnpDisplayFileAndLine(ErrFileHnd, DbgFileName,
++						       DbgLineNo);
++			}
++			vfprintf(ErrFileHnd, FmtStr, ArgList);
++			fflush(ErrFileHnd);
++		}
++		if (InfoFileHnd) {
++			if (DbgFileName) {
++				UpnpDisplayFileAndLine(InfoFileHnd, DbgFileName,
++						       DbgLineNo);
++			}
++			vfprintf(InfoFileHnd, FmtStr, ArgList);
++			fflush(InfoFileHnd);
++ 		}
+ 	}
+ 	va_end(ArgList);
+ 	ithread_mutex_unlock(&GlobalDebugMutex);
+ }
+ 
+-FILE *GetDebugFile(Upnp_LogLevel DLevel, Dbg_Module Module)
++FILE *UpnpGetDebugFile(Upnp_LogLevel DLevel, Dbg_Module Module)
+ {
+ 	FILE *ret;
+ 
+@@ -161,7 +179,7 @@
+ 		ret = NULL;
+ 	if (!DEBUG_TARGET)
+ 		ret = stdout;
+-	else if (DLevel == 0)
++	else if (DLevel == UPNP_CRITICAL)
+ 		ret = ErrFileHnd;
+ 	else
+ 		ret = InfoFileHnd;
+@@ -171,78 +189,26 @@
+ 
+ void UpnpDisplayFileAndLine(FILE *fd, const char *DbgFileName, int DbgLineNo)
+ {
+-#define NLINES 2
+-#define MAX_LINE_SIZE 512
+-#define NUMBER_OF_STARS 80
+-	const char *lines[NLINES];
+-	char buf[NLINES][MAX_LINE_SIZE];
+-	int i;
+-
+-	/* Initialize the pointer array */
+-	for (i = 0; i < NLINES; i++)
+-		lines[i] = buf[i];
+-	/* Put the debug lines in the buffer */
+-	sprintf(buf[0], "DEBUG - THREAD ID: 0x%lX",
++	time_t timenow = time(NULL);
++	struct tm localtimenow;
++	char timeprint[20];	/* "YYYY-MM-DD HH:MM:SS" */
++
++	localtime_r(&timenow, &localtimenow);
++	strftime(timeprint, sizeof(timeprint), "%F %T", &localtimenow);
++	fprintf(fd, "%s 0x%lX ", timeprint,
+ #ifdef WIN32
+ 		(unsigned long int)ithread_self().p
+ #else
+ 		(unsigned long int)ithread_self()
+ #endif
+ 	    );
+-	if (DbgFileName)
+-		sprintf(buf[1], "FILE: %s, LINE: %d", DbgFileName, DbgLineNo);
+-	/* Show the lines centered */
+-	UpnpDisplayBanner(fd, lines, NLINES, NUMBER_OF_STARS);
++	if (DbgFileName) {
++ 		char *filepath = strdup(DbgFileName);
++ 		fprintf(fd, "%s:%d ", basename(filepath), DbgLineNo);
++ 		free(filepath);
++	}
+ 	fflush(fd);
+ }
+ 
+-void UpnpDisplayBanner(FILE * fd,
+-		       const char **lines, size_t size, size_t starLength)
+-{
+-	size_t leftMarginLength = starLength / 2 + 1;
+-	size_t rightMarginLength = starLength / 2 + 1;
+-	size_t i = 0;
+-	size_t LineSize = 0;
+-	size_t starLengthMinus2 = starLength - 2;
+-
+-	char *leftMargin = malloc(leftMarginLength);
+-	char *rightMargin = malloc(rightMarginLength);
+-	char *stars = malloc(starLength + 1);
+-	char *currentLine = malloc(starLength + 1);
+-	const char *line = NULL;
+-
+-	memset(stars, '*', starLength);
+-	stars[starLength] = 0;
+-	memset(leftMargin, 0, leftMarginLength);
+-	memset(rightMargin, 0, rightMarginLength);
+-	fprintf(fd, "\n%s\n", stars);
+-	for (i = 0; i < size; i++) {
+-		LineSize = strlen(lines[i]);
+-		line = lines[i];
+-		while (LineSize > starLengthMinus2) {
+-			memcpy(currentLine, line, starLengthMinus2);
+-			currentLine[starLengthMinus2] = 0;
+-			fprintf(fd, "*%s*\n", currentLine);
+-			LineSize -= starLengthMinus2;
+-			line += starLengthMinus2;
+-		}
+-		leftMarginLength = (starLengthMinus2 - LineSize) / 2;
+-		if (LineSize % 2 == 0)
+-			rightMarginLength = leftMarginLength;
+-		else
+-			rightMarginLength = leftMarginLength + 1;
+-		memset(leftMargin, ' ', leftMarginLength);
+-		memset(rightMargin, ' ', rightMarginLength);
+-		leftMargin[leftMarginLength] = 0;
+-		rightMargin[rightMarginLength] = 0;
+-		fprintf(fd, "*%s%s%s*\n", leftMargin, line, rightMargin);
+-	}
+-	fprintf(fd, "%s\n\n", stars);
+-
+-	free(currentLine);
+-	free(stars);
+-	free(rightMargin);
+-	free(leftMargin);
+-}
+ 
+ #endif /* DEBUG */
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/gena/gena_ctrlpt.c
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/gena/gena_ctrlpt.c	2012-03-17 00:27:05.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/gena/gena_ctrlpt.c	2012-03-17 23:35:48.000000000 +0000
+@@ -79,12 +79,12 @@
+ 	UpnpString *tmpSID = UpnpString_new();
+ 
+ 	if (AUTO_RENEW_TIME == 0) {
+-		UpnpPrintf( UPNP_INFO, GENA, __FILE__, __LINE__, "GENA SUB EXPIRED");
++		UpnpPrintf( UPNP_INFO, GENA, __FILE__, __LINE__, "GENA SUB EXPIRED\n");
+ 		sub_struct->ErrCode = UPNP_E_SUCCESS;
+ 		send_callback = 1;
+ 		eventType = UPNP_EVENT_SUBSCRIPTION_EXPIRED;
+ 	} else {
+-		UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, "GENA AUTO RENEW");
++		UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, "GENA AUTO RENEW\n");
+ 		timeout = sub_struct->TimeOut;
+ 		UpnpString_set_String(tmpSID, sub_struct->Sid);
+ 		errCode = genaRenewSubscription(
+@@ -108,7 +108,7 @@
+ 			free_upnp_timeout(event);
+ 			goto end_function;
+ 		}
+-		UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, "HANDLE IS VALID");
++		UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, "HANDLE IS VALID\n");
+ 
+ 		/* make callback */
+ 		callback_fun = handle_info->Callback;
+@@ -531,7 +531,7 @@
+ 	memset(temp_sid, 0, sizeof(temp_sid));
+ 	memset(temp_sid2, 0, sizeof(temp_sid2));
+ 
+-	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, "GENA SUBSCRIBE BEGIN");
++	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, "GENA SUBSCRIBE BEGIN\n");
+ 
+ 	UpnpString_clear(out_sid);
+ 
+@@ -639,7 +639,7 @@
+ 		free_upnp_timeout((upnp_timeout *)tempJob.arg);
+ 	}
+ 
+-	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, "REMOVED AUTO RENEW  EVENT");
++	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, "REMOVED AUTO RENEW  EVENT\n");
+ 
+ 	UpnpClientSubscription_set_RenewEventId(sub, -1);
+ 	UpnpClientSubscription_assign(sub_copy, sub);
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/inc/gena.h
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/inc/gena.h	2012-01-24 23:35:34.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/inc/gena.h	2012-03-17 23:35:48.000000000 +0000
+@@ -121,10 +121,10 @@
+  */
+ #define SubscribeLock() \
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, \
+-		"Trying Subscribe Lock");  \
++		"Trying Subscribe Lock\n");  \
+ 	ithread_mutex_lock(&GlobalClientSubscribeMutex); \
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, \
+-		"Subscribe Lock");
++		"Subscribe Lock\n");
+ 
+ 
+ /*!
+@@ -132,10 +132,10 @@
+  */
+ #define SubscribeUnlock() \
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, \
+-		"Trying Subscribe UnLock"); \
++		"Trying Subscribe UnLock\n"); \
+ 	ithread_mutex_unlock(&GlobalClientSubscribeMutex); \
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__, \
+-		"Subscribe UnLock");
++		"Subscribe UnLock\n");
+ 
+ 
+ /*!
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/inc/upnpapi.h
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/inc/upnpapi.h	2012-03-17 00:27:05.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/inc/upnpapi.h	2012-03-17 23:35:48.000000000 +0000
+@@ -137,21 +137,21 @@
+ 
+ 
+ #define HandleWriteLock()  \
+-	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Trying a write lock"); \
++	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Trying a write lock\n"); \
+ 	ithread_rwlock_wrlock(&GlobalHndRWLock); \
+-	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Write lock acquired");
++	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Write lock acquired\n");
+ 
+ 
+ #define HandleReadLock()  \
+-	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Trying a read lock"); \
++	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Trying a read lock\n"); \
+ 	ithread_rwlock_rdlock(&GlobalHndRWLock); \
+-	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Read lock acquired");
++	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Read lock acquired\n");
+ 
+ 
+ #define HandleUnlock() \
+-	UpnpPrintf(UPNP_INFO, API,__FILE__, __LINE__, "Trying Unlock"); \
++	UpnpPrintf(UPNP_INFO, API,__FILE__, __LINE__, "Trying Unlock\n"); \
+ 	ithread_rwlock_unlock(&GlobalHndRWLock); \
+-	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Unlocked rwlock");
++	UpnpPrintf(UPNP_INFO, API, __FILE__, __LINE__, "Unlocked rwlock\n");
+ 
+ 
+ /*!
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/gena/gena_device.c
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/gena/gena_device.c	2012-03-12 21:25:14.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/gena/gena_device.c	2012-03-17 23:35:48.000000000 +0000
+@@ -474,7 +474,7 @@
+ 	memset(&job, 0, sizeof(job));
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"GENA BEGIN INITIAL NOTIFY");
++		"GENA BEGIN INITIAL NOTIFY\n");
+ 
+ 	reference_count = (int *)malloc(sizeof (int));
+ 	if (reference_count == NULL) {
+@@ -518,7 +518,7 @@
+ 		goto ExitFunction;
+ 	}
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"FOUND SERVICE IN INIT NOTFY: UDN %s, ServID: %s",
++		"FOUND SERVICE IN INIT NOTFY: UDN %s, ServID: %s\n",
+ 		UDN, servId);
+ 
+ 	sub = GetSubscriptionSID(sid, service);
+@@ -528,7 +528,7 @@
+ 		goto ExitFunction;
+ 	}
+ 	UpnpPrintf( UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"FOUND SUBSCRIPTION IN INIT NOTIFY: SID %s", sid);
++		"FOUND SUBSCRIPTION IN INIT NOTIFY: SID %s\n", sid);
+ 	sub->active = 1;
+ 
+ 	if (var_count <= 0) {
+@@ -543,7 +543,7 @@
+ 		goto ExitFunction;
+ 	}
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"GENERATED PROPERTY SET IN INIT NOTIFY: %s",
++		"GENERATED PROPERTY SET IN INIT NOTIFY: %s\n",
+ 		propertySet);
+ 
+ 	headers = AllocGenaHeaders(propertySet);
+@@ -601,7 +601,7 @@
+ 	HandleUnlock();
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, line,
+-		"GENA END INITIAL NOTIFY, ret = %d",
++		"GENA END INITIAL NOTIFY, ret = %d\n",
+ 		ret);
+ 
+ 	return ret;
+@@ -633,7 +633,7 @@
+ 	memset(&job, 0, sizeof(job));
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"GENA BEGIN INITIAL NOTIFY EXT");
++		"GENA BEGIN INITIAL NOTIFY EXT\n");
+ 	
+ 	reference_count = (int *)malloc(sizeof (int));
+ 	if (reference_count == NULL) {
+@@ -677,7 +677,7 @@
+ 		goto ExitFunction;
+ 	}
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"FOUND SERVICE IN INIT NOTFY EXT: UDN %s, ServID: %s",
++		"FOUND SERVICE IN INIT NOTFY EXT: UDN %s, ServID: %s\n",
+ 		UDN, servId);
+ 
+ 	sub = GetSubscriptionSID(sid, service);
+@@ -687,7 +687,7 @@
+ 		goto ExitFunction;
+ 	}
+ 	UpnpPrintf( UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"FOUND SUBSCRIPTION IN INIT NOTIFY EXT: SID %s", sid);
++		"FOUND SUBSCRIPTION IN INIT NOTIFY EXT: SID %s\n", sid);
+ 	sub->active = 1;
+ 
+ 	if (PropSet == 0) {
+@@ -703,7 +703,7 @@
+ 		goto ExitFunction;
+ 	}
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"GENERATED PROPERTY SET IN INIT EXT NOTIFY: %s",
++		"GENERATED PROPERTY SET IN INIT EXT NOTIFY: %s\n",
+ 		propertySet);
+ 
+ 	headers = AllocGenaHeaders(propertySet);
+@@ -761,7 +761,7 @@
+ 	HandleUnlock();
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, line,
+-		"GENA END INITIAL NOTIFY EXT, ret = %d",
++		"GENA END INITIAL NOTIFY EXT, ret = %d\n",
+ 		ret);
+ 
+ 	return ret;
+@@ -792,7 +792,7 @@
+ 	memset(&job, 0, sizeof(job));
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"GENA BEGIN NOTIFY ALL EXT");
++		"GENA BEGIN NOTIFY ALL EXT\n");
+ 
+ 	reference_count = (int *)malloc(sizeof (int));
+ 	if (reference_count == NULL) {
+@@ -828,7 +828,7 @@
+ 		goto ExitFunction;
+ 	}
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"GENERATED PROPERTY SET IN EXT NOTIFY: %s",
++		"GENERATED PROPERTY SET IN EXT NOTIFY: %s\n",
+ 		propertySet);
+ 
+ 	headers = AllocGenaHeaders(propertySet);
+@@ -905,7 +905,7 @@
+ 	HandleUnlock();
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, line,
+-		"GENA END NOTIFY ALL EXT, ret = %d",
++		"GENA END NOTIFY ALL EXT, ret = %d\n",
+ 		ret);
+ 
+ 	return ret;
+@@ -938,7 +938,7 @@
+ 	memset(&job, 0, sizeof(job));
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"GENA BEGIN NOTIFY ALL");
++		"GENA BEGIN NOTIFY ALL\n");
+ 
+ 	reference_count = (int *)malloc(sizeof (int));
+ 	if (reference_count == NULL) {
+@@ -973,7 +973,7 @@
+ 		goto ExitFunction;
+ 	}
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"GENERATED PROPERTY SET IN EXT NOTIFY: %s",
++		"GENERATED PROPERTY SET IN EXT NOTIFY: %s\n",
+ 		propertySet);
+ 
+ 	headers = AllocGenaHeaders(propertySet);
+@@ -1051,7 +1051,7 @@
+ 	HandleUnlock();
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, line,
+-		"GENA END NOTIFY ALL, ret = %d",
++		"GENA END NOTIFY ALL, ret = %d\n",
+ 		ret);
+ 
+ 	return ret;
+@@ -1282,7 +1282,7 @@
+ 	}
+ 
+ 	UpnpPrintf(UPNP_INFO, GENA, __FILE__, __LINE__,
+-		"Subscription Request: Number of Subscriptions already %d\n "
++		"Subscription Request: Number of subscriptions already: %d, "
+ 		"Max Subscriptions allowed: %d\n",
+ 		service->TotalSubscriptions,
+ 		handle_info->MaxSubscriptions);
+@@ -1457,7 +1457,7 @@
+     }
+ 
+     UpnpPrintf( UPNP_INFO, GENA, __FILE__, __LINE__,
+-        "Renew request: Number of subscriptions already: %d\n "
++        "Renew request: Number of subscriptions already: %d, "
+         "Max Subscriptions allowed:%d\n",
+         service->TotalSubscriptions,
+         handle_info->MaxSubscriptions );
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/soap/soap_device.c
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/soap/soap_device.c	2012-03-10 17:07:23.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/soap/soap_device.c	2012-03-17 23:35:48.000000000 +0000
+@@ -295,7 +295,7 @@
+ 	IXML_NodeList *nl = NULL;
+ 
+ 	UpnpPrintf(UPNP_INFO, SOAP, __FILE__, __LINE__,
+-		   "get_action_node(): node name =%s\n ", NodeName);
++		   "get_action_node(): node name =%s\n", NodeName);
+ 	*RespNode = NULL;
+ 	/* Got the Envelope node here */
+ 	EnvpNode = ixmlNode_getFirstChild((IXML_Node *) TempDoc);
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/genlib/net/http/httpreadwrite.c
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/genlib/net/http/httpreadwrite.c	2012-03-17 00:27:17.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/genlib/net/http/httpreadwrite.c	2012-03-17 23:36:54.000000000 +0000
+@@ -299,7 +299,6 @@
+ 				UpnpPrintf( UPNP_INFO, HTTP, __FILE__, __LINE__,
+ 					"<<< (RECVD) <<<\n%s\n-----------------\n",
+ 					parser->msg.msg.buf );
+-				print_http_headers( &parser->msg );
+ 				if (g_maxContentLength > (size_t)0 && parser->content_length > (unsigned int)g_maxContentLength) {
+ 					*http_error_code = HTTP_REQ_ENTITY_TOO_LARGE;
+ 					line = __LINE__;
+@@ -331,7 +330,6 @@
+ 				UpnpPrintf( UPNP_INFO, HTTP, __FILE__, __LINE__,
+ 					"<<< (RECVD) <<<\n%s\n-----------------\n",
+ 					parser->msg.msg.buf );
+-				print_http_headers(&parser->msg);
+ 				line = __LINE__;
+ 				ret = 0;
+ 				goto ExitFunction;
+@@ -696,7 +694,6 @@
+ 		return ret_code;
+ 	}
+ 	UpnpPrintf(UPNP_INFO, HTTP, __FILE__, __LINE__, "Response\n");
+-	print_http_headers(&response.msg);
+ 	/* optional content-type */
+ 	if (content_type) {
+ 		if (httpmsg_find_hdr(&response.msg, HDR_CONTENT_TYPE, &ctype) ==
+@@ -1641,8 +1638,8 @@
+ 			/* C string */
+ 			s = (char *)va_arg(argp, char *);
+ 			assert(s);
+-			UpnpPrintf(UPNP_ALL, HTTP, __FILE__, __LINE__,
+-				   "Adding a string : %s\n", s);
++			/* UpnpPrintf(UPNP_ALL, HTTP, __FILE__, __LINE__,
++				   "Adding a string : %s\n", s); */
+ 			if (membuffer_append(buf, s, strlen(s)))
+ 				goto error_handler;
+ 		} else if (c == 'K') {
+@@ -1663,8 +1660,8 @@
+ 		} else if (c == 'b') {
+ 			/* mem buffer */
+ 			s = (char *)va_arg(argp, char *);
+-			UpnpPrintf(UPNP_ALL, HTTP, __FILE__, __LINE__,
+-				"Adding a char Buffer starting with: %c\n", (int)s[0]);
++			/* UpnpPrintf(UPNP_ALL, HTTP, __FILE__, __LINE__,
++				"Adding a char Buffer starting with: %c\n", (int)s[0]); */
+ 			assert(s);
+ 			length = (size_t) va_arg(argp, size_t);
+ 			if (membuffer_append(buf, s, length))
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/genlib/net/http/webserver.c
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/genlib/net/http/webserver.c	2012-03-12 22:08:56.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/genlib/net/http/webserver.c	2012-03-17 23:35:48.000000000 +0000
+@@ -1033,7 +1033,6 @@
+ 	size_t dummy;
+ 	const char *extra_headers = NULL;
+ 
+-	print_http_headers(req);
+ 	url = &req->uri;
+ 	assert(req->method == HTTPMETHOD_GET ||
+ 	       req->method == HTTPMETHOD_HEAD ||
+@@ -1403,7 +1402,6 @@
+ 					UpnpPrintf(UPNP_INFO, HTTP, __FILE__, __LINE__,
+ 						"<<< (RECVD) <<<\n%s\n-----------------\n",
+ 						parser->msg.msg.buf);
+-					print_http_headers(&parser->msg);
+ 					parser->position = POS_COMPLETE;
+ 				} else {
+ 					/* partial msg or response */
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/ssdp/ssdp_server.c
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/ssdp/ssdp_server.c	2012-03-17 00:27:17.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/ssdp/ssdp_server.c	2012-03-17 23:35:48.000000000 +0000
+@@ -132,12 +132,12 @@
+ 		NumCopy++;
+ 		for (i = 0lu;; i++) {
+ 			UpnpPrintf(UPNP_ALL, API, __FILE__, __LINE__,
+-				   "Entering new device list with i = %lu\n\n",
++				   "Entering new device list with i = %lu\n",
+ 				   i);
+ 			tmpNode = ixmlNodeList_item(SInfo->DeviceList, i);
+ 			if (!tmpNode) {
+ 				UpnpPrintf(UPNP_ALL, API, __FILE__, __LINE__,
+-					   "Exiting new device list with i = %lu\n\n",
++					   "Exiting new device list with i = %lu\n",
+ 					   i);
+ 				break;
+ 			}
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/genlib/net/http/httpparser.c
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/genlib/net/http/httpparser.c	2012-03-17 00:27:17.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/genlib/net/http/httpparser.c	2012-03-17 23:35:48.000000000 +0000
+@@ -2175,37 +2175,3 @@
+ }
+ 
+ 
+-#ifdef DEBUG
+-void print_http_headers(http_message_t *hmsg)
+-{
+-    ListNode *node;
+-    /* NNS:  dlist_node *node; */
+-    http_header_t *header;
+-
+-    /* print start line */
+-    if( hmsg->is_request ) {
+-        printf( "method = %d, version = %d.%d, url = %.*s\n", 
+-            hmsg->method, hmsg->major_version, hmsg->minor_version,
+-            (int)hmsg->uri.pathquery.size, hmsg->uri.pathquery.buff);
+-    } else {
+-        printf( "resp status = %d, version = %d.%d, status msg = %.*s\n",
+-            hmsg->status_code, hmsg->major_version, hmsg->minor_version,
+-            (int)hmsg->status_msg.length, hmsg->status_msg.buf);
+-    }
+-
+-    /* print headers */
+-    node = ListHead( &hmsg->headers );
+-    /* NNS: node = dlist_first_node( &hmsg->headers ); */
+-    while( node != NULL ) {
+-        header = ( http_header_t * ) node->item;
+-        /* NNS: header = (http_header_t *)node->data; */
+-        printf( "hdr name: %.*s, value: %.*s\n", 
+-            (int)header->name.length, header->name.buf,
+-            (int)header->value.length, header->value.buf );
+-
+-        node = ListNext( &hmsg->headers, node );
+-        /* NNS: node = dlist_next( &hmsg->headers, node ); */
+-    }
+-}
+-#endif /* DEBUG */
+-
+Index: libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/inc/httpparser.h
+===================================================================
+--- libupnp-1.6.16~git.20120316.d3d17da6.orig/upnp/src/inc/httpparser.h	2012-03-13 09:32:58.000000000 +0000
++++ libupnp-1.6.16~git.20120316.d3d17da6/upnp/src/inc/httpparser.h	2012-03-17 23:35:48.000000000 +0000
+@@ -476,21 +476,6 @@
+ ************************************************************************/
+ const char* method_to_str( IN http_method_t method );
+ 
+-/*!
+- * \brief Print the HTTP headers.
+- */
+-#ifdef DEBUG
+-void print_http_headers(
+-	/*! [in] HTTP Message object. */
+-	http_message_t *hmsg);
+-#else
+-static UPNP_INLINE void print_http_headers(http_message_t *hmsg)
+-{
+-	return;
+-	hmsg = hmsg;
+-}
+-#endif
+-
+ #ifdef __cplusplus
+ }		/* extern "C" */
+ #endif	/* __cplusplus */

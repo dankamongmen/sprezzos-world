@@ -1,0 +1,348 @@
+unchanged:
+--- libupnp-1.6.16~git.20120315.c9f3e26f.orig/upnp/inc/upnp.h	2012-03-13 20:45:27.000000000 +0000
++++ libupnp-1.6.16~git.20120315.c9f3e26f/upnp/inc/upnp.h	2012-03-15 23:15:54.000000000 +0000
+@@ -45,6 +45,7 @@
+ #include "upnpconfig.h"
+ #include "UpnpGlobal.h"
+ #include "UpnpInet.h"
++#include "UpnpString.h"
+ 
+ /*
+  * \todo Document the exact reason of these include files and solve this
+@@ -642,7 +643,7 @@
+   int ErrCode;
+ 
+   /** The control URL for service. */
+-  char CtrlUrl[NAME_SIZE];
++  UpnpString *CtrlUrl;
+ 
+   /** The DOM document describing the action. */
+   IXML_Document *ActionRequest;
+@@ -692,7 +693,7 @@
+   int ErrCode;
+ 
+   /** The control URL for the service. */
+-  char CtrlUrl[NAME_SIZE];
++  UpnpString *CtrlUrl;
+ 
+   /** The name of the variable. */
+   char StateVarName[NAME_SIZE];
+@@ -776,7 +777,7 @@
+   int ErrCode;              
+ 
+   /** The event URL being subscribed to or removed from. */
+-  char PublisherUrl[NAME_SIZE]; 
++  UpnpString *PublisherUrl;
+ 
+   /** The actual subscription time (for subscriptions only). */
+   int TimeOut;              
+diff -u libupnp-1.6.16~git.20120315.c9f3e26f/upnp/src/api/upnpapi.c b/upnp/src/api/upnpapi.c
+--- libupnp-1.6.16~git.20120315.c9f3e26f/upnp/src/api/upnpapi.c	2012-03-15 23:15:54.000000000 +0000
++++ b/upnp/src/api/upnpapi.c
+@@ -1917,16 +1917,39 @@
+ 
+ 
+ #ifdef INCLUDE_CLIENT_APIS
++/**
++ * \brief De-allocate a UpnpNonblockParam and its fields
++ */
++static void Param_delete(struct UpnpNonblockParam *Param)
++{
++    #define FREEMARK "FrEe"
++    if( 0 == memcmp(Param, FREEMARK, strlen(FREEMARK)) ) {
++	UpnpPrintf(UPNP_CRITICAL, API, __FILE__, __LINE__,
++		"Freeing already freed UpnpNonblockParam at %p\n", Param);
++    } else {
++	if( Param->Url )
++	    UpnpString_delete( Param->Url );
++	else
++	    UpnpPrintf(UPNP_CRITICAL, API, __FILE__, __LINE__,
++		    "Freeing already freed UpnpNonblockParam string at %p\n", Param);
++	Param->Url = 0;
++	memcpy( Param, FREEMARK, strlen(FREEMARK) );
++	free( Param );	// fixme: is param what's getting freed twice in subscription renewals ?
++    }
++}
++#endif /* INCLUDE_CLIENT_APIS */
++
++
++#ifdef INCLUDE_CLIENT_APIS
+ int UpnpSubscribeAsync(
+ 	UpnpClient_Handle Hnd,
+-	const char *EvtUrl_const,
++	const char *EvtUrl,
+ 	int TimeOut,
+ 	Upnp_FunPtr Fun,
+ 	const void *Cookie_const)
+ {
+     struct Handle_Info *SInfo = NULL;
+     struct UpnpNonblockParam *Param;
+-    char *EvtUrl = ( char * )EvtUrl_const;
+     ThreadPoolJob job;
+ 
+     memset(&job, 0, sizeof(job));
+@@ -1969,13 +1992,14 @@
+ 
+     Param->FunName = SUBSCRIBE;
+     Param->Handle = Hnd;
+-    strncpy( Param->Url, EvtUrl, sizeof( Param->Url ) - 1 );
++    Param->Url = UpnpString_new();
++    UpnpString_set_String( Param->Url, EvtUrl );
+     Param->TimeOut = TimeOut;
+     Param->Fun = Fun;
+     Param->Cookie = (void *)Cookie_const;
+ 
+     TPJobInit(&job, (start_routine)UpnpThreadDistribution, Param);
+-    TPJobSetFreeFunction(&job, (free_routine)free);
++    TPJobSetFreeFunction(&job, (free_routine)Param_delete);
+     TPJobSetPriority(&job, MED_PRIORITY);
+     ThreadPoolAdd(&gSendThreadPool, &job, NULL);
+ 
+@@ -2161,7 +2185,7 @@
+ 	Param->Fun = Fun;
+ 	Param->Cookie = (void *)Cookie_const;
+ 	TPJobInit( &job, ( start_routine ) UpnpThreadDistribution, Param );
+-	TPJobSetFreeFunction( &job, ( free_routine ) free );
++	TPJobSetFreeFunction( &job, ( free_routine ) Param_delete );
+ 	TPJobSetPriority( &job, MED_PRIORITY );
+ 	ThreadPoolAdd( &gSendThreadPool, &job, NULL );
+ 
+@@ -2287,7 +2311,7 @@
+     Param->TimeOut = TimeOut;
+ 
+     TPJobInit( &job, ( start_routine ) UpnpThreadDistribution, Param );
+-    TPJobSetFreeFunction( &job, ( free_routine ) free );
++    TPJobSetFreeFunction( &job, ( free_routine ) Param_delete );
+     TPJobSetPriority( &job, MED_PRIORITY );
+     ThreadPoolAdd( &gSendThreadPool, &job, NULL );
+ 
+@@ -2679,7 +2703,7 @@
+ 
+ int UpnpSendActionAsync(
+ 	UpnpClient_Handle Hnd,
+-	const char *ActionURL_const,
++	const char *ActionURL,
+ 	const char *ServiceType_const,
+ 	const char *DevUDN_const,
+ 	IXML_Document *Act,
+@@ -2691,7 +2715,6 @@
+     struct Handle_Info *SInfo = NULL;
+     struct UpnpNonblockParam *Param;
+     DOMString tmpStr;
+-    char *ActionURL = (char *)ActionURL_const;
+     char *ServiceType = (char *)ServiceType_const;
+     /* udn not used? */
+     /*char *DevUDN = (char *)DevUDN_const;*/
+@@ -2738,7 +2761,8 @@
+ 
+     Param->FunName = ACTION;
+     Param->Handle = Hnd;
+-    strncpy( Param->Url, ActionURL, sizeof ( Param->Url ) - 1 );
++    Param->Url = UpnpString_new();
++    UpnpString_set_String( Param->Url, ActionURL );
+     strncpy( Param->ServiceType, ServiceType,
+ 	sizeof ( Param->ServiceType ) - 1 );
+ 
+@@ -2757,7 +2781,7 @@
+     Param->Fun = Fun;
+ 
+     TPJobInit( &job, ( start_routine ) UpnpThreadDistribution, Param );
+-    TPJobSetFreeFunction( &job, ( free_routine ) free );
++    TPJobSetFreeFunction( &job, ( free_routine ) Param_delete );
+ 
+     TPJobSetPriority( &job, MED_PRIORITY );
+     ThreadPoolAdd( &gSendThreadPool, &job, NULL );
+@@ -2771,7 +2795,7 @@
+ 
+ int UpnpSendActionExAsync(
+ 	UpnpClient_Handle Hnd,
+-	const char *ActionURL_const,
++	const char *ActionURL,
+ 	const char *ServiceType_const,
+ 	const char *DevUDN_const,
+ 	IXML_Document *Header,
+@@ -2783,7 +2807,6 @@
+     struct UpnpNonblockParam *Param;
+     DOMString tmpStr;
+     DOMString headerStr = NULL;
+-    char *ActionURL = ( char * )ActionURL_const;
+     char *ServiceType = ( char * )ServiceType_const;
+     ThreadPoolJob job;
+     int retVal = 0;
+@@ -2798,7 +2821,7 @@
+         "Inside UpnpSendActionExAsync\n");
+ 
+     if( Header == NULL ) {
+-        retVal = UpnpSendActionAsync( Hnd, ActionURL_const,
++        retVal = UpnpSendActionAsync( Hnd, ActionURL,
+                                       ServiceType_const, DevUDN_const, Act,
+                                       Fun, Cookie_const );
+         return retVal;
+@@ -2838,7 +2861,8 @@
+ 
+     Param->FunName = ACTION;
+     Param->Handle = Hnd;
+-    strncpy( Param->Url, ActionURL, sizeof( Param->Url ) - 1 );
++    Param->Url = UpnpString_new();
++    UpnpString_set_String( Param->Url, ActionURL );
+     strncpy( Param->ServiceType, ServiceType,
+ 	sizeof ( Param->ServiceType ) - 1 );
+     retVal = ixmlParseBufferEx( headerStr, &( Param->Header ) );
+@@ -2874,7 +2898,7 @@
+     Param->Fun = Fun;
+ 
+     TPJobInit( &job, ( start_routine ) UpnpThreadDistribution, Param );
+-    TPJobSetFreeFunction( &job, ( free_routine ) free );
++    TPJobSetFreeFunction( &job, ( free_routine ) Param_delete );
+ 
+     TPJobSetPriority( &job, MED_PRIORITY );
+     ThreadPoolAdd( &gSendThreadPool, &job, NULL );
+@@ -2888,7 +2912,7 @@
+ 
+ int UpnpGetServiceVarStatusAsync(
+ 	UpnpClient_Handle Hnd,
+-	const char *ActionURL_const,
++	const char *ActionURL,
+ 	const char *VarName_const,
+ 	Upnp_FunPtr Fun,
+ 	const void *Cookie_const)
+@@ -2896,7 +2920,6 @@
+     ThreadPoolJob job;
+     struct Handle_Info *SInfo = NULL;
+     struct UpnpNonblockParam *Param;
+-    char *ActionURL = (char *)ActionURL_const;
+     char *VarName = (char *)VarName_const;
+ 
+     memset(&job, 0, sizeof(job));
+@@ -2934,13 +2957,14 @@
+ 
+     Param->FunName = STATUS;
+     Param->Handle = Hnd;
+-    strncpy( Param->Url, ActionURL, sizeof( Param->Url ) - 1);
++    Param->Url = UpnpString_new();
++    UpnpString_set_String( Param->Url, ActionURL );
+     strncpy( Param->VarName, VarName, sizeof( Param->VarName ) - 1 );
+     Param->Fun = Fun;
+     Param->Cookie = ( void * )Cookie_const;
+ 
+     TPJobInit( &job, ( start_routine ) UpnpThreadDistribution, Param );
+-    TPJobSetFreeFunction( &job, ( free_routine ) free );
++    TPJobSetFreeFunction( &job, ( free_routine ) Param_delete );
+ 
+     TPJobSetPriority( &job, MED_PRIORITY );
+ 
+@@ -3588,23 +3612,21 @@
+ 	case SUBSCRIBE: {
+ 		struct Upnp_Event_Subscribe Evt;
+ 		UpnpString *Sid = UpnpString_new();
+-		UpnpString *Url = UpnpString_new();
+-		UpnpString_set_String(Url, Param->Url);
++		UpnpString *Url = UpnpString_dup(Param->Url);
+ 		memset(&Evt, 0, sizeof(Evt));
+ 		Evt.ErrCode = genaSubscribe(
+ 			Param->Handle,
+ 			Url,
+ 			(int *)&Param->TimeOut,
+ 			Sid);
+-		strncpy(Evt.PublisherUrl, Param->Url,
+-			sizeof(Evt.PublisherUrl) - 1);
++		UpnpString_assign(Evt.PublisherUrl, Param->Url);
+ 		Evt.TimeOut = Param->TimeOut;
+ 		strncpy((char *)Evt.Sid, UpnpString_get_String(Sid),
+ 			sizeof(Evt.Sid) - 1);
+ 		Param->Fun(UPNP_EVENT_SUBSCRIBE_COMPLETE, &Evt, Param->Cookie);
+ 		UpnpString_delete(Sid);
+ 		UpnpString_delete(Url);
+-		free(Param);
++		Param_delete(Param);
+ 		break;
+ 	}
+ 	case UNSUBSCRIBE: {
+@@ -3617,11 +3639,11 @@
+ 			Sid);
+ 		strncpy((char *)Evt.Sid, UpnpString_get_String(Sid),
+ 			sizeof(Evt.Sid) - 1);
+-		strncpy(Evt.PublisherUrl, "", sizeof(Evt.PublisherUrl) - 1);
++		UpnpString_delete(Evt.PublisherUrl);
+ 		Evt.TimeOut = 0;
+ 		Param->Fun(UPNP_EVENT_UNSUBSCRIBE_COMPLETE, &Evt, Param->Cookie);
+ 		UpnpString_delete(Sid);
+-		free(Param);
++		Param_delete(Param);
+ 		break;
+ 	}
+ 	case RENEW: {
+@@ -3638,7 +3660,7 @@
+ 			sizeof(Evt.Sid) - 1);
+ 		Param->Fun(UPNP_EVENT_RENEWAL_COMPLETE, &Evt, Param->Cookie);
+ 		UpnpString_delete(Sid);
+-		free(Param);
++		Param_delete(Param);
+ 		break;
+ 	}
+ #endif /* EXCLUDE_GENA == 0 */
+@@ -3648,30 +3670,32 @@
+ 		memset(&Evt, 0, sizeof(Evt));
+ 		Evt.ActionResult = NULL;
+ 		Evt.ErrCode = SoapSendAction(
+-			Param->Url,
++			UpnpString_get_String(Param->Url),
+ 			Param->ServiceType,
+ 			Param->Act, &Evt.ActionResult);
+ 		Evt.ActionRequest = Param->Act;
+-		strncpy(Evt.CtrlUrl, Param->Url, sizeof(Evt.CtrlUrl) - 1);
++		Evt.CtrlUrl = UpnpString_new();
++		UpnpString_assign(Evt.CtrlUrl, Param->Url);
+ 		Param->Fun(UPNP_CONTROL_ACTION_COMPLETE, &Evt, Param->Cookie);
+ 		ixmlDocument_free(Evt.ActionRequest);
+ 		ixmlDocument_free(Evt.ActionResult);
+-		free(Param);
++		Param_delete(Param);
+ 		break;
+ 	}
+ 	case STATUS: {
+ 		struct Upnp_State_Var_Complete Evt;
+ 		memset(&Evt, 0, sizeof(Evt));
+ 		Evt.ErrCode = SoapGetServiceVarStatus(
+-			Param->Url,
++			UpnpString_get_String(Param->Url),
+ 			Param->VarName,
+ 			&Evt.CurrentVal);
+ 		strncpy(Evt.StateVarName, Param->VarName,
+ 			sizeof(Evt.StateVarName) - 1);
+-		strncpy(Evt.CtrlUrl, Param->Url, sizeof(Evt.CtrlUrl) - 1);
++		Evt.CtrlUrl = UpnpString_new();
++		UpnpString_assign(Evt.CtrlUrl, Param->Url);
+ 		Param->Fun(UPNP_CONTROL_GET_VAR_COMPLETE, &Evt, Param->Cookie);
+ 		free(Evt.CurrentVal);
+-		free(Param);
++		Param_delete(Param);
+ 		break;
+ 	}
+ #endif /* EXCLUDE_SOAP == 0 */
+unchanged:
+--- libupnp-1.6.16~git.20120315.c9f3e26f.orig/upnp/src/inc/upnpapi.h	2012-03-15 19:51:05.000000000 +0000
++++ libupnp-1.6.16~git.20120315.c9f3e26f/upnp/src/inc/upnpapi.h	2012-03-15 23:15:54.000000000 +0000
+@@ -229,7 +229,7 @@
+ 	char DevId[NAME_SIZE];
+ 	char ServiceType[NAME_SIZE];
+ 	char ServiceVer[NAME_SIZE];
+-	char Url[NAME_SIZE];
++	UpnpString *Url;
+ 	Upnp_SID SubsId;
+ 	char *Cookie;
+ 	Upnp_FunPtr Fun;
+unchanged:
+--- libupnp-1.6.16~git.20120315.c9f3e26f.orig/upnp/src/gena/gena_ctrlpt.c	2012-03-15 19:51:05.000000000 +0000
++++ libupnp-1.6.16~git.20120315.c9f3e26f/upnp/src/gena/gena_ctrlpt.c	2012-03-15 23:50:11.000000000 +0000
+@@ -173,8 +173,8 @@
+ 	RenewEventStruct->TimeOut = TimeOut;
+ 	strncpy(RenewEventStruct->Sid, UpnpString_get_String(tmpSID),
+ 		sizeof(RenewEventStruct->Sid) - 1);
+-	strncpy(RenewEventStruct->PublisherUrl,
+-		UpnpString_get_String(tmpEventURL), NAME_SIZE - 1);
++	RenewEventStruct->PublisherUrl = UpnpString_new();
++	UpnpString_assign(RenewEventStruct->PublisherUrl, tmpEventURL);
+ 
+ 	/* RenewEvent->EventType=UPNP_EVENT_SUBSCRIPTION_EXPIRE; */
+ 	RenewEvent->handle = client_handle;
