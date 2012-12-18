@@ -3647,6 +3647,14 @@ $(RAZORQT): $(SPREZZ)/razorqt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf razorqt-$(razorqt_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: readline6
+readline6:$(READLINE6)_$(ARCH).deb
+$(READLINE6): $(SPREZZ)/readline6/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf readline-$(readline6_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: reaver
 reaver:$(REAVER)_$(ARCH).deb
 $(REAVER): $(SPREZZ)/reaver/debian/changelog
