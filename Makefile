@@ -2708,6 +2708,14 @@ $(LIBXFONT): $(SPREZZ)/libxfont/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxfont_$(libxfont_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libfontenc
+libfontenc:$(LIBFONTENC)_$(ARCH).deb
+$(LIBFONTENC): $(SPREZZ)/libfontenc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libfontenc-$(libfontenc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxi
 libxi:$(LIBXI)_$(ARCH).deb
 $(LIBXI): $(SPREZZ)/libxi/debian/changelog
@@ -2739,6 +2747,14 @@ $(LIBXAU): $(SPREZZ)/libxau/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXau-$(libxau_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxaw
+libxaw:$(LIBXAW)_$(ARCH).deb
+$(LIBXAW): $(SPREZZ)/libxaw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXaw-$(libxaw_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxmu
 libxmu:$(LIBXMU)_$(ARCH).deb
