@@ -68,8 +68,6 @@ IBUSUP:=ibus-$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1)
 IBUSORIG:=ibus_$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.gz
 LESSUP:=less-$(shell echo $(less_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LESSORIG:=$(shell echo $(LESSUP) | tr - _).orig.tar.gz
-LIBDRMUP:=libdrm-$(shell echo $(libdrm_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-LIBDRMORIG:=$(shell echo $(LIBDRMUP) | tr - _).orig.tar.bz2
 LIBPNGUP:=libpng-$(shell echo $(libpng_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
 LIBRSVGUP:=librsvg-$(shell echo $(librsvg_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
@@ -2502,6 +2500,22 @@ $(VLC): $(SPREZZ)/vlc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vlc-$(vlc_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libdmx
+libdmx:$(LIBDMX)_$(ARCH).deb
+$(LIBDMX): $(SPREZZ)/libdmx/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdmx-$(libdmx_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libdrm
+libdrm:$(LIBDRM)_$(ARCH).deb
+$(LIBDRM): $(SPREZZ)/libdrm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdrm-$(libdrm_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xft
 xft:$(XFT)_$(ARCH).deb
 $(XFT): $(SPREZZ)/xft/debian/changelog
@@ -2686,6 +2700,14 @@ $(LIBXFIXES): $(SPREZZ)/libxfixes/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxfixes_$(libxfixes_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libxfont
+libxfont:$(LIBXFONT)_$(ARCH).deb
+$(LIBXFONT): $(SPREZZ)/libxfont/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxfont_$(libxfont_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: libxi
 libxi:$(LIBXI)_$(ARCH).deb
 $(LIBXI): $(SPREZZ)/libxi/debian/changelog
@@ -2725,6 +2747,14 @@ $(LIBXMU): $(SPREZZ)/libxmu/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXmu-$(libxmu_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxpm
+libxpm:$(LIBXPM)_$(ARCH).deb
+$(LIBXPM): $(SPREZZ)/libxpm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXpm-$(libxpm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxspf
 libxspf:$(LIBXSPF)_$(ARCH).deb
@@ -4648,20 +4678,6 @@ less:$(LESS)_$(ARCH).deb
 $(LESS): $(SPREZZ)/less/debian/changelog $(LESSORIG)
 	mkdir $@
 	tar xzvf $(LESSORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(LIBDRMUP).tar.bz2
-$(LIBDRMUP).tar.bz2:
-	wget -nc -O$@ http://dri.freedesktop.org/libdrm/$(LIBDRMUP).tar.bz2
-
-$(LIBDRMORIG): $(LIBDRMUP).tar.bz2
-	ln -sf $< $@
-
-.PHONY: libdrm
-libdrm:$(LIBDRM)_$(ARCH).deb
-$(LIBDRM): $(SPREZZ)/libdrm/debian/changelog $(LIBDRMORIG)
-	mkdir $@
-	tar xjvf $(LIBDRMORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
