@@ -1,0 +1,82 @@
+#!/usr/bin/make -f
+
+DEB_HOST_ARCH_OS	?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+DEB_HOST_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH      ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+export CFLAGS += -Wall
+export LDFLAGS += -Wl,--as-needed -Wl,-O1 -Wl,-z,defs
+
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+	CROSS=CC=$(DEB_HOST_GNU_TYPE)-gcc
+else
+	CROSS=
+endif
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	rm -f config.guess config.sub
+
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	dh_clean
+
+config.status: configure
+	dh_testdir
+
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	cp -f /usr/share/misc/config.guess configure.guess
+endif
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	cp -f /usr/share/misc/config.sub configure.sub
+endif
+
+	./configure $(CROSS) --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) --prefix=/usr --mandir=\$${prefix}/share/man CFLAGS="$(CFLAGS)"
+
+build: build-stamp
+build-stamp: config.status
+	dh_testdir
+
+	$(MAKE)
+
+	touch build-stamp
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+
+	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
+
+	install -D -m 644 cdparanoia.1.jp debian/cdparanoia/usr/share/man/ja/man1/cdparanoia.1
+
+binary: binary-arch
+
+binary-arch: install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_install --fail-missing --sourcedir=debian/tmp
+	dh_lintian
+	dh_strip --dbg-package=cdparanoia-dbg
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+ifeq (kfreebsd,$(DEB_HOST_ARCH_OS))
+	dh_gencontrol -- -Varch-os-dev="libcam-dev"
+else
+	dh_gencontrol
+endif
+	dh_md5sums
+	dh_builddeb
+
+binary-indep:
+
+.PHONY: clean build install binary binary-arch binary-indep
