@@ -1,0 +1,100 @@
+From: "Nikita V. Youshchenko" <yoush@cs.msu.su>
+Date: Sat, 02 Nov 2002 17:57:13 +0300
+Subject: A bug in Xaw/StripChart.c causes incorrect scale lines in xload window
+
+Recently I tried to run xload on a high loaded server (load was more
+than 10), and discovered that if window size is rather small, scale
+lines are drawn incorrectly (upper than needed).
+
+This is caused by a bug in Xaw/StripChart.c.
+It draws lines with fixed integer steps. Than means that if window
+height is 39 pixels, and 10 lines should be drawn to split view into 11
+equal parts, lines will be drawn at 3, 6, 9, ,.., 30. So the bottom part
+height will be 9 pixels while other parts height will be 2 pixels.
+
+This patch makes part heights differ no more than by 1 pixel.
+
+Debian bug#167448 <http://bugs.debian.org/167448>
+
+--- a/src/StripChart.c
++++ b/src/StripChart.c
+@@ -370,12 +370,12 @@ draw_it(XtPointer client_data, XtInterva
+  * the returned value is identical to the initial value of next and data is
+  * unchanged.  Otherwise keeps half a window's worth of data.  If data is
+  * changed, then w->strip_chart.max_value is updated to reflect the
+- * largest data point
++ * largest data point.
+  */
+-static int
++static int
+ repaint_window(StripChartWidget w, int left, int width)
+ {
+-    int i, j;
++    int i, j, k;
+     int next = w->strip_chart.interval;
+     int scale = w->strip_chart.scale;
+     int scalewidth = 0;
+@@ -420,8 +420,10 @@ repaint_window(StripChartWidget w, int l
+ 	}
+ 
+ 	/* Draw graph reference lines */
++	k = XtHeight(w) % w->strip_chart.scale;
+ 	for (i = 1; i < w->strip_chart.scale; i++) {
+-	    j = i * ((int)XtHeight(w) / w->strip_chart.scale);
++	    j = i * (XtHeight(w) / w->strip_chart.scale) +
++		((i * k + w->strip_chart.scale/2) / w->strip_chart.scale);
+ 	    XDrawLine(dpy, win, w->strip_chart.hiGC, left, j, scalewidth, j);
+ 	}
+     }
+@@ -443,7 +445,7 @@ static void
+ MoveChart(StripChartWidget w, Bool blit)
+ {
+     double old_max;
+-    int left, i, j;
++    int left, i, j, k;
+     int next = w->strip_chart.interval;
+ 
+     if (!XtIsRealized((Widget)w))
+@@ -492,8 +494,10 @@ MoveChart(StripChartWidget w, Bool blit)
+ 
+     /* Draw graph reference lines */
+     left = j;
++    k = XtHeight(w) % w->strip_chart.scale;
+     for (i = 1; i < w->strip_chart.scale; i++) {
+-	j = i * (XtHeight(w) / w->strip_chart.scale);
++	j = i * (XtHeight(w) / w->strip_chart.scale) +
++	    ((i * k + w->strip_chart.scale/2) / w->strip_chart.scale);
+ 	XDrawLine(XtDisplay((Widget)w), XtWindow((Widget)w),
+ 		  w->strip_chart.hiGC, left, j, XtWidth(w), j);
+     }
+@@ -554,23 +558,26 @@ XawStripChartResize(Widget widget)
+     StripChartWidget w = (StripChartWidget)widget;
+     XPoint *points;
+     Cardinal size;
+-    int i;
++    int i, k;
+ 
+     if (w->strip_chart.scale <= 1) {
+ 	XtFree((char *)w->strip_chart.points);
+ 	w->strip_chart.points = NULL;
+ 	return;
+     }
+-
++
+     size = sizeof(XPoint) * (w->strip_chart.scale - 1);
+ 
+     points = (XPoint *)XtRealloc((XtPointer)w->strip_chart.points, size);
+     w->strip_chart.points = points;
+ 
+     /* Draw graph reference lines into clip mask */
+-
++    k = XtHeight(w) % w->strip_chart.scale;
+     for (i = 1; i < w->strip_chart.scale; i++) {
+ 	points[i - 1].x = 0;
+-	points[i - 1].y = XtHeight(w) / w->strip_chart.scale;
++	points[i - 1].y = i * (XtHeight(w) / w->strip_chart.scale) +
++	    ((i * k + w->strip_chart.scale/2) / w->strip_chart.scale);
+     }
++    for (i = w->strip_chart.scale - 1; i > 1; i--)
++	points[i - 1].y -= points[i - 2].y;
+ }
