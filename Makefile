@@ -2327,6 +2327,22 @@ $(LIBPROXY): $(SPREZZ)/libproxy/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libproxy-$(libproxy_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cracklib2
+cracklib2:$(CRACKLIB2)_$(ARCH).deb
+$(CRACKLIB2): $(SPREZZ)/cracklib2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cracklib-$(cracklib2_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libpwquality
+libpwquality:$(LIBPWQUALITY)_$(ARCH).deb
+$(LIBPWQUALITY): $(SPREZZ)/libpwquality/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libpwquality-$(libpwquality_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: lynx
 lynx:$(LYNX)_$(ARCH).deb
 $(LYNX): $(SPREZZ)/lynx/debian/changelog
