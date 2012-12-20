@@ -177,6 +177,14 @@ $(SYNAPTIC): $(SPREZZ)/synaptic/debian/changelog
 	ln -sf synaptic-$(synaptic_UPVER).tar.xz synaptic_$(synaptic_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: python-defaults
+python-defaults:$(PYTHONDEFAULTS)_$(ARCH).deb
+$(PYTHONDEFAULTS): $(SPREZZ)/python-defaults/debian/changelog
+	bzr branch http://alioth.debian.org/anonscm/bzr/pkg-python/python-defaults-debian $@
+	tar cJf python-defaults-$(python-defaults_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf python-defaults-$(python-defaults_UPVER).tar.xz python-defaults_$(python-defaults_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: gnome-xcf-thumbnailer
 gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
 $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
