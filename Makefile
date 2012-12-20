@@ -1420,6 +1420,14 @@ $(GJS): $(SPREZZ)/gjs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gjs-$(gjs_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: glade
+glade:$(GLADE)_$(ARCH).deb
+$(GLADE): $(SPREZZ)/glade/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf glade-$(glade_UPVER).xz $(TARARGS) $@
+
 .PHONY: glew
 glew:$(GLEW)_$(ARCH).deb
 $(GLEW): $(SPREZZ)/glew/debian/changelog
