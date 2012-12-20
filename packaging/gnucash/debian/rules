@@ -1,0 +1,75 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+# Avoid some error messages when running "make install"
+export GCONF_DISABLE_MAKEFILE_SCHEMA_INSTALL=1
+
+# Hack for Gnucash build system
+export BUILDING_FROM_SVN=$(if $(wildcard autogen.sh),yes,no)
+
+# reduce overlinking
+LDFLAGS+= -Wl,--as-needed
+
+%:
+	dh $@ --parallel --with python2,autoreconf
+
+override_dh_auto_clean:
+	find . -type l -exec rm -v \{\} \;
+	rm -fv debian/gnucash-icon-32x32.xpm
+	dh_auto_clean
+
+override_dh_autoreconf:
+	dh_autoreconf --as-needed
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--libdir=/usr/lib/$(DEB_HOST_MULTIARCH)/gnucash \
+		--infodir=/noinst \
+		--mandir=/noinst \
+		--docdir=/noinst \
+		--with-gconf-schema-file-dir=/usr/share/gconf/schemas \
+		--with-html-engine=webkit \
+		--disable-static \
+		--enable-debug \
+		--enable-dbi \
+		--enable-ofx \
+		--enable-aqbanking \
+		--enable-locale-specific-tax \
+		--enable-python-bindings
+
+# override this call, so we do not use parallelization
+# see https://bugzilla.gnome.org/show_bug.cgi?id=644896
+override_dh_auto_install:
+	dh_auto_install --max-parallel=1
+
+override_dh_install:
+	convert src/pixmaps/gnucash-icon-32x32.png debian/gnucash-icon-32x32.xpm
+	# generate man pages
+	find debian/tmp/usr/bin/ -type f -executable -execdir \
+		sh -c 'pod2man -s1 --stderr --utf8 {} "../../{}.1"; [ -s "../../{}.1" ] || rm "../../{}.1"' \;
+	find debian/tmp/usr/lib -name \*.la -exec rm -v \{\} \;
+	rm -rf debian/tmp/usr/share/gnucash/doc # --docdir option of configure broken in 2.4 series; fixed in trunk in r20736
+	dh_install
+
+override_dh_auto_test:
+
+override_dh_strip:
+	dh_strip --dbg-package=gnucash-dbg
+
+override_dh_python2:
+	dh_python2 --no-guessing-versions -V $(shell pyversions -dv)
+
+BINARY_VERSION := $(shell dpkg-parsechangelog | sed -n -e 's/^Version: //p')
+
+# Generate an shlibs files because otherwise dpkg-shlibdeps will fail on
+# python-gnucash. But do not distribute the shlibs file in the package, since
+# this creates a lot of lintian warning (many dynamic libraries do not have a
+# correct SOVERSION).
+override_dh_makeshlibs:
+	dh_makeshlibs -n --version-info="gnucash (= ${BINARY_VERSION})"
+
+override_dh_shlibdeps:
+	dh_shlibdeps
+	rm -f debian/gnucash/DEBIAN/shlibs
