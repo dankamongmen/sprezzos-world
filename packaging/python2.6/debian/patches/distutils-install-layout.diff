@@ -1,0 +1,238 @@
+# DP: distutils: Add an option --install-layout=deb, which
+# DP: - installs into $prefix/dist-packages instead of $prefix/site-packages.
+# DP: - doesn't encode the python version into the egg name.
+
+Index: python2.6-2.6.5+20100521/Doc/install/index.rst
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Doc/install/index.rst	2010-05-21 15:36:16.535706920 +0200
++++ python2.6-2.6.5+20100521/Doc/install/index.rst	2010-05-21 15:36:26.283728522 +0200
+@@ -237,6 +237,8 @@
+ +-----------------+-----------------------------------------------------+--------------------------------------------------+-------+
+ | Platform        | Standard installation location                      | Default value                                    | Notes |
+ +=================+=====================================================+==================================================+=======+
++| Debian/Ubuntu   | :file:`{prefix}/lib/python{X.Y}/dist-packages`      | :file:`/usr/local/lib/python{X.Y}/dist-packages` | \(0)  |
+++-----------------+-----------------------------------------------------+--------------------------------------------------+-------+
+ | Unix (pure)     | :file:`{prefix}/lib/python{X.Y}/site-packages`      | :file:`/usr/local/lib/python{X.Y}/site-packages` | \(1)  |
+ +-----------------+-----------------------------------------------------+--------------------------------------------------+-------+
+ | Unix (non-pure) | :file:`{exec-prefix}/lib/python{X.Y}/site-packages` | :file:`/usr/local/lib/python{X.Y}/site-packages` | \(1)  |
+@@ -246,6 +248,14 @@
+ 
+ Notes:
+ 
++(0)
++   Starting with Python-2.6 Debian/Ubuntu uses for the Python which comes within
++   the Linux distribution a non-default name for the installation directory. This
++   is to avoid overwriting of the python modules which come with the distribution,
++   which unfortunately is the upstream behaviour of the installation tools. The
++   non-default name in :file:`/usr/local` is used not to overwrite a local python
++   installation (defaulting to :file:`/usr/local`).
++
+ (1)
+    Most Linux distributions include Python as a standard part of the system, so
+    :file:`{prefix}` and :file:`{exec-prefix}` are usually both :file:`/usr` on
+@@ -367,6 +377,15 @@
+ 
+    /usr/bin/python setup.py install --prefix=/usr/local
+ 
++Starting with Python-2.6 Debian/Ubuntu does use
++:file:`/usr/lib/python{X.Y}/dist-packages` and
++:file:`/usr/local/lib/python{X.Y}/dist-packages` for the installation
++of python modules included in the Linux distribution.  To overwrite
++the name of the site directory, explicitely use the :option:`--prefix`
++option, however make sure that the installation path is included in
++``sys.path``.  For packaging of python modules for Debian/Ubuntu, use
++the new ``setup.py install`` option :option:`--install-layout=deb`.
++
+ Another possibility is a network filesystem where the name used to write to a
+ remote directory is different from the name used to read it: for example, the
+ Python interpreter accessed as :file:`/usr/local/bin/python` might search for
+@@ -605,6 +624,17 @@
+ import them, this directory must be added to ``sys.path``.  There are several
+ different ways to add the directory.
+ 
++On Debian/Ubuntu, starting with Python-2.6 the convention for system
++installed packages is to put then in the
++:file:`/usr/lib/python{X.Y}/dist-packages/` directory, and for locally
++installed packages is to put them in the
++:file:`/usr/lib/python{X.Y}/dist-packages/` directory.  To share the
++locally installed packages for the system provided Python with the
++locally installed packages of a local python installation, make
++:file:`/usr/lib/python{X.Y}/dist-packages/` a symbolic link to the
++:file:`{...}/site-packages/` directory of your local python
++installation.
++
+ The most convenient way is to add a path configuration file to a directory
+ that's already on Python's path, usually to the :file:`.../site-packages/`
+ directory.  Path configuration files have an extension of :file:`.pth`, and each
+Index: python2.6-2.6.5+20100521/Lib/distutils/command/install.py
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Lib/distutils/command/install.py	2010-05-21 15:36:16.495712522 +0200
++++ python2.6-2.6.5+20100521/Lib/distutils/command/install.py	2010-05-21 15:36:26.279711600 +0200
+@@ -47,6 +47,20 @@
+         'scripts': '$base/bin',
+         'data'   : '$base',
+         },
++    'unix_local': {
++        'purelib': '$base/local/lib/python$py_version_short/dist-packages',
++        'platlib': '$platbase/local/lib/python$py_version_short/dist-packages',
++        'headers': '$base/local/include/python$py_version_short/$dist_name',
++        'scripts': '$base/local/bin',
++        'data'   : '$base/local',
++        },
++    'deb_system': {
++        'purelib': '$base/lib/python$py_version_short/dist-packages',
++        'platlib': '$platbase/lib/python$py_version_short/dist-packages',
++        'headers': '$base/include/python$py_version_short/$dist_name',
++        'scripts': '$base/bin',
++        'data'   : '$base',
++        },
+     'unix_home': {
+         'purelib': '$base/lib/python',
+         'platlib': '$base/lib/python',
+@@ -168,6 +182,9 @@
+ 
+         ('record=', None,
+          "filename in which to record list of installed files"),
++
++        ('install-layout=', None,
++         "installation layout to choose (known values: deb, unix)"),
+         ]
+ 
+     boolean_options = ['compile', 'force', 'skip-build', 'user']
+@@ -182,6 +199,7 @@
+         self.exec_prefix = None
+         self.home = None
+         self.user = 0
++        self.prefix_option = None
+ 
+         # These select only the installation base; it's up to the user to
+         # specify the installation scheme (currently, that means supplying
+@@ -203,6 +221,9 @@
+         self.install_userbase = USER_BASE
+         self.install_usersite = USER_SITE
+ 
++        # enable custom installation, known values: deb
++        self.install_layout = None
++        
+         self.compile = None
+         self.optimize = None
+ 
+@@ -435,6 +456,7 @@
+             self.install_base = self.install_platbase = self.home
+             self.select_scheme("unix_home")
+         else:
++            self.prefix_option = self.prefix
+             if self.prefix is None:
+                 if self.exec_prefix is not None:
+                     raise DistutilsOptionError, \
+@@ -449,7 +471,23 @@
+ 
+             self.install_base = self.prefix
+             self.install_platbase = self.exec_prefix
+-            self.select_scheme("unix_prefix")
++            if self.install_layout:
++                if self.install_layout.lower() in ['deb']:
++                    self.select_scheme("deb_system")
++                elif self.install_layout.lower() in ['unix']:
++                    self.select_scheme("unix_prefix")
++                else:
++                    raise DistutilsOptionError(
++                        "unknown value for --install-layout")
++            elif (self.prefix_option and os.path.normpath(self.prefix) != '/usr/local') \
++                    or (self.user != 0 and 'PYTHONUSERBASE' in os.environ) \
++                    or 'real_prefix' in sys.__dict__:
++                self.select_scheme("unix_prefix")
++            else:
++                if os.path.normpath(self.prefix) == '/usr/local':
++                    self.select_scheme("deb_system")
++                else:
++                    self.select_scheme("unix_local")
+ 
+     # finalize_unix ()
+ 
+Index: python2.6-2.6.5+20100521/Lib/distutils/command/install_egg_info.py
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Lib/distutils/command/install_egg_info.py	2010-05-21 15:36:16.475711656 +0200
++++ python2.6-2.6.5+20100521/Lib/distutils/command/install_egg_info.py	2010-05-21 15:36:26.279711600 +0200
+@@ -14,18 +14,37 @@
+     description = "Install package's PKG-INFO metadata as an .egg-info file"
+     user_options = [
+         ('install-dir=', 'd', "directory to install to"),
++        ('install-layout', None, "custom installation layout"),
+     ]
+ 
+     def initialize_options(self):
+         self.install_dir = None
++        self.install_layout = None
++        self.prefix_option = None
+ 
+     def finalize_options(self):
+         self.set_undefined_options('install_lib',('install_dir','install_dir'))
+-        basename = "%s-%s-py%s.egg-info" % (
+-            to_filename(safe_name(self.distribution.get_name())),
+-            to_filename(safe_version(self.distribution.get_version())),
+-            sys.version[:3]
+-        )
++        self.set_undefined_options('install',('install_layout','install_layout'))
++        self.set_undefined_options('install',('prefix_option','prefix_option'))
++        if self.install_layout:
++            basename = "%s-%s.egg-info" % (
++                to_filename(safe_name(self.distribution.get_name())),
++                to_filename(safe_version(self.distribution.get_version()))
++                )
++            if not self.install_layout.lower() in ['deb']:
++                raise DistutilsOptionError(
++                    "unknown value for --install-layout")
++        elif self.prefix_option or 'real_prefix' in sys.__dict__:
++            basename = "%s-%s-py%s.egg-info" % (
++                to_filename(safe_name(self.distribution.get_name())),
++                to_filename(safe_version(self.distribution.get_version())),
++                sys.version[:3]
++                )
++        else:
++            basename = "%s-%s.egg-info" % (
++                to_filename(safe_name(self.distribution.get_name())),
++                to_filename(safe_version(self.distribution.get_version()))
++                )
+         self.target = os.path.join(self.install_dir, basename)
+         self.outputs = [self.target]
+ 
+Index: python2.6-2.6.5+20100521/Lib/distutils/sysconfig.py
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Lib/distutils/sysconfig.py	2010-05-21 15:36:16.515710804 +0200
++++ python2.6-2.6.5+20100521/Lib/distutils/sysconfig.py	2010-05-21 15:36:26.283728522 +0200
+@@ -115,6 +115,7 @@
+     If 'prefix' is supplied, use it instead of sys.prefix or
+     sys.exec_prefix -- i.e., ignore 'plat_specific'.
+     """
++    is_default_prefix = not prefix or os.path.normpath(prefix) in ('/usr', '/usr/local')
+     if prefix is None:
+         prefix = plat_specific and EXEC_PREFIX or PREFIX
+ 
+@@ -123,6 +124,8 @@
+                                  "lib", "python" + get_python_version())
+         if standard_lib:
+             return libpython
++        elif is_default_prefix and 'PYTHONUSERBASE' not in os.environ and 'real_prefix' not in sys.__dict__:
++            return os.path.join(libpython, "dist-packages")
+         else:
+             return os.path.join(libpython, "site-packages")
+ 
+Index: python2.6-2.6.5+20100521/Lib/site.py
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Lib/site.py	2010-05-21 15:36:16.455710091 +0200
++++ python2.6-2.6.5+20100521/Lib/site.py	2010-05-21 15:36:26.279711600 +0200
+@@ -255,6 +255,13 @@
+ 
+     if ENABLE_USER_SITE and os.path.isdir(USER_SITE):
+         addsitedir(USER_SITE, known_paths)
++    if ENABLE_USER_SITE:
++        for dist_libdir in ("local/lib", "lib"):
++            user_site = os.path.join(USER_BASE, dist_libdir,
++                                     "python" + sys.version[:3],
++                                     "dist-packages")
++            if os.path.isdir(user_site):
++                addsitedir(user_site, known_paths)
+     return known_paths
+ 
+ 

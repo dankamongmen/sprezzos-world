@@ -1,0 +1,176 @@
+# DP: Change the interpreter to build and install python extensions
+# DP: built with the python-dbg interpreter with a different name into
+# DP: the same path (by appending `_d' to the extension name).
+
+Index: python2.6-2.6.5+20100521/Lib/distutils/command/build.py
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Lib/distutils/command/build.py	2010-05-21 15:47:17.380709707 +0200
++++ python2.6-2.6.5+20100521/Lib/distutils/command/build.py	2010-05-21 15:47:38.251711950 +0200
+@@ -95,7 +95,8 @@
+         # 'lib.<plat>' under the base build directory.  We only use one of
+         # them for a given distribution, though --
+         if self.build_purelib is None:
+-            self.build_purelib = os.path.join(self.build_base, 'lib')
++            self.build_purelib = os.path.join(self.build_base,
++                                              'lib' + plat_specifier)
+         if self.build_platlib is None:
+             self.build_platlib = os.path.join(self.build_base,
+                                               'lib' + plat_specifier)
+Index: python2.6-2.6.5+20100521/Lib/distutils/sysconfig.py
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Lib/distutils/sysconfig.py	2010-05-21 15:47:17.400709947 +0200
++++ python2.6-2.6.5+20100521/Lib/distutils/sysconfig.py	2010-05-21 15:47:38.251711950 +0200
+@@ -85,7 +85,8 @@
+                 # Include is located in the srcdir
+                 inc_dir = os.path.join(srcdir, "Include")
+             return inc_dir
+-        return os.path.join(prefix, "include", "python" + get_python_version())
++        return os.path.join(prefix, "include",
++                            "python" + get_python_version() + (sys.pydebug and '_d' or ''))
+     elif os.name == "nt":
+         return os.path.join(prefix, "include")
+     elif os.name == "mac":
+@@ -233,7 +234,7 @@
+     if python_build:
+         return os.path.join(os.path.dirname(sys.executable), "Makefile")
+     lib_dir = get_python_lib(plat_specific=1, standard_lib=1)
+-    return os.path.join(lib_dir, "config", "Makefile")
++    return os.path.join(lib_dir, "config" + (sys.pydebug and "_d" or ""), "Makefile")
+ 
+ 
+ def parse_config_h(fp, g=None):
+Index: python2.6-2.6.5+20100521/Makefile.pre.in
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Makefile.pre.in	2010-05-21 15:47:17.428709806 +0200
++++ python2.6-2.6.5+20100521/Makefile.pre.in	2010-05-21 15:47:38.263712290 +0200
+@@ -96,8 +96,8 @@
+ # Detailed destination directories
+ BINLIBDEST=	$(LIBDIR)/python$(VERSION)
+ LIBDEST=	$(SCRIPTDIR)/python$(VERSION)
+-INCLUDEPY=	$(INCLUDEDIR)/python$(VERSION)
+-CONFINCLUDEPY=	$(CONFINCLUDEDIR)/python$(VERSION)
++INCLUDEPY=	$(INCLUDEDIR)/python$(VERSION)$(DEBUG_EXT)
++CONFINCLUDEPY=	$(CONFINCLUDEDIR)/python$(VERSION)$(DEBUG_EXT)
+ LIBP=		$(LIBDIR)/python$(VERSION)
+ 
+ # Symbols used for using shared libraries
+@@ -110,6 +110,8 @@
+ EXE=		@EXEEXT@
+ BUILDEXE=	@BUILDEXEEXT@
+ 
++DEBUG_EXT=	@DEBUG_EXT@
++
+ # Short name and location for Mac OS X Python framework
+ UNIVERSALSDK=@UNIVERSALSDK@
+ PYTHONFRAMEWORK=	@PYTHONFRAMEWORK@
+@@ -410,7 +412,7 @@
+ 	$(AR) cr $@ $(MODOBJS)
+ 	$(RANLIB) $@
+ 
+-libpython$(VERSION).so: $(LIBRARY_OBJS)
++libpython$(VERSION)$(DEBUG_EXT).so: $(LIBRARY_OBJS)
+ 	if test $(INSTSONAME) != $(LDLIBRARY); then \
+ 		$(LDSHARED) $(LDFLAGS) -Wl,-h$(INSTSONAME) -o $(INSTSONAME) $(LIBRARY_OBJS) $(MODLIBS) $(SHLIBS) $(LIBC) $(LIBM) $(LDLAST); \
+ 		$(LN) -f $(INSTSONAME) $@; \
+@@ -934,8 +936,8 @@
+ 	$(INSTALL_DATA) pyconfig.h $(DESTDIR)$(CONFINCLUDEPY)/pyconfig.h
+ 
+ # Install the library and miscellaneous stuff needed for extending/embedding
+-# This goes into $(exec_prefix)
+-LIBPL=		$(LIBP)/config
++# This goes into $(exec_prefix)$(DEBUG_EXT)
++LIBPL=		$(LIBP)/config$(DEBUG_EXT)
+ libainstall:	all
+ 	@for i in $(LIBDIR) $(LIBP) $(LIBPL); \
+ 	do \
+Index: python2.6-2.6.5+20100521/Misc/python-config.in
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Misc/python-config.in	2010-05-21 15:47:17.468709863 +0200
++++ python2.6-2.6.5+20100521/Misc/python-config.in	2010-05-21 15:47:38.267711821 +0200
+@@ -44,7 +44,7 @@
+ 
+ elif opt in ('--libs', '--ldflags'):
+     libs = getvar('LIBS').split() + getvar('SYSLIBS').split()
+-    libs.append('-lpython'+pyver)
++    libs.append('-lpython' + pyver + (sys.pydebug and "_d" or ""))
+     # add the prefix/lib/pythonX.Y/config dir, but only if there is no
+     # shared library in prefix/lib/.
+     if opt == '--ldflags' and not getvar('Py_ENABLE_SHARED'):
+Index: python2.6-2.6.5+20100521/Python/dynload_shlib.c
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Python/dynload_shlib.c	2010-05-21 15:47:17.359710249 +0200
++++ python2.6-2.6.5+20100521/Python/dynload_shlib.c	2010-05-21 15:48:51.051768804 +0200
+@@ -46,6 +46,10 @@
+     {"module.exe", "rb", C_EXTENSION},
+     {"MODULE.EXE", "rb", C_EXTENSION},
+ #else
++#ifdef Py_DEBUG
++    {"_d.so", "rb", C_EXTENSION},
++    {"module_d.so", "rb", C_EXTENSION},
++#endif
+     {".so", "rb", C_EXTENSION},
+     {"module.so", "rb", C_EXTENSION},
+ #endif
+Index: python2.6-2.6.5+20100521/Python/sysmodule.c
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Python/sysmodule.c	2010-05-21 15:47:17.331739651 +0200
++++ python2.6-2.6.5+20100521/Python/sysmodule.c	2010-05-21 15:47:38.247711581 +0200
+@@ -1436,6 +1436,12 @@
+     FlagsType.tp_init = NULL;
+     FlagsType.tp_new = NULL;
+ 
++#ifdef Py_DEBUG
++	PyDict_SetItemString(sysdict, "pydebug", Py_True);
++#else
++	PyDict_SetItemString(sysdict, "pydebug", Py_False);
++#endif
++
+ #undef SET_SYS_FROM_STRING
+     if (PyErr_Occurred())
+         return NULL;
+Index: python2.6-2.6.5+20100521/configure.in
+===================================================================
+--- python2.6-2.6.5+20100521.orig/configure.in	2010-05-21 15:47:17.448709904 +0200
++++ python2.6-2.6.5+20100521/configure.in	2010-05-21 15:47:38.267711821 +0200
+@@ -618,7 +618,7 @@
+ AC_MSG_CHECKING(LIBRARY)
+ if test -z "$LIBRARY"
+ then
+-	LIBRARY='libpython$(VERSION).a'
++	LIBRARY='libpython$(VERSION)$(DEBUG_EXT).a'
+ fi
+ AC_MSG_RESULT($LIBRARY)
+ 
+@@ -746,8 +746,8 @@
+ 	  INSTSONAME="$LDLIBRARY".$SOVERSION
+           ;;
+     Linux*|GNU*|NetBSD*|FreeBSD*|DragonFly*)
+-	  LDLIBRARY='libpython$(VERSION).so'
+-	  BLDLIBRARY='-L. -lpython$(VERSION)'
++	  LDLIBRARY='libpython$(VERSION)$(DEBUG_EXT).so'
++	  BLDLIBRARY='-L. -lpython$(VERSION)$(DEBUG_EXT)'
+ 	  RUNSHARED=LD_LIBRARY_PATH=`pwd`:${LD_LIBRARY_PATH}
+ 	  case $ac_sys_system in
+ 	      FreeBSD*)
+@@ -845,6 +845,12 @@
+ fi],
+ [AC_MSG_RESULT(no)])
+ 
++if test "$Py_DEBUG" = 'true'
++then
++	DEBUG_EXT=_d
++fi
++AC_SUBST(DEBUG_EXT)
++
+ # XXX Shouldn't the code above that fiddles with BASECFLAGS and OPT be
+ # merged with this chunk of code?
+ 
+@@ -1738,7 +1744,7 @@
+ 		esac
+ 		;;
+ 	CYGWIN*)   SO=.dll;;
+-	*)	   SO=.so;;
++	*)	   SO=$DEBUG_EXT.so;;
+ 	esac
+ else
+ 	# this might also be a termcap variable, see #610332

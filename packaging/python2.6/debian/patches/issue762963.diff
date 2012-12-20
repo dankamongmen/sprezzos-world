@@ -1,0 +1,69 @@
+# DP: Fix issue #762963, python loses current timezone.
+
+Index: python2.6-2.6.5+20100521/Lib/test/test_time.py
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Lib/test/test_time.py	2010-05-21 16:20:32.980725082 +0200
++++ python2.6-2.6.5+20100521/Lib/test/test_time.py	2010-05-21 16:20:33.004709833 +0200
+@@ -1,4 +1,5 @@
+ from test import test_support
++from os import environ
+ import time
+ import unittest
+ 
+@@ -218,6 +219,37 @@
+         t1 = time.mktime(lt1)
+         self.assert_(0 <= (t1-t0) < 0.2)
+ 
++    # Check for problems with tm_gmtoff in struct time. These can bite us
++    # on BSD-derived libc's. The primary (only?) sympton is to break the
++    # strftime %z format.
++    def test_tm_gmtoff1(self):
++        # The %z format is not guaranteed to be supported by the libc
++        # strftime(), but strftime(fmt) is documented to work the same as
++        # as strftime(fmt, localtime()) in all cases.
++        self.failUnlessEqual(
++                time.strftime("%z"), time.strftime("%z", time.localtime()))
++
++    @unittest.skipUnless(hasattr(time, "tzset"), "tzset not available")
++    def test_tm_gmtoff2(self):
++        # The %z format is not guaranteed to be supported by the libc
++        # strftime(), but if it is US Eastern timezone should never 
++        # return +0.
++        eastern = "EST+05EDT,M4.1.0,M10.5.0"
++        org_TZ = environ.get("TZ", None)
++        try:
++            environ["TZ"] = eastern
++            time.tzset()
++            self.assertNotEqual(
++                    time.strftime("%z", time.localtime()), "+0000")
++        finally:
++            # Repair TZ environment variable in case any other tests
++            # rely on it.
++            if org_TZ is not None:
++                environ["TZ"] = org_TZ
++            elif "TZ" in environ:
++                del environ["TZ"]
++            time.tzset()
++
+ def test_main():
+     test_support.run_unittest(TimeTestCase)
+ 
+Index: python2.6-2.6.5+20100521/Modules/timemodule.c
+===================================================================
+--- python2.6-2.6.5+20100521.orig/Modules/timemodule.c	2010-05-21 16:20:33.000710163 +0200
++++ python2.6-2.6.5+20100521/Modules/timemodule.c	2010-05-21 16:20:33.008710342 +0200
+@@ -345,6 +345,14 @@
+     int y;
+     memset((void *) p, '\0', sizeof(struct tm));
+ 
++#ifdef HAVE_TM_ZONE
++	/* Use mktime to normalize the struct tm field tm_gmtoff to
++	   the current timezone offset for the benefit of the
++	   BSD-style struct tm's that have it.  Without this we would
++	   lie to these libc's by using a struct tm that says we are
++	   in GMT.  */
++	mktime(p);
++#endif
+     if (!PyArg_Parse(args, "(iiiiiiiii)",
+                      &y,
+                      &p->tm_mon,
