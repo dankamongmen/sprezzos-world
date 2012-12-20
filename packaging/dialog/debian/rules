@@ -1,0 +1,91 @@
+#!/usr/bin/make -f
+
+package = dialog
+docdir = debian/tmp/usr/share/doc/$(package)
+examples = yesno msgbox inputbox checklist menubox menubox1 menubox2 \
+	infobox textbox radiolist gauge gauge2 \
+	msgbox1 msgbox2 inputbox1 inputbox2 inputbox3 calendar timebox \
+	calendar2 fselect2 infobox2 infobox3 infobox4 menubox3 menubox4 \
+	menubox5 password textbox2 timebox2 yesno2 yesno3 \
+	fselect fselect1 inputbox4 inputbox5 \
+	inputmenu1 inputmenu2 inputmenu3 inputmenu4 \
+	checklist-utf8 msgbox4-utf8 inputbox6-utf8 menubox-utf8 msgbox4-eucjp \
+	form1 form2 inputbox7 \
+	calendar-stdout calendar2-stdout gauge0-input-fd \
+	fselect-stdout fselect1-stdout fselect2-stdout \
+	password1 password2 inputmenu-stdout \
+	timebox-stdout timebox2-stdout \
+	menubox10 checklist10 radiolist10 pause \
+	editbox editbox2 editbox-utf8 mixedform mixedform2 mixedgauge \
+	report-button report-edit report-string report-tempfile report-yesno \
+	setup-edit setup-tempfile setup-utf8 setup-vars
+
+CFLAGS := `dpkg-buildflags --get CFLAGS` -fPIC -Wall
+LDFLAGS := `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS := `dpkg-buildflags --get CPPFLAGS`
+
+STRIP = true
+ATRIP = true
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+  CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+else
+  CROSS= --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+  STRIP = strip --remove-section=.comment --remove-section=.note
+  ATRIP = strip --strip-debug
+endif
+
+build:
+	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" \
+		./configure --prefix=/usr \
+		--enable-nls --with-ncursesw --disable-rpath-hack $(CROSS)
+	$(MAKE)
+	touch build
+
+clean:
+	rm -f build
+	[ ! -f makefile ] || $(MAKE) distclean
+	rm -f `find . -name "*~"`
+	rm -rf debian/tmp debian/files* core debian/substvars
+
+binary-indep: build
+
+binary-arch: build
+	rm -rf debian/tmp
+	install -d debian/tmp/DEBIAN $(docdir)/examples
+	cd debian/tmp && install -d usr/bin usr/man/man1 usr/share/perl5
+	$(MAKE) install install-lib DESTDIR=`pwd`/debian/tmp prefix=/usr
+	rm -f debian/tmp/usr/bin/dialog-config
+	cp -p dialog.pl debian/tmp/usr/share/perl5
+	cp -p debian/changelog $(docdir)/changelog.Debian
+	cp -p README CHANGES debian/copyright $(docdir)
+	cd samples && cp -p $(examples) ../$(docdir)/examples
+	chmod 644 $(docdir)/examples/report-*
+	chmod 644 $(docdir)/examples/setup-*
+	chmod -R u+w $(docdir) debian/tmp/usr/lib
+	cd $(docdir) && gzip -9 CHANGES changelog.Debian
+	ln -s CHANGES.gz $(docdir)/changelog.gz
+	gzip -r9 debian/tmp/usr/man
+	cd debian/tmp && mv usr/man usr/share
+	$(ATRIP) debian/tmp/usr/lib/libdialog.a
+	$(STRIP) debian/tmp/usr/bin/dialog
+	dpkg-shlibdeps debian/tmp/usr/bin/dialog
+	dpkg-gencontrol
+	cd debian/tmp && \
+		md5sum `find * -type f ! -regex "DEBIAN/.*"` > DEBIAN/md5sums
+	chown -R 0:0 debian/tmp
+	chmod -R go=rX debian/tmp
+	dpkg --build debian/tmp ..
+
+binary: binary-indep binary-arch
+
+build-arch: build
+
+build-indep: build
+
+.PHONY: binary binary-arch binary-indep build-arch build-indep clean
