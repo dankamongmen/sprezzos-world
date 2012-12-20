@@ -444,6 +444,14 @@ $(LIBACCOUNTSGLIB): $(SPREZZ)/libaccounts-glib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libaccounts-glib-$(libaccounts-glib_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: acpica-unix
+acpica-unix:$(ACPICAUNIX)_$(ARCH).deb
+$(ACPICAUNIX): $(SPREZZ)/acpica-unix/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf acpica-unix_$(acpica-unix_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: aften
 aften:$(AFTEN)_$(ARCH).deb
 $(AFTEN): $(SPREZZ)/aften/debian/changelog
@@ -723,6 +731,14 @@ $(CCLIVE): $(SPREZZ)/cclive/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf cclive-$(cclive_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: cdparanoia
+cdparanoia:$(CDPARANOIA)_$(ARCH).deb
+$(CDPARANOIA): $(SPREZZ)/cdparanoia/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cdparanoia_$(cdparanoia_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libcanberra
 libcanberra:$(LIBCANBERRA)_$(ARCH).deb
@@ -1884,6 +1900,14 @@ $(GRILO): $(SPREZZ)/grilo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf grilo-$(grilo_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gsoap
+gsoap:$(GSOAP)_$(ARCH).deb
+$(GSOAP): $(SPREZZ)/gsoap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gsoap-$(gsoap_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gst-plugins-base
 gst-plugins-base:$(GSTPLUGINSBASE)_$(ARCH).deb
 $(GSTPLUGINSBASE): $(SPREZZ)/gst-plugins-base/debian/changelog
@@ -2451,6 +2475,14 @@ $(LIBICE): $(SPREZZ)/libice/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libICE-$(libice_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libidl
+libidl:$(LIBIDL)_$(ARCH).deb
+$(LIBIDL): $(SPREZZ)/libidl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libIDL-$(libidl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libisoburn
 libisoburn:$(LIBISOBURN)_$(ARCH).deb
@@ -3333,6 +3365,14 @@ $(LIBOGG): $(SPREZZ)/libogg/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libogg-$(libogg_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: libvisual
+libvisual:$(LIBVISUAL)_$(ARCH).deb
+$(LIBVISUAL): $(SPREZZ)/libvisual/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libvisual-$(libvisual_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libvorbis
 libvorbis:$(LIBVORBIS)_$(ARCH).deb
