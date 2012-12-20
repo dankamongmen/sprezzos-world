@@ -1076,6 +1076,14 @@ $(EGLIBC): $(SPREZZ)/eglibc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf glibc-$(eglibc_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: elfutils
+elfutils:$(ELFUTILS)_$(ARCH).deb
+$(ELFUTILS): $(SPREZZ)/elfutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf elfutils-$(elfutils_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: emerillon
 emerillon:$(EMERILLON)_$(ARCH).deb
 $(EMERILLON): $(SPREZZ)/emerillon/debian/changelog
