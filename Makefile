@@ -3742,6 +3742,14 @@ $(PYGOBJECT): $(SPREZZ)/pygobject/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf pygobject-$(pygobject_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: python2.7
+python2.7:$(PYTHON2.7)_$(ARCH).deb
+$(PYTHON2.7): $(SPREZZ)/python2.7/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Python-$(python2.7_UPVER).tgz $(TARARGS) $@
+
 .PHONY: python-coverage
 python-coverage:$(PYTHONCOVERAGE)_$(ARCH).deb
 $(PYTHONCOVERAGE): $(SPREZZ)/python-coverage/debian/changelog
