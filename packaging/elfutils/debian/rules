@@ -1,0 +1,122 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Copyright 2006, Kurt Roeckx <kurt@roeckx.be>
+
+# Based on the sample file from dh-make:
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+        confflags += --build=$(DEB_HOST_GNU_TYPE)
+        make_check = yes
+else
+        confflags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+        make_check = no
+endif
+
+ifneq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+        make_check = no
+endif
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+config.status: configure.ac
+	dh_testdir
+	autoreconf -fis
+	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" \
+		./configure $(confflags) --prefix=/usr \
+		--libdir=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		--enable-maintainer-mode \
+		--program-prefix=eu- --enable-thread-safety
+
+build: build-stamp
+build-stamp:  config.status
+	dh_testdir
+
+	$(MAKE)
+
+ifeq ($(make_check), yes)
+	# Check that those files exist.
+	-ls -l /proc/$$$$/maps
+	-ls -l /proc/$$$$/auxv
+	-ls -l /proc/$$$$/
+	LC_CTYPE=C $(MAKE) check
+endif
+
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f configure version.h
+	rm -f INSTALL aclocal.m4
+	rm -f config/depcomp config/install-sh config/missing config/ylwrap
+	rm -f config/config.guess config/config.sub elfutils.spec
+	rm -rf autom4te.cache
+	rm -f rm Makefile.in backends/Makefile.in config/Makefile.in lib/Makefile.in libasm/Makefile.in libcpu/Makefile.in libdw/Makefile.in libdwfl/Makefile.in libebl/Makefile.in libelf/Makefile.in m4/Makefile.in src/Makefile.in tests/Makefile.in
+	rm -f libdw/known-dwarf.h
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	# Add here commands to install the package into debian/tmp
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	# We do not provide a libebl anymore, use libdw instead.
+	rm debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libebl.a
+	rm debian/tmp/usr/include/elfutils/libebl.h
+
+# Build architecture-independent files here.
+build-indep: build
+binary-indep: build-indep install
+# We have nothing to do.
+
+# Build architecture-dependent files here.
+build-arch: build
+binary-arch: build-arch install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_install --fail-missing --sourcedir=debian/tmp
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dpkg-gensymbols -Pdebian/libdw1/ -plibdw1 -c4
+	dpkg-gensymbols -Pdebian/libasm1/ -plibasm1 -c4
+	dpkg-gensymbols -Pdebian/libelf1/ -plibelf1 -c4
+	dh_makeshlibs -plibelf1 -V "libelf1 (>= 0.132)"
+	dh_makeshlibs -plibasm1 -V "libasm1 (>= 0.132)"
+	dh_makeshlibs -plibdw1 -V "libdw1 (>= 0.138)"
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+maint-unpatch:
+	bash debian/unpatch.sh debian/patches
+
+.PHONY: build clean binary-indep binary-arch binary install maint-unpatch
