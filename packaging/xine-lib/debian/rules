@@ -1,0 +1,264 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+# adapted for xine-lib 2001 by Siggi Langauf
+# rewritten for new package structure December 2006 by Reinhard Tartler
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+BINARY_ANY_PACKAGES=$(shell dh_listpackages -a)
+BINARY_ALL_PACKAGES=$(shell dh_listpackages -i)
+
+DEB_COMPRESS = -- -Zbzip2
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH		?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+  $(error cross compiling is not supported by xine)
+endif
+
+# predefine as empty
+DEB_BUILD_CONFIG_OPTIONS :=
+
+# add if we don't want optimisations
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	DEB_BUILD_CONFIG_OPTIONS += --disable-optimizations
+endif
+
+ifneq (,$(findstring linux,$(DEB_HOST_GNU_TYPE)))
+	DEB_BUILD_CONFIG_OPTIONS += --enable-libv4l
+endif
+
+ifneq (,$(findstring mips,$(DEB_HOST_GNU_TYPE)))
+	DEB_BUILD_CONFIG_OPTIONS += PTHREAD_LIBS="-lpthread"
+endif
+
+# taken from the qemu package
+# Support multiple makes at once
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+NJOBS := $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+else
+NJOBS := 1
+endif
+
+# set configure flags here
+CONFIGURE_FLAGS := \
+	--build $(DEB_BUILD_GNU_TYPE) \
+	--host $(DEB_HOST_GNU_TYPE) \
+	--prefix=/usr \
+	--mandir=\$${prefix}/share/man \
+	--with-external-libmad \
+	--with-external-a52dec \
+	--with-external-libdts \
+	--with-external-ffmpeg \
+	--with-external-libmpcdec \
+	--with-external-dvdnav \
+	--enable-ipv6 \
+	--with-jack \
+	--with-pulseaudio \
+	--with-libflac \
+	--with-wavpack \
+	--with-freetype \
+	--disable-vidix \
+	--enable-directfb \
+	--disable-nosefart \
+	$(DEB_BUILD_CONFIG_OPTIONS) \
+	$(DEB_EXTRA_CONFIG_FLAGS) \
+	LIBMODPLUG_LIBS="$(filter-out -lstdc++ -lm,$(shell pkg-config --libs libmodplug))" \
+	$(shell dpkg-buildflags --export=configure)
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	./configure $(CONFIGURE_FLAGS)
+	touch $@
+
+build: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE) -j $(NJOBS)
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean build-stamp configure-stamp install-stamp po/*.gmo \
+	    po/stamp-po binary-*-stamp all-files-stamp \
+	    generate-arch-files-stamp \
+	    debian/libxine1-bin.install.i386 \
+	    debian/libxine1*.install.kfreebsd* \
+	    debian/libxine1*.install.hurd* \
+	    debian/dh_xine \
+	    config.h config.log \
+	    a.out # XXX fix the configure script to not create this
+
+install: build install-stamp
+install-stamp: generate-arch-files-stamp debian/dh_xine
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp \
+	    LIBRARY_PATH=$(CURDIR)/debian/tmp/usr/lib
+	-(cd debian/tmp && find .) | sort -u | sed -e 's%doc/xine-lib%doc/libxine-dev%' > $@
+
+binary-common: build install
+	@echo working on package $(DH_PACKAGE)
+	dh_testdir
+	dh_testroot
+	dh_install
+	test ! -f debian/overrides/$(DH_PACKAGE) || \
+	  install -Dm644 \
+	       debian/overrides/$(DH_PACKAGE) \
+	       debian/$(DH_PACKAGE)/usr/share/lintian/overrides/$(DH_PACKAGE)
+	# mostly, we symlink docs -> libxine1-bin
+	set -e; case "$(DH_PACKAGE)" in \
+	    libxine1-bin|libxine-dev$(subst lib,|lib,$(BINARY_ALL_PACKAGES))) \
+	      dh_installdocs; \
+	      dh_installchangelogs -k ChangeLog; \
+	      ;; \
+	    *) \
+	      mkdir -p debian/$(DH_PACKAGE)/usr/share/doc; \
+	      ln -fs libxine1-bin \
+	         debian/$(DH_PACKAGE)/usr/share/doc/$(DH_PACKAGE); \
+	      ;; \
+	  esac
+	dh_installman
+	dh_link
+	dh_strip --dbg-package=libxine1-dbg
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs -V 'libxine1 (>= 1.1.8)'
+	dh_installdeb
+	dh_shlibdeps -ldebian/libxine1-bin/usr/lib
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb		$(DEB_COMPRESS)
+
+# special rules for the -dbg package.
+binary-libxine1-dbg: build install
+	@echo working on $@
+	dh_testdir		-plibxine1-dbg
+	dh_testroot		-plibxine1-dbg
+	dh_install 		-plibxine1-dbg
+	mkdir -p debian/libxine1-dbg/usr/share/doc
+	ln -fs libxine1-bin debian/libxine1-dbg/usr/share/doc/libxine1-dbg
+	dh_link			-plibxine1-dbg
+	dh_compress 		-plibxine1-dbg
+	dh_fixperms 		-plibxine1-dbg
+	dh_installdeb 		-plibxine1-dbg
+	dh_shlibdeps 		-plibxine1-dbg
+	dh_gencontrol 		-plibxine1-dbg
+	dh_md5sums 		-plibxine1-dbg
+	dh_builddeb 		-plibxine1-dbg $(DEB_COMPRESS)
+
+# Build architecture independant packages using the common target
+binary-indep: build install
+	set -e; for i in `dh_listpackages -i`; do \
+		$(MAKE) -f debian/rules \
+	             DH_OPTIONS=-p$$i DH_PACKAGE=$$i binary-common; \
+	done
+#	-(cd debian/libxine-dev && find .) | grep -v DEBIAN > $@-stamp
+
+# Build architecture dependant packages using the common targets
+binary-arch: build install binary-arch-stamp diff-installed-files
+binary-arch-stamp: $(addprefix binary-, $(BINARY_ANY_PACKAGES))
+	-cat binary-*-stamp | sort -u > $@
+
+diff-installed-files: install-stamp binary-arch-stamp
+	@echo "Comparing installed files from xine-lib Makefiles" \
+	      "with files installed in packages:"
+	-diff -u $^
+
+generate-arch-files-stamp: \
+		debian/libxine1-bin.install.i386 \
+		debian/libxine1-bin.install.kfreebsd-i386 \
+		debian/libxine1-bin.install.hurd-i386 \
+		debian/libxine1-x.install.kfreebsd-i386 \
+		debian/libxine1-x.install.kfreebsd-amd64 \
+		debian/libxine1-x.install.hurd-i386 \
+		debian/libxine1-misc-plugins.install.kfreebsd-i386 \
+		debian/libxine1-misc-plugins.install.kfreebsd-amd64 \
+		debian/libxine1-misc-plugins.install.hurd-i386 \
+		debian/libxine1-console.install.kfreebsd-i386 \
+		debian/libxine1-console.install.kfreebsd-amd64 \
+		debian/libxine1-console.install.hurd-i386
+	touch $@
+
+# i386 specific plugins are also available for kfreebsd-i386
+debian/libxine1-bin.install.i386: \
+		debian/libxine1-bin.install \
+		debian/libxine1-bin.install.i386.specific
+	cat $^ >$@
+
+debian/libxine1-bin.install.kfreebsd-i386: debian/libxine1-bin.install.i386
+	ln -f $^ $@
+
+debian/libxine1-bin.install.hurd-i386: debian/libxine1-bin.install.i386
+	ln -f $^ $@
+
+# create install files for Debian GNU/kFreeBSD i386/amd64 by dropping
+# everything which is not available on those architectures.
+debian/libxine1-x.install.kfreebsd-i386: debian/libxine1-x.install
+	grep -v -e dxr3 -e syncfb $^ >$@
+
+debian/libxine1-misc-plugins.install.kfreebsd-i386: debian/libxine1-misc-plugins.install
+	grep -v -e dxr3 -e pvr -e v4l -e alsa $^ >$@
+
+debian/libxine1-console.install.kfreebsd-i386: debian/libxine1-console.install
+	grep -v -e out_fb $^ >$@
+
+# create install files for Debian GNU/Hurd i386 by dropping
+# everything which is not available on those architectures.
+debian/libxine1-x.install.hurd-i386: debian/libxine1-x.install
+	grep -v -e dxr3 -e syncfb $^ >$@
+
+debian/libxine1-misc-plugins.install.hurd-i386: debian/libxine1-misc-plugins.install
+	grep -v -e dxr3 -e pvr -e v4l -e alsa -e dvb -e vcdo $^ >$@
+
+debian/libxine1-console.install.hurd-i386: debian/libxine1-console.install
+	grep -v -e out_fb $^ >$@
+
+debian/libxine1-%-amd64: debian/libxine1-%-i386
+	ln -f $^ $@
+
+
+# Any other binary targets build just one binary package at a time.
+binary-%: build install
+	make -f debian/rules binary-common DH_OPTIONS=-p$* DH_PACKAGE=$*
+	-(cd debian/$* && find .) | grep -v DEBIAN > $@-stamp
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary-common binary install configure diff-installed-files
+
+
+# Misc stuff.
+debian/dh_xine: debian/dh_xine.in
+	sed -e's/@VERSION@/'$(shell dpkg-parsechangelog -c1 | sed -e '/^Version:/! d; s/^.* //; s/-[^-]*$$//')'/' $< >$@
+
+
+#run only by hand!
+ifneq (,$(wildcard /usr/share/misc/config.guess))
+config.guess:
+	@echo updateing config.guess
+	cp -f /usr/share/misc/config.guess config.guess
+endif
+
+ifneq (,$(wildcard /usr/share/misc/config.guess))
+config.sub: /usr/share/misc/config.sub
+	@echo updateing config.sub and config.guess
+	cp -f /usr/share/misc/config.sub config.sub
+endif
+
+mq:
+	mkdir -p .git/patches
+	ln -fs ../debian/patches .hg/patches
+	touch debian/patches/status
+	QUILT_PATCHES=debian/patches quilt pop -a
+                                
