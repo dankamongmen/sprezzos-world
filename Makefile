@@ -3742,6 +3742,14 @@ $(PYGOBJECT): $(SPREZZ)/pygobject/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf pygobject-$(pygobject_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: python2.6
+python2.6:$(PYTHON2.6)_$(ARCH).deb
+$(PYTHON2.6): $(SPREZZ)/python2.6/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Python-$(python2.6_UPVER).tgz $(TARARGS) $@
+
 .PHONY: python2.7
 python2.7:$(PYTHON2.7)_$(ARCH).deb
 $(PYTHON2.7): $(SPREZZ)/python2.7/debian/changelog
