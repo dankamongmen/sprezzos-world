@@ -3382,6 +3382,14 @@ $(LIBVISUAL): $(SPREZZ)/libvisual/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libvisual-$(libvisual_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libvisual-plugins
+libvisual-plugins:$(LIBVISUALPLUGINS)_$(ARCH).deb
+$(LIBVISUALPLUGINS): $(SPREZZ)/libvisual-plugins/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libvisual-plugins-$(libvisual-plugins_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libvorbis
 libvorbis:$(LIBVORBIS)_$(ARCH).deb
 $(LIBVORBIS): $(SPREZZ)/libvorbis/debian/changelog
