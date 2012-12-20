@@ -415,6 +415,14 @@ $(ACETONEISO): $(SPREZZ)/acetoneiso/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf acetoneiso_$(acetoneiso_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: accerciser
+accerciser:$(ACCERCISER)_$(ARCH).deb
+$(ACCERCISER): $(SPREZZ)/accerciser/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf accerciser-$(accerciser_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: accountsservice
 accountsservice:$(ACCOUNTSSERVICE)_$(ARCH).deb
 $(ACCOUNTSSERVICE): $(SPREZZ)/accountsservice/debian/changelog
