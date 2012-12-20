@@ -932,6 +932,14 @@ $(CONPALETTE): $(SPREZZ)/conpalette/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf conpalette_$(conpalette_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: consolekit
+consolekit:$(CONSOLEKIT)_$(ARCH).deb
+$(CONSOLEKIT): $(SPREZZ)/consolekit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf ConsoleKit-$(consolekit_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: cups
 cups:$(CUPS)_$(ARCH).deb
 $(CUPS): $(SPREZZ)/cups/debian/changelog
@@ -1035,6 +1043,14 @@ $(DIA): $(SPREZZ)/dia/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf dia-$(dia_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: dialog
+dialog:$(DIALOG)_$(ARCH).deb
+$(DIALOG): $(SPREZZ)/dialog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dialog-$(dialog_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: djmount
 djmount:$(DJMOUNT)_$(ARCH).deb
