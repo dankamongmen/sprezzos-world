@@ -2028,6 +2028,22 @@ $(GUPNP): $(SPREZZ)/gupnp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gupnp-$(gupnp_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gupnp-av
+gupnp-av:$(GUPNPAV)_$(ARCH).deb
+$(GUPNPAV): $(SPREZZ)/gupnp-av/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gupnp-av-$(gupnp-av_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gupnp-dlna
+gupnp-dlna:$(GUPNPDLNA)_$(ARCH).deb
+$(GUPNPDLNA): $(SPREZZ)/gupnp-dlna/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gupnp-dlna-$(gupnp-dlna_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: guvcview
 guvcview:$(GUVCVIEW)_$(ARCH).deb
 $(GUVCVIEW): $(SPREZZ)/guvcview/debian/changelog
