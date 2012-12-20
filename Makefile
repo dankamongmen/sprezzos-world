@@ -2524,6 +2524,14 @@ $(LIBIDL): $(SPREZZ)/libidl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libIDL-$(libidl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libidn11
+libidn11:$(LIBIDN11)_$(ARCH).deb
+$(LIBIDN11): $(SPREZZ)/libidn11/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libidn-$(libidn11_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libisoburn
 libisoburn:$(LIBISOBURN)_$(ARCH).deb
 $(LIBISOBURN): $(SPREZZ)/libisoburn/debian/changelog
@@ -2539,6 +2547,14 @@ $(LIBISOFS): $(SPREZZ)/libisofs/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libisofs-$(libisofs_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: liblockfile
+liblockfile:$(LIBLOCKFILE)_$(ARCH).deb
+$(LIBLOCKFILE): $(SPREZZ)/liblockfile/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liblockfile-$(liblockfile_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: upower
 upower:$(UPOWER)_$(ARCH).deb
