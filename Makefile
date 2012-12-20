@@ -444,6 +444,14 @@ $(LIBACCOUNTSGLIB): $(SPREZZ)/libaccounts-glib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libaccounts-glib-$(libaccounts-glib_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: acpid
+acpid:$(ACPID)_$(ARCH).deb
+$(ACPID): $(SPREZZ)/acpid/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf acpid-$(acpid_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: acpica-unix
 acpica-unix:$(ACPICAUNIX)_$(ARCH).deb
 $(ACPICAUNIX): $(SPREZZ)/acpica-unix/debian/changelog
@@ -3323,6 +3331,14 @@ $(NCURSES): $(SPREZZ)/ncurses/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ncurses_$(ncurses_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: nemo
+nemo:$(NEMO)_$(ARCH).deb
+$(NEMO): $(SPREZZ)/nemo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nemo_$(nemo_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: neon
 neon:$(NEON)_$(ARCH).deb
