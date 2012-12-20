@@ -1620,6 +1620,14 @@ $(LIBGLADE2): $(SPREZZ)/libglade2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libglade-$(libglade2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgnome
+libgnome:$(LIBGNOME)_$(ARCH).deb
+$(LIBGNOME): $(SPREZZ)/libgnome/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libgnome-$(libgnome_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libgnomecanvas
 libgnomecanvas:$(LIBGNOMECANVAS)_$(ARCH).deb
 $(LIBGNOMECANVAS): $(SPREZZ)/libgnomecanvas/debian/changelog
@@ -1851,6 +1859,14 @@ $(GNOMECATALOG): $(SPREZZ)/gnomecatalog/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gnomecatalog_$(gnomecatalog_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: gnucash
+gnucash:$(GNUCASH)_$(ARCH).deb
+$(GNUCASH): $(SPREZZ)/gnucash/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gnucash-$(gnucash_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: gnupg
 gnupg:$(GNUPG)_$(ARCH).deb
@@ -2483,6 +2499,14 @@ $(LIBEV): $(SPREZZ)/libev/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libev-$(libev_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libevent
+libevent:$(LIBEVENT)_$(ARCH).deb
+$(LIBEVENT): $(SPREZZ)/libevent/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libevent-$(libevent_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libedit
 libedit:$(LIBEDIT)_$(ARCH).deb
@@ -4014,6 +4038,14 @@ $(SCREENLETS): $(SPREZZ)/screenlets/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf screenlets-$(screenlets_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: seahorse
+seahorse:$(SEAHORSE)_$(ARCH).deb
+$(SEAHORSE): $(SPREZZ)/seahorse/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf seahorse-$(seahorse_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: shadow
 shadow:$(SHADOW)_$(ARCH).deb
 $(SHADOW): $(SPREZZ)/shadow/debian/changelog
@@ -4339,8 +4371,8 @@ wireless-tools:$(WIRELESSTOOLS)_$(ARCH).deb
 $(WIRELESSTOOLS): $(SPREZZ)/wireless-tools/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	wget http://www.hpl.hp.com/personal/Jean_Tourrilhes/Linux/wireless_tools.30.pre9.tar.gz
-	tar xzvf wireless-tools-$(wireless-tools_UPVER).tar.gz $(TARARGS) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf wireless-tools_$(wireless-tools_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: wireshark
 wireshark:$(WIRESHARK)_$(ARCH).deb
