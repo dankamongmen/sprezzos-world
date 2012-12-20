@@ -524,6 +524,14 @@ $(ARGYLL): $(SPREZZ)/argyll/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf Argyll_V$(argyll_UPVER)_src.tar.gz $(TARARGS) $@
 
+.PHONY: arpwatch
+arpwatch:$(ARPWATCH)_$(ARCH).deb
+$(ARPWATCH): $(SPREZZ)/arpwatch/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf arpwatch-$(arpwatch_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: audit
 audit:$(AUDIT)_$(ARCH).deb
 $(AUDIT): $(SPREZZ)/audit/debian/changelog
@@ -1507,6 +1515,14 @@ $(GNOMEBOXES): $(SPREZZ)/gnome-boxes/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-boxes_$(gnome-boxes_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-colors
+gnome-colors:$(GNOMECOLORS)_$(ARCH).deb
+$(GNOMECOLORS): $(SPREZZ)/gnome-colors/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-colors-$(gnome-colors_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gnome-color-manager
 gnome-color-manager:$(GNOMECOLORMANAGER)_$(ARCH).deb
