@@ -2204,6 +2204,14 @@ $(LIBPAMSSH): $(SPREZZ)/libpam-ssh/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pam_ssh-$(libpam-ssh_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libproxy
+libproxy:$(LIBPROXY)_$(ARCH).deb
+$(LIBPROXY): $(SPREZZ)/libproxy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libproxy-$(libproxy_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: lynx
 lynx:$(LYNX)_$(ARCH).deb
 $(LYNX): $(SPREZZ)/lynx/debian/changelog
@@ -2619,6 +2627,14 @@ $(LIBTASN): $(SPREZZ)/libtasn/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtasn1-$(libtasn_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libtar
+libtar:$(LIBTAR)_$(ARCH).deb
+$(LIBTAR): $(SPREZZ)/libtar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtar-$(libtar_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libtirpc
 libtirpc:$(LIBTIRPC)_$(ARCH).deb
@@ -3091,6 +3107,14 @@ $(LIBMPDCLIENT): $(SPREZZ)/libmpdclient/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmpdclient-$(libmpdclient_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libmtp
+libmtp:$(LIBMTP)_$(ARCH).deb
+$(LIBMTP): $(SPREZZ)/libmtp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmtp-$(libmtp_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: muffin
 muffin:$(MUFFIN)_$(ARCH).deb
