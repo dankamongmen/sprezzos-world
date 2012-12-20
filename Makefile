@@ -1252,6 +1252,14 @@ $(FREEGLUT): $(SPREZZ)/freeglut/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf freeglut_$(freeglut_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fribidi
+fribidi:$(FRIBIDI)_$(ARCH).deb
+$(FRIBIDI): $(SPREZZ)/fribidi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf fribidi-$(fribidi_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: fuse-umfuse-fat
 fuse-umfuse-fat:$(FUSEUMFUSEFAT)_$(ARCH).deb
 $(FUSEUMFUSEFAT): $(SPREZZ)/fuse-umfuse-fat/debian/changelog
