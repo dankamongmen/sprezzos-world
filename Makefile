@@ -20,6 +20,9 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 
 -include $(subst $(SPREZZ),sprezzos-world/,$(PACKAGES))
 
+include worlds/kde.mk
+include worlds/xfce.mk
+
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
