@@ -1,0 +1,86 @@
+#!/usr/bin/make -f
+
+LDFLAGS+=-Wl,--as-needed
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_CONFIGURE_EXTRA_FLAGS := --enable-static=no
+ifneq (,$(findstring libmtp-doc, $(shell dh_listpackages)))
+DEB_CONFIGURE_EXTRA_FLAGS += --enable-doxygen
+endif
+
+DB2MAN = /usr/share/sgml/docbook/stylesheet/xsl/nwalsh/manpages/docbook.xsl
+XP = xsltproc -''-nonet
+SOVERSION = 9
+SUBSTFILES = debian/libmtp$(SOVERSION).docs	\
+	debian/libmtp$(SOVERSION).install	\
+	debian/libmtp$(SOVERSION).preinst	\
+	debian/libmtp$(SOVERSION).postinst
+UDEVFILES = 20-libmtp$(SOVERSION).fdi
+
+debdir = $(CURDIR)/debian
+debver = $(shell perl -ne '/([\d.-]+)/;print "$$1"; last' \
+		debian/changelog)
+
+# Replace SOVERSION string in debian/ files
+libmtp$(SOVERSION).%: libmtp.%.in
+	sed "s/@SOVERSION@/$(SOVERSION)/g" < $<	> $@
+debian/%: debian/%.in
+	sed "s/@SOVERSION@/$(SOVERSION)/g" < $<	> $@
+
+mtp-tools.1: debian/mtp-tools.dbk
+	# Build and install the man page for mtp-tools
+	$(XP) $(DB2MAN) $<
+
+%:
+	dh $@ --with autotools_dev
+
+override_dh_auto_configure: $(SUBSTFILES) debian/control
+	# Save file modified by configure
+	test -e src/gphoto2-endian.h-orig \
+		|| cp src/gphoto2-endian.h src/gphoto2-endian.h-orig
+	dh_auto_configure -- $(DEB_CONFIGURE_EXTRA_FLAGS)
+
+override_dh_auto_clean:
+	rm -f mtp-tools.1 $(SUBSTFILES) $(UDEVFILES)
+	# Restore original file
+	test ! -e src/gphoto2-endian.h-orig \
+		|| mv src/gphoto2-endian.h-orig src/gphoto2-endian.h
+	dh_auto_clean
+
+override_dh_auto_build: mtp-tools.1
+	dh_auto_build
+ifneq (,$(findstring libmtp-common, $(shell dh_listpackages)))
+	# Fix mode of udev lifting script
+	chmod +x libmtp.sh
+	# Rename udev files
+	for f in $(UDEVFILES) ; do				\
+		cp libmtp.$${f#*.} $$f ;			\
+	done
+endif
+
+override_dh_install:
+ifneq (,$(findstring libmtp-doc, $(shell dh_listpackages)))
+	# Rename some man files and remove others
+	chmod +x debian/sanitize-manpage.pl
+	( cd doc/man/man3/ ;						\
+	  rm -f _* ;							\
+	  for i in $$(ls *.3 | grep -v ^mtp_) ; do			\
+		../../../debian/sanitize-manpage.pl < $$i > mtp_$$i ;	\
+	  done )
+endif
+	dh_install
+
+override_dh_installdeb:
+ifeq (linux,$(DEB_HOST_ARCH_OS))
+	echo "udev=udev" >> debian/libmtp$(SOVERSION).substvars
+endif
+	# Remove rpath from the library
+	chrpath --delete \
+		$(debdir)/libmtp$(SOVERSION)/usr/lib/$(DEB_HOST_MULTIARCH)/libmtp.so.*.*
+	# Remove rpath from programs
+	chrpath --delete $(debdir)/mtp-tools/usr/bin/*
+	dh_installdeb
+
+override_dh_strip:
+	dh_strip -plibmtp$(SOVERSION) --dbg-package=libmtp-dbg
+	dh_strip --remaining-packages
