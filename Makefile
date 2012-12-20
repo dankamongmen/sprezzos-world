@@ -2148,6 +2148,14 @@ $(KBD): $(SPREZZ)/kbd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf kbd-$(kbd_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: krb
+krb:$(KRB)_$(ARCH).deb
+$(KRB): $(SPREZZ)/krb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xvf krb5-$(krb_UPVER)-signed.tar $(TARARGS) $@
+
 .PHONY: keyutils
 keyutils:$(KEYUTILS)_$(ARCH).deb
 $(KEYUTILS): $(SPREZZ)/keyutils/debian/changelog
@@ -2219,6 +2227,14 @@ $(LYNX): $(SPREZZ)/lynx/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lynx-$(lynx_UPVER).tar.xg $(TARARGS) $@
+
+.PHONY: e2fsprogs
+e2fsprogs:$(E2FSPROGS)_$(ARCH).deb
+$(E2FSPROGS): $(SPREZZ)/e2fsprogs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf e2fsprogs-$(e2fsprogs_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: earthorca
 earthorca:$(EARTHORCA)_$(ARCH).deb
