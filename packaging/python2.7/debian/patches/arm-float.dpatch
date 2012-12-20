@@ -1,0 +1,119 @@
+#! /bin/sh -e
+
+# DP: Support mixed-endian IEEE floating point, as found in the ARM old-ABI.
+
+dir=
+if [ $# -eq 3 -a "$2" = '-d' ]; then
+    pdir="-d $3"
+    dir="$3/"
+elif [ $# -ne 1 ]; then
+    echo >&2 "usage: `basename $0`: -patch|-unpatch [-d <srcdir>]"
+    exit 1
+fi
+case "$1" in
+    -patch)
+        patch $pdir -f --no-backup-if-mismatch -p0 < $0
+        ;;
+    -unpatch)
+        patch $pdir -f --no-backup-if-mismatch -R -p0 < $0
+        ;;
+    *)
+	echo >&2 "usage: `basename $0`: -patch|-unpatch [-d <srcdir>]"
+        exit 1
+esac
+exit 0
+
+--- Objects/floatobject.c.orig	2006-05-25 10:53:30.000000000 -0500
++++ Objects/floatobject.c	2007-07-27 06:43:15.000000000 -0500
+@@ -982,7 +982,7 @@
+ /* this is for the benefit of the pack/unpack routines below */
+ 
+ typedef enum {
+-	unknown_format, ieee_big_endian_format, ieee_little_endian_format
++	unknown_format, ieee_big_endian_format, ieee_little_endian_format, ieee_mixed_endian_format
+ } float_format_type;
+ 
+ static float_format_type double_format, float_format;
+@@ -1021,6 +1021,8 @@
+ 		return PyString_FromString("IEEE, little-endian");
+ 	case ieee_big_endian_format:
+ 		return PyString_FromString("IEEE, big-endian");
++	case ieee_mixed_endian_format:
++		return PyString_FromString("IEEE, mixed-endian");
+ 	default:
+ 		Py_FatalError("insane float_format or double_format");
+ 		return NULL;
+@@ -1073,11 +1075,14 @@
+ 	else if (strcmp(format, "IEEE, big-endian") == 0) {
+ 		f = ieee_big_endian_format;
+ 	}
++	else if (strcmp(format, "IEEE, mixed-endian") == 0) {
++		f = ieee_mixed_endian_format;
++	}
+ 	else {
+ 		PyErr_SetString(PyExc_ValueError,
+ 				"__setformat__() argument 2 must be "
+-				"'unknown', 'IEEE, little-endian' or "
+-				"'IEEE, big-endian'");
++				"'unknown', 'IEEE, little-endian', "
++				"'IEEE, big-endian' or 'IEEE, mixed-endian'");
+ 		return NULL;
+ 
+ 	}
+@@ -1230,6 +1235,8 @@
+ 			detected_double_format = ieee_big_endian_format;
+ 		else if (memcmp(&x, "\x05\x04\x03\x02\x01\xff\x3f\x43", 8) == 0)
+ 			detected_double_format = ieee_little_endian_format;
++		else if (memcmp(&x, "\x01\xff\x3f\x43\x05\x04\x03\x02", 8) == 0)
++			detected_double_format = ieee_mixed_endian_format;
+ 		else 
+ 			detected_double_format = unknown_format;
+ 	}
+@@ -1565,8 +1572,19 @@
+ 			p += 7;
+ 			incr = -1;
+ 		}
++		else if (double_format == ieee_mixed_endian_format) {
++			if (le)
++				p += 4;
++			else {
++				p += 3;
++				incr = -1;
++			}
++		}
+ 		
+ 		for (i = 0; i < 8; i++) {
++			if (double_format == ieee_mixed_endian_format && i == 4)
++				p += -8 * incr;
++
+ 			*p = *s++;
+ 			p += incr;
+ 		}
+@@ -1739,6 +1757,27 @@
+ 			}
+ 			memcpy(&x, buf, 8);
+ 		}
++		else if (double_format == ieee_mixed_endian_format) {
++			char buf[8];
++			char *d;
++			int i, incr = 1;
++
++			if (le)
++				d = &buf[4];
++			else
++				d = &buf[3];
++			
++			for (i = 0; i < 4; i++) {
++				*d = *p++;
++				d += incr;
++			}
++			d += -8 * incr;
++			for (i = 0; i < 4; i++) {
++				*d = *p++;
++				d += incr;
++			}
++			memcpy(&x, buf, 8);
++		}
+ 		else {
+ 			memcpy(&x, p, 8);
+ 		}

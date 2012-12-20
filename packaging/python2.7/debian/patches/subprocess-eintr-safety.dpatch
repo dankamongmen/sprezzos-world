@@ -1,0 +1,81 @@
+#! /bin/sh -e
+
+dir=
+if [ $# -eq 3 -a "$2" = '-d' ]; then
+    pdir="-d $3"
+    dir="$3/"
+elif [ $# -ne 1 ]; then
+    echo >&2 "usage: `basename $0`: -patch|-unpatch [-d <srcdir>]"
+    exit 1
+fi
+case "$1" in
+    -patch)
+        patch $pdir -f --no-backup-if-mismatch -p0 < $0
+        #cd ${dir}gcc && autoconf
+        ;;
+    -unpatch)
+        patch $pdir -f --no-backup-if-mismatch -R -p0 < $0
+        #rm ${dir}gcc/configure
+        ;;
+    *)
+	echo >&2 "usage: `basename $0`: -patch|-unpatch [-d <srcdir>]"
+        exit 1
+esac
+exit 0
+
+--- Lib/test/test_subprocess.py	2007-03-14 19:16:36.000000000 +0100
++++ Lib/test/test_subprocess.py	2007-03-14 19:18:57.000000000 +0100
+@@ -580,6 +578,34 @@ class ProcessTestCase(unittest.TestCase)
+             os.remove(fname)
+             self.assertEqual(rc, 47)
+ 
++        def test_eintr(self):
++            # retries on EINTR for an argv
++
++            # send ourselves a signal that causes EINTR
++            prev_handler = signal.signal(signal.SIGALRM, lambda x,y: 1)
++            signal.alarm(1)
++            time.sleep(0.5)
++
++            rc = subprocess.Popen(['sleep', '1'])
++            self.assertEqual(rc.wait(), 0)
++
++            signal.signal(signal.SIGALRM, prev_handler)
++
++        def test_eintr_out(self):
++            # retries on EINTR for a shell call and pipelining
++
++            # send ourselves a signal that causes EINTR
++            prev_handler = signal.signal(signal.SIGALRM, lambda x,y: 1)
++            signal.alarm(1)
++            time.sleep(0.5)
++
++            rc = subprocess.Popen("sleep 1; echo hello",
++                shell=True, stdout=subprocess.PIPE)
++            out = rc.communicate()[0]
++            self.assertEqual(rc.returncode, 0)
++            self.assertEqual(out, "hello\n")
++
++            signal.signal(signal.SIGALRM, prev_handler)
+ 
+     #
+     # Windows tests
+--- Lib/subprocess.py~	2008-07-15 15:41:24.000000000 +0200
++++ Lib/subprocess.py	2008-07-15 15:42:49.000000000 +0200
+@@ -657,13 +657,13 @@
+             stderr = None
+             if self.stdin:
+                 if input:
+-                    self.stdin.write(input)
++                    self._fo_write_no_intr(self.stdin, input)
+                 self.stdin.close()
+             elif self.stdout:
+-                stdout = self.stdout.read()
++                stdout = self._fo_read_no_intr(self.stdout)
+                 self.stdout.close()
+             elif self.stderr:
+-                stderr = self.stderr.read()
++                stderr = self._fo_read_no_intr(self.stderr)
+                 self.stderr.close()
+             self.wait()
+             return (stdout, stderr)
