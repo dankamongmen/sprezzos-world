@@ -1,0 +1,154 @@
+#!/usr/bin/make -f
+
+# Copyright (C) 2002,2011 Anton Zinoviev <zinoviev@debian.org>
+
+# This software may be used, modified, copied, distributed, and sold,
+# in both source and binary form provided that the copyright
+# and these terms are retained. Under no circumstances is the author
+# responsible for the proper functioning of this software, nor does
+# the author assume any responsibility for damages incurred with its use.
+
+SHELL = /bin/bash
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+NUMJOBS = $(patsubst parallel=%,%, $(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+X_ENCODINGS=unicode cp1251 pt154 koi8-r koi8-u iso-8859-1 iso-8859-2	\
+		iso-8859-5 iso-8859-7 iso-8859-9 iso-8859-13		\
+		iso-8859-15 iso-8859-16
+
+DOS_ENCODINGS=ibm437 ibm850 ibm852 ibm855 ibm860 ibm863 ibm865 ibm866	\
+		ibm869 mik ruscii
+
+ENCODINGS=$(X_ENCODINGS) $(DOS_ENCODINGS)
+
+SOURCE_BDFS = $(wildcard \
+			ter-u12[nb].bdf \
+			ter-u14[nb].bdf \
+			ter-u16[nb].bdf \
+			ter-u18[nb].bdf \
+			ter-u20[nb].bdf \
+			ter-u22[nb].bdf \
+			ter-u24[nb].bdf \
+			ter-u28[nb].bdf \
+			ter-u32[nb].bdf \
+		)
+
+oblique_bdfs = $(SOURCE_BDFS:%.bdf=%o.bdf)
+
+convertors=$(addsuffix _conv, $(ENCODINGS))
+
+new_x_bdfs = $(foreach enc, $(X_ENCODINGS), \
+		$(addsuffix _$(enc).bdf, $(SOURCE_BDFS:%.bdf=%)))
+
+new_oblique_bdfs = $(foreach enc, $(X_ENCODINGS), \
+			$(addsuffix _$(enc).bdf, $(oblique_bdfs:%.bdf=%)))
+
+new_dos_bdfs = $(foreach enc, $(DOS_ENCODINGS), \
+		$(addsuffix _$(enc).bdf, $(SOURCE_BDFS:%.bdf=%)))
+
+new_bdfs = $(new_x_bdfs) $(new_oblique_bdfs) $(new_dos_bdfs)
+
+compressed_x_fonts = $(new_x_bdfs:%.bdf=%.pcf.gz)
+
+compressed_oblique_fonts = $(new_oblique_bdfs:%.bdf=%.pcf.gz)
+
+compressed_dos_fonts = $(new_dos_bdfs:%.bdf=%.pcf.gz)
+
+compressed_fonts = $(compressed_x_fonts) $(compressed_oblique_fonts) \
+			$(compressed_dos_fonts)
+
+Terminus12x6-BDFS = ter-u12n.bdf
+Terminus14-BDFS = ter-u14n.bdf
+Terminus16-BDFS = ter-u16n.bdf
+Terminus18x10-BDFS = ter-u18n.bdf
+Terminus20x10-BDFS = ter-u20n.bdf
+Terminus22x11-BDFS = ter-u22n.bdf
+Terminus24x12-BDFS = ter-u24n.bdf
+Terminus28x14-BDFS = ter-u28n.bdf
+Terminus32x16-BDFS = ter-u32n.bdf
+TerminusBold12x6-BDFS = ter-u12b.bdf
+TerminusBold14-BDFS = ter-u14b.bdf
+TerminusBold16-BDFS = ter-u16b.bdf
+TerminusBold18x10-BDFS = ter-u18b.bdf
+TerminusBold20x10-BDFS = ter-u20b.bdf
+TerminusBold22x11-BDFS = ter-u22b.bdf
+TerminusBold24x12-BDFS = ter-u24b.bdf
+TerminusBold28x14-BDFS = ter-u28b.bdf
+TerminusBold32x16-BDFS = ter-u32b.bdf
+TerminusBoldVGA14-BDFS = ter-u14v.bdf
+TerminusBoldVGA16-BDFS = ter-u16v.bdf
+
+%.gz : %
+	gzip -9 <$< >$@
+
+$(oblique_bdfs) : %o.bdf : %.bdf
+	perl debian/bdfslant.pl -unjag <$< >$@
+
+$(convertors):
+	trbdf -f unicode -t $(@:_conv=) --no-fallback -s >$@
+
+$(new_bdfs) : basename_encoding = $(subst _,/,$(@:%.bdf=%))
+$(new_bdfs) : basename = $(subst /,,$(dir $(basename_encoding)))
+$(new_bdfs) : encoding = $(notdir $(basename_encoding))
+# It's not possible to use prerequisite like $(encoding)_conv here:
+$(new_bdfs) : $(SOURCE_BDFS) $(oblique_bdfs) $(convertors)
+	awk -f $(encoding)_conv <$(basename).bdf >$@
+
+%.pcf : %.bdf
+	bdftopcf $< >$@
+
+build: $(compressed_fonts)
+
+.PHONY : clean
+clean:
+	dh_testdir
+	$(MAKE) clean
+	rm -rf $(convertors) $(oblique_bdfs) $(new_bdfs) $(compressed_fonts)
+	dh_clean
+
+.PHONY : install
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_install -pxfonts-terminus $(compressed_x_fonts) usr/share/fonts/X11/misc
+	dh_install -pxfonts-terminus-oblique $(compressed_oblique_fonts) usr/share/fonts/X11/misc
+	dh_install -pxfonts-terminus-dos $(compressed_dos_fonts) usr/share/fonts/X11/misc
+	dh_install -pxfonts-terminus debian/xfonts-terminus.alias etc/X11/fonts/misc
+	sh debian/generate_aliases terminus "$(X_ENCODINGS)" >>debian/xfonts-terminus/etc/X11/fonts/misc/xfonts-terminus.alias
+	dh_install -pxfonts-terminus-dos debian/xfonts-terminus-dos.alias etc/X11/fonts/misc
+	sh debian/generate_aliases terminus-dos "$(DOS_ENCODINGS)" >>debian/xfonts-terminus-dos/etc/X11/fonts/misc/xfonts-terminus-dos.alias
+	dh_install -pxfonts-terminus debian/50-enable-terminus.conf etc/fonts/conf.avail
+	dh_link -pxfonts-terminus etc/fonts/conf.avail/50-enable-terminus.conf etc/fonts/conf.d/50-enable-terminus.conf
+	dh_link
+
+# Build architecture-independent files here.
+.PHONY : binary-indep
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installxfonts
+	dh_installdocs -A README README-BG
+#	dh_installexamples
+#	dh_installman
+#	dh_installinfo
+#	dh_undocumented
+	dh_installchangelogs
+#	dh_link
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-dependent files here.
+.PHONY : binary-arch
+binary-arch : build install
+# We have nothing to do by default.
+
+.PHONY : binary
+binary : binary-indep binary-arch
