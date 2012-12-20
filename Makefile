@@ -4030,6 +4030,14 @@ $(TIFF4): $(SPREZZ)/tiff4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tiff-$(tiff4_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: time
+time:$(TIME)_$(ARCH).deb
+$(TIME): $(SPREZZ)/time/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf time-$(time_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: totem-pl-parser
 totem-pl-parser:$(TOTEMPLPARSER)_$(ARCH).deb
 $(TOTEMPLPARSER): $(SPREZZ)/totem-pl-parser/debian/changelog
