@@ -1364,6 +1364,14 @@ $(GDM3): $(SPREZZ)/gdm3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gdm-$(gdm3_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gee
+gee:$(GEE)_$(ARCH).deb
+$(GEE): $(SPREZZ)/gee/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libgee-$(gee_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gettext
 gettext:$(GETTEXT)_$(ARCH).deb
 $(GETTEXT): $(SPREZZ)/gettext/debian/changelog
@@ -1426,7 +1434,7 @@ $(GLADE): $(SPREZZ)/glade/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf glade-$(glade_UPVER).xz $(TARARGS) $@
+	tar xJvf glade-$(glade_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: glew
 glew:$(GLEW)_$(ARCH).deb
@@ -3941,6 +3949,14 @@ $(RTORRENT): $(SPREZZ)/rtorrent/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rtorrent-$(rtorrent_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: rygel
+rygel:$(RYGEL)_$(ARCH).deb
+$(RYGEL): $(SPREZZ)/rygel/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf rygel-$(rygel_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: samba
 samba:$(SAMBA)_$(ARCH).deb
