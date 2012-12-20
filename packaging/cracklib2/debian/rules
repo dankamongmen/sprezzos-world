@@ -1,0 +1,116 @@
+#!/usr/bin/make -f
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+include /usr/share/python/python.mk
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+PYVERS := $(shell pyversions -vs)
+PY3VERS := $(shell py3versions -vs)
+
+override_dh_auto_configure:
+	aclocal && libtoolize && automake --add-missing && autoreconf
+	mkdir -p $(CURDIR)/debian/buildtmp/base
+	cd $(CURDIR)/debian/buildtmp/base; \
+	$(CURDIR)/configure \
+		--host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) \
+		--prefix=/usr --disable-rpath --without-python \
+		--with-default-dict=/var/cache/cracklib/cracklib_dict \
+		CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)"
+	for i in $(PYVERS) $(PY3VERS); do \
+		mkdir -p $(CURDIR)/debian/buildtmp/python$$i; \
+		cd $(CURDIR)/debian/buildtmp/python$$i; \
+		$(CURDIR)/configure \
+			--host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) \
+			--prefix=/usr --disable-rpath \
+			--with-default-dict=/var/cache/cracklib/cracklib_dict \
+			PYTHON_PREFIX=$(call py_builddir_sh,$$i) \
+			PYTHON=/usr/bin/python$$i \
+			CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)"; \
+	done
+
+override_dh_auto_build:
+	$(MAKE) -C $(CURDIR)/debian/buildtmp/base
+	for i in $(PYVERS) $(PY3VERS); do \
+		cd $(CURDIR)/debian/buildtmp/python$$i; \
+		rm -rf lib; ln -s $(CURDIR)/debian/buildtmp/base/lib lib; \
+		cd python; \
+		ln -s $(CURDIR)/python/*.py \
+		      $(CURDIR)/python/*.c \
+		      $(CURDIR)/debian/test_cracklib.py \
+		      $(CURDIR)/debian/crack.py \
+		      . ; \
+		CFLAGS="-I$(CURDIR)/lib $(CFLAGS)" LDFLAGS="$(LDFLAGS)" CPPFLAGS="$(CPPFLAGS)" python$$i setup.py build ; \
+	done
+	xmlto -o debian/doc xhtml-nochunks debian/libcrack2.xml
+	xmlto -o debian/doc xhtml-nochunks debian/cracklib-runtime.xml
+
+override_dh_auto_test:
+	mkdir $(CURDIR)/debian/tmp
+	$(CURDIR)/debian/buildtmp/base/util/cracklib-packer $(CURDIR)/debian/tmp/cracklib_dict < \
+	 $(CURDIR)/dicts/cracklib-small
+	for i in $(PYVERS) $(PY3VERS); do \
+		cd $(CURDIR)/debian/buildtmp/python$$i/python/$(call py_builddir_sh,$$i); \
+		LD_LIBRARY_PATH=$(CURDIR)/debian/buildtmp/base/lib/.libs python$$i \
+		-c 'import cracklib; cracklib.test(dictpath="$(CURDIR)/debian/tmp/cracklib_dict")'; \
+	done
+
+override_dh_auto_clean:
+	rm -rf debian/buildtmp
+	rm -rf debian/doc
+	if [ -f Makefile ]; then $(MAKE) clean; fi
+	if [ -f Makefile ]; then $(MAKE) distclean; fi
+	# remove files created or modified by autogen.sh
+	rm -f config.guess config.sub Makefile.in aclocal.m4 configure		\
+	 dicts/Makefile.in doc/Makefile.in lib/Makefile.in m4/Makefile.in	\
+	 py-compile python/Makefile.in util/Makefile.in ltmain.sh		\
+	 m4/ltoptions.m4 m4/ltversion.m4 m4/libtool.m4 m4/ltsugar.m4		\
+	 m4/lt~obsolete.m4
+	dh_auto_clean
+
+override_dh_auto_install:
+	$(MAKE) -C $(CURDIR)/debian/buildtmp/base DESTDIR=$(CURDIR)/debian/libcrack2 install
+	# move files to libcrack2-dev
+	mkdir -p $(CURDIR)/debian/libcrack2-dev/usr/lib
+	mv $(CURDIR)/debian/libcrack2/usr/include \
+	   $(CURDIR)/debian/libcrack2-dev/usr
+	mv $(CURDIR)/debian/libcrack2/usr/lib/*.a \
+	   $(CURDIR)/debian/libcrack2-dev/usr/lib
+	# move files to cracklib-runtime
+	mkdir -p $(CURDIR)/debian/cracklib-runtime/usr/share/dict
+	mv $(CURDIR)/debian/libcrack2/usr/sbin \
+	   $(CURDIR)/debian/cracklib-runtime/usr
+	mv $(CURDIR)/debian/libcrack2/usr/share/cracklib/cracklib-small \
+	   $(CURDIR)/debian/cracklib-runtime/usr/share/dict
+	# remove unused files
+	rm -f $(CURDIR)/debian/libcrack2/usr/lib/*.la \
+	      $(CURDIR)/debian/libcrack2/usr/lib/libcrack.so
+	rm -rf $(CURDIR)/debian/libcrack2/usr/share/cracklib
+	chrpath -d \
+	  $(CURDIR)/debian/cracklib-runtime/usr/sbin/cracklib-check \
+	  $(CURDIR)/debian/cracklib-runtime/usr/sbin/cracklib-packer \
+	  $(CURDIR)/debian/cracklib-runtime/usr/sbin/cracklib-unpacker
+	for i in $(PYVERS); do \
+		cd $(CURDIR)/debian/buildtmp/python$$i/python; \
+		python$$i setup.py install --install-layout=deb --root $(CURDIR)/debian/python-cracklib; \
+	done
+	for i in $(PY3VERS); do \
+		cd $(CURDIR)/debian/buildtmp/python$$i/python; \
+		python$$i setup.py install --install-layout=deb --root $(CURDIR)/debian/python3-cracklib; \
+	done
+
+override_dh_installchangelogs:
+	dh_installchangelogs NEWS
+
+override_dh_python2:
+	dh_python2 -ppython-cracklib
+
+override_dh_python3:
+	dh_python3 -ppython3-cracklib
+
+%:
+	dh --with python2,python3,autotools_dev $@

@@ -1,0 +1,189 @@
+Subject: add a safer check variant
+Author: Markus Wanner <markus@bluegap.ch>
+Bug-Debian: http://bugs.debian.org/682735
+--- a/lib/fascist.c
++++ b/lib/fascist.c
+@@ -879,6 +879,48 @@
+     return res;
+ }
+ 
++/* This Debian specific method is a work-around for Debian #682735. Please
++   do not rely on it being available in future verisons of cracklib2. */
++int
++__DEBIAN_SPECIFIC__SafeFascistCheck(password, path, errstr)
++    const char *password;
++    const char *path;
++    char **errstr;
++{
++    PWDICT *pwp;
++    char pwtrunced[STRINGSIZE];
++
++    /* If passed null for the path, use a compiled-in default */
++    if ( ! path )
++    {
++	path = DEFAULT_CRACKLIB_DICT;
++    }
++
++    /* security problem: assume we may have been given a really long
++       password (buffer attack) and so truncate it to a workable size;
++       try to define workable size as something from which we cannot
++       extend a buffer beyond its limits in the rest of the code */
++
++    strncpy(pwtrunced, password, TRUNCSTRINGSIZE);
++    pwtrunced[TRUNCSTRINGSIZE - 1] = '\0'; /* enforce */
++
++    /* perhaps someone should put something here to check if password
++       is really long and syslog() a message denoting buffer attacks?  */
++
++    if (!(pwp = PWOpen(path, "r")))
++    {
++	return 0;
++    }
++
++    /* sure seems like we should close the database, since we're only likely to check one password */
++    *errstr = FascistLook(pwp, pwtrunced);
++
++    PWClose(pwp);
++    pwp = (PWDICT *)0;
++
++    return 1;
++}
++
+ const char *
+ GetDefaultCracklibDict()
+ {
+--- a/python/_cracklibmodule.c
++++ b/python/_cracklibmodule.c
+@@ -42,6 +42,7 @@
+ #ifdef HAVE_LIBINTL_H
+ #include <libintl.h>
+ #endif
++#include <errno.h>
+ 
+ #ifdef HAVE_PTHREAD_H
+ static pthread_mutex_t cracklib_mutex = PTHREAD_MUTEX_INITIALIZER;
+@@ -74,7 +75,8 @@
+ {
+     char *candidate, *dict;
+     char *defaultdict = NULL;
+-    const char *result;
++    int result;
++    char *errmsg;
+     struct stat st;
+     char *keywords[] = {"pw", "dictpath", NULL};
+     char *dictfile;
+@@ -148,7 +150,8 @@
+ #endif
+ 
+     LOCK();
+-    result = FascistCheck(candidate, dict ? dict : defaultdict);
++    result = __DEBIAN_SPECIFIC__SafeFascistCheck(candidate,
++		dict ? dict : defaultdict, &errmsg);
+     UNLOCK();
+ 
+     if (defaultdict != NULL)
+@@ -156,11 +159,26 @@
+         free(defaultdict);
+     }
+ 
+-    if (result != NULL)
++    if (result)
+     {
+-    	PyErr_SetString(PyExc_ValueError, result);
+-        return NULL;
++	if (errmsg != NULL)
++	{
++	    PyErr_SetString(PyExc_ValueError, errmsg);
++	    return NULL;
++	}
++    } else {
++	if (errno == 0)
++	{
++	    PyErr_SetString(PyExc_RuntimeError, "Unable to read cracklib dictionary.");
++	    return NULL;
++	}
++	else
++	{
++	    PyErr_SetFromErrnoWithFilename(PyExc_ValueError, "/var/cache/cracklib_dict.*");
++	    return NULL;
++	}
+     }
++
+     return Py_BuildValue("s", candidate);
+ }
+ 
+--- a/lib/crack.h
++++ b/lib/crack.h
+@@ -15,6 +15,14 @@
+ 
+ extern const char *FascistCheck(const char *pw, const char *dictpath);
+ 
++/* This Debian specific method is a work-around for Debian #682735. Please
++   do not rely on it being available in future verisons of cracklib2.
++   Returns 1 (true) for success and 0 (false) in case an error occurred
++   opening or reading the dictionary. In the later case, please check
++   errno. */
++extern int __DEBIAN_SPECIFIC__SafeFascistCheck(const char *pw,
++				const char *dictpath, char **errmsg);
++
+ /* This function returns the compiled in value for DEFAULT_CRACKLIB_DICT.
+  */
+ extern const char *GetDefaultCracklibDict(void);
+--- a/lib/packlib.c
++++ b/lib/packlib.c
+@@ -16,6 +16,7 @@
+ #ifdef HAVE_STDINT_H
+ #include <stdint.h>
+ #endif
++#include <errno.h>
+ #include "packer.h"
+ 
+ static const char vers_id[] = "packlib.c : v2.3p2 Alec Muffett 18 May 1993";
+@@ -156,6 +157,7 @@
+ 	if (!fread((char *) &pdesc.header, sizeof(pdesc.header), 1, ifp))
+ 	{
+ 	    fprintf(stderr, "%s: error reading header\n", prefix);
++	    errno = 0;
+ 
+ 	    pdesc.header.pih_magic = 0;
+ 	    fclose(ifp);
+@@ -179,6 +181,7 @@
+             if (!fread((char *) &pdesc64.header, sizeof(pdesc64.header), 1, ifp))
+             {
+                 fprintf(stderr, "%s: error reading header\n", prefix);
++                errno = 0;
+  
+                 pdesc.header.pih_magic = 0;
+                 fclose(ifp);
+@@ -198,6 +201,7 @@
+             {
+                 /* nope, not "64-bit" after all */
+                 fprintf(stderr, "%s: error reading header\n", prefix);
++                errno = 0;
+  
+                 pdesc.header.pih_magic = 0;
+                 fclose(ifp);
+@@ -224,6 +228,7 @@
+ 	if (pdesc.header.pih_magic != PIH_MAGIC)
+ 	{
+ 	    fprintf(stderr, "%s: magic mismatch\n", prefix);
++	    errno = 0;
+ 
+ 	    pdesc.header.pih_magic = 0;
+ 	    fclose(ifp);
+@@ -244,6 +249,7 @@
+         if (pdesc.header.pih_numwords < 1)
+         {
+             fprintf(stderr, "%s: invalid word count\n", prefix);
++            errno = 0;
+  
+             pdesc.header.pih_magic = 0;
+             fclose(ifp);
+@@ -263,6 +269,7 @@
+ 	if (pdesc.header.pih_blocklen != NUMWORDS)
+ 	{
+ 	    fprintf(stderr, "%s: size mismatch\n", prefix);
++	    errno = 0;
+ 
+ 	    pdesc.header.pih_magic = 0;
+ 	    fclose(ifp);
