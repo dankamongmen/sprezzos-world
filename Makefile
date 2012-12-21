@@ -185,6 +185,14 @@ $(PYTHONDEFAULTS): $(SPREZZ)/python-defaults/debian/changelog
 	ln -sf python-defaults-$(python-defaults_UPVER).tar.xz python-defaults_$(python-defaults_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: x264
+x264:$(X264)_$(ARCH).deb
+$(X264): $(SPREZZ)/x264/debian/changelog
+	git clone git://git.videolan.org/x264.git $@
+	tar cJf x264-$(x264_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf x264-$(x264_UPVER).tar.xz x264_$(x264_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: gnome-xcf-thumbnailer
 gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
 $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
@@ -1974,6 +1982,14 @@ $(GOCR): $(SPREZZ)/gocr/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gocr-$(gocr_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gpac
+gpac:$(GPAC)_$(ARCH).deb
+$(GPAC): $(SPREZZ)/gpac/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpac-$(gpac_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gperf
 gperf:$(GPERF)_$(ARCH).deb
