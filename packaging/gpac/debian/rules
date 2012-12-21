@@ -1,0 +1,53 @@
+#!/usr/bin/make -f
+
+export REPACK_SH=$(CURDIR)/debian/repack.sh
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+export GPAC_SVN_REVISION ?= $(shell dpkg-parsechangelog | grep Version | sed 's/Version:.*+svn\([0-9]\+\).*/\1/')
+
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+DEB_CONFIGURE_EXTRA_FLAGS = --disable-opt
+endif
+
+%:
+	dh $@ --parallel
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+	    --prefix=/usr \
+	    --mandir=\$${prefix}/share/man \
+	    --libdir=lib/$(DEB_HOST_MULTIARCH) \
+	    --extra-cflags="-Wall -fPIC -DPIC -I/usr/include/mozjs -DXP_UNIX" \
+	    --enable-joystick \
+	    --enable-debug \
+	    --disable-ssl \
+	    $(DEB_EXTRA_CONFIGURE_FLAGS)
+	echo "#define GPAC_SVN_REVISION	\"\"" >include/gpac/version.h
+
+override_dh_auto_install:
+	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr \
+		moddir=$(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/gpac
+	$(MAKE) install-lib prefix=$(CURDIR)/debian/tmp/usr
+	# Move the arch-specific headers into the multiarch path
+	cd debian/tmp/usr/include && \
+	mkdir -p $(DEB_HOST_MULTIARCH)/gpac && \
+	mv gpac/configuration.h $(DEB_HOST_MULTIARCH)/gpac/
+	mv debian/tmp/usr/share/man/man1/mp4box.1 \
+		debian/tmp/usr/share/man/man1/MP4Box.1
+	mv debian/tmp/usr/share/man/man1/mp4client.1 \
+		debian/tmp/usr/share/man/man1/MP4Client.1
+
+override_dh_clean:
+	dh_clean config.h bin/gcc/libgpac* include/gpac/version.h
+	find $(CURDIR) -name *.opic -delete
+
+override_dh_strip:
+	dh_strip -pgpac --dbg-package=gpac-dbg
+	dh_strip -pgpac-modules-base --dbg-package=gpac-dbg
+	dh_strip -plibgpac2 --dbg-package=libgpac-dbg
+	dh_strip --remaining-packages
+
+get-orig-source:
+# Use external script
+#	sh debian/repack.stub `$(dir $_)gpac-$@`
+	uscan --force-download
