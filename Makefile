@@ -1983,6 +1983,14 @@ $(GOCR): $(SPREZZ)/gocr/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gocr-$(gocr_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ffms2
+ffms2:$(FFMS2)_$(ARCH).deb
+$(FFMS2): $(SPREZZ)/ffms2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ffms2-$(ffms2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gpac
 gpac:$(GPAC)_$(ARCH).deb
 $(GPAC): $(SPREZZ)/gpac/debian/changelog
