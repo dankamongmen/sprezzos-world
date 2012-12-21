@@ -2583,6 +2583,14 @@ $(LIBAV): $(SPREZZ)/libav/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf $(LIBAV).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libcacard
+libcacard:$(LIBCACARD)_$(ARCH).deb
+$(LIBCACARD): $(SPREZZ)/libcacard/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libcacard-$(libcacard_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libcap2
 libcap2:$(LIBCAP2)_$(ARCH).deb
 $(LIBCAP2): $(SPREZZ)/libcap2/debian/changelog
