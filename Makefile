@@ -5107,6 +5107,14 @@ $(PULSEAUDIO): $(SPREZZ)/pulseaudio/debian/changelog $(PULSEAUDIOORIG)
 	tar xJvf $(PULSEAUDIOORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
+.PHONY: slrn
+slrn:$(SLRN)_$(ARCH).deb
+$(SLRN): $(SPREZZ)/slrn/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf slrn-$(slrn_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: slang2
 slang2:$(SLANG2)_$(ARCH).deb
 $(SLANG2): $(SPREZZ)/slang2/debian/changelog
