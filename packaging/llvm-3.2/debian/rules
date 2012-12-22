@@ -1,0 +1,110 @@
+#!/usr/bin/make -f
+
+TARGET_BUILD	:= $(CURDIR)/build-llvm
+SONAME_EXT      := 1
+LLVM_FULL_VERSION :=$(shell dpkg-parsechangelog | sed -rne 's,^Version: (.*),\1,p')
+LLVM_VERSION	:= $(shell dpkg-parsechangelog | sed -rne 's,^Version: ([^-+~]+).*,\1,p')
+LLVM_VERSION_WITH_MINOR	:= $(shell dpkg-parsechangelog | sed -rne 's,^Version: ([^-]+).*,\1,p')
+DEB_HOST_MULTIARCH	?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+OCAML_STDLIB_DIR    ?= $(shell ocamlc -where)
+DISTRELEASE := $(shell lsb_release -is)
+COMMA = ,
+ifneq (,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+  NJOBS := -j $(subst parallel=,,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+endif
+
+confargs := --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) \
+--disable-assertions --prefix=/usr/lib/llvm-$(LLVM_VERSION) \
+--enable-optimized --with-optimize-option=' -g -O2' --enable-pic \
+--enable-libffi --with-ocaml-libdir=/usr/lib/ocaml/llvm-$(LLVM_VERSION) \
+--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+--with-binutils-include=/usr/include \
+--with-bug-report-url=http://bugs.debian.org/ \
+--enable-shared
+
+%:
+	dh $@
+
+debian/%: debian/%.in
+	sed -e 's|@DEB_HOST_MULTIARCH@|$(DEB_HOST_MULTIARCH)|g' -e "s|@OCAML_STDLIB_DIR@|$(OCAML_STDLIB_DIR)|g" -e "s|@LLVM_VERSION@|$(LLVM_VERSION)|g" $< > $@
+
+override_dh_auto_configure: debian/libllvm$(LLVM_VERSION).install debian/llvm-$(LLVM_VERSION)-dev.links debian/libllvm-$(LLVM_VERSION)-ocaml-dev.dirs debian/llvm-$(LLVM_VERSION)-runtime.binfmt debian/llvm-$(LLVM_VERSION)-runtime.prerm
+	mkdir -p $(TARGET_BUILD)
+	echo "#define LLVM_DEBIAN_INFO \"$(DISTRELEASE) $(LLVM_FULL_VERSION)\"" > $(TARGET_BUILD)/debian.h
+	cd $(TARGET_BUILD) && \
+	  ../configure $(confargs) || { cat config.log; exit 1; }
+
+override_dh_auto_build:
+	$(MAKE) $(NJOBS) -C $(TARGET_BUILD) VERBOSE=1
+
+llvm_source_package:
+	# creation of llvm-X.Y-source
+	rm -rf debian/llvm-$(LLVM_VERSION)-source/usr/src/
+	mkdir -p debian/llvm-$(LLVM_VERSION)-source/usr/src/llvm-$(LLVM_VERSION)/
+	cp ../llvm-$(LLVM_VERSION)_$(LLVM_VERSION_WITH_MINOR).orig.tar.bz2 debian/llvm-$(LLVM_VERSION)-source/usr/src/llvm-$(LLVM_VERSION)/llvm-$(LLVM_VERSION).tar.bz2
+	cd debian/llvm-$(LLVM_VERSION)-source/usr/src/llvm-$(LLVM_VERSION)/; \
+	echo "Unpack the origin archive"; \
+	tar jxf llvm-$(LLVM_VERSION).tar.bz2; \
+	mv $$(find . -maxdepth 1 -type d -iname 'llvm-$(LLVM_VERSION)*' -o -iname 'llvm.src') llvm-$(LLVM_VERSION); \
+	cd llvm-$(LLVM_VERSION); \
+		echo "Apply patches in the llvm-source package from $(CURDIR)/debian/patches/"; \
+		quilt setup  --sourcedir $(CURDIR)/debian/patches/ $(CURDIR)/debian/patches/series; \
+		quilt push -a || exit 1; \
+		rm patches series ../llvm-$(LLVM_VERSION).tar.bz2; \
+		cp $(TARGET_BUILD)/debian.h .; \
+		cd ..; \
+		echo "Compress the new archive"; \
+		tar Jcf llvm-$(LLVM_VERSION).tar.xz llvm-$(LLVM_VERSION) ; \
+		rm -rf llvm-$(LLVM_VERSION); \
+		FILESIZE=$$(stat --printf="%s" llvm-$(LLVM_VERSION).tar.xz); \
+		if test $$FILESIZE -lt 100000; then \
+			echo "llvm-$(LLVM_VERSION).tar.xz file size is too small. Found: "; echo $$FILESIZE; \
+			exit 42; \
+		fi
+
+
+override_dh_auto_install: llvm_source_package
+	rm -f $(CURDIR)/debian/tmp/usr/lib/llvm-$(LLVM_VERSION)/share/man/man1/* $(CURDIR)/debian/tmp/usr/lib/llvm-$(LLVM_VERSION)-runtime/share/man/man1/*
+	$(MAKE) -C $(TARGET_BUILD)  VERBOSE=1 install DESTDIR=$(CURDIR)/debian/tmp/
+	chrpath -d `find $(CURDIR)/debian/tmp/usr/lib/llvm-$(LLVM_VERSION)/bin/ -type f -executable`
+	mv $(CURDIR)/debian/tmp/usr/lib/llvm-$(LLVM_VERSION)/lib/libLLVM-$(LLVM_VERSION)*.so $(CURDIR)/debian/tmp/usr/lib/llvm-$(LLVM_VERSION)/lib/libLLVM-$(LLVM_VERSION).so.$(SONAME_EXT)
+
+# Rename binaries
+	mkdir -p $(CURDIR)/debian/tmp/usr/bin/
+	cd $(CURDIR)/debian/tmp/usr/bin/; rm -f *; \
+	for f in ../lib/llvm-$(LLVM_VERSION)/bin/*; do \
+		ln -s $$f `basename $$f`-$(LLVM_VERSION); \
+		echo "Link $$f to `basename $$f`-$(LLVM_VERSION)"; \
+	done
+
+# Rename manpages
+#	d=$(CURDIR)/debian/tmp/usr/lib/llvm-$(LLVM_VERSION)/share/man/man1; \
+#	cd $$d; \
+#	for f in *.1; do \
+#		echo "$$f"|grep "3\.1" || mv $$f `echo $$f|sed "s|\.1|-$(LLVM_VERSION).1|"`; \
+#	done
+	dh_auto_install
+
+override_dh_shlibdeps:
+	LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:$(CURDIR)/debian/tmp/usr/lib/llvm-$(LLVM_VERSION)/lib/ dh_shlibdeps
+
+override_dh_strip:
+	dh_strip --dbg-package=libllvm$(LLVM_VERSION)-dbg
+
+override_dh_installdeb:
+	# Belong to llvm runtime
+	rm -f $(CURDIR)/debian/llvm-$(LLVM_VERSION)/usr/share/man/man1/lli*
+	rm -f $(CURDIR)/debian/llvm-$(LLVM_VERSION)/usr/bin/lli-$(LLVM_VERSION)
+	rm -f $(CURDIR)/debian/llvm-$(LLVM_VERSION)/usr/lib/llvm-$(LLVM_VERSION)/bin/lli
+	rm -f $(CURDIR)/debian/llvm-$(LLVM_VERSION)-dev/usr/lib/llvm-$(LLVM_VERSION)/build/autoconf/LICENSE.TXT
+	rm -f $(CURDIR)/debian/llvm-$(LLVM_VERSION)-dev/usr/include/llvm-$(LLVM_VERSION)/llvm/Support/LICENSE.TXT
+	dh_installdeb
+
+#override_dh_auto_test:
+#	$(MAKE) -C $(TARGET_BUILD)  check || true
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf $(TARGET_BUILD)
+	find utils -name '*.pyc' | xargs -r rm -f
+	find test -name '*.pyc' -o -name '*.o' -o -name '*.cm[ix]' | xargs -r rm -f
