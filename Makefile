@@ -78,8 +78,6 @@ LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
 LIGHTDMUP:=lightdm_$(shell echo $(lightdm_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIGHTDMORIG:=$(shell echo $(LIGHTDMUP) | tr - _).orig.tar.gz
 LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_UPVER) | cut -d- -f1).orig.tar.bz2
-LVM2:=lvm2_$(shell echo $(lvm2_UPVER) | tr : .)
-LVM2UP:=LVM2.$(shell echo $(lvm2_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 MCELOGORIG:=mcelog_$(shell echo $(mcelog_UPVER) | cut -d- -f1).orig.tar.xz
 MPLAYER:=mplayer_$(shell echo $(mplayer_UPVER) | tr : .)
 NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_UPVER) | cut -d- -f1).orig.tar.xz
@@ -438,6 +436,30 @@ $(ACCOUNTSSERVICE): $(SPREZZ)/accountsservice/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf accountsservice-$(accountsservice_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: lvm2
+lvm2:$(LVM2)_$(ARCH).deb
+$(LVM2): $(SPREZZ)/lvm2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lvm2_$(lvm2_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: llvm-3.2
+llvm-3.2:$(LLVM3.2)_$(ARCH).deb
+$(LLVM3.2): $(SPREZZ)/llvm-3.2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf llvm-3.2-$(llvm-3.2_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libaacplus
+libaacplus:$(LIBAACPLUS)_$(ARCH).deb
+$(LIBAACPLUS): $(SPREZZ)/libaacplus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libaacplus-$(libaacplus_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libaacplus
 libaacplus:$(LIBAACPLUS)_$(ARCH).deb
@@ -5149,17 +5171,6 @@ ibus:$(IBUS)_$(ARCH).deb
 $(IBUS): $(SPREZZ)/ibus/debian/changelog $(IBUSORIG)
 	mkdir -p $@
 	tar xzvf $(IBUSORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(LVM2UP).tgz
-$(LVM2UP).tgz:
-	wget -nc -O$@ ftp://sources.redhat.com/pub/lvm2/$@
-
-.PHONY: lvm2
-lvm2:$(LVM2)_$(ARCH).deb
-$(LVM2): $(SPREZZ)/lvm2/debian/changelog $(LVM2UP).tgz
-	mkdir -p $@
-	tar xzvf $(LVM2UP).tgz $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GRUBUP).tar.xz
