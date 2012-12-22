@@ -461,14 +461,6 @@ $(LIBAACPLUS): $(SPREZZ)/libaacplus/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libaacplus-$(libaacplus_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: libaacplus
-libaacplus:$(LIBAACPLUS)_$(ARCH).deb
-$(LIBAACPLUS): $(SPREZZ)/libaacplus/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libaacplus-$(libaacplus_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: libaacs
 libaacs:$(LIBAACS)_$(ARCH).deb
 $(LIBAACS): $(SPREZZ)/libaacs/debian/changelog
