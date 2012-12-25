@@ -3541,6 +3541,14 @@ $(LIBNICE): $(SPREZZ)/libnice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libnice-$(libnice_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libnl
+libnl:$(LIBNL)_$(ARCH).deb
+$(LIBNL): $(SPREZZ)/libnl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnl-$(libnl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnotify
 libnotify:$(LIBNOTIFY)_$(ARCH).deb
 $(LIBNOTIFY): $(SPREZZ)/libnotify/debian/changelog
