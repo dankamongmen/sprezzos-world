@@ -4183,6 +4183,14 @@ $(SEAHORSE): $(SPREZZ)/seahorse/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf seahorse-$(seahorse_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: sed
+sed:$(SED)_$(ARCH).deb
+$(SED): $(SPREZZ)/sed/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sed-$(sed_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: shadow
 shadow:$(SHADOW)_$(ARCH).deb
 $(SHADOW): $(SPREZZ)/shadow/debian/changelog
