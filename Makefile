@@ -2285,6 +2285,14 @@ $(JBIG2DEC): $(SPREZZ)/jbig2dec/debian/changelog
 	ln -sf jbig2dec-$(jbig2dec_UPVER).tar.xz jbig2dec_$(jbig2dec_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: jasper
+jasper:$(JASPER)_$(ARCH).deb
+$(JASPER): $(SPREZZ)/jasper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf jasper-$(jasper_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: json-c
 json-c:$(JSONC)_$(ARCH).deb
 $(JSONC): $(SPREZZ)/json-c/debian/changelog
@@ -3188,6 +3196,14 @@ $(GMAKE): $(SPREZZ)/gmake/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf make-$(gmake_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gmp
+gmp:$(GMP)_$(ARCH).deb
+$(GMP): $(SPREZZ)/gmp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gmp-$(gmp_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gmpc
 gmpc:$(GMPC)_$(ARCH).deb
@@ -4230,6 +4246,14 @@ $(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf simple-scan_$(simple-scan_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: sip4
+sip4:$(SIP4)_$(ARCH).deb
+$(SIP4): $(SPREZZ)/sip4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sip-$(sip4_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: spacefm
 spacefm:$(SPACEFM)_$(ARCH).deb
