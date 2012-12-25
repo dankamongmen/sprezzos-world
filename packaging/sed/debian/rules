@@ -1,0 +1,106 @@
+#! /usr/bin/make -f
+
+# Debian package information
+package		= sed
+docdir		= /usr/share/doc/$(package)
+tmpdir		= $(CURDIR)/debian/tmp
+
+DEB_BUILD_GNU_TYPE = $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE = $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+CONFARGS = --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+CFLAGS := $(shell dpkg-buildflags --get CFLAGS)
+CPPFLAGS := $(shell dpkg-buildflags --get CPPFLAGS)
+LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS)
+
+INSTALL = install
+INSTALL_FILE    = $(INSTALL) -p    -o root -g root  -m  644
+INSTALL_PROGRAM = $(INSTALL) -p    -o root -g root  -m  755
+INSTALL_SCRIPT  = $(INSTALL) -p    -o root -g root  -m  755
+INSTALL_DIR     = $(INSTALL) -p -d -o root -g root  -m  755
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+INSTALL_PROGRAM += -s
+endif
+
+build: build-arch build-indep
+build-indep:
+
+build-arch: Makefile
+	$(MAKE) INSTALL_PROGRAM="$(INSTALL_PROGRAM)"
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	LC_ALL=C $(MAKE) check
+endif
+endif
+	touch build-arch
+
+clean:
+	rm -f debian/substvars debian/files build-arch config.log config.cache
+	rm -rf debian/tmp autom4te.cache
+	find . -type f -a \( -name \#\*\# -o -name .\*\~ -o -name \*\~ -o -name DEADJOE -o -name \*.orig -o -name \*.rej -o -name \*.bak -o -name .\*.orig -o -name .\*.rej -o -name .SUMS -o -name TAGS -o -name core -o \( -path \*/.deps/\* -a -name \*.P \) \) -exec rm -f {} \;
+	test ! -f Makefile || $(MAKE) distclean
+
+Makefile: Makefile.in
+	./configure --prefix=/usr \
+			--exec-prefix=/ \
+			--datadir=/usr/share \
+			--mandir=/usr/share/man \
+			--infodir=/usr/share/info \
+			--enable-html \
+			--without-included-regex \
+                        CFLAGS="$(CFLAGS)" \
+                        CPPFLAGS="$(CPPFLAGS)" \
+                        LDFLAGS="$(LDFLAGS)" \
+                        $(CONFARGS)
+
+
+binary: binary-indep binary-arch
+
+binary-indep:
+
+binary-arch: build checkroot
+	-rm -rf debian/tmp debian/files debian/substvars
+	install -d -o root -g root -m 755 $(tmpdir)$(docdir)/examples
+
+# Install sed
+	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	strip --remove-section=.comment --remove-section=.note \
+		--strip-unneeded debian/tmp/bin/sed
+endif
+	rm -f $(tmpdir)/usr/share/info/dir*
+#	mv $(tmpdir)/usr/share/doc/sed-4.1.5 $(tmpdir)$(docdir)
+#	mv $(tmpdir)/usr/share/doc/sed.html $(tmpdir)$(docdir)/
+	gzip -9 $(tmpdir)/usr/share/man/man1/*
+	gzip -9 $(tmpdir)/usr/share/info/sed.info*
+
+# Install some documentation
+	install -p -o root -g root -m 644 AUTHORS BUGS README THANKS \
+		NEWS $(tmpdir)$(docdir)
+	install -p -o root -g root -m 644 ChangeLog $(tmpdir)$(docdir)/changelog
+	install -p -o root -g root -m 644 debian/changelog \
+		$(tmpdir)$(docdir)/changelog.Debian
+	install -p -o root -g root -m 644 debian/my/sedfaq.txt $(tmpdir)$(docdir)
+	# We expect an error here for the examples-subdir
+	-gzip -9 $(tmpdir)$(docdir)/*
+	install -p -o root -g root -m 644 debian/copyright $(tmpdir)$(docdir)
+	install -p -o root -g root -m 644 testsuite/dc.sed $(tmpdir)$(docdir)/examples/
+
+# Install Debian-specific stuff
+	install -d -o root -g root -m 755 $(tmpdir)/DEBIAN
+
+	cd debian/tmp && find * -type f ! -regex '^DEBIAN/.*' -print0 | xargs -r0 md5sum > DEBIAN/md5sums
+
+# Build the packgae
+	dpkg-shlibdeps -dPre-Depends $(tmpdir)/bin/sed
+	dpkg-gencontrol -isp
+	dpkg --build debian/tmp ..
+
+checkroot:
+	test root = "`whoami`"
+
+
+.PHONY: checkroot binary build build-indep
