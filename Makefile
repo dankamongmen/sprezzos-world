@@ -354,6 +354,15 @@ $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	tar cJf mplayer-$(mplayer_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
 	ln -sf mplayer-$(mplayer_UPVER).tar.xz mplayer_$(mplayer_UPVER).orig.tar.xz
 
+.PHONY: skia
+skia:$(SKIA)_$(ARCH).deb
+$(SKIA): $(SPREZZ)/skia/debian/changelog
+	svn co http://skia.googlecode.com/svn/trunk/ $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
+	tar cJf skia-$(skia_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -sf skia-$(skia_UPVER).tar.xz skia_$(skia_UPVER).orig.tar.xz
+
 .PHONY: ramen
 ramen:$(RAMEN)_$(ARCH).deb
 $(RAMEN): $(SPREZZ)/ramen/debian/changelog
