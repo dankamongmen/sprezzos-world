@@ -1,0 +1,250 @@
+#!/usr/bin/make -f
+
+ORIG_SRC_VERSION = 5.0.5
+
+include /usr/share/quilt/quilt.make
+
+# Uncomment this to turn on verbose mode. 
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  JOBSFLAG = -j$(NUMJOBS)
+endif
+
+DEB_HOST_ARCH  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+export DEB_HOST_GNU_TYPE  := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_MULTIARCH := $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+MAKE_CHECK = : disabled make check
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+  ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+    MAKE_CHECK = $(MAKE) check
+  endif
+endif
+
+export CFLAGS = -Wall -g 
+export LDFLAGS = -Wl,-Bsymbolic-functions
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  CFLAGS += -O0
+else
+  ifneq (,$(findstring $(DEB_HOST_ARCH), ia64))
+    CFLAGS += -O2
+  else
+    CFLAGS += -O3
+  endif
+endif
+
+lib32dir = usr/lib32
+lib64dir = usr/lib64
+
+
+confflags = --prefix=/usr --enable-cxx
+
+ifneq (,$(filter $(DEB_HOST_ARCH), amd64 kfreebsd-amd64 lpia))
+  confflags += --disable-fat
+else
+  confflags += --enable-fat
+endif
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  AR = ar
+  confflags_build += --build $(DEB_BUILD_GNU_TYPE)
+else
+  AR = $(DEB_HOST_GNU_TYPE)-ar
+  confflags_build += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE) --target $(DEB_HOST_GNU_TYPE)
+endif
+
+ifneq (,$(findstring $(DEB_HOST_ARCH), amd64 ppc64 kfreebsd-amd64))
+  EXTRA_INSTALL=install32
+  m32=-m32
+  confflags32 = ABI=32 $(confflags) $(confflags_build) --libdir=/${lib32dir}
+endif
+
+ifneq (,$(findstring $(DEB_HOST_ARCH), powerpc))
+  EXTRA_INSTALL=install64
+  m64=-m64
+  confflags64_build = --build $(DEB_BUILD_GNU_TYPE) --host powerpc64-gnu-linux
+  confflags64 = ABI=mode64 NM=nm $(confflags) $(confflags64_build) --libdir=/${lib64dir}
+  CC64 = gcc $(m64)
+  CXX64 = g++ $(m64)
+  MAKE_CHECK = : disabled make check
+endif
+
+confflags_ma = $(confflags) --libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+CC   = $(DEB_HOST_GNU_TYPE)-gcc
+CC32 = $(DEB_HOST_GNU_TYPE)-gcc $(m32)
+CC64 = $(DEB_HOST_GNU_TYPE)-gcc $(m64)
+
+CXX   = $(DEB_HOST_GNU_TYPE)-g++
+CXX32 = $(DEB_HOST_GNU_TYPE)-g++ $(m32)
+CXX64 = $(DEB_HOST_GNU_TYPE)-g++ $(m64)
+
+confflags += $(confflags_build)
+
+
+get-orig-source: gmp-$(ORIG_SRC_VERSION).tar.bz2
+	tar --bzip -xf $<
+	mv gmp-$(ORIG_SRC_VERSION) gmp-$(ORIG_SRC_VERSION)+dfsg
+	mkdir gmp-doc-$(ORIG_SRC_VERSION)
+	mv gmp-$(ORIG_SRC_VERSION)+dfsg/doc/ gmp-doc-$(ORIG_SRC_VERSION)/
+	mkdir gmp-$(ORIG_SRC_VERSION)+dfsg/doc
+	touch gmp-$(ORIG_SRC_VERSION)+dfsg/doc/Makefile.am
+	touch gmp-$(ORIG_SRC_VERSION)+dfsg/doc/Makefile.in
+	cd gmp-$(ORIG_SRC_VERSION)+dfsg/ && autoreconf --force --install
+	tar czf gmp_$(ORIG_SRC_VERSION)+dfsg.orig.tar.gz gmp-$(ORIG_SRC_VERSION)+dfsg
+	tar czf gmp-doc_$(ORIG_SRC_VERSION).orig.tar.gz gmp-doc-$(ORIG_SRC_VERSION)
+	rm -rf gmp-$(ORIG_SRC_VERSION)+dfsg gmp-doc-$(ORIG_SRC_VERSION) gmp-$(ORIG_SRC_VERSION).tar.gz
+
+gmp-$(ORIG_SRC_VERSION).tar.bz2:
+	wget ftp://ftp.gnu.org/gnu/gmp/$@
+
+configure: patch configure-stamp
+configure-stamp:
+	mkdir -p build
+	cd build && ../configure $(confflags_ma) \
+	    AR=$(AR) CC="$(CC)" CFLAGS="$(CFLAGS)" \
+	    CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)"
+	CC="$(DEB_HOST_GNU_TYPE)-gcc" sh debian/fix-gmp-h.sh build
+	touch $@
+
+configure32: patch configure32-stamp
+configure32-stamp:
+	mkdir -p build32
+	cd build32 && ../configure $(confflags32) \
+	    AR=$(AR) CC="$(CC32)" CFLAGS="$(CFLAGS)" \
+	    CXX="$(CXX32)" CXXFLAGS="$(CXXFLAGS)" 
+	CC="$(CC32)" sh debian/fix-gmp-h.sh build32
+	touch $@
+
+configure64: patch configure64-stamp
+configure64-stamp:
+	mkdir -p build64
+	cd build64 && ../configure $(confflags64) \
+	    AR=$(AR) CC="$(CC64)" CFLAGS="$(CFLAGS)" \
+	    CXX="$(CXX64)" CXXFLAGS="$(CXXFLAGS)" 
+	CC="$(CC64)" sh debian/fix-gmp-h.sh build64
+	touch $@
+
+build: build-stamp
+build-stamp: configure
+	dh_testdir
+	$(MAKE) $(JOBSFLAG) -C build
+	$(MAKE_CHECK) -C build
+	touch $@
+
+build32-stamp: configure32
+	dh_testdir
+	$(MAKE) $(JOBSFLAG) -C build32
+	$(MAKE_CHECK) -C build32
+	touch $@
+
+build64-stamp: configure64
+	dh_testdir
+	$(MAKE) $(JOBSFLAG) -C build64
+	$(MAKE_CHECK) -C build64
+	touch $@
+
+clean: clean-patched unpatch
+
+clean-patched:
+	dh_testdir
+	dh_testroot
+	rm -rf build build-stamp
+	rm -rf build32 build32-stamp
+	rm -rf build64 build64-stamp
+	dh_clean
+
+install-prep:
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+install: build-stamp install-prep
+	$(MAKE) DESTDIR=`pwd`/debian/tmp -C build install
+
+	dh_install -plibgmp10 usr/lib/*/libgmp.so.*
+	dh_install -plibgmpxx4ldbl usr/lib/*/libgmpxx.so.*
+
+	dh_install -plibgmp-dev usr/lib/*/lib*.so
+	dh_install -plibgmp-dev usr/lib/*/lib*.a
+	dh_install -plibgmp-dev usr/include
+	dh_install -plibgmp-dev -Xgmp-mparam.h build/gmp*.h usr/include
+
+	# Install upstream ChangeLog, AUTHORS, NEWS, and README only in -dev package
+	dh_installchangelogs -plibgmp-dev
+	dh_installdocs -plibgmp-dev AUTHORS NEWS README
+
+install32: build32-stamp install-prep
+	$(MAKE) DESTDIR=`pwd`/debian/tmp -C build32 install
+
+	dh_install -plib32gmp10 ${lib32dir}/libgmp.so.*
+	dh_install -plib32gmpxx4 ${lib32dir}/libgmpxx.so.*
+
+	dh_install -plib32gmp-dev ${lib32dir}/lib*.so
+	dh_install -plib32gmp-dev ${lib32dir}/lib*.a
+	dh_install -plib32gmp-dev ${lib32dir}/lib*.la
+	dh_install -plib32gmp-dev -Xgmp-mparam.h -Xgmp.h build32/gmp*.h usr/include
+
+install64: build64-stamp install-prep
+	$(MAKE) DESTDIR=`pwd`/debian/tmp -C build64 install
+
+	dh_install -plib64gmp10 ${lib64dir}/libgmp.so.*
+	dh_install -plib64gmpxx4 ${lib64dir}/libgmpxx.so.*
+
+	dh_install -plib64gmp-dev ${lib64dir}/lib*.so
+	dh_install -plib64gmp-dev ${lib64dir}/lib*.a
+	dh_install -plib64gmp-dev ${lib64dir}/lib*.la
+	dh_install -plib64gmp-dev -Xgmp-mparam.h -Xgmp.h build64/gmp*.h usr/include
+
+
+# This single target is used to build all the packages, all at once, or
+# one at a time. So keep in mind: any options passed to commands here will
+# affect _all_ packages. Anything you want to only affect one package
+# should be put in another target, such as the install target.
+binary-common:
+	# See 633312, http://wiki.debian.org/ReleaseGoals/LAFileRemoval
+	sed -i "/dependency_libs/ s/'.*'/''/" `find debian/ -name '*.la'`
+	dh_testdir
+	dh_testroot
+	# User lower compatibility to avoid installing upstream changelog in all packages
+	DH_COMPAT=6 dh_installchangelogs
+	dh_installdocs
+	dh_installexamples
+	dh_installmenu
+	dh_lintian
+	dh_strip
+	dh_link
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: build install
+	 $(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build install $(EXTRA_INSTALL)
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+# Any other binary targets build just one binary package at a time.
+binary-%: build install
+	make -f debian/rules binary-common DH_OPTIONS=-p$*
+
+build-arch: build
+build-indep: build
+
+binary: binary-indep binary-arch
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary-common binary install install-prep

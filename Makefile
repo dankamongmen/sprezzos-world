@@ -354,6 +354,15 @@ $(MPLAYER): $(SPREZZ)/mplayer/debian/changelog
 	tar cJf mplayer-$(mplayer_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
 	ln -sf mplayer-$(mplayer_UPVER).tar.xz mplayer_$(mplayer_UPVER).orig.tar.xz
 
+.PHONY: skia
+skia:$(SKIA)_$(ARCH).deb
+$(SKIA): $(SPREZZ)/skia/debian/changelog
+	svn co http://skia.googlecode.com/svn/trunk/ $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
+	tar cJf skia-$(skia_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -sf skia-$(skia_UPVER).tar.xz skia_$(skia_UPVER).orig.tar.xz
+
 .PHONY: ramen
 ramen:$(RAMEN)_$(ARCH).deb
 $(RAMEN): $(SPREZZ)/ramen/debian/changelog
@@ -2285,6 +2294,14 @@ $(JBIG2DEC): $(SPREZZ)/jbig2dec/debian/changelog
 	ln -sf jbig2dec-$(jbig2dec_UPVER).tar.xz jbig2dec_$(jbig2dec_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: jasper
+jasper:$(JASPER)_$(ARCH).deb
+$(JASPER): $(SPREZZ)/jasper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf jasper-$(jasper_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: json-c
 json-c:$(JSONC)_$(ARCH).deb
 $(JSONC): $(SPREZZ)/json-c/debian/changelog
@@ -3189,6 +3206,14 @@ $(GMAKE): $(SPREZZ)/gmake/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf make-$(gmake_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gmp
+gmp:$(GMP)_$(ARCH).deb
+$(GMP): $(SPREZZ)/gmp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gmp-$(gmp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gmpc
 gmpc:$(GMPC)_$(ARCH).deb
 $(GMPC): $(SPREZZ)/gmpc/debian/changelog
@@ -3541,13 +3566,13 @@ $(LIBNICE): $(SPREZZ)/libnice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libnice-$(libnice_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: libnl
-libnl:$(LIBNL)_$(ARCH).deb
-$(LIBNL): $(SPREZZ)/libnl/debian/changelog
+.PHONY: libnl3
+libnl3:$(LIBNL3)_$(ARCH).deb
+$(LIBNL3): $(SPREZZ)/libnl3/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libnl-$(libnl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libnl-$(libnl3_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libnotify
 libnotify:$(LIBNOTIFY)_$(ARCH).deb
@@ -4230,6 +4255,14 @@ $(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf simple-scan_$(simple-scan_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: sip4
+sip4:$(SIP4)_$(ARCH).deb
+$(SIP4): $(SPREZZ)/sip4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sip-$(sip4_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: spacefm
 spacefm:$(SPACEFM)_$(ARCH).deb
