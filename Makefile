@@ -3086,6 +3086,14 @@ $(XVIDCORE): $(SPREZZ)/xvidcore/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xvidcore-$(xvidcore_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xkeyboard-config
+xkeyboard-config:$(XKEYBOARDCONFIG)_$(ARCH).deb
+$(XKEYBOARDCONFIG): $(SPREZZ)/xkeyboard-config/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xkeyboard-config-$(xkeyboard-config_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxkbcommon
 libxkbcommon:$(LIBXKBCOMMON)_$(ARCH).deb
 $(LIBXKBCOMMON): $(SPREZZ)/libxkbcommon/debian/changelog
