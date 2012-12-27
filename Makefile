@@ -191,6 +191,14 @@ $(X264): $(SPREZZ)/x264/debian/changelog
 	ln -sf x264-$(x264_UPVER).tar.xz x264_$(x264_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: cpupower
+cpupower:$(CPUPOWER)_$(ARCH).deb
+$(CPUPOWER): $(SPREZZ)/cpupower/debian/changelog
+	git clone git://git.kernel.org/pub/scm/linux/kernel/git/brodo/cpupowerutils.git $@
+	tar cJf cpupower-$(cpupower_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf cpupower-$(cpupower_UPVER).tar.xz cpupower_$(cpupower_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: gnome-xcf-thumbnailer
 gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
 $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
@@ -391,6 +399,8 @@ linux-latest:$(LINUXLATEST)_$(ARCH).deb
 $(LINUXLATEST): $(SPREZZ)/linux-latest/debian/changelog
 	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
 	cp -r $(<D)/.. $@
+	tar cJf linux-latest-$(linux-latest_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -s linux-latest-$(linux-latest_UPVER).tar.xz linux-latest_$(linux-latest_UPVER).orig.tar.xz
 
 .PHONY: javascript-common
 javascript-common:$(JAVASCRIPTCOMMON)_$(ARCH).deb
@@ -741,6 +751,14 @@ $(FLEX): $(SPREZZ)/flex/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf flex-$(flex_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: flickcurl
+flickcurl:$(FLICKCURL)_$(ARCH).deb
+$(FLICKCURL): $(SPREZZ)/flickcurl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf flickcurl-$(flickcurl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: blender
 blender:$(BLENDER)_$(ARCH).deb
