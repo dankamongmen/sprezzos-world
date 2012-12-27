@@ -1,0 +1,208 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+#we use quilt to handle our patches
+include /usr/share/quilt/quilt.make
+
+
+
+#build options
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	OPT = -O0
+	OPTSSE3 = -O0
+else
+	#although we can use -ffast-math as radiance doesn't rely on exact
+	#implementation of IEEE or ISO rules/specifications for math functions,
+	#I've disabled it to avoid "zero ray direction in localhit" errors.
+	#see <48066BAE.4050302@gmx.net> on the radiance-general list
+	OPT = -O3 
+	OPTSSE3 = -O3 -funroll-loops -msse3 -mfpmath=sse
+
+#-funroll-loops is broken on older gcc versions on arm (see #476460).
+ifeq (0,$(shell dpkg --compare-versions $(shell gcc --version| grep Debian | sed 's,.*Debian ,,;s,. [0-9].*,,') ge 4.3.1-1 && echo 0))
+	OPT += -funroll-loops
+else
+ifneq (arm,$(shell dpkg-architecture -qDEB_BUILD_GNU_CPU))
+	OPT += -funroll-loops
+endif
+endif
+endif
+
+MACH = -Wall -g -Dlinux -D_FILE_OFFSET_BITS=64 -L/usr/X11R6/lib -I/usr/include/X11 -DNOSTEREO
+COMPAT = erf.o
+DEVDIR = /usr/lib/radiance/dev
+LIBDIR = /usr/share/radiance
+INSTDIR = /usr/bin
+SPECIAL = ogl
+
+#full make overrides
+MAKEOVERRIDES = OPT="$$opt" MACH="$(MACH)" ARCH="$(DEB_HOST_ARCH)" \
+	        COMPAT="$(COMPAT)" SPECIAL="$(SPECIAL)" ESUFFIX="" LN="ln -s" \
+	        INSTDIR="$$instdir" LIBDIR="$$libdir" DEVDIR="$$devdir"
+
+#sourcedirs in the right order, taken from makeall
+SRCDIRS = common rt meta cv gen ot px hd util cal
+
+SRCDIRS-SSE3 = common rt
+
+DEB_VERSION := $(shell dpkg-parsechangelog  | grep '^Version' | cut -d ' ' -f 2)
+
+RMAKE = set -e ; set -x ;\
+	[ "$$opt" ] || opt="$(OPT)" ;\
+	[ "$$instdir" ] || instdir="$$destdir$(INSTDIR)" ;\
+	[ "$$libdir" ]  || libdir="$$destdir$(LIBDIR)" ;\
+	[ "$$devdir" ]  || devdir="$$destdir$(DEVDIR)" ;\
+	[ "$$srcdirs" ] || srcdirs="$(SRCDIRS)" ;\
+	for sdir in $$srcdirs; do \
+	  cd src/$$sdir ;\
+	  make -f Rmakefile $$rmakeopts $(MAKEOVERRIDES);\
+	  cd $(CURDIR) ;\
+	done
+
+debian/%.1: debian/%.sgml
+	docbook-to-man $< > $@
+
+build: build-arch build-indep 
+
+build-arch: build-arch-stamp
+build-arch-stamp: $(QUILT_STAMPFN) debian/radiance-experttools.1
+
+	#file permissions are rather weird, fixing this
+	find src -type f -print0 | xargs -0 chmod 644
+
+	mkdir src/lib
+
+	echo 'char VersionID[]="RADIANCE $(DEB_VERSION) (Debian package)";' > src/rt/Version.c
+
+
+	rmakeopts="all"; $(RMAKE)
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp: 
+
+	cd obj; for dir in *; do tar cf $$dir.tar $$dir; done; cd ..
+	touch $@
+
+build-sse3: 
+
+	rmakeopts="clean"; $(RMAKE)
+	rmakeopts="all"; \
+	    srcdirs="$(SRCDIRS-SSE3)"; \
+	    opt="$(OPTSSE3)"; \
+	    $(RMAKE)
+
+clean: clean-patched unpatch
+
+clean-patched: $(QUILT_STAMPFN)
+	dh_testdir
+	dh_testroot
+	rm -f build-arch-stamp build-indep-stamp
+	rmakeopts="clean"; $(RMAKE)
+	rm -rf src/lib
+	rm -f obj/*.tar
+	rm -f debian/radiance-experttools.1
+	rm -f src/rt/Version.c
+
+	dh_clean 
+
+install: install-indep install-arch
+install-indep:
+	dh_testdir
+	dh_testroot
+	dh_clean -k -i 
+	dh_installdirs -i
+
+	dh_install -i
+
+install-arch:
+	dh_testdir
+	dh_testroot
+	dh_clean -k -s 
+	dh_installdirs -s
+	rmakeopts="install"; \
+	    destdir="$(CURDIR)/debian/radiance"; \
+	    $(RMAKE)
+	#fix directory in trad
+	sed -i 's,$(CURDIR)/debian/radiance,,g' $(CURDIR)/debian/radiance/usr/bin/trad
+	#rview was the former name of rvu and renamed as vim provides /usr/bin/rview
+	#so we remove the compatibility link
+	rm -f $(CURDIR)/debian/radiance/usr/bin/rview
+	#a bit hackish, but more easy than patching a lot of Rmakefiles.
+	#our dh_install will install the files later into the proper package
+	find $(CURDIR)/debian/radiance/usr/share -mindepth 1 -maxdepth 1 -name radiance -o -print0 | \
+	     xargs -0 rm -rf
+	find $(CURDIR)/debian/radiance/usr/share/radiance -mindepth 1 -maxdepth 1 -name tcl -o -print0 | \
+	     xargs -0 rm -rf
+	rm -f $(CURDIR)/debian/radiance/usr/lib/radiance/dev/*h.hdi
+	dh_install -s -Nradiance-sse3
+
+install-sse3:
+	dh_testdir
+	dh_testroot
+	rmakeopts="install"; \
+	    opt="$(OPTSSE3)"; \
+	    srcdirs="$(SRCDIRS-SSE3)"; \
+	    destdir="$(CURDIR)/debian/radiance-sse3"; \
+	    $(RMAKE)
+	rm -rf $(CURDIR)/debian/radiance-sse3/usr/lib
+	rm -rf $(CURDIR)/debian/radiance-sse3/usr/share	
+	rm -f $(CURDIR)/debian/radiance-sse3/usr/bin/rview
+	rm -f $(CURDIR)/debian/radiance-sse3/usr/bin/lookamb
+	dh_install -pradiance-sse3
+
+binary-indep: build-indep install-indep
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -i
+	dh_installdocs -i
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+
+ifneq (i386,$(DEB_HOST_ARCH))
+binary-arch: build-arch install-arch
+else
+binary-arch: build-arch install-arch build-sse3 install-sse3
+endif
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -s
+	dh_installdocs -s 
+	dh_installman -s
+	#genbox was renamed, following this change for the manpage, too.
+	mv $(CURDIR)/debian/radiance/usr/share/man/man1/genbox.1 \
+	   $(CURDIR)/debian/radiance/usr/share/man/man1/genrbox.1
+	dh_link -s
+	dh_strip -s
+	dh_compress -s
+	dh_fixperms -s
+	dh_makeshlibs -s
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+
+binary: binary-arch binary-indep
+
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install install-indep install-arch unpatch get-orig-source
+
+
+##############################################################################
+#
+# targets which are not needed to build the package:
+
+SOURCE-VERSION = `dpkg-parsechangelog | \
+                      grep ^Version   | \
+                      sed 's,.* ,,;s,+.*,,'`+`date '+%Y%m%d'`.dfsg
+
+get-orig-source:
+	echo "Please see debian/README.Debian-source for details"

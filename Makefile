@@ -199,6 +199,14 @@ $(CPUPOWER): $(SPREZZ)/cpupower/debian/changelog
 	ln -sf cpupower-$(cpupower_UPVER).tar.xz cpupower_$(cpupower_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: mx
+mx:$(MX)_$(ARCH).deb
+$(MX): $(SPREZZ)/mx/debian/changelog
+	git clone git://github.com/clutter-project/mx.git $@
+	tar cJf mx-$(mx_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -sf mx-$(mx_UPVER).tar.xz mx_$(mx_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: gnome-xcf-thumbnailer
 gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
 $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
@@ -462,7 +470,7 @@ $(LENSFUN): $(SPREZZ)/lensfun/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf lensfun-$(lensfun_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf lensfun-$(lensfun_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: lvm2
 lvm2:$(LVM2)_$(ARCH).deb
@@ -2104,6 +2112,14 @@ $(GPHOTO2): $(SPREZZ)/gphoto2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gphoto2-$(gphoto2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gpodder
+gpodder:$(GPODDER)_$(ARCH).deb
+$(GPODDER): $(SPREZZ)/gpodder/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpodder-$(gpodder_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: grilo
 grilo:$(GRILO)_$(ARCH).deb
 $(GRILO): $(SPREZZ)/grilo/debian/changelog
@@ -3487,14 +3503,6 @@ $(MUTTER): $(SPREZZ)/mutter/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf mutter_$(mutter_UPVER).orig.tar.xz $(TARARGS) $@
-
-.PHONY: mx
-mx:$(MX)_$(ARCH).deb
-$(MX): $(SPREZZ)/mx/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf mx-$(mx_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: nautilus
 nautilus:$(NAUTILUS)_$(ARCH).deb
