@@ -456,6 +456,14 @@ $(ACCOUNTSSERVICE): $(SPREZZ)/accountsservice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf accountsservice-$(accountsservice_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: lensfun
+lensfun:$(LENSFUN)_$(ARCH).deb
+$(LENSFUN): $(SPREZZ)/lensfun/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lensfun-$(lensfun_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: lvm2
 lvm2:$(LVM2)_$(ARCH).deb
 $(LVM2): $(SPREZZ)/lvm2/debian/changelog
@@ -2623,6 +2631,22 @@ $(EXEMPI): $(SPREZZ)/exempi/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf exempi-$(exempi_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gexiv2
+gexiv2:$(GEXIV2)_$(ARCH).deb
+$(GEXIV2): $(SPREZZ)/gexiv2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libgexiv2-$(gexiv2_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: exiv2
+exiv2:$(EXIV2)_$(ARCH).deb
+$(EXIV2): $(SPREZZ)/exiv2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf exiv2-$(exiv2_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: exo
 exo:$(EXO)_$(ARCH).deb
@@ -4883,6 +4907,14 @@ $(XORGXSERVER): $(SPREZZ)/xorg-xserver/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xorg-server-$(xorg-xserver_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-input-wacom
+xserver-xorg-input-wacom:$(XSERVERXORGINPUTWACOM)_$(ARCH).deb
+$(XSERVERXORGINPUTWACOM): $(SPREZZ)/xserver-xorg-input-wacom/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xf86-input-wacom-$(xserver-xorg-input-wacom_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: xserver-xorg-video-geode
 xserver-xorg-video-geode:$(XSERVERXORGVIDEOGEODE)_$(ARCH).deb
