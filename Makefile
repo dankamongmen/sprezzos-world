@@ -902,6 +902,14 @@ $(TALLOC): $(SPREZZ)/talloc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf talloc-$(talloc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cpufrequtils
+cpufrequtils:$(CPUFREQUTILS)_$(ARCH).deb
+$(CPUFREQUTILS): $(SPREZZ)/cpufrequtils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cpufrequtils-$(cpufrequtils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: terminology
 terminology:$(TERMINOLOGY)_$(ARCH).deb
 $(TERMINOLOGY): $(SPREZZ)/terminology/debian/changelog
