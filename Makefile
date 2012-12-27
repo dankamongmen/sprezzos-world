@@ -1654,6 +1654,14 @@ $(GNOMECOLORS): $(SPREZZ)/gnome-colors/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-colors-$(gnome-colors_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gnome-color-chooser
+gnome-color-chooser:$(GNOMECOLORCHOOSER)_$(ARCH).deb
+$(GNOMECOLORCHOOSER): $(SPREZZ)/gnome-color-chooser/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-color-chooser-$(gnome-color-chooser_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnome-color-manager
 gnome-color-manager:$(GNOMECOLORMANAGER)_$(ARCH).deb
 $(GNOMECOLORMANAGER): $(SPREZZ)/gnome-color-manager/debian/changelog
