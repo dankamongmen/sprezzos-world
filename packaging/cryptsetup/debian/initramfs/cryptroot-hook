@@ -1,0 +1,559 @@
+#!/bin/sh
+
+PREREQ=""
+
+prereqs()
+{
+	echo "$PREREQ"
+}
+
+case $1 in
+prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+get_root_device() {
+	local device mount type options dump pass
+
+	if [ ! -r /etc/fstab ]; then
+		return 1
+	fi
+
+	grep -s '^[^#]' /etc/fstab | \
+	while read device mount type options dump pass; do
+		if [ "$mount" = "/" ]; then
+			device=$(canonical_device "$device") || return 0
+			echo "$device"
+			return
+		fi
+	done
+}
+
+get_resume_devices() {
+	local device opt count dupe candidates devices
+	candidates=""
+
+	# First, get a list of potential resume devices
+
+	# uswsusp
+	if [ -e /etc/uswsusp.conf ]; then
+		device=$(sed -rn 's/^resume device[[:space:]]*[:=][[:space:]]*// p' /etc/uswsusp.conf)
+		if [ -n "$device" ]; then
+			candidates="$candidates $device"
+		fi
+	fi
+
+	# uswsusp - again...
+	if [ -e /etc/suspend.conf ]; then
+		device=$(sed -rn 's/^resume device[[:space:]]*[:=][[:space:]]*// p' /etc/suspend.conf)
+		if [ -n "$device" ]; then
+			candidates="$candidates $device"
+		fi
+	fi
+
+	# regular swsusp
+	for opt in $(cat /proc/cmdline); do
+		case $opt in
+		resume=*)
+			device="${opt#resume=}"
+			candidates="$candidates $device"
+			;;
+		esac
+	done
+
+	# initramfs-tools
+	if [ -e /etc/initramfs-tools/conf.d/resume ]; then
+		device=$(sed -rn 's/^RESUME[[:space:]]*=[[:space:]]*// p' /etc/initramfs-tools/conf.d/resume)
+		if [ -n "$device" ]; then
+			candidates="$candidates $device"
+		fi
+	fi
+
+	# Now check the sanity of all candidates
+	devices=""
+	count=0
+	for device in $candidates; do
+		# Remove quotes around device candidate
+		device=$(echo $device | sed -e 's/^"\(.*\)"[[:space:]]*$/\1/' -e "s/^'\(.*\)'[[:space:]]*$/\1/")
+
+		# Weed out clever defaults
+		if [ "$device" = "<path_to_resume_device_file>" ]; then
+			continue
+		fi
+
+		# Detect devices required by decrypt_derived
+		derived="$(grep "^${device#/dev/mapper/}\b.*decrypt_derived" /etc/crypttab 2>/dev/null | awk '{print $3}')"
+		if [ -n "$derived" ]; then
+			if grep -q "^$derived" /etc/crypttab; then
+				derived=$(canonical_device "/dev/mapper/$derived") || return 0
+				if [ "$derived" != "$rootdev" ]; then
+					devices="$devices $derived"
+				fi
+			else
+				echo "cryptsetup: WARNING: decrypt_derived device $derived not found in crypttab" >&2
+			fi
+		fi
+
+		device=$(canonical_device "$device") || return 0
+
+		# Weed out duplicates
+		dupe=0
+		for opt in $devices; do
+			if [ "$device" = "$opt" ]; then
+				dupe=1
+			fi
+		done
+		if [ $dupe -eq 1 ]; then
+			continue
+		fi
+
+		# This device seems ok
+		devices="$devices $device"
+		count=$(( $count + 1 ))
+	done
+
+	if [ $count -gt 1 ]; then
+		echo "cryptsetup: WARNING: found more than one resume device candidate:" >&2
+		for device in $devices; do
+			echo "                     $device" >&2
+		done
+	fi
+
+	if [ $count -gt 0 ]; then
+		echo $devices
+	fi
+
+	return 0
+}
+
+node_is_in_crypttab() {
+	local node
+	node="$1"
+
+	grep -q "^$node\b" /etc/crypttab
+	return $?
+}
+
+get_lvm_deps() {
+	local node deps maj min depnode
+	node="$1"
+
+	if [ -z $node ]; then
+		echo "cryptsetup: WARNING: get_lvm_deps - invalid arguments" >&2
+		return 1
+	fi
+
+	if ! deps=$(vgs --noheadings -o pv_name $(dmsetup --noheadings splitname $node | cut -d':' -f1) 2>/dev/null); then
+		# $node is not a LVM node, stopping here
+		return 0
+	fi
+
+	# We should now have a list physical volumes for the VG
+	for dep in $deps; do
+		depnode=$(dmsetup info -c --noheadings -o name "$dep" 2>/dev/null)
+		if [ -z "$depnode" ]; then
+			continue
+		fi
+		if [ "$(dmsetup table "$depnode" 2>/dev/null | cut -d' ' -f3)" != "crypt" ]; then
+			get_lvm_deps "$depnode"
+			continue
+		fi
+		echo "$depnode"
+	done
+
+	return 0
+}
+
+get_device_opts() {
+	local target source link extraopts rootopts opt
+	target="$1"
+	extraopts="$2"
+	KEYSCRIPT=""
+	OPTIONS=""
+
+	if [ -z "$target" ]; then
+		echo "cryptsetup: WARNING: get_device_opts - invalid arguments" >&2
+		return 1
+	fi
+
+	opt=$( grep "^$target\b" /etc/crypttab | head -1 | sed 's/[[:space:]]\+/ /g' )
+	source=$( echo $opt | cut -d " " -f2 )
+	key=$( echo $opt | cut -d " " -f3 )
+	rootopts=$( echo $opt | cut -d " " -f4- )
+
+	if [ -z "$opt" ] || [ -z "$source" ] || [ -z "$key" ] || [ -z "$rootopts" ]; then
+		echo "cryptsetup: WARNING: invalid line in /etc/crypttab for $target - $opt" >&2
+		return 1
+	fi
+
+	# Sanity checks for $source
+	if [ -h "$source" ]; then
+		link=$(readlink -nqe "$source")
+		if [ -z "$link" ]; then
+			echo "cryptsetup: WARNING: $source is a dangling symlink" >&2
+			return 1
+		fi
+
+		if [ "$link" != "${link#/dev/mapper/}" ]; then
+			echo "cryptsetup: NOTE: using $link instead of $source for $target" >&2
+			source="$link"
+		fi
+	fi
+
+	# Sanity checks for $key
+	if [ "$key" = "/dev/random" ] || [ "$key" = "/dev/urandom" ]; then
+		echo "cryptsetup: WARNING: target $target has a random key, skipped" >&2
+		return 1
+	fi
+
+	if [ -n "$extraopts" ]; then
+		rootopts="$extraopts,$rootopts"
+	fi
+
+	# We have all the basic options, let's go trough them
+	OPTIONS="target=$target,source=$source,key=$key"
+	local IFS=", "
+	unset HASH_FOUND
+	unset LUKS_FOUND
+	for opt in $rootopts; do
+		case $opt in
+			cipher=*)
+				OPTIONS="$OPTIONS,$opt"
+				;;
+			hash=*)
+				OPTIONS="$OPTIONS,$opt"
+				HASH_FOUND=1
+				;;
+			size=*)
+				OPTIONS="$OPTIONS,$opt"
+				;;
+			lvm=*)
+				OPTIONS="$OPTIONS,$opt"
+				;;
+			keyscript=*)
+				opt=${opt#keyscript=}
+				if [ ! -x "/lib/cryptsetup/scripts/$opt" ] && [ ! -x "$opt" ]; then
+					echo "cryptsetup: WARNING: target $target has an invalid keyscript, skipped" >&2
+					return 1
+				fi
+				KEYSCRIPT="$opt"
+				OPTIONS="$OPTIONS,keyscript=/lib/cryptsetup/scripts/$(basename "$opt")"
+				;;
+			tries=*)
+				OPTIONS="$OPTIONS,$opt"
+				;;
+			rootdev)
+				OPTIONS="$OPTIONS,$opt"
+				;;
+			discard)
+				OPTIONS="$OPTIONS,$opt"
+				;;
+			luks)
+				LUKS_FOUND=1
+				;;
+			*)
+				# Presumably a non-supported option
+				;;
+		esac
+	done
+
+	# Warn for missing hash option, unless we have a LUKS partition
+	if [ -z "$HASH_FOUND" ] && [ -z "$LUKS_FOUND" ]; then
+		echo "WARNING: Option hash missing in crypttab for target $target, assuming ripemd160." >&2
+		echo "         If this is wrong, this initramfs image will not boot." >&2
+		echo "         Please read /usr/share/doc/cryptsetup/README.initramfs.gz and add" >&2
+		echo "         the correct hash option to your /etc/crypttab."  >&2
+	fi
+
+	# If keyscript is set, the "key" is just an argument to the script
+	if [ "$key" != "none" ] && [ -z "$KEYSCRIPT" ]; then
+		echo "cryptsetup: WARNING: target $target uses a key file, skipped" >&2
+		return 1
+	fi
+}
+
+get_device_modules() {
+	local node value cipher blockcipher ivhash
+	node="$1"
+
+	# Check the ciphers used by the active root mapping
+	value=$(dmsetup table "$node" | cut -d " " -f4)
+	cipher=$(echo "$value" | cut -d ":" -f1 | cut -d "-" -f1)
+	blockcipher=$(echo "$value" | cut -d ":" -f1 | cut -d "-" -f2)
+	ivhash=$(echo "$value" | cut -d ":" -s -f2)
+
+	if [ -n "$cipher" ]; then
+		echo "$cipher"
+	else
+		return 1
+	fi
+
+	if [ -n "$blockcipher" ] && [ "$blockcipher" != "plain" ]; then
+		echo "$blockcipher"
+	fi
+
+	if [ -n "$ivhash" ] && [ "$ivhash" != "plain" ]; then
+		echo "$ivhash"
+	fi
+	return 0
+}
+
+canonical_device() {
+	local dev altdev original
+	dev="$1"
+
+	altdev="${dev#LABEL=}"
+	if [ "$altdev" != "$dev" ]; then
+		dev="/dev/disk/by-label/$altdev"
+	fi
+
+	altdev="${dev#UUID=}"
+	if [ "$altdev" != "$dev" ]; then
+		dev="/dev/disk/by-uuid/$altdev"
+	fi
+
+	original="$dev"
+	if [ -h "$dev" ]; then
+		dev=$(readlink -e "$dev")
+	fi
+
+	if [ "x${dev%/dev/dm-*}" = "x" ]; then
+		# try to detect corresponding symlink in /dev/mapper/
+		for dmdev in /dev/mapper/*; do
+			if [ "$(readlink -e "$dmdev")" = "$dev" ]; then
+				dev="$dmdev"
+			fi
+		done
+	fi
+
+	altdev="${dev#/dev/mapper/}"
+	if [ "$altdev" != "$dev" ]; then
+		echo "$altdev"
+		return 0
+	elif [ "x${original%/dev/disk/by-*/*}" = "x" ]; then
+		# support crypttab UUID/LABEL entries
+		# this is a /dev/disk/by-*/ path so return just the 'basename'
+		echo "${original##/dev/disk/by-*/}"
+		return 0
+	fi
+
+	echo "cryptsetup: WARNING: failed to detect canonical device of $original" >&2
+	return 1
+}
+
+add_device() {
+	local node nodes opts lastopts i count
+	nodes="$1"
+	opts=""     # Applied to all nodes
+	lastopts="" # Applied to last node
+
+	if [ -z "$nodes" ]; then
+		return 0
+	fi
+
+	# Flag root device
+	if [ "$nodes" = "$rootdev" ]; then
+		if [ -z "$opts" ]; then
+			opts="rootdev"
+		else
+			opts="$opts,rootdev"
+		fi
+	fi
+
+	# Check that it is a node under /dev/mapper/
+	# nodes=$(canonical_device "$nodes") || return 0
+
+	# Can we find this node in crypttab
+	if ! node_is_in_crypttab "$nodes"; then
+		# dm node but not in crypttab, is it a lvm device backed by dm-crypt nodes?
+		lvmnodes=$(get_lvm_deps "$nodes") || return 1
+
+		# not backed by any dm-crypt nodes; stop here
+		if [ -z "$lvmnodes" ]; then
+		    return 0
+		fi
+
+		# It is a lvm device!
+		lastopts="lvm=$nodes"
+		nodes="$lvmnodes"
+	fi
+
+	# Prepare to setup each node
+	count=$(echo "$nodes" | wc -w)
+	i=1
+	for node in $nodes; do
+		# Prepare the additional options
+		if [ $i -eq $count ]; then
+			if [ -z "$opts" ]; then
+				opts="$lastopts"
+			elif [ -n "$lastopts" ]; then
+				opts="$opts,$lastopts"
+			fi
+		fi
+
+		# Get crypttab root options
+		if ! get_device_opts "$node" "$opts"; then
+			continue
+		fi
+		echo "$OPTIONS" >>"$DESTDIR/conf/conf.d/cryptroot"
+
+		# If we have a keyscript, make sure it is included
+		if [ -n "$KEYSCRIPT" ]; then
+			if [ ! -d "$DESTDIR/lib/cryptsetup/scripts" ]; then
+				mkdir -p "$DESTDIR/lib/cryptsetup/scripts"
+			fi
+
+			if [ -e "/lib/cryptsetup/scripts/$KEYSCRIPT" ]; then
+				copy_exec "/lib/cryptsetup/scripts/$KEYSCRIPT" /lib/cryptsetup/scripts >&2
+			elif [ -e "$KEYSCRIPT" ]; then
+				copy_exec "$KEYSCRIPT" /lib/cryptsetup/scripts >&2
+			elif KSTYPE="$(type "$KEYSCRIPT" 2>&1)"; then
+				if [ -x "${KSTYPE#"$KEYSCRIPT" is }" ]; then
+					copy_exec "${KSTYPE#"$KEYSCRIPT" is }" /lib/cryptsetup/scripts >&2
+				fi
+			else
+				echo "cryptsetup: WARNING: failed to find keyscript $KEYSCRIPT" >&2
+				continue
+			fi
+		fi
+
+		# Calculate needed modules
+		modules=$(get_device_modules $node | sort | uniq)
+		if [ -z "$modules" ]; then
+			echo "cryptsetup: WARNING: failed to determine cipher modules to load for $node" >&2
+			continue
+		fi
+		echo dm_mod
+		echo dm_crypt
+		echo "$modules"
+		# Load hardware aes module
+		if cpu_has_aesni; then
+			echo aesni
+		fi
+		i=$(( $i + 1 ))
+	done
+
+	return 0
+}
+
+cpu_has_aesni() {
+	return $(grep -q aes /proc/cpuinfo)
+}
+
+add_crypto_modules() {
+	local mod file altmod found genericfound
+	mod="$1"
+	found=""
+	genericfound=""
+
+	if [ -z "$mod" ]; then
+		return 1
+	fi
+
+	# We have several potential sources of modules (in order of preference):
+	#
+	#   a) /lib/modules/$VERSION/kernel/arch/$ARCH/crypto/$mod-$specific.ko
+	#   b) /lib/modules/$VERSION/kernel/crypto/$mod_generic.ko
+	#   c) /lib/modules/$VERSION/kernel/crypto/$mod.ko
+	#
+	# and (currently ignored):
+	#
+	#   d) /lib/modules/$VERSION/kernel/drivers/crypto/$specific-$mod.ko
+
+	for file in $(find "$MODULESDIR/kernel/arch/" -name "$mod-*.ko" 2>/dev/null); do
+		altmod="${file##*/}"
+		altmod="${altmod%.ko}"
+		manual_add_modules "$altmod"
+		found="yes"
+	done
+
+	for file in $(find "$MODULESDIR/kernel/crypto/" -name "${mod}_generic.ko" 2>/dev/null); do
+		altmod="${file##*/}"
+		altmod="${altmod%.ko}"
+		manual_add_modules "$altmod"
+		found="yes"
+		genericfound="yes"
+	done
+
+	if [ -z "$genericfound" ]; then
+		for file in $(find "$MODULESDIR/kernel/crypto/" -name "${mod}.ko" 2>/dev/null); do
+			altmod="${file##*/}"
+			altmod="${altmod%.ko}"
+			manual_add_modules "$altmod"
+			found="yes"
+		done
+	fi
+
+	if [ -z "$found" ]; then
+		return 1
+	fi
+
+	return 0
+}
+
+#
+# Begin real processing
+#
+
+setup="no"
+rootdev=""
+resumedevs=""
+
+# Find the root and resume device(s)
+if [ -r /etc/crypttab ]; then
+	rootdev=$(get_root_device)
+	if [ -z "$rootdev" ]; then
+		echo "cryptsetup: WARNING: could not determine root device from /etc/fstab" >&2
+	fi
+	resumedevs=$(get_resume_devices)
+fi
+
+# Load the config opts and modules for each device
+for dev in $rootdev $resumedevs; do
+	if ! modules=$(add_device "$dev"); then
+		echo "cryptsetup: FAILURE: could not determine configuration for $dev" >&2
+		continue
+	fi
+	setup="yes"
+
+	if [ "$MODULES" = "most" ]; then
+		archcrypto="$(find "$MODULESDIR/kernel/arch" -type d -name "crypto" 2>/dev/null)"
+		if [ -n "$archcrypto" ]; then
+			copy_modules_dir "${archcrypto##*${MODULESDIR}/}"
+		fi
+		copy_modules_dir "kernel/crypto"
+	else
+		for mod in $modules; do
+			add_crypto_modules $mod
+		done
+	fi
+done
+
+# With large initramfs, we always add a basic subset of modules
+if [ "$MODULES" != "dep" ]; then
+	for mod in aes cbc chainiv cryptomgr krng sha256 xts; do
+		add_crypto_modules $mod
+	done
+fi
+
+# See if we need to add the basic components
+if [ "$MODULES" != "dep" ] || [ "$setup" = "yes" ]; then
+	for mod in dm_mod dm_crypt; do
+		manual_add_modules $mod
+	done
+
+	copy_exec /sbin/cryptsetup
+	copy_exec /sbin/dmsetup
+	copy_exec /lib/cryptsetup/askpass
+
+	# We need sed. Either via busybox or as standalone binary.
+	if [ "$BUSYBOX" = "n" ] || [ ! -e ${BUSYBOXDIR}/busybox ]; then
+		copy_exec /bin/sed
+	fi
+fi
+
+exit 0
