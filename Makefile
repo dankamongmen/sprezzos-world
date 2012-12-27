@@ -702,6 +702,14 @@ $(AVIDEMUX): $(SPREZZ)/avidemux/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf avidemux_$(avidemux_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: avogadro
+avogadro:$(AVOGADRO)_$(ARCH).deb
+$(AVOGADRO): $(SPREZZ)/avogadro/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf avogadro-$(avogadro_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: awn-extras-applets
 awn-extras-applets:$(AWNEXTRASAPPLETS)_$(ARCH).deb
 $(AWNEXTRASAPPLETS): $(SPREZZ)/awn-extras-applets/debian/changelog
