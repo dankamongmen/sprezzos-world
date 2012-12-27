@@ -32,7 +32,6 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
 
-APITRACEORIG:=apitrace_$(shell echo $(apitrace_UPVER) | cut -d- -f1).orig.tar.xz
 GROWLIGHTORIG:=growlight_$(shell echo $(growlight_UPVER) | cut -d- -f1).orig.tar.xz
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_UPVER) | cut -d- -f1).orig.tar.xz
 SICKBEARDORIG:=sick-beard_$(shell echo $(Sick-Beard_UPVER) | cut -d- -f1).orig.tar.xz
@@ -95,12 +94,6 @@ SOCATORIG:=socat_$(shell echo $(socat_UPVER) | cut -d- -f1).orig.tar.bz2
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
-.PHONY: apitrace
-apitrace:$(APITRACE)_$(ARCH).deb
-$(APITRACE): $(SPREZZ)/apitrace/debian/changelog
-	git clone git://github.com/apitrace/apitrace.git $@
-	tar cJf $(APITRACEORIG) $@ --exclude-vcs
-	cp -r $(<D) $@/
 
 .PHONY: babl
 babl:$(BABL)_$(ARCH).deb
@@ -211,6 +204,14 @@ $(CHEESE): $(SPREZZ)/cheese/debian/changelog
 	git clone git://github.com/dankamongmen/dankcheese.git $@
 	tar cJf cheese-$(cheese_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
 	ln -sf cheese-$(cheese_UPVER).tar.xz cheese_$(cheese_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+.PHONY: apitrace
+apitrace:$(APITRACE)_$(ARCH).deb
+$(APITRACE): $(SPREZZ)/apitrace/debian/changelog
+	git clone git://github.com/apitrace/apitrace.git $@
+	tar cJf apitrace-$(apitrace_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -sf apitrace-$(apitrace_UPVER).tar.xz apitrace_$(apitrace_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: gnome-xcf-thumbnailer
@@ -845,6 +846,14 @@ $(CAIRO): $(SPREZZ)/cairo/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf cairo-$(cairo_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: cairo-dock
+cairo-dock:$(CAIRODOCK)_$(ARCH).deb
+$(CAIRODOCK): $(SPREZZ)/cairo-dock/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cairo-dock-$(cairo-dock_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cclive
 cclive:$(CCLIVE)_$(ARCH).deb
@@ -1718,6 +1727,14 @@ $(GNOMEDISKUTILITY): $(SPREZZ)/gnome-disk-utility/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-disk-utility_$(gnome-disk-utility_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: gnome-do
+gnome-do:$(GNOMEDO)_$(ARCH).deb
+$(GNOMEDO): $(SPREZZ)/gnome-do/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-do-$(gnome-do_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnome-doc-utils
 gnome-doc-utils:$(GNOMEDOCUTILS)_$(ARCH).deb
 $(GNOMEDOCUTILS): $(SPREZZ)/gnome-doc-utils/debian/changelog
@@ -1781,6 +1798,22 @@ $(GNOMEKEYRING): $(SPREZZ)/gnome-keyring/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-keyring_$(gnome-keyring_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: lmms
+lmms:$(LMMS)_$(ARCH).deb
+$(LMMS): $(SPREZZ)/lmms/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf lmms-$(lmms_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: lm-sensors
+lm-sensors:$(LMSENSORS)_$(ARCH).deb
+$(LMSENSORS): $(SPREZZ)/lm-sensors/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf lm_sensors-$(lm-sensors_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libgd2
 libgd2:$(LIBGD2)_$(ARCH).deb
@@ -2621,6 +2654,14 @@ $(ELEMENTARY): $(SPREZZ)/elementary/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf elementary_$(elementary_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: eterm
+eterm:$(ETERM)_$(ARCH).deb
+$(ETERM): $(SPREZZ)/eterm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Eterm-$(eterm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: ethumb
 ethumb:$(ETHUMB)_$(ARCH).deb
@@ -4120,6 +4161,14 @@ $(PYTHON2.7): $(SPREZZ)/python2.7/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Python-$(python2.7_UPVER).tgz $(TARARGS) $@
 
+.PHONY: python3.3
+python3.3:$(PYTHON3.3)_$(ARCH).deb
+$(PYTHON3.3): $(SPREZZ)/python3.3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf Python-$(python3.3_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: python-coverage
 python-coverage:$(PYTHONCOVERAGE)_$(ARCH).deb
 $(PYTHONCOVERAGE): $(SPREZZ)/python-coverage/debian/changelog
@@ -4135,6 +4184,22 @@ $(PYTHONGNUTLS): $(SPREZZ)/python-gnutls/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-gnutls-$(python-gnutls_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: python-numpy
+python-numpy:$(PYTHONNUMPY)_$(ARCH).deb
+$(PYTHONNUMPY): $(SPREZZ)/python-numpy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-numpy_$(python-numpy_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: python-qt4
+python-qt4:$(PYTHONQT4)_$(ARCH).deb
+$(PYTHONQT4): $(SPREZZ)/python-qt4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf PyQt-x11-gpl-$(python-qt4_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: newt
 newt:$(NEWT)_$(ARCH).deb
@@ -4191,6 +4256,14 @@ $(RATPOISON): $(SPREZZ)/ratpoison/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ratpoison-$(ratpoison_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: rrdtool
+rrdtool:$(RRDTOOL)_$(ARCH).deb
+$(RRDTOOL): $(SPREZZ)/rrdtool/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf rrdtool-$(rrdtool_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: librsvg
 librsvg:$(LIBRSVG)_$(ARCH).deb
