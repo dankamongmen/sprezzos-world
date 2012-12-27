@@ -494,6 +494,14 @@ $(LIBACCOUNTSGLIB): $(SPREZZ)/libaccounts-glib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libaccounts-glib-$(libaccounts-glib_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: acpi-support
+acpi-support:$(ACPISUPPORT)_$(ARCH).deb
+$(ACPISUPPORT): $(SPREZZ)/acpi-support/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf acpi-support-$(acpi-support_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: acpid
 acpid:$(ACPID)_$(ARCH).deb
 $(ACPID): $(SPREZZ)/acpid/debian/changelog
@@ -1405,6 +1413,14 @@ $(GCR): $(SPREZZ)/gcr/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gcr-$(gcr_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: cryptsetup
+cryptsetup:$(CRYPTSETUP)_$(ARCH).deb
+$(CRYPTSETUP): $(SPREZZ)/cryptsetup/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cryptsetup-$(cryptsetup_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gcrypt
 gcrypt:$(GCRYPT)_$(ARCH).deb
@@ -2485,6 +2501,14 @@ $(EEZE): $(SPREZZ)/eeze/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf eeze_$(eeze_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: efibootmgr
+efibootmgr:$(EFIBOOTMGR)_$(ARCH).deb
+$(EFIBOOTMGR): $(SPREZZ)/efibootmgr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf efibootmgr-$(efibootmgr_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: efreet
 efreet:$(EFREET)_$(ARCH).deb
