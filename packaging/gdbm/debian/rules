@@ -1,0 +1,169 @@
+#!/usr/bin/make -f
+# debian/rules file - for GNU DBM (1.8.3).
+# Based on sample debian/rules file - for GNU Hello (1.3).
+# Copyright 1994,1995 by Ian Jackson.
+# Copyright 1998-2006 by James Troup.
+# Copyright 2008-2009 by Anibal Monsalve Salazar.
+# I hereby give you perpetual unlimited permission to copy,
+# modify and relicense this file, provided that you do not remove
+# my name from the file itself.  (I assert my moral right of
+# paternity under the Copyright, Designs and Patents Act 1988.)
+# This file may have to be extensively modified
+
+DEB_BUILD_GNU_TYPE	:= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE	:= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH	:= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+CFLAGS += -O2 -g -Wall -D_REENTRANT
+
+STRIP=strip --remove-section=.comment --remove-section=.note
+
+install_dir=install -d -m 755
+install_file=install -m 644
+install_script=install -m 755
+install_binary=install -m 755 -s
+compress=gzip -9vn
+
+clean:
+	$(checkdir)
+	rm -f build config.log config.cache
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f config.sub config.guess
+	rm -f $$(find . -name "*~")
+	rm -rf debian/tmp debian/files* debian/substvars*
+
+build-arch: build
+build-indep: build
+build:
+	$(checkdir)
+	libtoolize --copy --force
+	aclocal
+	autoconf
+	cp -f /usr/share/misc/config.sub /usr/share/misc/config.guess .
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure --prefix=/usr \
+		--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH)
+else
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure --prefix=/usr \
+	--host=$(DEB_HOST_GNU_TYPE) --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH)
+endif
+	echo "/* We use fcntl locking (POSIX) instead of flock (BSD) */" >> autoconf.h
+	echo "#undef HAVE_FLOCK" >> autoconf.h
+	CFLAGS="$(CFLAGS)" LIBS="$(LDFLAGS)" $(MAKE)
+	$(MAKE) gdbm.info
+	touch build
+
+binary-indep:	checkroot build
+	$(checkdir)
+
+binary-arch: binary-libgdbm binary-libgdbm-dev
+
+binary-libgdbm: checkroot build
+	$(checkdir)
+	rm -rf debian/tmp/
+
+	$(MAKE) INSTALL_ROOT=$$(pwd)/debian/tmp install install-compat
+	rm -fr debian/tmp/usr/include debian/tmp/usr/info \
+	       debian/tmp/usr/man debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.a \
+                debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.la \
+	       debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.so
+	$(STRIP) --strip-unneeded debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.so*
+	chmod 644 debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.so*
+
+	$(compress) debian/tmp/usr/share/info/*
+	$(compress) debian/tmp/usr/share/man/man3/*
+
+	$(install_dir) debian/tmp/DEBIAN
+	$(install_file) debian/shlibs debian/tmp/DEBIAN/
+	$(install_script) debian/postinst debian/postrm debian/tmp/DEBIAN/
+
+	$(install_dir) debian/tmp/usr/share/doc/libgdbm3/
+	$(install_file) debian/changelog debian/tmp/usr/share/doc/libgdbm3/changelog.Debian
+	$(install_file) ChangeLog debian/tmp/usr/share/doc/libgdbm3/changelog
+	$(compress) debian/tmp/usr/share/doc/libgdbm3/*
+	$(install_file) debian/copyright debian/tmp/usr/share/doc/libgdbm3/copyright
+
+	dpkg-shlibdeps debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libgdbm.so.3.0.0
+	dpkg-gencontrol -isp -plibgdbm3
+	# md5sums control file
+	cd debian/tmp/; find . -type f ! -regex '.*/DEBIAN/.*' -printf '%P\0' | xargs -r0 md5sum > DEBIAN/md5sums
+	dpkg-gensymbols -plibgdbm3
+	chown -R root.root debian/tmp/
+	chmod -R go=rX debian/tmp/
+	dpkg --build debian/tmp/ ..
+
+binary-libgdbm-dev: checkroot build
+	$(checkdir)
+	rm -fr debian/tmp/
+
+	$(MAKE) prefix=$$(pwd)/debian/tmp/usr \
+                infodir=$$(pwd)/debian/tmp/usr/share/info \
+                man3dir=$$(pwd)/debian/tmp/usr/share/man/man3 \
+                install install-compat
+	for ext in "" "_compat"; do \
+	  $(STRIP) --strip-debug debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libgdbm$$ext.a; \
+	  rm debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libgdbm$$ext.so.3.0.0; \
+	  rm debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libgdbm$$ext.so.3; \
+	done
+	#chmod 644 debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.la
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.la
+
+	# libc6 owns ndbm.h, but some apps want gdbm's
+	mv debian/tmp/usr/include/ndbm.h debian/tmp/usr/include/gdbm-ndbm.h
+
+	rm -f debian/tmp/usr/share/man/man3/gdbm.3
+	cd debian/tmp/usr/share/man/man3 ; \
+	    for i in dbm gdbm_error gdbm_errno gdbm_open \
+		    gdbm_close gdbm_store gdbm_fetch gdbm_delete \
+		    gdbm_firstkey gdbm_nextkey gdbm_reorganize \
+		    gdbm_sync gdbm_exists gdbm_strerror \
+		    gdbm_setopt dbminit store fetch delete \
+		    firstkey nextkey dbmclose dbm_open \
+		    dbm_close dbm_fetch dbm_store dbm_delete \
+		    dbm_firstkey dbm_nextkey dbm_error \
+		    dbm_clearerr dbm_pagfno dbm_dirfno \
+		    dbm_rdonly; do \
+		ln -s gdbm.3.gz $$i.3.gz ; \
+	    done
+
+	rm -f debian/tmp/usr/share/info/gdbm.info
+	rmdir debian/tmp/usr/share/info/
+
+	$(install_dir) debian/tmp/DEBIAN/
+
+	$(install_dir) debian/tmp/usr/share/doc/libgdbm-dev/
+	$(install_file) debian/changelog \
+			debian/tmp/usr/share/doc/libgdbm-dev/changelog.Debian
+	$(install_file) ChangeLog  debian/tmp/usr/share/doc/libgdbm-dev/changelog
+	$(install_file) NEWS README debian/tmp/usr/share/doc/libgdbm-dev/
+	$(compress) debian/tmp/usr/share/doc/libgdbm-dev/*
+	$(install_file) debian/copyright \
+			debian/tmp/usr/share/doc/libgdbm-dev/copyright
+
+	dpkg-gencontrol -isp -plibgdbm-dev
+	# md5sums control file
+	cd debian/tmp/; find . -type f ! -regex '.*/DEBIAN/.*' -printf '%P\0' | xargs -r0 md5sum > DEBIAN/md5sums
+	chown -R root.root debian/tmp/
+	chmod -R go=rX debian/tmp/
+	dpkg --build debian/tmp/ ..
+
+define checkdir
+	test -f gdbmclose.c -a -f debian/rules
+endef
+
+# Below here is fairly generic really
+
+binary:		binary-indep binary-arch
+
+source diff:
+	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false
+
+checkroot:
+	$(checkdir)
+	test root = "`whoami`"
+
+.PHONY: binary binary-arch binary-indep clean checkroot
