@@ -42,8 +42,6 @@ ATKUP:=atk-$(shell echo $(atk_UPVER) | cut -d- -f1)
 ATKORIG:=atk1.0_$(shell echo $(atk_UPVER) | cut -d- -f1).orig.tar.xz
 BRASEROUP:=brasero-$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1)
 BRASEROORIG:=brasero_$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-CHEESEUP:=cheese-$(shell echo $(cheese_UPVER) | cut -d: -f2- | cut -d- -f1)
-CHEESEORIG:=cheese_$(shell echo $(cheese_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 EVINCEUP:=evince-$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1)
 EVINCEORIG:=evince_$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 FBIUP:=fbida-$(shell echo $(fbi_UPVER) | cut -d= -f2- | cut -d- -f1)
@@ -205,6 +203,14 @@ $(MX): $(SPREZZ)/mx/debian/changelog
 	git clone git://github.com/clutter-project/mx.git $@
 	tar cJf mx-$(mx_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
 	ln -sf mx-$(mx_UPVER).tar.xz mx_$(mx_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+.PHONY: cheese
+cheese:$(CHEESE)_$(ARCH).deb
+$(CHEESE): $(SPREZZ)/cheese/debian/changelog
+	git clone git://github.com/dankamongmen/dankcheese.git $@
+	tar cJf cheese-$(cheese_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -sf cheese-$(cheese_UPVER).tar.xz cheese_$(cheese_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: gnome-xcf-thumbnailer
@@ -5365,20 +5371,6 @@ brasero:$(BRASERO)_$(ARCH).deb
 $(BRASERO): $(SPREZZ)/brasero/debian/changelog $(BRASEROORIG)
 	mkdir -p $@
 	tar xJvf $(BRASEROORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(CHEESEUP).tar.xz
-$(CHEESEUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/cheese/3.6/$@
-
-$(CHEESEORIG): $(CHEESEUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: cheese
-cheese:$(CHEESE)_$(ARCH).deb
-$(CHEESE): $(SPREZZ)/cheese/debian/changelog $(CHEESEORIG)
-	mkdir -p $@
-	tar xJvf $(CHEESEORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GSETSCHEMASUP).tar.xz
