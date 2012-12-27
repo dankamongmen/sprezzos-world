@@ -1,0 +1,152 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+dh_gnome - tools for the Debian GNOME Packaging Team
+
+=cut
+
+use strict;
+use Debian::Debhelper::Dh_Lib;
+
+=head1 SYNOPSIS
+
+B<dh_gnome_clean> [I<debhelper options>] [--no-control] [--check-dist]
+
+=head1 DESCRIPTION
+
+gnome-pkg-tools contains some useful tools for the Debian GNOME Packaging Team.
+
+dh_gnome_clean is a tool designed to provide useful functions to GNOME packages
+which do use of debhelper as preferred build system, similar to the CDBS
+routines provided by gnome-pkg-tools.
+
+dh_gnome_clean handles some routines to be run during clean phase.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<--no-control>
+
+Use this flag if you do not want to recreate debian/control file on top of
+debian/control.in, or if you do not provide the latter.
+
+=item B<--check-dist>
+
+Use this flag if you want to avoid unwanted uploads to unstable.
+
+=back
+
+=cut
+
+init(options => { "no-control" => \$dh{MANGLE_CONTROL},
+                  "check-dist" => \$dh{CHECK_DIST} });
+
+# Members list of Debian GNOME Maintainers
+my $team_list = "/usr/share/gnome-pkg-tools/pkg-gnome.team";
+# Uploaders which should always be listed in UPLOADERS;
+# the Maintainer is still excluded
+my $always_uploads = "Debian GNOME Maintainers <pkg-gnome-maintainers\@lists.alioth.debian.org>";
+# Number of uploads to be considered recent for the list of recent uploaders
+my $recent_uploads = 10;
+# Header for debian/control
+my $control_header = "/usr/share/gnome-pkg-tools/control.header";
+# Allowed distributions in changelog
+my @allowed_dists = ("experimental");
+# Disallowed distributions in changelog
+my @disallowed_dists = ("unstable");
+
+sub mangle_control {
+
+    my @team_list;
+    my @uploaders;
+    my $maintainer;
+
+    # Save control.in content
+    open FILE, "debian/control.in" or die $!;
+    my @control = <FILE>;
+    close FILE;
+
+    # Save control_header content
+    open FILE, $control_header or die $!;
+    my @header = <FILE>;
+    close FILE;
+
+    # Determine who uploaded package so far
+    open FILE, "debian/changelog" or die $!;
+    foreach my $line (<FILE>) {
+        if ($line =~ m/^ -- (.*>)  /) {
+            push (@uploaders, $1);
+        }
+    }
+    close FILE;
+
+    # Determine pkg-gnome team members
+    open FILE, $team_list or die $!;
+    foreach my $line (<FILE>) {
+        if ($line =~ s/,//) {
+            push (@team_list, $line);
+        }
+    }
+    close FILE;
+
+    # Determine Maintainer
+    foreach (@control) {
+        $_ =~ m/^Maintainer: (.*)$/;
+        if ($1) {
+            $maintainer = $1;
+        }
+    }
+    $maintainer or die "Unable to determine Maintainer";
+
+    # Maintainer must not be listed in Uploader
+    if (my ($index) = grep { $team_list[$_] =~ $maintainer } 0..$#team_list) {
+        delete $team_list[$index];
+    }
+
+    # Only consider a limited number of uploads
+    delete @uploaders[$recent_uploads..$#uploaders];
+
+    # Fill debian/control with collected data
+    open FILE, ">", "debian/control" or die $!;
+    print FILE @header;
+    my %hash = map { $_, 1 } @uploaders;
+    my $uploaders = join (", ", sort (keys %hash) );
+    foreach (@control) {
+        $_ =~ s/\@GNOME_TEAM\@/$uploaders/;
+        print FILE $_;
+    }
+    close FILE;
+
+}
+
+sub check_dist {
+
+    `dpkg-parsechangelog` =~ m/Distribution: (\S+)/;
+    my $distribution = $1;
+
+    foreach (@allowed_dists) {
+        return if $distribution eq $_;
+    }
+    foreach (@disallowed_dists) {
+        die "Disallowed distribution: $distribution" if $distribution eq $_;
+    }
+    print "Unknown distribution: $distribution\n";
+
+}
+
+unless ($dh{MANGLE_CONTROL}) { mangle_control(); }
+if ($dh{CHECK_DIST}) { check_dist(); }
+
+=head1 SEE ALSO
+
+L<debhelper(7)>
+
+This program is a part of gnome-pkg-tools but is made to work with debhelper.
+
+=head1 AUTHORS
+
+Luca Falavigna <dktrkranz@debian.org>
+
+=cut
