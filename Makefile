@@ -1464,6 +1464,14 @@ $(GCSTAR): $(SPREZZ)/gcstar/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gcstar-$(gcstar_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gdbm
+gdbm:$(GDBM)_$(ARCH).deb
+$(GDBM): $(SPREZZ)/gdbm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gdbm-$(gdbm_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gdisk
 gdisk:$(GDISK)_$(ARCH).deb
 $(GDISK): $(SPREZZ)/gdisk/debian/changelog
