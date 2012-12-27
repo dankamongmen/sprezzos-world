@@ -5355,6 +5355,12 @@ console-setup:$(CONSOLESETUP)_$(ARCH).deb
 $(CONSOLESETUP): $(SPREZZ)/console-setup/debian/changelog
 	cp -r $(<D)/.. $@
 
+.PHONY: gnome-pkg-tools
+gnome-pkg-tools:$(GNOMEPKGTOOLS)_$(ARCH).deb
+$(GNOMEPKGTOOLS): $(SPREZZ)/gnome-pkg-tools/debian/changelog
+	cp -r $(<D)/.. $@/
+	tar cJvf gnome-pkg-tools_$(gnome-pkg-tools_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
+
 .PHONY: libdebian-installer
 libdebian-installer:$(LIBDEBIANINSTALLER)_$(ARCH).udeb
 $(LIBDEBIANINSTALLER): $(SPREZZ)/libdebian-installer/debian/changelog
