@@ -4328,7 +4328,7 @@ $(SPACEFM): $(SPREZZ)/spacefm/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf spacefm_$(spacefm_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf spacefm-$(spacefm_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: speech-tools
 speech-tools:$(SPEECHTOOLS)_$(ARCH).deb
