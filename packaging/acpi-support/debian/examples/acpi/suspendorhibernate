@@ -1,0 +1,212 @@
+#!/bin/sh
+#
+# How we handle suspend/hibernate is a bit complicated:
+#
+# If gnome-power-manager or klaptopdaemon are running, we send a fake key
+# and that's it. The daemons may have policies that turn off suspend in
+# response to suspend keys etc., so we don't want to do anything ourselves.
+#
+# If not, we follow the SUSPEND_METHODS setting.
+#
+#
+# This script takes parameter "suspend" or "hibernate".
+#
+. /etc/default/acpi-support
+. /usr/share/acpi-support/power-funcs
+. /usr/share/acpi-support/device-funcs
+. /usr/share/acpi-support/policy-funcs
+. /usr/share/acpi-support/key-constants
+
+DeviceConfig;
+
+# The difference between suspend and hibernate
+if [ "$1" = "suspend" ] ; then
+	KEY=$KEY_SLEEP
+	HIBERNATE_CMD=/usr/sbin/hibernate-ram
+	PM_UTILS_CMD=/usr/sbin/pm-suspend
+	DBUS_METHOD=Suspend
+	DBUS_PARAMS="int32:0"
+elif [ "$1" = "hibernate" ] ; then
+	KEY=$KEY_SUSPEND
+	HIBERNATE_CMD=/usr/sbin/hibernate-disk
+	PM_UTILS_CMD=/usr/sbin/pm-hibernate
+	DBUS_METHOD=Hibernate
+	DBUS_PARAMS=
+else
+	echo "'Usage: '$0' (suspend|hibernate)'"
+fi
+
+
+#
+# Backward compatibility
+#
+
+# Backward compatibility for setting USE_HIBERNATE_PACKAGE
+if [ "$SUSPEND_METHODS" = "" ] &&
+   [ "$USE_HIBERNATE_PACKAGE" = "true" ] &&
+   [ -x "$HIBERNATE_CMD" ] ; then
+	SUSPEND_METHODS="hibernate"
+fi
+
+# Backward compatibility for setups before SUSPEND_METHODS existed.
+if [ "$SUSPEND_METHODS" = "" ] ; then
+	# Legacy configuration -- use the built-in legacy suspend support. We
+	# can NEVER change this explicitly, because it will break people's
+	# working suspend setups, especially ones that depend on custom scripts
+	# in /etc/acpi/suspend.d and /etc/acpi/resume.d.
+	SUSPEND_METHODS="acpi-support"
+fi
+
+#
+# Just in case ...
+#
+sync
+
+#
+# Try the SUSPEND_METHODS in order.
+#
+
+for METHOD in $SUSPEND_METHODS; do
+	case $METHOD in
+	none)
+		exit
+		;;
+		
+	dbus-pm)
+		if [ -x /usr/bin/dbus-send ] ; then
+			# Call the power management daemon (which, if it is
+			# running, we probably don't know about, since we send
+			# keys if we detect one running that we know of).
+			if /usr/bin/dbus-send --session \
+			  --dest=org.freedesktop.PowerManagement \
+			  --type=method_call \
+			  --print-reply \
+			  --reply-timeout=2000 \
+			  /org/freedesktop/PowerManagement \
+			  org.freedesktop.PowerManagement.$DBUS_METHOD ;
+			  then			  
+			  	# The other side exists, we have access to it,
+			  	# and it received the message. It may have
+			  	# failed (I tested this: if pm-suspend returns
+			  	# exit code 1, then the return code of dbus-send
+			  	# is still 0 and you get no errors), but that
+			  	# doesn't matter: the first method in the list
+			  	# that we can access is the one that has to do
+			  	# it.
+			  	exit
+			fi
+			# We got a DBUS error, which means that the other side
+			# does not exist or we don't have access to it. We
+			# continue by trying the next option.
+		fi
+		;;
+		
+	dbus-hal)
+		if [ -x /usr/bin/dbus-send ] ; then
+			# Call HAL directly.
+			if /usr/bin/dbus-send --system \
+			  --dest=org.freedesktop.Hal \
+			  --type=method_call \
+			  --print-reply \
+			  --reply-timeout=2000 \
+			  /org/freedesktop/Hal/devices/computer \
+			  org.freedesktop.Hal.Device.SystemPowerManagement.$DBUS_METHOD $DBUS_PARAMS ;
+			  then			  
+			  	# The other side exists, we have access to it,
+			  	# and it received the message. It may have
+			  	# failed (I tested this: if pm-suspend returns
+			  	# exit code 1, then the return code of dbus-send
+			  	# is still 0 and you get no errors), but that
+			  	# doesn't matter: the first method in the list
+			  	# that we can access is the one that has to do
+			  	# it.
+			  	exit
+			fi
+			# We got a DBUS error, which means that the other side
+			# does not exist or we don't have access to it. We
+			# continue by trying the next option.
+		fi
+		;;
+		
+	pm-utils)
+		if [ -x $PM_UTILS_CMD ] ; then
+			$PM_UTILS_CMD
+			exit
+		fi
+		;;
+		
+	hibernate)
+		if [ -x $HIBERNATE_CMD ] ; then
+			$HIBERNATE_CMD
+			exit		
+		fi
+		;;
+		
+	acpi-support)
+		if [ "$1" = "hibernate" ] ; then
+			if [ x$ACPI_HIBERNATE != xtrue ]; then
+			  exit;
+			fi
+					
+			# Unset video posting - it's not needed for suspend to disk
+			unset POST_VIDEO
+			unset USE_DPMS
+
+			. /etc/acpi/prepare.sh
+
+			echo -n $HIBERNATE_MODE >/sys/power/disk
+
+			if [ -x /usr/sbin/s2disk ]; then
+			    /usr/sbin/s2disk
+			else
+			    echo -n "disk" >/sys/power/state
+			fi
+
+			. /etc/acpi/resume.sh
+		else	# $1 = suspend			
+			if [ x$ACPI_SLEEP != xtrue ]; then
+			  exit;
+			fi
+
+			if [ x$LOCK_SCREEN = xtrue ]; then
+			    if pidof xscreensaver > /dev/null; then 
+				d=/tmp/.X11-unix
+				for x in $d/*; do
+				    displaynum=${x#$d/X}
+				    getXuser;
+				    if [ x"$XAUTHORITY" != x"" ]; then	    
+					export DISPLAY=":$displaynum"
+					. /usr/share/acpi-support/screenblank
+				    fi
+				done
+			    fi
+			fi
+
+			# Generic preparation code
+			. /etc/acpi/prepare.sh
+
+			if [ x$DISABLE_DMA = xtrue ] && [ -b /dev/hda ]; then
+			  hdparm -d 0 /dev/hda
+			fi
+
+			echo -n $ACPI_SLEEP_MODE >/sys/power/state
+
+			if [ x$RESET_DRIVE = xtrue ] && [ -b /dev/hda ]; then
+			    hdparm -w /dev/hda
+			    hdparm -C /dev/hda
+			    hdparm -C /dev/hda
+			    hdparm -C /dev/hda
+			    hdparm -d 1 /dev/hda
+			fi
+
+			if [ x$DISABLE_DMA = xtrue ] && [ -b /dev/hda ]; then
+			  hdparm -d 1 /dev/hda
+			fi
+
+			# Generic wakeup code
+			. /etc/acpi/resume.sh	
+		fi	
+		exit
+		;;
+	esac
+done

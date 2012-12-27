@@ -1,0 +1,186 @@
+--- acpi-support/lib/state-funcs
++++ acpi-support/lib/state-funcs
+@@ -1,96 +1,103 @@
+-#!/bin/sh
+ # Paul Sladen, 2006-03-28, 2007-03-26
++# Luca Niccoli <lultimouomo@gmail.com>, 2010-06-23
++# Cristian Ionescu-Idbohrn <cristian.ionescu-idbohrn@axis.com>, 2010-12-14
+ # Library functions to check/change status of wireless
+ 
+-# Return 0 if there is, allowing you to write   if isAnyWirelessPoweredOn; then ...
+-isAnyWirelessPoweredOn()
+-{
+-    for DEVICE in /sys/class/net/* ; do
+-	if [ -d $DEVICE/wireless ]; then
+-	    for RFKILL in $DEVICE/phy80211/rfkill*/state $DEVICE/device/rfkill/rfkill*/state
+-	    do
+-		if [ -r "$RFKILL" ] && [ "$(cat "$RFKILL")" -eq 1 ]
+-		then
+-		    return 0
+-		fi
+-	    done
+-	    # if any of the wireless devices are turned on then return success
+-	    if [ -r $DEVICE/device/power/state ] && [ "`cat $DEVICE/device/power/state`" -eq 0 ]
+-	    then
+-		return 0
+-	    fi
+-	    if [ -r $DEVICE/device/rf_kill ] && [ "`cat $DEVICE/device/rf_kill`" -eq 0 ]
+-	    then
+-		return 0
+-	    fi
+-	fi
+-    done
++# Setup WLAN_RFKILLS list
++WLAN_RFKILLS=
++for r in /sys/class/rfkill/rfkill*; do
++	! read t <$r/type || [ "$t" != wlan ] ||
++		WLAN_RFKILLS=${WLAN_RFKILLS:+$WLAN_RFKILLS }$r/state
++done
+ 
+-    # otherwise return failure
+-    return 1
++haveDevRfkill() {
++	[ -c /dev/rfkill ] && [ -x /usr/sbin/rfkill ]
++}
++
++isAnyWirelessPoweredOn() {
++	local RFKILL s
++
++	if haveDevRfkill; then
++		rfkill list wlan |
++			egrep -q "Soft[[:blank:]]+blocked:[[:blank:]]+no"
++		return $?
++	else
++		for RFKILL in $WLAN_RFKILLS ; do
++			[ ! -r "$RFKILL" ] || ! read s <$RFKILL ||
++				[ "$s" -ne 1 ] || return 0
++		done
++	fi
++	# otherwise return failure
++	return 1
+ }
+ 
+ # Takes no parameters, toggles all wireless devices.
+-# TODO: Should possible toggle all wireless devices to the state of the first one.
+-# Attempts to use 'rf_kill' first, and then tries 'power/state', though that
+-# will fail on >=2.6.18 kernels since upstream removed the functionality...
+-toggleAllWirelessStates()
+-{
+-    for DEVICE in /sys/class/net/* ; do
+-	if [ -d $DEVICE/wireless ] ; then
+-	    # $DEVICE is a wireless device.
+-
+-	    FOUND=
+-	    # Yes, that's right... the new interface reverses the truth values.
+-	    ON=1
+-	    OFF=0
+-	    for CONTROL in $DEVICE/device/rfkill/rfkill*/state; do
+-		if [ -w "$CONTROL" ]; then
+-		    FOUND=1
+-
+-		    if [ "$(cat "$CONTROL")" = "$ON" ] ; then
+-			# It's powered on. Switch it off.
+-			echo -n "$OFF" > "$CONTROL"
+-		    else
+-			# It's powered off. Switch it on.
+-			echo -n "$ON" > "$CONTROL"
+-		    fi
+-		fi
+-	    done
+-	    # it might be safe to assume that a device only supports one
+-	    # interface at a time; but just in case, we short-circuit
+-	    # here to avoid toggling the power twice
+-	    if [ -n "$FOUND" ]; then
+-		continue
+-	    fi
+-
+-	    ON=0
+-	    OFF=1  # 1 for rf_kill, 2 for power/state
+-	    for CONTROL in $DEVICE/device/rf_kill $DEVICE/device/power/state ; do
+-		if [ -w $CONTROL ] ; then
+-		    # We have a way of controlling the device, lets try
+-		    if [ "`cat $CONTROL`" = 0 ] ; then
+-			# It's powered on. Switch it off.
+-			if echo -n $OFF > $CONTROL ; then 
+-			    break
++toggleAllWirelessStates() {
++	local WIFACE RFKILL get_wifaces zzz=0 max_zzz=7
++	local wicd_connect=/usr/share/wicd/daemon/autoconnect.py
++
++	if [ -x /usr/sbin/iw ]; then
++		get_wifaces='iw dev | sed -rne "s|^[[:blank:]]+Interface[[:blank:]]+([[:alnum:]]+).*$|\1|p"'
++	elif [ -x /sbin/iwconfig ]; then
++		get_wifaces='iwconfig 2>/dev/null | grep -o "^[[:alnum:]]*"'
++	else
++		logger -t${0##*/} -perr -- \
++			toggleAllWirelessStates: no way to pick up interfaces
++		exit 1
++	fi
++
++	if [ -x /sbin/ip ]; then
++		if_cmd="ip link set dev"
++	elif [ -x /sbin/ifconfig ]; then
++		if_cmd=ifconfig
++	else
++		logger -t${0##*/} -perr -- \
++			toggleAllWirelessStates: no way to up/down interfaces
++		exit 1
++	fi
++
++	# If rfkill is handled by the kernel, don't touch it
++	if ! grep -q '^H.*\brfkill\b' /proc/bus/input/devices; then
++		if isAnyWirelessPoweredOn; then
++			# 'down'ing wireless interfaces, helps with some
++			# buggy drivers
++			for WIFACE in $(eval $get_wifaces); do
++				$if_cmd $WIFACE down 2>/dev/null || :
++			done
++			if haveDevRfkill; then
++				rfkill block wlan
+ 			else
+-			    OFF=2 # for power/state, second time around
++				for RFKILL in $WLAN_RFKILLS; do
++					[ ! -w $RFKILL ] || echo 0 >$RFKILL
++				done
+ 			fi
+-		    else
+-			# It's powered off. Switch it on.
+-			if echo -n $ON > $CONTROL ; then
+-			    break
++		else
++			if haveDevRfkill; then
++				rfkill unblock wlan
++			else
++				for RFKILL in $WLAN_RFKILLS; do
++					[ ! -w $RFKILL ] || echo 1 >$RFKILL
++				done
+ 			fi
+-		    fi
+ 		fi
+-	    done
+ 	fi
+-    done
++	# Is wireless on now? Set the interfaces up and poke wicd
++	while ! isAnyWirelessPoweredOn && [ $zzz -lt $max_zzz ]; do
++		sleep 1
++		zzz=$(($zzz + 1))
++	done
++	if [ $zzz -lt $max_zzz ]; then
++		for WIFACE in $(eval $get_wifaces); do
++			$if_cmd $WIFACE up 2>/dev/null || :
++		done
++		[ ! -x $wicd_connect ] || $wicd_connect
++	fi
+ }
+ 
+ # Pass '1' to blink suspending LED and '0' to stop LED
+-setLEDThinkpadSuspending()
+-{
+-    action=`test "$1" -ne 0 && echo blink || echo off`
+-    test -w /proc/acpi/ibm/led && echo -n 7 "$action" > /proc/acpi/ibm/led
++setLEDThinkpadSuspending() {
++	local ibm_led=/proc/acpi/ibm/led
++
++	action=$([ "$1" -ne 0 ] && echo blink || echo off)
++	[ ! -w $ibm_led ] || printf '7 %s' $action >$ibm_led
+ }
