@@ -1,0 +1,108 @@
+include ../globalmakeflags
+
+SUBDIR=src
+
+MAJOR=0
+MINOR=0
+MICRO=0
+LDFLAGS += -L.
+LIBS=-ldebconf -lpthread @LIBS@
+LIBNAME=libdebconf.so
+CLILIB=libdebconfclient.so
+CLILIBNAME_A=libdebconfclient.a
+CLILIBNAME=$(CLILIB).$(MAJOR).$(MINOR).$(MICRO)
+CLISONAME=$(CLILIB).$(MAJOR)
+DEBCONF=debconf
+TOOLS=debconf-loadtemplate debconf-copydb debconf-communicate \
+	debconf-dumpdb debconf-escape \
+	debconf-get-selections debconf-set-selections \
+	dpkg-reconfigure debconf-show dpkg-preconfigure
+BIN=$(DEBCONF) $(TOOLS)
+
+LIBOBJS=commands.opic configuration.opic confmodule.opic debug.opic \
+	database.opic debconfclient.opic frontend.opic priority.opic \
+	strutl.opic question.opic template.opic rfc822.opic plugin.opic
+
+CLILIBOBJS=debconfclient.opic
+
+CLILIBOBJS_A=$(CLILIBOBJS:.opic=.o)
+
+all: $(BIN) $(LIBNAME) $(CLILIBNAME) $(CLILIBNAME_A) modules/Makefile client/confmodule
+	@$(MAKE) -C modules $@
+
+bin: $(BIN)
+
+$(BIN): $(LIBNAME) $(addsuffix .o,$(BIN))
+	@echo Compiling tool $@
+	$(CC) $(CFLAGS) -o $@ $@.o @RPATH@ $(LDFLAGS) $(LIBS)
+
+$(LIBNAME): $(LIBOBJS)
+	@echo Creating library $@
+	$(CC) $(CFLAGS) -shared -o $@ $(LDFLAGS) $^ -ldl @DI_LIBS@ @TEXTWRAP_LIBS@
+
+$(CLILIBNAME): $(CLILIBOBJS)
+	@echo Creating shared library $@
+	$(CC) $(CFLAGS) -shared -Wl,-soname,$(CLISONAME) -o $@ $(LDFLAGS) $^
+
+$(CLILIBNAME_A): $(CLILIBOBJS_A)
+	$(AR) cr $@ $^
+	ranlib $@
+
+$(CLISONAME) $(CLILIB): $(CLILIBNAME)
+	-@ln -sf $^ $@
+
+commands-list.h: commands-list.in
+	$(srcdir)/$(SUBDIR)/commands-list.h.build $< > $@
+
+client/confmodule: commands-list.in debconfclient.h client/confmodule.in
+	$(srcdir)/$(SUBDIR)/client/confmodule.build $^ > $@
+
+confmodule.o confmodule.opic: commands-list.h
+
+install:
+	install -d -m 755 $(DESTDIR)${etcdir}
+	install -d -m 755 $(DESTDIR)${libdir}
+	install -d -m 755 $(DESTDIR)${moddir}
+	install -m 755 debconf debconf-loadtemplate $(DESTDIR)${moddir}
+	install -m 755 debconf-copydb debconf-dumpdb $(DESTDIR)${moddir}
+ifneq ($(TARGET),udeb)
+	install -m 755 debconf-communicate $(DESTDIR)${moddir}
+	install -m 755 debconf-escape $(DESTDIR)${moddir}
+	install -m 755 debconf-get-selections $(DESTDIR)${moddir}
+	install -m 755 debconf-set-selections $(DESTDIR)${moddir}
+	install -m 755 debconf-show $(DESTDIR)${moddir}
+	install -m 755 dpkg-preconfigure $(DESTDIR)${moddir}
+	install -m 755 dpkg-reconfigure $(DESTDIR)${moddir}
+endif
+	install -m 644 $(LIBNAME) $(DESTDIR)${moddir}
+	install -m 644 $(CLILIBNAME) $(DESTDIR)${libdir}
+	ln -sf $(CLILIBNAME) $(DESTDIR)${libdir}/$(CLISONAME)
+	ln -sf $(CLILIBNAME) $(DESTDIR)${libdir}/$(CLILIB)
+	install -m 644 $(CLILIBNAME_A) $(DESTDIR)${libdir}
+	install -m 644 cdebconf.conf-dist $(DESTDIR)${etcdir}/cdebconf.conf
+ifeq ($(TARGET),udeb)
+	install -d -m 755 $(DESTDIR)${bindir}
+	install -d -m 755 $(DESTDIR)${sbindir}
+	install -d -m 755 $(DESTDIR)${sharedir}
+	set -e; for p in debconf debconf-loadtemplate \
+			debconf-copydb debconf-dumpdb; do \
+		ln -sf ../lib/cdebconf/$$p $(DESTDIR)${bindir}; \
+	done
+	install -m 644 client/confmodule $(DESTDIR)${sharedir}
+	ln -sf ../../lib/cdebconf/$(DEBCONF) $(DESTDIR)${sharedir}/frontend
+else
+	install -d -m 755 $(DESTDIR)${incdir}
+	install -m 644 ${srcdir}/src/debconfclient.h $(DESTDIR)${incdir}
+	install -m 644 ${srcdir}/src/question.h $(DESTDIR)${incdir}
+	install -m 644 ${srcdir}/src/template.h $(DESTDIR)${incdir}
+	install -m 644 ${srcdir}/src/constants.h $(DESTDIR)${incdir}
+	install -m 644 ${srcdir}/src/frontend.h $(DESTDIR)${incdir}
+	install -m 644 ${srcdir}/src/strutl.h $(DESTDIR)${incdir}
+endif
+	@$(MAKE) -C modules $@
+
+clean:
+	-@rm -f $(BIN) $(LIBNAME) $(CLILIB) $(CLILIBNAME) $(CLILIBNAME_A) $(CLISONAME) *~ *.o *.opic commands-list.h client/confmodule
+	@$(MAKE) -C modules clean
+
+.PHONY: all bin install clean

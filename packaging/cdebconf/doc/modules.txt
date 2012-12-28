@@ -1,0 +1,338 @@
+XXX -- General things which are missing
+XXX Consistentify typographical conventions
+XXX Refactoring to be more readable -- sections will need to be moved.
+
+General APIs
+~~~~~~~~~~~~
+Tags are strings consisting of identifiers separated by "::"
+XXX How to choose tags?
+
+configuration API
+~~~~~~~~~~~~~~~~~
+
+A "struct configuration" has several publically accessible methods:
+
+const char *get(struct configuration *, const char *tag, const char *default):
+   Return a string value for given tag
+
+int geti(struct configuration *, const char *tag, int default)
+   Return an integral value for given tag
+
+void set(struct configuration *, const char *tag, const char *value):
+   Save string value at tag
+
+void seti(struct configuration *, const char *tag, int value)
+   Save integral value at tag
+
+XXX memory ownership not discussed
+XXX new/delete, read/dump not documented
+
+template API
+~~~~~~~~~~~~
+Initializing a template should be done via the function
+struct template *template_new(const char * tag). This function takes
+a tag, and returns an empty template object.
+
+A template has the following publically accessible fields:
+
+- char *tag: the template's tag
+- char *type: the template's type, can be one of select, multiselect,
+              string, boolean, note, text and password
+- struct template_l10n_fields *fields - has following fields:
+  - struct template_l10n_fields *next: NULL or another localized field
+                                       structure
+  - char *language: ISO code for language (ll or ll_LL)
+  - char *defaultval: the template's default value, as a string
+  - char *choices: if the template's type is choices based, here the choices
+                   are listed in a single string, seperated by commas
+  - char *description: a description of the template XXX must be under ... chars?
+  - char *extended_description: a longer description 
+
+The first template_l10n_fields structure must always be in English, and
+its ISO code is set to C.
+
+XXX not covering "next", I assume it is private
+XXX not covering memory management or deletion
+
+The following functions are supported:
+XXX there are others
+
+const char *template_lget(const struct template *t, const char *lang, const char *field):
+   Return a string value for given field.
+   - If lang is NULL, English field is returned.
+   - If lang is empty, field in the current language is returned.
+   - If lang is not NULL and not empty, or if localized value does not
+     exist, English field is returned.
+
+void template_lset(struct template *t, const char *lang, const char *field, const char *value):
+   Save string value at field, see above for details about the lang
+   attribute.
+
+question API
+~~~~~~~~~~~~
+struct questionvariable has the following fields:
+- char *variable: name
+- char *value: value
+- struct questionvariable *: next variable or NULL
+
+The following functions are supported:
+
+- const char *question_get_variable(const struct question *q, const char *var):
+  Return the value of variable "var" as string
+
+XXX list of functions is incomplete
+XXX what are variables, and does anything use them?
+XXX only references I've seen are in db modules
+
+struct questionowner has the following fields:
+- char *owner: the owner
+- struct questionowner *next: next owner or NULL
+
+These are documented here because the serializer needs to be able
+to write all of them out. In general, nothing should directly modify
+those except via the APIs.
+
+struct question has the following public fields:
+
+* char *tag: the tag for this question
+* char *value: the value for this question
+* struct template *template: the template belonging to this question
+* unsigned int flags: XXX
+* struct questionvariable *variables: list of variables
+* struct questionowner *owners: list of owners
+* struct question *next, *prev: allows you to put questions in a doubly-linked
+  list (like the default front end functions do, for example)
+
+The following functions are supported:
+
+- struct question *question_new(const char *tag):
+  allocate and initialize a question
+- void question_setvalue(struct question *q, const char *value):
+  set the value of a question
+  (note that setvalue must *always* be called with non-translated choices)
+- const char *question_getvalue(struct question *q, const char *lang);
+  return the value of a question, or default value, otherwise a NULL pointer
+- void question_owner_add(struct question *q, const char *owner):
+  add an owner
+- void question_owner_delete(struct question *q, const char *owner)
+  remove an owner
+- const char *question_get_field(struct question *q, const char *lang,
+        const char *field):
+  return a string field from the question
+
+XXX not dealing with variables
+XXX not dealing with memory management
+  
+Writing modules
+~~~~~~~~~~~~~~~
+
+cdebconf is designed to allow frontend and database modules to be plugged
+in as needed. Modules can be built to support different database backends
+(e.g. postgres, ldap, etc) and frontends (e.g. ncurses, gtk, etc).
+
+Database modules:
+~~~~~~~~~~~~~~~~
+
+database.h defines the database module interface. Each database module
+needs to export a struct named debconf_database_module of type 
+struct database_module, defined as:
+
+struct database_module {
+	dcd_initialize_t initialize;
+	dcd_shutdown_t shutdown;
+	dcd_load_t load;
+	dcd_save_t save;
+	dcd_template_set_t template_set;
+	dcd_template_get_t template_get;
+	dcd_template_remove_t template_remove;
+	dcd_template_lock_t template_lock;
+	dcd_template_unlock_t template_unlock;
+	dcd_template_iterate_t template_iterate;
+	dcd_question_get_t question_get;
+	dcd_question_set_t question_set;
+	dcd_question_disown_t question_disown;
+	dcd_question_disownall_t question_disownall;
+	dcd_question_remove_t question_remove;
+	dcd_question_lock_t question_lock;
+	dcd_question_unlock_t question_unlock;
+	dcd_question_visible_t question_visible;
+	dcd_question_iterate_t question_iterate;
+};
+
+General
+~~~~~~~
+In "common.h", two constants are defined: DC_OK and DC_NOTOK.
+Every method which returns an int, unless specified otherwise, should
+return DC_OK if it succeeds and DC_NOTOK if it fails.
+
+Each of these methods have a signature defined in database.h. All methods
+have a sensible default implementation (usually doing nothing) so that 
+you only need to override the ones you need.
+
+All methods are passed a database object as a first argument. The database,
+besides the methods, contains the following attributes:
+
+const char *modname -- the name of the module this database was loaded from XXX
+void *handle -- a handle to the shared library. you should probably not use
+                this XXX
+struct configuration *config -- the configuration of the database. See later
+                                about how to use this XXX
+void *data -- this is a pointer the database can use to keep it's own private
+              data, by allocating some structure and keeping a pointer here
+              on initialization, and deleting it on deletion.
+
+Method descriptions:
+int initialize(struct database *, struct configuration *): 
+    initialize data structures, like cache.
+    Get information form the configuration, if you need to.
+    XXX WHY? Can't you get the configuration from database->config
+
+int shutdown(struct database *):
+    free data structures, like cache
+
+int load(struct database *):
+    read in the database structure from a file
+    (this is to optimize parsing. if you have no parsing to do, just
+    do nothing here)
+
+int save(struct database *): 
+    save the database structure back to a file
+    This is so not every change will get saved immediately, to optimize
+    deserialization. If saving each change immediately is easier, do nothing
+    here.
+
+int template_set(struct database *, struct template *):
+    save the given template (or, just keep all the information for
+    saving later in save())
+
+struct template *template_get(struct database *, char *name):
+    return a newly allocated template with the contents of the template whose
+    name is "name".
+    XXX should return NULL if fails?
+
+int template_remove(struct database *, char *name):
+    remove a template from the database
+
+int (template|question)_[un]lock(struct database *, char *name):
+    XXX WTF? Nothing implements this right now
+
+struct template *template_iterate(struct database *, void **iter):
+    Return "Next template"
+    When beginning to iterate, *iter will be NULL.
+    On consecutive iterations, it will keep its value.
+    It is your responsibility to free any allocated structure when
+    returning NULL, to signify end of iteration.
+    Otherwise, return whatever would have been returned by
+    calling template_get() with the template's name.
+
+struct question *question_get(struct database *, const char *name):
+    Return a newly allocated question object, corresponding to the name.
+
+int question_set(struct database *, struct question *):
+    Save the data about the question in the database.
+
+struct question *question_iterate(struct database *, void **iter):
+    Return "Next question"
+    When beginning to iterate, *iter will be NULL.
+    On consecutive iterations, it will keep its value.
+    It is your reponsibility to free any allocated structure when
+    returning NULL, to signify end of iteration.
+    Otherwise, return whatever would have been returned by
+    calling question_get() with the question's name.
+
+struct question *question_disown(struct database *, char *name, char *owner):
+    Remove the owner from the question.
+    XXX - WTF this is done here instead of the caller getting the question, 
+    removing the owner and setting the question is a mystery. Perhaps there
+    are cases where it will be much less efficient?
+
+struct question *question_disown_all(struct database *, char *owner):
+    Remove the owner from all questions.
+    Semantically, this should be the same as iterating, and for each question
+    removing the owner and resetting it. However, you might be able to avoid
+    iterating on some of the question, if the backend is structured correctly.
+
+int question_remove(struct database *, char *name):
+    remove a question from the database (useful while moving a question to a
+    different database)
+
+int question_visible(struct database *, char *name, char *priority)
+    XXX - WTF, nothing implements this either.
+
+See modules/db/* for some examples.
+
+Frontend modules
+~~~~~~~~~~~~~~~~
+Similarly, frontend modules have an interface defined in frontend.h.
+Modules export a struct called debconf_frontend_module of type 
+struct frontend_module, defined as:
+
+struct frontend_module {
+	dcf_initialize_t initialize;
+	dcf_shutdown_t shutdown;
+	dcf_query_capability_t query_capability;
+	dcf_set_title_t set_title;
+	dcf_add_t add;
+	dcf_go_t go;
+	dcf_clear_t clear;
+};
+
+All methods will be passed a struct frontend as a first argument.
+
+The structure has the following public attributes:
+
+* struct configuration *config -- Use this to get configuration information
+                                  (XXX colors for GTK+ would go here, right?)
+* void *data -- private data. 
+* struct *question questions -- list of questions to ask
+* struct *database db -- database object
+* char *title -- title
+* XXX: Are the rest of things public?
+
+Methods:
+
+All methods returning int should be returning DC_OK/DC_NOTOK, as above.
+
+* int initialize(struct frontend *, struct configuration *):
+  Initialize the structure. (For example, connect to X server)
+* int shutdown(struct frontend *)
+  Destroy all resources owned by object
+* unsigned long query_capability(struct frontend *)
+  Return all capabilities you support, as an | of flags.
+  Currently, the only capability supported is DCF_CAPB_BACKUP, which
+  means the front end is capable of backing up, so return either
+  0 of DCF_CAPB_BACKUP.
+* const char * lookup_directive(struct frontend *, const char *)
+  Return the proper value for the given directive.  If NULL is returned,
+  the directive is not expanded.
+  The default method always returns "" to remove unhandled directives from
+  queried question fields.
+* int add(struct frontend *, struct question *):
+  Add question. Default implementation adds the question to "questions"
+  attribute
+* int go(struct frontend *):
+  Ask all questions you need to, and notify the database object of the
+  answers.
+* int clear(struct frontend *):
+  Clear queue of pending questions. Default implementation clears the
+  "questions" queue.
+* int set_title(struct frontend *, char *title):
+  Set the title variable. "title" is owned by caller, so you should
+  copy it. The default implementation sets the title attribute.
+* int info(struct frontend *, struct question *);
+  Display an informative message, without requiring any acknowledgement
+  from the user. Frontends may choose not to implement this. If they do
+  implement it, they should display the info persistently until some
+  other info comes along.
+  This takes a question rather than a string because the locale could be
+  changed after this command (while the info is still being persistently
+  displayed), and the displayed text should be changed when that
+  happens.
+  The default implementation sets the info attribute.
+* cangoforward/cangoback -- XXX I don't understand what these do.
+
+Each of these methods have a signature defined in frontend.h. All methods
+have a sensible default implementation (usually doing nothing) so that 
+you only need to override the ones you need.
+
+See modules/frontend/* for examples.
