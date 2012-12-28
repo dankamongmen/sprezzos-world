@@ -1,0 +1,126 @@
+#!/usr/bin/make -f
+
+DEB_SRCDIR = .
+DEB_BUILDDIR = $(DEB_SRCDIR)/build
+
+DEB_PYTHON_SYSTEM=dh_python2
+PY_VERSIONS = $(shell pyversions --requested debian/control)
+export MONO_SHARED_DIR=$(CURDIR)
+export CSC=/usr/bin/mono-csc
+
+include /usr/share/cdbs/1/rules/patchsys-quilt.mk
+include /usr/share/cdbs/1/rules/autoreconf.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/gnome.mk
+include /usr/share/cdbs/1/rules/utils.mk
+
+API_VERSION = 0.1
+
+#DEB_MAKE_CHECK_TARGET := check
+
+DEB_CONFIGURE_EXTRA_FLAGS += --disable-scrollkeeper --enable-gtk-doc --enable-introspection
+
+configure-stamp-%:
+	mkdir build-$*
+	cd build-$* && PYTHON=`which $*` \
+		$(DEB_CONFIGURE_SCRIPT) $(DEB_CONFIGURE_NORMAL_ARGS) --srcdir=..
+	touch $@
+
+configure/python-appindicator:: $(addprefix configure-stamp-, $(PY_VERSIONS))
+
+build-stamp-%:
+	PYTHON=`which $*` \
+		$(MAKE) -C build-$*
+	touch $@
+
+build/python-appindicator:: $(addprefix build-stamp-, $(PY_VERSIONS))
+
+install-stamp-%:
+	PYTHON=`which $*` \
+		$(MAKE) -C build-$*/bindings/python install DESTDIR=$(CURDIR)/debian/tmp
+	dh_installdirs -ppython-appindicator 
+	dh_install -ppython-appindicator
+	touch $@
+
+binary-install/python-appindicator:: $(addprefix install-stamp-, $(PY_VERSIONS))
+
+configure-stamp: 
+	cd $(DEB_BUILDDIR) && \
+		$(DEB_CONFIGURE_SCRIPT) $(DEB_CONFIGURE_NORMAL_ARGS) $(DEB_CONFIGURE_EXTRA_FLAGS) --enable-gtk-doc
+	touch $@
+
+configure/libappindicator1:: configure-stamp
+
+build-stamp: 
+	$(MAKE) -C $(DEB_BUILDDIR)
+	touch $@
+
+build/libappindicator1:: build-stamp
+
+install-stamp:
+	$(MAKE) -C $(DEB_BUILDDIR) install DESTDIR=$(CURDIR)/debian/tmp
+	touch $@
+
+binary-install/libappindicator1:: install-stamp install-stamp-gtk3
+	dh_makeshlibs -plibappindicator1
+
+configure-stamp-gtk3:
+	: # configure for GTK+ 3.0
+	rm -rf build-gtk3; \
+	mkdir build-gtk3; \
+	cd build-gtk3; \
+	$(DEB_CONFIGURE_SCRIPT_ENV) ../configure --with-gtk=3 \
+		$(filter-out --enable-gtk-doc, $(filter-out --srcdir=%, $(DEB_CONFIGURE_NORMAL_ARGS) $(DEB_CONFIGURE_EXTRA_FLAGS))) \
+		--enable-gtk-doc=no; \
+	cd ..;
+	touch $@
+
+configure/libappindicator3-1:: configure-stamp-gtk3
+
+build-stamp-gtk3:
+	: # build for GTK+ 3.0
+	$(MAKE) -C build-gtk3/src;
+	$(MAKE) -C build-gtk3/bindings/vala;
+	touch $@
+
+build/libappindicator3-1:: build-stamp-gtk3
+
+install-stamp-gtk3:
+	: # install for GTK+ 3.0
+	$(MAKE) -C build-gtk3/src DESTDIR=$(CURDIR)/debian/tmp install
+	$(MAKE) -C build-gtk3/bindings/vala DESTDIR=$(CURDIR)/debian/tmp install
+	touch $@
+
+binary-install/libappindicator3-1:: install-stamp-gtk3
+	dh_makeshlibs -plibappindicator3-1
+
+binary-install/libappindicator0.1-cil:: binary-fixup/libappindicator1
+	dh_clistrip
+	dh_clifixperms
+	dh_makeclilibs -V
+	dh_installcligac
+
+binary-fixup/python-appindicator::
+	dh_python2 -ppython-appindicator
+	find debian/python-appindicator/usr/lib -name \*.la -exec rm {} \;
+	find debian/python-appindicator/usr/lib -name \*.a -exec rm {} \;
+
+binary-predeb/gir%::
+	dh_girepository -p$(cdbs_curpkg)
+
+binary-predeb/libappindicator0.1-cil:: binary-fixup/libappindicator1
+	dh_clideps -plibappindicator0.1-cil
+
+common-binary-predeb-arch:: list-missing
+	dh_fixperms
+	dh_strip
+	cd po; intltool-update --pot --verbose
+
+clean::
+	rm -f configure-stamp*
+	rm -f build-stamp*
+	rm -f install-stamp*
+	rm -rf build
+	rm -rf build-gtk3
+	rm -rf build-python*
+	rm -rf $(MONO_SHARED_DIR)/.wapi
