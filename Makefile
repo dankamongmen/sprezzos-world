@@ -4819,6 +4819,14 @@ $(X11XKBUTILS): $(SPREZZ)/x11-xkb-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xproto-$(x11-xkb-utils_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: x11proto-bigreqs
+x11proto-bigreqs:$(X11PROTOBIGREQS)_$(ARCH).deb
+$(X11PROTOBIGREQS): $(SPREZZ)/x11proto-bigreqs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bigreqsproto-$(x11proto-bigreqs_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: x11proto-core
 x11proto-core:$(X11PROTOCORE)_$(ARCH).deb
 $(X11PROTOCORE): $(SPREZZ)/x11proto-core/debian/changelog
@@ -4834,6 +4842,14 @@ $(X11PROTODAMAGE): $(SPREZZ)/x11proto-damage/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf damageproto-$(x11proto-damage_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: x11proto-dmx
+x11proto-dmx:$(X11PROTODMX)_$(ARCH).deb
+$(X11PROTODMX): $(SPREZZ)/x11proto-dmx/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dmxproto-$(x11proto-dmx_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: x11proto-fixes
 x11proto-fixes:$(X11PROTOFIXES)_$(ARCH).deb
@@ -4874,6 +4890,14 @@ $(X11PROTOKB): $(SPREZZ)/x11proto-kb/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf kbproto-$(x11proto-kb_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: x11proto-print
+x11proto-print:$(X11PROTOPRINT)_$(ARCH).deb
+$(X11PROTOPRINT): $(SPREZZ)/x11proto-print/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf printproto-$(x11proto-print_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: x11proto-randr
 x11proto-randr:$(X11PROTORANDR)_$(ARCH).deb
@@ -4922,6 +4946,14 @@ $(X11PROTOVIDEO): $(SPREZZ)/x11proto-video/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf videoproto-$(x11proto-video_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: x11proto-xcmisc
+x11proto-xcmisc:$(X11PROTOXCMISC)_$(ARCH).deb
+$(X11PROTOXCMISC): $(SPREZZ)/x11proto-xcmisc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xcmiscproto-$(x11proto-xcmisc_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: x11proto-xext
 x11proto-xext:$(X11PROTOXEXT)_$(ARCH).deb
