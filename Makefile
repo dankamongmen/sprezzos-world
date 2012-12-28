@@ -3103,6 +3103,14 @@ $(LIBVA): $(SPREZZ)/libva/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libva-$(libva_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libvdpau
+libvdpau:$(LIBVDPAU)_$(ARCH).deb
+$(LIBVDPAU): $(SPREZZ)/libvdpau/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libvdpau-$(libvdpau_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libvirt
 libvirt:$(LIBVIRT)_$(ARCH).deb
 $(LIBVIRT): $(SPREZZ)/libvirt/debian/changelog
