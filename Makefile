@@ -3071,6 +3071,14 @@ $(LIBTEXTWRAP): $(SPREZZ)/libtextwrap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtextwrap-$(libtextwrap_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libthrust
+libthrust:$(LIBTHRUST)_$(ARCH).deb
+$(LIBTHRUST): $(SPREZZ)/libthrust/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf thrust-$(libthrust_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libtirpc
 libtirpc:$(LIBTIRPC)_$(ARCH).deb
 $(LIBTIRPC): $(SPREZZ)/libtirpc/debian/changelog
