@@ -511,6 +511,14 @@ $(LIBAACS): $(SPREZZ)/libaacs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libaacs-$(libaacs_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libsigsegv
+libsigsegv:$(LIBSIGSEGV)_$(ARCH).deb
+$(LIBSIGSEGV): $(SPREZZ)/libsigsegv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsigsegv-$(libsigsegv_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsignon-glib
 libsignon-glib:$(LIBSIGNONGLIB)_$(ARCH).deb
 $(LIBSIGNONGLIB): $(SPREZZ)/libsignon-glib/debian/changelog
@@ -3031,6 +3039,14 @@ $(LIBTAR): $(SPREZZ)/libtar/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtar-$(libtar_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libtextwrap
+libtextwrap:$(LIBTEXTWRAP)_$(ARCH).deb
+$(LIBTEXTWRAP): $(SPREZZ)/libtextwrap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtextwrap-$(libtextwrap_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libtirpc
 libtirpc:$(LIBTIRPC)_$(ARCH).deb
 $(LIBTIRPC): $(SPREZZ)/libtirpc/debian/changelog
@@ -5498,6 +5514,12 @@ base-files:$(BASEFILES)_$(ARCH).deb
 $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf base-files_$(base-files_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
+
+.PHONY: cdebconf
+cdebconf:$(CDEBCONF)_$(ARCH).deb
+$(CDEBCONF): $(SPREZZ)/cdebconf/debian/changelog
+	cp -r $(<D)/.. $@
+	tar cJvf cdebconf_$(cdebconf_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
 .PHONY: meta-gnome
 meta-gnome:$(METAGNOME)_$(ARCH).deb
