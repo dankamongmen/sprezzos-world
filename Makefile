@@ -511,6 +511,14 @@ $(LIBAACS): $(SPREZZ)/libaacs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libaacs-$(libaacs_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libappindicator
+libappindicator:$(LIBAPPINDICATOR)_$(ARCH).deb
+$(LIBAPPINDICATOR): $(SPREZZ)/libappindicator/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libappindicator-$(libappindicator_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsigsegv
 libsigsegv:$(LIBSIGSEGV)_$(ARCH).deb
 $(LIBSIGSEGV): $(SPREZZ)/libsigsegv/debian/changelog
@@ -862,6 +870,14 @@ $(CAIRODOCK): $(SPREZZ)/cairo-dock/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cairo-dock-$(cairo-dock_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: cairo-dock-plug-ins
+cairo-dock-plug-ins:$(CAIRODOCKPLUGINS)_$(ARCH).deb
+$(CAIRODOCKPLUGINS): $(SPREZZ)/cairo-dock-plug-ins/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cairo-dock-plugins-$(cairo-dock-plug-ins_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cclive
 cclive:$(CCLIVE)_$(ARCH).deb
@@ -2855,6 +2871,14 @@ $(LIBIMOBILEDEVICE): $(SPREZZ)/libimobiledevice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libindicate
+libindicate:$(LIBINDICATE)_$(ARCH).deb
+$(LIBINDICATE): $(SPREZZ)/libindicate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libindicate-$(libindicate_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libbluray
 libbluray:$(LIBBLURAY)_$(ARCH).deb
 $(LIBBLURAY): $(SPREZZ)/libbluray/debian/changelog
@@ -3766,6 +3790,14 @@ $(NMAP): $(SPREZZ)/nmap/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf nmap-$(nmap_UPVER).tgz $(TARARGS) $@
+
+.PHONY: notify-osd
+notify-osd:$(NOTIFYOSD)_$(ARCH).deb
+$(NOTIFYOSD): $(SPREZZ)/notify-osd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf notify-osd-$(notify-osd_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: notification-daemon
 notification-daemon:$(NOTIFICATIONDAEMON)_$(ARCH).deb
