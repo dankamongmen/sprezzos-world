@@ -1,0 +1,82 @@
+#!/usr/bin/make -f
+
+DEB_SRCDIR = .
+DEB_BUILDDIR = $(DEB_SRCDIR)/build
+
+PY_VERSIONS = $(shell pyversions --requested debian/control)
+export MONO_SHARED_DIR=$(CURDIR)
+export CSC=/usr/bin/mono-csc
+
+DEB_CONFIGURE_EXTRA_FLAGS += --disable-scrollkeeper --enable-gtk-doc --disable-tests
+# -z,defs breaks linking with bin/python instead of libpython, for #638882
+#LDFLAGS += -Wl,-z,defs -Wl,--as-needed
+
+DEB_BUILDDIR = build
+DEB_MAKE_FLAVORS = gtk2 gtk3
+
+DEB_MAKE_CHECK_TARGET := check
+
+include /usr/share/cdbs/1/rules/simple-patchsys.mk
+include /usr/share/cdbs/1/rules/autoreconf.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/gnome.mk
+
+DEB_DH_MAKESHLIBS_ARGS_libindicate5 := -V 'libindicate5 (>= 0.4.90)'
+DEB_DH_MAKESHLIBS_ARGS_libindicate-gtk3 := -V 'libindicate-gtk3 (>= 0.5.90)'
+DEB_DH_MAKESHLIBS_ARGS_libindicate-gtk3-3 := -V 'libindicate-gtk3-3 (>= 0.5.90)'
+
+DEB_MAKE_DESTDIRSKEL = $(CURDIR)/debian/tmp/@FLAVOR@
+DEB_DESTDIR = $(CURDIR)/debian/tmp/$(cdbs_make_curflavor)/
+
+DEB_CONFIGURE_FLAGS_gtk2 = --with-gtk=2
+DEB_CONFIGURE_FLAGS_gtk3 = --with-gtk=3
+
+debian/stamp-autotools/gtk2: cdbs_configure_flags += $(DEB_CONFIGURE_FLAGS_gtk2)
+debian/stamp-autotools/gtk3: cdbs_configure_flags += $(DEB_CONFIGURE_FLAGS_gtk3)
+
+common-binary-post-install-indep::
+	dh_clistrip
+	dh_clifixperms
+	dh_makeclilibs -V
+	dh_installcligac
+
+binary-predeb/libindicate0.1-cil:: binary-fixup/libindicate5
+	dh_clideps -plibindicate0.1-cil
+
+binary-predeb/libindicate-gtk0.1-cil:: binary-fixup/libindicate-gtk3
+	dh_clideps -plibindicate-gtk0.1-cil
+
+configure-stamp-%:
+	mkdir build-$*
+	cd build-$* && PYTHON=`which $*` \
+		$(DEB_CONFIGURE_SCRIPT) $(DEB_CONFIGURE_NORMAL_ARGS) $(DEB_CONFIGURE_FLAGS_gtk2) --srcdir=..
+	touch $@
+
+configure/python-indicate:: $(addprefix configure-stamp-, $(PY_VERSIONS))
+
+build-stamp-%:
+	PYTHON=`which $*` \
+		$(MAKE) -C build-$*
+	touch $@
+
+build/python-indicate:: $(addprefix build-stamp-, $(PY_VERSIONS))
+
+install-stamp-%:
+	PYTHON=`which $*` \
+		$(MAKE) -C build-$*/bindings/python install DESTDIR=$(CURDIR)/debian/tmp/gtk2/
+	dh_installdirs -ppython-indicate -s
+	dh_install -ppython-indicate -s
+	touch $@
+
+install/python-indicate:: $(addprefix install-stamp-, $(PY_VERSIONS))
+
+binary-fixup/python-indicate::
+	dh_python2 -ppython-indicate
+	dh_strip -A
+	dh_fixperms -A
+	find debian/python-indicate/usr -name \*.la -delete
+	find debian/python-indicate/usr -name \*.a -delete
+
+clean::
+	rm -rf $(MONO_SHARED_DIR)/.wapi
+	rm -rf build-python*
