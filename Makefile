@@ -2904,6 +2904,14 @@ $(LIBINDICATE): $(SPREZZ)/libindicate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libindicate-$(libindicate_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libindicator
+libindicator:$(LIBINDICATOR)_$(ARCH).deb
+$(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libindicator-$(libindicator_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: indicator-applet
 indicator-applet:$(INDICATORAPPLET)_$(ARCH).deb
 $(INDICATORAPPLET): $(SPREZZ)/indicator-applet/debian/changelog
