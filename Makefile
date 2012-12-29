@@ -1776,6 +1776,14 @@ $(GNOMEDO): $(SPREZZ)/gnome-do/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-do-$(gnome-do_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gnome-do-plugins
+gnome-do-plugins:$(GNOMEDOPLUGINS)_$(ARCH).deb
+$(GNOMEDOPLUGINS): $(SPREZZ)/gnome-do-plugins/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-do-plugins-$(gnome-do-plugins_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnome-doc-utils
 gnome-doc-utils:$(GNOMEDOCUTILS)_$(ARCH).deb
 $(GNOMEDOCUTILS): $(SPREZZ)/gnome-doc-utils/debian/changelog
