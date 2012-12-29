@@ -1,0 +1,117 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+export DH_OPTIONS
+
+CXX=g++
+CC=gcc
+#CXX=/usr/lib/gcc-snapshot/bin/g++
+#CC=/usr/lib/gcc-snapshot/bin/gcc
+
+# see http://www.gentoo.org/proj/en/qa/asneeded.xml
+LDFLAGS="-Wl,--as-needed"
+
+CFLAGS = -Wall -g
+
+# link time optimisation - as soon as gcc-4.5 hits the archive
+#CFLAGS += -flto
+#LDFLAGS += -flto
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2 
+endif
+
+CFLAGS += -Winline -finline-functions
+
+# the suggested const is not working sufficiently, for gcc-4.6 and higher
+#CFLAGS += -Wsuggest-attribute=const
+
+CXXFLAGS=$(CFLAGS)
+
+configure: configure-stamp
+configure-stamp: $(QUILT_STAMPFN)
+	dh_testdir
+	set -e; \
+	for d in autogrid autodock; do \
+		( cd $$d && autoreconf -i && ./configure CC="$(CC)" CXX="$(CXX)" LDFLAGS="$(LDFLAGS)" CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" --prefix=/usr ) \
+	done
+
+	touch configure-stamp
+
+build: build-arch build-indep
+
+build-arch: build-arch-stamp
+build-arch-stamp: configure-stamp 
+	set -e; \
+	for d in autogrid autodock; do $(MAKE) -C $$d; done
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp: configure-stamp 
+	# Add here commands to compile the indep part of the package.
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-arch-stamp build-indep-stamp configure-stamp
+	for d in autodock autogrid; \
+	do \
+	   if [ -r $$d/Makefile ]; then $(MAKE) -C $$d distclean; fi \
+	done
+	dh_clean configure-stamp
+
+install: install-indep install-arch
+install-indep:
+	dh_testdir
+	dh_testroot
+	dh_prep -i 
+	dh_installdirs -i
+	dh_install -i
+	rm -rf $(CURDIR)/debian/autodock-test/usr/share/autodock/Tests/AutoDockTools
+	rm -rf $(CURDIR)/debian/autogrid-test/usr/share/autogrid/Tests/CVS/
+	rm -rf $(CURDIR)/debian/autodock-test/usr/share/autodock/Tests/CVS/
+	chmod 644 $(CURDIR)/debian/autodock-test/usr/share/autodock/Tests/*
+	chmod 644 $(CURDIR)/debian/autogrid-test/usr/share/autogrid/Tests/*
+
+install-arch:
+	dh_testdir
+	dh_testroot
+	dh_prep -s 
+	dh_installdirs -s
+
+	for d in autodock autogrid; do \
+		$(MAKE) -C $$d DESTDIR=$(CURDIR)/debian/$$d install; \
+	done
+	dh_install -s
+
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_installexamples
+	dh_installman
+	dh_link
+	dh_strip
+	dh_compress 
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-indep: build-indep install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+binary-arch: build-arch install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+binary: binary-arch binary-indep
+
+.PHONY: build clean binary-indep binary-arch binary install install-indep install-arch configure
