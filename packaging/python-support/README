@@ -1,0 +1,225 @@
+Python-support is a tool to handle byte-compilation of python modules 
+when there are several python versions installed on the system.
+
+QUICK GUIDE FOR MAINTAINERS
+===========================
+
+ * If necessary, describe the supported versions in debian/pyversions.
+ * If your package is arch-all:
+   - Build it using its standard build system.
+   - Build-depend on python and python-support.
+ * If your package is arch-any:
+   - Build it once for every supported Python version (loop over 
+     `pyversions -vr`).
+   - Build-depend on python-all-dev and python-support.
+ * Install files to the *standard* locations.
+ * Call dh_pysupport in the binary-* target.
+ * Add ${python:Depends} to the dependencies.
+
+And that’s all. Anything else is likely superfluous. If your package 
+works correctly by doing that (and this is the case of 99% packages), 
+you can stop reading this file here.
+
+
+How does it work?
+=================
+Python-support looks for modules in /usr/share/python-support.
+ * Private modules (.py files that shouldn't be installed in the default 
+   sys.path) are handled through a foo.private file, which contains a list 
+   of files to bytecompile. If the header of the foo.private file contains
+   a "pyversion=..." field, they will be bytecompiled with the Python
+   version described here, otherwise the current Python version will be
+   used.
+ * Public modules (.py files that should be installed in the default 
+   sys.path) are handled through a foo.public file, which contains a 
+   list of files to install. The files are normally installed in
+   /usr/share/pyshared/. They will be installed and bytecompiled in each
+   Python specific directory: /usr/lib/pymodules/pythonX.Y/. If the header
+   of the foo.public file contains a "pyversions=..." field, it will be 
+   parsed for the list of python versions the module supports. It should 
+   look like e.g.:
+	2.2,2.4-
+   for a package supporting python2.2, and all versions starting from 
+   python2.4.
+ * Public extensions (.so files) are handled just like public modules: 
+   they are listed in the foo.public file. However, extensions for each
+   pythonX.Y will be located in /usr/lib/pyshared/pythonX.Y/, while they
+   are installed in /usr/lib/pymodules/pythonX.Y together with the
+   corresponding modules.
+
+How to make a package using it?
+===============================
+All the work is done using dh_pysupport. For most packages, using the
+standard build system then calling dh_pysupport should be enough.
+However, if the package builds binary extensions, it should be changed
+to build the extensions for all python versions in a single package.
+While not mandatory, it is highly recommended.
+
+*** You don't need X[BS]-Python-Version fields. You don't need ***
+*** debian/pycompat. You don't need to call dh_python after    ***
+*** dh_pysupport. Just remove all of these.                    ***
+
+Of course, don't forget the dependency fields:
+	Build-Depends: python-support (>= 0.90), debhelper(>= 5)
+	Depends: ${python:Depends}
+
+If you're including public modules or extensions *and* if some other
+packages are expected to need them for a specific (non-default) Python
+version, you can also add the field:
+	Provides: ${python:Provides}
+
+However, if you do that, you need to be very careful. Especially, if
+you're depending on another python module, you should not declare it in
+the Depends field, but like this:
+	Python-Depends: python-bar (>= some.version)
+The appropriate dependencies on python2.X-bar will automatically be
+added.
+
+ For a package with only private modules
+ ---------------------------------------
+In this case, the rules file will probably look like this:
+
+build:
+	make ...
+
+install:
+	make install DESTDIR=debian/foo/
+
+binary-indep:
+	...
+	dh_pysupport
+	dh_installdeb
+	...
+
+If the private modules are not in a default directory (like 
+/usr/share/$package or /usr/lib/$package) you should pass the directory 
+to dh_pysupport:
+	dh_pysupport /usr/share/someframework/foo
+
+If the modules need a specific python version (like e.g. for Zope), you can
+pass the -V argument to dh_pysupport.
+	dh_pysupport -V2.4
+
+ For a package with public modules
+ ---------------------------------
+If the module doesn't work with all python versions, you should setup a
+debian/pyversions file. If the package needs python >= 2.3, it will look
+like :
+	2.3-
+
+The rules file will look like this:
+
+build:
+	...
+	python setup.py build
+
+install:
+	...
+	python setup.py install --root=$(CURDIR)/debian/python-foo
+
+binary-indep:
+	...
+	dh_pysupport
+	dh_installdeb
+	...
+
+ For a package with public C extensions:
+ ---------------------------------------
+First of all, you should build-depend on python-all-dev.
+
+If you want to build the extension only for some python versions, you 
+should create a debian/pyversions file as described earlier, and set in 
+the rules file:
+PYVERS=$(shell pyversions -vr)
+You need to build-depend on python (>= 2.3.5-11) for this to work.
+
+Otherwise, you can just build the extensions for all supported python 
+versions:
+PYVERS=$(shell pyversions -vs)
+
+The rest of the rules file will look like:
+
+build: $(PYVERS:%=build-python%)
+	touch $@
+build-python%:
+	python$* setup.py build
+	touch $@
+
+install: build $(PYVERS:%=install-python%)
+install-python%:
+	python$* setup.py install --root $(CURDIR)/debian/python-foo
+
+binary-arch:
+	...
+	dh_pysupport
+	dh_installdeb
+	...
+
+Specific cases
+==============
+ Packages hardcoding the path to their modules
+ ---------------------------------------------
+Some packages installing their modules in /usr/lib/python2.X expect
+to find them explicitly at that place at runtime. Fortunately this is
+uncommon as distutils doesn't allow that, but in this case the module
+will stop functioning with python-support. The solution is to install
+the files explicitly to /usr/lib/pymodules. Python-support will then
+automatically move them to the appropriate place.
+
+build-%/configure-stamp:
+	mkdir build-$*
+	cd build-$* && PYTHON=/usr/bin/python$* ../configure --prefix=/usr
+	touch $@
+
+build: $(PYVERS:%=build-%/build-stamp)
+build-%/build-stamp: build-%/configure-stamp
+	$(MAKE) -C build-$* pyexecdir=/usr/lib/pymodules/python$*
+	touch $@
+
+install: build $(PYVERS:%=install-%)
+install-%: build-%/build-stamp
+	$(MAKE) -C build-$* install pyexecdir=/usr/lib/pymodules/python$* DESTDIR=$(CURDIR)/debian/tmp
+
+binary-arch:
+	...
+	dh_pysupport
+	dh_installdeb
+
+ Namespace packages
+ ------------------
+Namespace packages are empty __init__.py files that are necessary for 
+other .py files to be considered as Python modules by the interpreter. 
+To avoid this being a problem, python-support will add them automatically
+as needed. However, this will be done later than the update-python-modules 
+call when dpkg installs the package, because this is, like 
+byte-compilation, a time-consuming operation.
+
+What this means is, if you need a namespace package or depend on a 
+package that needs it, *and* that you need to use it during the 
+postinst phase (e.g. for a daemon), you will have to add the following 
+command in the postinst before starting your daemon:
+	update-python-modules -p
+
+ Namespace packages and broken modules
+ -------------------------------------
+Some Python modules like Twisted rely on the fact that there is no 
+__init__.py file in some directories. THESE PACKAGES ARE BROKEN. You 
+should try to fix the package first to not rely on such implementation 
+details.
+
+However, if it turns out not to be possible, you can, as a workaround, 
+create a file named ".noinit" in the directories where you don't want 
+__init__.py to be created. In this case, update-python-modules will not 
+create the namespace package.
+
+
+Note : Legacy locations
+=======================
+Packages used to ship files in the following way:
+ * /usr/share/python-support/$package contained the public modules.
+ * /usr/lib/python-support/pythonX.Y/$package contained the public
+   extensions.
+ * /usr/share/python-support/$package.dirs contained a list of directories
+   to handle for byte-compilation (for private modules).
+These locations are still supported, but deprecated. New packages should
+not be using them.
