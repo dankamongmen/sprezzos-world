@@ -5667,6 +5667,15 @@ $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
 	tar cJvf meta-gnome_$(meta-gnome_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: sprezzos-keyring
+sprezzos-keyring:$(SPREZZOSKEYRING)_$(ARCH).deb
+$(SPREZZOSKEYRING): $(SPREZZ)/sprezzos-keyring/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf sprezzos-keyring_$(sprezzos-keyring_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: console-setup
 console-setup:$(CONSOLESETUP)_$(ARCH).deb
 $(CONSOLESETUP): $(SPREZZ)/console-setup/debian/changelog
