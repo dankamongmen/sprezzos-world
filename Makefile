@@ -993,6 +993,14 @@ $(CPPTEST): $(SPREZZ)/cpptest/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cpptest-$(cpptest_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: taglib
+taglib:$(TAGLIB)_$(ARCH).deb
+$(TAGLIB): $(SPREZZ)/taglib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf taglib-$(taglib_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: talloc
 talloc:$(TALLOC)_$(ARCH).deb
 $(TALLOC): $(SPREZZ)/talloc/debian/changelog
