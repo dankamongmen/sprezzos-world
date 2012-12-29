@@ -3065,6 +3065,14 @@ $(XFT): $(SPREZZ)/xft/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXft-$(xft_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libxp
+libxp:$(LIBXP)_$(ARCH).deb
+$(LIBXP): $(SPREZZ)/libxp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXp-$(libxp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xfsprogs
 xfsprogs:$(XFSPROGS)_$(ARCH).deb
 $(XFSPROGS): $(SPREZZ)/xfsprogs/debian/changelog
