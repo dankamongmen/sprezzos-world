@@ -46,7 +46,6 @@ EVINCEORIG:=evince_$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1).or
 FBIUP:=fbida-$(shell echo $(fbi_UPVER) | cut -d= -f2- | cut -d- -f1)
 FBTERMUP:=nfbterm-$(shell echo $(fbterm_UPVER) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_UPVER) | cut -d- -f1).orig.tar.gz
-FBVORIG:=fbv_$(shell echo $(fbv_UPVER) | cut -d- -f1).orig.tar.gz
 FONTCONFIGUP:=fontconfig-$(shell echo $(fontconfig_UPVER) | cut -d- -f1)
 FONTCONFIGORIG:=fontconfig_$(shell echo $(fontconfig_UPVER) | cut -d- -f1).orig.tar.gz
 FREETYPEUP:=freetype-$(shell echo $(freetype_UPVER) | cut -d- -f1) \
@@ -340,8 +339,10 @@ $(LINUXTOOLS): $(SPREZZ)/linux-tools/debian/changelog
 .PHONY: fbv
 fbv:$(FBV)_$(ARCH).deb
 $(FBV): $(SPREZZ)/fbv/debian/changelog
-	git clone git://repo.or.cz/fbv.git $@
-	tar czf $(FBVORIG) $@
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	git clone git@github.com:dankamongmen/nfbv.git $@
+	tar cJf nfbv-$(fbv_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf nfbv-$(fbv_UPVER).tar.xz nfbv_$(fbv_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: xbmc
@@ -1126,6 +1127,14 @@ $(CURL): $(SPREZZ)/curl/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf curl-$(curl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: cyrus-sasl
+cyrus-sasl:$(CYRUSSASL)_$(ARCH).deb
+$(CYRUSSASL): $(SPREZZ)/cyrus-sasl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cyrus-sasl-$(cyrus-sasl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: d-conf
 d-conf:$(DCONF)_$(ARCH).deb
@@ -3542,14 +3551,6 @@ $(LDNS): $(SPREZZ)/ldns/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ldns-$(ldns_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: mklibs
-mklibs:$(MKLIBS)_$(ARCH).deb
-$(MKLIBS): $(SPREZZ)/mklibs/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf mklibs-$(mklibs_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: mon
 mon:$(MON)_$(ARCH).deb
