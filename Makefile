@@ -2879,6 +2879,14 @@ $(LIBINDICATE): $(SPREZZ)/libindicate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libindicate-$(libindicate_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: indigo
+indigo:$(INDIGO)_$(ARCH).deb
+$(INDIGO): $(SPREZZ)/indigo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf indigo-$(indigo_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libbluray
 libbluray:$(LIBBLURAY)_$(ARCH).deb
 $(LIBBLURAY): $(SPREZZ)/libbluray/debian/changelog
@@ -3534,6 +3542,14 @@ $(LDNS): $(SPREZZ)/ldns/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ldns-$(ldns_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: mklibs
+mklibs:$(MKLIBS)_$(ARCH).deb
+$(MKLIBS): $(SPREZZ)/mklibs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mklibs-$(mklibs_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: mon
 mon:$(MON)_$(ARCH).deb
@@ -5622,6 +5638,12 @@ $(GNOMEPKGTOOLS): $(SPREZZ)/gnome-pkg-tools/debian/changelog
 libdebian-installer:$(LIBDEBIANINSTALLER)_$(ARCH).udeb
 $(LIBDEBIANINSTALLER): $(SPREZZ)/libdebian-installer/debian/changelog
 	cp -r $(<D)/.. $@
+
+.PHONY: mklibs
+mklibs:$(MKLIBS)_$(ARCH).deb
+$(MKLIBS): $(SPREZZ)/mklibs/debian/changelog
+	cp -r $(<D)/.. $@
+	tar cJvf mklibs_$(mklibs_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
 .PHONY: netbase
 netbase:$(NETBASE)_$(ARCH).deb
