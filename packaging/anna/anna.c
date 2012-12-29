@@ -292,8 +292,7 @@ install_modules(di_packages *status, di_packages *packages) {
 				if (*fp == '/')
 					f = ++fp;
 			}
-			if (asprintf(&dest_file, "%s/%s", DOWNLOAD_DIR, f) == -1)
-				return 5;
+			dest_file = xasprintf("%s/%s", DOWNLOAD_DIR, f);
 
 			di_log (DI_LOG_LEVEL_DEBUG, "retrieving %s %s", package->package, package->version);
 			if (!quiet) {

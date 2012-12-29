@@ -19,7 +19,7 @@ int retriever_usecached = 0;
  * If isdefault, the retriever is stored in the debconf db for use as the
  * default retriever later. */
 void set_retriever(const char *retriever, int isdefault) {
-	asprintf(&retriever_command, "%s/%s", RETRIEVER_DIR, retriever);
+	retriever_command = xasprintf("%s/%s", RETRIEVER_DIR, retriever);
 	if (isdefault) {
 		debconf_set(debconf, DEFAULT_RETRIEVER_VAR, retriever);
 		if (get_lowmem_level() == 0) {
@@ -45,8 +45,7 @@ int retriever_retrieve (di_package *package, char *dest) {
 	int ret;
 	char *command;
 
-	if (asprintf(&command, "%s retrieve %s %s", get_retriever(), package->filename, dest) == -1)
-		return 1;
+	command = xasprintf("%s retrieve %s %s", get_retriever(), package->filename, dest);
 	ret = di_exec_shell_log(command);
 	free(command);
 	return ret;
@@ -56,8 +55,7 @@ int retriever_config(void) {
 	char *command;
 	int ret;
 
-	if (asprintf(&command, "%s config", get_retriever()) == -1)
-		return 1;
+	command = xasprintf("%s config", get_retriever());
 	ret = di_exec_shell_log(command);
 	free(command);
 	return ret;
@@ -73,8 +71,7 @@ di_packages *retriever_packages(di_packages_allocator *allocator) {
 	int ret;
 
 	if (! retriever_usecached) {
-		if (asprintf(&command, "%s packages " DOWNLOAD_PACKAGES, get_retriever()) == -1)
-			return NULL;
+		command = xasprintf("%s packages " DOWNLOAD_PACKAGES, get_retriever());
 		ret = di_exec_shell_log(command);
 		free(command);
 		if (ret != 0)
@@ -109,8 +106,7 @@ signed int retriever_error (const char *failing_command) {
 	 * off. */
 	debconf_capb(debconf, "");
 
-	if (asprintf(&command, "%s error %s", get_retriever(), failing_command) == -1)
-		return 0;
+	command = xasprintf("%s error %s", get_retriever(), failing_command);
 	ret = di_exec_shell_log(command);
 	free(command);
 
@@ -129,8 +125,7 @@ signed int retriever_error (const char *failing_command) {
 void retriever_cleanup(void) {
 	char *command;
 
-	if (asprintf(&command, "%s cleanup", get_retriever()) != -1) {
-		di_exec_shell_log(command);
-		free(command);
-	}
+	command = xasprintf("%s cleanup", get_retriever());
+	di_exec_shell_log(command);
+	free(command);
 }

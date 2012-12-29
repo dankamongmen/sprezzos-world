@@ -1,6 +1,9 @@
 #include <debian-installer.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
+char *xvasprintf (const char *fmt, va_list ap);
+char *xasprintf (const char *fmt, ...);
 int get_lowmem_level (void);
 int is_queued(di_package *package);
 bool is_installed(di_package *p, di_packages *status);

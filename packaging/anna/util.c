@@ -1,15 +1,52 @@
+#include <errno.h>
 #include <fcntl.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "anna.h"
+#include "util.h"
+
+static void oom_die (void)
+{
+	fputs ("Out of memory!\n", stderr);
+	exit (1);
+}
+
+char *xvasprintf (const char *fmt, va_list ap) {
+	char *ret;
+
+	if (vasprintf (&ret, fmt, ap) < 0) {
+		if (errno == ENOMEM)
+			oom_die();
+		return NULL;
+	}
+
+	return ret;
+}
+
+char *xasprintf (const char *fmt, ...) {
+	va_list ap;
+	char *ret;
+
+	va_start (ap, fmt);
+	ret = xvasprintf (fmt, ap);
+	va_end (ap);
+
+	return ret;
+}
 
 int get_lowmem_level (void) {
 	int l;
 	l=open(LOWMEM_STATUS_FILE, O_RDONLY);
 	if (l != -1) {
 		char buf[2];
-		read(l, buf, 1);
+		if (read(l, buf, 1) != 1) {
+			close(l);
+			return 0;
+		}
 		close(l);
 		return atoi(buf);
 	}
@@ -108,8 +145,7 @@ int unpack_package (const char *pkgfile) {
 	char *command;
 	int ret;
 
-	if (asprintf(&command, "%s %s", DPKG_UNPACK_COMMAND, pkgfile) == -1)
-		return 0;
+	command = xasprintf("%s %s", DPKG_UNPACK_COMMAND, pkgfile);
 	ret = !di_exec_shell_log(command);
 	free(command);
 	return ret;
@@ -119,8 +155,7 @@ int configure_package (const char *package) {
 	char *command;
 	int ret;
 
-	if (asprintf(&command, "%s %s", DPKG_CONFIGURE_COMMAND, package) == -1)
-		return 0;
+	command = xasprintf("%s %s", DPKG_CONFIGURE_COMMAND, package);
 	ret = !di_exec_shell_log(command);
 	free(command);
 	return ret;
@@ -148,11 +183,7 @@ int load_templates (di_packages *packages) {
 		if (package->type != di_package_type_real_package ||
 		    package->status_want != di_package_status_want_install)
 			continue;
-		if (asprintf(&arg, "%s/%s.templates",
-			     INFO_DIR, package->package) == -1) {
-			di_free(command);
-			return 0;
-		}
+		arg = xasprintf("%s/%s.templates", INFO_DIR, package->package);
 		if (stat(arg, &st) == -1) {
 			free(arg);
 			continue;
@@ -184,9 +215,7 @@ int load_templates (di_packages *packages) {
 		if (package->type != di_package_type_real_package ||
 		    package->status_want != di_package_status_want_install)
 			continue;
-		if (asprintf(&arg, "%s/%s.templates",
-			     INFO_DIR, package->package) == -1)
-			return 0;
+		arg = xasprintf("%s/%s.templates", INFO_DIR, package->package);
 		unlink(arg);
 		free(arg);
 	}
