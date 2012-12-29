@@ -1,0 +1,104 @@
+#!/usr/bin/perl
+#
+# dpkg-distaddfile
+#
+# Copyright © 1996 Ian Jackson
+# Copyright © 2006-2008,2010,2012 Guillem Jover <guillem@debian.org>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+use strict;
+use warnings;
+
+use POSIX;
+use POSIX qw(:errno_h :signal_h);
+use Dpkg;
+use Dpkg::Gettext;
+use Dpkg::ErrorHandling;
+use Dpkg::File;
+
+textdomain("dpkg-dev");
+
+my $fileslistfile = 'debian/files';
+
+
+sub version {
+    printf _g("Debian %s version %s.\n"), $progname, $version;
+
+    printf _g("
+This is free software; see the GNU General Public License version 2 or
+later for copying conditions. There is NO warranty.
+");
+}
+
+sub usage {
+    printf _g(
+"Usage: %s [<option>...] <filename> <section> <priority>
+
+Options:
+  -f<files-list-file>      write files here instead of debian/files.
+  -?, --help               show this help message.
+      --version            show the version.
+"), $progname;
+}
+
+while (@ARGV && $ARGV[0] =~ m/^-/) {
+    $_=shift(@ARGV);
+    if (m/^-f/) {
+        $fileslistfile= $';
+    } elsif (m/^-(\?|-help)$/) {
+        usage();
+        exit(0);
+    } elsif (m/^--version$/) {
+        version();
+        exit(0);
+    } elsif (m/^--$/) {
+        last;
+    } else {
+        usageerr(_g("unknown option \`%s'"), $_);
+    }
+}
+
+@ARGV == 3 || usageerr(_g("need exactly a filename, section and priority"));
+my ($file, $section, $priority) = @ARGV;
+
+($file =~ m/\s/ || $section =~ m/\s/ || $priority =~ m/\s/) &&
+    error(_g("filename, section and priority may contain no whitespace"));
+
+# Obtain a lock on debian/control to avoid simultaneous updates
+# of debian/files when parallel building is in use
+my $lockfh;
+sysopen($lockfh, "debian/control", O_WRONLY) ||
+    syserr(_g("cannot write %s"), "debian/control");
+file_lock($lockfh, "debian/control");
+
+$fileslistfile="./$fileslistfile" if $fileslistfile =~ m/^\s/;
+open(Y, "> $fileslistfile.new") || syserr(_g("open new files list file"));
+if (open(X,"< $fileslistfile")) {
+    while (<X>) {
+        s/\n$//;
+        next if m/^(\S+) / && $1 eq $file;
+        print(Y "$_\n") || syserr(_g("copy old entry to new files list file"));
+    }
+} elsif ($! != ENOENT) {
+    syserr(_g("read old files list file"));
+}
+print(Y "$file $section $priority\n")
+    || syserr(_g("write new entry to new files list file"));
+close(Y) || syserr(_g("close new files list file"));
+rename("$fileslistfile.new", $fileslistfile) ||
+    syserr(_g("install new files list file"));
+
+# Release the lock
+close($lockfh) || syserr(_g("cannot close %s"), "debian/control");
