@@ -22,6 +22,7 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 
 include worlds/kde.mk
 include worlds/xfce.mk
+include worlds/gnome.mk
 
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
@@ -1823,14 +1824,6 @@ $(GNOMEGMAIL): $(SPREZZ)/gnome-gmail/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-gmail-$(gnome-gmail_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: gnome-icon-theme
-gnome-icon-theme:$(GNOMEICONTHEME)_$(ARCH).deb
-$(GNOMEICONTHEME): $(SPREZZ)/gnome-icon-theme/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-icon-theme_$(gnome-icon-theme_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: gnome-icon-theme-extras
 gnome-icon-theme-extras:$(GNOMEICONTHEMEEXTRAS)_$(ARCH).deb
