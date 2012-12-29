@@ -3096,6 +3096,14 @@ $(LIBTEXTWRAP): $(SPREZZ)/libtextwrap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtextwrap-$(libtextwrap_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libtheora
+libtheora:$(LIBTHEORA)_$(ARCH).deb
+$(LIBTHEORA): $(SPREZZ)/libtheora/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libtheora-$(libtheora_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libthrust
 libthrust:$(LIBTHRUST)_$(ARCH).deb
 $(LIBTHRUST): $(SPREZZ)/libthrust/debian/changelog
