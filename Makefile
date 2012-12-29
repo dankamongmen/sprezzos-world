@@ -5650,6 +5650,15 @@ $(CDEBCONF): $(SPREZZ)/cdebconf/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf cdebconf_$(cdebconf_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
+.PHONY: devscripts
+devscripts:$(DEVSCRIPTS)_$(ARCH).deb
+$(DEVSCRIPTS): $(SPREZZ)/devscripts/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf devscripts_$(devscripts_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: dpkg
 dpkg:$(DPKG)_$(ARCH).deb
 $(DPKG): $(SPREZZ)/dpkg/debian/changelog
