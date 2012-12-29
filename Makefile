@@ -2464,6 +2464,14 @@ $(JASPER): $(SPREZZ)/jasper/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf jasper-$(jasper_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: jfsutils
+jfsutils:$(JFSUTILS)_$(ARCH).deb
+$(JFSUTILS): $(SPREZZ)/jfsutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf jfsutils-$(jfsutils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: json-c
 json-c:$(JSONC)_$(ARCH).deb
 $(JSONC): $(SPREZZ)/json-c/debian/changelog
