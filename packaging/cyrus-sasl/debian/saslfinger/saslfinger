@@ -1,0 +1,312 @@
+#!/bin/bash
+#
+# Copyright © 2004 Patrick Koetter
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+#####################################################################
+#                          VARIABLES                                #
+#####################################################################
+# set -e
+scriptname="${0##*/}"
+scriptversion=1.0.4
+
+declare -a sasl_dirs valid_sasl_lib_names
+
+sasl_dirs=(/usr/lib/sasl \
+/usr/lib64/sasl2 \
+/var/lib/sasl \
+/opt/lib/sasl \
+/usr/lib/sasl2 \
+/var/lib/sasl2 \
+/opt/lib/sasl2 \
+/usr/local/lib/sasl2 \
+/etc/sasl2 \
+/etc/postfix/sasl \
+/etc/cyrus-sasl \
+/usr/pkg/lib)
+
+sasl_libs=(libsasl.so libsasl2.so)
+
+#####################################################################
+#                     COMMANDS AND FUNCTIONS                        #
+#####################################################################
+
+export PATH="/bin:/sbin:/usr/bin:/usr/sbin:$PATH"
+
+function start () {
+	echo "${scriptname} - postfix Cyrus sasl configuration $(date)"
+	echo "version: ${scriptversion}"
+	echo "mode: ${mode} SMTP AUTH"
+}
+
+function end () {
+	echo "-- end of ${scriptname} output --"
+}
+
+function postconf_get () { 
+	postconf -h ${1}; 
+}
+
+function get_saslpasswd () { 
+	postconf -h smtp_sasl_password_maps | sed -e s/^.*://; 
+}
+
+function get_mail_version () {
+	declare -a systems
+	local systems=("/etc/redhat-release" "/etc/fedora-release" "/etc/slackware-version" "/etc/gentoo-release" "/etc/issue" "/etc/motd")
+	echo "-- basics --"
+	echo "Postfix: $(postconf_get mail_version)"
+	for system in ${systems[@]}; do
+		if [[ -e ${system} ]]; then
+			echo "System: $(cat ${system})"
+			break
+		else
+			continue
+		fi
+	done
+}
+
+function get_sasl_dirs () {
+	local i=0
+	local sasldir=""
+	for sasldir in ${sasl_dirs[@]}; do
+		if [ -d ${sasldir} ]; then
+			valid_sasldirs[$i]=${sasldir}
+			let "i = $i + 1"
+		fi
+	done
+	if ! [[ ${valid_sasldirs[@]} ]]; then
+		echo -e "\aCould not find any valid Cyrus SASL directories."
+		echo "Cyrus SASL is required to setup SMTP AUTH!"
+		exit 72
+	fi
+}
+
+
+function get_sasl_support () {
+	local sasllib=""
+	echo "-- $1 is linked to --"
+	for sasllib in ${sasl_libs[@]}; do
+	local ldd_res="$(ldd "$(postconf_get daemon_directory)/${1}" | egrep -e "${sasllib}" 2>/dev/null)"
+		if [ -n "${ldd_res}" ]; then
+			echo "${ldd_res}"
+		fi
+	done
+}
+
+
+function get_smtp_dialogue () {
+	echo "-- mechanisms on ${1} --"
+	if echo "EHLO $HOSTNAME\r\nQUIT\r\n" | nc -w 1 -v ${1} 25 2>/dev/null | egrep "AUTH" 2>/dev/null; then
+	  echo
+	elif echo "EHLO $HOSTNAME\r\nQUIT\r\n" | netcat -w 1 -v ${1} 25 2>/dev/null | egrep "AUTH" 2>/dev/null; then
+	  echo
+	else
+		(echo "EHLO $HOSTNAME"; sleep 2) | telnet ${1} 25 2>/dev/null | egrep "(AUTH)"
+	fi
+}
+
+
+function get_maincf () {
+	if test ${1} = "smtpd"; then
+		local authparams="(^smtpd_sasl_*|broken_sasl_auth_clients|^smtpd_use_tls|^smtpd_tls_*)"
+	elif test ${1} = "smtp"; then
+		local authparams="(^smtp_sasl_*|^relayhost|^smtp_use_tls|^smtp_tls_*)"
+	fi
+
+	for daemon in ${1}; do
+		echo "-- active SMTP AUTH and TLS parameters for ${1} --"
+		if postconf -n | egrep -i ${authparams} 2> /dev/null; then
+			continue
+		else
+			echo -e "\aNo active SMTP AUTH and TLS parameters for ${1} in main.cf!"
+			echo "SMTP AUTH can't work!"
+			exit 72
+		fi
+	done
+}
+
+
+function get_sasl_apps () {
+	active_services[0]=""
+	if [[ $(egrep -v "^#.*smtpd_sasl_application_name" $(postconf_get config_directory)/master.cf |\
+		egrep "^.*smtpd_sasl_application_name" 2>/dev/null) ]]; then
+		active_services=$(egrep -v "^#.*smtpd_sasl_application_name" $(postconf_get config_directory)/master.cf |\
+			egrep "^.*smtpd_sasl_application_name" | sed 's/.*-o smtpd_sasl_application_name=//g' | awk '{print $1}')
+	else
+		active_services[0]="smtpd"
+	fi
+}
+
+function get_service_config () {
+# Add /etc/postfix/sasl to valid_sasldirs for Debian users.
+sasl_dirs[100]="/etc/postfix/sasl"
+	local o=1
+	local sasldir=""
+	local service=""
+	for sasldir in ${sasl_dirs[@]}; do
+		local i=1
+		for service in ${active_services[@]}; do
+			if [ -e ${sasldir}/${service}.conf ]; then
+				valid_services[$i$o]=${sasldir}/${service}.conf
+				let "i = $i + 1"
+			elif ! [ -e ${sasldir}/${service}.conf ]; then
+				continue
+			fi
+		done
+	let "o+=1"
+	done
+	if ! [[ ${valid_services[@]} ]]; then
+		echo; echo -e "\aThere is no smtpd.conf that defines what SASL should do for Postfix."
+		echo "SMTP AUTH can't work!"; echo
+		exit 72
+	fi
+}
+
+
+function list_service_configs () {
+	local smtpdconf=""
+	for smtpdconf in ${valid_services[@]}; do
+		echo "-- content of ${smtpdconf} --"
+		cat ${smtpdconf} | sed -e 's/.*ldapdb_id.*/ldapdb_id: --- replaced ---/;s/.*sql_user:.*/sql_user: --- replaced ---/g;'\
+				-e 's/.*ldapdb_pw:.*/ldapdb_pw: --- replaced ---/g;s/.*sql_passwd:.*/sql_passwd: --- replaced ---/g'
+		echo
+	done
+}
+
+
+function list_sasl_dirs () {
+	local sasldir=""
+	for sasldir in ${valid_sasldirs[@]}; do
+		echo "-- listing of ${sasldir} --"; ls -alL ${sasldir}; echo
+	done
+}
+
+
+function get_mastercf () {
+	echo "-- active services in $(postconf_get config_directory)/master.cf --"
+	echo "$(egrep "(^# service type|\(yes\))" $(postconf_get config_directory)/master.cf)"
+	echo "$(cat $(postconf_get config_directory)/master.cf | egrep -v "^#")"
+}
+
+
+function check_saslpasswd () {
+saslpasswd=$(postconf_get smtp_sasl_password_maps | sed -e s/^.*://)
+if ! [ $(get_saslpasswd) ]; then
+	echo -e "\aCannot find the smtp_sasl_password_maps parameter in main.cf."
+	echo "Client-side SMTP AUTH cannot work without this parameter!"
+	exit 78
+elif [ -e $(get_saslpasswd) ]; then
+	echo "-- permissions for $(get_saslpasswd) --"; echo "`ls -al ${saslpasswd}`"; echo
+	if [ -e $(get_saslpasswd).db ]; then
+		echo "-- permissions for $(get_saslpasswd).db --"; echo "`ls -al ${saslpasswd}.db`"; echo
+		if [ $(get_saslpasswd) -nt $(get_saslpasswd).db ]; then
+			echo -e "\a$(get_saslpasswd).db is older than $(get_saslpasswd)!"
+			echo "Run the following command as root to sync $(get_saslpasswd).db:"
+			echo;	echo -e "\tpostmap `postconf -h smtp_sasl_password_maps`"; echo
+			exit 65
+		else
+			echo "$(get_saslpasswd).db is up to date."
+		fi
+	else
+		echo; echo -e "\aThere is no $(get_saslpasswd).db!"
+		exit 78
+	fi
+elif ! [ -e $(get_saslpasswd) ]; then
+	echo; echo -e "\aYou have set smtp_sasl_password_maps = ${saslpasswd}"
+	echo "in main.cf, but $(get_saslpasswd) does not seem to be there."
+	echo "Please check and run ${scriptname} again."
+	exit 78
+fi
+}
+
+
+function get_smtp_dialogue_wrapper () {
+local host=""
+if [ -r $(get_saslpasswd) ]; then
+	for host in $(awk '!/^#/ {print $1}' ${saslpasswd}); do
+		get_smtp_dialogue ${host}; echo
+	done
+elif ! [ -r $(get_saslpasswd) ]; then
+	echo -e "\aYou don't have the correct permissions to read $(get_saslpasswd)."
+	echo "The telnet test, which gets the AUTH mechanisms offered by your remote"
+	echo "MTA(s), requires reading this file. Become either root to access"
+	echo "$(get_saslpasswd), or allow your current user, ${USER}, to read it."; echo
+	exit 0
+fi
+}
+
+
+
+function server () {
+	mode="server-side"
+	start; echo
+	get_mail_version; echo
+	get_sasl_support smtpd; echo
+	get_maincf smtpd; echo
+	get_sasl_dirs; echo
+	list_sasl_dirs; echo
+	get_sasl_apps; echo
+	get_service_config; echo
+	list_service_configs; echo
+	get_mastercf; echo
+	get_smtp_dialogue localhost; echo
+	end; echo
+	exit 0
+}
+
+
+function client () {
+	mode="client-side"
+	start; echo
+	get_mail_version;	echo
+	get_sasl_support smtp; echo
+	get_maincf smtp; echo
+	get_sasl_dirs; echo
+	list_sasl_dirs;	echo
+	check_saslpasswd;	echo
+	get_mastercf; echo
+	get_smtp_dialogue_wrapper; echo
+	end; echo
+	exit 0
+}
+
+
+function usage () {
+	echo; echo "saslfinger -s"; echo -e "\tCheck server-side SMTP AUTH configuration"
+	echo; echo "saslfinger -c"; echo -e "\tCheck client-side SMTP AUTH configuration"
+	echo; echo "saslfinger -h"; echo -e "\tPrint this message."
+	echo; echo "Read man (1) saslfinger for a detailed discussion on what"; echo "${scriptname} may do for you."
+	echo; exit 0
+}
+
+no_args=0
+if [ ${#} -eq ${no_args} ]; then
+	echo; echo -e "\aUsage: `basename ${0}` [-chs]"
+	echo "Use \"`basename ${0}` -h\" to find out what the options mean."
+	echo; exit 65
+fi 
+
+while getopts "chs" option; do
+  case ${option} in
+	c ) client;;
+	s ) server;;
+	h ) usage;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+exit 0

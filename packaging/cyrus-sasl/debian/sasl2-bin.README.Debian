@@ -1,0 +1,142 @@
+Notes for Cyrus SASL programs
+=============================
+
+saslauthd
+---------
+
+Using a single saslauthd instance with Postfix or another chrooted server:
+
+   NOTE: this applies only if you run Postfix or another server in
+   a chroot, which is the Debian default. If you run a mixed environment
+   (some instances of Postfix's smtpd in a chroot, some outside chroot,
+   for example) then see the section on multiple instances of saslauthd
+   below.
+
+ If you run a chrooted server such as Postfix and wish to use saslauthd, you
+ must place the saslauthd socket ("mux") inside the Postfix chroot. You must
+ also set correct overrides for the run directory inside the chroot, using
+ dpkg-statoverride. Finally, you must add the postfix user to the sasl group.
+ These steps ensure that the Debian subsystems know how you want things to be
+ laid out.
+
+ To know if your Postfix is running chroot, check /etc/postfix/master.cf.
+ If it has the line "smtp inet n - y - - smtpd" or "smtp inet n - - - - smtpd"
+ then your Postfix is running in a chroot.
+ If it has the line "smtp inet n - n - - smtpd" then your Postfix is NOT
+ running in a chroot.
+
+ To place the saslauthd socket inside the Postfix chroot, edit
+ /etc/default/saslauthd and set OPTIONS like this (you may omit -c):
+  OPTIONS="-c -m /var/spool/postfix/var/run/saslauthd"
+ 
+ To set the run directory using dpkg-statoverride, run this command as root:
+  dpkg-statoverride --add root sasl 750 /var/spool/postfix/var/run/saslauthd
+
+ Finally, to add the postfix user to the sasl group:
+  adduser postfix sasl
+
+ The init script will automatically create the run directory with the
+ permissions you have set using dpkg-statoverride. Please note that you must
+ also configure Postfix correctly. There are many options related to SASL. See
+ the Postfix documentation for how to do this.
+
+Running multiple instances of saslauthd:
+
+ By default, the Debian package runs a single instance of saslauthd.
+ However, the init script supports running several instances using the
+ method described subsequently. Note that it's your responsibility to keep
+ track of each instance: where its configuration file resides, where you
+ put its communication socket, and how you configure programs to look for
+ the right socket. The Debian infrastructure only provides a way to start,
+ stop, restart and reload these saslauthd instances, and nothing else.
+
+ By default, the start, stop, restart, force-reload and reload actions will
+ act on all your saslauthd instances. If you want to do something to a
+ single instance, use the following actions:
+ 	start-instance <name> -- start the instance <name>
+	stop-instance <name> -- stop the instance <name>
+	restart-instance <name> -- restart the instance <name>
+	force-reload-instance <name> -- force-reload the instance <name>
+	reload-instance <name> -- reload the instance <name>
+
+ Example: /etc/init.d/saslauthd start-instance saslauthd-postfix_chroot
+ 
+ To create a new instance of saslauthd, you must do three things:
+   1. Create a defaults file for the new instance,
+   2. create a statoverride for the run directory of that instance, and
+   3. configure programs to use the right socket.
+
+ 1. To create a defaults file for the new instance, copy the file
+ /etc/default/saslauthd to /etc/default/saslauthd-<name>, where <name> is a
+ string describing your new instance. For example:
+  cp /etc/default/saslauthd /etc/default/saslauthd-postfix_chroot
+
+   NOTE: <name> MUST NOT include any characters that need escaping
+   to be a valid file name. You can't put spaces or any other strange
+   characters in it. The formal definition is that you can use only the
+   characters a-z, A-Z, numbers 0-9, and the characters - and _. Things
+   will break if you use characters that need escaping. The name is case-
+   sensitive.
+
+ Then, edit that file and set the following:
+    DESC -- a description of this saslauthd instance, for example
+	        "Postfix chroot SASL Authentication Daemon"
+	NAME -- a short name for this saslauthd instance, for example
+	        "saslauthd-postfix_chroot"
+	OPTIONS -- must include the -m flag and the run directory of this
+	           instance, for example
+			   "-c -m /var/spool/postfix/var/run/saslauthd"
+
+ It's *very* important that you set the -m option differently for each
+ instance! Also note that you MUST set the -m option for EVERY instance.
+ Things will break if you don't do these things.
+
+ If you don't set the NAME option, it will be set to "default" and you will
+ not be able to start, stop or reload that instance separately (using the
+ *-instance actions described above).
+
+ 2. You must also create a statoverride entry to tell the init script
+ which permissions you want for the run directory. Example:
+  dpkg-statoverride --add root sasl 750 /var/spool/postfix/var/run/saslauthd
+
+ The init script will ensure that the directory exists, and create it with the
+ proper permissions if it doesn't. Note that the directory MUST match what you
+ specified for the -m option in step one.
+
+ 3. Finally, you must configure your programs to communicate with each
+ saslauthd instance on their respective sockets. This is usually accomplished
+ by setting the saslauthd_path option in the sasl configuration of the
+ program. For example, Postfix uses the SASL application name "smtpd", and it
+ sets the SASL configuration file path to /etc/postfix/sasl. This means that
+ SASL will look for settings in /etc/postfix/sasl/smtpd.conf. So, to set the
+ socket path, put this in /etc/postfix/sasl/smtpd.conf:
+  saslauthd_path: /var/run/saslauthd
+
+ NOTE: If you run a chrooted server, such as Postfix with default Debian
+ settings, the saslauthd_path is relative to the chroot directory. You have to
+ take this into account when configuring the -m option in the saslauthd
+ default file (see above).
+
+ If all this seems daunting to you, then take one step at a time, and make
+ sure you understand what you've done, and why, before proceeding to the next
+ step. The interactions of the SASL software, the server software using SASL
+ and the Debian system are fairly complex, and it's easy to get confused if
+ you are in a hurry or try to do things too fast. It really does pay off to
+ spend the 5-15 minutes it takes to do this right, instead of rushing off and
+ breaking your system.
+
+Running in debug mode
+---------------------
+
+ To run saslauthd in debug mode, use the -d option. However, avoid putting
+ this option into /etc/defaults/saslauthd, because it will break your system!
+ The -d option turns saslauthd into a foreground process instead of a
+ background daemon, which means that the boot (init) sequence will stop when
+ saslauthd is started. You will probably end up with a system that is only
+ partly started, and you'll be unable to log in through ssh to fix it.
+
+ When you do need to debug SASL, please stop saslauthd through the normal
+ init script and then run it by hand in debug mode with the -d option and
+ all other options that you wish to test.
+
+ -- Fabian Fagerholm <fabbe@debian.org>, Tue, 7 Apr 2008 19:34:12 +0300
