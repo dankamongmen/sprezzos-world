@@ -920,6 +920,14 @@ $(LIBCRYPTSSLEAYPERL): $(SPREZZ)/libcrypt-ssleay-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Crypt-SSLeay-$(libcrypt-ssleay-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: lsof
+lsof:$(LSOF)_$(ARCH).deb
+$(LSOF): $(SPREZZ)/lsof/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lsof_$(lsof_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: lsscsi
 lsscsi:$(LSSCSI)_$(ARCH).deb
 $(LSSCSI): $(SPREZZ)/lsscsi/debian/changelog
@@ -5674,6 +5682,24 @@ $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
 	cp -r $(<D)/.. $@
 	rm -rf $@/debian
 	tar cJvf meta-gnome_$(meta-gnome_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
+.PHONY: python-central
+python-central:$(PYTHONCENTRAL)_$(ARCH).deb
+$(PYTHONCENTRAL): $(SPREZZ)/python-central/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf python-central_$(python-central_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
+.PHONY: python-support
+python-support:$(PYTHONSUPPORT)_$(ARCH).deb
+$(PYTHONSUPPORT): $(SPREZZ)/python-support/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf python-support_$(python-support_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
 .PHONY: sprezzos-keyring
