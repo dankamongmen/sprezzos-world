@@ -1,0 +1,96 @@
+#!/bin/sh
+# This is a hacked up version of NM's keycheck.sh that understands jetring
+# changesets.
+
+# Copyright (C) 2003-2007 Joerg Jaspert <joerg@debian.org> and others
+# This little script is free software; you can redistribute
+# it and/or modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; version 2.
+#
+# On Debian systems, the complete text of the GNU General Public
+# License can be found in /usr/share/common-licenses/GPL-2 file.
+
+set -e
+
+CACHE=./cache
+TMPRING=./keyring.tmp
+# Which keyserver
+KEYSERVER=keyring.debian.org
+# The options for the gpg call in this script.
+# Contains only options used in ALL gpg calls.
+GPGOPTS=" -q --no-options --no-default-keyring --no-auto-check-trustdb --keyring $TMPRING --trust-model always"
+# For the following calls use LANG=C - some output is used for
+# reports to a list / for an english report.
+LANG=C
+export LANG
+
+changeset="$1"
+if [ -z "$changeset" ]; then
+	echo "Usage: keycheck changeset" >&2
+	exit 1
+fi
+
+trap cleanup EXIT
+
+cleanup () {
+	rm -f $TMPRING*
+}
+
+keycheck () {
+	gpg ${GPGOPTS} -v --with-fingerprint --keyring $CACHE/debian-keyring.gpg --keyring $CACHE/debian-keyring.pgp --check-sigs "$KEYID"
+	echo "Let's test if its a version 4 or greater key"
+	VERSION=$(gpg ${GPGOPTS} --with-colons --with-fingerprint --list-keys "0x$KEYID" | awk -F : '$1 == "fpr" {print length($10)}')
+
+	if [ $VERSION -eq 32 ]; then
+		echo "Warning: It looks like this key is an Version 3 GPG key. This is bad."
+		echo "Please doublecheck and then get your applicant to send you a correct"
+		echo "key if this is script isnt wrong."
+	else
+		echo "Key is ok"
+	fi
+
+	echo "Check for key expire stuff"
+	EXPIRE=$(gpg ${GPGOPTS} --with-colons --check-sigs "0x$KEYID" |awk -F : ' $1 == "sub" && $2 != "r" {print $7} ')
+	
+	if [ -z "$EXPIRE" ]; then
+	    echo "Key has no expiration date set, nothing to check."
+	else
+		echo "Key has an expiration date of "\"${EXPIRE}\""."
+		echo "Please check that its not in the past, AND that it is not too"
+		echo "near in the future to make adding this applicant pointless."
+	fi
+}
+
+make
+cp debian-maintainers.gpg $TMPRING
+KEYID=$(jetring-apply $TMPRING "$changeset" 2>&1 | grep -m 1 '^gpg: key' | sed 's/^gpg: key \([a-fA-F0-9]*\):.*/\1/')
+if [ -z "$KEYID" ]; then
+	echo "Changeset failed to apply, or failed to parse key id from gpg output" >&2
+	rm -f $TMPRING*
+	exit 1
+fi
+
+make rsync-keys
+
+echo "Checking key id $KEYID"
+val=$(keycheck 2>&1 | sed -e 's/^$/./' -e 's/^/  /')
+
+echo "Adding KeyCheck field to $changeset"
+printf "" > "$changeset.new"
+# Try to add it before the Data block.
+added=
+IFS="
+"
+for line in $(cat "$changeset"); do
+	if [ "$line" = "Action: import" ]; then
+		echo "KeyCheck:" >> "$changeset.new"
+		echo "$val" >> "$changeset.new"
+		added=1
+	fi
+	echo "$line" >> "$changeset.new"
+done
+if [ ! "$added" ]; then
+	echo "KeyCheck:" >> "$changeset.new"
+	echo "$val" >> "$changeset.new"
+fi
+mv -f "$changeset.new" "$changeset"

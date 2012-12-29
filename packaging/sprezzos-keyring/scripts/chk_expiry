@@ -1,0 +1,69 @@
+#!/usr/bin/perl
+use strict;
+use Date::Calc qw(Today Delta_Days Add_Delta_YM);
+
+my (%conf);
+%conf = (keyrings => ['debian-keyring.gpg', 'debian-nonupload.gpg',
+		      'debian-maintainers.gpg'],
+	 basedir => 'output/keyrings',
+ 	 cmd => 'gpg --no-default-keyring --keyring %s/%s --list-key|grep expire[ds]:'
+#	 basedir => '/tmp',
+#	 cmd => 'cat %s/%s'
+    );
+
+for my $keyring (@{$conf{keyrings}}) {
+    my ($keys, @expired, @nextmonth, @threemonths);
+    $keys = {};
+    print "============================================================\n";
+    print "Processing keyring: $keyring\n\n";
+    for my $line (query_keyring($keyring)) {
+	my ($key, $y, $m, $d);
+	unless ($line =~ m![ps]ub\s+\d+[RDg]/
+                           ([\dABCDEF]{8})
+                           \s.+expire[ds]:\s
+                           (\d{4})-(\d{2})-(\d{2})!x) {
+	    warn "Unrecognized: $line";
+	    next;
+	}
+	($key, $y, $m, $d) = ($1, $2, $3, $4);
+	$keys->{$key} = [$y, $m, $d];
+    }
+    print "\nAlready expired keys:\n";
+    report($keys, [Today()]);
+    print "\nKeys expiring soon (one month from today):\n";
+    report($keys, [Add_Delta_YM(Today(),0,1)], [Today()]);
+    print "\nKeys expiring after a month but within three months:\n";
+    report($keys, [Add_Delta_YM(Today(),0,1)], [Add_Delta_YM(Today(),0,3)]);
+}
+
+sub query_keyring {
+    my ($keyring, $cmd);
+    $keyring = shift;
+    $cmd = sprintf($conf{cmd}, $conf{basedir}, $keyring);
+    return `$cmd`;
+}
+
+# Called with three parameters:
+# - $keys: Hash keyed by keyid, with the expiry date in [y,m,d] form as its 
+#   value
+# - $before: [y,m,d] form. Keys expiring before this date will be reported
+# - $limit: Optional, [y,m,d] form. Keys expiring before this date will be 
+#   ignored.
+sub report {
+    my ($keys, $before, $limit, %res);
+    $keys = shift;
+    $before = shift;
+    $limit = shift;
+    for my $key (keys %$keys) {
+	next if Delta_Days(@{$keys->{$key}}, @{$before}) < 0;
+	next if $limit and Delta_Days(@{$keys->{$key}}, @{$limit}) > 0;
+	$res{$key} = {expiry => $keys->{$key}, 
+		      days_to_exp => Delta_Days(Today, @{$keys->{$key}}) };
+    }
+
+    foreach my $key (sort {$res{$a}{days_to_exp} <=> $res{$b}{days_to_exp}}
+		     keys %res) {
+	printf("%s: %s (%s days)\n", $key, join('-', @{$res{$key}{expiry}}),
+	       $res{$key}{days_to_exp});
+    }
+}

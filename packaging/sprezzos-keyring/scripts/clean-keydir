@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# Copyright (c) 2012 Jonathan McDowell <noodles@earth.li>
+# GNU GPL; v2 or later
+# Given a key directory clean the keys to be minimal or clean
+
+set -e
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+	echo "Usage: clean-keydir [clean|minimal] dir" >&2
+	exit 1
+fi
+
+if [ "$1" == "clean" ]; then
+	GPGOPTIONS="--keyring $(readlink -f output/keyrings/debian-keyring.gpg) --keyring $(readlink -f output/keyrings/debian-nonupload.gpg) --keyring $(readlink -f output/keyrings/debian-maintainers.gpg) --no-auto-check-trustdb --import-options import-clean --export-options export-clean"
+elif [ "$1" == "minimal" ]; then
+	GPGOPTIONS="--no-auto-check-trustdb --import-options import-minimal --export-options export-minimal"
+else
+	echo "Must specify clean or minimal; not $1" >&2
+	exit 1
+fi
+
+if [ ! -d $2 ]; then
+	echo "$2 is not a directory" >&2
+	exit 1
+fi
+
+# avoid gnupg touching ~/.gnupg
+GNUPGHOME=$(mktemp -d -t jetring.XXXXXXXX)
+export GNUPGHOME
+trap cleanup exit
+cleanup () {
+	rm -rf "$GNUPGHOME"
+}
+
+cd $2
+for key in 0x*; do
+	if gpg --quiet $GPGOPTIONS --import $key &&
+			gpg --quiet $GPGOPTIONS --export $key > $key.new &&
+			[ -s $key.new ]; then
+		OLDSIZE=$(stat -c "%s" $key)
+		NEWSIZE=$(stat -c "%s" $key.new)
+		if [ $OLDSIZE -gt $NEWSIZE ]; then
+			echo "Cleaning $key [$OLDSIZE] -> [$NEWSIZE]"
+			mv $key.new $key
+		fi
+	fi
+	[ -e $key.new ] && rm $key.new
+done
+
+exit 0

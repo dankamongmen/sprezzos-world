@@ -1,0 +1,66 @@
+#!/bin/sh
+
+# Copyright (c) 2008 Jonathan McDowell <noodles@earth.li>
+# GNU GPL; v2 or later
+# Updates an existing key in a keyring dir
+
+set -e
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+	echo "Usage: update-key keyfile dir" >&2
+	exit 1
+fi
+
+# avoid gnupg touching ~/.gnupg
+GNUPGHOME=$(mktemp -d -t jetring.XXXXXXXX)
+export GNUPGHOME
+trap cleanup exit
+cleanup () {
+	rm -rf "$GNUPGHOME"
+}
+
+keyfile=$(readlink -f "$1") # gpg works better with absolute keyring paths
+keydir="$2"
+
+basename=$(basename "$keyfile")
+date=`date -R`
+
+keyid=$(gpg --with-colons --keyid long --options /dev/null --no-auto-check-trustdb < $keyfile | grep '^pub' | head -n 1 | cut -d : -f 5)
+
+if [ ! -e $keydir/0x$keyid ]; then
+	echo "0x$keyid isn't already in $keydir - new key or error."
+	exit 1
+fi
+
+gpg --quiet --import $keydir/0x$keyid
+summary=$(gpg --import $keyfile 2>&1 | scripts/parse-gpg-update 0x$keyid)
+gpg --no-auto-check-trustdb --options /dev/null \
+		--export $keyid > $GNUPGHOME/0x$keyid
+
+case "$summary" in
+  *:*)
+	# Something changed
+	;;
+  *)
+	# Nothing changed, exit
+	echo "No changes to $summary"
+	exit
+esac
+
+echo "Running gpg-diff:"
+(
+	echo $summary 
+	echo
+	scripts/gpg-diff $keydir/0x$keyid $GNUPGHOME/0x$keyid
+) | sensible-pager
+
+echo "Are you sure you want to update this key? (y/n)"
+read n
+
+if [ "x$n" = "xy" -o "x$n" = "xY" ]; then
+	mv $GNUPGHOME/0x$keyid $keydir/0x$keyid
+	echo "Updated key."
+	echo $summary >> update.log
+else
+	echo "Not updating key."
+fi

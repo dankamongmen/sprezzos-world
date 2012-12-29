@@ -1,0 +1,204 @@
+#!/usr/bin/perl -w
+
+# Copyright (c) 2007 Anthony Towns
+# GNU GPL; v2 or later
+# Gives an overview of what changed between two keyrings
+
+# Take from jetring-diff and modified to be suitable for git.
+# Copyright (c) 2007 Jonathan McDowell <noodles@earth.li>
+
+use strict;
+use Cwd q{abs_path};
+use File::Temp qw(tempdir);
+use warnings;
+use strict;
+
+if (@ARGV != 2 and @ARGV != 7) {
+	die "usage: gpg-diff old.gpg new.gpg | path old.gpg old-hex old-mode ".
+			"new.gpg new-hex new-mode\n";
+}
+
+# avoid gnupg touching ~/.gnupg
+$ENV{GNUPGHOME}=tempdir("jetring.XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+
+my ($l, $r);
+
+if (@ARGV == 7) {
+	# Print a diff style header
+	print "gpg-diff a/$ARGV[0] b/$ARGV[4]\n";
+	print "--- a/$ARGV[0]\n";
+	print "+++ b/$ARGV[4]\n";
+	print "\n";
+
+	if ($ARGV[4] eq '/dev/null') {
+		print "Key deleted\n";
+		exit 0;
+	}
+
+	$l = parse_keyring($ARGV[1]);
+	$r = parse_keyring($ARGV[4]);
+} else {
+	$l = parse_keyring(shift);
+	$r = parse_keyring(shift);
+}
+
+foreach my $id (sort keys %{$l}) {
+	if (not exists $r->{$id}) {
+		summary("-", @{$l->{$id}});
+	}
+	else {
+		my $diff=0;
+		my @out;
+
+		my %rpackets = map { comparable($_->{'details'}) => $_ }
+				@{$r->{$id}};
+		my %lpackets = map { comparable($_->{'details'}) => 1 }
+				@{$l->{$id}};
+
+		foreach my $packet (@{$l->{$id}}) {
+			if (defined($rpackets{comparable($packet->{'details'})})) {
+				push @out, " ".outformat($packet->{'details'});
+				push @out, comparesigs(\$diff, $packet->{'sigs'},
+						$rpackets{comparable($packet->{'details'})}->{'sigs'});
+			} else {
+				push @out, "-".outformat($packet->{'details'});
+				$diff = 1;
+			}
+		}
+
+		foreach my $packet (@{$r->{$id}}) {
+			if (! $lpackets{comparable($packet->{'details'})}) {
+				push @out, "+".outformat($packet->{'details'});
+				$diff = 1;
+			}
+		}
+
+		print @out if $diff;
+	}
+}
+foreach my $id (sort keys %{$r}) {
+	if (not exists $l->{$id}) {
+		summary("+", @{$r->{$id}});
+	}
+}
+
+sub parse_keyring {
+	my $k=shift;
+
+	$k=abs_path($k); # annoying gpg..
+	my $cache=$k.".cache";
+
+	my $cached=0;
+	my $kmtime=(stat($k))[9];
+	if (-e $cache) {
+		my $cmtime=(stat($cache))[9];
+		if ($kmtime == $cmtime) {
+			open(DUMP, $cache) || die "$cache: $!";
+			$cached=1;
+		}
+	}
+	if (! $cached) {
+		open(DUMP, "gpg --options /dev/null --no-default-keyring ".
+			"--no-auto-check-trustdb --keyring $k --list-sigs ".
+			"--fixed-list-mode --with-colons -q |") 
+			or die "couldn't dump keyring $k: $!";
+# Disable caching for the moment
+#		if (! open(CACHE, ">$cache")) {
+#			print STDERR "warning: cannot write cache $cache\n";
+			$cache=undef;
+#		}
+	}
+	my %keys;
+	my $id;
+	my $packet;
+	while (<DUMP>) {
+		if (! $cached && defined $cache) {
+			print CACHE $_;
+		}
+		chomp;
+
+		my @fields=split(":", $_);
+		$fields[5]="-"; # ignore creation date, varies
+		next if $fields[0] eq 'tru';
+		if ($fields[0] eq 'pub') {
+			$id=$fields[4];
+		}
+		if ($fields[0] ne 'sig' && $fields[0] ne 'rev') {
+			if (defined($packet)) {
+				push @{$keys{$id}}, $packet;
+				undef $packet;
+			}
+			$packet->{'details'} = \@fields;
+		} else {
+			if (! defined $id or !defined($packet)) {
+				die "parse error: $_";
+				next;
+			}
+			push @{$packet->{'sigs'}}, \@fields;
+		}
+	}
+	push @{$keys{$id}}, $packet;
+	close DUMP;
+
+	if (defined $cache) {
+		close CACHE;
+		utime($kmtime, $kmtime, $cache) ||
+			print STDERR "warning: failed setting cache time: $!";
+	}
+
+	return \%keys;
+}
+
+sub summary {
+	my $prefix=shift;
+
+	foreach my $record (@_) {
+		if (ref $record eq 'HASH') {
+			summary($prefix, $record->{$_})
+				foreach reverse sort keys %$record;
+		}
+		else {
+			if ($record->[0] eq 'pub' || $record->[0] eq 'uid') {
+				print "$prefix".outformat($record);
+			}
+		}
+	}
+}
+
+sub outformat {
+	return join(":", @{shift()})."\n";
+}
+
+sub comparable {
+	my @record=@{shift()};
+	if ($record[0] eq 'sig') {
+		# Displayed user ids for sigs vary, so compare different
+		# ones the same. The user-id is what matters.
+		$record[9]="";
+	}
+	return join(":", @record);
+}
+
+sub comparesigs {
+	my $diff = shift;
+	my $l = shift;
+	my $r = shift;
+	my %lseen = map { comparable($_) => 1 } @{$l};
+	my %rseen = map { comparable($_) => 1 } @{$r};
+	my @out;
+
+	foreach my $record (@{$l}) {
+		if (! $rseen{comparable($record)}) {
+			push @out, "-".outformat($record);
+			${$diff} = 1;
+		}
+	}
+	foreach my $record (@{$r}) {
+		if (! $lseen{comparable($record)}) {
+			push @out, "+".outformat($record);
+			${$diff} = 1;
+		}
+	}
+
+	return @out;
+}

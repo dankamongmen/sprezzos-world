@@ -1,0 +1,51 @@
+#!/bin/sh
+
+# Copyright (c) 2008 Jonathan McDowell <noodles@earth.li>
+# GNU GPL; v2 or later
+# Imports a standalone revocation certificate
+
+set -e
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+	echo "Usage: revoke-key revocationcertfile dir" >&2
+	exit 1
+fi
+
+# avoid gnupg touching ~/.gnupg
+GNUPGHOME=$(mktemp -d -t jetring.XXXXXXXX)
+export GNUPGHOME
+trap cleanup exit
+cleanup () {
+	rm -rf "$GNUPGHOME"
+}
+
+revfile=$(readlink -f "$1") # gpg works better with absolute keyring paths
+keydir="$2"
+
+basename=$(basename "$revfile")
+date=`date -R`
+
+keyid=$(gpg --with-colons --keyid long --options /dev/null --no-auto-check-trustdb < $keyfile | grep '^pub' | cut -d : -f 5)
+
+if [ ! -e $keydir/0x$keyid ]; then
+	echo "0x$keyid isn't already in $keydir - new key or error."
+	exit 1
+fi
+
+gpg --import $keydir/0x$keyid
+gpg --import $revfile
+gpg --no-auto-check-trustdb --options /dev/null \
+		--export $keyid > $GNUPGHOME/0x$keyid
+
+echo "Running gpg-diff:"
+scripts/gpg-diff $keydir/0x$keyid $GNUPGHOME/0x$keyid
+
+echo "Are you sure you want to update this key? (y/n)"
+read n
+
+if [ "x$n" = "xy" -o "x$n" = "xY" ]; then
+	mv $GNUPGHOME/0x$keyid $keydir/0x$keyid
+	echo "Updated key."
+else
+	echo "Not updating key."
+fi

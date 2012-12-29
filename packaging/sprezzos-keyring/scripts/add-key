@@ -1,0 +1,78 @@
+#!/bin/sh
+
+# Copyright (c) 2008 Jonathan McDowell <noodles@earth.li>
+# GNU GPL; v2 or later
+# Adds a new key to a keyring directory
+
+set -e
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+	echo "Usage: add-key keyfile dir" >&2
+	exit 1
+fi
+
+# avoid gnupg touching ~/.gnupg
+GNUPGHOME=$(mktemp -d -t jetring.XXXXXXXX)
+export GNUPGHOME
+trap cleanup exit
+cleanup () {
+	rm -rf "$GNUPGHOME"
+}
+
+keyfile=$(readlink -f "$1") # gpg works better with absolute keyring paths
+keydir="$2"
+
+basename=$(basename "$keyfile")
+date=`date -R`
+
+if [ -f $keyfile ]; then
+	keyid=$(gpg --with-colons --keyid long --options /dev/null --no-auto-check-trustdb < $keyfile | grep '^pub' | cut -d : -f 5)
+else
+	keyid=${1: -16:16}
+fi
+
+for keyring in *-pgp/ *-gpg/; do
+	if [ -e $keyring/0x$keyid ]; then
+		echo "0x$keyid already exists in $keyring - existing key or error."
+		exit 1
+	fi
+done
+
+# Check we have our keyrings available for checking the signatures
+if [ ! -e output/keyrings/debian-keyring.gpg -o \
+		-e output/keyrings/extra-keys.pgp ]; then
+	make
+fi
+
+if [ -f $keyfile ]; then
+	gpg --quiet --import $keyfile
+else
+	gpg --quiet --keyserver the.earth.li --recv-key $1 || true
+	gpg --quiet --keyserver pgp.mit.edu --recv-key $1 || true
+	gpg --quiet --keyserver keyserver.ubuntu.com --recv-key $1 || true
+	gpg --quiet --keyserver the.earth.li --send-key $1
+fi
+(gpg --keyring output/keyrings/debian-keyring.gpg \
+	--keyring output/keyrings/extra-keys.pgp --fingerprint 0x$keyid
+gpg --keyring output/keyrings/debian-keyring.gpg \
+	--keyring output/keyrings/extra-keys.pgp --check-sigs 0x$keyid ) | \
+sensible-pager
+
+echo "Are you sure you want to update this key? (y/n)"
+read n
+
+if [ "x$n" = "xy" -o "x$n" = "xY" ]; then
+	gpg --no-auto-check-trustdb --options /dev/null \
+		--export $keyid > $keydir/0x$keyid
+	bzr add $keydir/0x$keyid
+	if ( echo $2 | egrep  -q '^(\./)?debian-(keyring|nonupload)-gpg/?$' ); then
+		echo -n "Enter full name of new key: "
+		read name
+		echo -n "Enter Debian login of new key: "
+		read login
+		echo "0x$keyid $name <$login>" >> keyids
+		sort keyids > keyids.$$ && mv keyids.$$ keyids
+	fi
+else
+	echo "Not adding key."
+fi
