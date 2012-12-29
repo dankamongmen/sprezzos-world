@@ -3056,6 +3056,14 @@ $(LIBSECRET): $(SPREZZ)/libsecret/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libsecret-$(libsecret_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libsm
+libsm:$(LIBSM)_$(ARCH).deb
+$(LIBSM): $(SPREZZ)/libsm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libSM-$(libsm_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsoup
 libsoup:$(LIBSOUP)_$(ARCH).deb
 $(LIBSOUP): $(SPREZZ)/libsoup/debian/changelog
@@ -5642,6 +5650,12 @@ $(CDEBCONF): $(SPREZZ)/cdebconf/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf cdebconf_$(cdebconf_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
+.PHONY: dpkg
+dpkg:$(DPKG)_$(ARCH).deb
+$(DPKG): $(SPREZZ)/dpkg/debian/changelog
+	cp -r $(<D)/.. $@
+	tar cJvf dpkg_$(dpkg_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
+
 .PHONY: meta-gnome
 meta-gnome:$(METAGNOME)_$(ARCH).deb
 $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
@@ -5674,6 +5688,12 @@ $(MKLIBS): $(SPREZZ)/mklibs/debian/changelog
 netbase:$(NETBASE)_$(ARCH).deb
 $(NETBASE): $(SPREZZ)/netbase/debian/changelog
 	cp -r $(<D)/.. $@
+
+.PHONY: udpkg
+udpkg:$(UDPKG)_$(ARCH).deb
+$(UDPKG): $(SPREZZ)/udpkg/debian/changelog
+	cp -r $(<D)/.. $@
+	tar cJvf udpkg_$(udpkg_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
 .PHONY: firmware-all
 firmware-all:$(FIRMWAREALL)_$(ARCH).deb
