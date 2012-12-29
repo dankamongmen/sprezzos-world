@@ -704,6 +704,14 @@ $(AUTOKEY): $(SPREZZ)/autokey/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf autokey_$(autokey_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: automake1.11
+automake1.11:$(AUTOMAKE1.11)_$(ARCH).deb
+$(AUTOMAKE1.11): $(SPREZZ)/automake1.11/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf automake-$(automake1.11_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: avahi
 avahi:$(AVAHI)_$(ARCH).deb
 $(AVAHI): $(SPREZZ)/avahi/debian/changelog
@@ -1111,6 +1119,14 @@ $(CONSOLEKIT): $(SPREZZ)/consolekit/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf ConsoleKit-$(consolekit_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: coreutils
+coreutils:$(COREUTILS)_$(ARCH).deb
+$(COREUTILS): $(SPREZZ)/coreutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf coreutils-$(coreutils_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: cups
 cups:$(CUPS)_$(ARCH).deb
