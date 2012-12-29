@@ -5653,14 +5653,19 @@ $(CDEBCONF): $(SPREZZ)/cdebconf/debian/changelog
 .PHONY: dpkg
 dpkg:$(DPKG)_$(ARCH).deb
 $(DPKG): $(SPREZZ)/dpkg/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	cp -r $(<D)/.. $@
-	tar cJvf dpkg_$(dpkg_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
+	rm -rf $@/debian
+	tar cJvf dpkg_$(dpkg_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
 
 .PHONY: meta-gnome
 meta-gnome:$(METAGNOME)_$(ARCH).deb
 $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
 	cp -r $(<D)/.. $@
-	tar cJvf meta-gnome_$(meta-gnome_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
+	rm -rf $@/debian
+	tar cJvf meta-gnome_$(meta-gnome_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
 
 .PHONY: console-setup
 console-setup:$(CONSOLESETUP)_$(ARCH).deb
@@ -5692,6 +5697,7 @@ $(NETBASE): $(SPREZZ)/netbase/debian/changelog
 .PHONY: udpkg
 udpkg:$(UDPKG)_$(ARCH).deb
 $(UDPKG): $(SPREZZ)/udpkg/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	cp -r $(<D)/.. $@
 	tar cJvf udpkg_$(udpkg_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
