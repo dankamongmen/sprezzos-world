@@ -4164,6 +4164,14 @@ $(OPENCV): $(SPREZZ)/opencv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf OpenCV-$(opencv_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: ilmbase
+ilmbase:$(ilmbase)_$(ARCH).deb
+$(ilmbase): $(SPREZZ)/ilmbase/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ilmbase-$(ilmbase_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: openimageio
 openimageio:$(openimageio)_$(ARCH).deb
 $(openimageio): $(SPREZZ)/openimageio/debian/changelog
