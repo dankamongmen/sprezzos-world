@@ -1,0 +1,205 @@
+#!/bin/sh -e
+### BEGIN INIT INFO
+# Provides:          kdm
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $local_fs $remote_fs
+# Should-Start:      console-screen kbd acpid dbus hal krb5-kdc
+# Should-Stop:       console-screen kbd
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: X display manager for KDE
+# Description:       KDM manages a collection of X servers, which may be on the local host or remote machines.
+### END INIT INFO
+# /etc/init.d/kdm: start or stop the X display manager
+# Script originally stolen from the xdm package
+#
+# description: K Display Manager
+#
+
+# import the LSB init functions
+. /lib/lsb/init-functions
+
+# set the locale
+if [ -r /etc/default/locale ]; then
+  . /etc/default/locale
+  export LANG LANGUAGE
+fi
+
+# to start kdm even if it is not the default display manager, change
+# HEED_DEFAULT_DISPLAY_MANAGER to "false."
+HEED_DEFAULT_DISPLAY_MANAGER=true
+DEFAULT_DISPLAY_MANAGER_FILE=/etc/X11/default-display-manager
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+DAEMON=/usr/bin/kdm
+PIDFILE=/var/run/kdm.pid
+UPGRADEFILE=/var/run/kdm.upgrade
+
+setup_config () {
+  # parameters to support kdm customization
+  KDMRC=/etc/kde4/kdm/kdmrc
+  BACKGROUNDRC=/etc/kde4/kdm/backgroundrc
+
+  # if configuration is changed by kdmtheme or other tools, don't do magick
+  if grep -q "^[[:space:]]*Theme=@@@ToBeReplacedByDesktopBase@@@" ${KDMRC}; then
+
+    KDMOVERRIDEDIR=/etc/default/kdm.d
+    KDMCFGDIR=/var/run/kdm
+    KDMCFG=$KDMCFGDIR/kdmrc
+    BACKGROUNDCFG=$KDMCFGDIR/backgroundrc
+    DEFAULT_KDM_THEME=/usr/share/kde4/apps/kdm/themes/ariya
+
+    test -x $DAEMON || exit 0
+
+    # uncomment, if you want auto-logon to be runlevel-dependant
+    #test "$runlevel" || { runlevel=`runlevel`; runlevel=${runlevel#* }; }
+    #test "$runlevel" = 4 && ARG=-autolog || ARG=-noautolog
+
+    # uncomment, if you want tons of debug info in your syslog
+    #ARG="$ARG -debug 255"
+
+    # we use an alternative kdm master configuration file
+    ARG="$ARG -config $KDMCFG"
+
+    # we generate kdm configuration files
+    genkdmconf --in $KDMCFGDIR 1> /dev/null
+
+    # we source overrides. run-parts sorts the list in a predictable order
+    if [ -d "$KDMOVERRIDEDIR" ]; then
+      for part in $(run-parts --list "$KDMOVERRIDEDIR" 2>/dev/null || true); do
+        . "$part"
+      done
+    fi
+
+    # we update kdm configuration files (only overridden values)
+    [ -n "$USEBACKGROUND" ] && sed -i "s|^#\?UseBackground=.*|UseBackground=$USEBACKGROUND|" $KDMCFG
+    [ -n "$BACKGROUNDCFG" ] && sed -i "s|^#\?BackgroundCfg=.*|BackgroundCfg=$BACKGROUNDCFG|" $KDMCFG
+    [ -n "$USETHEME" ] && sed -i "s|^#\?UseTheme=.*|UseTheme=$USETHEME|" $KDMCFG
+    [ -n "$THEME" ] && [ -e "$THEME" ] && sed -i "s|^#\?Theme=.*|Theme=$THEME|" $KDMCFG
+    [ -n "$LANGUAGE" ] && sed -i "s|^#\?Language=.*|Language=$LANGUAGE|" $KDMCFG
+
+    if grep -q "^[[:space:]]*Wallpaper=stripes.png" ${BACKGROUNDRC}; then
+      [ -n "$WALLPAPER" ] && [ -e "$WALLPAPER" ] && sed -i "s|^#\?Wallpaper=.*|Wallpaper=`readlink -f $WALLPAPER`|" $BACKGROUNDCFG
+    fi
+
+    # usetheme is now on "by default" so we need to be sure Theme is not invalid ...
+    sed -i "s|@@@ToBeReplacedByDesktopBase@@@|$DEFAULT_KDM_THEME|" ${KDMCFG}
+
+    # autologin overrides are useful for live debian environment
+    if [ -n "$AUTOLOGINUSER" ]; then
+      sed -i "s|^#\?AutoLoginEnable=.*|AutoLoginEnable=true|" $KDMCFG
+      sed -i "s|^#\?AutoLoginUser=.*|AutoLoginUser=$AUTOLOGINUSER|" $KDMCFG
+    fi
+    [ -n "$AUTOLOGINDELAY" ] && sed -i "s|^#\?AutoLoginDelay=.*|AutoLoginDelay=$AUTOLOGINDELAY|" $KDMCFG
+    [ -n "$AUTOLOGINAGAIN" ] && sed -i "s|^#\?AutoLoginAgain=.*|AutoLoginAgain=$AUTOLOGINAGAIN|" $KDMCFG
+    [ -n "$AUTOLOGINLOCKED" ] && sed -i "s|^#\?AutoLoginLocked=.*|AutoLoginLocked=$AUTOLOGINLOCKED|" $KDMCFG
+  fi
+  return 0
+}
+
+# If we upgraded the daemon, we can't use the --exec argument to
+# start-stop-daemon since the inode will have changed.  The risk here is that
+# in a situation where the daemon died, its pidfile was not cleaned up, and
+# some other process is now running under that pid, start-stop-daemon will send
+# signals to an innocent process.  However, this seems like a corner case.
+# C'est la vie!
+if [ -e $UPGRADEFILE ]; then
+  SSD_ARGS="--pidfile $PIDFILE --startas $DAEMON"
+else
+  SSD_ARGS="--pidfile $PIDFILE --exec $DAEMON"
+fi
+
+still_running () {
+  if expr "$(cat /proc/$DAEMONPID/cmdline 2> /dev/null)" : "$DAEMON" > /dev/null 2>&1; then
+    true
+  else
+    # if the daemon does not remove its own pidfile, we will
+    rm -f $PIDFILE $UPGRADEFILE
+    false
+  fi;
+}
+
+case "$1" in
+  start)
+    setup_config
+    if [ -e $DEFAULT_DISPLAY_MANAGER_FILE ] &&
+       [ "$HEED_DEFAULT_DISPLAY_MANAGER" = "true" ] &&
+       [ "$(cat $DEFAULT_DISPLAY_MANAGER_FILE)" != "$DAEMON" ]; then
+      log_action_msg "Not starting K Display Manager (kdm); it is not the default display manager."
+    else
+      log_daemon_msg "Starting K Display Manager" "kdm"
+      if start-stop-daemon --start --quiet $SSD_ARGS -- $ARG ; then
+        log_end_msg 0
+      else
+        log_action_end_msg 1 "already running"
+      fi
+    fi
+  ;;
+
+  restart)
+    /etc/init.d/kdm stop
+    if [ -f $PIDFILE ]; then
+      if still_running; then
+        exit 1
+      fi
+    fi
+    /etc/init.d/kdm start
+  ;;
+
+  reload)
+    log_action_begin_msg "Reloading K Display Manager configuration..."
+    if start-stop-daemon --stop --signal 1 --quiet $SSD_ARGS; then
+      log_action_end_msg 0
+    else
+      log_action_end_msg 1 "kdm not running"
+    fi
+  ;;
+
+  force-reload)
+    /etc/init.d/kdm reload
+  ;;
+
+  stop)
+    log_action_begin_msg "Stopping K Display Manager: kdm"
+    if [ ! -f $PIDFILE ]; then
+      log_action_end_msg 0 " not running ($PIDFILE not found)"
+      exit 0
+    else
+      DAEMONPID=$(cat $PIDFILE | tr -d '[:blank:]')
+      KILLCOUNT=1
+      if [ ! -e $UPGRADEFILE ]; then
+        if start-stop-daemon --stop --quiet $SSD_ARGS; then
+          # give kdm's signal handler a second to catch its breath
+          sleep 1
+        else
+          log_action_cont_msg " not running"
+        fi
+      fi
+      while [ $KILLCOUNT -le 5 ]; do
+        if still_running; then
+          kill $DAEMONPID
+        else
+          break
+        fi
+        sleep 1
+        KILLCOUNT=$(( $KILLCOUNT + 1 ))
+      done
+      if still_running; then
+        log_action_cont_msg " not responding to TERM signal (pid $DAEMONPID)"
+      else
+        rm -f $UPGRADEFILE
+      fi
+    fi
+    log_action_end_msg 0
+  ;;
+  status)
+    status_of_proc -p "$PIDFILE" "$DAEMON" kdm && exit 0 || exit $?
+  ;;
+
+  *)
+    echo "Usage: /etc/init.d/kdm {start|stop|restart|reload|force-reload|status}"
+    exit 1
+    ;;
+esac
+
+exit 0

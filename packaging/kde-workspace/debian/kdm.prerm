@@ -1,0 +1,177 @@
+#! /bin/sh
+# prerm script for kdm
+#
+# see: dh_installdeb(1)
+
+set -e
+
+# summary of how this script can be called:
+#        * <prerm> `remove'
+#        * <old-prerm> `upgrade' <new-version>
+#        * <new-prerm> `failed-upgrade' <old-version>
+#        * <conflictor's-prerm> `remove' `in-favour' <package> <new-version>
+#        * <deconfigured's-prerm> `deconfigure' `in-favour'
+#          <package-being-installed> <version> `removing'
+#          <conflicting-package> <version>
+# for details, see http://www.debian.org/doc/debian-policy/ or
+# the debian-policy package
+
+# debconf may not be available if some massive purging is going on
+HAVE_DEBCONF=
+if [ -e /usr/share/debconf/confmodule ]; then
+  . /usr/share/debconf/confmodule
+  HAVE_DEBCONF=yes
+fi
+
+case "$1" in
+    # we NEVER want to unconditionally stop kdm; see below
+    upgrade|failed-upgrade)
+        REMOVING=
+    ;;
+
+    remove|deconfigure)
+        REMOVING=yes
+    ;;
+
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+STOP=
+# are we supposed to restart on upgrade?  if REMOVING kdm, we don't care what
+# the user says, we have to stop the daemon
+if grep -qs ^restart-on-upgrade /etc/kde4/kdm/kdm.options ||
+   [ -n "$REMOVING" ]; then
+  # is there an kdm process running?
+  if start-stop-daemon --stop --quiet --signal 0 --name kdm; then
+    # any children?
+    PARENTS=$(pidof /usr/bin/kdm || true)
+    CHILDREN=
+    if [ -n "$PARENTS" ]; then    
+      for PROCESS in $PARENTS; do
+        # make sure we got numbers back
+        [ $PROCESS -eq $PROCESS ] 2> /dev/null ||
+        exit
+        # FIXME - redo this part uses shell-lib.sh from xfree86
+        #  die "pidof returned non-numeric value"
+        # we could use grep -q here if ps would ignore SIGPIPE :-P
+        if (ps axj | grep "^ *$PROCESS" > /dev/null 2>&1); then
+          CHILDREN=yes
+        fi
+      done
+      if [ -n "$CHILDREN" ]; then
+        if [ -n "$HAVE_DEBCONF" ]; then
+          # ask the question
+          db_input high kdm/stop_running_server_with_children || true
+          db_go
+          # what did the user say?
+          ANSWER=
+          if db_get kdm/stop_running_server_with_children; then
+            ANSWER="$RET"
+          fi
+          if [ "$ANSWER" = "true" ]; then
+            STOP=yes
+          fi
+          # forget that we have seen the question; this is the sort of
+          # non-configuration question that should be asked every time
+          db_fset kdm/stop_running_server_with_children seen false
+        fi
+      else
+        STOP=yes
+      fi
+    fi
+  fi
+fi
+
+if [ -n "$STOP" ]; then
+  if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+    invoke-rc.d kdm stop || true
+  else
+    /etc/init.d/kdm stop || true
+  fi
+else
+  if [ "$1" = "upgrade" -o "$1" = "failed-upgrade" ]; then
+    touch /var/run/kdm.upgrade
+  fi
+fi
+
+DEFAULT_DISPLAY_MANAGER_FILE=/etc/X11/default-display-manager
+
+if [ "$1" = "remove" -o "$1" = "deconfigure" ]; then
+  if [ -n "$HAVE_DEBCONF" ]; then
+    # disown this question
+    db_unregister shared/default-x-display-manager || true
+    # does the question still exist?
+    if db_get shared/default-x-display-manager; then
+      if db_metaget shared/default-x-display-manager owners; then
+        # FIXME - redo this part uses shell-lib.sh from xfree86
+        #observe "X display managers now available are \"$OWNERS\""
+        db_subst shared/default-x-display-manager choices "$RET"
+      fi
+      DEFAULT_DISPLAY_MANAGER=
+      if db_get shared/default-x-display-manager; then
+        DEFAULT_DISPLAY_MANAGER="$RET"
+      fi
+      # are we removing the currently selected display manager?
+      if [ -n "$DEFAULT_DISPLAY_MANAGER" ]; then
+        if [ "kdm" = "$DEFAULT_DISPLAY_MANAGER" ]; then
+          if [ -e "$DEFAULT_DISPLAY_MANAGER_FILE" ]; then
+            if db_get "$DEFAULT_DISPLAY_MANAGER/daemon_name"; then
+              # does the display manager file reference the current default?  if
+              # so, remove it because it will now be wrong
+              if [ -n "$RET" ]; then
+                if [ "$(cat "$DEFAULT_DISPLAY_MANAGER_FILE")" = "$RET" ]; then
+                  rm "$DEFAULT_DISPLAY_MANAGER_FILE"
+                fi
+              fi
+            fi
+          fi
+          # ask the user to choose a new default
+          db_fset shared/default-x-display-manager seen false
+          db_input critical shared/default-x-display-manager || true
+          db_go
+          # if the default display manager file doesn't exist, write it with
+          # the path to the new default display manager
+          if [ ! -e "$DEFAULT_DISPLAY_MANAGER_FILE" ]; then
+            DEFAULT_DISPLAY_MANAGER=
+            if db_get shared/default-x-display-manager; then
+              DEFAULT_DISPLAY_MANAGER="$RET"
+            fi
+            if [ -n "$DEFAULT_DISPLAY_MANAGER" ]; then
+              # FIXME - redo this part uses shell-lib.sh from xfree86
+              #warn "new default display manager has been selected; please be" \
+              #     "sure to run \"dpkg-reconfigure $RET\" to ensure that it" \
+              #     "is configured"
+              DAEMON_NAME=
+              if db_get "$DEFAULT_DISPLAY_MANAGER"/daemon_name; then
+                DAEMON_NAME="$RET"
+              fi
+              if [ ! -n "$DAEMON_NAME" ]; then
+                # if we were unable to determine the name of the selected daemon (for
+                # instance, if the selected default display manager doesn't provide a
+                # daemon_name question), guess
+                DAEMON_NAME=$(which "$DEFAULT_DISPLAY_MANAGER" 2>/dev/null)
+                if [ ! -n "$DAEMON_NAME" ]; then
+                  echo .
+                  # FIXME - redo this part uses shell-lib.sh from xfree86
+                  #warn "unable to determine path to default X display manager" \
+                  #     "$DEFAULT_DISPLAY_MANAGER; not updating" \
+                  #     "$DEFAULT_DISPLAY_MANAGER_FILE"
+                fi
+              fi
+              if [ -n "$DAEMON_NAME" ]; then
+                echo "$DAEMON_NAME" > "$DEFAULT_DISPLAY_MANAGER_FILE"
+              fi
+            fi
+          fi
+        fi
+      fi
+    fi
+  fi
+fi
+
+#DEBHELPER#
+
+exit 0

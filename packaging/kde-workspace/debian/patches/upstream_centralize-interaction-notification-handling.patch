@@ -1,0 +1,142 @@
+From da6e2b49fd2a30aca167ae37ef3e3fd1c7d3bc58 Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <ossi@kde.org>
+Date: Sun, 10 Jun 2012 10:57:19 +0200
+Subject: [PATCH] centralize interaction notification handling
+
+that way we don't have to handle it all over the place (which we didn't,
+which made the chooser dysfunctional).
+
+BUG: 281862
+
+(cherry picked from commit a4ef19c9491e7c5b3ff5a7e18915b6b14f71fe3f)
+---
+ kdm/backend/choose.c  |    6 +++---
+ kdm/backend/dm.h      |    4 ++--
+ kdm/backend/session.c |   20 ++++++++++----------
+ 3 files changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/kdm/backend/choose.c b/kdm/backend/choose.c
+index 66af82c..cea7af1 100644
+--- a/kdm/backend/choose.c
++++ b/kdm/backend/choose.c
+@@ -849,7 +849,7 @@ directChooseHost(const char *name)
+ #define PING_TRIES 3
+ 
+ int
+-doChoose()
++doChoose(time_t *startTime)
+ {
+     HostName **hp, *h;
+     char *host, **hostp;
+@@ -860,7 +860,7 @@ doChoose()
+ 
+     openGreeter();
+     gSendInt(G_Choose);
+-    switch (cmd = ctrlGreeterWait(True)) {
++    switch (cmd = ctrlGreeterWait(True, startTime)) {
+     case G_Ready:
+         break;
+     default: /* error */
+@@ -943,7 +943,7 @@ doChoose()
+ #endif
+         if (select(n + 1, &rfds, 0, 0, to) > 0) {
+             if (FD_ISSET(grtproc.pipe.fd.r, &rfds))
+-                switch (cmd = ctrlGreeterWait(False)) {
++                switch (cmd = ctrlGreeterWait(False, startTime)) {
+                 case -1:
+                     break;
+                 case G_Ch_Refresh:
+diff --git a/kdm/backend/dm.h b/kdm/backend/dm.h
+index 90aa4d5..13e7b45 100644
+--- a/kdm/backend/dm.h
++++ b/kdm/backend/dm.h
+@@ -473,7 +473,7 @@ extern GTalk mstrtalk, grttalk;
+ extern GProc grtproc;
+ void openGreeter(void);
+ int closeGreeter(int force);
+-int ctrlGreeterWait(int wreply);
++int ctrlGreeterWait(int wreply, time_t *startTime);
+ void prepareErrorGreet(void);
+ void finishGreet(void);
+ char *conv_interact(int what, const char *prompt);
+@@ -670,7 +670,7 @@ ARRAY8Ptr indirectChoice(ARRAY8Ptr clientAddress, ARRAY8Ptr clientPort, CARD16 c
+ int checkIndirectChoice(ARRAY8Ptr clientAddress, ARRAY8Ptr clientPort, CARD16 connectionType);
+ void registerIndirectChoice(ARRAY8Ptr clientAddress, ARRAY8Ptr clientPort, CARD16 connectionType,
+                             ARRAY8Ptr choice);
+-int doChoose(void);
++int doChoose(time_t *startTime);
+ 
+ /* socket.c or streams.c */
+ void updateListenSockets(void);
+diff --git a/kdm/backend/session.c b/kdm/backend/session.c
+index 85ab1d7..0e7901c 100644
+--- a/kdm/backend/session.c
++++ b/kdm/backend/session.c
+@@ -233,7 +233,7 @@ GTalk grttalk;
+ GTalk mstrtalk;
+ 
+ int
+-ctrlGreeterWait(int wreply)
++ctrlGreeterWait(int wreply, time_t *startTime)
+ {
+     int i, cmd, type, rootok;
+     char *name, *pass;
+@@ -247,6 +247,10 @@ ctrlGreeterWait(int wreply)
+         case G_Ready:
+             debug("G_Ready\n");
+             return 0;
++        case G_Interact:
++            if (startTime)
++                *startTime = 0;
++            break;
+         case G_GetCfg:
+             /*debug("G_GetCfg\n");*/
+             type = gRecvInt();
+@@ -437,7 +441,7 @@ openGreeter()
+               greeterUID, td->greeterAuthFile, &td->gpipe))
+         sessionExit(EX_UNMANAGE_DPY);
+     freeStrArr(env);
+-    if ((cmd = ctrlGreeterWait(True))) {
++    if ((cmd = ctrlGreeterWait(True, 0))) {
+         logError("Received unknown or unexpected command %d from greeter\n", cmd);
+         closeGreeter(True);
+         sessionExit(EX_UNMANAGE_DPY);
+@@ -569,7 +573,7 @@ manageSession(void)
+ 
+ #ifdef XDMCP
+     if (td->useChooser)
+-        doChoose();
++        doChoose(0);
+         /* NOTREACHED */
+ #endif
+ 
+@@ -595,15 +599,11 @@ manageSession(void)
+                       (tdiff > 0 || td->autoAgain)) ?
+                           G_GreetTimed : G_Greet);
+           gcont:
+-            cmd = ctrlGreeterWait(True);
+-            if (cmd == G_Interact) {
+-                startt = 0;
+-                goto gcont;
+-            }
++            cmd = ctrlGreeterWait(True, &startt);
+ #ifdef XDMCP
+             while (cmd == G_DChoose) {
+               choose:
+-                cmd = doChoose();
++                cmd = doChoose(&startt);
+             }
+             if (cmd == G_DGreet)
+                 continue;
+@@ -672,7 +672,7 @@ manageSession(void)
+         resetXProperties();
+         openGreeter();
+         gSendInt(G_ConfShutdown);
+-        if ((cmd = ctrlGreeterWait(True)) != G_Ready) {
++        if ((cmd = ctrlGreeterWait(True, 0)) != G_Ready) {
+             logError("Received unknown command %d from greeter\n", cmd);
+             closeGreeter(True);
+         }
+-- 
+1.7.10
+

@@ -1,0 +1,51 @@
+#!/usr/bin/make -f
+
+dh = --with=python2
+
+include /usr/share/pkg-kde-tools/qt-kde-team/2/debian-qt-kde.mk
+libpkgs_addsubst_allLibraries = kde-workspace-dev
+libpkgs_gen_strict_local_shlibs = $(libpkgs_all_packages) kde-style-oxygen
+include /usr/share/pkg-kde-tools/qt-kde-team/2/library-packages.mk
+
+BINARYVERSION := $(shell dpkg-parsechangelog | grep '^Version: ' | sed 's/^Version: //')
+DEB_HOST_ARCH_OS := $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+override_dh_auto_configure:
+	$(overridden_command) -- -DKDE4_KDM_PAM_SERVICE=kdm -DKDE4_COMMON_PAM_SERVICE=kdm
+
+override_dh_auto_install:
+	$(overridden_command)
+	chmod a-x debian/tmp/usr/share/autostart/klipper.desktop
+
+.PHONY: override_dh_auto_test
+
+override_dh_strip:
+	$(overridden_command) --dbg-package=kde-workspace-dbg
+
+override_dh_makeshlibs:
+	$(overridden_command) -pplasma-desktop -Xlibkickoff.so
+	$(overridden_command) --remaining-packages -- -c0
+
+override_dh_shlibdeps:
+	$(overridden_command) -pkde-workspace-bin -- -xksysguard
+	$(overridden_command) -pkde-workspace-dev -- -xkde-runtime
+	$(overridden_command) $(foreach p,$(filter lib%,$(shell dh_listpackages -a)),-p$p) -- -xkde-runtime
+	$(overridden_command) --remaining-packages
+
+# Prevent it from stopping kdm in prerm ever (--no-restart-on-upgrade is not
+# enough)
+override_dh_installinit:
+	$(overridden_command) -pkdm --noscripts
+	$(overridden_command) --remaining-packages
+
+pkgs_with_install_linux = $(patsubst debian/%.install.linux,%,$(wildcard debian/*.install.linux))
+override_dh_install:
+	$(overridden_command)
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+	# Also install common files in place of debian/*.install.linux variants
+	dh_install $(foreach p,$(pkgs_with_install_linux),-p$p --ignore=debian/$p.install.linux)
+endif
+	if [ -d debian/kdm ]; then \
+		install -p -D -m644 debian/kdm-np.pam debian/kdm/etc/pam.d/kdm-np && \
+		install -p -D -m644 debian/kdm.insserv debian/kdm/etc/insserv.conf.d/kdm; \
+	fi

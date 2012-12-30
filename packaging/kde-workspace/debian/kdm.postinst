@@ -1,0 +1,110 @@
+#! /bin/sh
+
+set -e
+
+# source debconf library
+. /usr/share/debconf/confmodule
+
+# debconf is not a registry, so we only fiddle with the default file if it
+# does not exist
+DEFAULT_DISPLAY_MANAGER_FILE=/etc/X11/default-display-manager
+if [ ! -e "$DEFAULT_DISPLAY_MANAGER_FILE" ]; then
+  DEFAULT_DISPLAY_MANAGER=
+  if db_get shared/default-x-display-manager; then
+    DEFAULT_DISPLAY_MANAGER="$RET"
+  fi
+  if [ -n "$DEFAULT_DISPLAY_MANAGER" ]; then
+    DAEMON_NAME=
+    if db_get "$DEFAULT_DISPLAY_MANAGER"/daemon_name; then
+      DAEMON_NAME="$RET"
+    fi
+    if [ ! -n "$DAEMON_NAME" ]; then
+      # if we were unable to determine the name of the selected daemon (for
+      # instance, if the selected default display manager doesn't provide a
+      # daemon_name question), guess
+      DAEMON_NAME=$(which "$DEFAULT_DISPLAY_MANAGER" 2>/dev/null || true)
+      if [ ! -n "$DAEMON_NAME" ]; then
+        echo .
+        # FIXME - redo this part uses shell-lib.sh from xfree86
+        #warn "unable to determine path to default X display manager" \
+        #     "$DEFAULT_DISPLAY_MANAGER; not updating" \
+        #     "$DEFAULT_DISPLAY_MANAGER_FILE"
+      fi
+    fi
+    if [ -n "$DAEMON_NAME" ]; then
+      # FIXME - redo this part uses shell-lib.sh from xfree86
+      #observe "committing change of default X display manager"
+      echo "$DAEMON_NAME" > "$DEFAULT_DISPLAY_MANAGER_FILE"
+    fi
+  fi
+fi
+
+# remove the displaced old default display manager file if it exists
+if [ -e "$DEFAULT_DISPLAY_MANAGER_FILE.dpkg-tmp" ]; then
+  rm "$DEFAULT_DISPLAY_MANAGER_FILE.dpkg-tmp"
+fi
+
+# restarting the daemon may cause output to stdout
+db_stop
+
+# don't start kdm if we are upgrading without stopping it
+NOSTART=
+if [ -e /var/run/kdm.upgrade ]; then
+  NOSTART=yes
+fi
+# or if we're currently in X on the display it attempts to manage by default
+for HOST in "" \
+            "localhost" \
+            "$(hostname 2> /dev/null)" \
+            "$(hostname -f 2> /dev/null)"; do
+  if echo "$DISPLAY" | grep -q "^$HOST:0.*"; then
+    NOSTART=yes
+    break
+  fi
+done
+# or if it's already running
+if start-stop-daemon --stop --quiet --signal 0 --pid /var/run/kdm.pid --name kdm; then
+  NOSTART=yes
+fi
+# or if the options file says not to
+if ! grep -qs ^restart-on-upgrade /etc/kde4/kdm/kdm.options; then
+  NOSTART=yes
+fi
+
+case "$1" in
+
+  configure)
+    adduser --system --quiet --no-create-home kdm
+    if [ -d /var/lib/kdm ]; then
+      chown -R kdm /var/lib/kdm
+    fi
+  ;;
+
+  abort-upgrade|abort-remove|abort-deconfigure)
+  ;;
+
+  *)
+  echo "postinst called with unknown argument \`$1'" >&2
+  exit 1
+  ;;
+
+esac
+
+
+if [ -x "/etc/init.d/kdm" ]; then
+  update-rc.d kdm defaults 99 01 >/dev/null
+fi
+
+if [ -n "$NOSTART" ]; then
+  exit 0
+else
+  if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+    invoke-rc.d kdm start || true
+  else
+    /etc/init.d/kdm start || true
+  fi
+fi
+
+#DEBHELPER#
+
+exit 0

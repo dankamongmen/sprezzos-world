@@ -1,0 +1,188 @@
+From: Modestas Vainius <modax@debian.org>
+Subject: Fix various problems with autostart of plasma-netbook
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=584905
+Last-Update: 2011-03-06
+
+This patch should fully fix problems with startup of plasma-netbook when
+plasma-desktop is NOT installed. We aim to support "plasma-desktop"-less
+installation via kde-plasma-netbook metapackage hence this bug was a
+showstopper for this goal.
+--- a/kcontrol/workspaceoptions/workspaceoptions.cpp
++++ b/kcontrol/workspaceoptions/workspaceoptions.cpp
+@@ -92,7 +92,7 @@ void WorkspaceOptionsModule::save()
+ 
+     m_plasmaNetbookAutostart.setAutostarts(!isDesktop);
+     m_plasmaNetbookAutostart.setStartPhase(KAutostart::BaseDesktop);
+-    m_plasmaNetbookAutostart.setCommand("plasma-netbook");
++    m_plasmaNetbookAutostart.setCommand("plasma-netbook --desktop");
+     m_plasmaNetbookAutostart.setAllowedEnvironments(QStringList()<<"KDE");
+ 
+     m_krunnerAutostart.setAutostarts(isDesktop);
+--- a/plasma/netbook/shell/main.cpp
++++ b/plasma/netbook/shell/main.cpp
+@@ -40,10 +40,16 @@ KDE_EXPORT int kdemain(int argc, char **
+ 
+ 
+     bool customGraphicsSystem = false;
++    bool argExplicitDesktop = false;
+     for (int i = 0; i < argc; ++i) {
+-        if (QString(argv[i]) == "-graphicssystem") {
++        QString arg(argv[i]);
++        if (arg == "-graphicssystem") {
+             customGraphicsSystem = true;
+             break;
++        } else if (arg == "--desktop") {
++            argExplicitDesktop = true;
++        } else if (arg == "--nodesktop") {
++            argExplicitDesktop = false;
+         }
+     }
+ 
+@@ -58,9 +64,16 @@ KDE_EXPORT int kdemain(int argc, char **
+     options.add("nodesktop", ki18n("Starts as a normal application instead of as the primary user interface"));
+     options.add("opengl", ki18n("Use OpenGL to draw the main screen"));
+     options.add("screen <geometry>", ki18n("The geometry of the screen"), "800x480");
++    if (argExplicitDesktop)
++        options.add("noautostart", ki18n("Explicit --desktop enables autostart handling which may be disabled with this option"));
++    else
++        options.add("autostart", ki18n("Enable autostart handling"));
+     KCmdLineArgs::addCmdLineOptions(options);
+ 
+     PlasmaApp *app = PlasmaApp::self();
++    if (!app->shallBeStarted())
++        return 0;
++
+     QApplication::setWindowIcon(KIcon("plasma"));
+     app->disableSessionManagement(); // autostarted
+     int rc = app->exec();
+--- a/plasma/netbook/shell/plasmaapp.cpp
++++ b/plasma/netbook/shell/plasmaapp.cpp
+@@ -33,6 +33,7 @@
+ #include <KStandardAction>
+ #include <KWindowSystem>
+ #include <KAction>
++#include <KAutostart>
+ 
+ #include <ksmserver_interface.h>
+ 
+@@ -320,7 +321,8 @@ PlasmaApp::PlasmaApp()
+       m_autoHideControlBar(true),
+       m_unHideTimer(0),
+       m_shadowWindow(0),
+-      m_startupSuspendWaitCount(0)
++      m_startupSuspendWaitCount(0),
++      m_shallBeStarted(true)
+ {
+     PlasmaApp::suspendStartup(true);
+     KGlobal::locale()->insertCatalog("libplasma");
+@@ -328,6 +330,13 @@ PlasmaApp::PlasmaApp()
+ 
+ 
+     KCmdLineArgs *args = KCmdLineArgs::parsedArgs();
++
++    if (args->isSet("autostart")) {
++        setupAutostart();
++        if (!shallBeStarted())
++            return;
++    }
++
+     bool isDesktop = args->isSet("desktop");
+     if (isDesktop) {
+         KCrash::setFlags(KCrash::AutoRestart);
+@@ -397,6 +406,38 @@ PlasmaApp::~PlasmaApp()
+ {
+ }
+ 
++void PlasmaApp::setupAutostart()
++{
++    // If autostart service is not registered, do not bother setting
++    // autostart up.
++    if (!KAutostart::isServiceRegistered("plasma-netbook"))
++        return;
++
++    if (KAutostart::isServiceRegistered("plasma-desktop")) {
++        // Both plasma-desktop and plasma-netbook are installed, but
++        // plasma-desktop is preferred. Change plasma-netbook autostart
++        // settings according to plasma-desktop status.
++        m_shallBeStarted = !KAutostart("plasma-desktop").autostarts();
++    } else {
++        // If plasma-desktop is not installed, make sure autostart
++        // is enabled
++        m_shallBeStarted = true;
++    }
++
++    KAutostart netbookAutostart("plasma-netbook");
++    if (netbookAutostart.autostarts() != m_shallBeStarted) {
++        netbookAutostart.setAutostarts(m_shallBeStarted);
++        netbookAutostart.setStartPhase(KAutostart::BaseDesktop);
++        netbookAutostart.setCommand("plasma-netbook --desktop");
++        netbookAutostart.setAllowedEnvironments(QStringList()<<"KDE");
++    }
++}
++
++bool PlasmaApp::shallBeStarted()
++{
++    return m_shallBeStarted;
++}
++
+ void PlasmaApp::cleanup()
+ {
+     if (m_corona) {
+--- a/plasma/netbook/shell/plasmaapp.h
++++ b/plasma/netbook/shell/plasmaapp.h
+@@ -87,6 +87,12 @@ public:
+      */
+     bool isDesktop() const;
+ 
++    /**
++      * Returns false if plasma-netbook should not be started
++      *  (e.g. due to enabled autostart of plasma-desktop)
++      */
++    bool shallBeStarted();
++
+     void showWidgetExplorer(Plasma::Containment *containment);
+ 
+ public Q_SLOTS:
+@@ -105,6 +111,7 @@ private:
+     void reserveStruts();
+     void createUnhideTrigger();
+     void destroyUnHideTrigger();
++    void setupAutostart();
+ 
+ private Q_SLOTS:
+     void cleanup();
+@@ -152,6 +159,7 @@ private:
+     QTimer *m_unHideTimer;
+     ShadowWindow *m_shadowWindow;
+     int m_startupSuspendWaitCount;
++    bool m_shallBeStarted;
+ };
+ 
+ #endif // multiple inclusion guard
+--- a/startkde.cmake
++++ b/startkde.cmake
+@@ -278,6 +278,24 @@ else
+     exit 1
+ fi
+ 
++# Added by Debian to fix bug #584905.
++# Reset user plasma-desktop/plasma-netbook autostart configuration if autostart
++# desktop file is not available system-wide for either of the shells. This
++# ensures that a user does not end up without any autostarted plasma shell when
++# a package of the active shell gets removed.
++if [ ! -e "@AUTOSTART_INSTALL_DIR@/plasma-desktop.desktop" ] && \
++   [ -e "@AUTOSTART_INSTALL_DIR@/plasma-netbook.desktop" ];
++then
++    # Reset custom plasma-netbook configuration
++    user_autostart_dir=`kde4-config --path autostart | cut -d: -f1`
++    rm -f "$user_autostart_dir/plasma-netbook.desktop"
++elif [ -e "@AUTOSTART_INSTALL_DIR@/plasma-desktop.desktop" ] && \
++     [ ! -e "@AUTOSTART_INSTALL_DIR@/plasma-netbook.desktop" ];
++then
++    # Reset custom plasma-desktop configuration
++    user_autostart_dir=`kde4-config --path autostart | cut -d: -f1`
++    rm -f "$user_autostart_dir/plasma-desktop.desktop"
++fi
+ 
+ # Mark that full KDE session is running (e.g. Konqueror preloading works only
+ # with full KDE running). The KDE_FULL_SESSION property can be detected by
