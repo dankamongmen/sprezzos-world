@@ -1,0 +1,114 @@
+#!/usr/bin/make -f
+
+SHLIBS_VERSION = "libetpan16 (>= 1.0)"
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+CFLAGS := $(shell dpkg-buildflags --get CFLAGS)
+
+CFLAGS += -Wall -g
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+       CFLAGS += -O0
+else
+       CFLAGS += -O2 -D_FORTIFY_SOURCE=2
+endif
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+       NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+       MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+config: config-stamp
+config-stamp:
+	dh_testdir
+	# Patches could touch autotools-related files.
+	# Ensure that 'config.h.in' and 'configure' are more recent than
+	# 'configure.in', to avoid attempts to run autotools at build time
+	sleep 1
+	touch config.h.in configure
+	CFLAGS="$(CFLAGS)" ./configure \
+	  --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) \
+	  --prefix=/usr --without-openssl --with-gnutls --with-sasl \
+	  --enable-unstrict-syntax
+	# HACK to avoid rpath in library
+	sed -i 's/^hardcode_into_libs=yes$$/hardcode_into_libs=no/' libtool
+	# End HACK
+	touch config-stamp
+
+build: build-arch build-indep
+
+build-arch: build-stamp
+
+build-indep: build-stamp
+
+build-stamp: config-stamp
+	dh_testdir
+	$(MAKE) CFLAGS="$(CFLAGS)"
+	touch build-stamp
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
+	touch install-stamp
+
+binary: binary-indep binary-arch
+
+binary-indep: build-stamp install-stamp
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -plibetpan-doc
+	dh_installdocs -i -X._
+	# Need to include only part of tests/ directory - don't know how to
+	# do it with debhelper. -X won't help much ...
+	( docdir=debian/libetpan-doc/usr/share/doc/libetpan-doc/tests; \
+	  mkdir -p $$docdir; \
+	  cp tests/*.[ch] tests/README tests/Makefile.am $$docdir/ )
+	dh_link -i
+	dh_compress -i -Xtests
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build-stamp install-stamp
+	dh_testdir
+	dh_testroot
+	( dbver=`ldd src/.libs/libetpan.so | \
+	         sed -n 's/.*libdb-\([0-9]\.[0-9]\).*/libdb\1-dev/p'| \
+		 head -n 1`; \
+	  echo libdb-dev-dependency=$$dbver >> debian/libetpan-dev.substvars )
+	dh_installchangelogs -plibetpan16 ChangeLog
+	dh_movefiles -a
+	dh_installdocs -plibetpan16
+	dh_installman -a
+	dh_link -a
+	dh_strip -a --dbg-package=libetpan-dbg
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -plibetpan16 -V$(SHLIBS_VERSION)
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f config-stamp build-stamp install-stamp
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean
+
+.PHONY: config build install clean binary-indep binary-arch binary
