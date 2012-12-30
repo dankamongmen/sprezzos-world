@@ -3714,6 +3714,14 @@ $(PENGUINTV): $(SPREZZ)/penguintv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf penguintv_$(penguintv_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: photofilmstrip
+photofilmstrip:$(photofilmstrip)_$(ARCH).deb
+$(photofilmstrip): $(SPREZZ)/photofilmstrip/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf photofilmstrip-$(photofilmstrip_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ldns
 ldns:$(LDNS)_$(ARCH).deb
 $(LDNS): $(SPREZZ)/ldns/debian/changelog
@@ -4107,6 +4115,14 @@ $(LIBVORBIS): $(SPREZZ)/libvorbis/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libvorbis-$(libvorbis_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: f-spot
+f-spot:$(fspot)_$(ARCH).deb
+$(fspot): $(SPREZZ)/f-spot/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf f-spot-$(f-spot_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: flac
 flac:$(FLAC)_$(ARCH).deb
