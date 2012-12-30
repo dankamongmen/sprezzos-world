@@ -3106,6 +3106,14 @@ $(VLC): $(SPREZZ)/vlc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vlc-$(vlc_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libdbusmenu
+libdbusmenu:$(libdbusmenu)_$(ARCH).deb
+$(libdbusmenu): $(SPREZZ)/libdbusmenu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdbusmenu-$(libdbusmenu_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libdmx
 libdmx:$(LIBDMX)_$(ARCH).deb
 $(LIBDMX): $(SPREZZ)/libdmx/debian/changelog
@@ -5655,8 +5663,8 @@ $(SOCAT): $(SPREZZ)/socat/debian/changelog $(SOCATORIG)
 	cp -r $(<D) $@/
 
 .PHONY: subversion
-subversion:$(SUBVERSION)_$(ARCH).deb
-$(SUBVERSION): $(SPREZZ)/subversion/debian/changelog
+subversion:$(subversion)_$(ARCH).deb
+$(subversion): $(SPREZZ)/subversion/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
