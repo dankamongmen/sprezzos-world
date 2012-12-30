@@ -2602,6 +2602,14 @@ $(LCMS2): $(SPREZZ)/lcms2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lcms2-$(lcms2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libarchive
+libarchive:$(libarchive)_$(ARCH).deb
+$(libarchive): $(SPREZZ)/libarchive/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf v$(libarchive_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libatasmart
 libatasmart:$(LIBATASMART)_$(ARCH).deb
 $(LIBATASMART): $(SPREZZ)/libatasmart/debian/changelog
