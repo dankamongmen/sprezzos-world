@@ -2882,6 +2882,14 @@ $(LIBCAP2): $(SPREZZ)/libcap2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libcap-$(libcap2_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libetpan
+libetpan:$(LIBETPAN)_$(ARCH).deb
+$(LIBETPAN): $(SPREZZ)/libetpan/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libetpan-$(libetpan_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libev
 libev:$(LIBEV)_$(ARCH).deb
 $(LIBEV): $(SPREZZ)/libev/debian/changelog
@@ -3089,6 +3097,14 @@ $(LIBDRM): $(SPREZZ)/libdrm/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libdrm-$(libdrm_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxtst
+libxtst:$(LIBXTST)_$(ARCH).deb
+$(LIBXTST): $(SPREZZ)/libxtst/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXtst-$(libxtst_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xft
 xft:$(XFT)_$(ARCH).deb
