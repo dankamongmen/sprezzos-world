@@ -1,0 +1,66 @@
+#!/usr/bin/make -f
+
+VERSION = 5.45
+
+SHELL := sh -e
+
+%:
+	dh ${@} --with quilt
+
+CFLAGS = -Wall -g -D_BSD_SOURCE -ansi -D_SVID_SOURCE -D_POSIX_SOURCE
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -f *.a *.o
+	rm -rf shared
+	rm -f expect_cf.h tcldbgcf.h
+	[ ! -f tclconfig/config.guess~ ] || mv -f tclconfig/config.guess~ tclconfig/config.guess
+	[ ! -f tclconfig/config.sub~ ] || mv -f tclconfig/config.sub~ tclconfig/config.sub
+	[ ! -f configure~ ] || mv -f configure~ configure
+	[ ! -f testsuite/Makefile ] || $(MAKE) -C testsuite distclean
+
+override_dh_auto_configure:
+	cp -f configure configure~
+	cp -fb /usr/share/misc/config.guess tclconfig/config.guess
+	cp -fb /usr/share/misc/config.sub tclconfig/config.sub
+	autoconf
+	dh_auto_configure -- --includedir=/usr/include/tcl8.5 \
+			     --with-tcl=/usr/lib/tcl8.5 \
+			     --with-tk=/usr/lib/tk8.5 \
+			     --with-tclinclude=/usr/include/tcl8.5 \
+			     --with-tkinclude=/usr/include/tcl8.5 \
+			     --enable-shared \
+			     --enable-threads \
+			     --disable-rpath \
+			     CFLAGS="$(CFLAGS)"
+
+override_dh_auto_build:
+	$(MAKE) SONAME=libexpect.so.$(VERSION)
+
+override_dh_auto_install:
+	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+	# Renaming expect scripts
+	for SCRIPT in debian/tmp/usr/bin/*; do \
+	    if [ "`basename $$SCRIPT`" != "expect" ] ; then \
+		mv $$SCRIPT `dirname $$SCRIPT`/expect_`basename $$SCRIPT`; \
+	    fi; \
+	done
+	for MANPAGE in debian/tmp/usr/share/man/man1/*; do \
+	    if [ "`basename $$MANPAGE`" != "expect.1" ] ; then \
+		mv $$MANPAGE `dirname $$MANPAGE`/expect_`basename $$MANPAGE`; \
+	    fi; \
+	done
+	# Fixing library name
+	mv debian/tmp/usr/lib/expect$(VERSION)/libexpect$(VERSION).so debian/tmp/usr/lib/libexpect.so.$(VERSION)
+	mkdir -p -m 755 debian/tmp/usr/lib/tcltk
+	mv debian/tmp/usr/lib/expect$(VERSION) debian/tmp/usr/lib/tcltk
+	# Fixing permissions
+	chmod 0644 debian/tmp/usr/lib/tcltk/expect$(VERSION)/pkgIndex.tcl
+
+override_dh_install:
+	dh_install --fail-missing
+
+get-orig-source:
+	wget -O expect_$(VERSION).orig.tar.gz \
+	     http://downloads.sourceforge.net/project/expect/Expect/$(VERSION)/expect$(VERSION).tar.gz
+
