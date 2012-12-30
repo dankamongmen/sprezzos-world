@@ -2818,6 +2818,14 @@ $(EXO): $(SPREZZ)/exo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf exo-$(exo_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: expect
+expect:$(EXPECT)_$(ARCH).deb
+$(EXPECT): $(SPREZZ)/expect/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf expect$(expect_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gdb
 gdb:$(GDB)_$(ARCH).deb
 $(GDB): $(SPREZZ)/gdb/debian/changelog
@@ -2977,6 +2985,14 @@ $(LIBBURN): $(SPREZZ)/libburn/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libburn-$(libburn_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libical
+libical:$(LIBICAL)_$(ARCH).deb
+$(LIBICAL): $(SPREZZ)/libical/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libical-$(libical_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libice
 libice:$(LIBICE)_$(ARCH).deb
