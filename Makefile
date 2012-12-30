@@ -1226,6 +1226,14 @@ $(DBUS): $(SPREZZ)/dbus/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-$(dbus_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: dbus-glib
+dbus-glib:$(DBUSGLIB)_$(ARCH).deb
+$(DBUSGLIB): $(SPREZZ)/dbus-glib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dbus-glib-$(dbus-glib_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: dbus-python
 dbus-python:$(DBUSPYTHON)_$(ARCH).deb
 $(DBUSPYTHON): $(SPREZZ)/dbus-python/debian/changelog
@@ -2297,6 +2305,14 @@ $(GTHUMB): $(SPREZZ)/gthumb/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gthumb_$(gthumb_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gtkglext
+gtkglext:$(GTKGLEXT)_$(ARCH).deb
+$(GTKGLEXT): $(SPREZZ)/gtkglext/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtkglext-$(gtkglext_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gtkhtml
 gtkhtml:$(GTKHTML)_$(ARCH).deb
