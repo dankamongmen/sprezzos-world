@@ -450,6 +450,14 @@ $(AACPLUSENC): $(SPREZZ)/aacplusenc/debian/changelog
 	rm -rf $@/debian
 	cp -r $(<D) $@/
 
+.PHONY: aalib
+aalib:$(AALIB)_$(ARCH).deb
+$(AALIB): $(SPREZZ)/aalib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf $(AALIB).orig.tar.gz $(TARARGS) $@
+
 .PHONY: acetoneiso
 acetoneiso:$(ACETONEISO)_$(ARCH).deb
 $(ACETONEISO): $(SPREZZ)/acetoneiso/debian/changelog
