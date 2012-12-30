@@ -42,6 +42,14 @@ $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
 	tar cJvf meta-gnome_$(meta-gnome_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: meta-kde
+meta-kde:$(metakde)_$(ARCH).deb
+$(metakde): $(SPREZZ)/meta-kde/debian/changelog
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf meta-kde_$(meta-kde_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: python-central
 python-central:$(PYTHONCENTRAL)_$(ARCH).deb
 $(PYTHONCENTRAL): $(SPREZZ)/python-central/debian/changelog
