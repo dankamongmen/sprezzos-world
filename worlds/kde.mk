@@ -6,6 +6,14 @@ $(filelight): $(SPREZZ)/filelight/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf filelight_$(filelight_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: hupnp
+hupnp:$(HUPNP)_$(ARCH).deb
+$(HUPNP): $(SPREZZ)/hupnp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf hupnp_$(hupnp_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: kactivities
 kactivities:$(KACTIVITIES)_$(ARCH).deb
 $(KACTIVITIES): $(SPREZZ)/kactivities/debian/changelog

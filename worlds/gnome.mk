@@ -1,3 +1,11 @@
+.PHONY: gnome-documents
+gnome-documents:$(GNOMEDOCUMENTS)_$(ARCH).deb
+$(GNOMEDOCUMENTS): $(SPREZZ)/gnome-documents/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-documents-$(gnome-documents_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gnome-icon-theme
 gnome-icon-theme:$(GNOMEICONTHEME)_$(ARCH).deb
 $(GNOMEICONTHEME): $(SPREZZ)/gnome-icon-theme/debian/changelog
