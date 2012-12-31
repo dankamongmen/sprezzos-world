@@ -3170,6 +3170,14 @@ $(LIBXTST): $(SPREZZ)/libxtst/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXtst-$(libxtst_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xauth
+xauth:$(XAUTH)_$(ARCH).deb
+$(XAUTH): $(SPREZZ)/xauth/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xauth-$(xauth_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xft
 xft:$(XFT)_$(ARCH).deb
 $(XFT): $(SPREZZ)/xft/debian/changelog
