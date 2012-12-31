@@ -1501,7 +1501,7 @@ $(FINDUTILS): $(SPREZZ)/findutils/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf findutils-$(findutils_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf findutils-$(findutils_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: fonts-cantarell
 fonts-cantarell:$(FONTSCANTARELL)_$(ARCH).deb
