@@ -1,6 +1,6 @@
 .PHONY: filelight
-filelight:$(filelight)_$(ARCH).deb
-$(filelight): $(SPREZZ)/filelight/debian/changelog
+filelight:$(FILELIGHT)_$(ARCH).deb
+$(FILELIGHT): $(SPREZZ)/filelight/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
@@ -55,8 +55,8 @@ $(KDEPIMLIBS): $(SPREZZ)/kdepimlibs/debian/changelog
 	tar xJvf kdepimlibs_$(kdepimlibs_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: kde-workspace
-kde-workspace:$(kdeworkspace)_$(ARCH).deb
-$(kdeworkspace): $(SPREZZ)/kde-workspace/debian/changelog
+kde-workspace:$(KDEWORKSPACE)_$(ARCH).deb
+$(KDEWORKSPACE): $(SPREZZ)/kde-workspace/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
