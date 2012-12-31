@@ -7,8 +7,8 @@ $(filelight): $(SPREZZ)/filelight/debian/changelog
 	tar xJvf filelight_$(filelight_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: kactivities
-kactivities:$(kactivities)_$(ARCH).deb
-$(kactivities): $(SPREZZ)/kactivities/debian/changelog
+kactivities:$(KACTIVITIES)_$(ARCH).deb
+$(KACTIVITIES): $(SPREZZ)/kactivities/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
