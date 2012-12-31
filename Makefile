@@ -4249,6 +4249,14 @@ $(NVIDIASETTINGS): $(SPREZZ)/nvidia-settings/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf nvidia-settings-$(nvidia-settings_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: liboauth
+liboauth:$(LIBOAUTH)_$(ARCH).deb
+$(LIBOAUTH): $(SPREZZ)/liboauth/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liboauth-$(liboauth_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libosinfo
 libosinfo:$(LIBOSINFO)_$(ARCH).deb
 $(LIBOSINFO): $(SPREZZ)/libosinfo/debian/changelog
