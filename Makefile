@@ -3786,6 +3786,14 @@ $(LDNS): $(SPREZZ)/ldns/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ldns-$(ldns_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: logstalgia
+logstalgia:$(LOGSTALGIA)_$(ARCH).deb
+$(LOGSTALGIA): $(SPREZZ)/logstalgia/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf logstalgia-$(logstalgia_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: mon
 mon:$(MON)_$(ARCH).deb
 $(MON): $(SPREZZ)/mon/debian/changelog
