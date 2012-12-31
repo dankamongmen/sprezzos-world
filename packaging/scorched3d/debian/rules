@@ -1,0 +1,89 @@
+#!/usr/bin/make -f
+# rules file for scorched3d (May 2004)
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+%:
+	dh $@
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+# FOR AUTOCONF 2.52 AND NEWER ONLY
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+confflags += --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE)
+confflags += --prefix=/usr --bindir=\$${prefix}/games
+confflags += --datadir=\$${prefix}/share/games/scorched3d
+confflags += --with-docdir=/usr/share/doc/scorched3d
+confflags += --mandir=\$${prefix}/share/man
+confflags += --infodir=\$${prefix}/share/info
+
+CFLAGS += -Wall
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+$(info Disable all  optimisations)
+  CFLAGS += -O0
+else
+  CFLAGS += -O2
+endif
+
+# We want parallel builds (dh_build always does -j1)
+override_dh_auto_build:
+	$(MAKE)
+
+override_dh_auto_configure:
+	# Upstream ships non-DFSG icons, so we replace them
+	mkdir -p data/avatars
+	cp -r debian/avatars data
+	sh ./autogen.sh $(confflags) AWK=gawk
+
+override_dh_auto_clean:
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f	src/client/scorchedc/Makefile.am \
+		src/launcher/scorched/Makefile.am \
+		src/server/scorcheds/Makefile.am
+	rm -f data/fonts/test.ttf
+	rm -f config.log config.status
+	rm -rf data/avatars debian/avatars-svg/*.png
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	# Both fonts are in ttf-dejavu-core. Remove them here and create
+	# symlinks later on by debian/scorched3d-data
+	rm debian/tmp/usr/share/games/scorched3d/data/fonts/dejavusans.ttf
+	rm debian/tmp/usr/share/games/scorched3d/data/fonts/dejavusmobd.ttf
+	mkdir -p debian/tmp/usr/share/bug/scorched3d
+	cp debian/presubj debian/tmp/usr/share/bug/scorched3d/
+	mkdir -p debian/tmp/usr/share/icons/hicolor/48x48/apps
+	cp debian/scorched3d.png debian/tmp/usr/share/icons/hicolor/48x48/apps/
+	mkdir -p debian/tmp/usr/share/applications
+	cp debian/scorched3d.desktop debian/tmp/usr/share/applications/
+	mkdir -p debian/tmp/usr/share/pixmaps
+	cp debian/scorched3d.xpm debian/tmp/usr/share/pixmaps/
+	# Remove unwanted files and make lintian happy
+	rm -f 	debian/tmp/usr/share/games/scorched3d/data/globalmods/apoc/authors.txt \
+		debian/tmp/usr/share/games/scorched3d/data/globalmods/apoc/license.txt \
+		debian/tmp/usr/share/games/scorched3d/data/globalmods/apoc/readme-nexus.txt \
+		debian/tmp/usr/share/games/scorched3d/data/globalmods/apoc/readme.txt \
+		debian/tmp/usr/share/games/scorched3d/data/shaders/water.license \
+		debian/tmp/usr/share/games/scorched3d/data/globalmods/none/data/windows/Thumbs.db
+
+override_dh_installchangelogs:
+	dh_installchangelogs --exclude=CHANGELOG
+
+override_dh_strip:
+	dh_strip -pscorched3d --dbg-package=scorched3d-dbg
