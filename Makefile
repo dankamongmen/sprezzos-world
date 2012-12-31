@@ -4773,6 +4773,14 @@ $(SQLITE3): $(SPREZZ)/sqlite3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf sqlite3_$(sqlite3_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: scorched3d
+scorched3d:$(SCORCHED3D)_$(ARCH).deb
+$(SCORCHED3D): $(SPREZZ)/scorched3d/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Scorched3D-$(scorched3d_UPVER)-src.tar.gz $(TARARGS) $@
+
 .PHONY: scowl
 scowl:$(SCOWL)_$(ARCH).deb
 $(SCOWL): $(SPREZZ)/scowl/debian/changelog
