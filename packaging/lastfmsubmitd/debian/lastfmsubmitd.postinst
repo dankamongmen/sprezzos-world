@@ -1,0 +1,75 @@
+#!/bin/sh -e
+
+case "$1" in
+    configure)
+        ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+if ! getent group lastfm >/dev/null 2>&1; then
+    addgroup --system lastfm
+fi
+
+if ! getent passwd lastfm >/dev/null 2>&1; then
+    adduser --system --disabled-password --disabled-login --no-create-home \
+        --ingroup lastfm lastfm
+fi
+
+. /usr/share/debconf/confmodule
+
+db_get lastfmsubmitd/user
+test "$RET" && USER="$RET"
+db_get lastfmsubmitd/password
+test "$RET" && PASSWORD="$RET"
+
+CONF=/etc/lastfmsubmitd.conf
+if [ ! -e $CONF ]; then
+    touch $CONF
+    chgrp lastfm $CONF
+    chmod 640 $CONF
+fi
+
+set_conf() {
+    if [ "$2" ]; then
+        echo "$2" | /usr/lib/lastfmsubmitd/conftool --set "$1" $CONF
+    fi
+}
+
+set_conf account/user "$USER"
+set_conf account/password "$PASSWORD"
+
+db_get lastfmsubmitd/spool_group
+if [ "$RET" ]; then
+    for dir in /var/log/lastfm /var/spool/lastfm; do
+        chown "lastfm:$RET" $dir
+        chmod 2775 $dir
+    done
+fi
+
+db_set lastfmsubmitd/password ""
+db_stop
+
+# clean up after old versions
+
+for dir in /var/log/lastfm /var/run/lastfm /var/spool/lastfm \
+        /var/cache/lastfm; do
+    if dpkg-statoverride --list --quiet $dir >/dev/null 2>&1; then
+        dpkg-statoverride --force --quiet --remove $dir
+    fi
+done
+
+if [ -d /var/cache/lastfm ]; then
+    if [ -e /var/cache/lastfm/subs ]; then
+        mv -f /var/cache/lastfm/subs /var/spool/lastfm
+    fi
+    rmdir --ignore-fail-on-non-empty /var/cache/lastfm
+fi
+
+rm -f /etc/default/lastfmsubmitd
+
+#DEBHELPER#
