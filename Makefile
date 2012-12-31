@@ -754,6 +754,14 @@ $(AVOGADRO): $(SPREZZ)/avogadro/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf avogadro-$(avogadro_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: awesome
+awesome:$(AWESOME)_$(ARCH).deb
+$(AWESOME): $(SPREZZ)/awesome/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf awesome-$(awesome_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: awn-extras-applets
 awn-extras-applets:$(AWNEXTRASAPPLETS)_$(ARCH).deb
 $(AWNEXTRASAPPLETS): $(SPREZZ)/awn-extras-applets/debian/changelog
@@ -2218,6 +2226,14 @@ $(GOCR): $(SPREZZ)/gocr/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gocr-$(gocr_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gource
+gource:$(GOURCE)_$(ARCH).deb
+$(GOURCE): $(SPREZZ)/gource/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gource-$(gource_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ffms2
 ffms2:$(FFMS2)_$(ARCH).deb
 $(FFMS2): $(SPREZZ)/ffms2/debian/changelog
@@ -2889,6 +2905,14 @@ $(LAME): $(SPREZZ)/lame/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lame-$(lame_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: lastfmsubmitd
+lastfmsubmitd:$(LASTFMSUBMITD)_$(ARCH).deb
+$(LASTFMSUBMITD): $(SPREZZ)/lastfmsubmitd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lastfmsubmitd-$(lastfmsubmitd_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libav
 libav:$(LIBAV)_$(ARCH).deb
@@ -3562,6 +3586,14 @@ $(XCBUTIL): $(SPREZZ)/xcb-util/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xcb-util_$(xcb-util_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xcb-util-image
+xcb-util-image:$(XCBUTILIMAGE)_$(ARCH).deb
+$(XCBUTILIMAGE): $(SPREZZ)/xcb-util-image/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xcb-util-image-$(xcb-util-image_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xcb-util-keysyms
 xcb-util-keysyms:$(XCBUTILKEYSYMS)_$(ARCH).deb
 $(XCBUTILKEYSYMS): $(SPREZZ)/xcb-util-keysyms/debian/changelog
@@ -3570,6 +3602,14 @@ $(XCBUTILKEYSYMS): $(SPREZZ)/xcb-util-keysyms/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xcb-util-keysyms-$(xcb-util-keysyms_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xcb-util-wm
+xcb-util-wm:$(XCBUTILWM)_$(ARCH).deb
+$(XCBUTILWM): $(SPREZZ)/xcb-util-wm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xcb-util-wm-$(xcb-util-wm_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxcb
 libxcb:$(LIBXCB)_$(ARCH).deb
 $(LIBXCB): $(SPREZZ)/libxcb/debian/changelog
@@ -3577,6 +3617,14 @@ $(LIBXCB): $(SPREZZ)/libxcb/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxcb_$(libxcb_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libxdg-basedir
+libxdg-basedir:$(LIBXDGBASEDIR)_$(ARCH).deb
+$(LIBXDGBASEDIR): $(SPREZZ)/libxdg-basedir/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxdg-basedir-$(libxdg-basedir_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxml2
 libxml2:$(LIBXML2)_$(ARCH).deb
