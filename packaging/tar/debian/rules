@@ -1,0 +1,100 @@
+#!/usr/bin/make -f
+
+DEB_BUILD_GNU_TYPE = $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE = $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+CONFARGS = --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+CFLAGS = `dpkg-buildflags --get CFLAGS`
+CFLAGS += -Wall
+LDFLAGS += `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS = `dpkg-buildflags --get CPPFLAGS`
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	cp -f /usr/share/misc/config.sub build-aux/config.sub
+	cp -f /usr/share/misc/config.guess build-aux/config.guess
+	RSH="/usr/bin/rsh" CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure \
+		--prefix=/usr \
+		--libexecdir=/usr/sbin \
+		--with-lzma=xz \
+		$(CONFARGS) 
+	touch configure-stamp
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	RSH="/usr/bin/rsh" CFLAGS="-O2 -g -Wall -fno-gnu89-inline" $(MAKE)
+
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	@runas=`whoami` ; \
+	if test $$runas = "root" ; \
+	then \
+	  echo "Sorry, but the test suite is not designed to be run as root."; \
+	  exit 1 ;\
+	fi
+	(cd tests ; $(MAKE) clean)
+	$(MAKE) check
+endif
+endif
+
+	perl debian/tarman > debian/tar.1
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp debian/tar.1
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	make install bindir=`pwd`/debian/tar/bin prefix=`pwd`/debian/tar/usr \
+		libexecdir=`pwd`/debian/tar/usr/sbin 
+	install -m 755 debian/rmt.sh debian/tar/etc/rmt
+	mv debian/tar/usr/sbin/rmt debian/tar/usr/sbin/rmt-tar
+
+# Build architecture-independent files here.
+binary-indep: build install
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	mv -f debian/tar/usr/share/doc/tar/ChangeLog \
+		debian/tar/usr/share/doc/tar/changelog
+	mv -f debian/tar/usr/share/doc/tar/ChangeLog.1 \
+		debian/tar/usr/share/doc/tar/changelog.1
+	dh_installexamples
+	dh_installmenu
+	dh_installcron
+	dh_installman debian/tar.1 debian/rmt.8
+	mv debian/tar/usr/share/man/man8/rmt.8 \
+	   debian/tar/usr/share/man/man8/rmt-tar.8
+	dh_installinfo
+	rm -f debian/tar/usr/share/info/dir*
+	dh_installmime
+	dh_installchangelogs #CHANGELOGS#
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure
