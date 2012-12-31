@@ -647,6 +647,14 @@ $(ARGYLL): $(SPREZZ)/argyll/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf Argyll_V$(argyll_UPVER)_src.tar.gz $(TARARGS) $@
 
+.PHONY: arp-scan
+arp-scan:$(ARPSCAN)_$(ARCH).deb
+$(ARPSCAN): $(SPREZZ)/arp-scan/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf arp-scan-$(arp-scan_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: arpwatch
 arpwatch:$(ARPWATCH)_$(ARCH).deb
 $(ARPWATCH): $(SPREZZ)/arpwatch/debian/changelog
@@ -1511,6 +1519,14 @@ $(FONTSCANTARELL): $(SPREZZ)/fonts-cantarell/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf cantarell-fonts-$(fonts-cantarell_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: fonts-junicode
+fonts-junicode:$(FONTSJUNICODE)_$(ARCH).deb
+$(FONTSJUNICODE): $(SPREZZ)/fonts-junicode/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf junicode-$(fonts-junicode_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: fonts-liberation
 fonts-liberation:$(FONTSLIBERATION)_$(ARCH).deb
 $(FONTSLIBERATION): $(SPREZZ)/fonts-liberation/debian/changelog
@@ -1550,6 +1566,14 @@ $(FUSEUMFUSEFAT): $(SPREZZ)/fuse-umfuse-fat/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fuse-umfuse-fat-$(fuse-umfuse-fat_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: unicode
+unicode:$(UNICODE)_$(ARCH).deb
+$(UNICODE): $(SPREZZ)/unicode/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unicode_$(unicode_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: unionfs-fuse
 unionfs-fuse:$(UNIONFSFUSE)_$(ARCH).deb
@@ -1750,6 +1774,14 @@ $(GLIB): $(SPREZZ)/glib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf glib2.0-$(glib_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: glibmm2.4
+glibmm2.4:$(GLIBMM2.4)_$(ARCH).deb
+$(GLIBMM2.4): $(SPREZZ)/glibmm2.4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf glibmm-$(glibmm2.4_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: glib-networking
 glib-networking:$(GLIBNETWORKING)_$(ARCH).deb
@@ -2310,6 +2342,14 @@ $(GPODDER): $(SPREZZ)/gpodder/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gpodder-$(gpodder_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xgridfit
+xgridfit:$(XGRIDFIT)_$(ARCH).deb
+$(XGRIDFIT): $(SPREZZ)/xgridfit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xgridfit-$(xgridfit_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: grilo
 grilo:$(GRILO)_$(ARCH).deb
@@ -3758,6 +3798,14 @@ $(LFTP): $(SPREZZ)/lftp/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf lftp_$(lftp_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: mm-common
+mm-common:$(MMCOMMON)_$(ARCH).deb
+$(MMCOMMON): $(SPREZZ)/mm-common/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mm-common-$(mm-common_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: m4
 m4:$(M4)_$(ARCH).deb
@@ -5522,6 +5570,14 @@ $(XTRANS): $(SPREZZ)/xtrans/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xtrans_$(xtrans_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libunique
+libunique:$(LIBUNIQUE)_$(ARCH).deb
+$(LIBUNIQUE): $(SPREZZ)/libunique/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libunique-$(libunique_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libupnp
 libupnp:$(LIBUPNP)_$(ARCH).deb
