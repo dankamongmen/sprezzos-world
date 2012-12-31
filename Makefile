@@ -4345,6 +4345,14 @@ $(OPENCV): $(SPREZZ)/opencv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf OpenCV-$(opencv_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: openexr
+openexr:$(OPENEXR)_$(ARCH).deb
+$(OPENEXR): $(SPREZZ)/openexr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openexr-$(openexr_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ilmbase
 ilmbase:$(ilmbase)_$(ARCH).deb
 $(ilmbase): $(SPREZZ)/ilmbase/debian/changelog
