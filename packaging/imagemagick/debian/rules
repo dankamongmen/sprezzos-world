@@ -1,0 +1,230 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_SOURCE_PACKAGE ?= $(strip $(shell egrep '^Source: ' debian/control | cut -f 2 -d ':'))
+export DEB_VERSION ?= $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
+export DEB_NOEPOCH_VERSION ?= $(shell echo $(DEB_VERSION) | cut -d: -f2-)
+export DEB_UPSTREAM_VERSION ?= $(shell echo $(DEB_NOEPOCH_VERSION) | sed 's/-[^-]*$$//')
+export DEB_ISNATIVE ?= $(shell dpkg-parsechangelog | egrep '^Version:' | perl -ne 'print if not /^Version:\s*.*-/;')
+
+export DEB_UPSTREAM_VERSION_DROPREVISION ?= $(shell echo $(DEB_UPSTREAM_VERSION) |  sed -r "s/(^.+)\..+$$/\1/g")
+export DEB_UPSTREAM_VERSION_MAJOR ?= $(shell echo $(DEB_UPSTREAM_VERSION) | sed -r "s/(^[[:digit:]]+)\..+$$/\1/g")
+
+DESTDIR="$(CURDIR)/debian/tmp"
+
+# for better pkg-symbols for c++
+ifneq (/usr/share/pkg-kde-tools/bin,$(filter /usr/share/pkg-kde-tools/bin,$(subst :, ,$(PATH))))
+    export PATH := /usr/share/pkg-kde-tools/bin:$(PATH)
+endif
+
+# For some reason, the
+# libtools wrapper scripts don't work.
+# And for some reasons, the delegates are missing here.
+# use the recently builded convert using upstream script
+CONVERT = $(CURDIR)/magick.sh convert
+CONVERT_FLAGS = -background none -define filter:blur=0.75 -filter Gaussian
+
+# ARGH, we use graphicsmagick convert to avoid painful circular dependencies...
+# CONVERT = /usr/bin/convert
+
+build: build-stamp
+build-stamp: $(QUILT_STAMPFN)
+	dh_testdir
+	# libtool link with depends lib by default autoreconf to avoid it, using debian patched version
+	dh_autoreconf
+
+        # NOTICE: remove EPL delegate lib gvc
+	dh_auto_configure -- \
+	--prefix=/usr \
+        --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+	--sysconfdir=/etc \
+	--mandir=\$${prefix}/share/man \
+	--infodir=\$${prefix}/share/info \
+	--docdir=\$${prefix}/share/doc/imagemagick \
+	--with-modules \
+	--with-gs-font-dir=/usr/share/fonts/type1/gsfonts \
+	--with-magick-plus-plus \
+	--with-djvu \
+        --with-wmf \
+        --without-gvc \
+	--enable-shared \
+	--without-dps \
+	--without-fpx \
+	--with-perl-options='INSTALLDIRS=vendor' \
+	--x-includes=/usr/include/X11 \
+	--x-libraries=/usr/lib/X11 \
+	--without-rsvg
+
+	# Patch the generated libtool to avoid passing -rpath when linking,
+	# and to explicitly link libraries against the libraries they
+	# depend on.
+
+	sed -i libtool \
+		-e 's/^hardcode_libdir_flag_spec.*$$/hardcode_libdir_flag_spec=" -D__LIBTOOL_IS_A_FOOL__ "/' \
+		-e '/^archive_cmds="/s/"$$/ \\$$deplibs"/'
+
+	dh_auto_build
+
+	# Create Makefile after building main library, so it finds -lMagickCore (see #650417)
+	cd "$(CURDIR)/PerlMagick" && \
+		perl Makefile.PL INSTALLDIRS=vendor
+
+	cd "$(CURDIR)/PerlMagick" && \
+		$(MAKE) OPTIMIZE="-O2 -g -Wall"
+
+	# build icons cache
+	while read SIZE; do \
+		mkdir -p $(CURDIR)/debian/icons/$$SIZE/apps/ ;\
+		$(CONVERT) $(CURDIR)/debian/display.im$(DEB_UPSTREAM_VERSION_MAJOR).svg $(CONVERT_FLAGS) -resize $$SIZE \
+	                   -gravity center -extent $$SIZE  \
+			   $(CURDIR)/debian/icons/$$SIZE/apps/display.im$(DEB_UPSTREAM_VERSION_MAJOR).png; \
+	done < $(CURDIR)/debian/display.im$(DEB_UPSTREAM_VERSION_MAJOR).iconssize
+	# make xpm
+	$(CONVERT) $(CURDIR)/debian/display.im$(DEB_UPSTREAM_VERSION_MAJOR).svg $(CONVERT_FLAGS) -resize 32x32 \
+                -gravity center -extent 32x32  \
+		$(CURDIR)/debian/display.im$(DEB_UPSTREAM_VERSION_MAJOR).xpm
+	mkdir -p $(CURDIR)/debian/icons/scalable/apps/
+	gzip -c -n -9 $(CURDIR)/debian/display.im$(DEB_UPSTREAM_VERSION_MAJOR).svg \
+		> $(CURDIR)/debian/icons/scalable/apps/display.im$(DEB_UPSTREAM_VERSION_MAJOR).svgz
+
+	touch build-stamp
+
+# This package does not currently split building of architecture dependent and independent packages
+build-arch: build
+build-indep: build
+
+check: check-stamp
+check-stamp: build-stamp
+	dh_testdir
+
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	# run the testsuite to get more info in the build logs for now,
+	# Fail in case of error
+	@if test "$(DEB_HOST_GNU_TYPE)" = "$(DEB_BUILD_GNU_TYPE)"; then \
+		unset DISPLAY; \
+		LD_LIBRARY_PATH="$(CURDIR)/magick/.libs:$(CURDIR)/wand/.libs:$(CURDIR)/Magick++/lib/.libs:$$LD_LIBRARY_PATH" \
+		$(MAKE) check LD_RUN_PATH= && echo "*** Testsuite succeeded ***" || (echo "*** Testsuite failed ***" ; exit 1) ; \
+		cat test-suite.log; \
+	else \
+		echo "Skipping regression tests because we appear to be cross-compiling"; \
+	fi
+endif
+
+	touch check-stamp
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+
+# revert autoreconf
+	dh_autoreconf_clean
+	# Commands to clean up after the build process
+	[ ! -f PerlMagick/Makefile ] || (cd PerlMagick && $(MAKE) distclean)
+	[ ! -f Makefile ] || $(MAKE) distclean
+	[ ! -f Magick++/Makefile ] || (cd Magick++ && $(MAKE) distclean)
+	rm -f "$(CURDIR)/utilities/.libs/*" "$(CURDIR)/_configs.sed" #\
+#		"$(CURDIR)/magick/magick-config.h"
+
+	# remove icons cache
+	[ ! -d $(CURDIR)/debian/icons ] || rm -rf $(CURDIR)/debian/icons
+	[ ! -f $(CURDIR)/debian/display.im$(DEB_UPSTREAM_VERSION_MAJOR).xpm ] || rm -rf $(CURDIR)/debian/display.im$(DEB_UPSTREAM_VERSION_MAJOR).xpm
+
+	dh_clean build-stamp
+
+install: build check
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	$(MAKE) install \
+		DESTDIR="$(CURDIR)/debian/tmp" \
+		pkgdocdir=/usr/share/doc/imagemagick
+
+	cd "$(CURDIR)/PerlMagick" && \
+		$(MAKE) install \
+		DESTDIR="$(CURDIR)/debian/tmp" \
+		pkgdocdir=/usr/share/doc/imagemagick
+
+	-find "$(CURDIR)/debian" -type f -name .packlist | xargs rm -f
+
+	# Fix HTML location inside manpages
+	sed -i 's/doc\/ImageMagick-$(DEB_UPSTREAM_VERSION_DROPREVISION)/doc\/imagemagick/' \
+		$(DESTDIR)/usr/share/man/man*/*
+	sed -i 's/doc\/ImageMagick\\-$(DEB_UPSTREAM_VERSION_DROPREVISION)/doc\/imagemagick/' \
+		$(DESTDIR)/usr/share/man/man*/*
+
+	# Use x-terminal emulator for editing (Bug #132947)
+	sed -i 's/xterm/\/etc\/alternatives\/x-terminal-emulator/' \
+		$(DESTDIR)/etc/ImageMagick/delegates.xml
+
+        # Add a suffix to binaries, and to the corresponding manual
+        # page
+	while read FILE; do \
+		if echo $$FILE | grep usr/bin > /dev/null; then \
+			filename=`echo "$$FILE"|sed s/*//g`; \
+			basename=`basename $$filename`; \
+	    		mv $(CURDIR)/debian/tmp/$$filename $(CURDIR)/debian/tmp/$$filename.im$(DEB_UPSTREAM_VERSION_MAJOR); \
+			mv $(CURDIR)/debian/tmp/usr/share/man/man1/$$basename.1 \
+			  $(CURDIR)/debian/tmp/usr/share/man/man1/$$basename.im$(DEB_UPSTREAM_VERSION_MAJOR).1 ;\
+		else \
+			true; \
+		fi \
+	done < debian/imagemagick.install
+
+	# Remove empty directories in debian/tmp
+	-find $(DESTDIR) -type d -empty | xargs -r rmdir -p
+
+	# Remove RPATH from Magick.so
+	chrpath -d $(DESTDIR)/usr/lib/perl5/auto/Image/Magick/Magick.so
+
+	# empties dependency_libs from .la files
+	# http://lists.debian.org/debian-devel/2009/08/msg00783.html
+	find $(DESTDIR)/usr/lib -name '*.la' -exec \
+		sed -i "s,^dependency_libs=.*,dependency_libs=''," {} \;
+
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build check install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installexamples
+	dh_install
+	# Remove extra coders
+	while read FILE; do \
+		rm -f debian/libmagickcore5/$$FILE; \
+	done < debian/libmagickcore5-extra.install
+	dh_installmenu
+	dh_installman
+	dh_installmime
+	dh_installinfo
+	dh_installchangelogs
+	dh_link
+	dh_bugfiles --all
+	dh_strip --dbg-package=imagemagick-dbg
+# fix #611125
+	dh_compress -X/usr/share/doc/imagemagick/www
+	dh_fixperms
+	dh_perl
+	dh_makeshlibs -V
+	dh_shlibdeps
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
