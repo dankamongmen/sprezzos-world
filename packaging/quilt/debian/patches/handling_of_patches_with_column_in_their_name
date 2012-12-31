@@ -1,0 +1,95 @@
+Description: Fix handling of patch files with ':' in their name    
+    avoids errors like this:
+    $ quilt refresh
+    sed: -e expression #1, char 21: unknown option to `s'
+    Nothing in patch patches/strange:name
+    .
+    [Satoru Takeuchi: suggested first alternative implementation not
+     relying on find -printf.]
+    [Jean Delvare: added missing quoting and a new test file for this
+     case.]
+Author: Benjamin Poirier <bpoirier@suse.de>
+Date:   Wed Dec 5 14:53:15 2012 +0100
+Upstream-status: picked from upstream git repo
+Debian-bug: http://bugs.debian.org/679779
+
+Index: quilt.git/quilt/scripts/patchfns.in
+===================================================================
+--- quilt.git.orig/quilt/scripts/patchfns.in	2012-12-30 19:06:20.000000000 +0100
++++ quilt.git/quilt/scripts/patchfns.in	2012-12-30 19:06:54.371724000 +0100
+@@ -88,6 +88,12 @@
+ 	echo "$1" | sed -e 's:\([][?{(|)}^$/.+*\\]\):\\\1:g'
+ }
+ 
++# Quote a string for use in a globing pattern.
++quote_glob()
++{
++	echo "$1" | sed -e 's:\([][*?\\]\):\\\1:g'
++}
++
+ patch_file_name()
+ {
+ 	echo "$QUILT_PATCHES/$1"
+@@ -653,8 +659,8 @@
+ 	if [ -d "$path" ]
+ 	then
+ 		find "$path" -type f \
+-			       -a ! -path "$path/.timestamp" |
+-		sed -e "s:$path/::"
++			       -a ! -path "$(quote_glob "$path")/.timestamp" |
++		sed -e "s/$(quote_bre "$path")\///"
+ 	fi
+ }
+ 
+Index: quilt.git/test/colon-in-patch-name.test
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ quilt.git/test/colon-in-patch-name.test	2012-12-30 19:06:54.371724000 +0100
+@@ -0,0 +1,47 @@
++$ mkdir patches
++
++$ quilt new "patch_with:strange[name]"
++> Patch patches/patch_with:strange[name] is now on top
++
++$ echo foo > foo
++$ quilt add foo
++> File foo added to patch patches/patch_with:strange[name]
++
++$ quilt files
++> foo
++
++$ echo bar > foo
++$ quilt diff -p ab -P "patch_with:strange[name]"
++> Index: b/foo
++> ===================================================================
++> --- a/foo
++> +++ b/foo
++> @@ -1 +1 @@
++> -foo
++> +bar
++
++$ quilt refresh -p ab
++> Refreshed patch patches/patch_with:strange[name]
++
++$ quilt applied
++> patches/patch_with:strange[name]
++
++$ quilt pop -q
++> Removing patch patches/patch_with:strange[name]
++> No patches applied
++
++$ quilt next
++> patches/patch_with:strange[name]
++
++$ quilt push -q "patch_with:strange[name]"
++> Applying patch patches/patch_with:strange[name]
++> Now at patch patches/patch_with:strange[name]
++
++$ quilt rename "another:strange(name)"
++> Patch patches/patch_with:strange[name] renamed to patches/another:strange(name)
++
++$ quilt series
++> patches/another:strange(name)
++
++$ quilt remove foo
++> File foo removed from patch patches/another:strange(name)
