@@ -3698,6 +3698,14 @@ $(GMPCPLUGINS): $(SPREZZ)/gmpc-plugins/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gmpc-plugins-$(gmpc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: grep
+grep:$(GREP)_$(ARCH).deb
+$(GREP): $(SPREZZ)/grep/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf grep-$(grep_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: lightspark
 lightspark:$(LIGHTSPARK)_$(ARCH).deb
 $(LIGHTSPARK): $(SPREZZ)/lightspark/debian/changelog
