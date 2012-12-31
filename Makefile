@@ -4345,6 +4345,14 @@ $(OPENCV): $(SPREZZ)/opencv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf OpenCV-$(opencv_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: enblend-enfuse
+enblend-enfuse:$(ENBLENDENFUSE)_$(ARCH).deb
+$(ENBLENDENFUSE): $(SPREZZ)/enblend-enfuse/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf enblend-enfuse-$(enblend-enfuse_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: openexr
 openexr:$(OPENEXR)_$(ARCH).deb
 $(OPENEXR): $(SPREZZ)/openexr/debian/changelog
