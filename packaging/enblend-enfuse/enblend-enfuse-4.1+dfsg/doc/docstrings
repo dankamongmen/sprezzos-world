@@ -1,0 +1,127 @@
+#! /usr/bin/env perl
+
+# This file is part of Enblend.
+# Licence details can be found in the file COPYING.
+
+# name:         docstrings
+# synopsis:     extract documentation strings from text files
+# author:       Dr. Christoph L. Spiel
+# perl version: 5.10.0
+
+
+# Grammar
+#     '//' '<' TEXT
+#     '/*' '<' TEXT '>' '*/'
+# where TEXT is on a single line
+
+
+use strict;
+use warnings;
+
+use English;
+use File::Basename;
+use IO::File;
+use IO::Handle;
+
+use constant COMMANDNAME => basename($0);
+
+
+my $regexp = qr(// \s* < \s* (.*) |
+                /\* \s* < \s* (.*?) \s* > \s* \*/)x;
+
+
+sub open_file {
+    my $file = shift;
+
+    my $handle;
+
+    if ($file eq '-') {
+        $handle = new IO::Handle;
+        $handle->fdopen(fileno(STDIN), 'r') or
+          die(COMMANDNAME, qq(: cannot open standard input: $OS_ERROR\n));
+    } else {
+        $handle = new IO::File($file, 'r') or
+          die(COMMANDNAME, qq(: cannot open "$file": $OS_ERROR\n));
+    }
+
+    return $handle;
+}
+
+
+sub insert_docstring {
+    my ($docstrings, $data) = @_;
+
+    my $value = $data->{VALUE};
+    $value =~ m{^(\S+)};
+    my $key = $1;
+
+    if (exists $docstrings->{$key}) {
+        my $previous_file = $docstrings->{$key}{FILENAME};
+        my $previous_line = $docstrings->{$key}{LINENUMBER};
+        warn(COMMANDNAME,
+             qq(: warning: duplicate key "$key" at $data->{FILENAME}:$data->{LINENUMBER};\n),
+             COMMANDNAME,
+             qq(: warning:     previous definition at $previous_file:$previous_line\n));
+    }
+
+    $docstrings->{$key} = $data;
+}
+
+
+sub collect_docstrings {
+    my ($docstrings, $filename, $file) = @_;
+
+    my $basename = basename($filename);
+    my $linenumber = 1;
+
+    while (my $line = readline($file)) {
+        while ($line =~ m{$regexp}g) {
+            insert_docstring($docstrings,
+                             {FILENAME => $basename,
+                              LINENUMBER => $linenumber,
+                              VALUE => $1}) if $1;
+            insert_docstring($docstrings,
+                             {FILENAME => $basename,
+                              LINENUMBER => $linenumber,
+                              VALUE => $2}) if $2;
+        }
+        ++$linenumber;
+    }
+
+    return $docstrings;
+}
+
+
+sub print_docstrings {
+    my $docstrings = shift;
+
+    foreach my $key (sort keys %$docstrings) {
+        my $filename = $docstrings->{$key}{FILENAME};
+        my $linenumber = $docstrings->{$key}{LINENUMBER};
+        my $value = $docstrings->{$key}{VALUE};
+
+        print("\@c $filename:$linenumber\n",
+              "\@set $value\n",
+              "\n");
+    }
+}
+
+
+sub scan_file {
+    my ($docstrings, $filename) = @_;
+
+    my $file = open_file($filename);
+    collect_docstrings($docstrings, $filename, $file);
+    $file->close or die(COMMANDNAME, qq(: cannot close "$filename": $OS_ERROR\n));
+}
+
+
+sub main {
+    @ARGV = ('-') unless @ARGV;
+    my $docstrings = {};
+    scan_file($docstrings, $_) foreach @ARGV;
+    print_docstrings($docstrings);
+}
+
+
+main();

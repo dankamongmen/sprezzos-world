@@ -1,0 +1,160 @@
+#! /usr/bin/env perl
+
+# name:         gen_sig
+# synopsis:     generate signature in Harry-van-der-Wolf style
+# author:       Dr. Christoph L. Spiel
+# perl version: 5.10.0
+
+# This file is part of Enblend.
+# Licence details can be found in the file COPYING.
+
+
+use strict;
+use warnings;
+
+use Sig;
+
+
+sub octalize_string {
+    my ($string, $prefix) = @_;
+    $prefix = '' unless $prefix;
+
+    my $result;
+    my $max_chars = 8;
+    my $length = length $string;
+
+    for (my $i = 1; $i <= $length; $i++) {
+        $result .= sprintf "\\%03o", ord(substr $string, $i - 1, 1);
+        if ($i % $max_chars == 0 and $i != $length) {
+            $result .= qq("\n            $prefix");
+        }
+    }
+
+    return qq($prefix"$result");
+}
+
+
+sub emit_class {
+    my ($signature, $checksum, $extra_checksum) = @_;
+
+    print <<END_OF_CLASS;
+#ifndef SIGNATURE_H_INCLUDED_
+#define SIGNATURE_H_INCLUDED_
+
+// This file is part of Enblend.
+// Licence details can be found in the file COPYING.
+
+#include <numeric>
+
+extern const std::string command;
+
+class Signature
+{
+public:
+    Signature(): checksum_(@{[sprintf "0%011o", $checksum]}U), neg_checksum_(0U) {}
+
+    const wchar_t* message() const
+    {
+        return @{[octalize_string($signature, q(L))]};
+    }
+
+    void initialize()
+    {
+#ifdef DEBUG_FORCE_SIGNATURE_CHECK_FAILURE
+        checksum_++;
+        neg_checksum_ = checksum_;
+#else
+        neg_checksum_ = ~checksum_;
+#endif
+    }
+
+    void check() const
+    {
+#if DEBUG_SIGNATURE_CHECK
+        if (checksum_ != ~neg_checksum_)
+        {
+            std::cerr <<
+                "+ static checksum " << checksum_ <<
+                " does not match static shadow checksum " << ~neg_checksum_ << "\\n";
+        }
+        if (generate_checksum() != checksum_)
+        {
+            std::cerr <<
+                "+ dynamic checksum " << generate_checksum() <<
+                " does not match static checksum " << checksum_ << ", where\\n" <<
+                "+     message is <" << message() << ">\\n";
+        }
+#endif
+
+        if (generate_checksum() != checksum_ || checksum_ != ~neg_checksum_)
+        {
+            std::cerr << command.c_str(); // MSVC chokes without c_str()
+#ifdef WANT_AGGRESSIVE_SIGNATURE_CHECK
+            std::cerr << @{[octalize_string(qq(: tampered binary\n))]};
+            exit(1);
+#else
+            std::cerr << @{[octalize_string(qq(: warning: signature check failed\n))]};
+#endif
+        }
+    }
+
+    unsigned generate_checksum() const
+    {
+        const wchar_t* m = message();
+        return m == NULL ? 0U : std::accumulate(m, m + wcslen(m), 0U) & 037777777777U;
+    }
+
+private:
+    unsigned checksum_;
+    unsigned neg_checksum_;
+};
+
+#endif // SIGNATURE_H_INCLUDED_
+END_OF_CLASS
+}
+
+
+sub self_test {
+    my $sig = Sig->new();
+    my $ok = 1;
+
+    print "// self-test...\n";
+
+    unless ($sig->get_username()) {
+        print "// no user name\n";
+        $ok = 0;
+    }
+
+    unless ($sig->get_hostname()) {
+        print "// no hostname\n";
+        $ok = 0;
+    }
+
+    unless ($sig->get_date()) {
+        print "// no date\n";
+        $ok = 0;
+    }
+
+    unless ($sig->get_time()) {
+        print "// no time\n";
+        $ok = 0;
+    }
+
+    print "// ", $sig->signature(), "\n";
+
+    print "// passed\n" if $ok;
+}
+
+
+sub main {
+    if ($ARGV[0] and $ARGV[0] =~ m/--extra=(.*)/) {
+        my $sig = Sig->new();
+        emit_class($sig->signature(), unpack("%32C*", $sig->signature()),
+                   unpack("%32C*", $1));
+    } else {
+        self_test();
+    }
+}
+
+
+main();
