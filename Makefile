@@ -21,6 +21,7 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 -include $(subst $(SPREZZ),sprezzos-world/,$(PACKAGES))
 
 include worlds/kde.mk
+include worlds/lxde.mk
 include worlds/xfce.mk
 include worlds/gnome.mk
 include worlds/debian.mk
@@ -2426,6 +2427,14 @@ $(GUPNPDLNA): $(SPREZZ)/gupnp-dlna/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gupnp-dlna-$(gupnp-dlna_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gutenprint
+gutenprint:$(GUTENPRINT)_$(ARCH).deb
+$(GUTENPRINT): $(SPREZZ)/gutenprint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gutenprint-$(gutenprint_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: guvcview
 guvcview:$(GUVCVIEW)_$(ARCH).deb
 $(GUVCVIEW): $(SPREZZ)/guvcview/debian/changelog
@@ -3969,6 +3978,14 @@ $(NETCF): $(SPREZZ)/netcf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf netcf_$(netcf_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: nethack
+nethack:$(NETHACK)_$(ARCH).deb
+$(NETHACK): $(SPREZZ)/nethack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nethack_$(nethack_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: net-snmp
 net-snmp:$(NETSNMP)_$(ARCH).deb
