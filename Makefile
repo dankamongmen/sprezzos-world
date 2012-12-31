@@ -2890,6 +2890,14 @@ $(HEIMDAL): $(SPREZZ)/heimdal/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf heimdal-$(heimdal_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: imagemagick
+imagemagick:$(IMAGEMAGICK)_$(ARCH).deb
+$(IMAGEMAGICK): $(SPREZZ)/imagemagick/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf imagemagick_$(imagemagick_UPVER).orig.tar.xz $(TARARGS) $@
+
 .PHONY: imlib
 imlib:$(IMLIB)_$(ARCH).deb
 $(IMLIB): $(SPREZZ)/imlib/debian/changelog

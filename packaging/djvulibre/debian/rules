@@ -1,0 +1,83 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with autoreconf --parallel
+
+# extract library major version from source build system
+libver0 := $(shell egrep '^LIBDJVU_VER_COMPAT=[0-9]+$$' configure.ac \
+		   | head -1 \
+		   | sed 's/LIBDJVU_VER_COMPAT=//')
+
+# extract library major version expected by debian packaging
+libver := $(shell egrep '^Package: libdjvulibre[0-9]+$$' debian/control \
+		  | head -1 \
+		  | sed 's/Package: libdjvulibre//')
+
+ifneq ($(libver0),$(libver))
+	error inconsistent debian/control library major version
+endif
+
+export DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+testlibver:
+	@echo library major version: upstream $(libver0), debian $(libver) $(libver1) $(libver2)
+
+configure_options += --disable-desktopfiles
+configure_options += --enable-static
+configure_options += --enable-shared
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+configure_options += --enable-debug
+else ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+# consider modifying the autoconf scripts to accept a --disable-optimization flag
+configure_options += --enable-debug
+endif
+
+# Always keep dubugging symbols
+configure_options += CXXFLAGS=-g
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(configure_options)
+
+override_dh_auto_install:
+	dh_auto_install
+	mkdir --parents debian/tmp/usr/lib/cgi-bin
+	cp --preserve=mode,timestamps debian/djvuserve.sh \
+		debian/tmp/usr/lib/cgi-bin/djvuserve
+	@echo "install djvu icon and mime types"
+	for n in 22 32 48 64 ; do \
+	  d="debian/tmp/usr/share/icons/hicolor/$${n}x$${n}/mimetypes"; \
+	  mkdir --parents $${d}; \
+	  install --mode=644 desktopfiles/hi$${n}-djvu.png \
+	    $${d}/image-vnd.djvu.png; \
+	  ln -sf image-vnd.djvu.png \
+	    $${d}/djvu.png; \
+	done
+	mkdir --parents debian/tmp/usr/share/icons/hicolor/scalable/mimetypes
+	install --mode=644 desktopfiles/hi-djvu.svgz \
+	  debian/tmp/usr/share/icons/hicolor/scalable/mimetypes/image-vnd.djvu.svgz
+	ln -sf image-vnd.djvu.svgz \
+	  debian/tmp/usr/share/icons/hicolor/scalable/mimetypes/djvu.svgz
+	mkdir --parents debian/tmp/usr/share/mimelnk/image
+	install --mode=644 desktopfiles/vnd.djvu.desktop \
+	  debian/tmp/usr/share/mimelnk/image/
+
+override_dh_install:
+	dh_install
+	@echo remove from djvulibre-bin, already in djvuserve
+	find debian/djvulibre-bin -name djvuserve\* -print -delete
+# 	@echo "remove from djvulibre-bin, not in Debian: needs gsdjvu, direct complaints to AT&T"
+# 	find debian/djvulibre-bin -name djvudigital\* -print -delete
+
+override_dh_installchangelogs:
+	dh_installchangelogs --keep NEWS
+
+override_dh_compress:
+	dh_compress --exclude=.djvu
+
+override_dh_strip:
+	dh_strip --dbg-package=djvulibre-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs --version-info --exclude=/plugins
+
+.PHONY: testlibver
