@@ -1,0 +1,217 @@
+From: Modestas Vainius <modax@debian.org>
+Subject: Framework for making libkdeinit4_*.so "private"
+Forwarded: no
+Origin: vendor
+Last-Update: 2011-03-27
+
+The patch adds LIBKDEINIT_INSTALL_DIR cmake flag which specifies where
+libkdeinit4_*.so are supposed to end up. Please note, however, that
+libkdeinit4_*.so will not be automatically installed to LIBKDEINIT_INSTALL_DIR
+(but rather LIB_INSTALL_DIR) after cmake_install and you will need to be move
+to LIBKDEINIT_INSTALL_DIR manually in packaging (or e.g. with
+dh_movelibkdeinit).
+
+ENABLE_LIBKDEINIT_RUNPATH boolean variable controls whether to add RUNPATH to
+generated kdeinit executables. ENABLE_LIBKDEINIT_RUNPATH is OFF by default
+unless CMAKE_BUILD_TYPE is set to Debian. However, please note that CDBS kde.mk
+and debhelper kde addon/buildsystem set CMAKE_BUILD_TYPE=Debian and call
+dh_movelibkdeinit by default.
+
+The patch also adds support for "kdeinit" resource type to KDE Platform
+libraries.
+--- a/CreateKDELibsDependenciesFile.cmake
++++ b/CreateKDELibsDependenciesFile.cmake
+@@ -32,6 +32,7 @@ set(KDE4_INSTALL_DIR "${CMAKE_INSTALL_PR
+ make_install_path_absolute(KDE4_LIB_INSTALL_DIR     ${LIB_INSTALL_DIR})
+ make_install_path_absolute(KDE4_IMPORTS_INSTALL_DIR     ${IMPORTS_INSTALL_DIR})
+ make_install_path_absolute(KDE4_LIBEXEC_INSTALL_DIR ${LIBEXEC_INSTALL_DIR})
++make_install_path_absolute(KDE4_LIBKDEINIT_INSTALL_DIR ${LIBKDEINIT_INSTALL_DIR})
+ make_install_path_absolute(KDE4_INCLUDE_INSTALL_DIR ${INCLUDE_INSTALL_DIR})
+ make_install_path_absolute(KDE4_BIN_INSTALL_DIR     ${BIN_INSTALL_DIR})
+ make_install_path_absolute(KDE4_SBIN_INSTALL_DIR    ${SBIN_INSTALL_DIR})
+@@ -65,6 +66,7 @@ endif (NOT KDE4_INSTALL_DIR)
+ set(KDE4_LIB_INSTALL_DIR     \"${KDE4_LIB_INSTALL_DIR}\")
+ set(KDE4_IMPORTS_INSTALL_DIR     \"${KDE4_IMPORTS_INSTALL_DIR}\")
+ set(KDE4_LIBEXEC_INSTALL_DIR \"${KDE4_LIBEXEC_INSTALL_DIR}\")
++set(KDE4_LIBKDEINIT_INSTALL_DIR \"${KDE4_LIBKDEINIT_INSTALL_DIR}\")
+ set(KDE4_INCLUDE_INSTALL_DIR \"${KDE4_INCLUDE_INSTALL_DIR}\")
+ set(KDE4_BIN_INSTALL_DIR     \"${KDE4_BIN_INSTALL_DIR}\")
+ set(KDE4_SBIN_INSTALL_DIR    \"${KDE4_SBIN_INSTALL_DIR}\")
+--- a/cmake/modules/FindKDE4Internal.cmake
++++ b/cmake/modules/FindKDE4Internal.cmake
+@@ -871,6 +871,7 @@ else (WIN32)
+    _set_fancy(INCLUDE_INSTALL_DIR  "${CMAKE_INSTALL_PREFIX}/include"         "The subdirectory to the header prefix")
+ 
+    _set_fancy(PLUGIN_INSTALL_DIR       "${LIB_INSTALL_DIR}/kde4"                "The subdirectory relative to the install prefix where plugins will be installed (default is ${LIB_INSTALL_DIR}/kde4)")
++   _set_fancy(LIBKDEINIT_INSTALL_DIR   "${LIB_INSTALL_DIR}"                     "The subdirectory relative to the install prefix where core libraries of the kdeinit based executables may be installed (default is ${LIB_INSTALL_DIR})")
+    _set_fancy(IMPORTS_INSTALL_DIR       "${PLUGIN_INSTALL_DIR}/imports"                "The subdirectory relative to the install prefix where imports will be installed")
+    _set_fancy(CONFIG_INSTALL_DIR       "${SHARE_INSTALL_PREFIX}/config"         "The config file install dir")
+    _set_fancy(DATA_INSTALL_DIR         "${SHARE_INSTALL_PREFIX}/apps"           "The parent directory where applications can install their data")
+@@ -1332,6 +1333,10 @@ if (CMAKE_C_COMPILER MATCHES "icc")
+ 
+ endif (CMAKE_C_COMPILER MATCHES "icc")
+ 
++if (CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE STREQUAL "Debian")
++   set(ENABLE_LIBKDEINIT_RUNPATH ON CACHE BOOL
++       "Add R(UN)PATH to kdeinit-based shared executables (defaults to ON if build type is Debian)")
++endif (CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE STREQUAL "Debian")
+ 
+ ###########    end of platform specific stuff  ##########################
+ 
+--- a/cmake/modules/KDE4Macros.cmake
++++ b/cmake/modules/KDE4Macros.cmake
+@@ -810,6 +810,17 @@ macro (KDE4_ADD_KDEINIT_EXECUTABLE _targ
+       set_target_properties(kdeinit_${_target_NAME} PROPERTIES OUTPUT_NAME kdeinit4_${_target_NAME})
+ 
+       kde4_add_executable(${_target_NAME} "${_nogui}" ${CMAKE_CURRENT_BINARY_DIR}/${_target_NAME}_dummy.cpp)
++      if (UNIX AND ENABLE_LIBKDEINIT_RUNPATH)
++         list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${LIBKDEINIT_INSTALL_DIR}" _isSystemKdeinitDir)
++         if("${_isSystemKdeinitDir}" STREQUAL "-1")
++            if (CMAKE_SKIP_RPATH)
++               set_target_properties(${_target_NAME} PROPERTIES LINK_FLAGS "-Wl,--enable-new-dtags,-rpath,'${LIBKDEINIT_INSTALL_DIR}'")
++            else (CMAKE_SKIP_RPATH)
++               set_target_properties(${_target_NAME} PROPERTIES INSTALL_RPATH "${LIBKDEINIT_INSTALL_DIR}"
++                                                                LINK_FLAGS    "-Wl,--enable-new-dtags")
++            endif (CMAKE_SKIP_RPATH)
++         endif("${_isSystemKdeinitDir}" STREQUAL "-1")
++      endif (UNIX AND ENABLE_LIBKDEINIT_RUNPATH)
+       target_link_libraries(${_target_NAME} kdeinit_${_target_NAME})
+    endif(WIN32)
+ 
+--- a/kinit/CMakeLists.txt
++++ b/kinit/CMakeLists.txt
+@@ -58,6 +58,17 @@ endif(Q_WS_X11)
+ 
+ install(TARGETS kdeinit4 ${INSTALL_TARGETS_DEFAULT_ARGS} )
+ 
++if (UNIX)
++  list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${LIBKDEINIT_INSTALL_DIR}" _isSystemKdeinitDir)
++  if("${_isSystemKdeinitDir}" STREQUAL "-1")
++    if (CMAKE_SKIP_RPATH)
++        set_target_properties(kdeinit4 PROPERTIES LINK_FLAGS "-Wl,--enable-new-dtags,-rpath,'${LIBKDEINIT_INSTALL_DIR}'")
++    else (CMAKE_SKIP_RPATH)
++        set_target_properties(kdeinit4 PROPERTIES INSTALL_RPATH "${LIBKDEINIT_INSTALL_DIR}"
++                                                  LINK_FLAGS    "-Wl,--enable-new-dtags")
++    endif (CMAKE_SKIP_RPATH)
++  endif("${_isSystemKdeinitDir}" STREQUAL "-1")
++endif (UNIX)
+ ########### kwrapper4 ###############
+ if (WIN32)
+   set(kwrapper_SRCS kwrapper_win.cpp  )
+--- a/config-prefix.h.cmake
++++ b/config-prefix.h.cmake
+@@ -12,6 +12,7 @@
+ #define __KDE_EXECPREFIX "NONE"
+ 
+ #define LIBEXEC_INSTALL_DIR "${LIBEXEC_INSTALL_DIR}"
++#define LIBKDEINIT_INSTALL_DIR "${LIBKDEINIT_INSTALL_DIR}"
+ #define DATA_INSTALL_DIR "${DATA_INSTALL_DIR}"
+ #define LIB_INSTALL_DIR "${LIB_INSTALL_DIR}"
+ #define INCLUDE_INSTALL_DIR "${INCLUDE_INSTALL_DIR}"
+--- a/kdecore/kde-config.cpp
++++ b/kdecore/kde-config.cpp
+@@ -144,6 +144,7 @@ int main(int argc, char **argv)
+             "html", I18N_NOOP("HTML documentation"),
+             "icon", I18N_NOOP("Icons"),
+             "kcfg", I18N_NOOP("Configuration description files"),
++            "kdeinit", I18N_NOOP("kdeinit shared executables (resource added by Debian)"),
+             "lib", I18N_NOOP("Libraries"),
+             "include", I18N_NOOP("Includes/Headers"),
+             "locale", I18N_NOOP("Translation files for KLocale"),
+--- a/kdecore/kernel/kstandarddirs.cpp
++++ b/kdecore/kernel/kstandarddirs.cpp
+@@ -165,6 +165,8 @@ xdgconf-menu
+ menus
+ xdgconf-autostart
+ autostart
++kdeinit
++%lib
+ */
+ 
+ static const char types_string[] =
+@@ -219,6 +221,8 @@ static const char types_string[] =
+     "menus\0"
+     "xdgconf-autostart\0"
+     "autostart\0"
++    "kdeinit\0"
++    "%lib\0"
+     "\0";
+ 
+ static const int types_indices[] = {
+@@ -228,7 +232,7 @@ static const int types_indices[] = {
+     248,  258,  275,  285,  301,  305,  309,  316,
+     326,  336,  354,  359,  377,  387,  403,  416,
+     429,  442,  448,  463,  471,  484,  504,  217,
+-    517,  530,  536,  554,  -1
++    517,  530,  536,  554,  564,  572,   -1
+ };
+ 
+ static void tokenize(QStringList& token, const QString& str,
+--- a/kdecore/kernel/kstandarddirs_unix.cpp
++++ b/kdecore/kernel/kstandarddirs_unix.cpp
+@@ -40,6 +40,8 @@ QString KStandardDirs::installPath(const
+                 return QFile::decodeName(KCFG_INSTALL_DIR "/");
+             if (strcmp("kdedir", type) == 0)
+                 return QFile::decodeName(KDEDIR "/");
++            if (strcmp("kdeinit", type) == 0)
++                return QFile::decodeName(LIBKDEINIT_INSTALL_DIR "/");
+             break;
+         case 'd':
+             if (strcmp("data", type) == 0)
+--- a/kdecore/kernel/kstandarddirs_win.cpp
++++ b/kdecore/kernel/kstandarddirs_win.cpp
+@@ -47,6 +47,8 @@ QString KStandardDirs::installPath(const
+                 return share() + QLatin1String("config.kcfg/");
+             if (strcmp("kdedir", type) == 0)
+                 return prefix();
++            if (strcmp("kdeinit", type) == 0)
++                return prefix() + QString::fromLatin1("lib" KDELIBSUFF "/");
+             break;
+         case 'd':
+             if (strcmp("data", type) == 0)
+--- a/kdecore/util/kpluginloader.cpp
++++ b/kdecore/util/kpluginloader.cpp
+@@ -113,6 +113,13 @@ QString findLibraryInternal(const QStrin
+         libname = fileinfo.path() + QLatin1String("/lib") + fileinfo.fileName();
+ #endif
+ 
++    if (kdeinit) {
++        libfile = cData.dirs()->findResource("kdeinit", libname);
++        if (!libfile.isEmpty()) {
++            return libfile;
++        }
++    }
++
+     libfile = cData.dirs()->findResource("lib", libname);
+     if (!libfile.isEmpty()) {
+         if (!kdeinit) {
+--- a/kinit/kinit.cpp
++++ b/kinit/kinit.cpp
+@@ -499,11 +499,23 @@ static pid_t launch(int argc, const char
+             // try to match an absolute path to an executable binary (either in bin/ or in libexec/)
+             // to a kdeinit module in the same prefix
+             if( lib.contains( QLatin1String( "/lib" KDELIBSUFF "/kde4/libexec/" ))) {
+-                libpath = QString( lib ).replace( QLatin1String( "/lib" KDELIBSUFF "/kde4/libexec/" ),
+-                    QLatin1String("/lib" KDELIBSUFF "/libkdeinit4_")) + QLatin1String(".so");
++                if ( lib.contains(KStandardDirs::installPath( "libexec" ))) {
++                    libpath = QString( lib ).replace( KStandardDirs::installPath( "libexec" ),
++                        KStandardDirs::installPath( "kdeinit" )) + QLatin1String(".so");
++                }
++                if (libpath.isEmpty() || !QFile::exists( libpath )) {
++                    libpath = QString( lib ).replace( QLatin1String( "/lib" KDELIBSUFF "/kde4/libexec/" ),
++                        QLatin1String("/lib" KDELIBSUFF "/libkdeinit4_")) + QLatin1String(".so");
++                }
+             } else if( lib.contains( QLatin1String( "/bin/" ))) {
+-                libpath = QString( lib ).replace( QLatin1String( "/bin/" ),
+-                    QLatin1String("/lib" KDELIBSUFF "/libkdeinit4_")) + QLatin1String(".so");
++                if ( lib.contains(KStandardDirs::installPath( "exe" )) ) {
++                    libpath = QString( lib ).replace( KStandardDirs::installPath( "exe" ),
++                        KStandardDirs::installPath( "kdeinit" )) + QLatin1String(".so");
++                }
++                if (libpath.isEmpty() || !QFile::exists( libpath )) {
++                    libpath = QString( lib ).replace( QLatin1String( "/bin/" ),
++                        QLatin1String("/lib" KDELIBSUFF "/libkdeinit4_")) + QLatin1String(".so");
++                }
+             }
+             // Don't confuse the user with "Could not load libkdeinit4_foo.so" if it doesn't exist
+             if (!QFile::exists(libpath)) {

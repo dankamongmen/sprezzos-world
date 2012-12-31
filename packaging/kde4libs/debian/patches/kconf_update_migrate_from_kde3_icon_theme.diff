@@ -1,0 +1,200 @@
+From: Modestas Vainius <modax@debian.org>
+Subject: Migrate from crystalsvg and similar KDE 4 incompatible icon themes
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=588374
+Forwarded: no
+Origin: vendor
+Last-Update: 2011-01-22
+
+The patch adds a kconf_update script which resets global icon theme to default
+if current one does not have some standard icons (e.g. document-open etc.)
+Useful when upgrading from KDE 3 to KDE 4 because default KDE 3 theme
+(crystalsvg) is exactly like this, i.e. incompatible with KDE 4.
+
+--- /dev/null
++++ b/kdeui/icons/kconf_update_migrate_from_kde3_icon_theme.cpp
+@@ -0,0 +1,157 @@
++/*
++   Copyright (c) 2011, Modestas Vainius <modax@debian.org>
++
++   This library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Library General Public
++   License as published by the Free Software Foundation; either
++   version 2 of the License, or (at your option) any later version.
++
++   This library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Library General Public License for more details.
++
++   You should have received a copy of the GNU Library General Public License
++   along with this library; see the file COPYING.LIB.  If not, write to
++   the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++   Boston, MA 02110-1301, USA.
++*/
++
++#include <QtCore/QString>
++#include <QtCore/QLatin1String>
++#include <QtCore/QStringList>
++#include <QtCore/QTextStream>
++#include <QtCore/QRegExp>
++#include <QtCore/QHash>
++
++#include <kicontheme.h>
++#include <kiconloader.h>
++#include <kaboutdata.h>
++#include <kcmdlineargs.h>
++#include <kapplication.h>
++#include <kdebug.h>
++
++struct IconCheck {
++    QString name;
++    QString kde4IconName;
++    KIconLoader::Context context;
++
++    IconCheck(const QString &name, const QString &kde4IconName,
++            KIconLoader::Context context)
++        : name(name), kde4IconName(kde4IconName), context(context)
++    {
++    }
++};
++
++bool isIconThemeKde4Compat(const QString &themeName=QString())
++{
++    KIconTheme *theme = new KIconTheme(
++            themeName.isEmpty() ? KIconTheme::current() : themeName);
++    if (!theme->isValid()) {
++        // When the theme is invalid (i.e. icon directory does not exist),
++        // KIconLoader will load default one. As this might be temporary,
++        // do not anything
++        delete theme;
++        return true;
++    }
++
++    /* Check if the theme is not for KDE 3. Do this by checking
++       if some standard KDE4 icons which have different names
++       from KDE 3, actually exist.
++
++        |----------|------------|------------------|
++        | Action   | KDE 3 name | KDE 4 name       |
++        |----------|------------|------------------|
++        | Open     | fileopen   | document-open    |
++        | Save     | filesave   | document-save    |
++        | Save As  | filesaveas | document-save-as |
++        |----------|------------|------------------|
++
++    */
++
++    QList<struct IconCheck> iconChecks;
++    iconChecks <<
++        IconCheck(QLatin1String("Open"),  QLatin1String("document-open"), KIconLoader::Action) <<
++        IconCheck(QLatin1String("Save"),  QLatin1String("document-save"), KIconLoader::Action) <<
++        IconCheck(QLatin1String("SaveAs"), QLatin1String("document-save-as"), KIconLoader::Action);
++
++    int success = 0;
++    QHash<KIconLoader::Context, QStringList> icons;
++    foreach(IconCheck iconCheck, iconChecks) {
++        if (!icons.contains(iconCheck.context)) {
++            icons[iconCheck.context] = theme->queryIcons(32, iconCheck.context);
++        }
++        const QStringList &iconList = icons.value(iconCheck.context);
++        if (!iconList.filter(iconCheck.kde4IconName).isEmpty())
++            success++;
++        else
++            kDebug() << "Standard KDE 4 icon" << iconCheck.kde4IconName << "for"
++                << iconCheck.name << "could not be found in the current icon theme"
++                << theme->name();
++    }
++
++    if (success < iconChecks.size())
++    {
++        kDebug() << theme->internalName() << "theme is not KDE 4 compatible.";
++    }
++
++    delete theme;
++    return (success == iconChecks.size());
++}
++
++int main(int argc, char *argv[])
++{
++    KAboutData aboutData(
++        "kconf_update_migrate_from_kde3_icon_theme", 0,
++        ki18n("kconf_update for icon theme: migrate from KDE 3"),
++        "1.0",
++        ki18n("kconf_update utility which resets global icon theme if "
++              "current one is not KDE 4 compatible"),
++        KAboutData::License_GPL,
++        ki18n("Copyright (C) 2011 Modestas Vainius"),
++        ki18n(QByteArray()),
++        "http://pkg-kde.alioth.debian.org/",
++        "debian-qt-kde@lists.debian.org");
++    KCmdLineArgs::init( argc, argv, &aboutData );
++    KApplication app(false);
++
++
++    QTextStream in(stdin, QIODevice::ReadOnly);
++    QTextStream out(stdout, QIODevice::WriteOnly);
++    QRegExp themeRe("^\\s*(Theme(\\[[^]]+\\])?)\\s*=(.*)");
++    QRegExp spacesRe("^\\s+$");
++
++    QString line, key, themeName;
++    QStringList keysToDelete;
++    bool deleteGroup = true;
++
++    while (!in.atEnd()) {
++        line = in.readLine();
++        if (line.isEmpty() || spacesRe.exactMatch(line))
++            continue;
++
++        if (themeRe.indexIn(line) > -1) {
++            key = themeRe.cap(1);
++            themeName = themeRe.cap(3).trimmed();
++            if (!isIconThemeKde4Compat(themeName)) {
++                keysToDelete.append(key);
++                continue;
++            }
++        }
++
++        // It means some valid keys exist, so don't delete the whole group
++        deleteGroup = false;
++    }
++
++    if (!keysToDelete.isEmpty()) {
++        if (deleteGroup) {
++            out << "# DELETEGROUP" << endl;
++        } else {
++            foreach (key, keysToDelete) {
++                out << "# DELETE " << key << endl;
++            }
++        }
++    }
++
++    return 0;
++}
+--- a/kdeui/CMakeLists.txt
++++ b/kdeui/CMakeLists.txt
+@@ -470,6 +470,16 @@ set_target_properties(kdeui PROPERTIES V
+                        )
+ 
+ install(TARGETS kdeui EXPORT kdelibsLibraryTargets ${INSTALL_TARGETS_DEFAULT_ARGS})
++
++# kconf_update to migrate from crystalsvg and the like KDE 4 incompatible icon
++# themes when upgrading to KDE SC 4
++kde4_add_executable(migrate_from_kde3_icon_theme icons/kconf_update_migrate_from_kde3_icon_theme.cpp)
++target_link_libraries(migrate_from_kde3_icon_theme ${QT_QTCORE_LIBRARY}
++                                                   ${KDE4_KDECORE_LIBRRY}
++                                                   ${KDE4_KDEUI_LIBRARY})
++install(TARGETS migrate_from_kde3_icon_theme DESTINATION ${LIB_INSTALL_DIR}/kconf_update_bin)
++install(FILES kdeui.upd DESTINATION ${KCONF_UPDATE_INSTALL_DIR})
++
+ ########### install files ###############
+ 
+ if (Q_WS_MAC)
+--- /dev/null
++++ b/kdeui/kdeui.upd
+@@ -0,0 +1,6 @@
++# Migrate from crystalsvg and similar KDE 4 incompatible icon themes
++Id=kde4/migrate_from_kde3_icon_theme
++File=kdeglobals
++Group=Icons
++Script=migrate_from_kde3_icon_theme
++

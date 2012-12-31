@@ -1,0 +1,94 @@
+From: Modestas Vainius <modax@debian.org>
+Subject: Use unsigned arithmetic when calculating tar header checksum
+Forwarded: yes
+Bug: https://bugs.kde.org/show_bug.cgi?id=266141
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=612675
+Last-Update: 2011-06-14
+Origin: vendor
+
+According to the ustar specification, implementations must use unsigned
+arithmetic when calculating checksum field of the tar header record. KTar prior
+to this patch used signed arithmetic for checksum calculation when writing an
+archive. The patch fixes this.
+
+However, there are more broken tar implementations out there (including former
+KTar itself) so the patch also makes KTar to verify checksums using both
+unsigned and signed arithmetic when reading archives. If either of checksums
+matches, archive is accepted.
+
+--- a/kdecore/io/ktar.cpp
++++ b/kdecore/io/ktar.cpp
+@@ -184,26 +184,41 @@ qint64 KTar::KTarPrivate::readRawHeader(
+     if (strncmp(buffer + 257, "ustar", 5)) {
+       // The magic isn't there (broken/old tars), but maybe a correct checksum?
+ 
+-      int check = 0;
+-      for( uint j = 0; j < 0x200; ++j )
+-        check += buffer[j];
++      // Checksum is supposed to be a sum of unsigned bytes but some
++      // implementations sum signed chars. Therefore, just check both.
++      int check_unsigned = 0, check_signed = 0;
++      for( uint j = 0; j < 0x200; ++j ) {
++        check_unsigned += (unsigned char) buffer[j];
++        check_signed += buffer[j];
++      }
+ 
+       // adjust checksum to count the checksum fields as blanks
+-      for( uint j = 0; j < 8 /*size of the checksum field including the \0 and the space*/; j++ )
+-        check -= buffer[148 + j];
+-      check += 8 * ' ';
+-
+-      QByteArray s = QByteArray::number( check, 8 ); // octal
+-
+-      // only compare those of the 6 checksum digits that mean something,
+-      // because the other digits are filled with all sorts of different chars by different tars ...
+-      // Some tars right-justify the checksum so it could start in one of three places - we have to check each.
+-      if( strncmp( buffer + 148 + 6 - s.length(), s.data(), s.length() )
+-        && strncmp( buffer + 148 + 7 - s.length(), s.data(), s.length() )
+-        && strncmp( buffer + 148 + 8 - s.length(), s.data(), s.length() ) ) {
++      for( uint j = 0; j < 8 /*size of the checksum field including the \0 and the space*/; j++ ) {
++        check_unsigned -= (unsigned char) buffer[148 + j];
++        check_signed -= buffer[148 + j];
++      }
++      check_unsigned += 8 * ' ';
++      check_signed += 8 * ' ';
++
++      QList<QByteArray> checks;
++      checks << QByteArray::number( check_unsigned, 8 ); // octal
++      if (check_unsigned != check_signed)
++        checks << QByteArray::number( check_signed, 8 ); // octal
++
++      bool checksum_ok = false;
++      foreach (QByteArray s, checks) {
++        // only compare those of the 6 checksum digits that mean something,
++        // because the other digits are filled with all sorts of different chars by different tars ...
++        // Some tars right-justify the checksum so it could start in one of three places - we have to check each.
++        if ((checksum_ok = !strncmp( buffer + 148 + 6 - s.length(), s.data(), s.length() )
++          || !strncmp( buffer + 148 + 7 - s.length(), s.data(), s.length() )
++          || !strncmp( buffer + 148 + 8 - s.length(), s.data(), s.length() )))
++            break;
++      }
++      if (!checksum_ok) {
+         kWarning(7041) << "KTar: invalid TAR file. Header is:" << QByteArray( buffer+257, 5 )
+                        << "instead of ustar. Reading from wrong pos in file?"
+-                       << "checksum=" << QByteArray( buffer + 148 + 6 - s.length(), s.length() );
++                       << "checksum=" << QByteArray( buffer + 148, 6 );
+         return -1;
+       }
+     }/*end if*/
+@@ -652,10 +667,12 @@ void KTar::KTarPrivate::fillBuffer( char
+   // group
+   strcpy( buffer + 0x129, gname );
+ 
+-  // Header check sum
+-  int check = 32;
++  // For checksumming purposes, all checksum[8] bytes must be 0x20. The 7th
++  // checksum byte (0x9a) byte is initialized to 0 above hence initialize
++  // 'check' value to 0x20 in order to compensate for that.
++  int check = 0x20;
+   for( uint j = 0; j < 0x200; ++j )
+-    check += buffer[j];
++    check += (unsigned char) buffer[j]; // checksum must use unsigned arithmetic
+   s = QByteArray::number( check, 8 ); // octal
+   s = s.rightJustified( 6, '0' );
+   memcpy( buffer + 0x94, s.constData(), 6 );

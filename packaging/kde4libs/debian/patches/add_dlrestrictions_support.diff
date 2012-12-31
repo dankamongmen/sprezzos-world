@@ -1,0 +1,118 @@
+From: Modestas Vainius <modax@debian.org>
+Subject: Add DLRestrictions support
+Forwarded: not-needed
+Origin: vendor
+Last-Update: 2011-05-25
+
+The patch adds DLRestrictions compatibility checks to the KPluginLoader::load()
+function. Moreover, a new helper CMake macro is introduced to ease addition of
+the special DLRestrictions symbol to the KDE 4 shared objects (shared library
+and module targets) defined in the project with kde4_add_library() macro.
+
+In order to define DLRestrictions expressions for the shared objects in your
+project, you may add something like this to the bottom of the main
+CMakeLists.txt:
+
+find_package(DLRestrictions REQUIRED)
+kde4deb_dlrestrictions_process_libraries()
+
+Please that either DEFAULT_DLRESTRICTIONS variable or DLRESTRICITIONS target
+property must have set beforehand. Otherwise, this snippet will have no effect
+on all (or some) the targets.
+
+--- a/cmake/modules/KDE4Macros.cmake
++++ b/cmake/modules/KDE4Macros.cmake
+@@ -1026,10 +1026,14 @@ macro (KDE4_ADD_LIBRARY _target_NAME _li
+    if (${_lib_TYPE} STREQUAL "SHARED")
+       set(_first_SRC)
+       set(_add_lib_param SHARED)
++      # Keep a list of SO targets in the global property
++      set_property(GLOBAL PROPERTY KDE4DEB_SO_TARGETS ${_target_NAME} APPEND)
+    endif (${_lib_TYPE} STREQUAL "SHARED")
+    if (${_lib_TYPE} STREQUAL "MODULE")
+       set(_first_SRC)
+       set(_add_lib_param MODULE)
++      # Keep a list of SO targets in the global property
++      set_property(GLOBAL PROPERTY KDE4DEB_SO_TARGETS ${_target_NAME} APPEND)
+    endif (${_lib_TYPE} STREQUAL "MODULE")
+ 
+    set(_SRCS ${_first_SRC} ${ARGN})
+@@ -1317,6 +1321,13 @@ function(KDE4_INSTALL_AUTH_ACTIONS HELPE
+ 
+ endfunction(KDE4_INSTALL_AUTH_ACTIONS)
+ 
++macro(KDE4DEB_DLRESTRICTIONS_PROCESS_LIBRARIES)
++    if (NOT DLRESTRICTIONS_FOUND)
++        MESSAGE(SEND_ERROR "Install and find_package() DLRestrictions before using it")
++    endif (NOT DLRESTRICTIONS_FOUND)
++    get_property(_all_kde4_so_targets GLOBAL PROPERTY KDE4DEB_SO_TARGETS)
++    dlrestrictions_process_targets(${_all_kde4_so_targets})
++endmacro(KDE4DEB_DLRESTRICTIONS_PROCESS_LIBRARIES)
+ 
+ macro(_KDE4_EXPORT_LIBRARY_DEPENDENCIES _append_or_write _filename)
+    message(FATAL_ERROR "_KDE4_EXPORT_LIBRARY_DEPENDENCIES() was an internal macro and has been removed again. Just remove the code which calls it, there is no substitute.")
+--- a/kdecore/CMakeLists.txt
++++ b/kdecore/CMakeLists.txt
+@@ -399,6 +399,14 @@ kde4_add_library(kdecore ${LIBRARY_TYPE}
+ 
+ target_link_libraries(kdecore ${QT_QTCORE_LIBRARY} ${QT_QTNETWORK_LIBRARY} ${QT_QTDBUS_LIBRARY} ${QT_QTXML_LIBRARY} ${ZLIB_LIBRARY} ${kdecore_OPTIONAL_LIBS})
+ 
++# Enable DLRestrictions library checking for Debian only
++if (CMAKE_BUILD_TYPE STREQUAL "Debian")
++    find_package(DLRestrictions REQUIRED)
++    macro_log_feature(DLRESTRICTIONS_FOUND "DLRestrictions" "Needed for kdecore plugin loader (Debian specific)" "http://packages.debian.org/search?keywords=libdlrestrictions-dev" TRUE "" "")
++    set_property(TARGET kdecore PROPERTY COMPILE_DEFINITIONS HAVE_DLRESTRICTIONS)
++    target_link_libraries(kdecore dlrestrictions)
++endif (CMAKE_BUILD_TYPE STREQUAL "Debian")
++
+ if(WINCE)
+   target_link_libraries(kdecore ${WCECOMPAT_LIBRARIES} Ceshell.lib)
+ endif(WINCE)
+--- a/kdecore/util/kpluginloader.cpp
++++ b/kdecore/util/kpluginloader.cpp
+@@ -31,6 +31,14 @@
+ #include <QtCore/QDir>
+ #include <QtCore/QFileInfo>
+ 
++#ifdef HAVE_DLRESTRICTIONS
++extern "C" {
++#include <dlrestrictions.h>
++}
++#include <errno.h>
++#include <QtCore/QFile>
++#endif
++
+ extern int kLibraryDebugArea();
+ 
+ class KPluginLoaderPrivate
+@@ -259,6 +267,30 @@ bool KPluginLoader::load()
+     else
+         d->pluginVersion = ~0U;
+ 
++#ifdef HAVE_DLRESTRICTIONS
++    QByteArray enLibFileName = QFile::encodeName(lib.fileName());
++    int dlr_plugstatus = dlr_check_file_compatibility(enLibFileName.data(), NULL);
++    if (dlr_plugstatus == -ENOENT) {
++        // Something was wrong with the given filename
++        kWarning(kLibraryDebugArea()) << "DLRestrictions was unable to load plugin" <<
++            d->name << "(filename: " << lib.fileName() << ") for compatibility checking. "
++            "Error was" << QString::fromLocal8Bit(dlr_error()) << ". Accepting anyway.";
++    } else if (dlr_plugstatus < 0) {
++        /* Do not fail if DLRestrictions specific error occurs */
++        char dlr_buf[4096];
++        dlr_buf[0] = 0;
++        dlr_snprintf_pretty_error(dlr_buf, sizeof(dlr_buf), d->name.toLocal8Bit().data());
++        kWarning(kLibraryDebugArea()) << dlr_buf << ". Accepting" << d->name << "plugin anyway.";
++    } else if (dlr_plugstatus == 0) {
++        /* Plugin or its shared library dependencies are not compatible */
++        d->errorString = i18n("The plugin '%1' or its library dependencies are not "
++                "compatible with currently loaded libraries: %2", d->name,
++                QString::fromLocal8Bit(dlr_error()));
++        unload();
++        return false;
++    } /* Else plugin passed DLRestrictions checks. Fine */
++#endif
++
+     return true;
+ }
+ 

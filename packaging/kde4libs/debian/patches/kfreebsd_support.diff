@@ -1,0 +1,124 @@
+Make kdelibs build in Debian's kFreeBSD.
+We can not push this patch to upstream since the:
+CMAKE_SYSTEM_NAME MATCHES kFreeBSD stuff, needs the Debian patched
+cmake. 
+---
+ ConfigureChecks.cmake           |    6 +++---
+ kio/kfile/kpropertiesdialog.cpp |   10 +++++++++-
+ kioslave/file/file.cpp          |    2 ++
+ kioslave/file/file_unix.cpp     |    4 ++++
+ kpty/kpty.cpp                   |   24 ++++++++++++------------
+ 5 files changed, 30 insertions(+), 16 deletions(-)
+
+--- a/ConfigureChecks.cmake
++++ b/ConfigureChecks.cmake
+@@ -148,11 +148,11 @@ if (UNIX)
+         set(UTIL_LIBRARY util)
+       endif (login_in_libutil)
+     endif (NOT login_in_libc)
+-    if (CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES GNU/FreeBSD OR CMAKE_SYSTEM_NAME STREQUAL GNU)
++    if (CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES GNU/FreeBSD OR CMAKE_SYSTEM_NAME STREQUAL GNU  OR CMAKE_SYSTEM_NAME MATCHES kFreeBSD)
+       set (HAVE_UTMPX)
+-    else (CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES GNU/FreeBSD OR CMAKE_SYSTEM_NAME STREQUAL GNU)
++    else (CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES GNU/FreeBSD OR CMAKE_SYSTEM_NAME STREQUAL GNU  OR CMAKE_SYSTEM_NAME MATCHES kFreeBSD)
+       check_function_exists(getutxent HAVE_UTMPX)
+-    endif (CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES GNU/FreeBSD OR CMAKE_SYSTEM_NAME STREQUAL GNU)
++    endif (CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES GNU/FreeBSD OR CMAKE_SYSTEM_NAME STREQUAL GNU  OR CMAKE_SYSTEM_NAME MATCHES kFreeBSD)
+     if (HAVE_UTMPX)
+       set(utmp utmpx)
+       if (login_in_libutil)
+--- a/kio/kfile/kpropertiesdialog.cpp
++++ b/kio/kfile/kpropertiesdialog.cpp
+@@ -1903,7 +1903,15 @@ static bool fileSystemSupportsACL( const
+     fileSystemSupportsACLs = ( statfs( path.data(), &buf ) == 0 ) && ( buf.f_flags & MNT_ACLS );
+ #else
+     fileSystemSupportsACLs =
+-            getxattr( path.data(), "system.posix_acl_access", NULL, 0 ) >= 0 || errno == ENODATA;
++      getxattr( path.data(), "system.posix_acl_access", NULL, 0 ) >= 0
++#ifdef ENODATA
++           || (errno == ENODATA)
++#endif
++#ifdef ENOATTR
++           || (errno == ENOATTR)
++#endif
++           ;
++
+ #endif
+     return fileSystemSupportsACLs;
+ }
+--- a/kioslave/file/file.cpp
++++ b/kioslave/file/file.cpp
+@@ -317,8 +317,10 @@ void FileProtocol::get( const KUrl& url
+     }
+ 
+ #if HAVE_FADVISE
++#ifdef POSIX_FADV_SEQUENTIAL
+     posix_fadvise( fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+ #endif
++#endif
+ 
+     // Determine the mimetype of the file to be retrieved, and emit it.
+     // This is mandatory in all slaves (for KRun/BrowserRun to work)
+--- a/kioslave/file/file_unix.cpp
++++ b/kioslave/file/file_unix.cpp
+@@ -156,8 +156,10 @@ void FileProtocol::copy( const KUrl &src
+     }
+ 
+ #if HAVE_FADVISE
++#ifdef POSIX_FADV_SEQUENTIAL
+     posix_fadvise(src_fd,0,0,POSIX_FADV_SEQUENTIAL);
+ #endif
++#endif
+     // WABA: Make sure that we keep writing permissions ourselves,
+     // otherwise we can be in for a surprise on NFS.
+     mode_t initialMode;
+@@ -179,8 +181,10 @@ void FileProtocol::copy( const KUrl &src
+     }
+ 
+ #if HAVE_FADVISE
++#ifdef POSIX_FADV_SEQUENTIAL
+     posix_fadvise(dest_fd,0,0,POSIX_FADV_SEQUENTIAL);
+ #endif
++#endif
+ 
+ #ifdef HAVE_POSIX_ACL
+     acl = acl_get_fd(src_fd);
+--- a/kpty/kpty.cpp
++++ b/kpty/kpty.cpp
+@@ -109,24 +109,24 @@ extern "C" {
+ # define _NEW_TTY_CTRL
+ #endif
+ 
+-#if defined (__FreeBSD__) || defined (__NetBSD__) || defined (__OpenBSD__) || defined (__bsdi__) || defined(__APPLE__) || defined (__DragonFly__)
++#if defined(HAVE_TCGETATTR)
++# define _tcgetattr(fd, ttmode) tcgetattr(fd, ttmode)
++#elif defined(TIOCGETA)
+ # define _tcgetattr(fd, ttmode) ioctl(fd, TIOCGETA, (char *)ttmode)
++#elif defined(TCGETS)
++# define _tcgetattr(fd, ttmode) ioctl(fd, TCGETS, (char *)ttmode)
+ #else
+-# if defined(_HPUX_SOURCE) || defined(__Lynx__) || defined (__CYGWIN__) || defined(__sun)
+-#  define _tcgetattr(fd, ttmode) tcgetattr(fd, ttmode)
+-# else
+-#  define _tcgetattr(fd, ttmode) ioctl(fd, TCGETS, (char *)ttmode)
+-# endif
++# error
+ #endif
+ 
+-#if defined (__FreeBSD__) || defined (__NetBSD__) || defined (__OpenBSD__) || defined (__bsdi__) || defined(__APPLE__) || defined (__DragonFly__)
++#if defined(HAVE_TCSETATTR) && defined(TCSANOW)
++# define _tcsetattr(fd, ttmode) tcsetattr(fd, TCSANOW, ttmode)
++#elif defined(TIOCSETA)
+ # define _tcsetattr(fd, ttmode) ioctl(fd, TIOCSETA, (char *)ttmode)
++#elif defined(TCSETS)
++# define _tcsetattr(fd, ttmode) ioctl(fd, TCSETS, (char *)ttmode)
+ #else
+-# if defined(_HPUX_SOURCE) || defined(__CYGWIN__) || defined(__sun)
+-#  define _tcsetattr(fd, ttmode) tcsetattr(fd, TCSANOW, ttmode)
+-# else
+-#  define _tcsetattr(fd, ttmode) ioctl(fd, TCSETS, (char *)ttmode)
+-# endif
++# error
+ #endif
+ 
+ #include <kdebug.h>
