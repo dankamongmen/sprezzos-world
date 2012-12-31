@@ -1,0 +1,153 @@
+From 15ecc3827a9f7c590b5efc4a7d26e14c6f3c9312 Mon Sep 17 00:00:00 2001
+From: Jonathan Nieder <jrnieder@gmail.com>
+Date: Sat, 16 Jul 2011 02:46:13 -0500
+Subject: [VAR] Disable LINENO support
+
+The LINENO variable was the last missing POSIX shell feature
+disqualifying dash from being used by autoconf to run configure
+scripts.  Sadly, some configure scripts for Linux-specific packages
+use bash-specific features or trigger dash bugs.  Lucas Nussbaum found
+124 such packages in May of last year; while many of those have been
+fixed, not all of them have.
+
+So until that number is closer to 5 or so, let's keep LINENO support
+out of Debian sid and make the release managers' lives a little easier.
+
+Signed-off-by: Jonathan Nieder <jrnieder@gmail.com>
+---
+ src/eval.c |   20 +++++---------------
+ src/var.c  |   10 +---------
+ src/var.h  |    7 +------
+ 3 files changed, 7 insertions(+), 30 deletions(-)
+
+diff --git a/src/eval.c b/src/eval.c
+index 95d30f45..72524635 100644
+--- a/src/eval.c
++++ b/src/eval.c
+@@ -213,9 +213,7 @@ evaltree(union node *n, int flags)
+ 		status = !exitstatus;
+ 		goto setstatus;
+ 	case NREDIR:
+-		errlinno = lineno = n->nredir.linno;
+-		if (funcline)
+-			lineno -= funcline - 1;
++		errlinno = n->nredir.linno;
+ 		expredir(n->nredir.redirect);
+ 		pushredir(n->nredir.redirect);
+ 		status = redirectsafe(n->nredir.redirect, REDIR_PUSH);
+@@ -374,9 +372,7 @@ evalfor(union node *n, int flags)
+ 	struct strlist *sp;
+ 	struct stackmark smark;
+ 
+-	errlinno = lineno = n->nfor.linno;
+-	if (funcline)
+-		lineno -= funcline - 1;
++	errlinno = n->nfor.linno;
+ 
+ 	setstackmark(&smark);
+ 	arglist.lastp = &arglist.list;
+@@ -419,9 +415,7 @@ evalcase(union node *n, int flags)
+ 	struct arglist arglist;
+ 	struct stackmark smark;
+ 
+-	errlinno = lineno = n->ncase.linno;
+-	if (funcline)
+-		lineno -= funcline - 1;
++	errlinno = n->ncase.linno;
+ 
+ 	setstackmark(&smark);
+ 	arglist.lastp = &arglist.list;
+@@ -454,9 +448,7 @@ evalsubshell(union node *n, int flags)
+ 	int backgnd = (n->type == NBACKGND);
+ 	int status;
+ 
+-	errlinno = lineno = n->nredir.linno;
+-	if (funcline)
+-		lineno -= funcline - 1;
++	errlinno = n->nredir.linno;
+ 
+ 	expredir(n->nredir.redirect);
+ 	if (!backgnd && flags & EV_EXIT && !have_traps())
+@@ -689,9 +681,7 @@ evalcommand(union node *cmd, int flags)
+ 	int status;
+ 	char **nargv;
+ 
+-	errlinno = lineno = cmd->ncmd.linno;
+-	if (funcline)
+-		lineno -= funcline - 1;
++	errlinno = cmd->ncmd.linno;
+ 
+ 	/* First expand the arguments. */
+ 	TRACE(("evalcommand(0x%lx, %d) called\n", (long)cmd, flags));
+diff --git a/src/var.c b/src/var.c
+index ecc8c90e..689adc9e 100644
+--- a/src/var.c
++++ b/src/var.c
+@@ -81,9 +81,6 @@ const char defifsvar[] = "IFS= \t\n";
+ const char defifs[] = " \t\n";
+ #endif
+ 
+-int lineno;
+-char linenovar[sizeof("LINENO=")+sizeof(int)*CHAR_BIT/3+1] = "LINENO=";
+-
+ /* Some macros in var.h depend on the order, add new variables to the end. */
+ struct var varinit[] = {
+ #if ATTY
+@@ -101,7 +98,6 @@ struct var varinit[] = {
+ 	{ 0,	VSTRFIXED|VTEXTFIXED,		"PS2=> ",	0 },
+ 	{ 0,	VSTRFIXED|VTEXTFIXED,		"PS4=+ ",	0 },
+ 	{ 0,	VSTRFIXED|VTEXTFIXED,		"OPTIND=1",	getoptsreset },
+-	{ 0,	VSTRFIXED|VTEXTFIXED,		linenovar,	0 },
+ #ifndef SMALL
+ 	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"TERM\0",	0 },
+ 	{ 0,	VSTRFIXED|VTEXTFIXED|VUNSET,	"HISTSIZE\0",	sethistsize },
+@@ -334,12 +330,8 @@ lookupvar(const char *name)
+ {
+ 	struct var *v;
+ 
+-	if ((v = *findvar(hashvar(name), name)) && !(v->flags & VUNSET)) {
+-		if (v == &vlineno && v->text == linenovar) {
+-			fmtstr(linenovar+7, sizeof(linenovar)-7, "%d", lineno);
+-		}
++	if ((v = *findvar(hashvar(name), name)) && !(v->flags & VUNSET))
+ 		return strchrnul(v->text, '=') + 1;
+-	}
+ 	return NULL;
+ }
+ 
+diff --git a/src/var.h b/src/var.h
+index 54f7b2db..35dd0998 100644
+--- a/src/var.h
++++ b/src/var.h
+@@ -88,9 +88,8 @@ extern struct var varinit[];
+ #define vps2 (&vps1)[1]
+ #define vps4 (&vps2)[1]
+ #define voptind (&vps4)[1]
+-#define vlineno (&voptind)[1]
+ #ifndef SMALL
+-#define vterm (&vlineno)[1]
++#define vterm (&voptind)[1]
+ #define vhistsize (&vterm)[1]
+ #endif
+ 
+@@ -103,9 +102,6 @@ extern const char defifs[];
+ extern const char defpathvar[];
+ #define defpath (defpathvar + 5)
+ 
+-extern int lineno;
+-extern char linenovar[];
+-
+ /*
+  * The following macros access the values of the above variables.
+  * They have to skip over the name.  They return the null string
+@@ -121,7 +117,6 @@ extern char linenovar[];
+ #define ps2val()	(vps2.text + 4)
+ #define ps4val()	(vps4.text + 4)
+ #define optindval()	(voptind.text + 7)
+-#define linenoval()	(vlineno.text + 7)
+ #ifndef SMALL
+ #define histsizeval()	(vhistsize.text + 9)
+ #define termval()	(vterm.text + 5)
+-- 
+1.7.6
+

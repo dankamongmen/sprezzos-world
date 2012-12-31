@@ -1,0 +1,98 @@
+#!/usr/bin/make -f
+
+CC =gcc
+CFLAGS =-g -O2 -Wall
+STRIP =strip
+
+DEB_HOST_GNU_TYPE =$(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE =$(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+  CC =$(DEB_HOST_GNU_TYPE)-gcc
+endif
+
+ifneq (,$(findstring diet,$(DEB_BUILD_OPTIONS)))
+  CC =diet -v -Os gcc
+  CFLAGS =-nostdinc -Wall
+endif
+ifneq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+  STRIP =: strip
+endif
+
+DIR =$(shell pwd)/debian/dash
+DIRA =$(shell pwd)/debian/ash
+
+patch: deb-checkdir patch-stamp
+patch-stamp:
+	for i in `ls -1 debian/diff/*.diff || :`; do \
+	  patch -p1 <$$i || exit 1; \
+	done
+	touch patch-stamp
+
+configure: deb-checkdir configure-stamp
+configure-stamp: patch-stamp
+	mkdir -p build-tmp
+	touch configure
+	(cd build-tmp && CC='$(CC)' CFLAGS='$(CFLAGS)' \
+	  exec ../configure --host='$(DEB_HOST_GNU_TYPE)')
+	touch configure-stamp
+
+build: deb-checkdir build-stamp
+build-stamp: configure-stamp
+	-$(CC) -v
+	(cd build-tmp && exec $(MAKE) CFLAGS='$(CFLAGS)') || \
+	  (cat build-tmp/config.log; exit 1) || exit 1
+	touch build-stamp
+
+po-templates: po-templates-stamp
+po-templates-stamp: deb-checkdir
+	po2debconf debian/dash.templates.in >debian/dash.templates
+	touch po-templates-stamp
+
+clean: deb-checkdir deb-checkuid
+	rm -rf build-tmp
+	test ! -e patch-stamp || \
+	  for i in `ls -1r debian/diff/*.diff || :`; do patch -p1 -R <$$i; done
+	rm -f configure-stamp patch-stamp build-stamp po-templates-stamp
+	rm -rf '$(DIR)' '$(DIRA)'
+	rm -f debian/files debian/substvars debian/dash.templates changelog
+
+install: install-indep install-arch
+install-indep: deb-checkdir deb-checkuid
+	rm -rf '$(DIRA)'
+	install -d -m0755 '$(DIRA)'/bin
+	ln -s dash '$(DIRA)'/bin/ash
+	install -d -m0755 '$(DIRA)'/usr/share/man/man1/
+	ln -s dash.1.gz '$(DIRA)'/usr/share/man/man1/ash.1.gz
+	# changelog
+	test -r changelog || ln -s ChangeLog changelog
+install-arch: deb-checkdir deb-checkuid build-stamp
+	# dash
+	rm -rf '$(DIR)'
+	install -d -m0755 '$(DIR)'/bin
+	install -m0755 build-tmp/src/dash '$(DIR)'/bin/dash
+	$(STRIP) -R .comment -R .note '$(DIR)'/bin/dash
+	ln -s dash '$(DIR)'/bin/sh
+	install -d -m0755 '$(DIR)'/usr/share/man/man1/
+	install -m0644 src/dash.1 '$(DIR)'/usr/share/man/man1/dash.1
+	gzip -9 '$(DIR)'/usr/share/man/man1/dash.1
+	ln -s dash.1.gz '$(DIR)'/usr/share/man/man1/sh.1.gz
+	install -d -m0755 '$(DIR)'/usr/share/menu
+	install -m0644 debian/dash.menu '$(DIR)'/usr/share/menu/dash
+	# changelog
+	test -r changelog || ln -s ChangeLog changelog
+
+binary: binary-indep binary-arch
+binary-indep: install-indep ash.deb
+	dpkg-gencontrol -isp -pash -P'$(DIRA)'
+	dpkg -b '$(DIRA)' ..
+binary-arch: install-arch po-templates dash.deb
+	# dash
+	rm -f debian/substvars
+	test '$(CC)' != 'gcc' || dpkg-shlibdeps '$(DIR)'/bin/dash
+	dpkg-gencontrol -isp -pdash -P'$(DIR)'
+	dpkg -b '$(DIR)' ..
+
+.PHONY: configure build po-templates clean patch install install-indep \
+	  install-arch binary binary-indep binary-arch
+
+include debian/implicit
