@@ -2951,6 +2951,14 @@ $(EXPECT): $(SPREZZ)/expect/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf expect$(expect_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ext3grep
+ext3grep:$(EXT3GREP)_$(ARCH).deb
+$(EXT3GREP): $(SPREZZ)/ext3grep/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ext3grep-$(ext3grep_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gdb
 gdb:$(GDB)_$(ARCH).deb
 $(GDB): $(SPREZZ)/gdb/debian/changelog
