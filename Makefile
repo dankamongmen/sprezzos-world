@@ -1495,6 +1495,14 @@ $(FILEROLLER): $(SPREZZ)/file-roller/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf file-roller-$(file-roller_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: findutils
+findutils:$(FINDUTILS)_$(ARCH).deb
+$(FINDUTILS): $(SPREZZ)/findutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf findutils-$(findutils_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: fonts-cantarell
 fonts-cantarell:$(FONTSCANTARELL)_$(ARCH).deb
 $(FONTSCANTARELL): $(SPREZZ)/fonts-cantarell/debian/changelog
