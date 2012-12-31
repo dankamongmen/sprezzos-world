@@ -4679,7 +4679,7 @@ $(PYTHONNUMPY): $(SPREZZ)/python-numpy/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf python-numpy_$(python-numpy_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xzvf $(PYTHONNUMPY).orig.tar.gz $(TARARGS) $@
 
 .PHONY: python-qt4
 python-qt4:$(PYTHONQT4)_$(ARCH).deb
