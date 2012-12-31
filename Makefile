@@ -81,10 +81,6 @@ MCELOGORIG:=mcelog_$(shell echo $(mcelog_UPVER) | cut -d- -f1).orig.tar.xz
 MPLAYER:=mplayer_$(shell echo $(mplayer_UPVER) | tr : .)
 NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_UPVER) | cut -d- -f1).orig.tar.xz
 FREI0RORIG:=frei0r_$(shell echo $(frei0r_UPVER) | cut -d- -f1).orig.tar.xz
-PANGOUP:=pango-$(shell echo $(pango_UPVER) | cut -d- -f1)
-PANGOORIG:=pango1.0_$(shell echo $(PANGOUP) | cut -d- -f2 | tr - _).orig.tar.xz
-POPPLERUP:=poppler-$(shell echo $(poppler_UPVER) | cut -d- -f1)
-POPPLERORIG:=poppler_$(shell echo $(POPPLERUP) | cut -d- -f2 | tr - _).orig.tar.gz
 PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_UPVER) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 SOCATUP:=socat-$(shell echo $(socat_UPVER) | cut -d- -f1 | tr \~ -)
@@ -898,6 +894,14 @@ $(CAIRO): $(SPREZZ)/cairo/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf cairo-$(cairo_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: cairomm
+cairomm:$(CAIROMM)_$(ARCH).deb
+$(CAIROMM): $(SPREZZ)/cairomm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cairomm-$(cairomm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cairo-dock
 cairo-dock:$(CAIRODOCK)_$(ARCH).deb
@@ -5757,19 +5761,21 @@ $(EVINCE): $(SPREZZ)/evince/debian/changelog $(EVINCEORIG)
 	tar xJvf $(EVINCEORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(PANGOUP).tar.xz
-$(PANGOUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/pango/1.32/$@
-
-$(PANGOORIG): $(PANGOUP).tar.xz
-	ln -sf $< $@
-
 .PHONY: pango
 pango:$(PANGO)_$(ARCH).deb
-$(PANGO): $(SPREZZ)/pango/debian/changelog $(PANGOORIG)
+$(PANGO): $(SPREZZ)/pango/debian/changelog
 	mkdir $@
-	tar xJvf $(PANGOORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pango-$(pango_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: pangomm
+pangomm:$(PANGOMM)_$(ARCH).deb
+$(PANGOMM): $(SPREZZ)/pangomm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf pangomm-$(pangomm_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: poppler
 poppler:$(POPPLER)_$(ARCH).deb
