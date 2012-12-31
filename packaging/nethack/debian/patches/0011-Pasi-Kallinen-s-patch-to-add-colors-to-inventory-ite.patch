@@ -1,0 +1,566 @@
+From e322d347a77bca305979201e4cfb552f0ea01a0e Mon Sep 17 00:00:00 2001
+From: Pasi Kallinen <pkalli@cs.joensuu.fi>
+Date: Thu, 24 Sep 2009 14:21:19 -0700
+Subject: Pasi Kallinen's patch to add colors to inventory items.
+
+---
+ README.menucolor |   96 ++++++++++++++++++++++++++++++++++++++
+ dat/opthelp      |   18 ++++++++
+ include/color.h  |   18 ++++++++
+ include/config.h |    9 ++++
+ include/extern.h |    3 ++
+ include/flag.h   |    3 ++
+ src/decl.c       |    4 ++
+ src/files.c      |    4 ++
+ src/options.c    |  136 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/save.c       |   26 +++++++++++
+ util/makedefs.c  |    7 +++
+ win/tty/wintty.c |   43 +++++++++++++++++
+ 12 files changed, 367 insertions(+)
+ create mode 100644 README.menucolor
+
+--- /dev/null
++++ b/README.menucolor
+@@ -0,0 +1,96 @@
++
++   This is version 1.3 of the menucolors patch.
++
++   This patch allows the user to define in what color menus are shown.
++   For example, putting
++
++   OPTIONS=menucolors
++   MENUCOLOR=" blessed "=green
++   MENUCOLOR=" holy "=green
++   MENUCOLOR=" cursed "=red
++   MENUCOLOR=" unholy "=red
++   MENUCOLOR=" cursed .* (being worn)"=orange&underline
++
++   in the configuration file makes all known blessed items
++   show up in green, all cursed items show up in red and
++   all cursed worn items show up in orange and underlined
++   when viewing inventory.
++
++   If you do not have GNU regex.h, comment
++   #define MENU_COLOR_REGEX out from include/config.h
++   and replace the MENUCOLOR lines in your config file with these:
++
++   MENUCOLOR="* blessed *"=green
++   MENUCOLOR="* holy *"=green
++   MENUCOLOR="* cursed *"=red
++   MENUCOLOR="* unholy *"=red
++   MENUCOLOR="* cursed * (being worn)"=orange&underline
++
++
++   Colors: black, red, green, brown, blue, magenta, cyan, gray, orange,
++           lightgreen, yellow, lightblue, lightmagenta, lightcyan, white.
++   Attributes: none, bold, dim, underline, blink, inverse.
++
++   Note that the terminal is free to interpret the attributes however
++   it wants.
++
++
++   TODO/BUGS:
++
++    o Only works with TTY
++    o You can't use '=' or '&' in the match-string.
++    o Maybe add color-field to tty_menu_item in include/wintty.h
++      (so there's no need to find the color for the line again)
++    o Guidebook is not up to date
++    o Better place to put the functions, colornames[] and attrnames[]?
++    o Some menus do not need coloring; maybe add new parameter
++      to process_menu_window()?
++
++
++   FIXES:
++
++   v1.3:
++    o Updated to use 3.4.3 codebase.
++    o Added a text to #version to show menucolors is compiled in.
++
++   v1.2:
++    o Updated to use 3.4.2 codebase.
++
++   v1.1:
++    o Updated to use 3.4.1 codebase.
++    o replaced USE_REGEX_MATCH with MENU_COLOR_REGEX
++
++   v1.04:
++    o Oops! 1.03 worked only on *nixes... (GNU regex.h)
++    o Compile-time option USE_REGEX_MATCH: if it's defined, use regex,
++      otherwise use globbing. ('?' and '*' wildcards)
++
++   v1.03:
++
++    o Now using Nethack 3.4.0 codebase
++    o Compile-time option MENU_COLOR
++    o Strings match using regular expressions instead of globbing
++    o You can use attribute with color (attr must come after '&')
++    o Use ``MENUCOLOR="foo"=color'' instead of ``OPTIONS=menucolor=...''
++      (Both work, but OPTIONS complains if you define menucolor
++      more than once)
++
++   v1.02:
++
++    o Should now work with OS/2, thanks to Jukka Lahtinen
++    o Strings match now using simple globbing. ('?' and '*' wildcards)
++
++   v1.01:
++
++    o Moved 'menucolors' boolean option, so now the options-menu
++      is in alphabetical order.
++    o Fixed 'menucolor' description in dat/opthelp.
++    o menu_colorings is now initialized to null in src/decl.c.
++
++   v1.0:
++
++    o Initial release
++
++--
++ Pasi Kallinen
++ pkalli@cs.joensuu.fi
+--- a/dat/opthelp
++++ b/dat/opthelp
+@@ -74,6 +74,9 @@
+ Boolean option if HPMON was set at compile time:
+ hpmon      color HP readout depending on how low it is            [FALSE]
+ 
++Boolean option if TEXTCOLOR and MENU_COLOR were set at compile time:
++menucolors use different colors for menus               [TRUE for micros]
++
+ Boolean option if TIMED_DELAY was set at compile time (tty interface only):
+ timed_delay    on unix and VMS, use a timer instead of sending
+                extra screen output when attempting to pause for
+@@ -172,6 +175,21 @@
+            still denote your gender using the "male" and "female"
+            options, the "gender" option will take precedence.  [RANDOM]
+ horsename  the name of your first horse  [NONE]
++menucolor  Set colors for menus. (menucolor:"regex_string"=color)
++           If boolean option ``menucolors'' is true, menus will be shown
++	   with different colors.
++	   For example, setting ``menucolor:" blessed "=green'' shows
++	   all lines in a menu with the text " blessed " in green.
++	   The string is matched using regular expressions.
++	   Valid values for the color are black, red, green, brown, blue,
++	   magenta, cyan, gray, orange, lightgreen, yellow, lightblue,
++	   lightmagenta, lightcyan and white.
++	   You can define menucolor as many times as you wish; those
++	   defined later will take precedence.
++	   Instead of using this with OPTIONS, consider using
++	   MENUCOLOR="regex_string"=color in the configuration file.
++	   Setting menucolor has effect only if TEXTCOLOR and MENU_COLOR
++	   were set at compile time.  [NONE]
+ menu_*     create single character accelerators for menu commands.  Below
+            is a list of all commands.  Each is followed by a list of window-
+            ports that implement them:  'x' is X11, 't' is tty, 'g' is Gem,
+--- a/include/color.h
++++ b/include/color.h
+@@ -5,6 +5,12 @@
+ #ifndef COLOR_H
+ #define COLOR_H
+ 
++#ifdef MENU_COLOR
++# ifdef MENU_COLOR_REGEX
++#  include <regex.h>
++# endif
++#endif
++
+ /*
+  * The color scheme used is tailored for an IBM PC.  It consists of the
+  * standard 8 colors, folowed by their bright counterparts.  There are
+@@ -49,4 +55,16 @@
+ #define DRAGON_SILVER	CLR_BRIGHT_CYAN
+ #define HI_ZAP		CLR_BRIGHT_BLUE
+ 
++#ifdef MENU_COLOR
++struct menucoloring {
++# ifdef MENU_COLOR_REGEX
++    struct re_pattern_buffer match;
++# else
++    char *match;
++# endif
++    int color, attr;
++    struct menucoloring *next;
++};
++#endif /* MENU_COLOR */
++
+ #endif /* COLOR_H */
+--- a/include/config.h
++++ b/include/config.h
+@@ -353,6 +353,17 @@
+  * bugs left here.
+  */
+ 
++#ifdef TTY_GRAPHICS
++# define MENU_COLOR
++#ifdef __linux__
++# define MENU_COLOR_REGEX
++/* if MENU_COLOR_REGEX is defined, use regular expressions (GNU regex.h)
++ * otherwise use pmatch() to match menu color lines.
++ * pmatch() provides basic globbing: '*' and '?' wildcards.
++ */
++#endif
++#endif
++
+ /*#define GOLDOBJ */	/* Gold is kept on obj chains - Helge Hafting */
+ #define AUTOPICKUP_EXCEPTIONS  /* exceptions to autopickup */
+ 
+--- a/include/extern.h
++++ b/include/extern.h
+@@ -1405,6 +1405,9 @@
+ E int FDECL(add_autopickup_exception, (const char *));
+ E void NDECL(free_autopickup_exceptions);
+ #endif /* AUTOPICKUP_EXCEPTIONS */
++#ifdef MENU_COLOR
++E boolean FDECL(add_menu_coloring, (char *));
++#endif /* MENU_COLOR */
+ 
+ /* ### pager.c ### */
+ 
+--- a/include/flag.h
++++ b/include/flag.h
+@@ -186,6 +186,9 @@
+ 	char prevmsg_window;	/* type of old message window to use */
+ 	boolean  extmenu;	/* extended commands use menu interface */
+ #endif
++#ifdef MENU_COLOR
++	boolean use_menu_color;	/* use color in menus; only if wc_color */
++#endif
+ #ifdef MFLOPPY
+ 	boolean  checkspace;	/* check disk space before writing files */
+ 				/* (in iflags to allow restore after moving
+--- a/src/decl.c
++++ b/src/decl.c
+@@ -235,6 +235,10 @@
+ 	"white",		/* CLR_WHITE */
+ };
+ 
++#ifdef MENU_COLOR
++struct menucoloring *menu_colorings = 0;
++#endif
++
+ struct c_common_strings c_common_strings = {
+ 	"Nothing happens.",		"That's enough tries!",
+ 	"That is a silly thing to %s.",	"shudder for a moment.",
+--- a/src/files.c
++++ b/src/files.c
+@@ -1794,6 +1794,10 @@
+ 	} else if (match_varname(buf, "BOULDER", 3)) {
+ 	    (void) get_uchars(fp, buf, bufp, &iflags.bouldersym, TRUE,
+ 			      1, "BOULDER");
++	} else if (match_varname(buf, "MENUCOLOR", 9)) {
++#ifdef MENU_COLOR
++	    (void) add_menu_coloring(bufp);
++#endif
+ 	} else if (match_varname(buf, "GRAPHICS", 4)) {
+ 	    len = get_uchars(fp, buf, bufp, translate, FALSE,
+ 			     MAXPCHARS, "GRAPHICS");
+--- a/src/options.c
++++ b/src/options.c
+@@ -128,6 +128,15 @@
+ #else
+ 	{"mail", (boolean *)0, TRUE, SET_IN_FILE},
+ #endif
++#ifdef MENU_COLOR
++# ifdef MICRO
++	{"menucolors", &iflags.use_menu_color, TRUE,  SET_IN_GAME},
++# else
++	{"menucolors", &iflags.use_menu_color, FALSE, SET_IN_GAME},
++# endif
++#else
++	{"menucolors", (boolean *)0, FALSE, SET_IN_GAME},
++#endif
+ #ifdef WIZARD
+ 	/* for menu debugging only*/
+ 	{"menu_tab_sep", &iflags.menu_tab_sep, FALSE, SET_IN_GAME},
+@@ -249,6 +258,7 @@
+ 	{ "horsename", "the name of your (first) horse (e.g., horsename:Silver)",
+ 						PL_PSIZ, DISP_IN_GAME },
+ 	{ "map_mode", "map display mode under Windows", 20, DISP_IN_GAME },	/*WC*/
++	{ "menucolor", "set menu colors", PL_PSIZ, SET_IN_FILE },
+ 	{ "menustyle", "user interface for object selection",
+ 						MENUTYPELEN, SET_IN_GAME },
+ 	{ "menu_deselect_all", "deselect all items in a menu", 4, SET_IN_FILE },
+@@ -967,6 +977,120 @@
+ 	}
+ }
+ 
++#ifdef MENU_COLOR
++extern struct menucoloring *menu_colorings;
++
++static const struct {
++   const char *name;
++   const int color;
++} colornames[] = {
++   {"black", CLR_BLACK},
++   {"red", CLR_RED},
++   {"green", CLR_GREEN},
++   {"brown", CLR_BROWN},
++   {"blue", CLR_BLUE},
++   {"magenta", CLR_MAGENTA},
++   {"cyan", CLR_CYAN},
++   {"gray", CLR_GRAY},
++   {"orange", CLR_ORANGE},
++   {"lightgreen", CLR_BRIGHT_GREEN},
++   {"yellow", CLR_YELLOW},
++   {"lightblue", CLR_BRIGHT_BLUE},
++   {"lightmagenta", CLR_BRIGHT_MAGENTA},
++   {"lightcyan", CLR_BRIGHT_CYAN},
++   {"white", CLR_WHITE}
++};
++
++static const struct {
++   const char *name;
++   const int attr;
++} attrnames[] = {
++     {"none", ATR_NONE},
++     {"bold", ATR_BOLD},
++     {"dim", ATR_DIM},
++     {"underline", ATR_ULINE},
++     {"blink", ATR_BLINK},
++     {"inverse", ATR_INVERSE}
++
++};
++
++/* parse '"regex_string"=color&attr' and add it to menucoloring */
++boolean
++add_menu_coloring(str)
++char *str;
++{
++    int i, c = NO_COLOR, a = ATR_NONE;
++    struct menucoloring *tmp;
++    char *tmps, *cs = strchr(str, '=');
++    const char *err = (char *)0;
++
++    if (!cs || !str) return FALSE;
++
++    tmps = cs;
++    tmps++;
++    while (*tmps && isspace(*tmps)) tmps++;
++
++    for (i = 0; i < SIZE(colornames); i++)
++	if (strstri(tmps, colornames[i].name) == tmps) {
++	    c = colornames[i].color;
++	    break;
++	}
++    if ((i == SIZE(colornames)) && (*tmps >= '0' && *tmps <='9'))
++	c = atoi(tmps);
++
++    if (c > 15) return FALSE;
++
++    tmps = strchr(str, '&');
++    if (tmps) {
++	tmps++;
++	while (*tmps && isspace(*tmps)) tmps++;
++	for (i = 0; i < SIZE(attrnames); i++)
++	    if (strstri(tmps, attrnames[i].name) == tmps) {
++		a = attrnames[i].attr;
++		break;
++	    }
++	if ((i == SIZE(attrnames)) && (*tmps >= '0' && *tmps <='9'))
++	    a = atoi(tmps);
++    }
++
++    *cs = '\0';
++    tmps = str;
++    if ((*tmps == '"') || (*tmps == '\'')) {
++	cs--;
++	while (isspace(*cs)) cs--;
++	if (*cs == *tmps) {
++	    *cs = '\0';
++	    tmps++;
++	}
++    }
++
++    tmp = (struct menucoloring *)alloc(sizeof(struct menucoloring));
++#ifdef MENU_COLOR_REGEX
++    tmp->match.translate = 0;
++    tmp->match.fastmap = 0;
++    tmp->match.buffer = 0;
++    tmp->match.allocated = 0;
++    tmp->match.regs_allocated = REGS_FIXED;
++    err = re_compile_pattern(tmps, strlen(tmps), &tmp->match);
++#else
++    tmp->match = (char *)alloc(strlen(tmps)+1);
++    (void) memcpy((genericptr_t)tmp->match, (genericptr_t)tmps, strlen(tmps)+1);
++#endif
++    if (err) {
++	raw_printf("\nMenucolor regex error: %s\n", err);
++	wait_synch();
++	free(tmp);
++	return FALSE;
++    } else {
++	tmp->next = menu_colorings;
++	tmp->color = c;
++	tmp->attr = a;
++	menu_colorings = tmp;
++	return TRUE;
++    }
++}
++#endif /* MENU_COLOR */
++
+ void
+ parseoptions(opts, tinitial, tfrom_file)
+ register char *opts;
+@@ -1136,6 +1260,18 @@
+ 		return;
+ 	}
+ 
++	/* menucolor:"regex_string"=color */
++	fullname = "menucolor";
++	if (match_optname(opts, fullname, 9, TRUE)) {
++#ifdef MENU_COLOR
++	    if (negated) bad_negation(fullname, FALSE);
++	    else if ((op = string_for_env_opt(fullname, opts, FALSE)) != 0)
++		if (!add_menu_coloring(op))
++		    badoption(opts);
++#endif
++	    return;
++	}
++
+ 	fullname = "msghistory";
+ 	if (match_optname(opts, fullname, 3, TRUE)) {
+ 		op = string_for_env_opt(fullname, opts, negated);
+--- a/src/save.c
++++ b/src/save.c
+@@ -48,6 +48,10 @@
+ #define HUP
+ #endif
+ 
++#ifdef MENU_COLOR
++extern struct menucoloring *menu_colorings;
++#endif
++
+ /* need to preserve these during save to avoid accessing freed memory */
+ static unsigned ustuck_id = 0, usteed_id = 0;
+ 
+@@ -953,12 +957,34 @@
+ 	return;
+ }
+ 
++#ifdef MENU_COLOR
++void
++free_menu_coloring()
++{
++    struct menucoloring *tmp = menu_colorings;
++
++    while (tmp) {
++	struct menucoloring *tmp2 = tmp->next;
++# ifdef MENU_COLOR_REGEX
++	(void) regfree(&tmp->match);
++# else
++	free(tmp->match);
++# endif
++	free(tmp);
++	tmp = tmp2;
++    }
++}
++#endif /* MENU_COLOR */
++
+ void
+ freedynamicdata()
+ {
+ 	unload_qtlist();
+ 	free_invbuf();	/* let_to_name (invent.c) */
+ 	free_youbuf();	/* You_buf,&c (pline.c) */
++#ifdef MENU_COLOR
++	free_menu_coloring();
++#endif
+ 	tmp_at(DISP_FREEMEM, 0);	/* temporary display effects */
+ #ifdef FREE_ALL_MEMORY
+ # define freeobjchn(X)	(saveobjchn(0, X, FREE_SAVE),  X = 0)
+--- a/util/makedefs.c
++++ b/util/makedefs.c
+@@ -679,6 +679,13 @@
+ #ifdef MAIL
+ 		"mail daemon",
+ #endif
++#ifdef MENU_COLOR
++# ifdef MENU_COLOR_REGEX
++		"menu colors via regular expressions",
++# else
++		"menu colors via pmatch",
++# endif
++#endif
+ #ifdef GNUDOS
+ 		"MSDOS protected mode",
+ #endif
+--- a/win/tty/wintty.c
++++ b/win/tty/wintty.c
+@@ -125,6 +125,10 @@
+ static char winpanicstr[] = "Bad window id %d";
+ char defmorestr[] = "--More--";
+ 
++#ifdef MENU_COLOR
++extern struct menucoloring *menu_colorings;
++#endif
++
+ #ifdef CLIPPING
+ # if defined(USE_TILES) && defined(MSDOS)
+ boolean clipping = FALSE;	/* clipping on? */
+@@ -1128,6 +1132,28 @@
+     }
+ }
+ 
++#ifdef MENU_COLOR
++STATIC_OVL boolean
++get_menu_coloring(str, color, attr)
++char *str;
++int *color, *attr;
++{
++    struct menucoloring *tmpmc;
++    if (iflags.use_menu_color)
++	for (tmpmc = menu_colorings; tmpmc; tmpmc = tmpmc->next)
++# ifdef MENU_COLOR_REGEX
++	    if (re_search(&tmpmc->match, str, strlen(str), 0, 9999, 0) >= 0) {
++# else
++	    if (pmatch(tmpmc->match, str)) {
++# endif
++		*color = tmpmc->color;
++		*attr = tmpmc->attr;
++		return TRUE;
++	    }
++    return FALSE;
++}
++#endif /* MENU_COLOR */
++
+ STATIC_OVL void
+ process_menu_window(window, cw)
+ winid window;
+@@ -1204,6 +1230,10 @@
+ 		for (page_lines = 0, curr = page_start;
+ 			curr != page_end;
+ 			page_lines++, curr = curr->next) {
++#ifdef MENU_COLOR
++		    int color = NO_COLOR, attr = ATR_NONE;
++		    boolean menucolr = FALSE;
++#endif
+ 		    if (curr->selector)
+ 			*rp++ = curr->selector;
+ 
+@@ -1219,6 +1249,13 @@
+ 		     * actually output the character.  We're faster doing
+ 		     * this.
+ 		     */
++#ifdef MENU_COLOR
++		   if (iflags.use_menu_color &&
++		       (menucolr = get_menu_coloring(curr->str, &color,&attr))) {
++		       term_start_attr(attr);
++		       if (color != NO_COLOR) term_start_color(color);
++		   } else
++#endif
+ 		    term_start_attr(curr->attr);
+ 		    for (n = 0, cp = curr->str;
+ #ifndef WIN32CON
+@@ -1236,6 +1273,12 @@
+ 				(void) putchar('#'); /* count selected */
+ 			} else
+ 			    (void) putchar(*cp);
++#ifdef MENU_COLOR
++		   if (iflags.use_menu_color && menucolr) {
++		       if (color != NO_COLOR) term_end_color();
++		       term_end_attr(attr);
++		   } else
++#endif
+ 		    term_end_attr(curr->attr);
+ 		}
+ 	    } else {

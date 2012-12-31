@@ -1,0 +1,199 @@
+From 9a705b20cd95adfe8b570bb8a4f105a2201a9ebf Mon Sep 17 00:00:00 2001
+From: Ralph Churchill <mrchucho@yahoo.com>
+Date: Thu, 24 Sep 2009 14:21:19 -0700
+Subject: Enables color HP monitor for textmode NetHack.
+
+---
+ dat/opthelp       |    3 +++
+ doc/Guidebook.mn  |    4 ++++
+ doc/Guidebook.tex |    5 +++++
+ doc/Guidebook.txt |    5 +++++
+ include/config.h  |    3 +++
+ include/flag.h    |    5 +++++
+ src/botl.c        |   46 ++++++++++++++++++++++++++++++++++++++++++++++
+ src/options.c     |    3 +++
+ 8 files changed, 74 insertions(+)
+
+diff --git a/dat/opthelp b/dat/opthelp
+index 4dade58..2fa5f70 100644
+--- a/dat/opthelp
++++ b/dat/opthelp
+@@ -71,6 +71,9 @@ Boolean options if TEXTCOLOR was set at compile time:
+ color      use different colors for objects on screen   [TRUE for micros]
+ hilite_pet display pets in a highlighted manner                   [FALSE]
+ 
++Boolean option if HPMON was set at compile time:
++hpmon      color HP readout depending on how low it is            [FALSE]
++
+ Boolean option if TIMED_DELAY was set at compile time (tty interface only):
+ timed_delay    on unix and VMS, use a timer instead of sending
+                extra screen output when attempting to pause for
+diff --git a/doc/Guidebook.mn b/doc/Guidebook.mn
+index f67f02f..8ac033d 100644
+--- a/doc/Guidebook.mn
++++ b/doc/Guidebook.mn
+@@ -1863,6 +1863,10 @@ interesting and/or important information.
+ .lp horsename
+ Name your starting horse (ex. ``horsename:Trigger'').
+ Cannot be set with the `O' command.
++.lp hpmon
++Colors your HP reading green when you attain <= 2/3 of your total HP,
++yellow when you reach <= 1/3 of total, and red when you are at or below
++1/10 of your total HP.
+ .lp IBMgraphics
+ Use a predefined selection of IBM extended ASCII characters to display the
+ dungeon/effects/traps instead of having to define a full graphics set
+diff --git a/doc/Guidebook.tex b/doc/Guidebook.tex
+index f76398f..9dd0be5 100644
+--- a/doc/Guidebook.tex
++++ b/doc/Guidebook.tex
+@@ -2307,6 +2307,11 @@ might miss some interesting and/or important information.
+ Name your starting horse (ex.\ ``{\tt horsename:Trigger}'').
+ Cannot be set with the `{\tt O}' command.
+ %.lp
++\item[\ib{hpmon}]
++Colors your HP reading green when you attain <= 2/3 of your total HP,
++yellow when you reach <= 1/3 of total, and red when you are at or below
++1/10 of your total HP.
++%.lp
+ \item[\ib{IBMgraphics}]
+ Use a predefined selection of IBM extended ASCII characters to display the
+ dungeon/effects/traps instead of having to define a full graphics set
+diff --git a/doc/Guidebook.txt b/doc/Guidebook.txt
+index f0f9f7d..cfc0ed4 100644
+--- a/doc/Guidebook.txt
++++ b/doc/Guidebook.txt
+@@ -2398,6 +2398,11 @@
+             Name  your  starting horse (ex. ``horsename:Trigger'').  Cannot
+             be set with the `O' command.
+ 
++          hpmon
++               Colors your hitpoint reading green when you attain <= 2/3  of
++               your total HP, yellow when you reach <= 1/3 of total, and red
++               when you are at or below 1/10 of your total HP.
++               
+           IBMgraphics
+             Use a predefined selection of IBM extended ASCII characters  to
+             display the dungeon/effects/traps instead of having to define a
+diff --git a/include/config.h b/include/config.h
+index e2c1921..5a57195 100644
+--- a/include/config.h
++++ b/include/config.h
+@@ -340,6 +340,9 @@ typedef unsigned char	uchar;
+ 
+ #define EXP_ON_BOTL	/* Show experience on bottom line */
+ #define PARANOID
++
++#define HPMON           /* Color HP monitor */
++
+ /* #define SCORE_ON_BOTL */	/* added by Gary Erickson (erickson@ucivax) */
+ 
+ /*
+diff --git a/include/flag.h b/include/flag.h
+index de149ff..ee8031b 100644
+--- a/include/flag.h
++++ b/include/flag.h
+@@ -219,6 +219,11 @@ struct instance_flags {
+ 	boolean lan_mail;	/* mail is initialized */
+ 	boolean lan_mail_fetched; /* mail is awaiting display */
+ #endif
++
++#if defined(HPMON) && defined(TEXTCOLOR)
++        boolean use_hpmon;
++#endif
++
+ /*
+  * Window capability support.
+  */
+diff --git a/src/botl.c b/src/botl.c
+index 6534ad7..70a2d37 100644
+--- a/src/botl.c
++++ b/src/botl.c
+@@ -3,6 +3,7 @@
+ /* NetHack may be freely redistributed.  See license for details. */
+ 
+ #include "hack.h"
++#include "wintty.h"
+ 
+ #ifdef OVL0
+ extern const char *hu_stat[];	/* defined in eat.c */
+@@ -248,6 +249,9 @@ bot2()
+ 	char  newbot2[MAXCO];
+ 	register char *nb;
+ 	int hp, hpmax;
++#if defined(HPMON) && !defined(LISP_GRAPHICS)
++	int hpcolor, hpattr;
++#endif
+ 	int cap = near_capacity();
+ 
+ 	hp = Upolyd ? u.mh : u.uhp;
+@@ -256,6 +260,15 @@ bot2()
+ 	if(hp < 0) hp = 0;
+ 	(void) describe_level(newbot2);
+ 	Sprintf(nb = eos(newbot2),
++#ifdef HPMON
++		"%c:%-2ld HP:", oc_syms[COIN_CLASS],
++#ifndef GOLDOBJ
++		u.ugold
++#else
++		money_cnt(invent)
++#endif
++		);
++#else /* HPMON */
+ 		"%c:%-2ld HP:%d(%d) Pw:%d(%d) AC:%-2d", oc_syms[COIN_CLASS],
+ #ifndef GOLDOBJ
+ 		u.ugold,
+@@ -263,6 +276,39 @@ bot2()
+ 		money_cnt(invent),
+ #endif
+ 		hp, hpmax, u.uen, u.uenmax, u.uac);
++#endif /* HPMON */
++#ifdef HPMON
++	curs(WIN_STATUS, 1, 1);
++	putstr(WIN_STATUS, 0, newbot2);
++
++	Sprintf(nb = eos(newbot2), "%d(%d)", hp, hpmax);
++#if defined(TEXTCOLOR) && !defined(LISP_GRAPHICS)
++	if (iflags.use_color && iflags.use_hpmon) {
++	  curs(WIN_STATUS, 1, 1);
++	  hpattr = ATR_NONE;
++	  if(hp == hpmax){
++	    hpcolor = NO_COLOR;
++	  } else if(hp > (hpmax*2/3)) {
++	    hpcolor = CLR_GREEN;
++	  } else if(hp <= (hpmax/3)) {
++	    hpcolor = CLR_RED;
++	    if(hp<=(hpmax/10)) 
++	      hpattr = ATR_BLINK;
++	  } else {
++	    hpcolor = CLR_YELLOW;
++	  }
++	  if (hpcolor != NO_COLOR)
++	    term_start_color(hpcolor);
++	  if(hpattr!=ATR_NONE)term_start_attr(hpattr);
++	  putstr(WIN_STATUS, hpattr, newbot2);
++	  if(hpattr!=ATR_NONE)term_end_attr(hpattr);
++	  if (hpcolor != NO_COLOR)
++	    term_end_color();
++	}
++#endif /* TEXTCOLOR */
++	Sprintf(nb = eos(newbot2), " Pw:%d(%d) AC:%-2d",
++		u.uen, u.uenmax, u.uac);
++#endif /* HPMON */
+ 
+ 	if (Upolyd)
+ 		Sprintf(nb = eos(nb), " HD:%d", mons[u.umonnum].mlevel);
+diff --git a/src/options.c b/src/options.c
+index dfb8006..3aff6b3 100644
+--- a/src/options.c
++++ b/src/options.c
+@@ -86,6 +86,9 @@ static struct Bool_Opt
+ #else
+ 	{"extmenu", (boolean *)0, FALSE, SET_IN_FILE},
+ #endif
++#if defined(TEXTCOLOR) && defined(HPMON)
++        { "hpmon", &iflags.use_hpmon, FALSE, SET_IN_GAME},
++#endif
+ #ifdef OPT_DISPMAP
+ 	{"fast_map", &flags.fast_map, TRUE, SET_IN_GAME},
+ #else

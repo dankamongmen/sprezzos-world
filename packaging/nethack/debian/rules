@@ -1,0 +1,161 @@
+#!/usr/bin/make -f
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+        MAKEFLAGS += -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+endif
+DEB_CFLAGS := $(shell dpkg-buildflags --get CFLAGS) -Wall
+DEB_CPPFLAGS := $(shell dpkg-buildflags --get CPPFLAGS)
+DEB_LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS)
+
+# upstream Makefile only has CFLAGS (missing CPPFLAGS)
+# and does not give CFLAGS to linking calls, so add them.
+# also needs some stuff so the Makefile can be overriden:
+CFLAGS = $(DEB_CPPFLAGS) $(DEB_CFLAGS) -I../include -g -Wall -DGCC_WARN
+LFLAGS = $(DEB_CFLAGS) $(DEB_LDFLAGS)
+
+build-arch: build-arch-stamp
+build-arch-stamp: Makefile
+	if dpkg-buildflags --status >/dev/null 2>&1 ; then dpkg-buildflags --status ; fi
+	+$(call build_target,console)
+	+$(call build_target,x11)
+	+$(call build_target,lisp)
+	touch src/nethack.dummy ; sleep 2
+	$(MAKE) -j1 LFLAGS='$(LFLAGS)' CFLAGS='$(CFLAGS) -DUSE_XPM' \
+	  GAME=src/nethack.dummy \
+	  VARDATND="x11tiles pet_mark.xbm rip.xpm mapbg.xpm" \
+	  Guidebook data oracles options quest.dat rumors dungeon spec_levs \
+	  check-dlb x11tiles pet_mark.xbm rip.xpm mapbg.xpm
+	$(MAKE) -C util LFLAGS='$(LFLAGS)' CFLAGS='$(CFLAGS)' recover
+	touch $@
+
+TARGETS = console lisp x11
+
+define build_target
+	$(MAKE) clean
+	touch include/config.h
+	sleep 2
+	$(MAKE) LFLAGS='$(LFLAGS)' CFLAGS='$(CFLAGS) $(EXTRACPP_$1)' \
+		WINSRC='$(SRC_$1)' WINOBJ='$(OBJ_$1)' WINLIB='$(LIB_$1)' \
+		$(EXTRA_$1) GAME='nethack.$1' \
+		-C src 'nethack.$1'
+endef
+SRC_console = $$(WINTTYSRC)
+OBJ_console = $$(WINTTYOBJ)
+LIB_console = -lncurses
+EXTRACPP_console =
+SRC_x11 = $$(WINTTYSRC) $$(WINX11SRC)
+OBJ_x11 = $$(WINTTYOBJ) $$(WINX11OBJ)
+LIB_x11 = -lncurses -lXaw -Wl,--as-needed -lXmu -lXext -Wl,--no-as-needed -lXt -lXpm -lX11 -Wl,--as-needed -lm -Wl,--no-as-needed
+EXTRACPP_x11 = -DX11_GRAPHICS
+SRC_lisp = $$(WINLISPSRC)
+OBJ_lisp = $$(WINLISPOBJ)
+LIB_lisp = $$(WINLISPLIB)
+EXTRACPP_lisp = -DLISP_GRAPHICS -DDEFAULT_WINDOW_SYS=\"lisp\"
+
+
+Makefile:
+# setup.sh makes the symlinks for the Makefiles. Giving it any
+# (in this case, 1) tells it to make symlinks.
+	sh sys/unix/setup.sh 1
+
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-arch-stamp
+	rm -f nh10.pcf*
+	rm -f $(patsubst %,src/nethack.%,$(TARGETS) dummy)
+	if [ -f Makefile ] ; then $(MAKE) spotless ; fi
+	find . -name Makefile -print0 | xargs -r -0 --no-run-if-empty rm
+
+	dh_clean
+
+build-indep:
+binary-indep:
+# Ye olde no-op.
+
+binary-arch: build-arch-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	dh_installinit --no-start -pnethack-common -- 'start 18 2 3 4 5 .'
+	dh_link
+
+	chgrp games debian/nethack-common/usr/lib/games/nethack
+	chgrp -R games debian/nethack-common/var/games/nethack
+	chmod -R 2775 debian/nethack-common/var/games/nethack
+
+	install -m 0755 -o root -g root debian/recover-helper \
+	  debian/nethack-common/usr/lib/games/nethack/recover-helper
+
+	install -m 0644 -o root -g root dat/nhdat \
+	  debian/nethack-common/usr/lib/games/nethack/nhdat
+	install -m 0644 -o root -g root dat/hh \
+	  debian/nethack-common/usr/lib/games/nethack/hh
+
+	install -m 0644 -o root -g root debian/nethackrc.tty \
+	  debian/nethack-common/etc/nethack/nethackrc.tty
+
+	install -m 0644 -o root -g root debian/nethack.xpm \
+	  debian/nethack-common/usr/share/pixmaps
+
+	install -m 644 debian/x11/NetHack.ad \
+	  debian/nethack-x11/etc/X11/app-defaults/NetHack
+
+	/usr/bin/bdftopcf -o nh10.pcf win/X11/nh10.bdf
+	gzip -9f nh10.pcf
+	install -m 644 nh10.pcf.gz debian/nethack-x11/usr/share/fonts/X11/misc
+	# all graphics data needed by the graphical front ends
+	for file in x11tiles pet_mark.xbm rip.xpm mapbg.xpm; do \
+	  install -m 0644 -o root -g root dat/$$file \
+	    debian/nethack-common/usr/share/pixmaps/nethack/; \
+	done
+
+	# install all utilities
+	for prg in dgn_comp lev_comp dlb; do \
+	  install -m 0755 -o root -g root util/$$prg \
+	    debian/nethack-common/usr/lib/games/nethack/$$prg; \
+	done
+
+   # may become setgid games
+	install -m 0755 -o root -g games util/recover \
+	  debian/nethack-common/usr/lib/games/nethack/recover; \
+
+	# all shell scripts, nethack binaries, and nethackrcs
+	for flavor in $(TARGETS); do \
+	  install -m 0755 -o root -g root debian/$$flavor/nethack.sh \
+	    debian/nethack-$$flavor/usr/lib/games/nethack/nethack-$$flavor.sh; \
+	  if [ -f "debian/$$flavor/nethack-tty.sh" ]; then \
+	    install -m 0755 -o root -g root debian/$$flavor/nethack-tty.sh \
+	      debian/nethack-$$flavor/usr/lib/games/nethack/nethack-$$flavor-tty.sh; \
+	  fi; \
+	  install -m 0644 -o root -g root debian/$$flavor/nethackrc \
+	    debian/nethack-$$flavor/etc/nethack/nethackrc.$$flavor; \
+	  install -m 2755 -o root -g games src/nethack.$$flavor \
+	    debian/nethack-$$flavor/usr/lib/games/nethack/nethack-$$flavor; \
+	done
+
+	dh_installdocs -a -A README.menucolor
+	dh_installdocs -pnethack-common debian/README.patches
+	dh_install
+	dh_installmenu -a
+	dh_installdebconf -pnethack-common
+	dh_installexamples -pnethack-x11 debian/x11/NetHack.ad
+	dh_installman -a
+	dh_installchangelogs -a
+	dh_installxfonts -a
+	dh_lintian -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a -Xnethack
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+build: build-arch build-indep
+
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary

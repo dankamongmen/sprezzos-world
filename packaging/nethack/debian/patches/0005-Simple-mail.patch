@@ -1,0 +1,232 @@
+From c3567da0cb29043180b24543f883454312c8f17f Mon Sep 17 00:00:00 2001
+From: Joshua Kwan <joshk@triplehelix.org>
+Date: Thu, 24 Sep 2009 14:21:19 -0700
+Subject: Simple mail
+
+---
+ include/decl.h      |    4 +++
+ include/flag.h      |    3 ++
+ include/unixconf.h  |    1 -
+ src/mail.c          |   96 ++++++++++++++++++++++++++++++++++++++++++++-------
+ sys/unix/unixmain.c |   10 +++++-
+ 5 files changed, 99 insertions(+), 15 deletions(-)
+
+diff --git a/include/decl.h b/include/decl.h
+index 76f9533..ab650d3 100644
+--- a/include/decl.h
++++ b/include/decl.h
+@@ -385,6 +385,10 @@ struct autopickup_exception {
+ };
+ #endif /* AUTOPICKUP_EXCEPTIONS */
+ 
++#ifdef SIMPLE_MAIL
++E int mailckfreq;
++#endif
++
+ #undef E
+ 
+ #endif /* DECL_H */
+diff --git a/include/flag.h b/include/flag.h
+index 1807a0b..de149ff 100644
+--- a/include/flag.h
++++ b/include/flag.h
+@@ -175,6 +175,9 @@ struct instance_flags {
+ 	uchar	bouldersym;	/* symbol for boulder display */
+ 	boolean travel1;	/* first travel step */
+ 	coord	travelcc;	/* coordinates for travel_cache */
++#ifdef SIMPLE_MAIL
++	boolean simplemail;	/* simple mail format $NAME:$MESSAGE */
++#endif
+ #ifdef WIZARD
+ 	boolean  sanity_check;	/* run sanity checks */
+ 	boolean  mon_polycontrol;	/* debug: control monster polymorphs */
+diff --git a/include/unixconf.h b/include/unixconf.h
+index fe1b006..414938a 100644
+--- a/include/unixconf.h
++++ b/include/unixconf.h
+@@ -193,7 +193,6 @@
+ # endif
+ #endif
+ 
+-#define MAILCKFREQ	50
+ #endif	/* MAIL */
+ 
+ 
+diff --git a/src/mail.c b/src/mail.c
+index 99d7637..9b1e4f6 100644
+--- a/src/mail.c
++++ b/src/mail.c
+@@ -5,6 +5,8 @@
+ #include "hack.h"
+ 
+ #ifdef MAIL
++#include <fcntl.h>
++#include <errno.h>
+ #include "mail.h"
+ 
+ /*
+@@ -36,6 +38,8 @@ STATIC_DCL boolean FDECL(md_stop,(coord *, coord *));
+ STATIC_DCL boolean FDECL(md_rush,(struct monst *,int,int));
+ STATIC_DCL void FDECL(newmail, (struct mail_info *));
+ 
++int mailckfreq = 0;
++
+ extern char *viz_rmin, *viz_rmax;	/* line-of-sight limits (vision.c) */
+ 
+ #ifdef OVL0
+@@ -464,11 +468,15 @@ struct obj *otmp;
+ void
+ ckmailstatus()
+ {
++#ifdef SIMPLE_MAIL
++	if (mailckfreq == 0)
++	  mailckfreq = (iflags.simplemail ? 5 : 10);
++#else
++	mailckfreq = 10;
++#endif
++
+ 	if(!mailbox || u.uswallow || !flags.biff
+-#  ifdef MAILCKFREQ
+-		    || moves < laststattime + MAILCKFREQ
+-#  endif
+-							)
++		    || moves < laststattime + mailckfreq)
+ 		return;
+ 
+ 	laststattime = moves;
+@@ -501,9 +509,68 @@ void
+ readmail(otmp)
+ struct obj *otmp;
+ {
+-#  ifdef DEF_MAILREADER			/* This implies that UNIX is defined */
++#ifdef DEF_MAILREADER
+ 	register const char *mr = 0;
++#endif /* DEF_MAILREADER */
++#ifdef SIMPLE_MAIL
++	if (iflags.simplemail)
++	{
++		FILE* mb = fopen(mailbox, "r");
++		char curline[102], *msg;
++		boolean seen_one_already = FALSE;
++		struct flock fl = { 0 };
++
++		fl.l_type = F_RDLCK;
++		fl.l_whence = SEEK_SET;
++		fl.l_start = 0;
++		fl.l_len = 0;
++
++		if (!mb)
++			goto bail;
++
++		/* Allow this call to block. */
++		if (fcntl (fileno (mb), F_SETLKW, &fl) == -1)
++		  goto bail;
++		
++		errno = 0;
++		
++		while (fgets(curline, 102, mb) != NULL)
++		{
++		  fl.l_type = F_UNLCK;
++		  fcntl (fileno(mb), F_UNLCK, &fl);
++		  
++		  pline("There is a%s message on this scroll.",
++		      seen_one_already ? "nother" : "");
++		  
++		  msg = strchr(curline, ':');
++		  
++		  if (!msg)
++		    goto bail;
++		  
++		  *msg = '\0';
++		  msg++;
++		  
++		  pline ("This message is from '%s'.", curline);
++
++		  msg[strlen(msg) - 1] = '\0'; /* kill newline */
++		  pline ("It reads: \"%s\".", msg);
++
++		  seen_one_already = TRUE;
++		  errno = 0;
++
++		  fl.l_type = F_RDLCK;
++		  fcntl(fileno(mb), F_SETLKW, &fl);
++		}
+ 
++		fl.l_type = F_UNLCK;
++		fcntl(fileno(mb), F_UNLCK, &fl);
++		
++		fclose(mb);
++		unlink(mailbox);
++		return;
++	}
++# endif /* SIMPLE_MAIL */
++# ifdef DEF_MAILREADER			/* This implies that UNIX is defined */
+ 	display_nhwindow(WIN_MESSAGE, FALSE);
+ 	if(!(mr = nh_getenv("MAILREADER")))
+ 		mr = DEF_MAILREADER;
+@@ -512,15 +579,21 @@ struct obj *otmp;
+ 		(void) execl(mr, mr, (char *)0);
+ 		terminate(EXIT_FAILURE);
+ 	}
+-#  else
+-#   ifndef AMS				/* AMS mailboxes are directories */
++# else
++#  ifndef AMS				/* AMS mailboxes are directories */
+ 	display_file(mailbox, TRUE);
+-#   endif /* AMS */
+-#  endif /* DEF_MAILREADER */
++#  endif /* AMS */
++# endif /* DEF_MAILREADER */
+ 
+ 	/* get new stat; not entirely correct: there is a small time
+ 	   window where we do not see new mail */
+ 	getmailstatus();
++	return;
++
++#ifdef SIMPLE_MAIL
++bail:
++	pline("It appears to be all gibberish."); /* bail out _professionally_ */
++#endif
+ }
+ 
+ # endif /* UNIX */
+@@ -587,10 +660,7 @@ ckmailstatus()
+ 	static int laststattime = 0;
+ 	
+ 	if(u.uswallow || !flags.biff
+-#  ifdef MAILCKFREQ
+-		    || moves < laststattime + MAILCKFREQ
+-#  endif
+-							)
++		    || moves < laststattime + mailckfreq)
+ 		return;
+ 
+ 	laststattime = moves;
+diff --git a/sys/unix/unixmain.c b/sys/unix/unixmain.c
+index a13514f..f88c2e1 100644
+--- a/sys/unix/unixmain.c
++++ b/sys/unix/unixmain.c
+@@ -54,7 +54,9 @@ char *argv[];
+ 	register char *dir;
+ #endif
+ 	boolean exact_username;
+-
++#ifdef SIMPLE_MAIL
++	char* e_simple = NULL;
++#endif
+ #if defined(__APPLE__)
+ 	/* special hack to change working directory to a resource fork when
+ 	   running from finder --sam */
+@@ -84,6 +86,12 @@ char *argv[];
+ 	}
+ #endif
+ 
++#ifdef SIMPLE_MAIL
++	/* figure this out early */
++	e_simple = nh_getenv("SIMPLEMAIL");
++	iflags.simplemail = (e_simple ? 1 : 0);
++#endif
++
+ 	hname = argv[0];
+ 	hackpid = getpid();
+ 	(void) umask(0777 & ~FCMASK);
