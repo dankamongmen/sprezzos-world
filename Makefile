@@ -4713,6 +4713,14 @@ $(QRENCODE): $(SPREZZ)/qrencode/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf qrencode-$(qrencode_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: quilt
+quilt:$(QUILT)_$(ARCH).deb
+$(QUILT): $(SPREZZ)/quilt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf quilt-$(quilt_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ratpoison
 ratpoison:$(RATPOISON)_$(ARCH).deb
 $(RATPOISON): $(SPREZZ)/ratpoison/debian/changelog
