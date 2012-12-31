@@ -61,3 +61,12 @@ $(OXYGENICONS): $(SPREZZ)/oxygen-icons/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf oxygen-icons-$(oxygen-icons_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: soprano
+soprano:$(SOPRANO)_$(ARCH).deb
+$(SOPRANO): $(SPREZZ)/soprano/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf soprano-$(soprano_UPVER).tar.bz2 $(TARARGS) $@
+
