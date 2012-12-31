@@ -1034,6 +1034,14 @@ $(TALLOC): $(SPREZZ)/talloc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf talloc-$(talloc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: tar
+tar:$(TAR)_$(ARCH).deb
+$(TAR): $(SPREZZ)/tar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf tar-$(tar_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: cpufrequtils
 cpufrequtils:$(CPUFREQUTILS)_$(ARCH).deb
 $(CPUFREQUTILS): $(SPREZZ)/cpufrequtils/debian/changelog
@@ -1209,6 +1217,14 @@ $(DARKTABLE): $(SPREZZ)/darktable/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf darktable-$(darktable_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: dash
+dash:$(DASH)_$(ARCH).deb
+$(DASH): $(SPREZZ)/dash/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dash-$(dash_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: db5.1
 db5.1:$(DB5.1)_$(ARCH).deb
