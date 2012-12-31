@@ -39,8 +39,8 @@ $(KDEBASEAPPS): $(SPREZZ)/kde-baseapps/debian/changelog
 	tar xJvf kde-baseapps_$(kde-baseapps_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: kdepimlibs
-kdepimlibs:$(kdepimlibs)_$(ARCH).deb
-$(kdepimlibs): $(SPREZZ)/kdepimlibs/debian/changelog
+kdepimlibs:$(KDEPIMLIBS)_$(ARCH).deb
+$(KDEPIMLIBS): $(SPREZZ)/kdepimlibs/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
