@@ -1,0 +1,104 @@
+#!/usr/bin/make -f
+# rules to package gutenprint
+#
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE       ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE      ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+LIBDIR = usr/lib/$(DEB_HOST_MULTIARCH)
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+DH_OPTIONS = --with autotools_dev --builddirectory=debian/build
+
+DH_INSTALL_FILES = $(basename $(wildcard debian/*.install.in))
+
+# Use debhelper's dh
+%:
+	dh $@ $(DH_OPTIONS)
+
+%.install: %.install.in
+	sed -e 's;@LIBDIR@;$(LIBDIR);g' <$< >$@
+
+update-patch-series:
+	mkdir -p $(CURDIR)/debian/patches
+	rm -f $(CURDIR)/debian/patches/*.patch
+	git format-patch -o $(CURDIR)/debian/patches patches ^upstream | \
+	  xargs -n 1 -r basename > $(CURDIR)/debian/patches/series
+	for patch in $$(ls $(CURDIR)/debian/patches/*.patch); do \
+	  lines=$$(cat $$patch | wc -l); \
+	  head -n $$(($$lines - 3)) $$patch > $${patch}.chomped; \
+	  mv $${patch}.chomped $$patch; \
+	done
+
+override_dh_auto_configure: debian/build/config.status
+debian/build/config.status: configure debian/control
+# Note: manually specifying libdir to work around bug in configure script
+	dh_auto_configure -- \
+	  --libdir=/$(LIBDIR) \
+	  --disable-static --enable-shared --disable-rpath \
+	  --disable-static-genppd \
+	  --with-modules=dlopen \
+	  --enable-libgutenprintui2 --with-gimp2 \
+	  --with-cups --enable-cups-level3-ppds --enable-globalized-cups-ppds \
+	  --with-foomatic --with-foomatic3 \
+	  --disable-test \
+	  --enable-nls
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -f $(DH_INSTALL_FILES)
+	rm -rf debian/install debian/install-stamp
+
+override_dh_auto_build:
+	$(MAKE) -C debian/build
+
+override_dh_auto_test:
+# Testsuite takes too long to run per-build, so skip.
+
+override_dh_auto_install: debian/install-stamp
+debian/install-stamp:
+	$(MAKE) -C debian/build DESTDIR=$(CURDIR)/debian/install install
+	touch $@
+
+install-arch: build-arch $(DH_INSTALL_FILES)
+	dh $@ $(DH_OPTIONS)
+
+install-indep: build-indep $(DH_INSTALL_FILES)
+	dh $@ $(DH_OPTIONS)
+
+	rm -r debian/cups-driver-gutenprint/usr/share/doc/cups-driver-gutenprint/
+	ln -s printer-driver-gutenprint debian/cups-driver-gutenprint/usr/share/doc/cups-driver-gutenprint
+
+override_dh_install-arch:
+	dh_install
+# Remove rpath
+	find debian/printer-driver-gutenprint/usr/lib -type f -perm +0111 -print0 | xargs -0 chrpath --delete
+# Documentation fixup
+	cp src/cups/README debian/printer-driver-gutenprint/usr/share/doc/printer-driver-gutenprint/README.cups
+	mv debian/ijsgutenprint/usr/share/man/man1/ijsgutenprint.1 debian/ijsgutenprint/usr/share/man/man1/ijsgutenprint.5.2.1
+	ln -s ijsgutenprint.5.2.1.gz debian/ijsgutenprint/usr/share/man/man1/ijsgutenprint.1.gz
+	ln -s ijsgutenprint.5.2 debian/ijsgutenprint/usr/bin/ijsgutenprint
+
+override_dh_installchangelogs:
+	dh_installchangelogs NEWS
+
+override_dh_compress:
+	dh_compress -X.pdf -X.odt
+
+override_dh_makeshlibs:
+	dh_makeshlibs -s -V -X $(LIBDIR)/gutenprint
+
+override_dh_shlibdeps:
+	dh_shlibdeps -s -X $(LIBDIR)/gutenprint -l$(CURDIR)/debian/libgutenprint2/$(LIBDIR):$(CURDIR)/debian/libgutenprintui2-1/$(LIBDIR)
+
+.PHONY: install-arch install-indep update-patch-series override_dh_auto_configure override_dh_auto_clean override_dh_auto_build override_dh_auto_test override_dh_auto_install override_dh_installchangelogs override_dh_compress override_dh_makeshlibs override_dh_shlibdeps
