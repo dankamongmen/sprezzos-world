@@ -22,6 +22,14 @@ $(GNOMEMIMEDATA): $(SPREZZ)/gnome-mime-data/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-mime-data-$(gnome-mime-data_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgdata
+libgdata:$(LIBGDATA)_$(ARCH).deb
+$(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libgdata-$(libgdata_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: tango-icon-theme
 tango-icon-theme:$(TANGOICONTHEME)_$(ARCH).deb
 $(TANGOICONTHEME): $(SPREZZ)/tango-icon-theme/debian/changelog
