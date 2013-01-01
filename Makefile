@@ -4600,7 +4600,7 @@ $(POWERTOP): $(SPREZZ)/powertop/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf powertop-$(powertop_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf powertop-$(powertop_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: procmail
 procmail:$(PROCMAIL)_$(ARCH).deb
@@ -4873,6 +4873,14 @@ $(RYGEL): $(SPREZZ)/rygel/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf rygel-$(rygel_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: sshfp
+sshfp:$(SSHFP)_$(ARCH).deb
+$(SSHFP): $(SPREZZ)/sshfp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf $(sshfp_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: samba
 samba:$(SAMBA)_$(ARCH).deb
