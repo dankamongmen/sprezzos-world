@@ -30,6 +30,14 @@ $(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgdata-$(libgdata_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libgnome-media-profiles
+libgnome-media-profiles:$(LIBGNOMEMEDIAPROFILES)_$(ARCH).deb
+$(LIBGNOMEMEDIAPROFILES): $(SPREZZ)/libgnome-media-profiles/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libgnome-media-profiles-$(libgnome-media-profiles_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: tango-icon-theme
 tango-icon-theme:$(TANGOICONTHEME)_$(ARCH).deb
 $(TANGOICONTHEME): $(SPREZZ)/tango-icon-theme/debian/changelog
