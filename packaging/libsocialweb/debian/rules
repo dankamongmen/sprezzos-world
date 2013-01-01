@@ -1,0 +1,57 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/autoreconf.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/rules/buildvars.mk
+include /usr/share/cdbs/1/class/gnome.mk
+
+DEB_SOURCE := $(shell dpkg-parsechangelog | grep Source: | sed -e 's/Source: //')
+DEB_VERSION := $(shell dpkg-parsechangelog | grep Version: | sed -e 's/Version: //')
+DEB_UPSTREAM_VERSION := $(shell echo $(DEB_VERSION) | sed -e 's/-[^-]*$$//')
+GIT_URL = git://git.gnome.org/libsocialweb
+
+DEB_CONFIGURE_SCRIPT = $(CURDIR)/$(DEB_SRCDIR)/configure
+DEB_CONFIGURE_EXTRA_FLAGS = --enable-gtk-doc \
+  --enable-all-services \
+  --with-gnome \
+  --disable-static \
+  --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+  --enable-vala-bindings
+DEB_DH_AUTORECONF_ARGS = ./debian/rules upstream_autoreconf
+
+ifeq ($(DEB_BUILD_ARCH_OS),linux)
+  DEB_CONFIGURE_EXTRA_FLAGS += --with-online=fallback_connman_nm
+else
+  DEB_CONFIGURE_EXTRA_FLAGS += --with-online=always
+endif 
+
+
+clean::
+	rm -rf docs/libsocialweb/html docs/libsocialweb-client/html
+	rm -rf docs/libsocialweb-dbus/html
+
+upstream_autoreconf:
+	mkdir -p m4
+	gtkdocize || exit 1
+	intltoolize --copy --force --automake || exit 1
+	CLOCAL="${ACLOCAL-aclocal} $ACLOCAL_FLAGS" autoreconf -v -f -i
+
+get-orig-source::
+	set -e; if echo $(DEB_VERSION) | grep -c "git"; \
+	then \
+		git_version=`echo $(DEB_VERSION) | sed -e 's/^.*git\([0-9]*\)*\.\(.*\)-.*$$/\2/g'`; \
+	else \
+		git_version=$(DEB_UPSTREAM_VERSION); \
+	fi; \
+	tmpdir=`mktemp -d -t`; \
+	cd $$tmpdir; \
+	echo "checkout upstream repository ..."; \
+	git clone $(GIT_URL); echo "getting specific upstream revision/tag: $$git_version"; \
+	cd `ls | head -n 1`; git checkout -b orig $$git_version; cd ..; \
+	tar --exclude=.git -czvf $(CURDIR)/$(DEB_SOURCE)_$(DEB_UPSTREAM_VERSION).orig.tar.gz `ls | head -n 1`; \
+	cd $(CURDIR); \
+	rm -rf $$tmpdir
+
+common-binary-predeb-arch:: list-missing

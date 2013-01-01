@@ -1,0 +1,255 @@
+Description: Add --with-online=fallback_connman_nm to use ConnMan and then
+             fallback to NM
+Author: Ying-Chun Liu (PaulLiu) <paulliu@debian.org>
+Bug-Debian: http://bugs.debian.org/547163
+Last-Update: 2010-02-02
+Index: libsocialweb-0.25.20/configure.ac
+===================================================================
+--- libsocialweb-0.25.20.orig/configure.ac	2011-11-12 18:56:37.000000000 +0800
++++ libsocialweb-0.25.20/configure.ac	2011-11-21 15:22:22.000000000 +0800
+@@ -107,6 +107,13 @@
+         AC_DEFINE([WITH_ONLINE_TEST], 1, [Test UI online detection])
+         ],
+ 
++        ["fallback_connman_nm"],
++        [
++        AC_MSG_RESULT([Fallback with ConnMan and NM])
++        PKG_CHECK_MODULES(NM, libnm-glib >= 0.7)
++        AC_DEFINE([WITH_ONLINE_FALLBACK_CONNMAN_NM], 1, [Fallback with ConnMan and NM detection])
++        ],
++
+         [AC_MSG_ERROR([Unknown argument "$with_online" to --with-online])]
+ )
+ 
+Index: libsocialweb-0.25.20/libsocialweb/sw-online.c
+===================================================================
+--- libsocialweb-0.25.20.orig/libsocialweb/sw-online.c	2011-08-10 17:38:28.000000000 +0800
++++ libsocialweb-0.25.20/libsocialweb/sw-online.c	2011-11-21 15:22:22.000000000 +0800
+@@ -265,3 +265,227 @@
+ #if WITH_ONLINE_TEST
+ #include "sw-online-testui.c"
+ #endif
++
++#if WITH_ONLINE_FALLBACK_CONNMAN_NM
++#include <libnm-glib/nm-client.h>
++#include <string.h>
++#include <dbus/dbus-glib.h>
++
++/*
++ * Use NMClient since it correctly handles the NetworkManager service
++ * appearing and disappearing, as can happen at boot time, or during
++ * a network subsystem restart.
++ */
++static NMClient *nmclient = NULL;
++static gboolean NM_sw_is_online (void);
++
++static gboolean
++NM_we_are_online (gpointer user_data)
++{
++  emit_notify (NM_sw_is_online ());
++  return FALSE;
++}
++
++static void
++NM_state_changed (NMClient        *client,
++	       const GParamSpec *pspec,
++	       gpointer          data)
++{
++  if (NM_sw_is_online()) {
++    /* NM is notifying us too early - workaround that */
++    g_timeout_add (1500, (GSourceFunc)NM_we_are_online, NULL);
++  } else {
++    emit_notify (FALSE); /* sw_is_online ()); */
++  }
++}
++
++static gboolean
++NM_online_init (void)
++{
++  if (!nmclient) {
++    nmclient = nm_client_new();
++    g_signal_connect (nmclient, "notify::" NM_CLIENT_STATE,
++		      G_CALLBACK (NM_state_changed), NULL);
++  }
++  return TRUE;
++}
++
++static gboolean
++NM_sw_is_online (void)
++{
++  NMState state = NM_STATE_UNKNOWN;
++
++  if (!NM_online_init ())
++    return TRUE;
++
++  g_object_get (G_OBJECT (nmclient), NM_CLIENT_STATE, &state, NULL);
++
++  switch (state) {
++  case NM_STATE_CONNECTED:
++    return TRUE;
++  case NM_STATE_CONNECTING:
++  case NM_STATE_ASLEEP:
++  case NM_STATE_DISCONNECTED:
++  case NM_STATE_UNKNOWN:
++  default:
++    return FALSE;
++  }
++}
++
++static DBusGProxy *CMproxy = NULL;
++
++#define STRING_VARIANT_HASHTABLE (dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE))
++
++static void
++CM_props_changed (DBusGProxy *proxy, const char *key, GValue *v, gpointer user_data)
++{
++  const char *s;
++
++  if (strcmp (key, "State") != 0)
++    return;
++
++  s = g_value_get_string (v);
++
++  emit_notify (strcmp (s, "online") == 0);
++}
++
++static gboolean
++CM_online_init (void)
++{
++  DBusGConnection *conn;
++
++  if (CMproxy)
++    return TRUE;
++
++  conn = dbus_g_bus_get (DBUS_BUS_SYSTEM, NULL);
++  if (!conn) {
++    g_warning ("Cannot get connection to system message bus");
++    return FALSE;
++  }
++
++  CMproxy = dbus_g_proxy_new_for_name (conn, "org.moblin.connman",
++                                     "/", "org.moblin.connman.Manager");
++
++  dbus_g_object_register_marshaller (sw_marshal_VOID__STRING_BOXED,
++                                     G_TYPE_NONE,
++                                     G_TYPE_STRING,
++                                     G_TYPE_BOXED,
++                                     G_TYPE_INVALID);
++  dbus_g_proxy_add_signal (CMproxy, "PropertyChanged",
++                           G_TYPE_STRING, G_TYPE_VALUE, NULL);
++  dbus_g_proxy_connect_signal (CMproxy, "PropertyChanged",
++                               (GCallback)CM_props_changed, NULL, NULL);
++  return TRUE;
++}
++
++static gboolean
++CM_sw_is_online (void)
++{
++  GHashTable *hash;
++  GValue *v;
++  const char *s;
++  gboolean ret = TRUE;
++
++  if (!CM_online_init ())
++    return TRUE;
++
++  if (!dbus_g_proxy_call (CMproxy, "GetProperties", NULL,
++                          G_TYPE_INVALID,
++                          STRING_VARIANT_HASHTABLE, &hash, G_TYPE_INVALID)) {
++    /* On error report online */
++    return TRUE;
++  }
++
++  v = g_hash_table_lookup (hash, "State");
++  if (v) {
++    s = g_value_get_string (v);
++    ret = (strcmp (s, "online") == 0);
++  }
++
++  g_hash_table_unref (hash);
++
++  return ret;
++}
++
++static gboolean
++NM_test () {
++  gboolean ret=FALSE;
++  NMClient *nmclient = NULL;
++  nmclient = nm_client_new();
++  ret = nm_client_get_manager_running(nmclient);
++  g_object_unref (nmclient);
++  return ret;
++}
++
++static gboolean
++CM_test () {
++  DBusGProxy *connmanproxy = NULL;
++  DBusGConnection *conn=NULL;
++  gboolean ret=FALSE;
++  conn = dbus_g_bus_get (DBUS_BUS_SYSTEM, NULL);
++  if (conn) {
++    connmanproxy = dbus_g_proxy_new_for_name_owner (conn,
++						    "org.moblin.connman",
++						    "/",
++						    "org.moblin.connman.Manager",
++						    NULL);
++  }
++  ret = connmanproxy ? TRUE : FALSE;
++  if (connmanproxy) {
++    g_object_unref(connmanproxy);
++  }
++  if (conn) {
++    dbus_g_connection_unref(conn);
++  }
++  return ret;
++}
++
++enum manager_type_t {
++  MANAGER_UNTESTED,
++  MANAGER_CONNMAN,
++  MANAGER_NETWORKMANAGER,
++  MANAGER_ALWAYS
++};
++
++static enum manager_type_t manager_type = MANAGER_UNTESTED;
++
++static enum manager_type_t testManagerType() {
++  if (manager_type != MANAGER_UNTESTED) {
++    return manager_type;
++  }
++  if (CM_test()) {
++    manager_type = MANAGER_CONNMAN;
++  } else if (NM_test()) {
++    manager_type = MANAGER_NETWORKMANAGER;
++  } else {
++    manager_type = MANAGER_ALWAYS;
++  }
++  return manager_type;
++}
++
++static gboolean
++online_init (void)
++{
++  switch (testManagerType()) {
++  case MANAGER_CONNMAN:
++    return CM_online_init();
++  case MANAGER_NETWORKMANAGER:
++    return NM_online_init();
++  default:
++    return FALSE;
++  }
++}
++
++gboolean
++sw_is_online (void)
++{
++  switch (testManagerType()) {
++  case MANAGER_CONNMAN:
++    return CM_sw_is_online();
++  case MANAGER_NETWORKMANAGER:
++    return NM_sw_is_online();
++  default:
++    return TRUE;
++  }
++}
++#endif
