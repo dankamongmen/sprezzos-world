@@ -4370,6 +4370,14 @@ $(OPENCV): $(SPREZZ)/opencv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf OpenCV-$(opencv_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: openmpi
+openmpi:$(OPENMPI)_$(ARCH).deb
+$(OPENMPI): $(SPREZZ)/openmpi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openmpi-$(openmpi_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: enblend-enfuse
 enblend-enfuse:$(ENBLENDENFUSE)_$(ARCH).deb
 $(ENBLENDENFUSE): $(SPREZZ)/enblend-enfuse/debian/changelog
