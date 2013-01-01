@@ -4586,6 +4586,22 @@ $(POSTGRESQL): $(SPREZZ)/postgresql/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf postgresql-$(postgresql_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: powerman
+powerman:$(POWERMAN)_$(ARCH).deb
+$(POWERMAN): $(SPREZZ)/powerman/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf powerman-$(powerman_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: powertop
+powertop:$(POWERTOP)_$(ARCH).deb
+$(POWERTOP): $(SPREZZ)/powertop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf powertop-$(powertop_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: procmail
 procmail:$(PROCMAIL)_$(ARCH).deb
 $(PROCMAIL): $(SPREZZ)/procmail/debian/changelog
