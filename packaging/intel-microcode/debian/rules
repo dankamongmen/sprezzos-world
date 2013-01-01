@@ -1,0 +1,79 @@
+#!/usr/bin/make -f
+# debian/rules for intel-microcode
+# Copyright (C) 2011,2012 by Henrique de Moraes Holschuh
+# Published under the GNU GPL license version 2 or any later versions
+
+PACKAGE := intel-microcode
+DEBDIR  := $(CURDIR)/debian
+PKGDIR  := $(DEBDIR)/$(PACKAGE)
+
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+export PATH := $(PATH):/sbin:/usr/sbin
+IUCODE_TOOL := iucode_tool
+
+# DebHelper control
+export DH_ALWAYS_EXCLUDE=CVS:.svn:.git
+
+ifneq ($(DEB_HOST_ARCH),amd64)
+IUCODE_FILE := intel-microcode.bin
+else
+IUCODE_FILE := intel-microcode-64.bin
+endif
+
+# Work around Debian bug #688794
+INITRAMFS_NAME := $(subst -,_,$(subst +,_,$(subst .,_,$(PACKAGE))))
+
+build-indep:
+
+build-arch: build
+build:
+	dh_testdir
+	$(MAKE)
+
+clean:
+	dh_testdir
+	dh_testroot
+	$(MAKE) clean
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	# split microcode pack
+	$(IUCODE_TOOL) -q --write-firmware="$(PKGDIR)/lib/firmware/intel-ucode" $(IUCODE_FILE)
+
+	mkdir -p "$(PKGDIR)/usr/share/initramfs-tools/hooks"
+	install -m 755 "$(DEBDIR)/initramfs.hook" \
+		"$(PKGDIR)/usr/share/initramfs-tools/hooks/$(INITRAMFS_NAME)"
+	mkdir -p "$(PKGDIR)/usr/share/initramfs-tools/scripts/init-premount"
+	install -m 755 "$(DEBDIR)/initramfs.init-premount" \
+		"$(PKGDIR)/usr/share/initramfs-tools/scripts/init-premount/$(INITRAMFS_NAME)"
+	mkdir -p "$(PKGDIR)/etc/kernel/preinst.d"
+	install -m 755 "$(DEBDIR)/$(PACKAGE).kpreinst" \
+		"$(PKGDIR)/etc/kernel/preinst.d/$(PACKAGE)"
+
+	# We have a /etc/default file, but no initscript
+	install -m 644 "$(DEBDIR)/$(PACKAGE).default" "$(PKGDIR)/etc/default/$(PACKAGE)"
+
+binary: install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installchangelogs changelog
+	dh_lintian
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-indep:
+
+binary-arch: binary
+
+.PHONY: build clean binary install binary-arch binary-indep
