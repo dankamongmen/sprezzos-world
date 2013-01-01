@@ -2481,6 +2481,14 @@ $(GTKAM): $(SPREZZ)/gtkam/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gtkam-$(gtkam_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: guake
+guake:$(GUAKE)_$(ARCH).deb
+$(GUAKE): $(SPREZZ)/guake/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf guake-$(guake_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gucharmap
 gucharmap:$(GUCHARMAP)_$(ARCH).deb
 $(GUCHARMAP): $(SPREZZ)/gucharmap/debian/changelog
@@ -4690,6 +4698,14 @@ $(PYGOBJECT): $(SPREZZ)/pygobject/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf pygobject-$(pygobject_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: pygtk
+pygtk:$(PYGTK)_$(ARCH).deb
+$(PYGTK): $(SPREZZ)/pygtk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf pygtk-$(pygtk_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: python2.6
 python2.6:$(PYTHON2.6)_$(ARCH).deb
