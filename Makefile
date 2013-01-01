@@ -1512,6 +1512,14 @@ $(FILEROLLER): $(SPREZZ)/file-roller/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf file-roller-$(file-roller_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: fftw3
+fftw3:$(FFTW3)_$(ARCH).deb
+$(FFTW3): $(SPREZZ)/fftw3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fftw-$(fftw3_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: findutils
 findutils:$(FINDUTILS)_$(ARCH).deb
 $(FINDUTILS): $(SPREZZ)/findutils/debian/changelog
