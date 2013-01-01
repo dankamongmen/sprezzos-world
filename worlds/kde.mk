@@ -70,6 +70,14 @@ $(OXYGENICONS): $(SPREZZ)/oxygen-icons/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf oxygen-icons-$(oxygen-icons_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: qscintilla2
+qscintilla2:$(QSCINTILLA2)_$(ARCH).deb
+$(QSCINTILLA2): $(SPREZZ)/qscintilla2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf QScintilla-gpl-$(qscintilla2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: soprano
 soprano:$(SOPRANO)_$(ARCH).deb
 $(SOPRANO): $(SPREZZ)/soprano/debian/changelog
