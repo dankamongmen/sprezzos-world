@@ -30,6 +30,14 @@ $(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgdata-$(libgdata_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libsocialweb
+libsocialweb:$(LIBSOCIALWEB)_$(ARCH).deb
+$(LIBSOCIALWEB): $(SPREZZ)/libsocialweb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libsocialweb-$(libsocialweb_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libgnome-media-profiles
 libgnome-media-profiles:$(LIBGNOMEMEDIAPROFILES)_$(ARCH).deb
 $(LIBGNOMEMEDIAPROFILES): $(SPREZZ)/libgnome-media-profiles/debian/changelog
