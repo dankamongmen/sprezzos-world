@@ -5034,6 +5034,14 @@ $(SPEEX): $(SPREZZ)/speex/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf speex-$(speex_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pocketsphinx
+pocketsphinx:$(POCKETSPHINX)_$(ARCH).deb
+$(POCKETSPHINX): $(SPREZZ)/pocketsphinx/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pocketsphinx-$(pocketsphinx_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: sphinxbase
 sphinxbase:$(SPHINXBASE)_$(ARCH).deb
 $(SPHINXBASE): $(SPREZZ)/sphinxbase/debian/changelog
