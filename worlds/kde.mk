@@ -78,6 +78,14 @@ $(OXYGENICONS): $(SPREZZ)/oxygen-icons/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf oxygen-icons-$(oxygen-icons_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: qt4-x11
+qt4-x11:$(QT4X11)_$(ARCH).deb
+$(QT4X11): $(SPREZZ)/qt4-x11/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qt-everywhere-opensource-src-$(qt4-x11_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: qwt
 qwt:$(QWT)_$(ARCH).deb
 $(QWT): $(SPREZZ)/qwt/debian/changelog
