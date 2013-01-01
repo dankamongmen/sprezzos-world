@@ -5138,6 +5138,14 @@ $(TRACKER): $(SPREZZ)/tracker/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf tracker_$(tracker_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: trousers
+trousers:$(TROUSERS)_$(ARCH).deb
+$(TROUSERS): $(SPREZZ)/trousers/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf trousers-$(trousers_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: tulip
 tulip:$(TULIP)_$(ARCH).deb
 $(TULIP): $(SPREZZ)/tulip/debian/changelog
