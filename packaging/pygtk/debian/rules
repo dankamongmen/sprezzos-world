@@ -1,0 +1,201 @@
+#!/usr/bin/make -f
+
+include /usr/share/gnome-pkg-tools/1/rules/uploaders.mk
+-include /usr/share/gnome-pkg-tools/1/rules/gnome-get-source.mk
+
+include /usr/share/python/python.mk
+
+CFLAGS += -Wall -g -O$(if $(findstring noopt,$(DEB_BUILD_OPTIONS)),0,2)
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+configure_flags += --prefix=/usr --enable-thread --build=$(DEB_BUILD_GNU_TYPE)
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	configure_flags += --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+PYDEFAULTVER := $(shell pyversions --default --version)
+PYVERS := $(shell pyversions --requested --version debian/control)
+PYVERS := $(filter-out $(PYDEFAULTVER), $(PYVERS)) $(PYDEFAULTVER)
+
+.PRECIOUS: build-%/configure-stamp dbg-build-%/configure-stamp
+
+patch-stamp:
+	dh_testdir
+	# backup the original files to restore them in the clean target
+	[ ! -r config.sub ]   || \
+	    (cp config.sub   config.sub.orig   && \
+	     cp /usr/share/misc/config.sub   config.sub)
+	[ ! -r config.guess ] || \
+	    (cp config.guess config.guess.orig && \
+	     cp /usr/share/misc/config.guess config.guess)
+	touch $@
+
+patch: patch-stamp
+
+unpatch:
+	rm -f patch-stamp
+	# restore files from backup (before unpatching)
+	[ ! -r config.sub.orig ]   || \
+	    cp config.sub.orig   config.sub
+	[ ! -r config.guess.orig ]   || \
+	    cp config.guess.orig config.guess
+	rm -rf .pc
+
+build-%/configure-stamp: patch-stamp
+	dh_testdir
+	mkdir -p build-$*
+	cd build-$* && \
+		PYTHON=/usr/bin/python$* CFLAGS="$(CFLAGS)" \
+			$(CURDIR)/configure $(configure_flags)
+	touch $@
+
+build-%/build-stamp: build-%/configure-stamp
+	dh_testdir
+	PYTHON=/usr/bin/python$* $(MAKE) -C build-$* pyexecdir=$(call py_libdir_sh, $*)
+	touch $@
+
+dbg-build-%/configure-stamp: patch-stamp
+	dh_testdir
+	mkdir -p dbg-build-$*
+	cd dbg-build-$* && \
+		PYTHON=/usr/bin/python$*-dbg CFLAGS="$(CFLAGS) -O0" \
+			$(CURDIR)/configure $(configure_flags)
+	touch $@
+
+dbg-build-%/build-stamp: dbg-build-%/configure-stamp
+	dh_testdir
+	PYTHON=/usr/bin/python$*-dbg $(MAKE) -C dbg-build-$* pyexecdir=$(call py_libdir_sh, $*)
+	touch $@
+
+build: $(PYVERS:%=build-%/build-stamp) $(PYVERS:%=dbg-build-%/build-stamp)
+
+build-%/check-stamp: build-%/build-stamp
+	dh_testdir
+	G_HOME=/ PYTHON=/usr/bin/python$* xvfb-run -s "-screen 0 1280x1024x24 -noreset" $(MAKE) -C build-$* check
+	touch $@
+
+dbg-build-%/check-stamp: dbg-build-%/build-stamp
+	dh_testdir
+	G_HOME=/ PYTHON=/usr/bin/python$*-dbg xvfb-run -s "-screen 0 1280x1024x24 -noreset" $(MAKE) -C dbg-build-$* check
+	touch $@
+
+check: $(PYVERS:%=build-%/check-stamp) $(PYVERS:%=dbg-build-%/check-stamp)
+
+build-%/install-stamp: build-%/build-stamp
+	dh_testdir
+	dh_testroot
+	PYTHON=/usr/bin/python$* $(MAKE) -C build-$* install DESTDIR=$(CURDIR)/debian/tmp pyexecdir=$(call py_libdir_sh, $*)
+	# move installed files to a per python runtime location to allow
+	# comparison of the resulting files across runtimes or shipping
+	# multiple versions
+	# pkg-config file (this is shipped twice because of varying pyexecdir)
+	mkdir debian/tmp/usr/lib/pkgconfig/python$*
+	mv debian/tmp/usr/lib/pkgconfig/*.pc debian/tmp/usr/lib/pkgconfig/python$*
+	# defs files, should be the same whatever the build-time python runtime
+	mkdir debian/tmp/usr/share/pygtk/2.0/defs/python$*
+	mv debian/tmp/usr/share/pygtk/2.0/defs/*.defs debian/tmp/usr/share/pygtk/2.0/defs/python$*
+	# headers, should be the same whatever the build-time python runtime
+	mkdir debian/tmp/usr/include/python$*
+	mv debian/tmp/usr/include/pygtk-2.0 debian/tmp/usr/include/python$*
+
+dbg-build-%/install-stamp: dbg-build-%/build-stamp
+	dh_testdir
+	dh_testroot
+	PYTHON=/usr/bin/python$* $(MAKE) -C dbg-build-$* install DESTDIR=$(CURDIR)/debian/python-gtk2-dbg pyexecdir=$(call py_libdir_sh, $*)
+	find debian/python-gtk2-dbg ! -type d ! -name '*.so' | xargs rm -f
+	find debian/python-gtk2-dbg -depth -empty -exec rmdir {} \;
+	touch $@
+
+install-stamp:
+	dh_testdir
+	dh_testroot
+	# remove the install stamps to force a reinstall (since dh_clean is
+	# removing the package dirs)
+	rm -f $(PYVERS:%=build-%/install-stamp) $(PYVERS:%=dbg-build-%/install-stamp)
+	dh_prep
+	$(MAKE) -f debian/rules $(PYVERS:%=build-%/install-stamp) $(PYVERS:%=dbg-build-%/install-stamp)
+	# check that all builds with various Python runtimes produced the same
+	# *.defs files (or fail)
+	for v in $(PYVERS); do \
+	    echo "Comparing defs files for the default Python version ($(PYDEFAULTVER)) with defs files for Python $$v"; \
+	    diff --brief --recursive debian/tmp/usr/share/pygtk/2.0/defs/python$(PYDEFAULTVER) debian/tmp/usr/share/pygtk/2.0/defs/python$$v; \
+	    echo "Comparing headers for the default Python version ($(PYDEFAULTVER)) with headers for Python $$v"; \
+	    diff --brief --recursive debian/tmp/usr/include/python$(PYDEFAULTVER) debian/tmp/usr/include/python$$v; \
+	done
+	# since all Python runtimes produced the same files, only keep one set
+	echo "Cleaning up"
+	mv debian/tmp/usr/share/pygtk/2.0/defs/python$(PYDEFAULTVER)/*.defs debian/tmp/usr/share/pygtk/2.0/defs
+	mv debian/tmp/usr/include/python$(PYDEFAULTVER)/* debian/tmp/usr/include
+	for v in $(PYVERS); do \
+	    rm --force --recursive debian/tmp/usr/share/pygtk/2.0/defs/python$$v; \
+	    rm --force --recursive debian/tmp/usr/include/python$$v; \
+	done
+	# finally, install files from DESTDIR in the per-package dirs
+	dh_install
+	# install rtupdate script to handle Python default runtime change
+	install -d debian/python-gtk2-dev/usr/share/python/runtime.d
+	install debian/python-gtk2-dev.rtupdate debian/python-gtk2-dev/usr/share/python/runtime.d
+	for i in $$(find debian/python-*-dbg -name '*.so'); do \
+	  b=$$(basename $$i .so); \
+	  mv $$i $$(dirname $$i)/$${b}_d.so; \
+	done
+
+install: install-stamp
+
+clean::
+	dh_testdir
+	dh_testroot
+	rm -f install-stamp
+	rm -rf debian/tmp-*
+	rm -rf build-* dbg-build-*
+	rm -f tests/*.pyc
+	$(MAKE) -f debian/rules unpatch
+	dh_clean
+
+maybe_check = $(if $(findstring nocheck,$(DEB_BUILD_OPTIONS)),,check)
+
+binary-indep: build install $(maybe_check)
+	dh_testdir
+	dh_testroot
+	dh_installdocs -i
+	dh_installexamples -i
+	find debian/python-gtk2-doc/usr/share/doc -name '*.py[co]' -delete
+	dh_installchangelogs -i ChangeLog
+	dh_link -i
+	dh_compress -i -X.py -X.glade
+	dh_fixperms -i
+	# More permission fixing
+	grep -rlZ "^#\!.*python" debian/python-gtk2-dev/usr | xargs -0r chmod 755
+	dh_python2 -ppython-gtk2-doc /usr/share/pygtk
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install $(maybe_check)
+	dh_testdir
+	dh_testroot
+	dh_installdocs -s
+	dh_installexamples -s
+	dh_installchangelogs ChangeLog -s
+	dh_strip -s -Npython-gtk2-dbg --dbg-package=python-gtk2-dbg
+	rm -rf debian/python-gtk2-dbg/usr/share/doc/python-gtk2-dbg
+	ln -s python-gtk2 debian/python-gtk2-dbg/usr/share/doc/python-gtk2-dbg
+	dh_link -s
+	dh_compress -s -X.py -X.glade
+	dh_fixperms -s
+	dh_python2 -a
+	if ! dpkg-vendor --is ubuntu; then \
+		dh_numpy -s -ppython-gtk2; \
+	fi
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-arch binary-indep
+.PHONY: patch unpatch build check install clean binary-indep binary-arch binary
