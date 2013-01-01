@@ -1528,6 +1528,14 @@ $(FINDUTILS): $(SPREZZ)/findutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf findutils-$(findutils_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: fonts-awesome
+fonts-awesome:$(FONTSAWESOME)_$(ARCH).deb
+$(FONTSAWESOME): $(SPREZZ)/fonts-awesome/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf $(fonts-awesome_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: fonts-cantarell
 fonts-cantarell:$(FONTSCANTARELL)_$(ARCH).deb
 $(FONTSCANTARELL): $(SPREZZ)/fonts-cantarell/debian/changelog
