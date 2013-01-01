@@ -1,0 +1,110 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+CFLAGS = -Wall -g
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+	CXXFLAGS += -O0
+else
+	CFLAGS += -O2
+	CXXFLAGS += -O2
+endif
+
+PYTHONS := $(shell pyversions -vr debian/control) $(shell py3versions -vr)
+
+configure-stamp:
+	dh_testdir
+	cd Qt4Qt5 && qmake-qt4 QMAKE_STRIP=""
+	cd designer-Qt4 && qmake-qt4 INCLUDEPATH+=../Qt4Qt5 QMAKE_LIBDIR+=../Qt4Qt5 QMAKE_STRIP=""
+	touch $@
+
+configure: configure-stamp $(PYTHONS:%=Python/build-%/configure-stamp)
+
+Python/build-%/configure-stamp:
+	dh_testdir
+	mkdir -p Python/build-$*
+	cd Python/build-$* \
+		&& python$* ../configure.py -n ../../Qt4Qt5/ -o ../../Qt4Qt5 -c -p 4
+	touch $@
+
+build-library-stamp: configure
+	dh_testdir
+	cd Qt4Qt5 && $(MAKE)
+	cd designer-Qt4 && $(MAKE)
+	touch $@
+
+build: build-arch build-indep
+build-arch: build-library-stamp $(PYTHONS:%=Python/build-%/build-stamp)
+
+Python/build-%/build-stamp: Python/build-%/configure-stamp build-library-stamp
+	dh_testdir
+	$(MAKE) -C Python/build-$*
+	touch $@
+
+build-indep: build-stamp
+build-stamp:
+
+clean:
+	dh_testdir
+	dh_testroot
+	-cd Qt4Qt5 && $(MAKE) distclean
+	-cd designer-Qt4 && $(MAKE) distclean
+
+	rm -fr $(PYTHONS:%=Python/build-%)
+	rm -f *-stamp
+
+	dh_clean 
+
+install-python-%: 
+	$(MAKE) -C Python/build-$* install INSTALL_ROOT=$(CURDIR)/debian/tmp DESTDIR=$(CURDIR)/debian/tmp
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	cd Qt4Qt5 && $(MAKE) INSTALL_ROOT=$(CURDIR)/debian/tmp install
+	cd designer-Qt4 && $(MAKE) INSTALL_ROOT=$(CURDIR)/debian/tmp install
+	for p in $(PYTHONS) ; do \
+                $(MAKE) -f debian/rules install-python-$$p;\
+        done
+
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installman
+	dh_install --sourcedir=$(CURDIR)/debian/tmp
+	dh_installchangelogs NEWS
+	dh_installdocs -A
+	dh_installexamples
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_python2
+	dh_python3
+	rm -rf $(CURDIR)/debian/python-qscintilla2/usr/share/pyshared
+	dh_sip
+	dh_sip3
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: install
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: install
+	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure
+.NOTPARALLEL: 
