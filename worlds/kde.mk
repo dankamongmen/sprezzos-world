@@ -14,6 +14,14 @@ $(HUPNP): $(SPREZZ)/hupnp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf hupnp_$(hupnp_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: kaccessible
+kaccessible:$(KACCESSIBLE)_$(ARCH).deb
+$(KACCESSIBLE): $(SPREZZ)/kaccessible/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kaccessible-$(kaccessible_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: kactivities
 kactivities:$(KACTIVITIES)_$(ARCH).deb
 $(KACTIVITIES): $(SPREZZ)/kactivities/debian/changelog
