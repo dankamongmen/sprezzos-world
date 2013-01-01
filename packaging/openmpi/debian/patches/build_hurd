@@ -1,0 +1,252 @@
+Description: Fix build problems on hurd-i386
+ This patch allows Open MPI to build on Debian GNU/HURD.
+Author: Pino Toscano <pino@kde.org>
+Forwarded: yes
+Last-Update: 2010-07-20
+
+--- a/ompi/runtime/ompi_mpi_abort.c
++++ b/ompi/runtime/ompi_mpi_abort.c
+@@ -53,10 +53,11 @@
+                bool kill_remote_of_intercomm)
+ {
+     int count = 0, i;
+-    char *msg, *host, hostname[MAXHOSTNAMELEN];
++    char *msg, *host = NULL;
+     pid_t pid = 0;
+     orte_process_name_t *abort_procs;
+     orte_std_cntr_t nabort_procs;
++    bool free_host = false;
+ 
+     /* Protection for recursive invocation */
+     if (have_been_invoked) {
+@@ -70,8 +71,12 @@
+     if (orte_initialized) {
+         host = orte_process_info.nodename;
+     } else {
+-        gethostname(hostname, sizeof(hostname));
+-        host = hostname;
++        size_t host_length = 128;
++        do {
++            host_length *= 2;
++            host = realloc(host, host_length);
++        } while ((gethostname(host, host_length) == -1) && (errno == ENAMETOOLONG));
++        free_host = true;
+     }
+     pid = getpid();
+ 
+@@ -138,9 +143,17 @@
+         fprintf(stderr, "[%s:%d] Abort %s completed successfully; not able to guarantee that all other processes were killed!\n",
+                 host, (int) pid, ompi_mpi_finalized ? 
+                 "after MPI_FINALIZE" : "before MPI_INIT");
++        if (free_host) {
++            free(host);
++        }
+         exit(errcode);
+     }
+ 
++    if (free_host) {
++        free(host);
++        host = NULL;
++    }
++
+     /* abort local procs in the communicator.  If the communicator is
+        an intercommunicator AND the abort has explicitly requested
+        that we abort the remote procs, then do that as well. */
+--- a/ompi/runtime/ompi_mpi_finalize.c
++++ b/ompi/runtime/ompi_mpi_finalize.c
+@@ -100,13 +100,18 @@
+         /* Note that if we're already finalized, we cannot raise an
+            MPI exception.  The best that we can do is write something
+            to stderr. */
+-        char hostname[MAXHOSTNAMELEN];
++        char *hostname = NULL;
++        size_t hostname_length = 128;
+         pid_t pid = getpid();
+-        gethostname(hostname, sizeof(hostname));
++        do {
++            hostname_length *= 2;
++            hostname = realloc(hostname, hostname_length);
++        } while ((gethostname(hostname, hostname_length) == -1) && (errno == ENAMETOOLONG));
+ 
+         orte_show_help("help-mpi-runtime.txt",
+                        "mpi_finalize:invoked_multiple_times",
+                        true, hostname, pid);
++        free(hostname);
+         return MPI_ERR_OTHER;
+     }
+ 
+--- a/opal/mca/base/mca_base_component_find.c
++++ b/opal/mca/base/mca_base_component_find.c
+@@ -205,11 +205,16 @@
+         }
+ 
+         if (opal_list_get_end(found_components) == item) {
+-            char h[MAXHOSTNAMELEN];
+-            gethostname(h, sizeof(h));
++            char *h = NULL;
++            size_t h_length = 128;
++            do {
++                h_length *= 2;
++                h = realloc(h, h_length);
++            } while ((gethostname(h, h_length) == -1) && (errno == ENAMETOOLONG));
+             opal_show_help("help-mca-base.txt", 
+                            "find-available:not-valid", true,
+                            h, type, requested_component_names[i]);
++            free(h);
+             return OPAL_ERR_NOT_FOUND;
+         }
+     }
+--- a/opal/mca/base/mca_base_param.c
++++ b/opal/mca/base/mca_base_param.c
+@@ -186,8 +186,14 @@
+     home = (char*)opal_home_directory();
+     
+     if(NULL == cwd) {
++#if !defined(MAXPATHLEN) && defined(__GLIBC__)
++        cwd = get_current_dir_name();
++        if( NULL == cwd)
++#else
+         cwd = (char *) malloc(sizeof(char) * MAXPATHLEN);
+-        if( NULL == (cwd = getcwd(cwd, MAXPATHLEN) )) {
++        if( NULL == (cwd = getcwd(cwd, MAXPATHLEN) ))
++#endif
++        {
+             opal_output(0, "Error: Unable to get the current working directory\n");
+             cwd = strdup(".");
+         }
+--- a/opal/mca/paffinity/darwin/configure.m4
++++ b/opal/mca/paffinity/darwin/configure.m4
+@@ -23,9 +23,9 @@
+ # -----------------------------------------------------------
+ AC_DEFUN([MCA_paffinity_darwin_CONFIG],[
+     OMPI_VAR_SCOPE_PUSH([paff_darwin_happy])
+-    # check to see if we have <mach/mach_host.h>
++    # check to see if we have <mach-o/arch.h>
+     # as this is a Darwin-specific thing
+-    AC_CHECK_HEADER([mach/mach_host.h], [paff_darwin_happy=yes], [paff_darwin_happy=no])
++    AC_CHECK_HEADER([mach-o/arch.h], [paff_darwin_happy=yes], [paff_darwin_happy=no])
+ 
+     AS_IF([test "$paff_darwin_happy" = "yes"], [$1], [$2])
+     OMPI_VAR_SCOPE_POP
+--- a/opal/util/stacktrace.c
++++ b/opal/util/stacktrace.c
+@@ -363,6 +363,13 @@
+     fflush(stderr);
+ }
+ 
++#ifndef SA_SIGINFO
++static void show_stackframe_handler (int signo)
++{
++    show_stackframe(signo, NULL, NULL);
++}
++
++#endif /* SA_SIGINFO */
+ #endif /* OMPI_WANT_PRETTY_PRINT_STACKTRACE && ! defined(__WINDOWS__) */
+ 
+ 
+@@ -422,8 +429,12 @@
+     mca_base_param_lookup_string (param, &string_value);
+ 
+     memset(&act, 0, sizeof(act));
++#ifdef SA_SIGINFO
+     act.sa_sigaction = show_stackframe;
+     act.sa_flags = SA_SIGINFO;
++#else
++    act.sa_handler = show_stackframe_handler;
++#endif
+ #ifdef SA_ONESHOT
+     act.sa_flags |= SA_ONESHOT;
+ #else
+--- a/orte/mca/odls/base/odls_base_default_fns.c
++++ b/orte/mca/odls/base/odls_base_default_fns.c
+@@ -851,8 +851,13 @@
+     orte_odls_job_t *jobdat;
+     orte_pmap_t *pmap;
+     char *pathenv = NULL, *mpiexec_pathenv = NULL;
++#if !defined(MAXPATHLEN) && defined(__GLIBC__)
++    char *basedir=NULL;
++    char *dir=NULL;
++#else
+     char basedir[MAXPATHLEN];
+     char dir[MAXPATHLEN];
++#endif
+     char **argvptr;
+     char *full_search;
+     char **argvsav=NULL;
+@@ -865,7 +870,11 @@
+      * bouncing around as we execute various apps, but we will always return
+      * to this place as our default directory
+      */
++#if !defined(MAXPATHLEN) && defined(__GLIBC__)
++    basedir = get_current_dir_name();
++#else
+     getcwd(basedir, sizeof(basedir));
++#endif
+     
+     /* find the jobdat for this job */
+     jobdat = NULL;
+@@ -1016,7 +1025,11 @@
+          * again not match getcwd! This is beyond our control - we are only
+          * ensuring they start out matching.
+          */
++#if !defined(MAXPATHLEN) && defined(__GLIBC__)
++        dir = get_current_dir_name();
++#else
+         getcwd(dir, sizeof(dir));
++#endif
+         opal_setenv("PWD", dir, true, &app->env);
+         
+         /* Search for the OMPI_exec_path and PATH settings in the environment. */
+@@ -1365,6 +1378,10 @@
+ 
+     opal_condition_signal(&orte_odls_globals.cond);
+     OPAL_THREAD_UNLOCK(&orte_odls_globals.mutex);
++#if !defined(MAXPATHLEN) && defined(__GLIBC__)
++    free(basedir);
++    free(dir);
++#endif
+     return rc;
+ }
+ 
+--- a/orte/orted/orted_main.c
++++ b/orte/orted/orted_main.c
+@@ -199,7 +199,7 @@
+     int ret = 0;
+     int fd;
+     opal_cmd_line_t *cmd_line = NULL;
+-    char log_file[PATH_MAX];
++    char *log_file = NULL;
+     char *jobidstring;
+     char *rml_uri;
+     int i;
+@@ -445,6 +445,7 @@
+         }
+ 
+         /* define a log file name in the session directory */
++        log_file = malloc(strlen(jobidstring) + strlen(orte_process_info.nodename) + 19);
+         sprintf(log_file, "output-orted-%s-%s.log",
+                 jobidstring, orte_process_info.nodename);
+         log_path = opal_os_path(false,
+@@ -452,6 +453,7 @@
+                                 orte_process_info.top_session_dir,
+                                 log_file,
+                                 NULL);
++        free(log_file);
+ 
+         fd = open(log_path, O_RDWR|O_CREAT|O_TRUNC, 0640);
+         if (fd < 0) {
+--- a/orte/util/context_fns.c
++++ b/orte/util/context_fns.c
+@@ -56,10 +56,12 @@
+ {
+     bool good = true;
+     const char *tmp;
++#if 0 /* 'hostname' looks unused... */
+     char hostname[MAXHOSTNAMELEN];
+     
+     /* Use hostname in a few messages below */
+     gethostname(hostname, sizeof(hostname));
++#endif
+     
+     /* If we want to chdir and the chdir fails (for any reason -- such
+        as if the dir doesn't exist, it isn't a dir, we don't have

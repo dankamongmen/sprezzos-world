@@ -1,0 +1,274 @@
+Description: Fix build issues on MIPS
+ This patch should add build support for MIPS. Unfortunately,
+ there where build issues related to libtool. With libtool 2.2
+ being available, those issues should be gone. The patch needs
+ to be updated and tested, so it's currently not applied.
+Forwarded: https://svn.open-mpi.org/trac/ompi/ticket/2494
+Debian-Bug: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=489173
+Author: George Bosilca
+Last-Update: 2011-03-10
+
+--- a/opal/asm/asm-data.txt
++++ b/opal/asm/asm-data.txt
+@@ -127,3 +127,7 @@
+ 
+ MIPS	default-.text-.globl-:--L--1-1-1-1-0	mips-irix
+ MIPS	default-.text-.globl-:--L--1-1-1-1-0	mips64el
++MIPS	default-.text-.globl-:--L-@-1-1-1-1-1	mips64-linux
++
++# However, this doesn't hold true for 32-bit MIPS as used on Linux.
++MIPS	default-.text-.globl-:--L-@-1-1-1-0-1	mips-linux
+--- a/opal/asm/base/MIPS.asm
++++ b/opal/asm/base/MIPS.asm
+@@ -1,26 +1,48 @@
+ START_FILE
+ 
++#ifdef __linux__
+ #include <sys/asm.h>
++#else
++#include <asm.h>
++#endif
+ #include <regdef.h>
+ 	
+ 	TEXT
+ 
+ 	ALIGN(8)
+ LEAF(opal_atomic_mb)
+-	sync
++#ifdef __linux__
++	.set mips2
++#endif
++	sync
++#ifdef __linux__
++	.set mips0
++#endif	
+ 	j	ra
+ END(opal_atomic_mb)
+ 
+ 	
+ 	ALIGN(8)
+ LEAF(opal_atomic_rmb)
+-	sync
++#ifdef __linux__
++	.set mips2
++#endif
++	sync
++#ifdef __linux__
++	.set mips0
++#endif
+ 	j	ra
+ END(opal_atomic_rmb)
+ 	
+ 	
+ LEAF(opal_atomic_wmb)
+-	sync
++#ifdef __linux__
++	.set mips2
++#endif
++	sync
++#ifdef __linux__
++	.set mips0
++#endif
+ 	j	ra
+ END(opal_atomic_wmb)
+ 
+@@ -28,11 +50,23 @@
+ LEAF(opal_atomic_cmpset_32)
+ 	.set noreorder        
+ retry1:                
++#ifdef __linux__
++	.set mips2
++#endif
+ 	ll     $3, 0($4)         
++#ifdef __linux__
++	.set mips0
++#endif
+ 	bne    $3, $5, done1   
+ 	or     $2, $6, 0      
++#ifdef __linux__
++	.set mips2
++#endif
+ 	sc     $2, 0($4)         
+-	bne    $2, 1, retry1
++#ifdef __linux__
++	.set mips0
++#endif
++	beqz   $2, retry1
+ done1:                 
+ 	.set reorder          
+ 
+@@ -45,13 +79,31 @@
+ LEAF(opal_atomic_cmpset_acq_32)
+ 	.set noreorder        
+ retry2:                
++#ifdef __linux__
++	.set mips2
++#endif
+ 	ll     $3, 0($4)         
++#ifdef __linux__
++	.set mips0
++#endif
+ 	bne    $3, $5, done2   
+ 	or     $2, $6, 0      
++#ifdef __linux__
++	.set mips2
++#endif
+ 	sc     $2, 0($4)         
+-	bne    $2, 1, retry2   
++#ifdef __linux__
++	.set mips0
++#endif
++	beqz   $2, retry2   
+ done2:                 
+-	sync
++#ifdef __linux__
++	.set mips2
++#endif
++	sync
++#ifdef __linux__
++	.set mips0
++#endif
+ 	.set reorder          
+ 
+ 	xor	$3,$3,$5
+@@ -62,13 +114,31 @@
+ 	
+ LEAF(opal_atomic_cmpset_rel_32)
+ 	.set noreorder        
+-	sync
++#ifdef __linux__
++	.set mips2
++#endif
++	sync
++#ifdef __linux__
++	.set mips0
++#endif
+ retry3:                
++#ifdef __linux__
++	.set mips2
++#endif
+ 	ll     $3, 0($4)         
++#ifdef __linux__
++	.set mips0
++#endif
+ 	bne    $3, $5, done3   
+ 	or     $2, $6, 0      
++#ifdef __linux__
++	.set mips2
++#endif
+ 	sc     $2, 0($4)         
+-	bne    $2, 1, retry3   
++#ifdef __linux__
++	.set mips0
++#endif
++	beqz   $2, retry3   
+ done3:                 
+ 	.set reorder          
+ 
+@@ -77,7 +147,7 @@
+ 	sltu	$2,$3,1
+ END(opal_atomic_cmpset_rel_32)
+ 	
+-	
++#ifdef __mips64	
+ LEAF(opal_atomic_cmpset_64)
+ 		.set noreorder        
+ retry4:                
+@@ -85,7 +155,7 @@
+ 	bne    $3, $5, done4   
+ 	or     $2, $6, 0      
+ 	scd    $2, 0($4)         
+-	bne    $2, 1, retry4   
++	beqz   $2, retry4   
+ done4:                 
+ 	.set reorder          
+ 
+@@ -102,7 +172,7 @@
+ 	bne    $3, $5, done5   
+ 	or     $2, $6, 0      
+ 	scd    $2, 0($4)         
+-	bne    $2, 1, retry5   
++	beqz   $2, retry5   
+ done5:                 
+ 	.set reorder          
+ 	sync
+@@ -120,7 +190,7 @@
+ 	bne    $3, $5, done6   
+ 	or     $2, $6, 0      
+ 	scd    $2, 0($4)         
+-	bne    $2, 1, retry6   
++	beqz   $2, retry6   
+ done6:                 
+ 	.set reorder          
+ 
+@@ -128,3 +198,4 @@
+ 	j	ra
+ 	sltu	$3,$4,1
+ END(opal_atomic_cmpset_rel_64)
++#endif /* __mips64 */
+--- a/opal/include/opal/sys/mips/atomic.h
++++ b/opal/include/opal/sys/mips/atomic.h
+@@ -23,10 +23,17 @@
+ #if OMPI_WANT_SMP_LOCKS
+ 
+ /* BWB - FIX ME! */
++#ifdef __linux__
++#define MB() __asm__ __volatile__(".set mips2; sync; .set mips0": : :"memory")
++#define RMB() __asm__ __volatile__(".set mips2; sync; .set mips0": : :"memory")
++#define WMB() __asm__ __volatile__(".set mips2; sync; .set mips0": : :"memory")
++#define SMP_SYNC ".set mips2; sync; .set mips0"
++#else
+ #define MB() __asm__ __volatile__("sync": : :"memory")
+ #define RMB() __asm__ __volatile__("sync": : :"memory")
+ #define WMB() __asm__ __volatile__("sync": : :"memory")
+ #define SMP_SYNC "sync"
++#endif
+ 
+ #else
+ 
+@@ -46,8 +53,10 @@
+ #define OPAL_HAVE_ATOMIC_MEM_BARRIER 1
+ 
+ #define OPAL_HAVE_ATOMIC_CMPSET_32 1
+-#define OPAL_HAVE_ATOMIC_CMPSET_64 1
+ 
++#ifdef __mips64
++#define OPAL_HAVE_ATOMIC_CMPSET_64 1
++#endif
+ 
+ /**********************************************************************
+  *
+@@ -94,10 +103,16 @@
+    __asm__ __volatile__ ("\t"
+                          ".set noreorder        \n"
+                          "1:                \n\t"
++#ifdef __linux__
++                         ".set mips2         \n\t"
++#endif
+                          "ll     %0, %2         \n\t" /* load *addr into ret */
+                          "bne    %0, %3, 2f   \n\t" /* done if oldval != ret */
+                          "or     %5, %4, 0      \n\t" /* ret = newval */
+                          "sc     %5, %2         \n\t" /* store ret in *addr */
++#ifdef __linux__
++                         ".set mips0         \n\t"
++#endif
+                          /* note: ret will be 0 if failed, 1 if succeeded */
+ 			 "bne    %5, 1, 1b   \n\t"
+                          "2:                 \n\t"
+@@ -133,7 +148,7 @@
+     return opal_atomic_cmpset_32(addr, oldval, newval);
+ }
+ 
+-
++#ifdef OPAL_HAVE_ATOMIC_CMPSET_64
+ static inline int opal_atomic_cmpset_64(volatile int64_t *addr,
+                                         int64_t oldval, int64_t newval)
+ {
+@@ -183,6 +198,7 @@
+     opal_atomic_wmb();
+     return opal_atomic_cmpset_64(addr, oldval, newval);
+ }
++#endif /* OPAL_HAVE_ATOMIC_CMPSET_64 */
+ 
+ #endif /* OMPI_GCC_INLINE_ASSEMBLY */
+ 

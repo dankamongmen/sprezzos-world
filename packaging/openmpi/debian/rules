@@ -1,0 +1,193 @@
+#!/usr/bin/make -f
+
+#include /usr/share/dpatch/dpatch.make
+include /usr/share/quilt/quilt.make
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_CPU   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_CPU)
+
+CFLAGS = -Wall -g
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+	CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+else
+	CROSS= --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+ifeq (sparc,$(DEB_HOST_GNU_CPU))
+	CFLAGS += -mcpu=v9
+endif
+
+# BLCR checkpointing support
+BLCR_ARCH = "amd64 armel i386 powerpc"
+ifneq (,$(findstring $(DEB_HOST_ARCH),$(BLCR_ARCH)))
+        CHKPT = --with-ft=cr --with-blcr=/usr --with-blcr-libdir=/usr/lib
+endif
+
+# Memory affinity support
+NUMA_ARCH = "amd64 i386 ia64 mips mipsel powerpc"
+ifneq (,$(findstring $(DEB_HOST_ARCH),$(NUMA_ARCH)))
+        NUMA = --with-libnuma=/usr --with-libnuma-libdir=/usr/lib
+endif
+
+# Torque support. Does not build on HURD currently,
+#   should be fine on all other arches.
+ifneq (hurd-i386,$(DEB_HOST_ARCH))
+	TORQUE=--with-tm
+endif
+
+COMMON_CONFIG_PARAMS = \
+			$(CROSS)				\
+			$(CHKPT)				\
+			$(NUMA)					\
+			--prefix=/usr 				\
+			--mandir=\$${prefix}/share/man 		\
+			--infodir=\$${prefix}/share/info 	\
+			--sysconfdir=/etc/openmpi 		\
+			--libdir=\$${prefix}/lib/openmpi/lib	\
+			--includedir=\$${prefix}/lib/openmpi/include	\
+			--with-devel-headers \
+			--enable-heterogeneous \
+			$(TORQUE)
+
+# Thread support disabled because it's broken, see bug #435581
+#                       --enable-mpi-threads                    \
+#                       --enable-progress-threads
+
+# Flags for the static build: see bug #502232
+STATIC_CONFIG_PARAMS = --enable-static
+
+.PHONY: autoreconf
+autoreconf: patch autoreconf-stamp
+autoreconf-stamp:
+	dh_testdir
+	./autogen.sh
+	autoreconf
+	touch $@
+
+.PHONY: build
+build: build-shared build-static
+
+build-shared: autoreconf build-shared-stamp
+build-shared-stamp:
+	dh_testdir
+	mkdir -p build/shared
+	(cd build/shared && LDFLAGS="" CFLAGS="$(CFLAGS)" ../../configure $(COMMON_CONFIG_PARAMS))
+	$(MAKE) -C build/shared
+	touch $@
+
+build-static: autoreconf build-static-stamp
+build-static-stamp:
+	dh_testdir
+	mkdir -p build/static
+	(cd build/static && LDFLAGS="" CFLAGS="$(CFLAGS)" ../../configure $(COMMON_CONFIG_PARAMS) $(STATIC_CONFIG_PARAMS))
+	$(MAKE) -C build/static
+	touch $@
+
+# Everything is built in the "build" target
+build-arch:  build
+build-indep: build
+
+check: check-stamp build
+check-stamp:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	-$(MAKE) check 
+endif
+	touch $@
+
+clean: clean-work unpatch
+clean-work:
+	dh_testdir
+	dh_testroot
+	rm -rf configure-stamp build/ build-shared-stamp build-static-stamp check-stamp autoreconf-stamp
+	rm -rf check debian/openmpi
+	xargs rm -f < debian/clean_symlinks
+	[ ! -f Makefile ] || $(MAKE) distclean
+        # some additional cleanups
+	rm -rf opal/libltdl/.libs 
+	dh_clean 
+
+install-indep: build-indep check
+	dh_testdir
+	dh_testroot
+	dh_clean -k -i 
+	dh_installdirs -i
+	dh_install -i --sourcedir=$(CURDIR)/debian/openmpi
+
+install-arch: build-arch check
+	dh_testdir
+	dh_testroot
+	dh_clean -k -s 
+	$(MAKE) -C build/static install DESTDIR=$(CURDIR)/debian/libopenmpi-dev/
+	$(MAKE) -C build/shared install DESTDIR=$(CURDIR)/debian/openmpi/
+	rm -rf $(CURDIR)/debian/libopenmpi-dev/usr/lib/openmpi/include/ $(CURDIR)/debian/libopenmpi-dev/etc/ $(CURDIR)/debian/libopenmpi-dev/usr/share/ $(CURDIR)/debian/libopenmpi-dev/usr/bin/
+	rm -f $(CURDIR)/debian/libopenmpi-dev/usr/lib/openmpi/lib/mpi.mod
+	find  $(CURDIR)/debian/libopenmpi-dev/ -name '*\.so*' -exec rm -f '{}' \;
+
+	# Strip rpath info from all executables and libraries
+	find debian/openmpi/ -type f -perm -+x -a ! -name '*.la' -a ! -name '*.mod' -exec chrpath -d '{}' \;
+	for f in mpic++ mpicc mpicxx mpiexec mpif77 mpif90 ; do \
+		cp debian/openmpi/usr/share/man/man1/$${f}.1 debian/openmpi/usr/share/man/man1/$${f}.openmpi.1 ; \
+	done
+
+	# Empty dependency_libs in all .la files. This is part of the "Remove
+	# .la files" release goal for Squeeze.
+	find debian/libopenmpi-dev/ -type f -name '*.la' -exec sed -i "s,^dependency_libs=.*,dependency_libs=''," '{}' \;
+
+	chmod 644 debian/openmpi/usr/lib/openmpi/lib/mpi.mod
+	sed -i 's/3OpenMPI/3/' debian/openmpi/usr/share/man/man3/*.3
+
+	dh_install -s --sourcedir=$(CURDIR)/debian/openmpi --list-missing
+	# This gets installed by the wildcard, but we want to remove it really, so it's only used for checkpointing
+	-rm -f debian/libopenmpi*/usr/lib/openmpi/lib/openmpi/mca_crs_blcr.so
+
+binary-indep: install-indep
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs  -i
+	dh_installdocs --all AUTHORS NEWS README
+	dh_installexamples -popenmpi-doc examples/*
+	dh_installman -i
+	dh_link -i
+	dh_strip -i
+	dh_compress  -i
+	dh_fixperms -i
+	dh_makeshlibs -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: install-arch
+	dh_testdir -a
+	dh_testroot -a
+	dh_installchangelogs  -a
+	dh_installdocs --all AUTHORS NEWS README
+	dh_installexamples -a
+	dh_installman -a
+	dh_lintian
+	dh_link -a
+	dh_strip -a --dbg-package=libopenmpi-dbg
+	dh_compress  -a
+	dh_fixperms -a
+	dh_makeshlibs -plibopenmpi1.3
+	dh_makeshlibs -n -plibopenmpi-dev
+	dh_installdeb -a
+	dh_shlibdeps -a -l$(CURDIR)/debian/openmpi/usr/lib/openmpi/lib -Llibopenmpi1.3
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-arch binary-indep
+
+.PHONY: binary binary-arch binary-indep build-arch build-indep clean install-arch install-indep
