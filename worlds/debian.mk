@@ -34,6 +34,15 @@ $(DPKG): $(SPREZZ)/dpkg/debian/changelog
 	tar cJvf dpkg_$(dpkg_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: libept
+libept:$(LIBEPT)_$(ARCH).deb
+$(LIBEPT): $(SPREZZ)/libept/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf libept_$(libept_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: meta-gnome
 meta-gnome:$(METAGNOME)_$(ARCH).deb
 $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
