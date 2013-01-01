@@ -25,6 +25,7 @@ include worlds/lxde.mk
 include worlds/xfce.mk
 include worlds/gnome.mk
 include worlds/debian.mk
+include worlds/ubuntu.mk
 
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
@@ -534,6 +535,14 @@ $(LIBSIGSEGV): $(SPREZZ)/libsigsegv/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsigsegv-$(libsigsegv_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: signon
+signon:$(SIGNON)_$(ARCH).deb
+$(SIGNON): $(SPREZZ)/signon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf signon-$(signon_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libsignon-glib
 libsignon-glib:$(LIBSIGNONGLIB)_$(ARCH).deb
