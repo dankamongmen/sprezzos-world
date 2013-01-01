@@ -197,13 +197,22 @@ $(MX): $(SPREZZ)/mx/debian/changelog
 	ln -sf mx-$(mx_UPVER).tar.xz mx_$(mx_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+# our version compiles against libgee-0.9
+#.PHONY: cheese
+#cheese:$(CHEESE)_$(ARCH).deb
+#$(CHEESE): $(SPREZZ)/cheese/debian/changelog
+#	git clone git://github.com/dankamongmen/dankcheese.git $@
+#	tar cJf cheese-$(cheese_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+#	ln -sf cheese-$(cheese_UPVER).tar.xz cheese_$(cheese_UPVER).orig.tar.xz
+#	cp -r $(<D) $@/
+
 .PHONY: cheese
 cheese:$(CHEESE)_$(ARCH).deb
 $(CHEESE): $(SPREZZ)/cheese/debian/changelog
-	git clone git://github.com/dankamongmen/dankcheese.git $@
-	tar cJf cheese-$(cheese_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
-	ln -sf cheese-$(cheese_UPVER).tar.xz cheese_$(cheese_UPVER).orig.tar.xz
+	mkdir $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf cheese-$(cheese_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: apitrace
 apitrace:$(APITRACE)_$(ARCH).deb
@@ -5692,13 +5701,13 @@ $(XTRANS): $(SPREZZ)/xtrans/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xtrans_$(xtrans_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: libunique
-libunique:$(LIBUNIQUE)_$(ARCH).deb
-$(LIBUNIQUE): $(SPREZZ)/libunique/debian/changelog
+.PHONY: libunique3
+libunique3:$(LIBUNIQUE3)_$(ARCH).deb
+$(LIBUNIQUE3): $(SPREZZ)/libunique3/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libunique-$(libunique_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf libunique-$(libunique3_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libupnp
 libupnp:$(LIBUPNP)_$(ARCH).deb
