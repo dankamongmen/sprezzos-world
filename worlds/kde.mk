@@ -78,6 +78,14 @@ $(OXYGENICONS): $(SPREZZ)/oxygen-icons/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf oxygen-icons-$(oxygen-icons_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: qscintilla2
+qscintilla2:$(QSCINTILLA2)_$(ARCH).deb
+$(QSCINTILLA2): $(SPREZZ)/qscintilla2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf QScintilla-gpl-$(qscintilla2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: qt4-x11
 qt4-x11:$(QT4X11)_$(ARCH).deb
 $(QT4X11): $(SPREZZ)/qt4-x11/debian/changelog
@@ -86,6 +94,14 @@ $(QT4X11): $(SPREZZ)/qt4-x11/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf qt-everywhere-opensource-src-$(qt4-x11_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: qtwebkit
+qtwebkit:$(QTWEBKIT)_$(ARCH).deb
+$(QTWEBKIT): $(SPREZZ)/qtwebkit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qtwebkit-$(qtwebkit_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: qwt
 qwt:$(QWT)_$(ARCH).deb
 $(QWT): $(SPREZZ)/qwt/debian/changelog
@@ -93,14 +109,6 @@ $(QWT): $(SPREZZ)/qwt/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf qwt-$(qwt_UPVER).tar.bz2 $(TARARGS) $@
-
-.PHONY: qscintilla2
-qscintilla2:$(QSCINTILLA2)_$(ARCH).deb
-$(QSCINTILLA2): $(SPREZZ)/qscintilla2/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf QScintilla-gpl-$(qscintilla2_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: simon
 simon:$(SIMON)_$(ARCH).deb
