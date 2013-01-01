@@ -1,0 +1,66 @@
+Description: send Q_ASSERT, qDebug, qWarning and qFatal messages to syslog
+Forwarded: not-needed
+Author: Thiago Macieira <thiago@kde.org>
+---
+ src/corelib/global/qglobal.cpp          |   24 ++++++++++++++++++++++++
+ src/corelib/kernel/qcoreapplication_p.h |    2 ++
+ 2 files changed, 26 insertions(+)
+
+--- a/src/corelib/global/qglobal.cpp
++++ b/src/corelib/global/qglobal.cpp
+@@ -50,6 +50,7 @@
+ 
+ #ifndef QT_NO_QOBJECT
+ #include <private/qthread_p.h>
++#include <private/qcoreapplication_p.h>
+ #endif
+ 
+ #include <stdio.h>
+@@ -87,6 +88,8 @@
+ 
+ _LIT(qt_S60Filter, "Series60v?.*.sis");
+ _LIT(qt_symbianSystemInstallDir, "z:\\system\\install\\");
++#elif defined(Q_OS_UNIX)
++#include <syslog.h>
+ #endif
+ 
+ QT_BEGIN_NAMESPACE
+@@ -2225,6 +2228,27 @@ void qt_message_output(QtMsgType msgType
+ #else
+         fprintf(stderr, "%s\n", buf);
+         fflush(stderr);
++
++        if (qgetenv("QT_USE_SYSLOG").toInt() > 0) {
++            static bool logOpened = false;
++            if (!logOpened) {
++                QByteArray appname;
++#ifndef QT_NO_QOBJECT
++                appname = QCoreApplication::applicationName().toLatin1(); // don't use the local codec here
++                if (appname.isEmpty())
++                    appname = QCoreApplicationPrivate::staticAppName().toLatin1();
++#endif
++                if (appname.isEmpty())
++                    appname = "unknown-qt-application";
++                openlog(appname, LOG_NOWAIT | LOG_PID, LOG_USER);
++                logOpened = true;
++            }
++
++            int level = msgType == QtFatalMsg ? LOG_ERR :
++                        msgType == QtWarningMsg ? LOG_WARNING :
++                        LOG_DEBUG;
++            syslog(level, "%s", buf);
++        }
+ #endif
+     }
+ 
+--- a/src/corelib/kernel/qcoreapplication_p.h
++++ b/src/corelib/kernel/qcoreapplication_p.h
+@@ -86,6 +86,8 @@ public:
+     bool sendThroughObjectEventFilters(QObject *, QEvent *);
+     bool notify_helper(QObject *, QEvent *);
+ 
++    static QString staticAppName()
++    { return QCoreApplication::self ? QCoreApplication::self->d_func()->appName() : QString(); }
+     virtual QString appName() const;
+     virtual void createEventDispatcher();
+     static void removePostedEvent(QEvent *);
