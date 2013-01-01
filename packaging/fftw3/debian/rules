@@ -1,0 +1,180 @@
+#!/usr/bin/make -f
+
+ARCHITECTURE := $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS:=$(shell dpkg-buildflags --get CFLAGS)
+LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
+
+ifeq (libfftw3-quad3,$(findstring libfftw3-quad3, $(shell dh_listpackages)))
+QUAD := quad
+else
+QUAD :=
+endif
+ifeq (libfftw3-long3,$(findstring libfftw3-long3, $(shell dh_listpackages)))
+LONG := long
+else
+LONG :=
+endif
+PREC := single double $(LONG) $(QUAD)
+
+# old configure stuff needs a --target
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  archconfflags := $(archconfflags) --build $(DEB_HOST_GNU_TYPE)
+else
+  archconfflags := $(archconfflags) --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+#--enable-k7             enable AMD K7 optimizations, including 3dNow! (single precision)
+#--enable-sse            enable SSE optimizations (single precision only)
+#--enable-sse2           enable SSE2 optimizations (double precision only)
+#--enable-altivec        enable Altivec optimizations (single precision only)
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+ifneq (,$(filter $(ARCHITECTURE), i386 amd64))
+	archconfflags_single := --enable-sse --enable-avx
+	archconfflags_double := --enable-sse2 --enable-avx
+endif
+# no avx support in debian yet see #674760
+ifneq (,$(filter $(ARCHITECTURE), kfreebsd-i386 kfreebsd-amd64))
+	archconfflags_single := --enable-sse
+	archconfflags_double := --enable-sse2
+endif
+ifeq ($(ARCHITECTURE), powerpc)
+	archconfflags_single := --enable-altivec
+endif
+ifeq ($(ARCHITECTURE), armhf)
+	archconfflags_single := --enable-neon
+endif
+endif
+
+ifneq (,$(findstring nog77,$(DEB_BUILD_OPTIONS)))
+	archconfflags := $(archconfflags) F77="gfortran" 
+else
+	archconfflags := $(archconfflags) F77="gfortran -ff2c"
+endif
+
+SETCFLAGS := CFLAGS='$(CFLAGS)' LDFLAGS='$(LDFLAGS)' CPPFLAGS='$(CPPFLAGS)'
+
+# common configure options
+archconfflags := $(archconfflags) --prefix=/usr --enable-shared --enable-threads --enable-openmp --enable-mpi --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) MPILIBS="$(shell mpicc --showme:link)"
+
+build-arch:
+	dh_autoreconf
+	# single precision
+	$(SETCFLAGS) ./configure --enable-single $(archconfflags) $(archconfflags_single)
+	$(MAKE)
+	( cd tests ; $(MAKE) smallcheck )
+	$(MAKE) install DESTDIR=`pwd`/debian/tmp-single
+	#
+	# double precision
+	$(SETCFLAGS) ./configure $(archconfflags) $(archconfflags_double)
+	$(MAKE)
+	( cd tests ; $(MAKE) smallcheck )
+	$(MAKE) install DESTDIR=`pwd`/debian/tmp-double
+	# long double precision
+ifeq (long,$(LONG))
+	$(SETCFLAGS) ./configure --enable-long-double $(archconfflags)
+	$(MAKE)
+	( cd tests ; $(MAKE) smallcheck )
+	$(MAKE) install DESTDIR=`pwd`/debian/tmp-long;
+endif
+ifeq (quad,$(QUAD))
+	# quad precision
+	$(SETCFLAGS) ./configure $(archconfflags) --enable-quad-precision --disable-mpi
+	$(MAKE)
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	( cd tests ; $(MAKE) smallcheck )
+endif
+	$(MAKE) install DESTDIR=`pwd`/debian/tmp-quad
+endif
+	touch build-arch
+
+build-indep:
+	-(cd doc ; $(MAKE) -j1 -k clean)
+	-rm -f doc/*.info* doc/rfftwnd.png doc/html/*
+	cd doc/FAQ && $(MAKE) -j1 fftw-faq.html fftw-faq.ascii
+	cd doc && $(MAKE) -j1 && $(MAKE) -j1 html
+	touch build-indep
+
+build: build-stamp
+build-stamp: build-arch
+
+clean: clean1st
+clean1st:
+	dh_testdir
+	dh_testroot
+	rm -f build-arch build-indep
+	(cd doc ; [ ! -f Makefile ] || $(MAKE) -k clean)
+	[ ! -f Makefile ] || $(MAKE) distclean
+	-rm -f *.la threads/*.la *.pc
+	-rm -f test_long_long-double
+	-rm -f config.cache config.status config.log
+	-rm -rf debian/tmp-single debian/tmp-double debian/tmp-long debian/tmp-quad
+	rm -f mpi/mpi-bench
+	chmod -R g-s .
+	dh_autoreconf_clean
+	dh_clean
+
+binary-indep: build-indep
+	# build fftw3-doc
+	dh_prep -i
+	dh_testdir
+	dh_testroot
+	dh_installdocs -i README NEWS
+	dh_installinfo -i
+	dh_installchangelogs -i ChangeLog
+	dh_compress -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i -- -Zxz
+
+binary-arch: build-arch
+	# build fftw3
+	dh_prep -a
+	dh_installdocs -a -A README NEWS debian/README.Debian
+	dh_installchangelogs -a -XChangeLog
+	dh_installexamples -a
+	dh_installdirs -a
+	set -e && for s in $(PREC); do \
+	  dh_install -plibfftw3-bin --sourcedir=debian/tmp-$$s; \
+	  dh_install -plibfftw3-$${s}3 --sourcedir=debian/tmp-$$s; \
+	  dh_install -plibfftw3-dev --sourcedir=debian/tmp-$$s; \
+	  if [ $$s != "quad" ]; then \
+	    dh_install -plibfftw3-mpi3 --sourcedir=debian/tmp-$$s; \
+	    dh_install -plibfftw3-mpi-dev --sourcedir=debian/tmp-$$s; \
+	    rm debian/libfftw3-$${s}3/usr/lib/$(DEB_HOST_MULTIARCH)/libfftw3*mpi*; \
+	  fi; \
+	done
+	rm debian/libfftw3-dev/usr/lib/$(DEB_HOST_MULTIARCH)/libfftw3*mpi* \
+	   debian/libfftw3-dev/usr/include/*mpi*
+	chrpath --delete debian/libfftw3-mpi3/usr/lib/$(DEB_HOST_MULTIARCH)/libfftw3*mpi*so*
+
+	find $(CURDIR)/debian/libfftw3-dev -type d -empty -delete
+
+	dh_installman -a
+	dh_strip --dbg-package=libfftw3-dbg -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a -- -Zxz
+
+binary: binary-indep binary-arch
+
+.PHONY: binary binary-arch binary-indep clean
+.NOTPARALLEL:
