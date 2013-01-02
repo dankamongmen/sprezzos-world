@@ -1,0 +1,50 @@
+#!/usr/bin/make -f
+
+CFLAGS = -g -Wall
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+
+LDFLAGS += -Wl,--as-needed
+
+DESTDIR=$(CURDIR)/debian/tmp
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+%:
+	dh $*
+
+override_dh_auto_configure:
+	CFLAGS="$(CFLAGS)" ./configure --prefix=/usr --bundled-libraries=NONE \
+		   --disable-rpath --disable-rpath-install \
+		   --minimum-library-version="$(shell ./debian/autodeps.py --minimum-library-version)" \
+		   --libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+override_dh_auto_build:
+	$(MAKE) all
+
+get-packaged-orig-source:
+	./debian/build-orig.sh
+
+override_dh_auto_clean:
+	-./buildtools/bin/waf clean
+	rm -f buildtools/wafsamba/*.pyc \
+		buildtools/wafadmin/*.pyc \
+		buildtools/wafadmin/Tools/*.pyc
+	rm -rf build
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(DESTDIR)
+	ar cr libtevent.a bin/default/*.o
+	cp libtevent.a $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
+	# No python for now
+	rm -f $(DESTDIR)/usr/lib/python*/*-packages/_tevent.so
+
+override_dh_strip:
+	dh_strip --dbg-package=libtevent0-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs -- -c4
