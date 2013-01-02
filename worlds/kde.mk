@@ -94,6 +94,14 @@ $(QSCINTILLA2): $(SPREZZ)/qscintilla2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf QScintilla-gpl-$(qscintilla2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: qt-assistant-compat
+qt-assistant-compat:$(QTASSISTANTCOMPAT)_$(ARCH).deb
+$(QTASSISTANTCOMPAT): $(SPREZZ)/qt-assistant-compat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qt-assistant-qassistantclient-library-compat-src-$(qt-assistant-compat_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: qt4-x11
 qt4-x11:$(QT4X11)_$(ARCH).deb
 $(QT4X11): $(SPREZZ)/qt4-x11/debian/changelog
