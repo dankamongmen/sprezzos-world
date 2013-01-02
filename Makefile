@@ -3721,6 +3721,14 @@ $(LIBXVMC): $(SPREZZ)/libxvmc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXvMC-$(libxvmc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libxxf86vm
+libxxf86vm:$(LIBXXF86VM)_$(ARCH).deb
+$(LIBXXF86VM): $(SPREZZ)/libxxf86vm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXxf86vm-$(libxxf86vm_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libx11
 libx11:$(LIBX11)_$(ARCH).deb
 $(LIBX11): $(SPREZZ)/libx11/debian/changelog
