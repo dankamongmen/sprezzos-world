@@ -1,3 +1,11 @@
+.PHONY: akonadi
+akonadi:$(AKONADI)_$(ARCH).deb
+$(AKONADI): $(SPREZZ)/akonadi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf akonadi-$(akonadi_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: filelight
 filelight:$(FILELIGHT)_$(ARCH).deb
 $(FILELIGHT): $(SPREZZ)/filelight/debian/changelog
