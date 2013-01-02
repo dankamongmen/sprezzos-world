@@ -1849,6 +1849,14 @@ $(GLU): $(SPREZZ)/GLU/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf glu_$(GLU_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: glui
+glui:$(GLUI)_$(ARCH).deb
+$(GLUI): $(SPREZZ)/glui/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf glui-$(glui_UPVER).tgz $(TARARGS) $@
+
 .PHONY: gnome-applets
 gnome-applets:$(GNOMEAPPLETS)_$(ARCH).deb
 $(GNOMEAPPLETS): $(SPREZZ)/gnome-applets/debian/changelog
