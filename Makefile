@@ -3297,6 +3297,14 @@ $(libdbusmenu): $(SPREZZ)/libdbusmenu/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libdbusmenu-$(libdbusmenu_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libdca
+libdca:$(LIBDCA)_$(ARCH).deb
+$(LIBDCA): $(SPREZZ)/libdca/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libdca-$(libdca_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libdmx
 libdmx:$(LIBDMX)_$(ARCH).deb
 $(LIBDMX): $(SPREZZ)/libdmx/debian/changelog
@@ -4008,6 +4016,14 @@ $(MP4V2): $(SPREZZ)/mp4v2/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf mp4v2_$(mp4v2_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: mpeg2dec
+mpeg2dec:$(MPEG2DEC)_$(ARCH).deb
+$(MPEG2DEC): $(SPREZZ)/mpeg2dec/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmpeg2-$(mpeg2dec_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: mpd
 mpd:$(MPD)_$(ARCH).deb
