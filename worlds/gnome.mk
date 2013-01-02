@@ -1,3 +1,19 @@
+.PHONY: gconf
+gconf:$(GCONF)_$(ARCH).deb
+$(GCONF): $(SPREZZ)/gconf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf GConf-$(gconf_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gconf-editor
+gconf-editor:$(GCONFEDITOR)_$(ARCH).deb
+$(GCONFEDITOR): $(SPREZZ)/gconf-editor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gconf-editor-$(gconf-editor_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gnome-documents
 gnome-documents:$(GNOMEDOCUMENTS)_$(ARCH).deb
 $(GNOMEDOCUMENTS): $(SPREZZ)/gnome-documents/debian/changelog
@@ -29,6 +45,14 @@ $(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgdata-$(libgdata_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: libgsf
+libgsf:$(LIBGSF)_$(ARCH).deb
+$(LIBGSF): $(SPREZZ)/libgsf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libgsf-$(libgsf_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libsocialweb
 libsocialweb:$(LIBSOCIALWEB)_$(ARCH).deb

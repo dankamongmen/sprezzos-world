@@ -1665,22 +1665,6 @@ $(GAWK): $(SPREZZ)/gawk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gawk-$(gawk_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: gconf
-gconf:$(GCONF)_$(ARCH).deb
-$(GCONF): $(SPREZZ)/gconf/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gconf-$(gconf_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: gconf-editor
-gconf-editor:$(GCONFEDITOR)_$(ARCH).deb
-$(GCONFEDITOR): $(SPREZZ)/gconf-editor/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gconf-editor-$(gconf-editor_UPVER).tar.xz $(TARARGS) $@
-
 .PHONY: gcc-4.7
 gcc-4.7:$(GCC4.7)_$(ARCH).deb
 $(GCC4.7): $(SPREZZ)/gcc-4.7/debian/changelog
@@ -4032,6 +4016,14 @@ $(MPD): $(SPREZZ)/mpd/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mpd_$(mpd_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libmng
+libmng:$(LIBMNG)_$(ARCH).deb
+$(LIBMNG): $(SPREZZ)/libmng/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmng-$(libmng_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libmnl
 libmnl:$(LIBMNL)_$(ARCH).deb
