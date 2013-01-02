@@ -1,0 +1,165 @@
+#!/usr/bin/make -f
+# rules file for docbook-xml
+#
+# Some bytes in this file may have been touched by Ian Jackson,
+# so I can never remove his name from this file.
+
+PACKAGE := docbook-xml
+
+include /usr/share/dpatch/dpatch.make
+
+
+debian/docbook-xml.install:
+	set -ex ; \
+	touch $@ ; \
+	for dbx in docbook-* ; do \
+		dbxver=`echo $${dbx} | sed -e 's/docbook-//g'` ; \
+		for file in $${dbx}/*.dtd $${dbx}/*.ent $${dbx}/*.mod $${dbx}/*.ver ; do \
+			if [ -f $${file} ] ; then \
+				if [ $${file} != $${dbx}/dbgenent.* ] ; then \
+					echo "$${file} usr/share/xml/docbook/schema/dtd/$${dbxver}" >> $@ ; \
+				else \
+					echo "$${file} etc/sgml/docbook-xml/$${dbxver}" >> $@ ; \
+				fi ; \
+			fi ; \
+		done ; \
+		[ -f $${dbx}/catalog.xml ] && \
+		    echo "$${dbx}/catalog.xml usr/share/xml/docbook/schema/dtd/$${dbxver}" >> $@ ; \
+	done
+
+debian/docbook-xml.links:
+	set -ex ; \
+	touch $@ ; \
+	cat $@.in >> $@ ; \
+	for dbx in docbook-* ; do \
+		dbxver=`echo $${dbx} | sed -e 's/docbook-//g'` ; \
+		for file in $${dbx}/dbgenent.* ; do \
+			dbfile=`echo $${file} | sed -e 's/[^\/]*\///g'` ; \
+			echo -n "etc/sgml/docbook-xml/$${dbxver}/$${dbfile} " >> $@ && \
+			    echo "usr/share/xml/docbook/schema/dtd/$${dbxver}/$${dbfile}" >> $@ ; \
+		done ; \
+		[ -f $${dbx}/docbook.cat ] && \
+		    echo -n "usr/share/xml/docbook/schema/dtd/$${dbxver}/catalog " >> $@ && \
+		        echo "usr/share/xml/docbook/schema/dtd/$${dbxver}/docbook.cat" >> $@ ; \
+		[ -d $${dbx}/ent ] && \
+		    echo -n "usr/share/xml/entities/xml-iso-entities-8879.1986 " >> $@ && \
+		        echo "usr/share/xml/docbook/schema/dtd/$${dbxver}/ent" >> $@ ; \
+		echo "usr/share/xml/docbook/schema/dtd/$${dbxver} usr/share/sgml/docbook/dtd/xml/$${dbxver}" >> $@ ; \
+	done
+
+debian/docbook-xml.sgmlcatalogs:
+	set -ex ; \
+	touch $@ ; \
+	echo "catalog /usr/share/xml/docbook/schema/dtd/catalog" > $@ ; \
+	for dbx in docbook-* ; do \
+		dbxver=`echo $${dbx} | sed -e 's/docbook-//g'` ; \
+		[ -f $${dbx}/docbook.cat ] && \
+		    echo "$${dbx}/docbook.cat /usr/share/xml/docbook/schema/dtd/$${dbxver}/catalog" >> $@ ; \
+	done
+
+debian/docbook-xml.xmlcatalogs:
+	set -ex ; \
+	touch $@ ; \
+	cat $@.in >> $@ ; \
+	for dbx in docbook-* ; do \
+		dbxver=`echo $${dbx} | sed -e 's/docbook-//g'` ; \
+		if [ -f $${dbx}/catalog.xml ] ; then \
+			echo "local;$${dbx}/catalog.xml;/usr/share/xml/docbook/schema/dtd/$${dbxver}/catalog.xml" >> $@ ; \
+			sysids=`egrep -e "<system systemId=\"[^\"]+\"" $${dbx}/catalog.xml | \
+			        sed -e 's/<system systemId=\"\(.*\)\"/\1;/g'` IFS=';' ; \
+			echo $${sysids} | while read id ; do \
+				echo "package;system;$${id};/usr/share/xml/docbook/schema/dtd/$${dbxver}/catalog.xml" >> $@ ; \
+			done ; \
+			pubids=`egrep -e "<public publicId=\"[^\"]+\"" $${dbx}/catalog.xml | \
+			        sed -e 's/<public publicId=\"\(.*\)\"/\1;/g'` IFS=';' ; \
+			echo $${pubids} | while read id ; do \
+				echo "package;public;$${id};/usr/share/xml/docbook/schema/dtd/$${dbxver}/catalog.xml" >> $@ ; \
+			done ; \
+			echo >> $@ ; \
+		fi ; \
+	done ; \
+	fpiregex="s/^.*\-\/\/OASIS\/\/DTD XML Exchange Table Model 19990315\/\/EN.*\/dtd\/4\.[^5].*//g" ; \
+	sed -i -e 's/\ ;\/usr/;\/usr/g' -e $${fpiregex} $@
+
+build: patch-stamp build-stamp
+
+build-stamp: debian/docbook-xml.install debian/docbook-xml.links debian/docbook-xml.sgmlcatalogs debian/docbook-xml.xmlcatalogs
+	dh_testdir
+	touch build-stamp
+
+clean: unpatch
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp patch-stamp
+	rm -f debian/docbook-xml.install \
+	      debian/docbook-xml.links \
+	      debian/docbook-xml.sgmlcatalogs \
+	      debian/docbook-xml.xmlcatalogs \
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+binary-arch: build
+binary-indep: build
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog.upstream
+	dh_install
+	dh_installdocs
+	dh_installexamples
+	dh_installcatalogs
+	dh_installxmlcatalogs
+	dh_link
+	find $(CURDIR)/debian/$(PACKAGE) -type l -follow >/dev/null # exits 1 on broken links
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+version=$(shell dpkg-parsechangelog | sed -n -e 's/^Version: \(.*\)-[^-]*/\1/p')
+get-orig-source:
+	set -ex ; \
+	TMPDIR=`mktemp -d docbook-xml-$(version).orig.XXXXXX` ; \
+	touch "$$TMPDIR"/ChangeLog.upstream ; \
+	for db in 4.5 4.4 4.3 4.2 ; do \
+		dbxver=`echo $${db} | sed -e 's/\.//g'` ; \
+		dbxzip=docbook-xml-$${db}.zip ; \
+		mkdir -p "$$TMPDIR"/docbook-$${db} ; \
+		wget -P "$$TMPDIR" http://www.oasis-open.org/docbook/xml/$${db}/"$$dbxzip" ; \
+		unzip -d "$$TMPDIR"/docbook-$${db} "$$TMPDIR"/"$$dbxzip" ; \
+		rm -f "$$TMPDIR"/"$$dbxzip" ; \
+		([ -f "$$TMPDIR"/docbook-$${db}/ChangeLog ] && [ "$$dbxver" -ge 44 ] ) && \
+		    cat "$$TMPDIR"/docbook-$${db}/ChangeLog >> "$$TMPDIR"/ChangeLog.upstream ; \
+	done; \
+	for db in 4.1.2 4.0 ; do \
+		dbxver=`echo $${db} | sed -e 's/\.//g'` ; \
+		dbxzip=docbkx"$$dbxver".zip ; \
+		mkdir -p "$$TMPDIR"/docbook-$${db} ; \
+		wget -P "$$TMPDIR" http://www.oasis-open.org/docbook/xml/$${db}/"$$dbxzip" ; \
+		unzip -d "$$TMPDIR"/docbook-$${db} "$$TMPDIR"/"$$dbxzip" ; \
+		rm -f "$$TMPDIR"/"$$dbxzip" ; \
+		if [ $${db} = "4.1.2" ] ; then \
+			cat "$$TMPDIR"/docbook-$${db}/ChangeLog >> "$$TMPDIR"/ChangeLog.upstream ; \
+			cat "$$TMPDIR"/docbook-$${db}/41chg.txt >> "$$TMPDIR"/ChangeLog.upstream ; \
+			cat "$$TMPDIR"/docbook-$${db}/40chg.txt >> "$$TMPDIR"/ChangeLog.upstream ; \
+		else \
+			cat "$$TMPDIR"/docbook-$${db}/"$$dbxver"chg.txt >> "$$TMPDIR"/ChangeLog.upstream ; \
+		fi ; \
+	done ; \
+	find "$$TMPDIR" -type f ! -perm 644 -exec chmod 644 "{}" ";" ; \
+	mv "$$TMPDIR" docbook-xml-$(version).orig ; \
+	GZIP=-9 tar --remove-files -czf $(CURDIR)/docbook-xml_${version}.orig.tar.gz \
+	    docbook-xml-$(version).orig
+
+.PHONY: binary binary-arch binary-indep build clean get-orig-source
+#Local variables:
+#mode: makefile
+#End:
