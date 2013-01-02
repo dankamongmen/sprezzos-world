@@ -681,6 +681,14 @@ $(ARPWATCH): $(SPREZZ)/arpwatch/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf arpwatch-$(arpwatch_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: audiofile
+audiofile:$(AUDIOFILE)_$(ARCH).deb
+$(AUDIOFILE): $(SPREZZ)/audiofile/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf audiofile-$(audiofile_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: audit
 audit:$(AUDIT)_$(ARCH).deb
 $(AUDIT): $(SPREZZ)/audit/debian/changelog
@@ -1096,6 +1104,14 @@ $(TERMINOLOGY): $(SPREZZ)/terminology/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf terminology-$(terminology_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: ttf-dejavu
+ttf-dejavu:$(TTFDEJAVU)_$(ARCH).deb
+$(TTFDEJAVU): $(SPREZZ)/ttf-dejavu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf dejavu-fonts-$(ttf-dejavu_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: ttfautohint
 ttfautohint:$(TTFAUTOHINT)_$(ARCH).deb
