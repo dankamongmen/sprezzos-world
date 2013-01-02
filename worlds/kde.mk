@@ -94,6 +94,14 @@ $(OXYGENICONS): $(SPREZZ)/oxygen-icons/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf oxygen-icons-$(oxygen-icons_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: qimageblitz
+qimageblitz:$(QIMAGEBLITZ)_$(ARCH).deb
+$(QIMAGEBLITZ): $(SPREZZ)/qimageblitz/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qimageblitz-$(qimageblitz_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: qscintilla2
 qscintilla2:$(QSCINTILLA2)_$(ARCH).deb
 $(QSCINTILLA2): $(SPREZZ)/qscintilla2/debian/changelog
