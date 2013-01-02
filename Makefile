@@ -4499,6 +4499,14 @@ $(LIBPTHREADSTUBS): $(SPREZZ)/libpthread-stubs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libpthread-stubs-$(libpthread-stubs_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: parted
+parted:$(PARTED)_$(ARCH).deb
+$(PARTED): $(SPREZZ)/parted/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xJvf parted-$(parted_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: patch
 patch:$(PATCH)_$(ARCH).deb
 $(PATCH): $(SPREZZ)/patch/debian/changelog
