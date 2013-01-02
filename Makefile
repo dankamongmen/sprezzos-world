@@ -4504,7 +4504,7 @@ parted:$(PARTED)_$(ARCH).deb
 $(PARTED): $(SPREZZ)/parted/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version --repack
+	cd $@ && uscan --force-download --download-current-version
 	tar xJvf parted-$(parted_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: patch
