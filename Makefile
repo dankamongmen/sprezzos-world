@@ -3985,6 +3985,14 @@ $(photofilmstrip): $(SPREZZ)/photofilmstrip/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf photofilmstrip-$(photofilmstrip_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ldb
+ldb:$(LDB)_$(ARCH).deb
+$(LDB): $(SPREZZ)/ldb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ldb-$(ldb_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ldns
 ldns:$(LDNS)_$(ARCH).deb
 $(LDNS): $(SPREZZ)/ldns/debian/changelog
@@ -5025,7 +5033,7 @@ $(SAMBA4): $(SPREZZ)/samba4/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf samba4-$(samba4_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf samba-$(samba4_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: sbc
 sbc:$(SBC)_$(ARCH).deb
@@ -5250,6 +5258,14 @@ $(TELEPATHYGLIB): $(SPREZZ)/telepathy-glib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf telepathy-glib-$(telepathy-glib_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: tevent
+tevent:$(TEVENT)_$(ARCH).deb
+$(TEVENT): $(SPREZZ)/tevent/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tevent-$(tevent_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: tiff3
 tiff3:$(TIFF3)_$(ARCH).deb
