@@ -5019,6 +5019,14 @@ $(SAMBA): $(SPREZZ)/samba/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf samba-$(samba_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: samba4
+samba4:$(SAMBA4)_$(ARCH).deb
+$(SAMBA4): $(SPREZZ)/samba4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf samba4-$(samba4_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: sbc
 sbc:$(SBC)_$(ARCH).deb
 $(SBC): $(SPREZZ)/sbc/debian/changelog
