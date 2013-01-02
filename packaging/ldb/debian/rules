@@ -1,0 +1,77 @@
+#!/usr/bin/make -f
+
+CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS:=$(shell dpkg-buildflags --get CFLAGS)
+CXXFLAGS:=$(shell dpkg-buildflags --get CXXFLAGS)
+LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS)
+
+CFLAGS += -Wall
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+
+LDFLAGS += -Wl,--as-needed
+
+DESTDIR=$(CURDIR)/debian/tmp
+
+export PYTHON=$(shell which `pyversions -d`)
+export PYTHON_CONFIG="$(PYTHON)-config"
+export WAF=$(PYTHON) ./buildtools/bin/waf
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+%:
+	dh $* --with python2
+
+override_dh_auto_configure:
+	PYTHON="$(PYTHON)" PYTHON_CONFIG="$(PYTHON_CONFIG)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" \
+		$(WAF) configure --prefix=/usr --disable-rpath-install \
+		--builtin-libraries=ccan,replace,tdb_compat \
+		--bundled-libraries=NONE,pytevent \
+		--minimum-library-version="$(shell ./debian/autodeps.py --minimum-library-version)" \
+		--libdir=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		--with-modulesdir=/usr/lib/$(DEB_HOST_MULTIARCH)/ldb/modules
+
+get-packaged-orig-source:
+	./debian/build-orig.sh
+
+override_dh_auto_clean:
+	-$(WAF) clean
+	# Waf should be doing this; see
+	# https://bugzilla.samba.org/show_bug.cgi?id=8854
+	rm -f .lock-wscript
+	# Waf should be doing this; see
+	# https://bugzilla.samba.org/show_bug.cgi?id=8855
+	rm -f buildtools/wafsamba/*.pyc \
+		buildtools/wafadmin/*.pyc \
+		buildtools/wafadmin/Tools/*.pyc
+
+override_dh_auto_build:
+	$(WAF) build
+
+override_dh_auto_test:
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	$(WAF) test
+endif
+
+override_dh_python2:
+	dh_python2 --no-guessing-versions
+
+override_dh_auto_install:
+	DESTDIR=$(DESTDIR) $(WAF) install
+	rm $(DESTDIR)/usr/lib/python*/dist-packages/_tevent.so
+	rm $(DESTDIR)/usr/lib/python*/dist-packages/tevent.py
+	ar cr libldb.a bin/default/common/*.o
+	mv libldb.a $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
+
+override_dh_strip:
+	dh_strip -pldb-tools
+	dh_strip -ppython-ldb --dbg-package=python-ldb-dbg
+	dh_strip -plibldb1 --dbg-package=libldb1-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs -Xldb.so -ppython-ldb -- -c4
+	dh_makeshlibs -X/usr/lib/$(DEB_HOST_MULTIARCH)/ldb -plibldb1 -- -c4
