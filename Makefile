@@ -3601,6 +3601,14 @@ $(LIBFONTENC): $(SPREZZ)/libfontenc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libfontenc-$(libfontenc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libfont-ttf-perl
+libfont-ttf-perl:$(LIBFONTTTFPERL)_$(ARCH).deb
+$(LIBFONTTTFPERL): $(SPREZZ)/libfont-ttf-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Font-TTF-$(libfont-ttf-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxi
 libxi:$(LIBXI)_$(ARCH).deb
 $(LIBXI): $(SPREZZ)/libxi/debian/changelog
