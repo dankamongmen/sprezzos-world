@@ -905,6 +905,14 @@ $(BOOST1.52): $(SPREZZ)/boost1.52/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf boost1.52_$(boost1.52_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: bustle
+bustle:$(BUSTLE)_$(ARCH).deb
+$(BUSTLE): $(SPREZZ)/bustle/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bustle-$(bustle_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: bzip2
 bzip2:$(BZIP2)_$(ARCH).deb
 $(BZIP2): $(SPREZZ)/bzip2/debian/changelog
@@ -3344,6 +3352,14 @@ $(LIBJPEG): $(SPREZZ)/libjpeg/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libjpeg8_$(libjpeg_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libsamplerate
+libsamplerate:$(LIBSAMPLERATE)_$(ARCH).deb
+$(LIBSAMPLERATE): $(SPREZZ)/libsamplerate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsamplerate-$(libsamplerate_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libsecret
 libsecret:$(LIBSECRET)_$(ARCH).deb
