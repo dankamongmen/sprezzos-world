@@ -46,8 +46,6 @@ ATKUP:=atk-$(shell echo $(atk_UPVER) | cut -d- -f1)
 ATKORIG:=atk1.0_$(shell echo $(atk_UPVER) | cut -d- -f1).orig.tar.xz
 BRASEROUP:=brasero-$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1)
 BRASEROORIG:=brasero_$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-EVINCEUP:=evince-$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1)
-EVINCEORIG:=evince_$(shell echo $(evince_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
 FBIUP:=fbida-$(shell echo $(fbi_UPVER) | cut -d= -f2- | cut -d- -f1)
 FBTERMUP:=nfbterm-$(shell echo $(fbterm_UPVER) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_UPVER) | cut -d- -f1).orig.tar.gz
@@ -1487,6 +1485,14 @@ $(EOGPLUGINS): $(SPREZZ)/eog-plugins/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf eog-plugins_$(eog-plugins_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: ettercap
+ettercap:$(ETTERCAP)_$(ARCH).deb
+$(ETTERCAP): $(SPREZZ)/ettercap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ettercap-$(ettercap_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: evolution
 evolution:$(EVOLUTION)_$(ARCH).deb
