@@ -75,8 +75,6 @@ LIBPNGUP:=libpng-$(shell echo $(libpng_UPVER) | cut -d- -f1 | cut -d= -f2- | cut
 LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
 LIBRSVGUP:=librsvg-$(shell echo $(librsvg_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
-LIGHTDMUP:=lightdm_$(shell echo $(lightdm_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-LIGHTDMORIG:=$(shell echo $(LIGHTDMUP) | tr - _).orig.tar.gz
 LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_UPVER) | cut -d- -f1).orig.tar.bz2
 MCELOGORIG:=mcelog_$(shell echo $(mcelog_UPVER) | cut -d- -f1).orig.tar.xz
 MPLAYER:=mplayer_$(shell echo $(mplayer_UPVER) | tr : .)
@@ -2816,6 +2814,22 @@ $(LIBPWQUALITY): $(SPREZZ)/libpwquality/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libpwquality-$(libpwquality_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: lightdm
+lightdm:$(LIGHTDM)_$(ARCH).deb
+$(LIGHTDM): $(SPREZZ)/lightdm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lightdm-$(lightdm_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: lightspeed
+lightspeed:$(LIGHTSPEED)_$(ARCH).deb
+$(LIGHTSPEED): $(SPREZZ)/lightspeed/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf lightspeed-$(lightspeed_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: lynx
 lynx:$(LYNX)_$(ARCH).deb
@@ -6230,17 +6244,6 @@ gsettings-desktop-schemas:$(GSETTINGSDESKTOPSCHEMAS)_$(ARCH).deb
 $(GSETTINGSDESKTOPSCHEMAS): $(SPREZZ)/gsettings-desktop-schemas/debian/changelog $(GSETSCHEMASORIG)
 	mkdir -p $@
 	tar xJvf $(GSETSCHEMASORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(LIGHTDMUP).orig.tar.gz
-$(LIGHTDMUP).orig.tar.gz:
-	wget -nc -O$@ https://launchpad.net/ubuntu/quantal/+source/lightdm/1.4.0-0ubuntu1/+files/$@
-
-.PHONY: lightdm
-lightdm:$(LIGHTDM)_$(ARCH).deb
-$(LIGHTDM): $(SPREZZ)/lightdm/debian/changelog $(LIGHTDMORIG)
-	mkdir -p $@
-	tar xzvf $(LIGHTDMORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 .PHONY: sprezzos-keyring
