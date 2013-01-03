@@ -94,6 +94,14 @@ $(KONSOLE): $(SPREZZ)/konsole/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf konsole-$(konsole_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libdbusmenu-qt
+libdbusmenu-qt:$(LIBDBUSMENUQT)_$(ARCH).deb
+$(LIBDBUSMENUQT): $(SPREZZ)/libdbusmenu-qt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libdbusmenu-qt-$(libdbusmenu-qt_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: oxygen-icons
 oxygen-icons:$(OXYGENICONS)_$(ARCH).deb
 $(OXYGENICONS): $(SPREZZ)/oxygen-icons/debian/changelog
