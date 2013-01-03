@@ -77,3 +77,12 @@ $(TANGOICONTHEME): $(SPREZZ)/tango-icon-theme/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tango-icon-theme-$(tango-icon-theme_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: vte3
+vte3:$(VTE3)_$(ARCH).deb
+$(VTE3): $(SPREZZ)/vte3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf vte_$(vte3_UPVER).orig.tar.xz $(TARARGS) $@
+

@@ -5403,14 +5403,6 @@ $(VOAACENC): $(SPREZZ)/vo-aacenc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vo-aacenc-$(vo-aacenc_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: vte
-vte:$(VTE)_$(ARCH).deb
-$(VTE): $(SPREZZ)/vte/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf vte_$(vte_UPVER).orig.tar.xz $(TARARGS) $@
-
 .PHONY: wayland
 wayland:$(WAYLAND)_$(ARCH).deb
 $(WAYLAND): $(SPREZZ)/wayland/debian/changelog
