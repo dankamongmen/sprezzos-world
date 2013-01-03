@@ -3886,7 +3886,7 @@ $(GMP): $(SPREZZ)/gmp/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gmp-$(gmp_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf gmp-$(gmp_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gmpc
 gmpc:$(GMPC)_$(ARCH).deb
