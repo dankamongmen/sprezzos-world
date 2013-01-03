@@ -26,6 +26,7 @@ include worlds/xfce.mk
 include worlds/gnome.mk
 include worlds/debian.mk
 include worlds/ubuntu.mk
+include worlds/obsolete.mk
 
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
