@@ -1,0 +1,209 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# This file is public domain software, originally written by Joey Hess.
+#
+# This version is for a multibinary package. It also allows you to build any
+# of the binary packages independantly, via binary-<package> targets.
+
+# Uncomment this to turn on verbose mode. 
+#export DH_VERBOSE=1
+
+with_check := yes
+ifneq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+        with_check := disabled through DEB_BUILD_OPTIONS
+endif
+
+NJOBS =
+# Support parallel=<n> in DEB_BUILD_OPTIONS (see #209008)
+ifneq (,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+  COMMA = ,
+  NJOBS := -j $(subst parallel=,,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+endif
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+DEB_HOST_ARCH  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+export CFLAGS = -g
+export LDFLAGS = -Wl,-z,defs
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+    ifeq (m68k,$(DEB_HOST_ARCH))
+	CFLAGS += -O0
+    else
+	CFLAGS += -O3
+    endif
+endif
+
+ifeq (sh4,$(DEB_HOST_ARCH))
+    CFLAGS += -mieee
+endif
+
+# Re-enable TLS on sparc.
+# ifeq (sparc,$(DEB_HOST_ARCH))
+#     confflags += --disable-thread-safe
+# endif
+
+ifneq (,$(findstring $(DEB_HOST_ARCH), amd64 ppc64 kfreebsd-amd64))
+  EXTRA_INSTALL=install32
+  m32=-m32
+endif
+
+build-doc: configure-stamp
+	$(MAKE) -C build pdf info html
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	rm -rf build
+	mkdir -p build
+	chmod +x configure
+	cd build && \
+	    ../configure $(confflags) --prefix=/usr \
+		--enable-shared --libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+	touch configure-stamp
+
+configure32: configure32-stamp
+configure32-stamp:
+	mkdir -p build32
+	cd build32 && \
+	    CC="gcc -m32" CXX="g++ -m32" ../configure $(confflags32) --prefix=/usr \
+	    --enable-shared --libdir=/usr/lib32 ABI=32 
+	touch $@
+
+build32-stamp: configure32-stamp
+	dh_testdir
+	$(MAKE) $(NJOBS) -C build32
+
+ifeq ($(with_check),yes)
+  ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	GMP_CHECK_RANDOMIZE=1 $(MAKE) -C build32 check
+  endif
+endif
+	touch $@
+
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE) $(NJOBS) -C build
+
+ifeq ($(with_check),yes)
+  ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	GMP_CHECK_RANDOMIZE=1 $(MAKE) -C build check
+  endif
+endif
+	touch build-stamp
+
+configure64: configure64-stamp
+configure64-stamp:
+	dh_testdir
+	rm -rf build64
+	mkdir -p build64
+	chmod +x configure
+	cd build64 && \
+	    CC="gcc -m64" CXX="g++ -m64" ../configure $(confflags) --prefix=/usr \
+		--enable-shared powerpc64-linux-gnu
+	touch configure64-stamp
+
+build64-stamp: configure64-stamp
+	dh_testdir
+	$(MAKE) $(NJOBS) -C build64
+
+ifeq ($(with_check),yes)
+  ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	GMP_CHECK_RANDOMIZE=1 $(MAKE) -C build64 check
+  endif
+endif
+	touch build64-stamp
+
+build-indep: build-stamp
+build-arch: build-stamp
+# not yet ready for that: $(if $(filter powerpc,$(DEB_HOST_ARCH)), build64-stamp)
+build: build-indep build-arch
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f *-stamp
+
+	rm -rf build build64 build32
+
+	dh_clean
+
+install: DH_OPTIONS=
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_clean
+	dh_installdirs
+
+	$(MAKE) -C build DESTDIR=`pwd`/debian/tmp install
+
+#ifeq (powerpc,$(DEB_HOST_ARCH))
+#	$(MAKE) -C build64 DESTDIR=`pwd`/debian/tmp64 install
+#	mv debian/tmp64/usr/lib debian/tmp/usr/lib64
+#endif
+	# Miscellaneous install.
+	dh_install -i
+	dh_install -plibmpfr4
+	dh_install -plibmpfr-dev
+
+	dh_makeshlibs -v -V -plibmpfr4
+	dh_makeshlibs -v -V -plib64mpfr4
+
+install32: build32-stamp
+	$(MAKE) DESTDIR=`pwd`/debian/tmp -C build32 install
+	dh_install -plib32mpfr4
+	dh_install -plib32mpfr-dev
+	dh_makeshlibs -v -V -plib32mpfr4
+
+# This single target is used to build all the packages, all at once, or
+# one at a time. So keep in mind: any options passed to commands here will
+# affect _all_ packages. Anything you want to only affect one package
+# should be put in another target, such as the install target.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs -A BUGS NEWS README TODO AUTHORS
+	dh_installexamples
+	dh_installmenu
+	dh_installinfo
+	dh_strip --dbg-package=libmpfr4-dbg
+	dh_link
+	dh_compress
+	dh_fixperms
+	dh_lintian
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: build build-doc install
+# (Uncomment this next line if you have such packages.)
+	 $(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build install $(EXTRA_INSTALL)
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+# Any other binary targets build just one binary package at a time.
+binary-%: build install
+	make -f debian/rules binary-common DH_OPTIONS=-p$*
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary-common binary install build-arch build-indep
