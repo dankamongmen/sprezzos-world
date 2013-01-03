@@ -5457,6 +5457,14 @@ $(WEBKIT): $(SPREZZ)/webkit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf webkit_$(webkit_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: libwebp
+libwebp:$(LIBWEBP)_$(ARCH).deb
+$(LIBWEBP): $(SPREZZ)/libwebp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libwebp-$(libwebp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: wget
 wget:$(WGET)_$(ARCH).deb
 $(WGET): $(SPREZZ)/wget/debian/changelog
