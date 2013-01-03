@@ -1,0 +1,53 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+# Needed by octave-common.links
+include /usr/share/dpkg/pkg-info.mk
+export DEB_VERSION_UPSTREAM
+
+%:
+	dh $@ --with autoreconf --parallel
+
+clean:
+	dh clean --with autoreconf
+
+# override normal dh_auto_configure call to pass OpenMP flag to it (#631831)
+# and while we are at it, disable the rpath (thanks lintian)
+override_dh_auto_configure:
+	dh_auto_configure -- --enable-openmp --disable-rpath
+
+# override normal dh_compress call to avoid compressing .pdf files
+override_dh_compress:
+	dh_compress -O--parallel --exclude=.pdf
+
+# override this call, so we do not pass the --parallel option to it; 
+# "make -j2 install" does not work as of now
+override_dh_auto_install:
+	# Smuggle our configuration file into the installed files
+	mkdir -p debian/tmp/etc && cp debian/octave.conf debian/tmp/etc/
+	dh_auto_install --max-parallel=1
+
+# save debug information into the debug package
+override_dh_strip:
+	dh_strip -a --dbg-package=octave-dbg
+
+# Strip the executable bit from the .oct files
+# Cannot be done in dh_fixperms, as then dh_strip and dh_shlibdeps don't take the
+# .oct files into account
+override_dh_shlibdeps:
+	dh_shlibdeps -O--parallel
+	find debian/octave -name '*.oct' -print0 2>/dev/null | xargs -0r chmod 644
+
+# Latest version containing a backward-compatible API change (see policy 8.6.2)
+override_dh_makeshlibs:
+	dh_makeshlibs -V 'liboctave1 (>= 3.6.2)'
+
+get-orig-source:
+	uscan --force-download --rename --destdir .
+.PHONY: get-orig-source

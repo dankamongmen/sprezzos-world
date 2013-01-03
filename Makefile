@@ -4481,6 +4481,14 @@ $(OBEXFS): $(SPREZZ)/obexfs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf obexfs-$(obexfs_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: octave
+octave:$(OCTAVE)_$(ARCH).deb
+$(OCTAVE): $(SPREZZ)/octave/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf octave-$(octave_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: opal
 opal:$(OPAL)_$(ARCH).deb
 $(OPAL): $(SPREZZ)/opal/debian/changelog
