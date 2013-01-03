@@ -6,6 +6,14 @@ $(AKONADI): $(SPREZZ)/akonadi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf akonadi-$(akonadi_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: digikam
+digikam:$(DIGIKAM)_$(ARCH).deb
+$(DIGIKAM): $(SPREZZ)/digikam/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf digikam-$(digikam_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: filelight
 filelight:$(FILELIGHT)_$(ARCH).deb
 $(FILELIGHT): $(SPREZZ)/filelight/debian/changelog
