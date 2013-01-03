@@ -977,6 +977,14 @@ $(CDPARANOIA): $(SPREZZ)/cdparanoia/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cdparanoia_$(cdparanoia_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cdrkit
+cdrkit:$(CDRKIT)_$(ARCH).deb
+$(CDRKIT): $(SPREZZ)/cdrkit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cdrkit-$(cdrkit_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libcanberra
 libcanberra:$(LIBCANBERRA)_$(ARCH).deb
 $(LIBCANBERRA): $(SPREZZ)/libcanberra/debian/changelog
