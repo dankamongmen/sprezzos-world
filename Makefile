@@ -5169,7 +5169,7 @@ $(SPEEX): $(SPREZZ)/speex/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf speex-$(speex_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf $(SPEEX).orig.tar.gz $(TARARGS) $@
 
 .PHONY: pocketsphinx
 pocketsphinx:$(POCKETSPHINX)_$(ARCH).deb
