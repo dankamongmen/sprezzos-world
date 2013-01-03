@@ -22,6 +22,14 @@ $(GNOMEDOCUMENTS): $(SPREZZ)/gnome-documents/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-documents-$(gnome-documents_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gnome-dvb-daemon
+gnome-dvb-daemon:$(GNOMEDVBDAEMON)_$(ARCH).deb
+$(GNOMEDVBDAEMON): $(SPREZZ)/gnome-dvb-daemon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-dvb-daemon-$(gnome-dvb-daemon_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gnome-icon-theme
 gnome-icon-theme:$(GNOMEICONTHEME)_$(ARCH).deb
 $(GNOMEICONTHEME): $(SPREZZ)/gnome-icon-theme/debian/changelog
