@@ -4488,7 +4488,7 @@ $(OCTAVE): $(SPREZZ)/octave/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf octave-$(octave_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf octave-$(octave_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: opal
 opal:$(OPAL)_$(ARCH).deb
