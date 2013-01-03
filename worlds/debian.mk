@@ -59,6 +59,15 @@ $(metakde): $(SPREZZ)/meta-kde/debian/changelog
 	tar cJvf meta-kde_$(meta-kde_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: python-apt
+python-apt:$(PYTHONAPT)_$(ARCH).deb
+$(PYTHONAPT): $(SPREZZ)/python-apt/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf python-apt_$(python-apt_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: python-central
 python-central:$(PYTHONCENTRAL)_$(ARCH).deb
 $(PYTHONCENTRAL): $(SPREZZ)/python-central/debian/changelog
