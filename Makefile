@@ -3758,6 +3758,14 @@ $(LIBXKBFILE): $(SPREZZ)/libxkbfile/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxkbfile-xkbfile-$(libxkbfile_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libxklavier
+libxklavier:$(LIBXKLAVIER)_$(ARCH).deb
+$(LIBXKLAVIER): $(SPREZZ)/libxklavier/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libxklavier-$(libxklavier_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: libxv
 libxv:$(LIBXV)_$(ARCH).deb
 $(LIBXV): $(SPREZZ)/libxv/debian/changelog
