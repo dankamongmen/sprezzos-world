@@ -78,6 +78,14 @@ $(KDEPIMLIBS): $(SPREZZ)/kdepimlibs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kdepimlibs_$(kdepimlibs_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: kdesdk
+kdesdk:$(KDESDK)_$(ARCH).deb
+$(KDESDK): $(SPREZZ)/kdesdk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kdesdk-$(kdesdk_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: kde-workspace
 kde-workspace:$(KDEWORKSPACE)_$(ARCH).deb
 $(KDEWORKSPACE): $(SPREZZ)/kde-workspace/debian/changelog
@@ -101,6 +109,14 @@ $(LIBDBUSMENUQT): $(SPREZZ)/libdbusmenu-qt/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libdbusmenu-qt-$(libdbusmenu-qt_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libkate
+libkate:$(LIBKATE)_$(ARCH).deb
+$(LIBKATE): $(SPREZZ)/libkate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libkate-$(libkate_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: oxygen-icons
 oxygen-icons:$(OXYGENICONS)_$(ARCH).deb
