@@ -4262,6 +4262,14 @@ $(NETHACK): $(SPREZZ)/nethack/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf nethack_$(nethack_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: netsniff-ng
+netsniff-ng:$(NETSNIFFNG)_$(ARCH).deb
+$(NETSNIFFNG): $(SPREZZ)/netsniff-ng/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf netsniff-ng-$(netsniff-ng_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: net-snmp
 net-snmp:$(NETSNMP)_$(ARCH).deb
 $(NETSNMP): $(SPREZZ)/net-snmp/debian/changelog
