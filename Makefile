@@ -502,6 +502,14 @@ $(LVM2): $(SPREZZ)/lvm2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lvm2_$(lvm2_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: lldpad
+lldpad:$(LLDPAD)_$(ARCH).deb
+$(LLDPAD): $(SPREZZ)/lldpad/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lldpad-$(lldpad_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: llvm-3.2
 llvm-3.2:$(LLVM3.2)_$(ARCH).deb
 $(LLVM3.2): $(SPREZZ)/llvm-3.2/debian/changelog
