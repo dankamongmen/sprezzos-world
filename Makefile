@@ -4448,6 +4448,14 @@ $(LIBOGG): $(SPREZZ)/libogg/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libogg-$(libogg_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: liboggz
+liboggz:$(LIBOGGZ)_$(ARCH).deb
+$(LIBOGGZ): $(SPREZZ)/liboggz/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liboggz-$(liboggz_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libvisual
 libvisual:$(LIBVISUAL)_$(ARCH).deb
 $(LIBVISUAL): $(SPREZZ)/libvisual/debian/changelog
