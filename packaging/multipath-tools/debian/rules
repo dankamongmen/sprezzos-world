@@ -1,0 +1,92 @@
+#!/usr/bin/make -f
+
+INITRAMFS=$(CURDIR)/debian/multipath-tools-boot/usr/share/initramfs-tools/
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+        INSTALL_PROGRAM = install -s
+else
+        INSTALL_PROGRAM = install
+endif
+
+# Work around misp(el) linker bug:
+# http://sources.redhat.com/bugzilla/show_bug.cgi?id=10144
+DEB_HOST_ARCH=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+ifneq (,$(findstring mips,$(DEB_HOST_ARCH)))
+  OPTFLAGS = "OPTFLAGS=-pipe -Wall -Wunused -Wstrict-prototypes"
+endif
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+build: build-arch build-indep
+
+build-arch: build-stamp
+build-indep: build-stamp
+
+build-stamp:
+	dh_testdir
+
+	$(MAKE) $(OPTFLAGS) LIB=lib
+
+	touch $@
+
+clean-tree:
+	$(MAKE) clean
+
+clean: clean-tree
+	dh_testdir
+	rm -f build-stamp
+	dh_clean
+	debconf-updatepo
+
+install:
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	mkdir -p $(CURDIR)/debian/tmp/sbin
+	$(MAKE) install INSTALL_PROGRAM=$(INSTALL_PROGRAM) DESTDIR=$(CURDIR)/debian/tmp LIB=lib
+	install -m 755 debian/dmsetup_env $(CURDIR)/debian/tmp/lib/udev/
+	dh_install -X.rules --fail-missing --sourcedir=$(CURDIR)/debian/tmp
+	# initramfs stuff:
+	install -D -m 755 debian/initramfs/hooks $(INITRAMFS)/hooks/multipath
+	install -D -m 755 debian/initramfs/local-top \
+		$(INITRAMFS)/scripts/local-top/multipath
+	install -D -m 755 debian/initramfs/init-top \
+		$(INITRAMFS)/scripts/init-top/multipath
+	# reportbug:
+	for pkg in "multipath-tools" "multipath-tools-boot"; do \
+	    install -D -m 755 debian/reportbug/script debian/$${pkg}/usr/share/bug/$${pkg}/script; \
+	done
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_installexamples
+	dh_installinit -pmultipath-tools
+	dh_installinit -pmultipath-tools --name=multipath-tools-boot --no-start -- start 21 S .
+	dh_installudev -pkpartx
+	dh_installudev -pmultipath-tools --name=multipath
+	dh_installdebconf -pmultipath-tools-boot
+	dh_installman
+	dh_makeshlibs --add-udeb=multipath-udeb
+	dh_link
+	dh_strip --dbg-package=multipath-tools-dbg
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary:	binary-indep binary-arch
+.PHONY: binary binary-arch binary-indep unpack configure build clean 
