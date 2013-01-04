@@ -3750,6 +3750,14 @@ $(LIBXKBCOMMON): $(SPREZZ)/libxkbcommon/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxkbcommon-xkbcommon-$(libxkbcommon_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libxkbfile
+libxkbfile:$(LIBXKBFILE)_$(ARCH).deb
+$(LIBXKBFILE): $(SPREZZ)/libxkbfile/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxkbfile-xkbfile-$(libxkbfile_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxv
 libxv:$(LIBXV)_$(ARCH).deb
 $(LIBXV): $(SPREZZ)/libxv/debian/changelog
