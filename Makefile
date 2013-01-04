@@ -3756,7 +3756,7 @@ $(LIBXKBFILE): $(SPREZZ)/libxkbfile/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libxkbfile-xkbfile-$(libxkbfile_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libxkbfile-$(libxkbfile_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxklavier
 libxklavier:$(LIBXKLAVIER)_$(ARCH).deb
