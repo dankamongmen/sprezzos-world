@@ -1390,6 +1390,14 @@ $(DNSMASQ): $(SPREZZ)/dnsmasq/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf dnsmasq-$(dnsmasq_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: docbook
+docbook:$(DOCBOOK)_$(ARCH).deb
+$(DOCBOOK): $(SPREZZ)/docbook/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf docbook-$(docbook_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: docbook-xml
 docbook-xml:$(DOCBOOKXML)_$(ARCH).deb
 $(DOCBOOKXML): $(SPREZZ)/docbook-xml/debian/changelog
