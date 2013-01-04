@@ -4984,6 +4984,14 @@ $(RRDTOOL): $(SPREZZ)/rrdtool/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf rrdtool-$(rrdtool_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libraw
+libraw:$(LIBRAW)_$(ARCH).deb
+$(LIBRAW): $(SPREZZ)/libraw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf LibRaw-$(libraw_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: librsvg
 librsvg:$(LIBRSVG)_$(ARCH).deb
 $(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog
