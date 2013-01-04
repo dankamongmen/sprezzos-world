@@ -1,0 +1,92 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+PACKAGE	:= docbook
+
+%:
+	dh $@ --parallel
+
+override_dh_clean:
+	dh_clean debian/docbook.install \
+	         debian/docbook.links \
+	         debian/docbook.sgmlcatalogs
+
+override_dh_install: debian/docbook.install
+	dh_install
+
+debian/docbook.install:
+	set -ex ; \
+	touch $@ ; \
+	for db in docbook-* ; do \
+		dbver=`echo $${db} | sed -e 's/docbook-//g'` ; \
+		for file in $${db}/*.dcl $${db}/*.dtd $${db}/*.mod ; do \
+			if [ $${file} != $${db}/dbgenent.mod ] ; then \
+				echo "$${file} usr/share/sgml/docbook/dtd/$${dbver}" >> $@ ; \
+			else \
+				echo "$${file} etc/sgml/docbook/$${dbver}" >> $@ ; \
+			fi ; \
+		done ; \
+	done
+
+override_dh_link: debian/docbook.links
+	dh_link
+	find $(CURDIR)/debian/$(PACKAGE) -type l -follow >/dev/null # exits 1 on broken links
+
+debian/docbook.links:
+	set -ex ; \
+	touch $@ ; \
+	for db in docbook-* ; do \
+		dbver=`echo $${db} | sed -e 's/docbook-//g'` ; \
+		[ -f $${db}/dbgenent.mod ] && \
+		    echo -n "etc/sgml/docbook/$${dbver}/dbgenent.mod " >> $@ && \
+		        echo "usr/share/sgml/docbook/dtd/$${dbver}/dbgenent.mod" >> $@ ; \
+		[ -f $${db}/docbook.cat ] && \
+		    echo "usr/share/sgml/docbook/dtd/$${dbver}/catalog usr/share/sgml/docbook/dtd/$${dbver}/docbook.cat" >> $@ ; \
+	done
+
+override_dh_installcatalogs: debian/docbook.sgmlcatalogs
+	dh_installcatalogs
+
+debian/docbook.sgmlcatalogs:
+	set -ex ; \
+	touch $@ ; \
+	echo "debian/catalog /usr/share/sgml/docbook/dtd/catalog" > $@ ; \
+	for db in docbook-* ; do \
+		dbver=`echo $${db} | sed -e 's/docbook-//g'` ; \
+		[ -f $${db}/docbook.cat ] && \
+		    echo "$${db}/docbook.cat /usr/share/sgml/docbook/dtd/$${dbver}/catalog" >> $@ ; \
+	done
+
+override_dh_installchangelogs::
+	dh_installchangelogs ChangeLog.upstream
+
+version=$(shell dpkg-parsechangelog | sed -n -e 's/^Version: \(.*\)-[^-]*/\1/p')
+
+.PHONY: get-orig-source
+get-orig-source:
+	set -ex ; \
+	TMPDIR=`mktemp -d docbook-$(version).orig` ; \
+	touch "$$TMPDIR"/ChangeLog.upstream ; \
+	for db in 4.5 4.4 4.3 4.2 ; do \
+		mkdir -p "$$TMPDIR"/docbook-$${db} ; \
+		dbzip=docbook-$${db}.zip ; \
+		wget -P "$$TMPDIR" http://www.oasis-open.org/docbook/sgml/$${db}/"$$dbzip" ; \
+		unzip -d "$$TMPDIR"/docbook-$${db} "$$TMPDIR"/"$$dbzip" ; \
+		rm -f "$$TMPDIR"/"$$dbzip" ; \
+		[ -f "$$TMPDIR"/docbook-$${db}/ChangeLog ] && \
+		    cat "$$TMPDIR"/docbook-$${db}/ChangeLog >> "$$TMPDIR"/ChangeLog.upstream ; \
+	done; \
+	for db in 4.1 4.0 3.1 3.0 2.4.1 ; do \
+		mkdir -p "$$TMPDIR"/docbook-$${db} ; \
+		dbver=`echo $${db} | sed -e 's/\.//g'` ; \
+		dbzip=docbk"$$dbver".zip ; \
+		wget -P "$$TMPDIR" http://www.oasis-open.org/docbook/sgml/$${db}/"$$dbzip" ; \
+		unzip -d "$$TMPDIR"/docbook-$${db} "$$TMPDIR"/"$$dbzip" ; \
+		rm -f "$$TMPDIR"/"$$dbzip" ; \
+		cat "$$TMPDIR"/docbook-$${db}/"$$dbver"chg.txt >> "$$TMPDIR"/ChangeLog.upstream ; \
+	done ; \
+	find "$$TMPDIR" -type f ! -perm 644 -exec chmod 644 "{}" ";" ; \
+	GZIP=-9 tar -czf $(CURDIR)/docbook_${version}.orig.tar.gz "$$TMPDIR" ; \
+	rm -rf "$$TMPDIR"
+
