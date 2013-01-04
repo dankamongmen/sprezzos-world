@@ -1,0 +1,184 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+export MONO_SHARED_DIR = $(shell pwd)/debian
+
+PACKAGE     := antlr
+VERSION		:= $(shell dpkg-parsechangelog | grep ^Version: | cut -d' ' -f2 | cut -d- -f1 | cut -d+ -f1)
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	cp /usr/share/misc/config.* scripts
+	JAVAC='/usr/lib/jvm/default-java/bin/javac -source 1.4' CLASSPATH=`pwd` JAVA=/usr/lib/jvm/default-java/bin/java \
+	CSHARPC=mono-csc \
+	./configure \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man 
+	touch configure-stamp
+
+build-indep: configure build-stamp-indep
+build-stamp-indep:
+	dh_testdir
+	$(MAKE) -f debian/Makefile.debian build_antlr
+	$(MAKE) -C lib/csharp
+	touch build-stamp-indep
+
+# Do not depend on build-indep as B-D-I may not be available and
+# buildd blindly call build.  Instead, binary depends on binary-indep
+# which in turn depends on build-indep (via install-indep).
+build: build-arch
+build-arch: configure build-stamp
+build-stamp:
+	dh_testdir
+	uudecode -o debian/antlr.snk debian/antlr.snk.uue
+	$(MAKE) -f debian/Makefile.debian compile build_antlr
+	$(MAKE) -C lib/cpp CXXFLAGS="+ -fPIC -DPIC"
+	mv -f lib/cpp/src/libantlr.a debian/libantlr-pic.a
+	$(MAKE) -C lib/cpp clean
+	$(MAKE) -C lib/cpp
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	-rm -f build-stamp build-stamp-indep configure-stamp
+	[ ! -f debian/Makefile.debian ] || $(MAKE) -f debian/Makefile.debian clean
+	-cd lib/cpp; $(MAKE) clean
+	-cd lib/csharp; $(MAKE) clean
+	-rm -rf lib/cpp/src/.deps
+	-rm -f lib/cpp/config.sub lib/cpp/config.guess lib/cpp/config.cache lib/cpp/config.log
+	-rm -f lib/cpp/scripts/config.sub lib/cpp/scripts/config.guess lib/cpp/scripts/config.cache lib/cpp/scripts/config.log
+	-rm config.status config.log
+	-find -name Makefile | xargs rm -f
+	-rm -f scripts/*.sh
+	-rm -f scripts/antlr-config scripts/config.deps scripts/antlr.spec scripts/config.make scripts/config.vars 
+	-rm -f scripts/config.guess scripts.config.sub
+	-rm -f antlr/Version.java
+	-rm -f debian/libantlr-pic.a
+	-rm -f lib/csharp/antlr.astframe/bin/antlr.astframe.xml lib/csharp/antlr.runtime/bin/antlr.runtime.xml
+	-rm -f debian/antlr.snk
+	-rm -rf debian/.wapi
+	-rm -rf debian/tmp
+	dh_clean
+
+install-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_prep -i
+	dh_installdirs -i
+	dh_install -i
+	dh_link -i
+	$(MAKE) -f debian/Makefile.debian install DESTDIR=`pwd`/debian/antlr
+	mv debian/antlr/usr/share/java/* debian/libantlr-java/usr/share/java/
+	rmdir debian/antlr/usr/share/java/
+	mkdir -p debian/python-antlr/usr/lib/$$(pyversions -d)/dist-packages
+	install -m644 lib/python/antlr/antlr.py \
+		debian/python-antlr/usr/lib/$$(pyversions -d)/dist-packages/.
+	install -m644 -D CHANGES.txt debian/antlr/usr/share/doc/antlr/changelog
+	install -m644 -D CHANGES.txt debian/antlr-doc/usr/share/doc/antlr-doc/changelog
+	mh_installpoms -plib$(PACKAGE)-java
+	mh_linkjar -plib$(PACKAGE)-java -l debian/pom.xml usr/share/java/antlr.jar
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep -a
+	dh_installdirs -a
+	dh_install -a
+	dh_link -a
+	$(MAKE) -C lib/cpp install prefix=`pwd`/debian/libantlr-dev/usr
+	install -m755 scripts/antlr-config debian/libantlr-dev/usr/bin
+	install -m644 -D CHANGES.txt debian/libantlr-dev/usr/share/doc/libantlr-dev/changelog
+	install -m644 debian/libantlr-pic.a debian/libantlr-dev/usr/lib/
+
+binary-indep: build-indep install-indep
+	dh_testdir 
+	dh_testroot
+	# C# library
+	dh_makeclilibs -V -plibantlr2.7-cil
+	dh_installcligac -plibantlr2.7-cil
+	dh_clideps -plibantlr2.7-cil
+	dh_installdocs -plibantlr2.7-cil
+	dh_installexamples -plibantlr2.7-cil
+	dh_installchangelogs -plibantlr2.7-cil
+	dh_fixperms -plibantlr2.7-cil
+	chmod a-x debian/libantlr2.7-cil/usr/lib/cli/antlr-2.7/antlr.*.dll
+	dh_compress -plibantlr2.7-cil
+	dh_installdeb -plibantlr2.7-cil
+	dh_gencontrol -plibantlr2.7-cil
+	dh_md5sums -plibantlr2.7-cil
+	dh_builddeb -plibantlr2.7-cil
+	# antlr-doc
+	dh_installdocs -pantlr-doc
+	dh_installexamples -pantlr-doc
+	dh_installchangelogs -pantlr-doc
+	rm -rf debian/antlr-doc/usr/share/doc/antlr-doc/examples/csharp
+	rm -f debian/antlr-doc/usr/share/doc/antlr-doc/csharp-runtime.html
+	rm -f debian/antlr-doc/usr/share/doc/antlr-doc/Makefile*
+	find debian/antlr-doc/usr/share/doc/antlr-doc/examples -type f -print | xargs chmod 0644
+	dh_fixperms -pantlr-doc
+	dh_compress -pantlr-doc
+	dh_installdeb -pantlr-doc
+	dh_gencontrol -pantlr-doc
+	dh_md5sums -pantlr-doc
+	dh_builddeb -pantlr-doc
+	# antlr
+	dh_installman -pantlr
+	dh_installdocs -pantlr
+	dh_installchangelogs -pantlr
+	dh_compress -pantlr
+	dh_fixperms -pantlr
+	dh_installdeb -pantlr
+	dh_gencontrol -pantlr
+	dh_md5sums -pantlr
+	dh_builddeb -pantlr
+	# antlr
+	dh_installman -plibantlr-java
+	dh_installdocs -plibantlr-java
+	dh_installchangelogs -plibantlr-java
+	dh_link -plibantlr-java \
+		usr/share/java/antlr.jar usr/share/java/antlr.debug.jar \
+		usr/share/java/antlr.jar usr/share/java/antlrall.jar
+	dh_compress -plibantlr-java
+	dh_fixperms -plibantlr-java
+	dh_installdeb -plibantlr-java
+	dh_gencontrol -plibantlr-java
+	dh_md5sums -plibantlr-java
+	dh_builddeb -plibantlr-java
+	# python-antlr
+	dh_installdocs -ppython-antlr
+	dh_installchangelogs -ppython-antlr
+	dh_python2 -ppython-antlr
+	dh_compress -ppython-antlr
+	dh_fixperms -ppython-antlr
+	dh_installdeb -ppython-antlr
+	dh_gencontrol -ppython-antlr
+	dh_md5sums -ppython-antlr
+	dh_builddeb -ppython-antlr
+
+
+binary-arch: build install
+	# libantlr-dev
+	dh_testdir
+	dh_testroot
+	dh_installdocs -plibantlr-dev
+	dh_installexamples -plibantlr-dev
+	dh_installchangelogs -plibantlr-dev
+	dh_strip -plibantlr-dev
+	dh_compress -plibantlr-dev
+	dh_fixperms -plibantlr-dev
+	dh_makeshlibs -plibantlr-dev
+	dh_installdeb -plibantlr-dev
+	dh_shlibdeps -plibantlr-dev
+	dh_gencontrol -plibantlr-dev
+	dh_md5sums -plibantlr-dev
+	dh_builddeb -plibantlr-dev
+
+binary: binary-indep binary-arch
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install
+
+get-orig-pom:
+	wget -O debian/pom.xml http://repository.sonatype.org/service/local/repositories/central/content/antlr/antlr/$(VERSION)/antlr-$(VERSION).pom
+
