@@ -3838,6 +3838,14 @@ $(XCBUTILKEYSYMS): $(SPREZZ)/xcb-util-keysyms/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xcb-util-keysyms-$(xcb-util-keysyms_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xcb-util-renderutil
+xcb-util-renderutil:$(XCBUTILRENDERUTIL)_$(ARCH).deb
+$(XCBUTILRENDERUTIL): $(SPREZZ)/xcb-util-renderutil/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xcb-util-renderutil-$(xcb-util-renderutil_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xcb-util-wm
 xcb-util-wm:$(XCBUTILWM)_$(ARCH).deb
 $(XCBUTILWM): $(SPREZZ)/xcb-util-wm/debian/changelog
