@@ -3806,6 +3806,14 @@ $(LIBX11): $(SPREZZ)/libx11/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libx11_$(libx11_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libx11-protocol-perl
+libx11-protocol-perl:$(LIBX11PROTOCOLPERL)_$(ARCH).deb
+$(LIBX11PROTOCOLPERL): $(SPREZZ)/libx11-protocol-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf X11-Protocol-$(libx11-protocol-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libx11-protocol-other-perl
 libx11-protocol-other-perl:$(LIBX11PROTOCOLOTHERPERL)_$(ARCH).deb
 $(LIBX11PROTOCOLOTHERPERL): $(SPREZZ)/libx11-protocol-other-perl/debian/changelog
