@@ -638,6 +638,14 @@ $(ANJUTA): $(SPREZZ)/anjuta/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf anjuta-$(anjuta_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: antler
+antler:$(ANTLER)_$(ARCH).deb
+$(ANTLER): $(SPREZZ)/antler/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf antler-$(antler_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: apache
 apache:$(APACHE)_$(ARCH).deb
 $(APACHE): $(SPREZZ)/apache/debian/changelog
