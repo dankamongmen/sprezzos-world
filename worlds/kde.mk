@@ -30,6 +30,14 @@ $(HUPNP): $(SPREZZ)/hupnp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf hupnp_$(hupnp_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: k3b
+k3b:$(K3B)_$(ARCH).deb
+$(K3B): $(SPREZZ)/k3b/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf k3b-$(k3b_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: kaccessible
 kaccessible:$(KACCESSIBLE)_$(ARCH).deb
 $(KACCESSIBLE): $(SPREZZ)/kaccessible/debian/changelog
