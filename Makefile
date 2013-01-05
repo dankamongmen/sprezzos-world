@@ -5810,6 +5810,14 @@ $(XCBPROTO): $(SPREZZ)/xcb-proto/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xcb-proto_$(xcb-proto_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xine-lib
+xine-lib:$(XINELIB)_$(ARCH).deb
+$(XINELIB): $(SPREZZ)/xine-lib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xine-lib-$(xine-lib_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxinerama
 libxinerama:$(LIBXINERAMA)_$(ARCH).deb
 $(LIBXINERAMA): $(SPREZZ)/libxinerama/debian/changelog
