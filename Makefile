@@ -5224,6 +5224,14 @@ $(SCREENLETS): $(SPREZZ)/screenlets/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf screenlets-$(screenlets_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: scribus
+scribus:$(SCRIBUS)_$(ARCH).deb
+$(SCRIBUS): $(SPREZZ)/scribus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf scribus-$(scribus_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: seahorse
 seahorse:$(SEAHORSE)_$(ARCH).deb
 $(SEAHORSE): $(SPREZZ)/seahorse/debian/changelog
@@ -5881,6 +5889,14 @@ $(LIBXRENDER): $(SPREZZ)/libxrender/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXrender-$(libxrender_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libxres
+libxres:$(LIBXRES)_$(ARCH).deb
+$(LIBXRES): $(SPREZZ)/libxres/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXres-$(libxres_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xinit
 xinit:$(XINIT)_$(ARCH).deb
