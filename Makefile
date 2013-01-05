@@ -3488,6 +3488,14 @@ $(LIBSELINUX): $(SPREZZ)/libselinux/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libselinux-$(libselinux_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libsepol
+libsepol:$(LIBSEPOL)_$(ARCH).deb
+$(LIBSEPOL): $(SPREZZ)/libsepol/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsepol-$(libsepol_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsm
 libsm:$(LIBSM)_$(ARCH).deb
 $(LIBSM): $(SPREZZ)/libsm/debian/changelog
