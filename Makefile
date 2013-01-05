@@ -86,7 +86,7 @@ SOCATORIG:=socat_$(shell echo $(socat_UPVER) | cut -d- -f1).orig.tar.bz2
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -j8 -k$(DEBKEY)
+	cd $< && debuild -k$(DEBKEY)
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -5496,6 +5496,14 @@ $(V4LUTILS): $(SPREZZ)/v4l-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf v4l-utils-$(v4l-utils_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: vcdimager
+vcdimager:$(VCDIMAGER)_$(ARCH).deb
+$(VCDIMAGER): $(SPREZZ)/vcdimager/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vcdimager-$(vcdimager_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: vim
 vim:$(VIM)_$(ARCH).deb
 $(VIM): $(SPREZZ)/vim/debian/changelog
@@ -5535,6 +5543,14 @@ $(VOAACENC): $(SPREZZ)/vo-aacenc/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vo-aacenc-$(vo-aacenc_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: wavpack
+wavpack:$(WAVPACK)_$(ARCH).deb
+$(WAVPACK): $(SPREZZ)/wavpack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf wavpack-$(wavpack_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: wayland
 wayland:$(WAYLAND)_$(ARCH).deb
