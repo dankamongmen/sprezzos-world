@@ -51,10 +51,6 @@ FBTERMUP:=nfbterm-$(shell echo $(fbterm_UPVER) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_UPVER) | cut -d- -f1).orig.tar.gz
 FONTCONFIGUP:=fontconfig-$(shell echo $(fontconfig_UPVER) | cut -d- -f1)
 FONTCONFIGORIG:=fontconfig_$(shell echo $(fontconfig_UPVER) | cut -d- -f1).orig.tar.gz
-FREETYPEUP:=freetype-$(shell echo $(freetype_UPVER) | cut -d- -f1) \
-	freetype-doc-$(shell echo $(freetype_UPVER) | cut -d- -f1) \
-	ft2demos-$(shell echo $(freetype_UPVER) | cut -d- -f1)
-FREETYPEORIG:=freetype_$(shell echo $(freetype_UPVER) | cut -d- -f1).orig.tar.gz
 GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_UPVER) | cut -d- -f1)
 GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_UPVER) | cut -d- -f1).orig.tar.xz
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1)
@@ -1677,6 +1673,20 @@ $(FREEGLUT): $(SPREZZ)/freeglut/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf freeglut_$(freeglut_UPVER).orig.tar.gz $(TARARGS) $@
+
+FREETYPEUP:=freetype-$(shell echo $(freetype_UPVER) | cut -d- -f1) \
+	freetype-doc-$(shell echo $(freetype_UPVER) | cut -d- -f1) \
+	ft2demos-$(shell echo $(freetype_UPVER) | cut -d- -f1)
+FREETYPEORIG:=freetype_$(shell echo $(freetype_UPVER) | cut -d- -f1).orig.tar.gz
+
+.PHONY: freetype
+freetype:$(FREETYPE)_$(ARCH).deb
+$(FREETYPE): $(SPREZZ)/freetype/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	cd $@ && for i in $(FREETYPEUP) ; do wget -nc -O$$i.tar.gz http://download.savannah.gnu.org/releases/freetype/$$i.tar.gz ; done
+	#tar xzvf freetype-$(freetype_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: fribidi
 fribidi:$(FRIBIDI)_$(ARCH).deb
@@ -6146,20 +6156,6 @@ fontconfig:$(FONTCONFIG)_$(ARCH).deb
 $(FONTCONFIG): $(SPREZZ)/fontconfig/debian/changelog $(FONTCONFIGORIG)
 	mkdir $@
 	tar xzvf $(FONTCONFIGORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(FREETYPEUP).tar.gz
-$(FREETYPEUP).tar.gz:
-	wget -nc -O$@ http://download.savannah.gnu.org/releases/freetype/$@
-
-$(FREETYPEORIG): $(FREETYPEUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: freetype
-freetype:$(FREETYPE)_$(ARCH).deb
-$(FREETYPE): $(SPREZZ)/freetype/debian/changelog $(FREETYPEORIG)
-	mkdir $@
-	tar xzvf $(FREETYPEORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(GDKPIXBUFUP).tar.xz
