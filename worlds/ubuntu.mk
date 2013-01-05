@@ -109,3 +109,12 @@ $(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libindicator-$(libindicator_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libunity
+libunity:$(LIBUNITY)_$(ARCH).deb
+$(LIBUNITY): $(SPREZZ)/libunity/debian/changelog
+	bzr branch lp:~juliank/libunity/debian $@
+	rm -rf $@/debian
+	tar cJf libunity-$(libunity_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf libunity-$(libunity_UPVER).tar.xz libunity_$(libunity_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
