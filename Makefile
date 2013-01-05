@@ -586,6 +586,14 @@ $(A52DEC): $(SPREZZ)/a52dec/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf a52dec-$(a52dec_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: acl
+acl:$(ACL)_$(ARCH).deb
+$(ACL): $(SPREZZ)/acl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf acl-$(acl_UPVER).src.tar.gz $(TARARGS) $@
+
 .PHONY: acpi-support
 acpi-support:$(ACPISUPPORT)_$(ARCH).deb
 $(ACPISUPPORT): $(SPREZZ)/acpi-support/debian/changelog
