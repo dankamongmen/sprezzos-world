@@ -158,6 +158,14 @@ $(QT4X11): $(SPREZZ)/qt4-x11/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf qt-everywhere-opensource-src-$(qt4-x11_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: qt5-x11
+qt5-x11:$(QT5X11)_$(ARCH).deb
+$(QT5X11): $(SPREZZ)/qt5-x11/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qt-everywhere-opensource-src-$(qt5-x11_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: qtwebkit
 qtwebkit:$(QTWEBKIT)_$(ARCH).deb
 $(QTWEBKIT): $(SPREZZ)/qtwebkit/debian/changelog
