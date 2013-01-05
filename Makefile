@@ -582,6 +582,14 @@ $(LIBACCOUNTSGLIB): $(SPREZZ)/libaccounts-glib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libaccounts-glib-$(libaccounts-glib_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: a52dec
+a52dec:$(A52DEC)_$(ARCH).deb
+$(A52DEC): $(SPREZZ)/a52dec/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf a52dec-$(a52dec_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: acpi-support
 acpi-support:$(ACPISUPPORT)_$(ARCH).deb
 $(ACPISUPPORT): $(SPREZZ)/acpi-support/debian/changelog
