@@ -38,3 +38,50 @@ $(INDICATORAPPLICATION): $(SPREZZ)/indicator-application/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf indicator-application-$(indicator-application_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: indicator-appmenu
+indicator-appmenu:$(INDICATORAPPMENU)_$(ARCH).deb
+$(INDICATORAPPMENU): $(SPREZZ)/indicator-appmenu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf indicator-appmenu-$(indicator-appmenu_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: indicator-datetime
+indicator-datetime:$(INDICATORDATETIME)_$(ARCH).deb
+$(INDICATORDATETIME): $(SPREZZ)/indicator-datetime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf indicator-datetime-$(indicator-datetime_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: indicator-me
+indicator-me:$(INDICATORME)_$(ARCH).deb
+$(INDICATORME): $(SPREZZ)/indicator-me/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf indicator-me-$(indicator-me_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: indicator-messages
+indicator-messages:$(INDICATORMESSAGES)_$(ARCH).deb
+$(INDICATORMESSAGES): $(SPREZZ)/indicator-messages/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf indicator-messages-$(indicator-messages_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: indicator-session
+indicator-session:$(INDICATORSESSION)_$(ARCH).deb
+$(INDICATORSESSION): $(SPREZZ)/indicator-session/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf indicator-session-$(indicator-session_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: indicator-sound
+indicator-sound:$(INDICATORSOUND)_$(ARCH).deb
+$(INDICATORSOUND): $(SPREZZ)/indicator-sound/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf indicator-sound-$(indicator-sound_UPVER).tar.gz $(TARARGS) $@
