@@ -1,0 +1,104 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE=1
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+package = attr
+develop = lib$(package)1-dev
+library = lib$(package)1
+
+dirme  = debian/$(package)
+dirdev = debian/$(develop)
+dirlib = debian/$(library)
+pkgme  = DIST_ROOT=`pwd`/$(dirme);  export DIST_ROOT;
+pkgdev = DIST_ROOT=`pwd`/$(dirdev); export DIST_ROOT;
+pkglib = DIST_ROOT=`pwd`/$(dirlib); export DIST_ROOT;
+stdenv = @GZIP=-q; export GZIP;
+
+options = export DEBUG=-DNDEBUG DISTRIBUTION=debian \
+	  INSTALL_USER=root INSTALL_GROUP=root \
+	  CONFIG_SHELL=/bin/sh ;
+checkdir = test -f debian/rules
+
+ifneq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+        LOCAL_CONFIGURE_OPTIONS += --host $(DEB_HOST_GNU_TYPE) --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+LOCAL_CONFIGURE_OPTIONS += \
+		--libdir=/lib/$(DEB_HOST_MULTIARCH) \
+		--libexecdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+build-arch: build
+build-indep: build
+build: built
+built: config
+	@echo "== dpkg-buildpackage: build" 1>&2
+	$(MAKE) default
+	rm -f po/attr.pot
+	$(MAKE) -C po attr.pot
+	touch built
+
+config: .census
+.census:
+	@echo "== dpkg-buildpackage: configure" 1>&2
+	$(checkdir)
+	$(options) $(MAKE) configure LOCAL_CONFIGURE_OPTIONS="$(LOCAL_CONFIGURE_OPTIONS)"
+	touch .census
+
+clean:
+	@echo "== dpkg-buildpackage: clean" 1>&2
+	$(checkdir)
+	-rm -f built .census
+	$(MAKE) distclean
+	-rm -rf $(dirme) $(dirdev) $(dirlib) debian/tmp
+	-rm -f debian/*substvars debian/files* debian/*.debhelper
+
+binary-indep:
+
+binary-arch: checkroot built
+	@echo "== dpkg-buildpackage: binary-arch" 1>&2
+	$(checkdir)
+	-rm -rf $(dirme) $(dirdev) $(dirlib)
+	$(pkgme)  $(MAKE) -C . install
+	$(pkgdev) $(MAKE) -C . install-dev
+	$(pkglib) $(MAKE) -C . install-lib
+	$(pkgme)  $(MAKE) -C build src-manifest
+
+	rm -f $(dirdev)/usr/lib/$(DEB_HOST_MULTIARCH)/libattr.la
+	rm -f $(dirdev)/lib/$(DEB_HOST_MULTIARCH)/libattr.la
+
+	-rm -rf $(dirdev)/usr/share/doc/attr
+	-rm -rf $(dirlib)/usr/share/doc/attr
+	-rm -rf $(dirlib)/usr/share/locale
+	-rm -rf $(dirlib)/usr/share/man
+	-rm -rf $(dirlib)/usr/bin
+
+	dh_installdocs
+	dh_installchangelogs
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs -N $(library)
+	dh_makeshlibs -p $(library) -V 'libattr1 (>= 1:2.4.46-8)'
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+
+	dh_md5sums
+	dh_builddeb -p$(package) -- -Zbzip2 -z9
+	dh_builddeb -p$(develop) -- -Zbzip2 -z9
+	dh_builddeb -p$(library)
+
+binary: binary-indep binary-arch
+
+checkroot:
+	test 0 -eq `id -u`
+
+.PHONY: binary binary-arch binary-indep clean checkroot
