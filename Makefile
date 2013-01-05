@@ -5816,7 +5816,7 @@ $(XINELIB): $(SPREZZ)/xine-lib/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xine-lib-$(xine-lib_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf xine-lib-$(xine-lib_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libxinerama
 libxinerama:$(LIBXINERAMA)_$(ARCH).deb
