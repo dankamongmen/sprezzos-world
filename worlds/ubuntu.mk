@@ -1,3 +1,11 @@
+.PHONY: appmenu-qt
+appmenu-qt:$(APPMENUQT)_$(ARCH).deb
+$(APPMENUQT): $(SPREZZ)/appmenu-qt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf appmenu-qt-$(appmenu-qt_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: dbus-test-runner
 dbus-test-runner:$(DBUSTESTRUNNER)_$(ARCH).deb
 $(DBUSTESTRUNNER): $(SPREZZ)/dbus-test-runner/debian/changelog
