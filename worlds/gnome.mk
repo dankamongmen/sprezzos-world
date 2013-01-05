@@ -1,3 +1,27 @@
+.PHONY: evolution
+evolution:$(EVOLUTION)_$(ARCH).deb
+$(EVOLUTION): $(SPREZZ)/evolution/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf evolution-$(evolution_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: evolution-data-server
+evolution-data-server:$(EVOLUTIONDATASERVER)_$(ARCH).deb
+$(EVOLUTIONDATASERVER): $(SPREZZ)/evolution-data-server/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf evolution-data-server-$(evolution-data-server_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: evolution-mapi
+evolution-mapi:$(EVOLUTIONMAPI)_$(ARCH).deb
+$(EVOLUTIONMAPI): $(SPREZZ)/evolution-mapi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf evolution-mapi-$(evolution-mapi_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gconf
 gconf:$(GCONF)_$(ARCH).deb
 $(GCONF): $(SPREZZ)/gconf/debian/changelog
@@ -94,3 +118,10 @@ $(VTE3): $(SPREZZ)/vte3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vte_$(vte3_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: syncevolution
+syncevolution:$(SYNCEVOLUTION)_$(ARCH).deb
+$(SYNCEVOLUTION): $(SPREZZ)/syncevolution/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf syncevolution_$(syncevolution_UPVER).orig.tar.gz $(TARARGS) $@

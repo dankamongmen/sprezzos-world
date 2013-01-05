@@ -1555,22 +1555,6 @@ $(ETTERCAP): $(SPREZZ)/ettercap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ettercap-$(ettercap_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: evolution
-evolution:$(EVOLUTION)_$(ARCH).deb
-$(EVOLUTION): $(SPREZZ)/evolution/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf evolution-$(evolution_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: evolution-data-server
-evolution-data-server:$(EVOLUTIONDATASERVER)_$(ARCH).deb
-$(EVOLUTIONDATASERVER): $(SPREZZ)/evolution-data-server/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf evolution-data-server-$(evolution-data-server_UPVER).tar.xz $(TARARGS) $@
-
 .PHONY: f2fs-tools
 f2fs-tools:$(F2FSTOOLS)_$(ARCH).deb
 $(F2FSTOOLS): $(SPREZZ)/f2fs-tools/debian/changelog
@@ -5370,14 +5354,6 @@ $(STARTUPNOTIFICATION): $(SPREZZ)/startup-notification/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf startup-notification-$(startup-notification_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: syncevolution
-syncevolution:$(SYNCEVOLUTION)_$(ARCH).deb
-$(SYNCEVOLUTION): $(SPREZZ)/syncevolution/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf syncevolution_$(syncevolution_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: systemd
 systemd:$(SYSTEMD)_$(ARCH).deb
