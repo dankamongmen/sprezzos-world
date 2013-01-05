@@ -27,6 +27,7 @@ include worlds/gnome.mk
 include worlds/debian.mk
 include worlds/ubuntu.mk
 include worlds/obsolete.mk
+include worlds/sprezzatech.mk
 
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
@@ -6373,13 +6374,6 @@ sudo:$(SUDO)_$(ARCH).deb
 $(SUDO): $(SPREZZ)/sudo/debian/changelog sudo-1.8.5p3.tar.gz
 	mkdir $@
 	tar xzvf sudo-1.8.5p3.tar.gz $(TARARGS) $@
-	cp -r $(<D) $@/
-
-.PHONY: grubtheme
-sprezzos-grub2theme:$(GRUBTHEME)_$(ARCH).deb
-$(GRUBTHEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
-	mkdir -p $@
-	cp -r $(SPREZZ)/sprezzos-grub2theme/images $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(IBUSUP).tar.gz
