@@ -6,21 +6,13 @@ $(DBUSTESTRUNNER): $(SPREZZ)/dbus-test-runner/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-test-runner-$(dbus-test-runner_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: libindicate
-libindicate:$(LIBINDICATE)_$(ARCH).deb
-$(LIBINDICATE): $(SPREZZ)/libindicate/debian/changelog
+.PHONY: ido
+ido:$(IDO)_$(ARCH).deb
+$(IDO): $(SPREZZ)/ido/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libindicate-$(libindicate_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: libindicator
-libindicator:$(LIBINDICATOR)_$(ARCH).deb
-$(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libindicator-$(libindicator_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf ido-$(ido_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: indicator-applet
 indicator-applet:$(INDICATORAPPLET)_$(ARCH).deb
@@ -85,3 +77,27 @@ $(INDICATORSOUND): $(SPREZZ)/indicator-sound/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf indicator-sound-$(indicator-sound_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libdbusmenu
+libdbusmenu:$(LIBDBUSMENU)_$(ARCH).deb
+$(LIBDBUSMENU): $(SPREZZ)/libdbusmenu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdbusmenu-$(libdbusmenu_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libindicate
+libindicate:$(LIBINDICATE)_$(ARCH).deb
+$(LIBINDICATE): $(SPREZZ)/libindicate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libindicate-$(libindicate_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libindicator
+libindicator:$(LIBINDICATOR)_$(ARCH).deb
+$(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libindicator-$(libindicator_UPVER).tar.gz $(TARARGS) $@

@@ -3377,14 +3377,6 @@ $(VLC): $(SPREZZ)/vlc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vlc-$(vlc_UPVER).tar.xz $(TARARGS) $@
 
-.PHONY: libdbusmenu
-libdbusmenu:$(libdbusmenu)_$(ARCH).deb
-$(libdbusmenu): $(SPREZZ)/libdbusmenu/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libdbusmenu-$(libdbusmenu_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: libdca
 libdca:$(LIBDCA)_$(ARCH).deb
 $(LIBDCA): $(SPREZZ)/libdca/debian/changelog
