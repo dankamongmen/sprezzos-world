@@ -3480,6 +3480,14 @@ $(LIBSECRET): $(SPREZZ)/libsecret/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libsecret-$(libsecret_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libselinux
+libselinux:$(LIBSELINUX)_$(ARCH).deb
+$(LIBSELINUX): $(SPREZZ)/libselinux/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libselinux-$(libselinux_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsm
 libsm:$(LIBSM)_$(ARCH).deb
 $(LIBSM): $(SPREZZ)/libsm/debian/changelog
