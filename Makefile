@@ -534,6 +534,14 @@ $(LIBAACS): $(SPREZZ)/libaacs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libaacs-$(libaacs_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libao
+libao:$(LIBAO)_$(ARCH).deb
+$(LIBAO): $(SPREZZ)/libao/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libao-$(libao_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libappindicator
 libappindicator:$(LIBAPPINDICATOR)_$(ARCH).deb
 $(LIBAPPINDICATOR): $(SPREZZ)/libappindicator/debian/changelog
