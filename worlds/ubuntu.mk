@@ -113,8 +113,9 @@ $(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
 .PHONY: libunity
 libunity:$(LIBUNITY)_$(ARCH).deb
 $(LIBUNITY): $(SPREZZ)/libunity/debian/changelog
-	bzr branch lp:~juliank/libunity/debian $@
+	bzr branch lp:libunity $@
 	rm -rf $@/debian
 	tar cJf libunity-$(libunity_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf libunity-$(libunity_UPVER).tar.xz libunity_$(libunity_UPVER).orig.tar.xz
+	ln -sf libunity-$(libunity_UPVER).tar.xz \
+		libunity_$(libunity_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
