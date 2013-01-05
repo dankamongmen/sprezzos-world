@@ -3265,30 +3265,6 @@ $(LIBIMOBILEDEVICE): $(SPREZZ)/libimobiledevice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libimobiledevice_$(libimobiledevice_UPVER).orig.tar.bz2 $(TARARGS) $@
 
-.PHONY: libindicate
-libindicate:$(LIBINDICATE)_$(ARCH).deb
-$(LIBINDICATE): $(SPREZZ)/libindicate/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libindicate-$(libindicate_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: libindicator
-libindicator:$(LIBINDICATOR)_$(ARCH).deb
-$(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libindicator-$(libindicator_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: indicator-applet
-indicator-applet:$(INDICATORAPPLET)_$(ARCH).deb
-$(INDICATORAPPLET): $(SPREZZ)/indicator-applet/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf indicator-applet-$(indicator-applet_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: indigo
 indigo:$(INDIGO)_$(ARCH).deb
 $(INDIGO): $(SPREZZ)/indigo/debian/changelog
