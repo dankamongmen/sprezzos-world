@@ -746,6 +746,14 @@ $(ATSPI): $(SPREZZ)/at-spi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf at-spi2-core-$(at-spi_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: attr
+attr:$(ATTR)_$(ARCH).deb
+$(ATTR): $(SPREZZ)/attr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf attr-$(attr_UPVER).src.tar.gz $(TARARGS) $@
+
 .PHONY: autoconf
 autoconf:$(AUTOCONF)_$(ARCH).deb
 $(AUTOCONF): $(SPREZZ)/autoconf/debian/changelog
