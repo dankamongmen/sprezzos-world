@@ -1,0 +1,83 @@
+#! /usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+## Figure out some variables
+DEB_HOST_ARCH_OS	:= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+DEB_HOST_GNU_CPU	:= $(shell dpkg-architecture -qDEB_HOST_GNU_CPU)
+DEB_HOST_GNU_TYPE	:= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH	:= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+LIBDIR_LIBSEPOL		:= $(shell pkg-config --variable=libdir libsepol)
+
+# for cross compilation
+ifeq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+  PREFIX = /usr
+else
+  PREFIX = /usr/$(DEB_HOST_GNU_TYPE)
+endif
+
+## Default target
+binary:
+
+## Sanity check
+ifneq ($(DEB_HOST_ARCH_OS),linux)
+$(error This is a linux only package. Aborting build.)
+endif
+
+## The build system doesn't use CPPFLAGS, pass them to CFLAGS to enable the
+## missing (hardening) flags.
+export DEB_CFLAGS_MAINT_APPEND = $(shell dpkg-buildflags --get CPPFLAGS)
+
+## Unconditionally run debhelper command targets
+.PHONY: FORCE
+FORCE:
+
+## By default, pass everything through debhelper automatically
+export DH_OPTIONS
+%: FORCE
+	@dh $@ --with=python2,ruby
+
+## Don't try to rebuild the debian/rules file
+debian/rules:
+	@touch $@
+
+## Skip python/ruby packages during stage1 build
+ifeq ($(DEB_STAGE),stage1)
+DH_OPTIONS += -Npython-selinux -Nruby-selinux -Nlibselinux-ruby1.8
+endif
+
+## Set up some variables to be passed to the upstream Makefile
+extra_make_args  = LIBSEPOLDIR=$(LIBDIR_LIBSEPOL)
+extra_make_args += ARCH=$(DEB_HOST_GNU_CPU)
+extra_make_args += CC=$(DEB_HOST_GNU_TYPE)-gcc
+override_dh_auto_build: FORCE
+	+$(MAKE) PREFIX="$(PREFIX)" LIBBASE="lib/${DEB_HOST_MULTIARCH}" $(extra_make_args) all
+
+## Work around the very limited SELinux build-system
+DESTDIR = $(CURDIR)/debian/tmp
+base_extra_install_args  = $(extra_make_args)
+base_extra_install_args += DESTDIR=$(DESTDIR)
+extra_install_args = $(base_extra_install_args) LIBDIR=$(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
+extra_install_args += SHLIBDIR=$(DESTDIR)/lib/$(DEB_HOST_MULTIARCH)
+python_extra_install_args = $(base_extra_install_args) LIBDIR=$(DESTDIR)/usr/lib
+
+override_dh_auto_install: FORCE
+	+$(MAKE) PREFIX="$(DESTDIR)$(PREFIX)" $(extra_install_args) install
+	@# Fix up the broken library symlink
+	rm -f $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)/libselinux.so
+	ln -s /lib/$(DEB_HOST_MULTIARCH)/libselinux.so.1 $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)/libselinux.so
+	@# Move manpages for user-accessible tools to section 1
+	install -d -m 755 $(DESTDIR)/usr/share/man/man1
+	mv $(DESTDIR)/usr/share/man/man8/getenforce.8     $(DESTDIR)/usr/share/man/man1/getenforce.1
+	mv $(DESTDIR)/usr/share/man/man8/selinuxenabled.8 $(DESTDIR)/usr/share/man/man1/selinuxenabled.1
+ifneq ($(DEB_STAGE),stage1)
+	+$(MAKE) PREFIX="$(PREFIX)" $(python_extra_install_args) -f debian/python.mk
+	+$(MAKE) PREFIX="$(PREFIX)" $(extra_install_args) -f debian/ruby.mk
+else
+	@echo "Detected stage-1 bootstrap, skipping python/ruby bindings..."
+endif
+
+## Generate a hard error for any upstream files we don't install
+override_dh_install: FORCE
+	dh_install --fail-missing
