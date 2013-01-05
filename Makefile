@@ -862,6 +862,14 @@ $(BINUTILS): $(SPREZZ)/binutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf binutils-$(binutils_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: biosdevname
+biosdevname:$(BIOSDEVNAME)_$(ARCH).deb
+$(BIOSDEVNAME): $(SPREZZ)/biosdevname/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf biosdevname-$(biosdevname_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: bison
 bison:$(BISON)_$(ARCH).deb
 $(BISON): $(SPREZZ)/bison/debian/changelog
