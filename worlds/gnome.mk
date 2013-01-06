@@ -127,7 +127,7 @@ $(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
 	tar xJvf libwnck-$(libwnck_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libwnck3
-libwnck:$(LIBWNCK3)_$(ARCH).deb
+libwnck3:$(LIBWNCK3)_$(ARCH).deb
 $(LIBWNCK3): $(SPREZZ)/libwnck3/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
