@@ -86,6 +86,14 @@ $(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgdata-$(libgdata_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libgnome-media-profiles
+libgnome-media-profiles:$(LIBGNOMEMEDIAPROFILES)_$(ARCH).deb
+$(LIBGNOMEMEDIAPROFILES): $(SPREZZ)/libgnome-media-profiles/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libgnome-media-profiles-$(libgnome-media-profiles_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libgsf
 libgsf:$(LIBGSF)_$(ARCH).deb
 $(LIBGSF): $(SPREZZ)/libgsf/debian/changelog
@@ -93,6 +101,14 @@ $(LIBGSF): $(SPREZZ)/libgsf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgsf-$(libgsf_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: libpeas
+libpeas:$(LIBPEAS)_$(ARCH).deb
+$(LIBPEAS): $(SPREZZ)/libpeas/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libpeas-$(libpeas_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libsocialweb
 libsocialweb:$(LIBSOCIALWEB)_$(ARCH).deb
@@ -102,13 +118,21 @@ $(LIBSOCIALWEB): $(SPREZZ)/libsocialweb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libsocialweb-$(libsocialweb_UPVER).tar.bz2 $(TARARGS) $@
 
-.PHONY: libgnome-media-profiles
-libgnome-media-profiles:$(LIBGNOMEMEDIAPROFILES)_$(ARCH).deb
-$(LIBGNOMEMEDIAPROFILES): $(SPREZZ)/libgnome-media-profiles/debian/changelog
+.PHONY: seed
+seed:$(SEED)_$(ARCH).deb
+$(SEED): $(SPREZZ)/seed/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf libgnome-media-profiles-$(libgnome-media-profiles_UPVER).tar.bz2 $(TARARGS) $@
+	tar xJvf seed-$(seed_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: syncevolution
+syncevolution:$(SYNCEVOLUTION)_$(ARCH).deb
+$(SYNCEVOLUTION): $(SPREZZ)/syncevolution/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf syncevolution_$(syncevolution_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: tango-icon-theme
 tango-icon-theme:$(TANGOICONTHEME)_$(ARCH).deb
@@ -125,11 +149,3 @@ $(VTE3): $(SPREZZ)/vte3/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vte_$(vte3_UPVER).orig.tar.xz $(TARARGS) $@
-
-.PHONY: syncevolution
-syncevolution:$(SYNCEVOLUTION)_$(ARCH).deb
-$(SYNCEVOLUTION): $(SPREZZ)/syncevolution/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf syncevolution_$(syncevolution_UPVER).orig.tar.gz $(TARARGS) $@

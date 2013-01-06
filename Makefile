@@ -4723,14 +4723,6 @@ $(LIBPCIACCESS): $(SPREZZ)/libpciaccess/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libpciaccess-$(libpciaccess_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: libpeas
-libpeas:$(LIBPEAS)_$(ARCH).deb
-$(LIBPEAS): $(SPREZZ)/libpeas/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version --repack
-	tar xzvf libpeas-$(libpeas_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: libpthread-stubs
 libpthread-stubs:$(LIBPTHREADSTUBS)_$(ARCH).deb
 $(LIBPTHREADSTUBS): $(SPREZZ)/libpthread-stubs/debian/changelog
