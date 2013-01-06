@@ -1,0 +1,68 @@
+#!/usr/bin/make -f
+
+CFLAGS = -g -Wall
+SHLD_FLAGS = -shared -Wl,--as-needed
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+
+LDFLAGS += -Wl,--as-needed
+
+DESTDIR=$(CURDIR)/debian/tmp
+export PYTHON=$(shell which `pyversions -d`)
+export PYTHON_CONFIG=$(PYTHON)-config
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+%:
+	dh $* --with python2
+
+override_dh_auto_configure:
+	PYTHON="$(PYTHON)" PYTHON_CONFIG="$(PYTHON_CONFIG)" CFLAGS="$(CFLAGS)" ./configure --prefix=/usr --disable-rpath-install --libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+get-packaged-orig-source:
+	./debian/build-orig.sh
+
+override_dh_python2:
+	dh_python2 --no-guessing-versions
+
+override_dh_auto_build:
+	$(MAKE) all SHLD_FLAGS="$(SHLD_FLAGS)"
+
+override_dh_auto_test:
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	$(MAKE) check
+endif
+
+override_dh_auto_clean:
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -rf build
+	# Waf should be doing this; see
+	# https://bugzilla.samba.org/show_bug.cgi?id=8854
+	rm -f .lock-wscript
+	# Waf should be doing this; see
+	# https://bugzilla.samba.org/show_bug.cgi?id=8855
+	rm -f buildtools/wafsamba/*.pyc \
+		  buildtools/wafadmin/*.pyc \
+		  buildtools/wafadmin/Tools/*.pyc
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(DESTDIR)
+	# Waf should be doing this..
+	ar cr libtdb.a bin/default/common/*.o
+	mv libtdb.a $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)
+	mv $(DESTDIR)/usr/bin/tdbbackup \
+		$(DESTDIR)/usr/bin/tdbbackup.tdbtools
+	mv $(DESTDIR)//usr/share/man/man8/tdbbackup.8 \
+		$(DESTDIR)/usr/share/man/man8/tdbbackup.tdbtools.8
+
+override_dh_strip:
+	dh_strip -p libtdb1 --dbg-package=libtdb1-dbg
+	dh_strip -p python-tdb --dbg-package=python-tdb-dbg
+	dh_strip -p tdb-tools
+
+override_dh_makeshlibs:
+	dh_makeshlibs -- -c4

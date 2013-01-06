@@ -4897,7 +4897,7 @@ $(PROTOBUF): $(SPREZZ)/protobuf/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf protobuf-$(protobuf_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf protobuf-$(protobuf_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: ptlib
 ptlib:$(PTLIB)_$(ARCH).deb
