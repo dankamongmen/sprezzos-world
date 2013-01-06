@@ -1,0 +1,73 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 65_saverandomseed.dpatch by  <ametzler@argenau>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Save gcrypt RNG seed.
+
+diff -NurbBp exim.orig/src/tls-gnu.c exim/src/tls-gnu.c
+--- exim.orig/src/tls-gnu.c	2009-11-15 12:17:32.000000000 +0100
++++ exim/src/tls-gnu.c	2009-11-15 12:38:30.000000000 +0100
+@@ -20,6 +20,7 @@ functions from the GnuTLS library. */
+ #include <gnutls/gnutls.h>
+ #include <gnutls/x509.h>
+ 
++#include <gcrypt.h>
+ 
+ #define UNKNOWN_NAME "unknown"
+ #define DH_BITS      2048
+@@ -443,10 +444,35 @@ tls_init(host_item *host, uschar *certif
+   uschar *crl)
+ {
+ int rc;
++uschar filename[200];
+ uschar *cert_expanded, *key_expanded, *cas_expanded, *crl_expanded;
++gcry_error_t gcr_rc;
+ 
+ client_host = host;
+ 
++/* initialize gcrypt explicitely */
++gcry_check_version (NULL);
++
++/* Use a random_seed file for gcrypt's RNG */
++if (host_number_string != NULL)
++  {
++  if (!string_format(filename, sizeof(filename), "%s/random.seed%s",
++    spool_directory, host_number_string))
++  return tls_error(US"overlong filename spool_directory/random.seedlocalhost_number", host, 0);
++  }
++else
++  {
++  if (!string_format(filename, sizeof(filename), "%s/random.seed",
++    spool_directory))
++  return tls_error(US"overlong filename spool_directory/random.seed", host, 0);
++  }
++
++gcr_rc = gcry_control (GCRYCTL_SET_RANDOM_SEED_FILE,filename);
++if (gcr_rc)
++  return tls_error(US"Failure to set random_seed file", host, gcr_rc);
++
++gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
++
+ rc = gnutls_global_init();
+ if (rc < 0) return tls_error(US"tls-init", host, gnutls_strerror(rc));
+ 
+@@ -1295,8 +1321,19 @@ Returns:     nothing
+ void
+ tls_close(BOOL shutdown)
+ {
++gcry_error_t gcr_rc;
++
+ if (tls_active < 0) return;  /* TLS was not active */
+ 
++gcr_rc = gcry_control (GCRYCTL_UPDATE_RANDOM_SEED_FILE);
++
++if (gcr_rc)
++  {
++  DEBUG(D_tls) debug_printf(
++    "GCRYCTL_UPDATE_RANDOM_SEED_FILE failed: (%d): (%s)\n",
++    gcr_rc,gcry_strerror(gcr_rc));
++  }
++
+ if (shutdown)
+   {
+   DEBUG(D_tls) debug_printf("tls_close(): shutting down TLS\n");

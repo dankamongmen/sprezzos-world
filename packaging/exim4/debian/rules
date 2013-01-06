@@ -1,0 +1,488 @@
+#!/usr/bin/make -f
+# debian/rules for exim4
+# This file is public domain software, originally written by Joey Hess.
+#
+# Uncomment this to turn on verbose mode. 
+# export DH_VERBOSE=1
+
+buildname := $(shell scripts/os-type)-$(shell scripts/arch-type)
+DEBIAN := $(shell pwd)/debian
+
+ifeq ($(wildcard /usr/share/dpkg/buildflags.mk),) 
+CFLAGS := -g
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+else
+export DEB_BUILD_MAINT_OPTIONS := hardening=+bindnow,+pie
+DPKG_EXPORT_BUILDFLAGS := 1
+include /usr/share/dpkg/buildflags.mk
+endif
+
+# The build system ignores CPPFLAGS, append them to CFLAGS
+CFLAGS := $(CFLAGS) $(shell getconf LFS_CFLAGS) -D_LARGEFILE_SOURCE -fno-strict-aliasing -Wall $(CPPFLAGS)
+export CFLAGS
+# LFLAGS is used where GNU would use LDFLAGS
+export LFLAGS += $(LDFLAGS)
+
+LC_ALL=C
+export LC_ALL
+
+# Which packages should we build?
+ifndef buildbasepackages
+buildbasepackages=yes
+endif
+
+ifndef extradaemonpackages
+extradaemonpackages=exim4-daemon-heavy
+endif
+# If you want to build a daemon with a configuration tailored to YOUR special
+# needs, call "fakeroot debian/rules unpack-configs", copy EDITME.exim4-light
+# to EDITME.exim4-custom and modify it. Please note that you _need_ to
+# modify EDITME.exim4-custom or your build will fail due to #386188.
+#
+# If you want to create multiple custom packages with different names, use
+# the script debian/create-custom-package [suffix].
+#
+# Afterwards EITHER change the definition of extradaemonpackages above OR
+# simply set extradaemonpackages to the desired value via the environment.
+
+# If you want your changes to survive a debian/rules clean, call
+# "fakeroot debian/rules pack-configs" after customizing EDITME.exim4-custom
+
+# If you remove exim4-daemon-light from basedaemonpackages to prevent
+# exim4-daemon-light from being built, you need to modify the build
+# process to pull the helper binaries from the daemon package that you
+# actually build. If you simply remove exim4-daemon-light here, you will
+# end up with exim4-base sans binaries, which is most probably not what
+# you intend to have.
+#
+# combined[ai]dbgpackage has a list of packages whose debug information
+# goes into the combined debug package exim4-dbg, separated as arch
+# independent and arch dependent list.
+# extraadbgpackage has a list of packages whose debug information
+# goes into one debug package foo-dbg per package. This is currently
+# only implemented and needed for arch dependent packages.
+
+ifeq ($(buildbasepackages),yes)
+basedaemonpackages=exim4-daemon-light
+combinedadbgpackage=exim4-base eximon4
+combinedidbgpackage=exim4-config exim4
+exim4dbg=exim4-dbg
+dhstripparm=--dbg-package=$(exim4dbg)
+exim4dev=exim4-dev
+extraadbgpackage=$(basedaemonpackages) $(extradaemonpackages)
+else
+basedaemonpackages=
+combinedadbgpackage=
+combinedidbgpackage=
+exim4dbg=
+dhstripparm=
+exim4dev=
+extraadbgpackage=$(extradaemonpackages)
+endif
+#DEBUGOUT:=$(shell echo >&2 buildbasepackages $(buildbasepackages))
+#DEBUGOUT:=$(shell echo >&2 extradaemonpackages $(extradaemonpackages))
+
+# If you want to build with OpenSSL instead of GnuTLS, uncomment this
+# OPENSSL:=1
+# Please note that building exim4-daemon-heavy with OpenSSL is a GPL
+# violation.
+
+
+# list of all arch dependent packages to be built
+buildpackages=$(combinedadbgpackage) $(extraadbgpackage) $(addsuffix -dbg,$(extraadbgpackage)) $(exim4dbg) $(exim4dev)
+# generate -pexim4-base -peximon4 ... commandline for debhelper
+dhbuildpackages=$(addprefix -p,$(buildpackages))
+dhcombinedadbgpackage=$(addprefix -p,$(combinedadbgpackage))
+dhcombinedidbgpackage=$(addprefix -p,$(combinedidbgpackage))
+
+# exim4-daemon-heavy --> b-exim4-daemon-heavy/build-Linux-x86_64/exim
+daemonbinaries=$(addprefix b-,$(addsuffix /build-$(buildname)/exim,$(extradaemonpackages)))
+debiandaemonbinaries=$(addprefix $(DEBIAN)/,$(addsuffix /usr/sbin/exim4,$(extradaemonpackages)))
+BDIRS=$(addprefix b-,$(extradaemonpackages) $(basedaemonpackages))
+
+
+# get upstream-version from debian/changelog, i.e. anything until the first -
+DEBVERSION := $(shell dpkg-parsechangelog | sed -n '/^Version: /s/^Version: //p')
+UPSTREAMVERSION := $(shell echo $(DEBVERSION) | sed -n 's/\(.\+\)-[^-]\+/\1/p')
+MTACONFLICTS := $(shell cat $(DEBIAN)/mtalist)
+
+# set up build directory b-exim4-daemon-heavy/
+$(addsuffix /Makefile,$(BDIRS)): %/Makefile:
+	mkdir $*
+	find . -mindepth 1 -maxdepth 1 \
+		-name debian -prune -o \
+		-name 'b-*' -o -print0 | \
+		xargs --no-run-if-empty --null \
+		cp -a --target-directory=$*
+
+
+unpack-configs: unpack-configs-stamp
+unpack-configs-stamp: src/EDITME exim_monitor/EDITME
+	patch -o EDITME.eximon exim_monitor/EDITME \
+		$(DEBIAN)/EDITME.eximon.diff
+	patch -o EDITME.exim4-light src/EDITME \
+		$(DEBIAN)/EDITME.exim4-light.diff
+ifdef OPENSSL
+	patch EDITME.exim4-light $(DEBIAN)/EDITME.openssl.exim4-light.diff
+endif
+	-for editme in $(DEBIAN)/EDITME.exim4-*.diff; do \
+	  if [ "$$editme" != "$(DEBIAN)/EDITME.exim4-light.diff" ]; then \
+	    TARGETNAME=`basename $$editme .diff`; \
+	    echo patch -o $$TARGETNAME EDITME.exim4-light $$editme; \
+	    patch -o $$TARGETNAME EDITME.exim4-light $$editme; \
+	  fi; \
+	done
+	touch unpack-configs-stamp
+
+pack-configs:
+	-diff -u src/EDITME EDITME.exim4-light \
+		> $(DEBIAN)/EDITME.exim4-light.diff
+	-for editme in EDITME.exim4-*; do \
+	  if [ "$$editme" != "EDITME.exim4-light" ]; then \
+	    echo diff -u EDITME.exim4-light $$editme; \
+	    diff -u EDITME.exim4-light $$editme > $(DEBIAN)/$${editme}.diff; \
+	  fi; \
+	done
+	-diff -u exim_monitor/EDITME EDITME.eximon \
+		> $(DEBIAN)/EDITME.eximon.diff
+
+# only called manually by maintainer before upload.
+update-mtaconflicts:
+	which grep-available > /dev/null && \
+		grep-available --show-field=Package --field=Provides \
+		mail-transport-agent --no-field-names \
+		/var/lib/apt/lists/*Packages | grep -v exim | sort -u | \
+		tr '\n' ',' | sed -e 's/,/, /g;s/, $$//' > $(DEBIAN)/mtalist
+
+# Generate README.Debian as text/html ...
+debian/README.Debian.html: debian/README.Debian.xml
+	xsltproc --nonet --stringparam section.autolabel 1 \
+		-o $@ \
+		/usr/share/xml/docbook/stylesheet/nwalsh/html/docbook.xsl \
+		$<
+# ... and text/plain
+debian/README.Debian: debian/README.Debian.html
+	chmod 755 $(DEBIAN)/lynx-dump-postprocess
+	lynx -force_html -dump $< | $(DEBIAN)/lynx-dump-postprocess > $@.tmp
+	mv $@.tmp $@
+
+configure: configure-stamp
+
+configure-stamp: $(addsuffix /Makefile,$(BDIRS)) unpack-configs-stamp
+	dh_testdir
+	# Add here commands to configure the package.
+	# We currently do not want to build depend on debhelper 7.2.3 just to
+	# keep it from installing the wrong upstream changelog. 490937
+	rm -fv CHANGES
+	touch $@ 
+
+# Build binaries for the base package, the eximon4 package, and the
+# exim4-daemon-light package.
+b-exim4-daemon-light/build-$(buildname)/exim: b-exim4-daemon-light/Makefile configure-stamp
+	@echo build $(<D)
+	dh_testdir
+
+	rm -rf $(@D)
+	mkdir -p $(<D)/Local
+	cp EDITME.exim4-light $(<D)/Local/Makefile
+	cp EDITME.eximon $(<D)/Local/eximon.conf
+	cd $(<D) && $(MAKE) FULLECHO=''
+
+b-exim4-daemon-heavy/build-$(buildname)/exim: b-exim4-daemon-heavy/Makefile configure-stamp
+	@echo build $(<D)
+	dh_testdir
+
+	rm -rf $(@D)
+	mkdir -p $(<D)/Local
+	cp EDITME.exim4-heavy $(<D)/Local/Makefile
+	cd $(<D) && $(MAKE) FULLECHO=''
+
+b-exim4-daemon-custom/build-$(buildname)/exim: b-exim4-daemon-custom/Makefile configure-stamp
+	@echo build $(<D)
+	dh_testdir
+
+	rm -rf $(@D)
+	mkdir -p $(<D)/Local
+	cp EDITME.exim4-custom $(<D)/Local/Makefile
+	cd $(<D) && $(MAKE) FULLECHO=''
+
+build-indep: build-indep-stamp
+build-indep-stamp:
+	dh_testdir
+
+	# Add here command to compile/build the arch indep package.
+	# It's ok not to do anything here, if you don't need to build
+	#  anything for this package.
+	#/usr/bin/docbook-to-man $(DEBIAN)/exim.sgml > exim.1
+
+	touch build-indep-stamp
+
+build-arch: build-arch-stamp test-stamp
+
+ifeq ($(buildbasepackages),yes)
+build-arch-stamp: b-exim4-daemon-light/build-$(buildname)/exim $(daemonbinaries)
+else
+build-arch-stamp: $(daemonbinaries)
+endif
+	dh_testdir
+	# Which version of Berkeley DB are we building against?
+	printf '#include <db.h>\ninstdbversionis DB_VERSION_MAJOR DB_VERSION_MINOR\n' | \
+		cpp | grep instdbversionis |\
+		sed -e 's/[[:space:]]*instdbversionis[[:space:]]//' \
+		-e 's/[[:space:]][[:space:]]*/./' \
+		-e 's_^_s/^BDBVERSION=.*/BDBVERSION=_' \
+		-e 's_$$_/_' \
+		> $(DEBIAN)/berkeleydb.sed
+	# Store Berkeley DB version in postinst script.
+	sed -i -f $(DEBIAN)/berkeleydb.sed \
+		$(DEBIAN)/exim4-base.postinst
+	touch build-arch-stamp
+
+test-stamp: build-arch-stamp
+	# it is not possible to run exim unless the compile-time specified
+	# user exists.
+	if id -u Debian-exim ; then \
+		echo Debian-exim user found, running minimal testsuite ; \
+		chmod +x debian/minimaltest ; \
+		rm -rf $(CURDIR)/test ; \
+		for i in b-exim4-daemon-light/build-$(buildname)/exim \
+			$(daemonbinaries) ;\
+			do mkdir $(CURDIR)/test && \
+			debian/minimaltest $(CURDIR)/test $$i || \
+			{ echo testsuite error  ; exit 1 ; } ; \
+			rm -rf $(CURDIR)/test ; \
+		done \
+	fi
+	touch $@
+
+build: build-arch build-indep
+
+clean: cleanfiles
+
+cleanfiles:
+	dh_testdir
+	dh_testroot
+	
+	debconf-updatepo
+	
+	rm -f build-stamp configure-stamp installbase-stamp test-stamp
+
+	# Add here commands to clean up after the build process.
+	[ ! -f Makefile ] || $(MAKE) distclean
+	-rm -rf build-* doc/tmp test/
+	-rm -f EDITME.* unpack-configs-stamp
+	-rm -f $(DEBIAN)/debconf/exim4.conf.template $(DEBIAN)/files \
+		$(DEBIAN)/README.Debian $(DEBIAN)/README.Debian.html \
+		$(DEBIAN)/berkeleydb.sed
+
+	#these are identical for all daemon-* and therefore symlinked
+	@cd $(DEBIAN) && find . -maxdepth 1 \
+		-regex '^\./exim4-daemon-.*\.\(postinst\|prerm\)$$' \
+		-and -not -name 'exim4-daemon-light.*' -print0 \
+		| xargs -0r rm -v
+
+	#pwd
+	chmod 755 $(DEBIAN)/exim-gencert \
+		$(DEBIAN)/lynx-dump-postprocess $(DEBIAN)/script \
+		$(DEBIAN)/exim-adduser
+	dh_clean
+	rm -rf $(BDIRS)
+	# fix broken (0600) permissions in original tarball
+	#find OS doc scripts exim_monitor src util -perm -044 -or -print0 |\
+	#	xargs -0r chmod -c og+r
+
+installbase-stamp: b-exim4-daemon-light/build-$(buildname)/exim debian/README.Debian debian/README.Debian.html
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	cd b-exim4-daemon-light && \
+	  $(MAKE) install FULLECHO='' \
+		INSTALL_ARG=-no_symlink \
+		inst_conf=$(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/example.conf \
+		inst_aliases=$(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/aliases \
+		inst_dest=$(DEBIAN)/exim4-base/usr/sbin
+	if [ -e "$(DEBIAN)/example.conf.md5" ] && [ "$$(< $(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/example.conf md5sum)" != "$$(cat $(DEBIAN)/example.conf.md5)" ] ; then \
+	  echo "upstream example configuration has changed, new md5sum:"; \
+	  < $(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/example.conf md5sum; \
+	  echo "aborting build."; \
+	  exit 1; \
+	fi
+	< $(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/example.conf md5sum > $(DEBIAN)/example.conf.md5
+	sed -e 's,/[a-zA-Z/0-9.-]*exim4-base/examples/,/etc/,' \
+		< $(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/example.conf \
+		> $(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/example.conf.tmp
+	mv $(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/example.conf.tmp \
+		$(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples/example.conf
+	install -m755 b-exim4-daemon-light/build-$(buildname)/convert4r4 \
+		$(DEBIAN)/exim4-base/usr/sbin/exim_convert4r4
+	install -m755 \
+		b-exim4-daemon-light/build-$(buildname)/transport-filter.pl \
+		b-exim4-daemon-light/util/ratelimit.pl \
+		$(DEBIAN)/exim4-base/usr/share/doc/exim4-base/examples
+	mv $(DEBIAN)/exim4-base/usr/sbin/exim \
+		$(DEBIAN)/exim4-daemon-light/usr/sbin/exim4
+	# fix permissions of /usr/sbin/exim4 if running with restrictive umask,
+	# dh_fixperms sanitizes anything else
+	chmod 4755 $(DEBIAN)/exim4-daemon-light/usr/sbin/exim4
+	mv $(DEBIAN)/exim4-base/usr/sbin/eximon \
+		$(DEBIAN)/eximon4/usr/sbin
+	mv $(DEBIAN)/exim4-base/usr/sbin/eximon.bin \
+		$(DEBIAN)/eximon4/usr/lib/exim4
+	pod2man --center=EXIM4 --section=8 \
+		$(DEBIAN)/exim4-base/usr/sbin/exipick \
+		$(DEBIAN)/exim4-base/usr/share/man/man8/exipick.8
+	pod2man --center=EXIM4 --section=8 \
+		$(DEBIAN)/exim4-base/usr/sbin/eximstats \
+		$(DEBIAN)/exim4-base/usr/share/man/man8/eximstats.8
+	install -m755 $(DEBIAN)/syslog2eximlog $(DEBIAN)/exim4-base/usr/sbin/
+	pod2man --center=EXIM4 --section=8 \
+		$(DEBIAN)/syslog2eximlog \
+		$(DEBIAN)/exim4-base/usr/share/man/man8/syslog2eximlog.8
+	# if you change anything here, you will have to change
+	# config-custom/debian/rules as well
+	sed -e \
+	"s/^UPEX4C_version=\"\"/UPEX4C_version=\"$(DEBVERSION)\"/" \
+	< $(DEBIAN)/debconf/update-exim4.conf \
+	> $(DEBIAN)/exim4-config/usr/sbin/update-exim4.conf
+	chmod 755 $(DEBIAN)/exim4-config/usr/sbin/update-exim4.conf
+	install -m 755 $(DEBIAN)/update-exim4defaults \
+		$(DEBIAN)/exim4-config/usr/sbin
+
+	cd $(DEBIAN)/debconf/conf.d && \
+		tar cf - `find \( -path '*/.svn/*' -prune \) -or \
+		\( -type f -print \)` | \
+		{ cd $(DEBIAN)/exim4-config/etc/exim4/conf.d/ && \
+		tar xf - ; }
+
+	# ship a copy in examples
+	# install -m644 $(DEBIAN)/debconf/exim4.conf.template $(DEBIAN)/exim4-config/usr/share/doc/exim4-config/examples/exim4.conf.template.debconf
+	install -m644 $(DEBIAN)/email-addresses $(DEBIAN)/exim4-config/etc/
+	install -m640 -oroot -groot $(DEBIAN)/passwd.client \
+		$(DEBIAN)/exim4-config/etc/exim4/
+	chmod 755 $(DEBIAN)/debconf/update-exim4.conf.template
+	env CONFDIR=$(DEBIAN)/debconf \
+		$(DEBIAN)/debconf/update-exim4.conf.template --nobackup --run
+#	dh_movefiles
+	touch installbase-stamp
+
+
+# This dependency expands to
+#   debian/exim4-daemon-heavy/usr/sbin/exim4: b-exim4-daemon-heavy/build-Linux-x86_64/exim
+$(debiandaemonbinaries): $(DEBIAN)/%/usr/sbin/exim4: b-%/build-$(buildname)/exim
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	install -m4755 -oroot -groot $< $@
+
+
+# Build architecture-independent files here.
+# this is just exim4-config and exim4.
+binary-indep: build $(install)
+ifeq ($(buildbasepackages),yes)
+	dh_testdir -i
+	dh_testroot -i
+	# upstream changelog is only in exim4-base
+	dh_link -i
+	dh_installchangelogs -i -XCHANGES
+	dh_installdocs -i
+	dh_installexamples -i
+	#dh_installmenu -i
+	dh_installdebconf -i
+	dh_installlogrotate -i
+#	dh_installemacsen -i
+	#dh_installpam -i
+	#dh_installmime -i
+#	dh_installinit -i
+	dh_installcron -i
+#	dh_installinfo -i
+#	dh_undocumented -i
+	dh_installppp -i --name=exim4
+	dh_installman -i
+	dh_install -i
+	dh_lintian -i
+	dh_strip $(dhcombinedidbgpackage) $(dhstripparm)
+	#for pkg in $(extraidbgpackage); do \
+	#  dh_strip -p$$pkg --dbg-package=$${pkg}-dbg; \
+	#done
+	dh_compress -i
+	dh_fixperms -i -X/etc/exim4/passwd.client
+#	dh_makeshlibs -i
+	dh_installdeb -i
+#	dh_perl -i
+	dh_shlibdeps -i
+	dh_gencontrol -i -- -VUpstream-Version=$(UPSTREAMVERSION) \
+		-VMTA-Conflicts="$(MTACONFLICTS)"
+	dh_md5sums -i
+	dh_builddeb -i
+endif
+
+# Build architecture-dependent files here.
+ifeq ($(buildbasepackages),yes)
+install=installbase-stamp $(debiandaemonbinaries)
+else
+install=$(debiandaemonbinaries)
+endif
+
+binary-arch: build $(install)
+	dh_testdir $(dhbuildpackages)
+	dh_testroot $(dhbuildpackages)
+	# symlink identical maintainerscripts
+	@for i in $(extradaemonpackages) ; do \
+		ln -sfv exim4-daemon-light.prerm \
+			"$(DEBIAN)/$$i.prerm" ; \
+		ln -sfv exim4-daemon-light.postinst \
+			"$(DEBIAN)/$$i.postinst" ; \
+	done
+	# upstream changelog is only in exim4-base, the other packages include
+	# a symlink
+	dh_installchangelogs -pexim4-base doc/ChangeLog
+	# remove "-pexim4-base" from "-pexim4-base -pexim4-daemon-light ..."
+	dh_installchangelogs $(subst -pexim4-base ,,$(dhbuildpackages)) \
+		-XCHANGES
+	dh_installdocs $(dhbuildpackages)
+	dh_installexamples $(dhbuildpackages)
+	dh_installmenu $(dhbuildpackages)
+	dh_installdebconf $(dhbuildpackages)
+	dh_installlogrotate $(dhbuildpackages)
+	dh_installlogrotate $(dhbuildpackages) --name=exim4-paniclog
+#	dh_installemacsen $(dhbuildpackages)
+	dh_installpam $(dhbuildpackages)
+	dh_installmime $(dhbuildpackages)
+	#dh_installinit $(dhbuildpackages) --noscripts --name=exim4
+	# work around #347577 (fixed in debhelper 5.0.15)
+	dh_installinit $(dhbuildpackages) -n --name=exim4
+	dh_installcron $(dhbuildpackages)
+#	dh_installinfo $(dhbuildpackages)
+#	dh_undocumented $(dhbuildpackages)
+	dh_installman $(dhbuildpackages)
+	dh_install $(dhbuildpackages)
+	# install config.h from daemon package, but not from exim4-daemon-light
+	dh_install -p exim4-dev \
+		$(shell ls -1 b-exim4-daemon-*/build-$(buildname)/config.h | grep -v ^b-exim4-daemon-light/) \
+		usr/include/exim4
+	dh_lintian $(dhbuildpackages)
+	dh_strip $(dhcombinedadbgpackage) $(dhstripparm)
+	for pkg in $(extraadbgpackage); do \
+	  dh_strip -p$$pkg --dbg-package=$${pkg}-dbg; \
+	done
+	dh_link $(dhbuildpackages)
+	dh_compress $(dhbuildpackages)
+	dh_fixperms $(dhbuildpackages) -Xusr/sbin/exim4
+#	dh_makeshlibs $(dhbuildpackages)
+	dh_installdeb $(dhbuildpackages)
+#	dh_perl $(dhbuildpackages)
+	dh_shlibdeps $(dhbuildpackages)
+	dh_gencontrol $(dhbuildpackages) -- \
+		-VUpstream-Version=$(UPSTREAMVERSION) \
+		-VMTA-Conflicts="$(MTACONFLICTS)"
+	dh_md5sums $(dhbuildpackages)
+	dh_builddeb $(dhbuildpackages)
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install

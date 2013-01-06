@@ -1,0 +1,87 @@
+#!/bin/sh
+
+set -e
+
+# Do not run as root
+if [ `id -u` = "0" ]; then
+	echo $0: running with id 0, exiting.
+	exit 0
+fi
+
+if ! test -x "$2" ; then
+	echo "\$2 $2: not exeutable"
+	exit 1
+fi
+
+# set up directorytree
+if ! echo "$1" | grep -q '^/......' && test -d "$1"; then
+	echo \$1 needs to be absolute patch
+	exit 1
+fi
+
+echo ========================================
+echo running minimal functionality test for binary $2 in directory $1
+
+top="$1/eximtest"
+
+rm -rf $1/eximtest/*
+mkdir -p $top/var/log $top/var/spool/db $top/var/spool/input $top/var/spool/msglog $top/var/run $top/var/mail
+cat <<EOF > $top/exim4.conf
+exim_user = `id -u`
+exim_group = `id -g`
+log_file_path = $top/var/log/%slog
+spool_directory = $top/var/spool
+pid_file_path = $top/var/run
+primary_hostname = eximtest.example.com
+rfc1413_hosts =
+
+begin routers
+eximtest:
+  driver = accept
+  transport = writetofile
+
+begin transports
+writetofile:
+  driver = appendfile
+  file = $top/var/mail/\$local_part
+  delivery_date_add
+  envelope_to_add
+  return_path_add
+EOF
+
+cat <<EOF > $top/var/mail/compare
+From from@eximtest.example.com Sat May 07 12:12:12 2012
+Return-path: <from@eximtest.example.com>
+Envelope-to: recip@eximtest.example.com
+Delivery-date: Sat, 07 May 2011 12:12:12 +0000
+Received: from buildd by eximtest.example.com with local (Exim 4.44)
+	(envelope-from <from@eximtest.example.com>)
+	id msgid
+	for recip@eximtest.example.com;Sat, 07 May 2011 12:12:12 +0000
+From: Testing Exim <from@eximtest.example.com>
+To: Recipient <recip@eximtest.example.com>
+Subject: Test Message
+Message-Id: <Emsgid@eximtest.example.com>
+Date: Sat, 07 May 2011 12:12:12 +0000
+
+no body
+
+EOF
+
+$2 -C "$top/exim4.conf" -bV
+$2 -C "$top/exim4.conf" -be '${if bool{0}{yes}{no}} X ${if !bool{0}{yes}{no}}'
+$2 -C "$top/exim4.conf" -bt local
+printf 'From: Testing Exim <from@eximtest.example.com>\nTo: Recipient <recip@eximtest.example.com>\nSubject: Test Message\n\nno body\n' | \
+$2 -C "$top/exim4.conf" -odf -oep -oi -t -f from@eximtest.example.com
+sed -i -e 's/^From \([^ ]*\) .*/From \1 Sat May 07 12:12:12 2012/' \
+	-e 's/^Delivery-date: .*/Delivery-date: Sat, 07 May 2011 12:12:12 +0000/' \
+	-e 's/^Received: from [^ ][^ ]* /Received: from buildd /' \
+	-e '/^Received:/s/(Exim [^)]*/(Exim 4.44/' \
+	-e '/[[:space:]]for /s/;.*/;Sat, 07 May 2011 12:12:12 +0000/' \
+	-e '/[[:space:]]id /s/id .*/id msgid/' \
+	-e 's/^Message-Id: [^@]*/Message-Id: <Emsgid/' \
+	-e 's/^Date: .*/Date: Sat, 07 May 2011 12:12:12 +0000/' \
+	$top/var/mail/recip
+
+diff -u $top/var/mail/recip $top/var/mail/compare
+exit 0

@@ -1,0 +1,186 @@
+From 54c90be16587ca315041c964e251f07fc2bcf0e9 Mon Sep 17 00:00:00 2001
+From: Phil Pennock <pdp@exim.org>
+Date: Fri, 1 Jun 2012 05:52:31 -0400
+Subject: [PATCH] tls_dh_min_bits smtp transport option
+
+Could not find an API for use with OpenSSL, so GnuTLS only
+---
+ src/buildconfig.c       |   11 ++++++-----
+ src/config.h.defaults   |    3 ++-
+ src/functions.h         |    2 +-
+ src/tls-gnu.c           |   15 +++++++++++++--
+ src/tls-openssl.c       |    4 +++-
+ src/transports/smtp.c   |    9 +++++++--
+ src/transports/smtp.h   |    3 ++-
+ 11 files changed, 70 insertions(+), 13 deletions(-)
+
+diff --git a/src/buildconfig.c b/src/buildconfig.c
+index 62114fc..f3390cb 100644
+--- a/src/buildconfig.c
++++ b/src/buildconfig.c
+@@ -847,16 +847,17 @@ else if (isgroup)
+         }
+ 
+       /* how many bits Exim, as a client, demands must be in D-H */
+-      /* as of GnuTLS 2.12.x, we ask for "normal" for D-H PK; before that, we
+-      specify the number of bits.  We've stuck with the historical value, but
+-      it can be overridden. */
+-      else if ((strcmp(name, "EXIM_CLIENT_DH_MIN_BITS") == 0) ||
++      /* 1024 is a historical figure; some sites actually use lower, so we
++      permit the value to be lowered "dangerously" low, but not "insanely"
++      low.  Though actually, 1024 is becoming "dangerous". */
++      else if ((strcmp(name, "EXIM_CLIENT_DH_MIN_MIN_BITS") == 0) ||
++               (strcmp(name, "EXIM_CLIENT_DH_DEFAULT_MIN_BITS") == 0) ||
+                (strcmp(name, "EXIM_SERVER_DH_BITS_PRE2_12") == 0))
+         {
+         long nv;
+         char *end;
+         nv = strtol(value, &end, 10);
+-        if (end != value && *end == '\0' && nv >= 1000 && nv < 50000)
++        if (end != value && *end == '\0' && nv >= 512 && nv < 500000)
+           {
+           fprintf(new, "%s\n", value);
+           }
+diff --git a/src/config.h.defaults b/src/config.h.defaults
+index 92a4cd3..f02aef1 100644
+--- a/src/config.h.defaults
++++ b/src/config.h.defaults
+@@ -49,7 +49,8 @@ it's a default value. */
+ #define EXIMDB_LOCK_TIMEOUT          60
+ #define EXIMDB_LOCKFILE_MODE       0640
+ #define EXIMDB_MODE                0640
+-#define EXIM_CLIENT_DH_MIN_BITS
++#define EXIM_CLIENT_DH_MIN_MIN_BITS         512
++#define EXIM_CLIENT_DH_DEFAULT_MIN_BITS    1024
+ #define EXIM_GNUTLS_LIBRARY_LOG_LEVEL
+ #define EXIM_SERVER_DH_BITS_PRE2_12
+ #define EXIM_PERL
+diff --git a/src/functions.h b/src/functions.h
+index fa9d558..2758a4a 100644
+--- a/src/functions.h
++++ b/src/functions.h
+@@ -27,7 +27,7 @@ extern const char *
+                std_dh_prime_named(const uschar *);
+ extern int     tls_client_start(int, host_item *, address_item *, uschar *,
+                  uschar *, uschar *, uschar *, uschar *, uschar *, uschar *,
+-                 int);
++                 int, int);
+ extern void    tls_close(BOOL);
+ extern int     tls_feof(void);
+ extern int     tls_ferror(void);
+diff --git a/src/tls-gnu.c b/src/tls-gnu.c
+index c8bf634..cf315b6 100644
+--- a/src/tls-gnu.c
++++ b/src/tls-gnu.c
+@@ -1536,6 +1536,7 @@ Arguments:
+   verify_certs      file for certificate verify
+   verify_crl        CRL for verify
+   require_ciphers   list of allowed ciphers or NULL
++  dh_min_bits       minimum number of bits acceptable in server's DH prime
+   timeout           startup timeout
+ 
+ Returns:            OK/DEFER/FAIL (because using common functions),
+@@ -1547,7 +1548,7 @@ tls_client_start(int fd, host_item *host,
+     address_item *addr ARG_UNUSED, uschar *dhparam ARG_UNUSED,
+     uschar *certificate, uschar *privatekey, uschar *sni,
+     uschar *verify_certs, uschar *verify_crl,
+-    uschar *require_ciphers, int timeout)
++    uschar *require_ciphers, int dh_min_bits, int timeout)
+ {
+ int rc;
+ const char *error;
+@@ -1559,7 +1560,17 @@ rc = tls_init(host, certificate, privatekey,
+     sni, verify_certs, verify_crl, require_ciphers, &state);
+ if (rc != OK) return rc;
+ 
+-gnutls_dh_set_prime_bits(state->session, EXIM_CLIENT_DH_MIN_BITS);
++if (dh_min_bits < EXIM_CLIENT_DH_MIN_MIN_BITS)
++  {
++  DEBUG(D_tls)
++    debug_printf("WARNING: tls_dh_min_bits far too low, clamping %d up to %d\n",
++        dh_min_bits, EXIM_CLIENT_DH_MIN_MIN_BITS);
++  dh_min_bits = EXIM_CLIENT_DH_MIN_MIN_BITS;
++  }
++
++DEBUG(D_tls) debug_printf("Setting D-H prime minimum acceptable bits to %d\n",
++    dh_min_bits);
++gnutls_dh_set_prime_bits(state->session, dh_min_bits);
+ 
+ if (verify_certs == NULL)
+   {
+diff --git a/src/tls-openssl.c b/src/tls-openssl.c
+index 22c0730..fdcb95e 100644
+--- a/src/tls-openssl.c
++++ b/src/tls-openssl.c
+@@ -1233,6 +1233,8 @@ Argument:
+   verify_certs     file for certificate verify
+   crl              file containing CRL
+   require_ciphers  list of allowed ciphers
++  dh_min_bits      minimum number of bits acceptable in server's DH prime
++                   (unused in OpenSSL)
+   timeout          startup timeout
+ 
+ Returns:           OK on success
+@@ -1244,7 +1246,7 @@ int
+ tls_client_start(int fd, host_item *host, address_item *addr, uschar *dhparam,
+   uschar *certificate, uschar *privatekey, uschar *sni,
+   uschar *verify_certs, uschar *crl,
+-  uschar *require_ciphers, int timeout)
++  uschar *require_ciphers, int dh_min_bits ARG_UNUSED, int timeout)
+ {
+ static uschar txt[256];
+ uschar *expciphers;
+diff --git a/src/transports/smtp.c b/src/transports/smtp.c
+index f9f225f..b3856f5 100644
+--- a/src/transports/smtp.c
++++ b/src/transports/smtp.c
+@@ -129,6 +129,8 @@ optionlist smtp_transport_options[] = {
+       (void *)offsetof(smtp_transport_options_block, tls_certificate) },
+   { "tls_crl",              opt_stringptr,
+       (void *)offsetof(smtp_transport_options_block, tls_crl) },
++  { "tls_dh_min_bits",      opt_int,
++      (void *)offsetof(smtp_transport_options_block, tls_dh_min_bits) },
+   { "tls_privatekey",       opt_stringptr,
+       (void *)offsetof(smtp_transport_options_block, tls_privatekey) },
+   { "tls_require_ciphers",  opt_stringptr,
+@@ -195,9 +197,11 @@ smtp_transport_options_block smtp_transport_option_defaults = {
+   NULL,                /* gnutls_require_kx */
+   NULL,                /* gnutls_require_mac */
+   NULL,                /* gnutls_require_proto */
++  NULL,                /* tls_sni */
+   NULL,                /* tls_verify_certificates */
+-  TRUE,                /* tls_tempfail_tryclear */
+-  NULL                 /* tls_sni */
++  EXIM_CLIENT_DH_DEFAULT_MIN_BITS,
++                       /* tls_dh_min_bits */
++  TRUE                 /* tls_tempfail_tryclear */
+ #endif
+ #ifndef DISABLE_DKIM
+  ,NULL,                /* dkim_canon */
+@@ -1136,6 +1140,7 @@ if (tls_offered && !suppress_tls &&
+       ob->tls_verify_certificates,
+       ob->tls_crl,
+       ob->tls_require_ciphers,
++      ob->tls_dh_min_bits,
+       ob->command_timeout);
+ 
+     /* TLS negotiation failed; give an error. From outside, this function may
+diff --git a/src/transports/smtp.h b/src/transports/smtp.h
+index 621cb6b..17b75cf 100644
+--- a/src/transports/smtp.h
++++ b/src/transports/smtp.h
+@@ -52,9 +52,10 @@ typedef struct {
+   uschar *gnutls_require_kx;
+   uschar *gnutls_require_mac;
+   uschar *gnutls_require_proto;
++  uschar *tls_sni;
+   uschar *tls_verify_certificates;
++  int     tls_dh_min_bits;
+   BOOL    tls_tempfail_tryclear;
+-  uschar *tls_sni;
+   #endif
+   #ifndef DISABLE_DKIM
+   uschar *dkim_domain;
+-- 
+1.7.10
+

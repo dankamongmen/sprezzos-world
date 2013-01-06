@@ -1,0 +1,71 @@
+#!/bin/bash
+
+if [ -n "$1" ]; then
+  PACKAGESUFFIX="$1"
+else
+  PACKAGESUFFIX="custom"
+fi
+
+TARGETDIR="../exim4-config-$PACKAGESUFFIX"
+#DEBUG=1
+
+# copy over -changelog, generating a proper changelog entry
+# copy over update-exim4defaults, ip-up.d, email-addresses
+
+dh_testdir
+
+set -e
+
+copytextreplace() {
+  FILE="$1"
+  DSTFILE="$2"
+  DIR="${FILE%/*}"
+  FILE="${FILE##*/}"
+  if [ -z "$DSTFILE" ]; then
+    DSTFILE="$FILE"
+  fi
+  [ $DEBUG ] && echo >&2 "DBG: source $DIR/$FILE"
+  [ $DEBUG ] && echo >&2 "DBG: dst    $TARGETDIR/$DIR/$DSTFILE"
+  mkdir -p $TARGETDIR/$DIR
+  if ! [ -e "$TARGETDIR/$DIR/$FILE" ]; then
+    < $DIR/$FILE \
+       sed -e "s/exim4-config/exim4-config-$PACKAGESUFFIX/g" \
+           -e "s/orig-exim4-config-$PACKAGESUFFIX/exim4-config/g" \
+    > $TARGETDIR/$DIR/$DSTFILE
+    chmod --reference=$DIR/$FILE $TARGETDIR/$DIR/$DSTFILE
+  else
+    echo >&2 "ERR: can't write to $TARGETDIR/$DIR/$DSTFILE, file exists"
+    exit 1
+  fi
+}
+
+for file in manpages config templates postinst postrm dirs; do
+  copytextreplace debian/exim4-config.$file exim4-config-$PACKAGESUFFIX.$file
+done
+
+for file in `cat debian/exim4-config.manpages` \
+            `find debian/debconf \( -path '*/.svn/*' -prune \) -or \( -type f -print \)`; do
+  copytextreplace $file
+done
+
+for file in compat control copyright rules install; do
+  copytextreplace debian/config-custom/debian/$file
+done
+
+for file in ip-up.d update-exim4defaults email-addresses; do
+  copytextreplace debian/$file
+done
+
+# manual corrections in target directory
+
+mv $TARGETDIR/debian/config-custom/debian/* $TARGETDIR/debian
+rm -rf $TARGETDIR/debian/config-custom
+chmod 775 $TARGETDIR/debian/rules
+
+# hack changelog
+
+< debian/changelog sed -n "/^exim4/{s/exim4/exim4-config-$PACKAGESUFFIX/p;q;}" > $TARGETDIR/debian/changelog
+echo -e "\n  * automatically generated changelog" >> $TARGETDIR/debian/changelog
+< debian/changelog sed -n '/^ --/{p;q;}' >> $TARGETDIR/debian/changelog
+cd $TARGETDIR
+dch --append "generated source package by create-custom-package"

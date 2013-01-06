@@ -1,0 +1,73 @@
+From f68fe5f62128effcce35efca90d74bc6df066765 Mon Sep 17 00:00:00 2001
+From: Phil Pennock <pdp@exim.org>
+Date: Wed, 7 Nov 2012 01:53:37 -0500
+Subject: [PATCH] Fix server_set_id for SPA/NTLM auth.
+
+Broken in 4.80 release, commit 08488c86.
+
+We need to leave $auth1 available after the authenticator returns, so
+that server_set_id can be evaluated by the caller.  We need to do this
+whether we succeed or fail, because server_set_id only makes it into
+$authenticated_id if we return OK, but is logged regardless.
+
+Updated test config to set server_set_id; updated logs.
+---
+
+diff --git a/src/auths/spa.c b/src/auths/spa.c
+index 1abd657..0bf7b04 100644
+--- a/src/auths/spa.c
++++ b/src/auths/spa.c
+@@ -196,17 +196,14 @@ that causes failure if the size of msgbuf is exceeded. ****/
+ /***************************************************************/
+ 
+ /* Put the username in $auth1 and $1. The former is now the preferred variable;
+-the latter is the original variable. */
++the latter is the original variable. These have to be out of stack memory, and
++need to be available once known even if not authenticated, for error messages
++(server_set_id, which only makes it to authenticated_id if we return OK) */
+ 
+-auth_vars[0] = expand_nstring[1] = msgbuf;
++auth_vars[0] = expand_nstring[1] = string_copy(msgbuf);
+ expand_nlength[1] = Ustrlen(msgbuf);
+ expand_nmax = 1;
+ 
+-/* clean up globals which aren't referenced, but still shouldn't be left
+-pointing to stack memory */
+-#define CLEANUP_RETURN(Code) do { auth_vars[0] = expand_nstring[1] = NULL; \
+-  expand_nlength[1] = expand_nmax = 0; return (Code); } while (0);
+-
+ debug_print_string(ablock->server_debug_string);    /* customized debug */
+ 
+ /* look up password */
+@@ -218,13 +215,13 @@ if (clearpass == NULL)
+     {
+     DEBUG(D_auth) debug_printf("auth_spa_server(): forced failure while "
+       "expanding spa_serverpassword\n");
+-    CLEANUP_RETURN(FAIL);
++    return FAIL;
+     }
+   else
+     {
+     DEBUG(D_auth) debug_printf("auth_spa_server(): error while expanding "
+       "spa_serverpassword: %s\n", expand_string_message);
+-    CLEANUP_RETURN(DEFER);
++    return DEFER;
+     }
+   }
+ 
+@@ -240,13 +237,12 @@ if (memcmp(ntRespData,
+       24) == 0)
+   /* success. we have a winner. */
+   {
+-  int rc = auth_check_serv_cond(ablock);
+-  CLEANUP_RETURN(rc);
++  return auth_check_serv_cond(ablock);
+   }
+ 
+   /* Expand server_condition as an authorization check (PH) */
+ 
+-CLEANUP_RETURN(FAIL);
++return FAIL;
+ }
+ 
+ 

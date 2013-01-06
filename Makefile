@@ -3089,6 +3089,14 @@ $(GEXIV2): $(SPREZZ)/gexiv2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgexiv2-$(gexiv2_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: exim4
+exim4:$(EXIM4)_$(ARCH).deb
+$(EXIM4): $(SPREZZ)/exim4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf exim4-$(exim4_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: exiv2
 exiv2:$(EXIV2)_$(ARCH).deb
 $(EXIV2): $(SPREZZ)/exiv2/debian/changelog

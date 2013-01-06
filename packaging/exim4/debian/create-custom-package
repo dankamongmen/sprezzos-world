@@ -1,0 +1,95 @@
+#!/bin/bash
+
+set -e
+
+if [ -n "$EX4DEBUG" ]; then
+  echo "now debugging $0 $@"
+  set -x
+fi
+
+dh_testdir
+if [ -z "$(which grep-dctrl)" ] || ! [ -x "$(which grep-dctrl)" ]; then
+  echo >&2 "ERR: no grep-dctrl binary"
+  exit 1
+fi
+
+fakeroot debian/rules clean
+
+if [ -n "$1" ]; then
+  PACKAGESUFFIX="$1"
+fi
+
+#DEBUG=1
+
+dh_testdir
+
+cd debian
+
+replacepkgname() {
+  sed -e "s/exim4-daemon-custom/exim4-daemon-$PACKAGESUFFIX/g;\
+  	  s/exim4-custom/exim4-$PACKAGESUFFIX/g"
+}
+
+copytextreplace() {
+  FILE="$1"
+  DSTFILE="$2"
+  if [ -z "$DSTFILE" ]; then
+    echo >&2 "no destination file given to copytextreplace $FILE"
+    exit 1
+  fi
+  [ $DEBUG ] && echo >&2 "DBG: source $FILE"
+  [ $DEBUG ] && echo >&2 "DBG: dst    $DSTFILE"
+  if ! [ -e "$DSTFILE" ]; then
+    < $FILE replacepkgname > $DSTFILE
+    chmod --reference=$FILE $DSTFILE
+  else
+    echo >&2 "ERR: can't write to $DSTFILE, file exists"
+    exit 1
+  fi
+}
+
+NEEDEDFILES="exim4-daemon-custom.* rules control"
+for file in $NEEDEDFILES; do
+  if ! [ -e $file ]; then
+    echo >&2 "ERR: $file does not exist, not starting"
+    exit 1
+  fi
+done
+
+# the grep-dctrl|grep construct is necessary on woody,
+# since woody grep-dctrl does not give sensible return values.
+if grep-dctrl --field=Package exim4-daemon-$PACKAGESUFFIX control | \
+   grep -q '^Package:'; then
+  echo >&2 "ERR: there is already a debian/control entry for exim4-daemon-$PACKAGESUFFIX, not starting"
+  exit 1
+fi
+
+if grep -q exim4-daemon-$PACKAGESUFFIX rules; then
+  echo >&2 "ERR: exim4-daemon-$PACKAGESUFFIX already mentioned in debian/rules, not starting"
+  exit 1
+fi
+
+for file in exim4-daemon-custom.* ; do
+  copytextreplace $file ${file/exim4-daemon-custom/exim4-daemon-$PACKAGESUFFIX}
+done
+
+echo >> control
+grep-dctrl --field=Package exim4-daemon-custom control | \
+  replacepkgname >> control
+
+< rules sed "/^builddaemonpackages/ \
+	     {s/^builddaemonpackages=/builddaemonpackages=exim4-daemon-$PACKAGESUFFIX /; \
+	     }" > rules.new
+echo >> rules.new
+< rules sed -n "\
+             /^build-exim4-daemon-custom/,/^[^[:space:]]/ \
+	     { \
+	      s/exim4-daemon-custom/exim4-daemon-$PACKAGESUFFIX/; \
+	      s/exim4-custom/exim4-$PACKAGESUFFIX/; \
+	      /^build-exim4-daemon-$PACKAGESUFFIX/p;
+	      /^[^[:space:]]/d; \
+	      p; \
+	     }" \
+>> rules.new
+chmod --reference=rules rules.new
+mv rules.new rules
