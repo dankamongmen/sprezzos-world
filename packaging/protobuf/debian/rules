@@ -1,0 +1,190 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+#
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+#
+# Modified to make a template file for a multi-binary package with separated
+# build-arch and build-indep targets  by Bill Allombert 2001
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+CFLAGS += -Wall
+CXXFLAGS += -Wall -fpermissive
+
+# Renesas SH(sh4) need -mieee option.
+# If this option is not effective, NaN test failed.
+ifeq (sh4,$(shell dpkg-architecture -qDEB_HOST_ARCH))
+  CFLAGS += -mieee
+  CXXFLAGS += -mieee
+endif
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    PAROPTS = -j$(NUMJOBS)
+else
+    PAROPTS =
+endif
+# end DEB_BUILD_OPTIONS
+
+version=0.0.0
+major=0
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	# Add here commands to configure the package.
+	dh_auto_configure
+	touch configure-stamp
+
+
+#Architecture
+build: build-arch
+
+build-arch: build-arch-stamp
+build-arch-stamp: configure-stamp
+
+	# Add here commands to compile the arch part of the package.
+	$(MAKE) $(PAROPTS)
+
+	# run the test suite
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	$(MAKE) $(PAROPTS) check
+endif
+
+	# python bindings
+	cd python && \
+	  PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=cpp python setup.py build
+
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	# run tests via pure-python
+	cd python && \
+	  PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python python setup.py test
+	# run tests via the CPP implementation
+	cd python && \
+	  LD_LIBRARY_PATH="../src/.libs:$LD_LIBRARY_PATH" \
+	  PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=cpp python setup.py test
+endif
+
+	# build the protoc manpage
+	xmlto man debian/protoc.xml
+
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp: build-arch-stamp
+
+	# java bindings
+	# this code mimics mvn package. This should be changed when maven is supported by debian.
+	$(SHELL) /usr/bin/ant -f debian/java-build.xml jar
+
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-arch-stamp build-indep-stamp configure-stamp
+
+	# C++ bindings cleanups
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	# remove the built manpage
+	rm -f protoc.1
+
+	# Python bindings cleanups
+	cd python && python setup.py clean --all
+	rm -rf python/protobuf.egg-info
+
+	# Java bindings cleanups
+	$(SHELL) /usr/bin/ant -f debian/java-build.xml clean || true
+
+	dh_clean
+	mh_clean
+
+install: install-indep install-arch
+install-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_prep -i
+	dh_installdirs -i
+
+	dh_install -i
+	mh_install
+
+install-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_prep -s
+	dh_installdirs -s
+
+	# Add here commands to install the arch part of the package into
+	# debian/tmp.
+	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+
+	dh_install --sourcedir=debian/tmp -s
+
+	# convert doc dir to symlink for the dev packages
+	rm -rf $(CURDIR)/debian/libprotobuf-dev/usr/share/doc/libprotobuf-dev
+	ln -s libprotobuf7 $(CURDIR)/debian/libprotobuf-dev/usr/share/doc/libprotobuf-dev
+	rm -rf $(CURDIR)/debian/libprotoc-dev/usr/share/doc/libprotoc-dev
+	ln -s libprotoc7 $(CURDIR)/debian/libprotoc-dev/usr/share/doc/libprotoc-dev
+
+	# remove compiler headers from libprotobuf-dev
+	rm -rf $(CURDIR)/debian/libprotobuf-dev/usr/include/google/protobuf/compiler
+
+	# remove .la files, as no other library depends on us
+	find $(CURDIR)/debian -name '*.la' -print0|xargs -r0 rm -f
+
+	# python bindings
+	cd python && PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=cpp \
+	  python setup.py install --no-compile \
+	    --root=$(CURDIR)/debian/python-protobuf ; \
+	  find $(CURDIR)/debian/python-protobuf \
+	    -name 'protobuf-*-nspkg.pth' -print0 | \
+	  xargs -r0 rm -f
+	# cleanup RPATH from built bindings
+	find $(CURDIR)/debian/python-protobuf -name '*.so' -print0 | \
+	  xargs -r0 chrpath -d
+
+# Must not depend on anything. This is to be called by
+# binary-arch/binary-indep
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs CHANGES.txt
+	dh_installdocs
+	dh_installexamples
+	dh_installman
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_pysupport
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install install-indep install-arch configure
