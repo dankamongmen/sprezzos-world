@@ -1,0 +1,128 @@
+Description: Add Fedora compatible rpm builtin provides
+Origin: vendor, http://pkgs.fedoraproject.org/cgit/rpm.git/plain/rpm-4.9.1.2-rpmlib-filesystem-check.patch
+Forwarded: not-needed
+--- a/lib/depends.c
++++ b/lib/depends.c
+@@ -459,6 +459,108 @@
+     return rc;
+ }
+ 
++/*
++ * Temporary support for live-conversion of the filesystem hierarchy
++ *   mailto: kay@redhat.com, harald@redhat.com
++ *   https://fedoraproject.org/wiki/Features/UsrMove
++ *
++ *   X-CheckUnifiedSystemdir:
++ *     /bin, /sbin, /lib, /lib64 --> /usr
++ *
++ *   X-CheckUnifiedBindir:
++ *     /usr/sbin -> /usr/bin
++ *
++ *   X-CheckMultiArchLibdir:
++ *     /usr/lib64 /usr/lib/<platform tuple> (e.g. x86_64-linux-gnu)
++ *
++ * This code is not needed for new installations, it can be removed after
++ * updates from older systems are no longer supported: Fedora 19 / RHEL 8.
++ */
++
++static int CheckLink(const char *dir, const char *root)
++{
++    char *d = NULL;
++    struct stat sbuf;
++    int rc = 0;
++
++    if (!root)
++	root = "/";
++
++    rasprintf(&d, "%s%s", root, dir);
++    if (!d) {
++	rc = -1;
++	goto exit;
++    }
++
++    /* directory or symlink does not exist, all is fine */
++    if (lstat(d, &sbuf) < 0) {
++	rc = 1;
++	goto exit;
++    }
++
++    /* if it is a symlink, all is fine */
++    if (S_ISLNK(sbuf.st_mode))
++	rc = 1;
++
++exit:
++    free(d);
++    return rc;
++}
++
++static int CheckFilesystemHierarchy(rpmds * dsp, const char *root)
++{
++    static const char *dirs[] = { "bin", "sbin", "lib", "lib64" };
++    int check;
++    int i;
++    rpmds ds;
++    int rc = 0;
++
++    for (i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
++	check = CheckLink(dirs[i], root);
++	if (check < 0) {
++	    rc = -1;
++	    goto exit;
++	}
++
++	if (check == 0)
++	    goto exit;
++    }
++    ds = rpmdsSingle(RPMTAG_PROVIDENAME,
++		     "rpmlib(X-CheckUnifiedSystemdir)", "1",
++		     RPMSENSE_EQUAL);
++    rpmdsMerge(dsp, ds);
++    rpmdsFree(ds);
++
++    check = CheckLink("usr/lib64", root);
++    if (check < 0) {
++        rc = -1;
++        goto exit;
++    }
++    if (check > 0) {
++	ds = rpmdsSingle(RPMTAG_PROVIDENAME,
++			 "rpmlib(X-CheckMultiArchLibdir)", "1",
++			 RPMSENSE_EQUAL);
++	rpmdsMerge(dsp, ds);
++	rpmdsFree(ds);
++    }
++
++    check = CheckLink("usr/sbin", root);
++    if (check < 0) {
++	rc = -1;
++	goto exit;
++    }
++    if (check > 0) {
++	ds = rpmdsSingle(RPMTAG_PROVIDENAME,
++			 "rpmlib(X-CheckUnifiedBindir)", "1",
++			 RPMSENSE_EQUAL);
++	rpmdsMerge(dsp, ds);
++	rpmdsFree(ds);
++    }
++
++exit:
++    return rc;
++}
++
+ /**
+  * Check dep for an unsatisfied dependency.
+  * @param ts		transaction set
+@@ -483,9 +585,11 @@
+      */
+     if (dsflags & RPMSENSE_RPMLIB) {
+ 	static int oneshot = -1;
+-	if (oneshot) 
++	if (oneshot) {
+ 	    oneshot = rpmdsRpmlib(&rpmlibP, NULL);
+-	
++	    CheckFilesystemHierarchy(&rpmlibP, rpmtsRootDir(ts));
++	}
++
+ 	if (rpmlibP != NULL && rpmdsSearch(rpmlibP, dep) >= 0) {
+ 	    rpmdsNotify(dep, "(rpmlib provides)", rc);
+ 	    goto exit;

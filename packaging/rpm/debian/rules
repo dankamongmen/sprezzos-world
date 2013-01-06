@@ -1,0 +1,66 @@
+#!/usr/bin/make -f
+
+DEB_HOST_ARCH_OS   := $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+PYDEF   := $(shell pyversions -vd)
+PYVERS  := $(shell pyversions -vr debian/control)
+PYEXTRA := $(filter-out $(PYDEF), $(PYVERS))
+
+ifeq (linux,$(DEB_HOST_ARCH_OS))
+       configure_flags +=--with-cap
+endif
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+CPPFLAGS+=$(shell pkg-config --cflags nss)
+
+configure_flags += \
+	--datadir=/usr/share \
+	--with-external-db \
+	--with-lua \
+	--with-debian \
+	--with-vendor=debian \
+	--enable-shared \
+	--enable-python \
+	LDFLAGS="$(LDFLAGS) -Wl,--as-needed" \
+	CPPFLAGS="$(CPPFLAGS)"
+
+override_dh_auto_configure:
+	set -e -x; for p in $(PYEXTRA) ; do \
+		dh_auto_configure --builddirectory=b-python-$$p -- $(configure_flags) \
+			PYTHON=/usr/bin/python$$p \
+			__PYTHON=/usr/bin/python$$p ;\
+	done
+	dh_auto_configure --builddirectory=b-default -- $(configure_flags)
+
+override_dh_auto_build:
+	set -e -x; for p in $(PYEXTRA) ; do dh_auto_build --builddirectory=b-python-$$p ; done
+	dh_auto_build --builddirectory=b-default
+
+override_dh_auto_install:
+	set -e -x; for p in $(PYEXTRA) ; do dh_auto_install --builddirectory=b-python-$$p ; done
+	dh_auto_install --builddirectory=b-default
+	# Kill all the junk this installs.
+	rm -f debian/tmp/usr/lib/rpm/config.guess \
+		debian/tmp/usr/lib/rpm/config.sub \
+		debian/tmp/usr/lib/rpm/config.site \
+		debian/tmp/usr/lib/rpm/rpmdiff.cgi \
+		debian/tmp/usr/lib/*.la \
+		debian/tmp/usr/lib/rpm-plugins/*.la \
+		debian/tmp/usr/lib/python*/dist-packages/rpm/*.la \
+		debian/tmp/usr/lib/rpm/rpm.xinetd \
+		debian/tmp/usr/lib/rpm/rpm.log
+	# Fix permissions
+	chmod -x \
+		debian/tmp/usr/lib/rpm/macros.php \
+		debian/tmp/usr/lib/rpm/macros.perl \
+		debian/tmp/usr/lib/rpm/macros.python \
+		debian/tmp/usr/lib/python*/*/rpm/*.py
+	chmod +x debian/tmp/usr/lib/rpm/rpm.daily
+
+override_dh_strip:
+	dh_strip --dbg-package=librpm-dbg
+
+%:
+	dh --fail-missing --with python2,autoreconf,autotools_dev $@
