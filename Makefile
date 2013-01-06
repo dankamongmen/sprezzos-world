@@ -3649,14 +3649,6 @@ $(LIBWACOM): $(SPREZZ)/libwacom/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libwacom-$(libwacom_UPVER).tar.bz2 $(TARARGS) $@
 
-.PHONY: libwnck
-libwnck:$(LIBWNCK)_$(ARCH).deb
-$(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf libwnck3-$(libwnck_UPVER).tar.xz $(TARARGS) $@
-
 .PHONY: libwww-perl
 libwww-perl:$(LIBWWWPERL)_$(ARCH).deb
 $(LIBWWWPERL): $(SPREZZ)/libwww-perl/debian/changelog

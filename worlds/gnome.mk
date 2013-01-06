@@ -118,6 +118,22 @@ $(LIBSOCIALWEB): $(SPREZZ)/libsocialweb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libsocialweb-$(libsocialweb_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libwnck
+libwnck:$(LIBWNCK)_$(ARCH).deb
+$(LIBWNCK): $(SPREZZ)/libwnck/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libwnck-$(libwnck_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: libwnck3
+libwnck:$(LIBWNCK3)_$(ARCH).deb
+$(LIBWNCK3): $(SPREZZ)/libwnck3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libwnck3-$(libwnck3_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: seed
 seed:$(SEED)_$(ARCH).deb
 $(SEED): $(SPREZZ)/seed/debian/changelog
