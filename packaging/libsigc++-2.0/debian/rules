@@ -1,0 +1,139 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# The current SONAME (FIXME: can we autodetect this?)
+SONAME=0c2a
+
+# Files whose name varies with the soname.  For each entry x of this
+# variable, the file debian/libsigc++-2.0-$(SONAME).$(x) will be
+# created from debian/libsigc++-2.0.soname.$(x) file.
+SONAME_SPECIFIC_EXTS=install
+
+# These are used for cross-compiling and for saving the configure
+# script from having to guess our platform (since we know it already).
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+else
+CROSS= --build $(DEB_BUILD_GNU_TYPE)
+endif
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# Which automake version to use.
+AUTOMAKE_VERSION=1.10
+
+ACLOCAL=aclocal-$(AUTOMAKE_VERSION)
+AUTOMAKE=automake-$(AUTOMAKE_VERSION)
+
+# Files to move out of the way and regenerate:
+AUTOTOOLS_FILES= \
+	configure config.h.in \
+	aclocal.m4 Makefile.in examples/Makefile.in docs/Makefile.in tests/Makefile.in \
+        sigc++/Makefile.in \
+	build
+
+b := $(shell pwd)/debian/tmp
+
+binary: binary-arch binary-indep
+
+binary-arch: binary-arch-stamp
+binary-arch-stamp: install
+	dh_testdir -a
+	dh_testroot -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a -V'libsigc++-2.0-$(SONAME) (>= 2.0.2)'
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_strip -a
+	dh_gencontrol -a -- -VSoname=$(SONAME)
+	dh_md5sums -a
+	dh_builddeb -a
+
+	touch binary-arch-stamp
+
+binary-indep: binary-indep-stamp
+binary-indep-stamp: install
+	dh_compress -i -Xdoxygen_tags
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_strip -i
+	dh_gencontrol -i -- -VSoname=$(SONAME)
+	dh_md5sums -i
+	dh_builddeb -i
+
+	touch binary-indep-stamp
+
+build: build-stamp
+build-stamp: config
+	dh_testdir -a
+	cd builddir && $(MAKE)
+	touch build-stamp
+
+clean: clean-arrange
+	dh_testdir
+	dh_testroot
+	if [ -d builddir ]; then rm -rf builddir; fi
+	dh_clean
+	# Restore all the .debian-build-orig files that we backed up earlier.
+	for x in $(AUTOTOOLS_FILES); \
+	do \
+	    if [ -f $$x.debian-build-orig ]; then mv $$x.debian-build-orig $$x; fi; \
+	done
+
+config: config-stamp
+config-stamp:
+	dh_testdir
+
+	# If the .debian-build-orig file already exists, we assume
+	# that it's a correct backup and just blow away the original
+	# file before regenerating it.  Otherwise, if the original
+	# file exists, try to rename it to its .debian-build-orig
+	# form.
+	for x in $(AUTOTOOLS_FILES); \
+	do \
+	    if [ -f $$x.debian-build-orig ]; \
+	    then if [ -f $$x ]; then rm $$x; fi; \
+	    else if [ -f $$x ]; then mv -n $$x $$x.debian-build-orig; fi; \
+	    fi; \
+	done
+
+	ACLOCAL=$(ACLOCAL) AUTOMAKE=$(AUTOMAKE) autoreconf
+	test -d builddir || mkdir builddir
+	cd builddir && ../configure --prefix=/usr --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) --enable-shared --enable-static $(CROSS)
+
+	touch config-stamp
+
+install: install-stamp
+install-stamp: build arrange
+	dh_testdir
+	dh_installdirs
+
+	# Include and .pc files are in install-data, not install-exec, so we
+	# need to do a full install.
+	cd builddir && $(MAKE) DESTDIR=$(b) install
+	# Move the standard documentation directory to its final location.
+	mv $(b)/usr/share/doc/libsigc++-2.0 $(b)/usr/share/doc/libsigc++-2.0-doc
+	dh_install --sourcedir=debian/tmp
+
+	dh_installdocs
+	dh_installexamples -plibsigc++-2.0-doc examples/*.cc
+	dh_installchangelogs ChangeLog
+
+	touch install-stamp
+
+clean-arrange:
+	dh_testdir
+	dh_testroot
+	if [ -f debian/soname-specific-files ]; then rm -f `cat debian/soname-specific-files`; rm debian/soname-specific-files; fi
+
+# This rule adjusts the soname-specific files.
+arrange: arrange-stamp
+arrange-stamp: install clean-arrange
+	for x in $(SONAME_SPECIFIC_EXTS); do echo "debian/libsigc++-2.0-$(SONAME).$$x" > debian/soname-specific-files; done
+	#echo "debian/libsigc++-2.0-$(SONAME).postinst" > debian/soname-specific-files
+	for x in $(SONAME_SPECIFIC_EXTS); do cp -v debian/libsigc++-2.0.soname.$$x debian/libsigc++-2.0-$(SONAME).$$x; done
+	touch arrange-stamp
+
+.PHONY: arrange build clean-arrange binary-indep binary-arch binary install force-clean
