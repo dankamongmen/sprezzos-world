@@ -14,6 +14,14 @@ $(DBUSTESTRUNNER): $(SPREZZ)/dbus-test-runner/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-test-runner-$(dbus-test-runner_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: frame
+frame:$(FRAME)_$(ARCH).deb
+$(FRAME): $(SPREZZ)/frame/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf frame-$(frame_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: geis
 geis:$(GEIS)_$(ARCH).deb
 $(GEIS): $(SPREZZ)/geis/debian/changelog
@@ -21,6 +29,14 @@ $(GEIS): $(SPREZZ)/geis/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf geis-$(geis_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: grail
+grail:$(GRAIL)_$(ARCH).deb
+$(GRAIL): $(SPREZZ)/grail/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf grail-$(grail_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: ido
 ido:$(IDO)_$(ARCH).deb
