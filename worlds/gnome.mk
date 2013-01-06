@@ -102,6 +102,14 @@ $(LIBGSF): $(SPREZZ)/libgsf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgsf-$(libgsf_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libgtop2
+libgtop2:$(LIBGTOP2)_$(ARCH).deb
+$(LIBGTOP2): $(SPREZZ)/libgtop2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libgtop2-$(libgtop2_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: libpeas
 libpeas:$(LIBPEAS)_$(ARCH).deb
 $(LIBPEAS): $(SPREZZ)/libpeas/debian/changelog
@@ -117,6 +125,14 @@ $(LIBSOCIALWEB): $(SPREZZ)/libsocialweb/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libsocialweb-$(libsocialweb_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libsigc++-2.0
+libsigc++-2.0:$(LIBSIGC++2.0)_$(ARCH).deb
+$(LIBSIGC++2.0): $(SPREZZ)/libsigc++-2.0/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libsigc++-$(libsigc++-2.0_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libwnck
 libwnck:$(LIBWNCK)_$(ARCH).deb
