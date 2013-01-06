@@ -2825,6 +2825,14 @@ $(KMOD): $(SPREZZ)/kmod/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kmod-$(kmod_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: kyotocabinet
+kyotocabinet:$(KYOTOCABINET)_$(ARCH).deb
+$(KYOTOCABINET): $(SPREZZ)/kyotocabinet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf kyotocabinet-$(kyotocabinet_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: lcms2
 lcms2:$(LCMS2)_$(ARCH).deb
 $(LCMS2): $(SPREZZ)/lcms2/debian/changelog
