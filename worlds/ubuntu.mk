@@ -14,6 +14,14 @@ $(DBUSTESTRUNNER): $(SPREZZ)/dbus-test-runner/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-test-runner-$(dbus-test-runner_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: geis
+geis:$(GEIS)_$(ARCH).deb
+$(GEIS): $(SPREZZ)/geis/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf geis-$(geis_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: ido
 ido:$(IDO)_$(ARCH).deb
 $(IDO): $(SPREZZ)/ido/debian/changelog
