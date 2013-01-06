@@ -4947,6 +4947,14 @@ $(PYGTK): $(SPREZZ)/pygtk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pygtk-$(pygtk_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: pyrex
+pyrex:$(PYREX)_$(ARCH).deb
+$(PYREX): $(SPREZZ)/pyrex/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Pyrex-$(pyrex_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: python2.6
 python2.6:$(PYTHON2.6)_$(ARCH).deb
 $(PYTHON2.6): $(SPREZZ)/python2.6/debian/changelog
