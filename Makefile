@@ -3095,7 +3095,7 @@ $(EXIM4): $(SPREZZ)/exim4/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf exim4-$(exim4_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf exim-$(exim4_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: exiv2
 exiv2:$(EXIV2)_$(ARCH).deb
