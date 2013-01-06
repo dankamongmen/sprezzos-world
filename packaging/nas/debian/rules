@@ -1,0 +1,249 @@
+#! /usr/bin/make -f
+# debian/rules file for NAS
+
+DEB_BUILD_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_BUILD_GNU_CPU	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_CPU)
+DEB_BUILD_GNU_SYSTEM	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_SYSTEM)
+DEB_BUILD_ARCH_OS	?= $(shell dpkg-architecture -qDEB_BUILD_ARCH_OS)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+LDFLAGS_DEF = `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS_DEF = `dpkg-buildflags --get CPPFLAGS`
+CFLAGS_DEF = `dpkg-buildflags --get CFLAGS`
+
+ifeq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
+	LDFLAGS_DEF += -s
+endif
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS_DEF += -O0
+endif
+
+package=nas
+instdirs=BINDIR=/usr/bin USRLIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) MANPATH=/usr/share/man INCDIR=/usr/include MANSUFFIX=1nas LIBMANSUFFIX=3nas FILEMANSUFFIX=5nas ETCDIR=/etc/nas
+
+ifeq ($(DEB_BUILD_ARCH_OS),hurd)
+archpacs=nas-bin libaudio2 libaudio-dev
+else
+archpacs=nas nas-bin libaudio2 libaudio-dev
+endif
+allpacs=nas-doc
+
+build-arch: build
+build-indep: build
+
+build:
+        # Make include symlinks
+	( cd include/audio; for file in ../../lib/audio/*.h; do ln -s $$file .; done )
+	cp /usr/share/misc/config.sub config
+	xmkmf -a
+	$(MAKE) EXTRA_LDOPTIONS="$(LDFLAGS_DEF)" \
+		CCOPTIONS="$(CFLAGS_DEF) $(CPPFLAGS_DEF)" \
+		INSTALL_FLAGS="$(INSTALL_FLAGS)" \
+		LDFLAGS_DEF="$(LDFLAGS_DEF)"
+	touch build
+
+clean:
+	FOO=bar; echo $$FOO
+	$(checkdir)
+	-$(MAKE) clean
+	find . -name Makefile -exec rm -f {} \;
+	find . -name '*~' -exec rm -f {} \;
+	# Clear up include symlinks
+	find include -type l -exec rm -f {} \;
+	rm -rf debian/tmp debian/nas debian/nas-doc debian/nas-bin 
+	rm -rf debian/libaudio2 debian/libaudio-dev debian/substvars
+	rm -f build debian/files 
+	rm -f config/config.cache config/config.h config/config.log
+	rm -f config/config.status
+	rm -f config/config.sub
+	rm -f config/libtool libtool
+	rm -rf config/autom4te.cache
+	# So so ugly, but works.
+	echo "#!/bin/sh" > config/config.guess
+	echo "echo $(DEB_BUILD_GNU_TYPE)" >> config/config.guess
+	chmod +x config/config.guess
+
+binary-indep:  checkroot
+	$(checkdir)
+	# nas-doc
+	install -d debian/nas-doc/DEBIAN
+	install -d debian/nas-doc/usr/share/doc/nas-doc
+	install -d debian/nas-doc/usr/share/doc/nas
+	# install nas-doc
+	install -m644 doc/*ps doc/*txt doc/actions debian/nas-doc/usr/share/doc/nas
+	install -m644 doc/README debian/nas-doc/usr/share/doc/nas/README.DOC
+	install -m644 README FAQ TODO debian/nas-doc/usr/share/doc/nas-doc
+	install -m644 HISTORY debian/nas-doc/usr/share/doc/nas-doc/changelog
+	install -m644 debian/changelog debian/nas-doc/usr/share/doc/nas-doc/changelog.Debian
+	-gzip -9vn debian/nas-doc/usr/share/doc/*/*
+	cp debian/copyright debian/nas-doc/usr/share/doc/nas-doc
+	for file in preinst postinst prerm postrm config ; \
+	do \
+		if [ -f debian/nas-doc.$$file ] ; then \
+			install -m755 debian/nas-doc.$$file debian/nas-doc/DEBIAN/$$file; \
+		fi; \
+	done; \
+	dpkg-gencontrol -isp -Pdebian/nas-doc -pnas-doc >debian/nas-doc/DEBIAN/control
+	-chown -R root.root debian/nas-doc
+	-chmod -R g-ws debian/nas-doc
+	dpkg --build debian/nas-doc ..
+
+binary-arch:  checkroot build
+	$(checkdir)
+	# First create directories:
+	# nas
+	install -d debian/nas/DEBIAN
+	install -d debian/nas/usr/bin
+	install -d debian/nas/usr/share/man/man1
+	install -d debian/nas/usr/share/man/man5
+	install -d debian/nas/usr/share/doc/nas
+	install -d debian/nas/usr/share/doc/nas/examples
+	install -d debian/nas/usr/share/nas
+	install -d debian/nas/etc/init.d
+	install -d debian/nas/etc/default
+	# nas-bin
+	install -d debian/nas-bin/DEBIAN
+	install -d debian/nas-bin/usr/bin
+	install -d debian/nas-bin/usr/share/man/man1
+	install -d debian/nas-bin/usr/share/doc/nas-bin
+	# libaudio-dev
+	install -d debian/libaudio-dev/DEBIAN
+	install -d debian/libaudio-dev/usr/include/audio
+	install -d debian/libaudio-dev/usr/share/man/man3
+	install -d debian/libaudio-dev/usr/share/doc/libaudio-dev
+	install -d debian/libaudio-dev/usr/lib/$(DEB_HOST_MULTIARCH)
+	# libaudio2
+	install -d debian/libaudio2/DEBIAN
+	install -d debian/libaudio2/usr/lib/$(DEB_HOST_MULTIARCH)
+	install -d debian/libaudio2/usr/share/libaudio2
+	install -d debian/libaudio2/usr/share/doc/libaudio2
+
+	# install nas
+	(top=`pwd`; cd server && $(MAKE) install $(instdirs) DESTDIR=$$top/debian/nas)
+	(top=`pwd`; cd server && $(MAKE) install.man $(instdirs) DESTDIR=$$top/debian/nas)
+ifneq ($(DEB_BUILD_ARCH_OS),hurd)
+	cp debian/nas/etc/nas/nasd.conf.eg debian/nas/etc/nas/nasd.conf 
+	mv debian/nas/etc/nas/nasd.conf.eg debian/nas/usr/share/nas
+	ln -s ../../../nas/nasd.conf.eg debian/nas/usr/share/doc/nas/examples
+	chmod 644 debian/nas/usr/share/doc/nas/examples/nasd.conf.eg
+	chmod 755 debian/nas/etc/nas
+	chmod 755 debian/nas/etc/default
+ifeq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
+	file debian/nas/usr/bin/* | grep executable | grep -v 'text executable' | cut -d':' -f1 | xargs strip --strip-unneeded --remove-section=.comment --remove-section=.note
+endif
+endif
+
+	# install nas-bin
+	(top=`pwd`; cd clients/audio && $(MAKE) install $(instdirs) DESTDIR=$$top/debian/nas-bin)
+	(top=`pwd`; cd clients/audio && $(MAKE) install.man $(instdirs) DESTDIR=$$top/debian/nas-bin)
+ifeq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
+	file debian/nas-bin/usr/bin/* | grep executable | grep -v 'text executable' | cut -d':' -f1 | xargs strip --strip-unneeded --remove-section=.comment --remove-section=.note
+endif
+
+	# install libaudio-dev
+	(top=`pwd`; cd doc/man/lib && $(MAKE) install.man $(instdirs) MANSUFFIX=3nas DESTDIR=$$top/debian/libaudio-dev)
+	install -m644 lib/audio/libaudio.a debian/libaudio-dev/usr/lib/$(DEB_HOST_MULTIARCH)
+	install -m644 include/audio/*.h debian/libaudio-dev/usr/include/audio
+	rm -f debian/libaudio-dev/usr/include/audio/release.h
+	ln -s libaudio.so.2.4 debian/libaudio-dev/usr/lib/$(DEB_HOST_MULTIARCH)/libaudio.so
+
+	# install libaudio2
+	install -m644 lib/audio/AuErrorDB debian/libaudio2/usr/share/libaudio2
+	install -m644 lib/audio/libaudio.so.2.4 debian/libaudio2/usr/lib/$(DEB_HOST_MULTIARCH)
+	ln -s libaudio.so.2.4 debian/libaudio2/usr/lib/$(DEB_HOST_MULTIARCH)/libaudio.so.2
+	install -m644 lib/audio/libaudio.so.2.4 debian/libaudio2/usr/lib/$(DEB_HOST_MULTIARCH)
+ifeq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
+	strip --strip-unneeded --remove-section=.comment --remove-section=.note debian/libaudio2/usr/lib/$(DEB_HOST_MULTIARCH)/libaudio.so.2.4 
+endif
+
+	# Install other files
+	install -m 644 debian/nas.default debian/nas/etc/default/nas
+	install debian/rc.nas debian/nas/etc/init.d/nas
+	install debian/start-nas debian/nas/usr/bin
+	install -m 644 debian/start-nas.man debian/nas/usr/share/man/man1/start-nas.1nas
+	install -m 644 doc/man/nas.man debian/nas/usr/share/man/man1/nas.1nas
+	# Install documentation
+	-gzip -9vn debian/nas/usr/share/man/man*/*
+	-gzip -9vn debian/nas-bin/usr/share/man/man*/*
+	-gzip -9vn debian/libaudio-dev/usr/share/man/man*/*
+	ln -s nas.1nas.gz debian/nas/usr/share/man/man1/au.1nas.gz
+	for dir in $(archpacs); do install -m644 README FAQ TODO debian/$$dir/usr/share/doc/$$dir; done
+	for dir in $(archpacs); do install -m644 HISTORY debian/$$dir/usr/share/doc/$$dir/changelog; done
+	for dir in $(archpacs); do install -m644 debian/changelog debian/$$dir/usr/share/doc/$$dir/changelog.Debian; done
+	install -m644 debian/nas.README.Debian debian/nas/usr/share/doc/nas/README.Debian
+
+	# Now compress docs & clean up permissions
+	-gzip -9vn debian/nas/usr/share/doc/*/*
+	-gzip -9vn debian/libaudio-dev/usr/share/doc/*/*
+	-gzip -9vn debian/nas-bin/usr/share/doc/*/*
+	-gzip -9vn debian/libaudio2/usr/share/doc/*/*
+
+	-chmod -Rv u+w debian/nas/usr/share/man
+	-chmod -Rv u+w debian/libaudio-dev/usr/include debian/libaudio-dev/usr/share/man
+	-chmod -Rv u+w debian/nas-bin/usr/share/man
+
+	-chmod -v 644 debian/nas/etc/nas/* 
+	chmod -v 644 debian/libaudio2/usr/share/libaudio2/AuErrorDB
+	for dir in $(archpacs); do cp debian/copyright debian/$$dir/usr/share/doc/$$dir; done
+	# Standard package building stuff
+	debconf-updatepo
+	for dir in $(archpacs); \
+	do \
+		for file in conffiles shlibs; \
+		do \
+			if [ -f debian/$$dir.$$file ] ; then \
+				install -m644 debian/$$dir.$$file debian/$$dir/DEBIAN/$$file; \
+			fi; \
+		done; \
+		for file in preinst postinst prerm postrm config; \
+		do \
+			if [ -f debian/$$dir.$$file ] ; then \
+				install -m755 debian/$$dir.$$file debian/$$dir/DEBIAN/$$file; \
+			fi; \
+		done; \
+		if [ -f debian/$$dir.templates ] ; then \
+			po2debconf debian/$$dir.templates > debian/$$dir/DEBIAN/templates ; \
+		fi; \
+	done
+
+	dpkg-shlibdeps debian/nas/usr/bin/*
+	LD_LIBRARY_PATH=./debian/libaudio2/usr/lib/$(DEB_HOST_MULTIARCH):$$LD_LIBRARY_PATH dpkg-shlibdeps debian/nas-bin/usr/bin/*
+	dpkg-shlibdeps debian/libaudio2/usr/lib/$(DEB_HOST_MULTIARCH)/lib*
+	for dir in $(archpacs); \
+	do \
+		dpkg-gencontrol -isp -Pdebian/$$dir -p$$dir >debian/$$dir/DEBIAN/control; \
+	done
+	-chown -R root.root debian/nas
+	-chown -R root.root debian/libaudio-dev
+	-chown -R root.root debian/nas-bin
+	-chown -R root.root debian/libaudio2
+
+	-chmod -R g-ws debian/nas
+	-chmod -R g-ws debian/libaudio-dev
+	-chmod -R g-ws debian/nas-bin
+	-chmod -R g-ws debian/libaudio2
+
+	for dir in $(archpacs); \
+	do \
+		dpkg --build debian/$$dir ..; \
+	done
+
+define checkdir
+	test -f server/dia/au.h -a -f debian/rules
+endef
+
+# Below here is fairly generic really
+
+binary:  binary-indep binary-arch
+
+source diff:
+	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false
+
+checkroot:
+	$(checkdir)
+	test root = "`whoami`"
+
+.PHONY: binary binary-arch binary-indep clean checkroot
+
+
+
