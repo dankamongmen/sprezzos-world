@@ -14,6 +14,15 @@ $(BAMF): $(SPREZZ)/bamf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bamf-$(bamf_UPVER).tar.gz $(TARARGS) $@
 
+# There's a recipe for the tip-of-bzr-trunk in Makefile
+#.PHONY: compiz9
+#compiz9:$(COMPIZ9)_$(ARCH).deb
+#$(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@/
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xjvf compiz-$(compiz9_UPVER).tar.bz2 $(TARARGS) $@
+#
 .PHONY: dbus-test-runner
 dbus-test-runner:$(DBUSTESTRUNNER)_$(ARCH).deb
 $(DBUSTESTRUNNER): $(SPREZZ)/dbus-test-runner/debian/changelog

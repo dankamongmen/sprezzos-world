@@ -123,6 +123,21 @@ $(EVERPAD): $(SPREZZ)/everpad/debian/changelog
 	ln -sf everpad-$(everpad_UPVER).tar.xz everpad_$(everpad_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf compiz-$(compiz9_UPVER).tar.bz2 $(TARARGS) $@
+
+# There's a recipe for the released version commented out in worlds/ubuntu.mk
+.PHONY: compiz9
+compiz9:$(COMPIZ9)_$(ARCH).deb
+$(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
+	bzr branch lp:compiz $@
+	rm -rf $@/debian
+	tar cJf compiz-$(compiz9_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf compiz-$(compiz9_UPVER).tar.xz compiz_$(compiz9_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: software-properties
 software-properties:$(SOFTWAREPROPERTIES)_$(ARCH).deb
 $(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
@@ -546,6 +561,14 @@ $(LIBAPPINDICATOR): $(SPREZZ)/libappindicator/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libappindicator-$(libappindicator_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libasyncns
+libasyncns:$(LIBASYNCNS)_$(ARCH).deb
+$(LIBASYNCNS): $(SPREZZ)/libasyncns/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libasyncns-$(libasyncns_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libsigsegv
 libsigsegv:$(LIBSIGSEGV)_$(ARCH).deb
@@ -1242,14 +1265,6 @@ $(COMPIZ): $(SPREZZ)/compiz/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf compiz-$(compiz_UPVER).tar.bz2 $(TARARGS) $@
-
-.PHONY: compiz9
-compiz9:$(COMPIZ9)_$(ARCH).deb
-$(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf compiz-$(compiz9_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: conntrack
 conntrack:$(CONNTRACK)_$(ARCH).deb
