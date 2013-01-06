@@ -3422,7 +3422,7 @@ $(LIBDRM): $(SPREZZ)/libdrm/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libdrm-$(libdrm_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf libdrm-$(libdrm_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libxtst
 libxtst:$(LIBXTST)_$(ARCH).deb
