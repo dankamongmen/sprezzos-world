@@ -38,6 +38,14 @@ $(GCONFEDITOR): $(SPREZZ)/gconf-editor/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gconf-editor-$(gconf-editor_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: ghemical
+ghemical:$(GHEMICAL)_$(ARCH).deb
+$(GHEMICAL): $(SPREZZ)/ghemical/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ghemical-$(ghemical_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnome-documents
 gnome-documents:$(GNOMEDOCUMENTS)_$(ARCH).deb
 $(GNOMEDOCUMENTS): $(SPREZZ)/gnome-documents/debian/changelog
