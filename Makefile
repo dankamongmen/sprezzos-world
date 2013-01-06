@@ -5139,6 +5139,14 @@ $(RPCBIND): $(SPREZZ)/rpcbind/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf rpcbind-$(rpcbind_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: rpm
+rpm:$(RPM)_$(ARCH).deb
+$(RPM): $(SPREZZ)/rpm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf rpm-$(rpm_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: rtmpdump
 rtmpdump:$(RTMPDUMP)_$(ARCH).deb
 $(RTMPDUMP): $(SPREZZ)/rtmpdump/debian/changelog
