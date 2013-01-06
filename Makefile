@@ -4635,6 +4635,14 @@ $(OPENMPI): $(SPREZZ)/openmpi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openmpi-$(openmpi_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: orc
+orc:$(ORC)_$(ARCH).deb
+$(ORC): $(SPREZZ)/orc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf orc-$(orc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: enblend-enfuse
 enblend-enfuse:$(ENBLENDENFUSE)_$(ARCH).deb
 $(ENBLENDENFUSE): $(SPREZZ)/enblend-enfuse/debian/changelog
