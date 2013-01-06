@@ -6,6 +6,14 @@ $(APPMENUQT): $(SPREZZ)/appmenu-qt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf appmenu-qt-$(appmenu-qt_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: bamf
+bamf:$(BAMF)_$(ARCH).deb
+$(BAMF): $(SPREZZ)/bamf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bamf-$(bamf_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: dbus-test-runner
 dbus-test-runner:$(DBUSTESTRUNNER)_$(ARCH).deb
 $(DBUSTESTRUNNER): $(SPREZZ)/dbus-test-runner/debian/changelog
