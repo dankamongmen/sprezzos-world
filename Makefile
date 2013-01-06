@@ -5403,6 +5403,14 @@ $(UTILLINUX): $(SPREZZ)/util-linux/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf util-linux-$(util-linux_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: tdb
+tdb:$(TDB)_$(ARCH).deb
+$(TDB): $(SPREZZ)/tdb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tdb-$(tdb_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: telepathy-farstream
 telepathy-farstream:$(TELEPATHYFARSTREAM)_$(ARCH).deb
 $(TELEPATHYFARSTREAM): $(SPREZZ)/telepathy-farstream/debian/changelog
