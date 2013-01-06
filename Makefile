@@ -5467,6 +5467,14 @@ $(TOTEMPLPARSER): $(SPREZZ)/totem-pl-parser/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf totem-pl-parser-$(totem-pl-parser_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: tokyocabinet
+tokyocabinet:$(TOKYOCABINET)_$(ARCH).deb
+$(TOKYOCABINET): $(SPREZZ)/tokyocabinet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tokyocabinet-$(tokyocabinet_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: tracker
 tracker:$(TRACKER)_$(ARCH).deb
 $(TRACKER): $(SPREZZ)/tracker/debian/changelog
