@@ -108,7 +108,7 @@ $(LIBGTOP2): $(SPREZZ)/libgtop2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf libgtop2-$(libgtop2_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf libgtop-$(libgtop2_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libpeas
 libpeas:$(LIBPEAS)_$(ARCH).deb
