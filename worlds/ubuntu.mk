@@ -14,6 +14,14 @@ $(DBUSTESTRUNNER): $(SPREZZ)/dbus-test-runner/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-test-runner-$(dbus-test-runner_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: evemu
+evemu:$(EVEMU)_$(ARCH).deb
+$(EVEMU): $(SPREZZ)/evemu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf evemu-$(evemu_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: frame
 frame:$(FRAME)_$(ARCH).deb
 $(FRAME): $(SPREZZ)/frame/debian/changelog
