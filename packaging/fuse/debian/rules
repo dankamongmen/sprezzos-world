@@ -1,0 +1,62 @@
+#!/usr/bin/make -f
+
+SHELL := sh -e
+
+DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh ${@} --with autotools_dev
+
+override_dh_auto_configure:
+	dh_auto_configure -- --bindir=/bin --libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz -z9
+
+override_dh_compress:
+	dh_compress -Xusr/share/doc/libfuse-dev/examples
+
+override_dh_fixperms:
+	dh_fixperms
+
+ifeq ($(DEB_BUILD_ARCH),linux)
+	chmod 0755 debian/fuse/bin/fusermount
+endif
+
+override_dh_install:
+	# remove unused files
+	rm -f debian/tmp/etc/init.d/fuse
+	rm -f debian/tmp/etc/udev/rules.d/99-fuse.rules
+	rm -f debian/tmp/usr/lib/*/*.la
+
+	dh_install --fail-missing
+
+	# adjusting /lib for multiarch
+	mkdir -p debian/libfuse2/lib/$(DEB_HOST_MULTIARCH)
+	mv debian/libfuse2/lib/*.so* debian/libfuse2/lib/$(DEB_HOST_MULTIARCH)
+	mkdir -p debian/libfuse2-udeb/lib/$(DEB_HOST_MULTIARCH)
+	mv debian/libfuse2-udeb/lib/*.so* debian/libfuse2-udeb/lib/$(DEB_HOST_MULTIARCH)
+
+	# adding initramfs-tools integration
+	install -D -m 0755 debian/local/fuse.hook debian/fuse/usr/share/initramfs-tools/hooks/fuse
+
+	# adding kmod integration
+	install -D -m 0644 debian/local/fuse.kmod debian/fuse/lib/modules-load.d/fuse.conf
+
+override_dh_link:
+	# correcting symlink targets
+	for LIB in debian/tmp/usr/lib/*/*.so; \
+	do \
+		dh_link -plibfuse-dev lib/$(DEB_HOST_MULTIARCH)/$$(basename $$(readlink $${LIB})) usr/lib/$(DEB_HOST_MULTIARCH)/$$(basename $${LIB}); \
+	done
+
+	dh_link --remaining-packages
+
+override_dh_makeshlibs:
+	dh_makeshlibs -s -V "libfuse2 (>= 2.8.1)" --add-udeb=libfuse2-udeb
+
+override_dh_strip:
+	dh_strip --dbg-package=fuse-dbg
