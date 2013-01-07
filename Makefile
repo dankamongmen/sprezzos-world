@@ -3914,6 +3914,14 @@ $(LIBX11PROTOCOLOTHERPERL): $(SPREZZ)/libx11-protocol-other-perl/debian/changelo
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf X11-Protocol-Other-$(libx11-protocol-other-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: x11-session-utils
+x11-session-utils:$(X11SESSIONUTILS)_$(ARCH).deb
+$(X11SESSIONUTILS): $(SPREZZ)/x11-session-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --watchfile debian/watch.xsm --force-download --download-current-version
+	tar xzvf xsm-$(x11-session-utils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libx86
 libx86:$(LIBX86)_$(ARCH).deb
 $(LIBX86): $(SPREZZ)/libx86/debian/changelog
