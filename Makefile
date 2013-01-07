@@ -826,6 +826,14 @@ $(AUTOMAKE1.11): $(SPREZZ)/automake1.11/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf automake-$(automake1.11_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: automake1.13
+automake1.13:$(AUTOMAKE1.11)_$(ARCH).deb
+$(AUTOMAKE1.13): $(SPREZZ)/automake1.11/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf automake-$(automake1.13_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: avahi
 avahi:$(AVAHI)_$(ARCH).deb
 $(AVAHI): $(SPREZZ)/avahi/debian/changelog
