@@ -827,8 +827,8 @@ $(AUTOMAKE1.11): $(SPREZZ)/automake1.11/debian/changelog
 	tar xzvf automake-$(automake1.11_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: automake1.13
-automake1.13:$(AUTOMAKE1.11)_$(ARCH).deb
-$(AUTOMAKE1.13): $(SPREZZ)/automake1.11/debian/changelog
+automake1.13:$(AUTOMAKE1.13)_$(ARCH).deb
+$(AUTOMAKE1.13): $(SPREZZ)/automake1.13/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
