@@ -1,0 +1,135 @@
+#! /usr/bin/make -f
+
+SHELL = /bin/bash
+
+DEB_HOST_ARCH_OS ?=  $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+# all versions
+PYVERS	:= $(shell pyversions -vs)
+VER	:= $(shell /usr/bin/python -c 'import sys; print sys.version[:3]')
+
+gamesdir = debian/twisted-quotes/usr/share/games/fortunes
+
+twersion := $(subst twisted-,,$(notdir $(CURDIR)))
+
+include /usr/share/python/python.mk
+
+build: build-stamp
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: $(PYVERS:%=build-python%)
+	touch $@
+build-python%:
+	python$* setup.py build
+	python$*-dbg setup.py build
+	touch $@
+
+clean:
+	rm -rf *-stamp build-python* build
+	rm -rf $(addprefix debian/,$(packages)) debian/files debian/substvars
+	rm -rf _trial_temp test.log
+	find . -name "*.pyc" |xargs -r rm
+	dh_clean
+
+install: build-stamp install-prereq $(PYVERS:%=install-python%) install-nover
+
+install-prereq: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+
+install-python%: install-prereq
+	: # python-twisted-core
+	python$* setup.py install --root=debian/python-twisted-core --install-layout=deb
+
+	-find debian/python-twisted-core -name '*.py[co]' | xargs rm -f
+	rm -rf debian/python-twisted-core/usr/lib/python$*/*-packages/twisted/python/pymodules
+
+	: # python-twisted-bin
+ifeq ($(DEB_HOST_ARCH_OS), linux)
+	dh_movefiles -ppython-twisted-bin \
+	  --sourcedir=debian/python-twisted-core \
+	    $(call py_libdir,$*)/twisted/python/sendmsg.so \
+	    $(call py_libdir,$*)/twisted/test/raiser.so
+else
+	dh_movefiles -ppython-twisted-bin \
+	  --sourcedir=debian/python-twisted-core \
+	    $(call py_libdir,$*)/twisted/python/sendmsg.so \
+	    $(call py_libdir,$*)/twisted/test/raiser.so
+endif
+	case $* in \
+	  2.6) dh_movefiles -ppython-twisted-bin \
+	         --sourcedir=debian/python-twisted-core \
+	           $(call py_libdir,$*)/twisted/python/_initgroups.so ; \
+	esac
+
+	: # python-twisted
+	mkdir -p debian/python-twisted/$(call py_libdir,$*)
+	sed 's/@twersion@/$(twversion)/' debian/Twisted.egg-info.in \
+		> debian/python-twisted/$(call py_libdir,$*)/Twisted-$(twersion).egg-info
+
+	: # Replace all '#!' calls to python with /usr/bin/python
+	: # and make them executable
+	for i in `find debian/python-twisted-* -mindepth 3 -type f`; do \
+	  sed '1s,#!.*python[^ ]*\(.*\),#! /usr/bin/python\1,' \
+		$$i > $$i.temp; \
+	  if cmp --quiet $$i $$i.temp; then \
+	    rm -f $$i.temp; \
+	  else \
+	    mv -f $$i.temp $$i; \
+	    chmod 755 $$i; \
+	    echo "fixed interpreter: $$i"; \
+	  fi; \
+	done
+
+	: # python-twisted-bin-dbg
+	python$*-dbg setup.py install --root=debian/python-twisted-bin-dbg --no-compile --install-layout=deb
+	find debian/python-twisted-bin-dbg ! -type d ! -name '*_d.so' | xargs rm -f
+	find debian/python-twisted-bin-dbg -depth -empty -exec rmdir {} \;
+
+install-nover:
+	: # twisted-doc
+	mkdir -p debian/twisted-doc/usr/share/doc/twisted-doc
+	cp -a doc/* debian/twisted-doc/usr/share/doc/twisted-doc/
+	-find debian/twisted-doc -type d -name man | xargs rm -rf
+
+	mkdir -p debian/python-twisted-core/usr/share/man/man1
+	for i in doc/man/{manhole,*tap*,trial,twistd,pyhtmlizer}.1; do \
+	  cp -p $$i debian/python-twisted-core/usr/share/man/man1/; \
+	done
+
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -i
+	dh_installdocs -i
+	dh_installmenu -i
+	dh_compress -i -X.py
+	dh_fixperms -i
+	dh_python2 -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -a
+	dh_installdocs -a
+	dh_installmenu -a
+	dh_strip -ppython-twisted-bin --dbg-package=python-twisted-bin-dbg
+	rm -rf debian/python-twisted-bin-dbg/usr/share/doc/python-twisted-bin-dbg
+	ln -s python-twisted-bin \
+	    debian/python-twisted-bin-dbg/usr/share/doc/python-twisted-bin-dbg
+	dh_compress -a -X.py
+	dh_fixperms -a
+	dh_python2 -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install install-nover install-prereq
