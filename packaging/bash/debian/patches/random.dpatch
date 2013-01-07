@@ -1,0 +1,107 @@
+#! /bin/sh -e
+
+dir=.
+if [ $# -eq 3 -a "$2" = '-d' ]; then
+    pdir="-d $3"
+    dir=$3
+elif [ $# -ne 1 ]; then
+    echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+    exit 1
+fi
+case "$1" in
+    -patch)
+	patch $pdir -f --no-backup-if-mismatch -p1 < $0
+	echo '2.05' > $dir/_distribution
+	echo '0' > $dir/_patchlevel
+	cd $dir && autoconf
+	rm -f $dir/_distribution $dir/_patchlevel
+	;;
+    -unpatch)
+	patch $pdir -f --no-backup-if-mismatch -R -p1 < $0
+	rm -f $dir/configure $dir/_distribution $dir/_patchlevel
+	;;
+    *)
+	echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+	exit 1
+esac
+exit 0
+
+# DP: use the system random functions
+
+diff -urb bash.orig/config.h.in bash/config.h.in
+--- bash.orig/config.h.in	2003-09-22 14:42:35.000000000 +0200
++++ bash/config.h.in	2003-09-28 00:27:15.000000000 +0200
+@@ -606,6 +606,9 @@
+ /* Define if you have the putenv function.  */
+ #undef HAVE_PUTENV
+ 
++/* Define if you have the random function.  */
++#undef HAVE_RANDOM
++
+ /* Define if you have the readlink function. */
+ #undef HAVE_READLINK
+ 
+@@ -696,6 +699,9 @@
+ /* Define if you have the strsignal function or macro. */
+ #undef HAVE_STRSIGNAL
+ 
++/* Define if you have the srandom function.  */
++#undef HAVE_SRANDOM
++
+ /* Define if you have the sysconf function. */
+ #undef HAVE_SYSCONF
+ 
+diff -urb bash.orig/variables.c bash/variables.c
+--- bash.orig/variables.c	2003-07-31 16:28:57.000000000 +0200
++++ bash/variables.c	2003-09-28 00:27:15.000000000 +0200
+@@ -1098,16 +1098,22 @@
+ static unsigned long rseed = 1;
+ static int last_random_value;
+ 
+-/* A linear congruential random number generator based on the example
+-   one in the ANSI C standard.  This one isn't very good, but a more
+-   complicated one is overkill. */
++/* Use the random number genrator provided by the standard C library,
++   else use a linear congruential random number generator based on the
++   ANSI C standard.  This one isn't very good (the values are alternately
++   odd and even, for example), but a more complicated one is overkill. */
+ 
+ /* Returns a pseudo-random number between 0 and 32767. */
+ static int
+ brand ()
+ {
++#if defined(HAVE_RANDOM)
++  rseed = (unsigned int) (labs(random()) & 32767);
++  return rseed;
++#else
+   rseed = rseed * 1103515245 + 12345;
+   return ((unsigned int)((rseed >> 16) & 32767));	/* was % 32768 */
++#endif
+ }
+ 
+ /* Set the random number generator seed to SEED. */
+@@ -1115,8 +1121,12 @@
+ sbrand (seed)
+      unsigned long seed;
+ {
++#if defined(HAVE_SRANDOM)
++  srandom(seed);
++#else
+   rseed = seed;
+   last_random_value = 0;
++#endif
+ }
+ 
+ static SHELL_VAR *
+--- bash/configure.in~	2004-03-02 00:04:29.000000000 +0100
++++ bash/configure.in	2004-03-02 00:05:48.000000000 +0100
+@@ -667,6 +667,9 @@
+ 
+ AC_FUNC_MKTIME
+ 
++dnl checks for random functions
++AC_CHECK_FUNCS(random srandom)
++
+ dnl
+ dnl Checks for lib/intl and related code (uses some of the output from
+ dnl AM_GNU_GETTEXT)
