@@ -1434,6 +1434,14 @@ $(DIALOG): $(SPREZZ)/dialog/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dialog-$(dialog_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: distribute
+distribute:$(DISTRIBUTE)_$(ARCH).deb
+$(DISTRIBUTE): $(SPREZZ)/distribute/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf distribute-$(distribute_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: djmount
 djmount:$(DJMOUNT)_$(ARCH).deb
 $(DJMOUNT): $(SPREZZ)/djmount/debian/changelog
