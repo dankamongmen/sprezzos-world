@@ -168,3 +168,13 @@ $(LIBUNITY): $(SPREZZ)/libunity/debian/changelog
 	ln -sf libunity-$(libunity_UPVER).tar.xz \
 		libunity_$(libunity_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
+
+.PHONY: libunity-misc
+libunity-misc:$(LIBUNITYMISC)_$(ARCH).deb
+$(LIBUNITYMISC): $(SPREZZ)/libunity-misc/debian/changelog
+	bzr branch lp:libunity-misc $@
+	rm -rf $@/debian
+	tar cJf libunity-misc-$(libunity-misc_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf libunity-misc-$(libunity-misc_UPVER).tar.xz \
+		libunity_misc-$(libunity-misc_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
