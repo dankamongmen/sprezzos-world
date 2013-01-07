@@ -5560,7 +5560,7 @@ $(TWISTED): $(SPREZZ)/twisted/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf TwistedCore-$(twisted_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf TwistedCore-$(twisted_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: uwsgi
 uwsgi:$(UWSGI)_$(ARCH).deb
