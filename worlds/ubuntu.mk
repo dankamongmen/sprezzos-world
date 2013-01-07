@@ -179,10 +179,11 @@ $(LIBUNITYMISC): $(SPREZZ)/libunity-misc/debian/changelog
 		libunity_misc-$(libunity-misc_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
-.PHONY: nux
-nux:$(NUX)_$(ARCH).deb
-$(NUX): $(SPREZZ)/nux/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf nux-$(nux_UPVER).tar.gz $(TARARGS) $@
+# We're building from bzr in Makefile
+#.PHONY: nux
+#nux:$(NUX)_$(ARCH).deb
+#$(NUX): $(SPREZZ)/nux/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@/
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xzvf nux-$(nux_UPVER).tar.gz $(TARARGS) $@

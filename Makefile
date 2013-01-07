@@ -138,6 +138,16 @@ $(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
 	ln -sf compiz-$(compiz9_UPVER).tar.xz compiz_$(compiz9_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+# There's a recipe for the released version commented out in worlds/ubuntu.mk
+.PHONY: nux
+nux:$(NUX)_$(ARCH).deb
+$(NUX): $(SPREZZ)/nux/debian/changelog
+	bzr branch lp:nux $@
+	rm -rf $@/debian
+	tar cJf nux-$(nux_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf nux-$(nux_UPVER).tar.xz nux_$(nux_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: software-properties
 software-properties:$(SOFTWAREPROPERTIES)_$(ARCH).deb
 $(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
