@@ -461,12 +461,6 @@ $(JAVASCRIPTCOMMON): $(SPREZZ)/javascript-common/debian/changelog
 	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
 	cp -r $(<D)/.. $@/
 
-.PHONY: lsb
-lsb:$(LSB)_$(ARCH).deb
-$(LSB): $(SPREZZ)/lsb/debian/changelog
-	[ ! -e $@ ] || { echo "$@ already exists; remove it" >&2 ; false ; }
-	cp -r $(<D)/.. $@
-
 .PHONY: abcde
 abcde:$(ABCDE)_$(ARCH).deb
 $(ABCDE): $(SPREZZ)/abcde/debian/changelog
@@ -2809,7 +2803,7 @@ $(INSSERV): $(SPREZZ)/insserv/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf insserv-$(insserv_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf insserv-$(insserv_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: jbig2dec
 jbig2dec:$(JBIG2DEC)_$(ARCH).deb
@@ -3714,6 +3708,14 @@ $(LIBWACOM): $(SPREZZ)/libwacom/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libwacom-$(libwacom_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libcurses-ui-perl
+libcurses-ui-perl:$(LIBCURSESUIPERL)_$(ARCH).deb
+$(LIBCURSESUIPERL): $(SPREZZ)/libcurses-ui-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Curses-UI-$(libcurses-ui-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libwww-perl
 libwww-perl:$(LIBWWWPERL)_$(ARCH).deb
