@@ -1712,6 +1712,14 @@ $(FRIBIDI): $(SPREZZ)/fribidi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf fribidi-$(fribidi_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: fuse
+fuse:$(FUSE)_$(ARCH).deb
+$(FUSE): $(SPREZZ)/fuse/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fuse-$(fuse_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: fuse-umfuse-fat
 fuse-umfuse-fat:$(FUSEUMFUSEFAT)_$(ARCH).deb
 $(FUSEUMFUSEFAT): $(SPREZZ)/fuse-umfuse-fat/debian/changelog
