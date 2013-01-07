@@ -6,6 +6,14 @@ $(AKONADI): $(SPREZZ)/akonadi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf akonadi-$(akonadi_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: calligra
+calligra:$(CALLIGRA)_$(ARCH).deb
+$(CALLIGRA): $(SPREZZ)/calligra/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf calligra-$(calligra_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: digikam
 digikam:$(DIGIKAM)_$(ARCH).deb
 $(DIGIKAM): $(SPREZZ)/digikam/debian/changelog
