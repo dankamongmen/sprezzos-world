@@ -1,18 +1,10 @@
-.PHONY: thunar
-thunar:$(THUNAR)_$(ARCH).deb
-$(THUNAR): $(SPREZZ)/thunar/debian/changelog
+.PHONY: garcon
+garcon:$(GARCON)_$(ARCH).deb
+$(GARCON): $(SPREZZ)/garcon/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf Thunar-$(thunar_UPVER).tar.bz2 $(TARARGS) $@
-
-.PHONY: xfconf
-xfconf:$(XFCONF)_$(ARCH).deb
-$(XFCONF): $(SPREZZ)/xfconf/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf xfconf-$(xfconf_UPVER).tar.bz2 $(TARARGS) $@
+	tar xjvf garcon-$(garcon_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libxfce4ui
 libxfce4ui:$(LIBXFCE4UI)_$(ARCH).deb
@@ -38,6 +30,14 @@ $(XFCE4SESSION): $(SPREZZ)/xfce4-session/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfce4-session-$(xfce4-session_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: xfce4-settings
+xfce4-settings:$(XFCE4SETTINGS)_$(ARCH).deb
+$(XFCE4SETTINGS): $(SPREZZ)/xfce4-settings/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfce4-settings-$(xfce4-settings_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: xfce4-terminal
 xfce4-terminal:$(XFCE4TERMINAL)_$(ARCH).deb
 $(XFCE4TERMINAL): $(SPREZZ)/xfce4-terminal/debian/changelog
@@ -46,3 +46,18 @@ $(XFCE4TERMINAL): $(SPREZZ)/xfce4-terminal/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf Terminal-$(xfce4-terminal_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: xfconf
+xfconf:$(XFCONF)_$(ARCH).deb
+$(XFCONF): $(SPREZZ)/xfconf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfconf-$(xfconf_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: thunar
+thunar:$(THUNAR)_$(ARCH).deb
+$(THUNAR): $(SPREZZ)/thunar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf Thunar-$(thunar_UPVER).tar.bz2 $(TARARGS) $@
