@@ -5546,6 +5546,14 @@ $(TULIP): $(SPREZZ)/tulip/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tulip-$(tulip_UPVER)-src.tar.gz $(TARARGS) $@
 
+.PHONY: twisted
+twisted:$(TWISTED)_$(ARCH).deb
+$(TWISTED): $(SPREZZ)/twisted/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf TwistedCore-$(twisted_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: uwsgi
 uwsgi:$(UWSGI)_$(ARCH).deb
 $(UWSGI): $(SPREZZ)/uwsgi/debian/changelog
