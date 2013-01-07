@@ -128,6 +128,15 @@ $(EVERPAD): $(SPREZZ)/everpad/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf compiz-$(compiz9_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: mawk
+mawk:$(MAWK)_$(ARCH).deb
+$(MAWK): $(SPREZZ)/mawk/debian/changelog
+	bzr branch nosmart+http://bzr.debian.org/bzr/users/vorlon/mawk/trunk/ $@
+	rm -rf $@/debian
+	tar cJf mawk-$(mawk_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf mawk-$(mawk_UPVER).tar.xz mawk_$(mawk_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 # There's a recipe for the released version commented out in worlds/ubuntu.mk
 .PHONY: compiz9
 compiz9:$(COMPIZ9)_$(ARCH).deb
@@ -2793,6 +2802,14 @@ $(INKSCAPE): $(SPREZZ)/inkscape/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf inkscape-$(inkscape_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: insserv
+insserv:$(INSSERV)_$(ARCH).deb
+$(INSSERV): $(SPREZZ)/insserv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf insserv-$(insserv_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: jbig2dec
 jbig2dec:$(JBIG2DEC)_$(ARCH).deb
