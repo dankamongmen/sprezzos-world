@@ -22,6 +22,14 @@ $(LIBXFCE4UTIL): $(SPREZZ)/libxfce4util/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libxfce4util-$(libxfce4util_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: thunar
+thunar:$(THUNAR)_$(ARCH).deb
+$(THUNAR): $(SPREZZ)/thunar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf Thunar-$(thunar_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: xfce4-session
 xfce4-session:$(XFCE4SESSION)_$(ARCH).deb
 $(XFCE4SESSION): $(SPREZZ)/xfce4-session/debian/changelog
@@ -46,6 +54,14 @@ $(XFCE4TERMINAL): $(SPREZZ)/xfce4-terminal/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf Terminal-$(xfce4-terminal_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: xfce4-utils
+xfce4-utils:$(XFCE4UTILS)_$(ARCH).deb
+$(XFCE4UTILS): $(SPREZZ)/xfce4-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfce-utils-$(xfce4-utils_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: xfconf
 xfconf:$(XFCONF)_$(ARCH).deb
 $(XFCONF): $(SPREZZ)/xfconf/debian/changelog
@@ -53,11 +69,3 @@ $(XFCONF): $(SPREZZ)/xfconf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfconf-$(xfconf_UPVER).tar.bz2 $(TARARGS) $@
-
-.PHONY: thunar
-thunar:$(THUNAR)_$(ARCH).deb
-$(THUNAR): $(SPREZZ)/thunar/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf Thunar-$(thunar_UPVER).tar.bz2 $(TARARGS) $@
