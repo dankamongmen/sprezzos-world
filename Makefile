@@ -767,6 +767,14 @@ $(ARPWATCH): $(SPREZZ)/arpwatch/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf arpwatch-$(arpwatch_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libass
+libass:$(LIBASS)_$(ARCH).deb
+$(LIBASS): $(SPREZZ)/libass/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libass-$(libass_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: audiofile
 audiofile:$(AUDIOFILE)_$(ARCH).deb
 $(AUDIOFILE): $(SPREZZ)/audiofile/debian/changelog
@@ -1558,6 +1566,14 @@ $(EMPATHY): $(SPREZZ)/empathy/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf empathy-$(empathy_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: enca
+enca:$(ENCA)_$(ARCH).deb
+$(ENCA): $(SPREZZ)/enca/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf enca-$(enca_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: enchant
 enchant:$(ENCHANT)_$(ARCH).deb
