@@ -4855,6 +4855,14 @@ $(ilmbase): $(SPREZZ)/ilmbase/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ilmbase-$(ilmbase_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: opengtl
+opengtl:$(OPENGTL)_$(ARCH).deb
+$(OPENGTL): $(SPREZZ)/opengtl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf OpenGTL-$(opengtl_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: openimageio
 openimageio:$(openimageio)_$(ARCH).deb
 $(openimageio): $(SPREZZ)/openimageio/debian/changelog
