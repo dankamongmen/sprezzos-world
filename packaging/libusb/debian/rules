@@ -1,0 +1,203 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+#
+# Modified to make a template file for a multi-binary package with separated
+# build-arch and build-indep targets  by Bill Allombert 2001
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH	?= $(shell dpkg-architecture -qDEB_BUILD_MULTIARCH)
+DEB_BUILD_GNU_TYPE	?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+# Get flags from dpkg-buildflags
+CPPFLAGS		= $(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS			= $(shell dpkg-buildflags --get CFLAGS)
+CXXFLAGS		= $(shell dpkg-buildflags --get CXXFLAGS)
+LDFLAGS			= $(shell dpkg-buildflags --get LDFLAGS)
+
+# Additional flags
+CFLAGS 			+= -Wall
+CXXFLAGS 		+= -Wall
+
+# Flags for udebs
+CPPFLAGS_UDEB		= $(CFLAGS)
+CFLAGS_UDEB		= $(CFLAGS) -Os
+CXXFLAGS_UDEB		= $(CXXFLAGS) -Os
+LDFLAGS_UDEB		= $(LDFLAGS)
+
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+objdir = $(CURDIR)/obj-$(DEB_BUILD_GNU_TYPE)
+objdir_udeb = $(objdir)-udeb
+
+configure: configure-deb-stamp configure-udeb-stamp
+
+configure-common: configure-common-stamp
+configure-common-stamp:
+	dh_testdir
+
+	# make sure this file doesn't exist!
+	rm -f $(CURDIR)/usb.h
+
+	# update config.guess and config.sub
+	cp -f /usr/share/misc/config.sub config.sub
+	cp -f /usr/share/misc/config.guess config.guess
+	
+	touch $@
+
+configure-deb: configure-deb-stamp
+configure-deb-stamp: configure-common-stamp
+	dh_testdir
+
+	# make build directory
+	mkdir $(objdir)
+
+	# run configure with build tree $(objdir)
+	cd $(objdir) && \
+		CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" LDFLAGS="$(LDFLAGS)" ../configure \
+			--host=$(DEB_HOST_GNU_TYPE) \
+			--build=$(DEB_BUILD_GNU_TYPE) \
+			--prefix=/usr \
+			--libdir=/usr/lib/$(DEB_HOST_MULTIARCH) \
+			--mandir=/usr/share/man \
+			--infodir=/usr/share/info
+
+	touch $@
+
+configure-udeb: configure-udeb-stamp
+configure-udeb-stamp: configure-common-stamp
+	dh_testdir
+
+	# make build directory
+	mkdir $(objdir_udeb)
+
+	# run configure with build tree $(objdir_udeb)
+	cd $(objdir_udeb) && \
+		CPPFLAGS="$(CPPFLAGS_UDEB)" CFLAGS="$(CFLAGS_UDEB)" CXXFLAGS="$(CXXFLAGS_UDEB)" LDFLAGS="$(LDFLAGS_UDEB)" ../configure \
+			--prefix=/usr \
+			--mandir=/usr/share/man \
+			--infodir=/usr/share/info \
+			--disable-build-docs
+
+	touch $@
+
+build: build-arch build-indep
+build-arch: build-arch-deb build-arch-udeb
+
+build-arch-deb: build-arch-deb-stamp
+build-arch-deb-stamp: configure-deb-stamp
+	dh_testdir
+
+	cd $(objdir) && \
+		$(MAKE)
+
+	touch $@
+
+build-arch-udeb: build-arch-udeb-stamp
+build-arch-udeb-stamp: configure-udeb-stamp
+	dh_testdir
+
+	cd $(objdir_udeb) && \
+		$(MAKE)
+
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp:
+	dh_testdir
+
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f *-stamp
+	rm -f config.sub config.guess
+
+	# Remove build trees
+	rm -rf $(objdir) $(objdir_udeb)
+
+	# Remove install dirs
+	rm -rf $(CURDIR)/debian/tmp $(CURDIR)/debian/tmp-udeb
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k -s
+	dh_installdirs -s
+
+	# Main install
+	cd $(objdir) && \
+		$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+
+	# Move the library to /lib
+	mkdir -p $(CURDIR)/debian/tmp/lib/$(DEB_HOST_MULTIARCH)
+	mv $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libusb-0.1.so.* \
+	   $(CURDIR)/debian/tmp/lib/$(DEB_HOST_MULTIARCH)
+	ln -sf /lib/$(DEB_HOST_MULTIARCH)/libusb-0.1.so.4.4.4 \
+	       $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libusb.so
+
+	# Move all files in their corresponding package
+	dh_install -s -Nlibusb-0.1-udeb --list-missing --sourcedir=debian/tmp
+
+	# udeb install
+	$(MAKE) -C $(objdir_udeb) install DESTDIR=$(CURDIR)/debian/tmp-udeb
+
+	# Move the library to /lib
+	mkdir $(CURDIR)/debian/tmp-udeb/lib/
+	mv $(CURDIR)/debian/tmp-udeb/usr/lib/libusb-0.1.so.* \
+	   $(CURDIR)/debian/tmp-udeb/lib/
+
+	dh_install -plibusb-0.1-udeb --sourcedir=debian/tmp-udeb
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+#	dh_installexamples
+#	dh_installmenu
+	dh_installdebconf
+#	dh_installlogrotate
+#	dh_installemacsen
+#	dh_installpam
+#	dh_installmime
+#	dh_installinit
+#	dh_installcron
+#	dh_installinfo
+	dh_installman
+	dh_link -s
+	dh_strip -s
+	dh_compress -s
+	dh_fixperms -s
+#	dh_perl
+#	dh_python
+	dh_makeshlibs -plibusb-0.1-4 --add-udeb="libusb-0.1-udeb"
+	dh_makeshlibs -V -plibusb++-0.1-4c2
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install configure
