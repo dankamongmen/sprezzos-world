@@ -6313,6 +6313,14 @@ $(LIBUPNP): $(SPREZZ)/libupnp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libupnp-$(libupnp_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libusbx
+libusbx:$(LIBUSBX)_$(ARCH).deb
+$(LIBUSBX): $(SPREZZ)/libusbx/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libusbx-$(libusbx_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: udisks2
 udisks2:$(UDISKS2)_$(ARCH).deb
 $(UDISKS2): $(SPREZZ)/udisks2/debian/changelog
