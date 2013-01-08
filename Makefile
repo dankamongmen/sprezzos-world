@@ -2837,6 +2837,14 @@ $(JFSUTILS): $(SPREZZ)/jfsutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf jfsutils-$(jfsutils_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: jigit
+jigit:$(JIGIT)_$(ARCH).deb
+$(JIGIT): $(SPREZZ)/jigit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf jigit_$(jigit_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: json-c
 json-c:$(JSONC)_$(ARCH).deb
 $(JSONC): $(SPREZZ)/json-c/debian/changelog
@@ -5742,6 +5750,14 @@ $(VOAACENC): $(SPREZZ)/vo-aacenc/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vo-aacenc-$(vo-aacenc_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: vo-amrwbenc
+vo-amrwbenc:$(VOAMRWBENC)_$(ARCH).deb
+$(VOAMRWBENC): $(SPREZZ)/vo-amrwbenc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vo-amrwbenc-$(vo-amrwbenc_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: wavpack
 wavpack:$(WAVPACK)_$(ARCH).deb
