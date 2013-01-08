@@ -79,7 +79,7 @@ $(GNOMEMIMEDATA): $(SPREZZ)/gnome-mime-data/debian/changelog
 	tar xzvf gnome-mime-data-$(gnome-mime-data_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gst-plugins-bad1.0
-gst-plugins-bad:$(GSTPLUGINSBAD1.0)_$(ARCH).deb
+gst-plugins-bad1.0:$(GSTPLUGINSBAD1.0)_$(ARCH).deb
 $(GSTPLUGINSBAD1.0): $(SPREZZ)/gst-plugins-bad1.0/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
