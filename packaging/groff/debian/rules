@@ -1,0 +1,158 @@
+#! /usr/bin/make -f
+build clean install binary-arch binary-indep binary:
+	dh $@ --builddirectory=debian/build --with=autoreconf
+
+export DH_OPTIONS
+
+CPPFLAGS += $(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
+CFLAGS += -Wall
+CXXFLAGS = $(shell dpkg-buildflags --get CXXFLAGS)
+CXXFLAGS += -Wall
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+buildflags := CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" \
+	      CXXFLAGS="$(CXXFLAGS)" LDFLAGS="$(LDFLAGS)"
+
+# From Makefile.in
+version  = $(shell cat VERSION)
+revision = $(shell sed -e 's/^0$$//' -e 's/^[1-9].*$$/.&/' REVISION)
+upstream = $(version)$(revision)
+datadir  = usr/share/groff/$(upstream)
+
+gbtmp = debian/groff-base
+gtmp  = debian/groff
+
+ifeq (,$(filter no-groff-x11,$(DEB_BUILD_OPTIONS)))
+GROFF_X11 := yes
+else
+GROFF_X11 := no
+endif
+
+ifeq ($(GROFF_X11),no)
+  confflags += --without-x
+endif
+
+DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE  := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+confflags_gnulib = --build=$(DEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+  confflags_gnulib += --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+override_dh_autoreconf:
+	dh_autoreconf autoreconf -- -f -i -I m4
+
+override_dh_auto_configure:
+	-rm -f config.log config.cache
+	$(buildflags) YACC='bison -y' PSPRINT=lpr PAGE=A4 \
+		dh_auto_configure -- $(confflags) \
+			--with-appresdir=/etc/X11/app-defaults
+	mkdir -p debian/build/src/libs/gnulib
+	cd debian/build/src/libs/gnulib && \
+		$(buildflags) \
+		$(CURDIR)/src/libs/gnulib/configure $(confflags_gnulib)
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	$(buildflags) YACC='bison -y' PSPRINT=lpr PAGE=A4 \
+		DEB_HOST_GNU_TYPE=$(DEB_BUILD_GNU_TYPE) \
+		dh_auto_configure --builddirectory=debian/build-native -- \
+			$(confflags) \
+			--with-appresdir=/etc/X11/app-defaults
+endif
+
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+  cross :=
+else
+  native_tmp := $(CURDIR)/debian/build-native
+  groff_bin_dirs := \
+	$(native_tmp)/src/roff/groff \
+	$(native_tmp)/src/roff/troff \
+	$(native_tmp)/src/preproc/pic \
+	$(native_tmp)/src/preproc/eqn \
+	$(native_tmp)/src/preproc/tbl \
+	$(native_tmp)/src/preproc/grn \
+	$(native_tmp)/src/preproc/refer \
+	$(native_tmp)/src/preproc/soelim \
+	$(native_tmp)/src/preproc/html \
+	$(native_tmp)/src/devices/grops \
+	$(native_tmp)/src/devices/grodvi \
+	$(native_tmp)/src/devices/grotty \
+	$(native_tmp)/src/devices/grolj4 \
+	$(native_tmp)/src/devices/grolbp \
+	$(native_tmp)/src/devices/grohtml
+  empty :=
+  space := $(empty) $(empty)
+  cross := \
+	TROFFBIN=$(native_tmp)/src/roff/troff/troff \
+	GROFFBIN=$(native_tmp)/src/roff/groff/groff \
+	GROFF_BIN_DIR=$(native_tmp)/src/roff/groff \
+	GROFF_BIN_PATH=$(subst $(space),:,$(groff_bin_dirs))
+endif
+
+override_dh_auto_build:
+	touch configure		# avoid autoconf build-dependency
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	$(MAKE) -C debian/build-native \
+		extratmacdirs=/usr/share/groff/tmac \
+		docdir=\$${prefix}/share/doc/groff-base
+endif
+	$(MAKE) -C debian/build \
+		extratmacdirs=/usr/share/groff/tmac \
+		docdir=\$${prefix}/share/doc/groff-base $(cross)
+	GROFF_NO_SGR=1 $(MAKE) -C debian/build/doc $(cross) \
+		meintro.txt meref.txt pic.txt
+
+override_dh_auto_install:
+	dh_auto_install -- \
+		docdir=\$${prefix}/share/doc/groff-base \
+		INSTALL_INFO=:
+
+%: %.in
+	sed -e 's/@VERSION@/$(upstream)/g' $< > $@
+
+override_dh_install:
+	$(MAKE) -f debian/rules \
+		debian/groff-base.dirs \
+		debian/groff-base.install \
+		debian/groff.install
+	dh_install --fail-missing
+	# Debian additions to *.local
+	cat debian/mandoc.local >> $(gbtmp)/etc/groff/man.local
+	cat debian/mandoc.local >> $(gbtmp)/etc/groff/mdoc.local
+	# Scripts should be executable
+	chmod +x $(gbtmp)/$(datadir)/font/devps/generate/afmname \
+		 $(gbtmp)/$(datadir)/font/devps/generate/symbol.sed
+	chmod +x $(gtmp)/$(datadir)/font/devdvi/generate/CompileFonts \
+		 $(gtmp)/$(datadir)/font/devlj4/generate/special.awk
+
+override_dh_installdocs:
+	dh_installdocs -pgroff-base
+	dh_installdocs -pgroff -Xcopyright --link-doc=groff-base
+
+override_dh_installchangelogs:
+	dh_installchangelogs -pgroff-base
+
+override_dh_compress:
+	dh_compress -X.mom
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
+ifneq ($(GROFF_X11),yes)
+	@echo
+	@echo "=========================================================="
+	@echo "WARNING! groff has been built without X support."
+	@echo "Please do not upload these packages to the Debian archive!"
+	@echo "=========================================================="
+	@echo
+endif
+
+# You only need to run this immediately after checking out the package from
+# revision control.
+quilt-setup:
+	[ ! -d .pc ]
+	set -e; for patch in $$(quilt series | tac); do \
+		patch -p1 -R --no-backup-if-mismatch <"debian/patches/$$patch"; \
+	done
+	quilt push -a
+
+.PHONY: build clean install binary-arch binary-indep binary quilt-setup

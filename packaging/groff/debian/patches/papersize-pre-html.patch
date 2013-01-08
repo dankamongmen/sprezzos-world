@@ -1,0 +1,95 @@
+Description: Set appropriate papersize when calling gs from HTML preprocessor
+ This patch seems fishy.  get_papersize was removed upstream in r335.1.348,
+ so should we even be applying this any more?  Furthermore, we don't use
+ gsPaper anywhere, and looking at devps/DESC here is just nasty.  Needs
+ review.
+Author: Colin Watson <cjwatson@debian.org>
+Forwarded: no
+Last-Update: 2013-01-07
+
+Index: b/src/preproc/html/pre-html.cpp
+===================================================================
+--- a/src/preproc/html/pre-html.cpp
++++ b/src/preproc/html/pre-html.cpp
+@@ -152,6 +152,10 @@
+ #define DEFAULT_IMAGE_RES 100	// number of pixels per inch resolution
+ #define IMAGE_BOARDER_PIXELS 0
+ #define INLINE_LEADER_CHAR '\\'
++#define A4_LENGTH 841890	// taken from devps/Makefile.sub
++#define LETTER_LENGTH 792000	// taken from devps/Makefile.sub
++#define A4_OFFSET 0
++#define LETTER_OFFSET 50	// 50/72 of an inch
+ 
+ // Don't use colour names here!  Otherwise there is a dependency on
+ // a file called `rgb.txt' which maps names to colours.
+@@ -199,6 +203,7 @@
+ 					// by -D
+ static int troff_arg = 0;		// troff arg index
+ static char *image_dir = NULL;		// user specified image directory
++static char *gsPaper = NULL;		// the paper size that gs must use
+ static int textAlphaBits = MAX_ALPHA_BITS;
+ static int graphicAlphaBits = MAX_ALPHA_BITS;
+ static char *antiAlias = NULL;		// antialias arguments we pass to gs
+@@ -312,6 +317,54 @@
+ }
+ 
+ /*
++ *  get_papersize - returns an integer determining the paper length from
++ *  devps/DESC
++ */
++
++static int get_papersize (void)
++{
++  char *pathp;
++  FILE *f;
++  int res;
++  f = font_path.open_file("devps/DESC", &pathp);
++  if (f == 0)
++    fatal("can't open devps/DESC");
++  while (get_line(f)) {
++    int n = sscanf(linebuf, "paperlength %d", &res);
++    if (n >= 1) {
++      fclose(f);
++      return res;
++    }
++    if (!strncmp(linebuf, "papersize", 9)) {
++      double length;
++      char *p = linebuf + 9;
++      while (*p == ' ' || *p == '\t')
++        p++;
++      for (p = strtok(p, " \t"); p; p = strtok(0, " \t")) {
++        if (font::scan_papersize(p, 0, &length, 0)) {
++          fclose(f);
++          return int(length * postscriptRes + 0.5);
++        }
++      }
++      fatal("bad argument to `papersize' keyword in devps/DESC");
++    }
++  }
++  fatal("can't find `papersize' or `paperlength' keyword in devps/DESC");
++  return 0;
++}
++
++/*
++ *  determine_vertical_offset - works out the default vertical offset from
++ *                              the page length
++ */
++
++static void determine_vertical_offset (void)
++{
++  vertical_offset = ((A4_LENGTH-get_papersize())*72)/postscriptRes;
++  gsPaper = "-sPAPERSIZE=a4";
++}
++
++/*
+  *  html_system - A wrapper for system().
+  */
+ 
+@@ -1782,6 +1835,7 @@
+   if (image_gen == NULL || (strcmp(image_gen, "") == 0))
+     fatal("devhtml/DESC must set the image_generator field, exiting");
+   postscriptRes = get_resolution();
++  determine_vertical_offset();
+   i = scanArguments(argc, argv);
+   setupAntiAlias();
+   checkImageDir();
