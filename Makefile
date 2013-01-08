@@ -4261,6 +4261,14 @@ $(MPFR4): $(SPREZZ)/mpfr4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mpfr-$(mpfr4_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: mpg123
+mpg123:$(MPG123)_$(ARCH).deb
+$(MPG123): $(SPREZZ)/mpg123/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf mpg123-$(mpg123_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libmms
 libmms:$(LIBMMS)_$(ARCH).deb
 $(LIBMMS): $(SPREZZ)/libmms/debian/changelog
