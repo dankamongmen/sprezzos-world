@@ -1503,6 +1503,14 @@ $(DIALOG): $(SPREZZ)/dialog/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dialog-$(dialog_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: dirac
+dirac:$(DIRAC)_$(ARCH).deb
+$(DIRAC): $(SPREZZ)/dirac/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dirac-$(dirac_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: distribute
 distribute:$(DISTRIBUTE)_$(ARCH).deb
 $(DISTRIBUTE): $(SPREZZ)/distribute/debian/changelog
@@ -5446,6 +5454,14 @@ $(SCORCHED3D): $(SPREZZ)/scorched3d/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Scorched3D-$(scorched3d_UPVER)-src.tar.gz $(TARARGS) $@
+
+.PHONY: schroedinger
+schroedinger:$(SCHROEDINGER)_$(ARCH).deb
+$(SCHROEDINGER): $(SPREZZ)/schroedinger/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf schroedinger-$(schroedinger_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: scowl
 scowl:$(SCOWL)_$(ARCH).deb
