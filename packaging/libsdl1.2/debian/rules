@@ -1,0 +1,75 @@
+#!/usr/bin/make -f
+
+SHLIBVER = 1.2.11
+
+DEB_HOST_ARCH_CPU ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+
+confflags = --disable-rpath --enable-sdl-dlopen --disable-loadso \
+            --disable-video-ggi --disable-video-svga --disable-video-aalib \
+            --disable-nas --disable-esd --disable-arts \
+            --disable-alsa-shared --disable-pulseaudio-shared \
+            --disable-x11-shared \
+            --enable-video-directfb
+all_confflags = --enable-video-caca
+udeb_confflags = --enable-video-directfb \
+                 --disable-video-x11 \
+                 --disable-dga --disable-video-photon \
+                 --disable-video-fbcon --disable-video-ps2gs \
+                 --disable-video-opengl --disable-video-xbios \
+                 --disable-video-gem --disable-video-caca \
+                 --disable-audio \
+                 --disable-oss --disable-alsa --disable-pulseaudio \
+                 --libdir=\$${prefix}/lib
+
+# Only use NASM routines on x86 CPUs
+ifeq ($(DEB_HOST_ARCH_CPU),i386)
+	confflags += --enable-nasm
+endif
+
+# Don't use PlayStation 3 Cell driver on powerpc and ppc64
+ifneq (,$(findstring $(DEB_HOST_ARCH_CPU),powerpc ppc64))
+	confflags += --enable-video-ps3=no \
+	             --disable-altivec
+endif
+
+
+%:
+	dh $@ --with autoreconf --parallel
+
+override_dh_autoreconf:
+	dh_autoreconf ./autogen.sh
+
+override_dh_auto_configure:
+	dh_auto_configure -Bbuilddir/all -- $(confflags) $(all_confflags)
+	dh_auto_configure -Bbuilddir/udeb -- $(confflags) $(udeb_confflags)
+
+override_dh_auto_build:
+	dh_auto_build -Bbuilddir/all
+	dh_auto_build -Bbuilddir/udeb
+	tar czf debian/examples.tar.gz test
+
+override_dh_auto_install:
+	dh_auto_install -Bbuilddir/all
+	dh_auto_install -Bbuilddir/udeb --destdir=debian/tmp-udeb
+
+override_dh_auto_clean:
+	dh_auto_clean -Bbuilddir/all
+	dh_auto_clean -Bbuilddir/udeb
+	rm -f debian/examples.tar.gz
+
+override_dh_install:
+	dh_install -plibsdl1.2debian-udeb --sourcedir=debian/tmp-udeb
+	dh_install --remaining-packages --fail-missing -XlibSDL.la -XlibSDLmain.la
+
+override_dh_installdocs:
+	dh_installdocs -Xdocs/man3/SDL
+
+override_dh_installexamples:
+	dh_installexamples -plibsdl1.2-dev debian/examples.tar.gz
+	dh_installexamples --remaining-packages
+
+override_dh_strip:
+	dh_strip --dbg-package=libsdl1.2-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs -V"libsdl1.2debian (>= $(SHLIBVER))" --add-udeb=libsdl1.2debian-udeb
