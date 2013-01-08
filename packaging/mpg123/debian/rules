@@ -1,0 +1,90 @@
+#!/usr/bin/make -f
+
+PACKAGE:=mpg123
+
+ARCH:=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+OS:=$(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+CPU:=$(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+WRAPPER_TARGETS:=mpg123-oss mpg123-nas mpg123-jack mpg123-openal mpg123-portaudio
+
+CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS:=$(shell dpkg-buildflags --get CFLAGS)
+CXXFLAGS:=$(shell dpkg-buildflags --get CXXFLAGS)
+LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS)
+
+ifeq ($(OS),linux)
+WRAPPER_TARGETS += mpg123-alsa
+endif
+
+CONF_COMMON:=--enable-static=no --enable-shared --enable-lfs-alias \
+	--with-module-suffix=.so
+
+CONF_i486:=--with-cpu=x86_dither
+
+SOVERSION:=0
+LIB_PKG:=libmpg123-$(SOVERSION)
+DEV_PKG:=libmpg123-dev
+LIB_PKGSTR:=-p$(LIB_PKG) -p$(DEV_PKG)
+ARCH_PKGSTR=-pmpg123
+ALL_PKGSTR=$(LIB_PKGSTR) $(ARCH_PKGSTR)
+
+LDFLAGS += -Wl,--as-needed
+
+#export DH_VERBOSE=1
+
+%:
+	dh $@ --with autoreconf
+
+mpg123-%: debian/mpg123-wrapper.in
+	dh_testdir
+	o=`echo $@ | sed -e 's/^mpg123-\([^-]\+\).*/\1/'`; \
+	sed -e "s/@OUTPUT@/$$o/g" < debian/mpg123-wrapper.in > $@
+
+override_dh_autoreconf:
+	dh_autoreconf --as-needed
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CONF_COMMON) $(CONF_$(CPU))
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -f $(WRAPPER_TARGETS)
+
+override_dh_auto_install: $(WRAPPER_TARGETS)
+	dh_auto_install
+
+	find $(CURDIR)/debian -name '*.la' -delete
+	mv $(CURDIR)/debian/tmp/usr/bin/mpg123 \
+	   $(CURDIR)/debian/tmp/usr/bin/mpg123.bin
+	mv $(CURDIR)/debian/tmp/usr/share/man/man1/mpg123.1 \
+	   $(CURDIR)/debian/tmp/usr/share/man/man1/mpg123.bin.1
+	install $(WRAPPER_TARGETS) $(CURDIR)/debian/tmp/usr/bin/
+	for i in $(WRAPPER_TARGETS); do \
+		install debian/mpg123-wrapper.1 \
+		        $(CURDIR)/debian/tmp/usr/share/man/man1/$$i.1; \
+	done
+
+override_dh_installchangelogs:
+	dh_installchangelogs $(ARCH_PKGSTR) NEWS
+	dh_installchangelogs $(LIB_PKGSTR) NEWS.libmpg123
+	dh_installchangelogs --remaining-packages
+
+override_dh_makeshlibs:
+	dh_makeshlibs $(LIB_PKGSTR) -V "$(LIB_PKG) (>= 1.14.0)"
+
+override_dh_shlibdeps:
+	dh_shlibdeps $(ALL_PKGSTR) -Xdebian/mpg123/usr/lib/$(DEB_HOST_MULTIARCH)/mpg123/ -- \
+		-dSuggests `find debian/mpg123/usr/lib/$(DEB_HOST_MULTIARCH)/mpg123/ -name "output_*.so" -type f` -dDepends
+	for n in alsa nas jack dummy openal oss portaudio; do \
+		i="debian/mpg123/usr/lib/$(DEB_HOST_MULTIARCH)/mpg123/output_$$n.so"; \
+		test -e "$$i" || continue; \
+		dh_shlibdeps $(ARCH_PKGSTR) -Xdebian/mpg123/usr/lib/$(DEB_HOST_MULTIARCH)/mpg123 debian/mpg123 -- -p"$$n"plugin -dRecommends "$$i" -dDepends; \
+	done
+	chmod +x "$(CURDIR)/debian/alt_deps.py"
+	"$(CURDIR)/debian/alt_deps.py" "$(CURDIR)/debian/mpg123.substvars" \
+	  plugin:Recommends \
+	  "alsaplugin:Recommends ossplugin:Recommends dummyplugin:Recommends jackplugin:Recommends openalplugin:Recommends portaudioplugin:Recommends" \
+	  "ossplugin:Recommends=oss-compat | oss4-base"
+	dh_shlibdeps --remaining-packages
