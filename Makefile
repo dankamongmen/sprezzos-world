@@ -6377,6 +6377,22 @@ $(ZENITY): $(SPREZZ)/zenity/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf zenity-$(zenity_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: unzip
+unzip:$(UNunzip)_$(ARCH).deb
+$(UNunzip): $(SPREZZ)/unzip/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf unzip-$(unzip_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: zip
+zip:$(ZIP)_$(ARCH).deb
+$(ZIP): $(SPREZZ)/zip/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf zip-$(zip_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: zlib
 zlib:$(ZLIB)_$(ARCH).deb
 $(ZLIB): $(SPREZZ)/zlib/debian/changelog

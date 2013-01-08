@@ -1,0 +1,59 @@
+#!/usr/bin/make -f
+
+package = zip
+docdir = debian/tmp/usr/share/doc/$(package)
+
+CC = gcc
+CFLAGS := `dpkg-buildflags --get CFLAGS` -Wall -I. -DUNIX
+LDFLAGS := `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS := `dpkg-buildflags --get CPPFLAGS`
+STRIP = true
+
+DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+  CC=$(DEB_HOST_GNU_TYPE)-gcc
+endif
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+  STRIP = strip --remove-section=.comment --remove-section=.note
+endif
+
+build:
+	LDFLAGS="$(LDFLAGS)" sh unix/configure "$(CC)" "$(CFLAGS) $(CPPFLAGS)"
+	$(MAKE) -f unix/Makefile generic
+	touch build
+
+clean:
+	rm -f build
+	$(MAKE) -f unix/Makefile clean
+	rm -rf debian/tmp debian/files* debian/*~ debian/*.bak debian/substvars
+
+binary-indep: build
+
+binary-arch: build
+	rm -rf debian/tmp
+	install -d debian/tmp/DEBIAN $(docdir)
+	cd debian/tmp && install -d usr/bin usr/man/man1
+	$(MAKE) -f unix/Makefile install prefix=`pwd`/debian/tmp/usr
+	chmod 755 debian/tmp/usr/bin/*
+	cat debian/copyright.in LICENSE > $(docdir)/copyright
+	cp debian/changelog $(docdir)/changelog.Debian
+	cp -p CHANGES TODO WHATSNEW $(docdir)
+	cd $(docdir) && gzip -9 changelog.Debian CHANGES
+	ln -s CHANGES.gz $(docdir)/changelog.gz
+	$(STRIP) debian/tmp/usr/bin/*
+	gzip -r9 debian/tmp/usr/man
+	cd debian/tmp && mv usr/man usr/share
+	dpkg-shlibdeps debian/tmp/usr/bin/*
+	dpkg-gencontrol
+	cd debian/tmp && \
+		md5sum `find * -type f ! -regex "DEBIAN/.*"` > DEBIAN/md5sums
+	chown -R 0:0 debian/tmp
+	chmod -R u+w,go=rX debian/tmp
+	dpkg --build debian/tmp ..
+
+binary: binary-indep binary-arch
+
+.PHONY: binary binary-arch binary-indep clean

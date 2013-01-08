@@ -1,0 +1,67 @@
+#!/usr/bin/make -f
+
+package = unzip
+docdir = debian/tmp/usr/share/doc/$(package)
+history = History.600
+
+CC = gcc
+export DEB_BUILD_MAINT_OPTIONS=hardening=-format
+CFLAGS := `dpkg-buildflags --get CFLAGS` -Wall
+LDFLAGS := `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS := `dpkg-buildflags --get CPPFLAGS`
+DEFINES = -DACORN_FTYPE_NFS -DWILD_STOP_AT_DIR -DLARGE_FILE_SUPPORT \
+ -DUNICODE_SUPPORT -DUNICODE_WCHAR -DUTF8_MAYBE_NATIVE -DNO_LCHMOD \
+ -DDATE_FORMAT=DF_YMD -DUSE_BZIP2 -DIZ_HAVE_UXUIDGID -DNOMEMCPY
+
+STRIP = true
+
+DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+  CC=$(DEB_HOST_GNU_TYPE)-gcc
+endif
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+  STRIP = strip --remove-section=.comment --remove-section=.note
+endif
+
+build:
+	$(MAKE) -f unix/Makefile D_USE_BZ2=-DUSE_BZIP2 L_BZ2=-lbz2 \
+		CC="$(CC)" LF2="$(LDFLAGS)" \
+		CF="$(CFLAGS) $(CPPFLAGS) -I. $(DEFINES)" unzips
+	touch build
+
+clean:
+	rm -f build
+	$(MAKE) -f unix/Makefile clean
+	rm -rf *~ debian/tmp debian/*~ debian/files* debian/substvars
+
+binary-indep: build
+
+binary-arch: build
+	rm -rf debian/tmp
+	install -d debian/tmp/DEBIAN $(docdir)
+	cd debian/tmp && install -d usr/bin usr/man/man1 usr/lib/mime/packages
+	$(MAKE) -f unix/Makefile install prefix=`pwd`/debian/tmp/usr
+	install -m 755 debian/postinst debian/postrm debian/tmp/DEBIAN
+	install -m 644 debian/mime debian/tmp/usr/lib/mime/packages/$(package)
+	cat debian/copyright.in LICENSE > $(docdir)/copyright
+	cp debian/changelog $(docdir)/changelog.Debian
+	cp -p History.* BUGS ToDo $(docdir)
+	cd $(docdir) && gzip -9 changelog.Debian History.*
+	ln -s $(history).gz $(docdir)/changelog.gz
+	cd debian/tmp/usr/bin && $(STRIP) funzip unzip unzipsfx zipinfo
+	gzip -r9 debian/tmp/usr/man
+	cd debian/tmp && mv usr/man usr/share
+	dpkg-shlibdeps debian/tmp/usr/bin/unzip
+	dpkg-gencontrol
+	cd debian/tmp && \
+		md5sum `find * -type f ! -regex "DEBIAN/.*"` > DEBIAN/md5sums
+	chown -R 0:0 debian/tmp
+	chmod -R go=rX debian/tmp
+	dpkg --build debian/tmp ..
+
+binary: binary-indep binary-arch
+
+.PHONY: binary binary-arch binary-indep clean
