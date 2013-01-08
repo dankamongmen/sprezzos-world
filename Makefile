@@ -607,6 +607,14 @@ $(SIGNON): $(SPREZZ)/signon/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf signon-$(signon_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: swig
+swig:$(SWIG2.0)_$(ARCH).deb
+$(SWIG2.0): $(SPREZZ)/swig2.0/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf swig-$(swig2.0_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsignon-glib
 libsignon-glib:$(LIBSIGNONGLIB)_$(ARCH).deb
 $(LIBSIGNONGLIB): $(SPREZZ)/libsignon-glib/debian/changelog
