@@ -4325,6 +4325,14 @@ $(MPG123): $(SPREZZ)/mpg123/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf mpg123-$(mpg123_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libmad
+libmad:$(LIBMAD)_$(ARCH).deb
+$(LIBMAD): $(SPREZZ)/libmad/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmad-$(libmad_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libmms
 libmms:$(LIBMMS)_$(ARCH).deb
 $(LIBMMS): $(SPREZZ)/libmms/debian/changelog
