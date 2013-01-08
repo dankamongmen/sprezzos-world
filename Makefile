@@ -2541,6 +2541,14 @@ $(GRILO): $(SPREZZ)/grilo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf grilo-$(grilo_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: groff
+groff:$(GROFF)_$(ARCH).deb
+$(GROFF): $(SPREZZ)/groff/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf groff-$(groff_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gsoap
 gsoap:$(GSOAP)_$(ARCH).deb
 $(GSOAP): $(SPREZZ)/gsoap/debian/changelog
@@ -5606,6 +5614,14 @@ $(TWISTED): $(SPREZZ)/twisted/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf TwistedCore-$(twisted_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: twolame
+twolame:$(TWOLAME)_$(ARCH).deb
+$(TWOLAME): $(SPREZZ)/twolame/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf twolame-$(twolame_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: uwsgi
 uwsgi:$(UWSGI)_$(ARCH).deb
