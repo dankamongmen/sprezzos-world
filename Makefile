@@ -4261,6 +4261,14 @@ $(MPFR4): $(SPREZZ)/mpfr4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mpfr-$(mpfr4_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libmms
+libmms:$(LIBMMS)_$(ARCH).deb
+$(LIBMMS): $(SPREZZ)/libmms/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmms-$(libmms_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libmng
 libmng:$(LIBMNG)_$(ARCH).deb
 $(LIBMNG): $(SPREZZ)/libmng/debian/changelog
