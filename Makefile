@@ -4871,6 +4871,14 @@ $(OPENLDAP): $(SPREZZ)/openldap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openldap_$(openldap_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: openslp
+openslp:$(OPENSLP)_$(ARCH).deb
+$(OPENSLP): $(SPREZZ)/openslp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openslp-$(openslp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: openssl
 openssl:$(OPENSSL)_$(ARCH).deb
 $(OPENSSL): $(SPREZZ)/openssl/debian/changelog
