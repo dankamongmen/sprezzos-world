@@ -4863,6 +4863,14 @@ $(PCRE): $(SPREZZ)/pcre/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf pcre-$(pcre_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pdftk
+pdftk:$(PDFTK)_$(ARCH).deb
+$(PDFTK): $(SPREZZ)/pdftk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf pdftk-$(pdftk_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: perl
 perl:$(PERL)_$(ARCH).deb
 $(PERL): $(SPREZZ)/perl/debian/changelog
