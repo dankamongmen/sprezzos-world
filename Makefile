@@ -4869,7 +4869,7 @@ $(PDFTK): $(SPREZZ)/pdftk/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xzvf pdftk-$(pdftk_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf pdftk-$(pdftk_UPVER)-src.tar.gz $(TARARGS) $@
 
 .PHONY: perl
 perl:$(PERL)_$(ARCH).deb
