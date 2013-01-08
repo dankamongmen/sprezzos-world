@@ -583,6 +583,14 @@ $(LIBASYNCNS): $(SPREZZ)/libasyncns/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libasyncns-$(libasyncns_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libsdl1.2
+libsdl1.2:$(LIBSDL1.2)_$(ARCH).deb
+$(LIBSDL1.2): $(SPREZZ)/libsdl1.2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf SDL-$(libsdl1.2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsigsegv
 libsigsegv:$(LIBSIGSEGV)_$(ARCH).deb
 $(LIBSIGSEGV): $(SPREZZ)/libsigsegv/debian/changelog
