@@ -2621,14 +2621,6 @@ $(GSOAP): $(SPREZZ)/gsoap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gsoap-$(gsoap_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: gst-plugins-base
-gst-plugins-base:$(GSTPLUGINSBASE)_$(ARCH).deb
-$(GSTPLUGINSBASE): $(SPREZZ)/gst-plugins-base/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gst-plugins-base-$(gst-plugins-base_UPVER).tar.xz $(TARARGS) $@
-
 .PHONY: gssdp
 gssdp:$(GSSDP)_$(ARCH).deb
 $(GSSDP): $(SPREZZ)/gssdp/debian/changelog
@@ -2636,14 +2628,6 @@ $(GSSDP): $(SPREZZ)/gssdp/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gssdp-$(gssdp_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: gstreamer
-gstreamer:$(GSTREAMER)_$(ARCH).deb
-$(GSTREAMER): $(SPREZZ)/gstreamer/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gstreamer-$(gstreamer_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gthumb
 gthumb:$(GTHUMB)_$(ARCH).deb

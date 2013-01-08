@@ -78,6 +78,30 @@ $(GNOMEMIMEDATA): $(SPREZZ)/gnome-mime-data/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-mime-data-$(gnome-mime-data_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gst-plugins-bad1.0
+gst-plugins-bad:$(GSTPLUGINSBAD1.0)_$(ARCH).deb
+$(GSTPLUGINSBAD1.0): $(SPREZZ)/gst-plugins-bad1.0/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gst-plugins-bad-$(gst-plugins-bad1.0_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gst-plugins-base
+gst-plugins-base:$(GSTPLUGINSBASE)_$(ARCH).deb
+$(GSTPLUGINSBASE): $(SPREZZ)/gst-plugins-base/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gst-plugins-base-$(gst-plugins-base_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gstreamer
+gstreamer:$(GSTREAMER)_$(ARCH).deb
+$(GSTREAMER): $(SPREZZ)/gstreamer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gstreamer-$(gstreamer_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: libgdata
 libgdata:$(LIBGDATA)_$(ARCH).deb
 $(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
