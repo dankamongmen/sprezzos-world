@@ -591,6 +591,14 @@ $(LIBSIGSEGV): $(SPREZZ)/libsigsegv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsigsegv-$(libsigsegv_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libswitch-perl
+libswitch-perl:$(LIBSWITCHPERL)_$(ARCH).deb
+$(LIBSWITCHPERL): $(SPREZZ)/libswitch-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Switch-$(libswitch-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: signon
 signon:$(SIGNON)_$(ARCH).deb
 $(SIGNON): $(SPREZZ)/signon/debian/changelog
@@ -4180,6 +4188,14 @@ $(MESADEMOS): $(SPREZZ)/mesa-demos/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mesa-demos_$(mesa-demos_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: mlocate
+mlocate:$(MLOCATE)_$(ARCH).deb
+$(MLOCATE): $(SPREZZ)/mlocate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf mlocate-$(mlocate_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: p11-kit
 p11-kit:$(P11KIT)_$(ARCH).deb
