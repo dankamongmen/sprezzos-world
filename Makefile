@@ -4927,6 +4927,14 @@ $(PIXMAN): $(SPREZZ)/pixman/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pixman-$(pixman_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pkcs11-helper
+pkcs11-helper:$(PKCS11HELPER)_$(ARCH).deb
+$(PKCS11HELPER): $(SPREZZ)/pkcs11-helper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pkcs11-helper-$(pkcs11-helper_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: pkg-config
 pkg-config:$(PKGCONFIG)_$(ARCH).deb
 $(PKGCONFIG): $(SPREZZ)/pkg-config/debian/changelog
