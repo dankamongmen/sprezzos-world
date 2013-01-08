@@ -583,6 +583,14 @@ $(LIBASYNCNS): $(SPREZZ)/libasyncns/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libasyncns-$(libasyncns_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: sdl-image1.2
+sdl-image1.2:$(SDLIMAGE1.2)_$(ARCH).deb
+$(SDLIMAGE1.2): $(SPREZZ)/sdl-image1.2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf SDL_image-$(sdl-image1.2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsdl1.2
 libsdl1.2:$(LIBSDL1.2)_$(ARCH).deb
 $(LIBSDL1.2): $(SPREZZ)/libsdl1.2/debian/changelog
