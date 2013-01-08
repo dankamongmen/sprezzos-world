@@ -1127,6 +1127,14 @@ $(LIBCANBERRA): $(SPREZZ)/libcanberra/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libcanberra-$(libcanberra_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libcec
+libcec:$(LIBCEC)_$(ARCH).deb
+$(LIBCEC): $(SPREZZ)/libcec/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libcec-$(libcec_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libchamplain
 libchamplain:$(LIBCHAMPLAIN)_$(ARCH).deb
 $(LIBCHAMPLAIN): $(SPREZZ)/libchamplain/debian/changelog
