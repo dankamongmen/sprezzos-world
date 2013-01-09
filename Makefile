@@ -607,6 +607,14 @@ $(LIBSIGSEGV): $(SPREZZ)/libsigsegv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsigsegv-$(libsigsegv_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libsndfile
+libsndfile:$(libsndfile)_$(ARCH).deb
+$(libsndfile): $(SPREZZ)/libsndfile/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsndfile-$(libsndfile_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libswitch-perl
 libswitch-perl:$(LIBSWITCHPERL)_$(ARCH).deb
 $(LIBSWITCHPERL): $(SPREZZ)/libswitch-perl/debian/changelog
@@ -5632,8 +5640,8 @@ $(STARTUPNOTIFICATION): $(SPREZZ)/startup-notification/debian/changelog
 	tar xzvf startup-notification-$(startup-notification_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: systemd
-systemd:$(SYSTEMD)_$(ARCH).deb
-$(SYSTEMD): $(SPREZZ)/systemd/debian/changelog
+systemd:$(systemd)_$(ARCH).deb
+$(systemd): $(SPREZZ)/systemd/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
