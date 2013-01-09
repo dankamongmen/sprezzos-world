@@ -4133,6 +4133,14 @@ $(LIBXDGBASEDIR): $(SPREZZ)/libxdg-basedir/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxdg-basedir-$(libxdg-basedir_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xdg-utils
+xdg-utils:$(XDGUTILS)_$(ARCH).deb
+$(XDGUTILS): $(SPREZZ)/xdg-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xdg-utils-$(xdg-utils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxml2
 libxml2:$(LIBXML2)_$(ARCH).deb
 $(LIBXML2): $(SPREZZ)/libxml2/debian/changelog
