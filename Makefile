@@ -4877,7 +4877,7 @@ $(ISOMASTER): $(SPREZZ)/isomaster/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf isomaster-$(isomaster_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf isomaster-$(isomaster_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: opengtl
 opengtl:$(OPENGTL)_$(ARCH).deb
