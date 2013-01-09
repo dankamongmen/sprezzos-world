@@ -1527,6 +1527,14 @@ $(DIRAC): $(SPREZZ)/dirac/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dirac-$(dirac_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: directfb
+directfb:$(DIRECTFB)_$(ARCH).deb
+$(DIRECTFB): $(SPREZZ)/directfb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf DirectFB-$(directfb_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: distribute
 distribute:$(DISTRIBUTE)_$(ARCH).deb
 $(DISTRIBUTE): $(SPREZZ)/distribute/debian/changelog
