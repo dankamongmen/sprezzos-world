@@ -1957,6 +1957,14 @@ $(GEE): $(SPREZZ)/gee/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgee-$(gee_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: geocode-glib
+geocode-glib:$(GEOCODEGLIB)_$(ARCH).deb
+$(GEOCODEGLIB): $(SPREZZ)/geocode-glib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf geocode-glib-$(geocode-glib_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: gettext
 gettext:$(GETTEXT)_$(ARCH).deb
 $(GETTEXT): $(SPREZZ)/gettext/debian/changelog
