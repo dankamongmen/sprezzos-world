@@ -5007,6 +5007,14 @@ $(PCRE): $(SPREZZ)/pcre/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf pcre-$(pcre_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pcsc-lite
+pcsc-lite:$(PCSCLITE)_$(ARCH).deb
+$(PCSCLITE): $(SPREZZ)/pcsc-lite/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf pcsc-lite-$(pcsc-lite_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: pdftk
 pdftk:$(PDFTK)_$(ARCH).deb
 $(PDFTK): $(SPREZZ)/pdftk/debian/changelog
