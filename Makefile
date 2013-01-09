@@ -3981,6 +3981,14 @@ $(LIBXVMC): $(SPREZZ)/libxvmc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXvMC-$(libxvmc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libxxf86dga
+libxxf86dga:$(libxxf86dga)_$(ARCH).deb
+$(libxxf86dga): $(SPREZZ)/libxxf86dga/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libXxf86dga-$(libxxf86dga_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxxf86vm
 libxxf86vm:$(LIBXXF86VM)_$(ARCH).deb
 $(LIBXXF86VM): $(SPREZZ)/libxxf86vm/debian/changelog
@@ -4934,6 +4942,14 @@ $(LIBPTHREADSTUBS): $(SPREZZ)/libpthread-stubs/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libpthread-stubs-$(libpthread-stubs_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libquicktime
+libquicktime:$(libquicktime)_$(ARCH).deb
+$(libquicktime): $(SPREZZ)/libquicktime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libquicktime-$(libquicktime_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: parted
 parted:$(PARTED)_$(ARCH).deb
