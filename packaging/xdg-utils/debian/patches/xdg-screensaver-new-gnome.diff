@@ -1,0 +1,70 @@
+Description: Use DBus API for GNOME since gnome-screensaver-command --poke
+	has been removed
+Author: Ben Hutchings <ben@decadent.org.uk>
+Bug: http://bugs.debian.org/610155
+
+--- a/scripts/xdg-screensaver.in
++++ b/scripts/xdg-screensaver.in
+@@ -435,14 +435,54 @@ screensaver_gnome_screensaver()
+ # http://people.gnome.org/~mccann/gnome-screensaver/docs/gnome-screensaver.html
+     case "$1" in
+         suspend)
+-        screensaver_suspend_loop \
+-        dbus-send --session \
+-                  --dest=org.gnome.ScreenSaver \
+-                  --type=method_call \
+-                  /org/gnome/ScreenSaver \
+-                  org.gnome.ScreenSaver.SimulateUserActivity \
+-                  2> /dev/null
+-        result=$?
++        perl -e '
++use strict;
++use warnings;
++use IO::File;
++use Net::DBus;
++use X11::Protocol;
++
++my ($window_id, $screensaver_file) = @ARGV;
++
++# Find window name to pass to session manager.
++my $x = X11::Protocol->new();
++my $named_window_id = hex($window_id);
++my $window_name;
++while (1) {
++  ($window_name) = $x->GetProperty($named_window_id, $x->atom("WM_NAME"),
++				   $x->atom("STRING"), 0, 1000, 0);
++  last if defined($window_name) && $window_name ne "";
++  (undef, $named_window_id) = $x->QueryTree($named_window_id);
++  if (!defined($named_window_id)) {
++    $window_name = "?";
++    last;
++  }
++}
++
++# Inhibit idle detection (flags = 8) with window name and ID.
++# We have no reason so just send the window name again.
++my $bus = Net::DBus->session();
++my $sm_svc = $bus->get_service("org.gnome.SessionManager");
++my $sm = $sm_svc->get_object("/org/gnome/SessionManager",
++			     "org.gnome.SessionManager");
++$sm->Inhibit($window_name, hex($window_id), $window_name, 8);
++
++# Wait until removed from the status file.
++while (1) {
++  sleep(10);
++  my $status = new IO::File($screensaver_file, "r")
++    or exit 0;
++  my $found;
++  while (<$status>) {
++    if (/^$window_id:/) {
++      $found = 1;
++      last;
++    }
++  }
++  exit 0 unless $found;
++}
++' $window_id $screensaver_file &
++        result=0
+         ;;
+ 
+         resume)
