@@ -6361,6 +6361,14 @@ $(XTRANS): $(SPREZZ)/xtrans/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xtrans_$(xtrans_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xz-utils
+xz-utils:$(XZUTILS)_$(ARCH).deb
+$(XZUTILS): $(SPREZZ)/xz-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xz-utils_$(xz-utils_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: libunique3
 libunique3:$(LIBUNIQUE3)_$(ARCH).deb
 $(LIBUNIQUE3): $(SPREZZ)/libunique3/debian/changelog
