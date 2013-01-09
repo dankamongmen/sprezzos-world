@@ -3557,6 +3557,14 @@ $(XAUTH): $(SPREZZ)/xauth/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xauth-$(xauth_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xawtv
+xawtv:$(XAWTV)_$(ARCH).deb
+$(XAWTV): $(SPREZZ)/xawtv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xawtv-$(xawtv_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xft
 xft:$(XFT)_$(ARCH).deb
 $(XFT): $(SPREZZ)/xft/debian/changelog
@@ -6378,12 +6386,12 @@ $(ZENITY): $(SPREZZ)/zenity/debian/changelog
 	tar xJvf zenity-$(zenity_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: unzip
-unzip:$(UNunzip)_$(ARCH).deb
-$(UNunzip): $(SPREZZ)/unzip/debian/changelog
+unzip:$(unzip)_$(ARCH).deb
+$(unzip): $(SPREZZ)/unzip/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf unzip-$(unzip_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf unzip_$(unzip_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: zip
 zip:$(ZIP)_$(ARCH).deb
