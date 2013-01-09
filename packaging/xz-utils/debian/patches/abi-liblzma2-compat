@@ -1,0 +1,208 @@
+From: Jonathan Nieder <jrnieder@gmail.com>
+Date: Thu, 17 May 2012 18:49:00 -0500
+Subject: liblzma: skip ABI-incompatible check when liblzma.so.2 is loaded
+
+When liblzma started using ELF symbol versioning at the same time
+as a soname bump (2 → 5) and a small increase in the reserved space at
+the end of the lzma_stream structure checked by lzma_code, introducing
+an unversioned compatibility symbol to ease the transition seemed like
+a great idea.  After all:
+
+ - most applications only use one version of the library (liblzma.so.2
+   or liblzma.so.5) and would obviously work fine
+
+ - applications linking to the new version of the library
+   (liblzma.so.5) should use the default, versioned lzma_code symbol so
+   errors initializing the reserved space can be noticed
+
+ - symbol versioning should ensure application/library mixtures
+   independently making use of both versions of the library also
+   work.  Calls using the unversioned symbol names would be resolved
+   using the old symbol from liblzma.so.2 or the compatibility symbol
+   from liblzma.so.5, avoiding segfaults and spurious
+   LZMA_OPTIONS_ERROR errors.
+
+ - application/library mixtures using both versions of the library and
+   passing lzma_stream objects between the two would break, but that
+   was never supposed to be supported, anyway.
+
+Three toolchain bugs dash that plan.
+
+Current (2.22) versions of the gold linker cannot be used to build
+libraries providing versioned and unversioned symbols with the same
+name.  On the other hand, BFD ld doesn't mind.  So GNU gold refuses to
+link versions of liblzma including the compatibility symbol (PR12261):
+
+	/usr/bin/ld: error: symbol lzma_code has undefined version
+
+Annoying, but livable.  liblzma with the compatibility symbol just
+has to be built with BFD ld.
+
+More importantly, gold does not support linking to libraries providing
+versioned and unversioned symbols with the same name.  If I link some
+code to a version of liblzma with the compatibility symbol:
+
+	ld -o demo demo.o -llzma
+
+then the documented behavior, implemented by BFD ld, is to interpret
+calls to lzma_code as referring to the default version
+(lzma_code@XZ_5.0).  Current versions of GNU gold treat such calls as
+referring to whichever symbol comes first in liblzma.so.5's symbol
+table.  If the unversioned symbol comes first (and in Debian liblzma5
+5.1.1alpha+20110809-3 it does), GNU gold will mislink new applications
+to use the unversioned compatibility symbol (PR13521):
+
+	$ ld.gold -o test.gold test.o -llzma
+	$ eu-readelf -s test.gold | grep lzma_code
+	    1: 0000000000000000      0 FUNC    GLOBAL DEFAULT    UNDEF lzma_code
+	    5: 0000000000000000      0 FUNC    GLOBAL DEFAULT    UNDEF lzma_code
+
+There is no warning.
+
+Worse, ld.so from glibc unpredictably will sometimes use the versioned
+symbol to resolve references to the unversioned base version when both
+are present (PR12977).
+
+Clearly no one has been testing mixtures of versioned and
+unversioned symbols at all, and we cannot trust the symbol resolution
+process to do anything in particular for them.
+
+This patch implements an alternative method to implement the same
+compatibility goals described above.
+
+ - No more compatibility symbol.  liblzma.so.5 will define lzma_code
+   only once, with version XZ_5.0.
+
+ - When initializing an lzma_stream object, use dlopen("liblzma.so.2",
+   RTLD_NOLOAD) to detect whether the caller might have been expecting
+   the old ABI, and store that information in the private
+   stream->internal->liblzma2_compat field.
+
+ - In lzma_code, when checking reserved fields, skip fields past the
+   old end of the lzma_stream structure ifying reserved fields if and
+   only if this->internal->liblzma2_compat is false.
+
+That's it.  Hopefully this time it will work reliably.
+
+Thanks to Eduard Bloch for noticing PR13521 and to Ian Lance Taylor
+for PR12977.
+
+Signed-off-by: Jonathan Nieder <jrnieder@gmail.com>
+---
+ configure.ac                |    5 +++++
+ src/liblzma/common/common.c |   40 ++++++++++++++++++++++++++++++++++++++--
+ src/liblzma/common/common.h |    4 ++++
+ 3 files changed, 47 insertions(+), 2 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 25eb838f..88b81ba1 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -471,6 +471,11 @@ if test "x$enable_threads" = xyes; then
+ 	AC_CHECK_DECLS([CLOCK_MONOTONIC], [], [], [[#include <time.h>]])
+ 	CFLAGS=$OLD_CFLAGS
+ fi
++
++# As a Debian-specific hack, liblzma uses dlopen() to check if extra
++# paranoia is needed because unversioned symbols from liblzma.so.2 are
++# present in the same process.  See src/liblzma/common/common.c.
++AC_SEARCH_LIBS([dlopen], [dl])
+ 
+ echo
+ echo "Initializing Libtool:"
+diff --git a/src/liblzma/common/common.c b/src/liblzma/common/common.c
+index 50c984c7..e61d940d 100644
+--- a/src/liblzma/common/common.c
++++ b/src/liblzma/common/common.c
+@@ -12,6 +12,8 @@
+ 
+ #include "common.h"
+ 
++#include <dlfcn.h>
++
+ 
+ /////////////
+ // Version //
+@@ -141,6 +143,17 @@ lzma_next_end(lzma_next_coder *next, lzma_allocator *allocator)
+ // External to internal API wrapper //
+ //////////////////////////////////////
+ 
++static bool
++liblzma2_loaded(void)
++{
++	void *handle = dlopen("liblzma.so.2", RTLD_LAZY | RTLD_NOLOAD);
++	if (handle) {
++		dlclose(handle);
++		return true;
++	}
++	return false;
++}
++
+ extern lzma_ret
+ lzma_strm_init(lzma_stream *strm)
+ {
+@@ -154,6 +167,7 @@ lzma_strm_init(lzma_stream *strm)
+ 			return LZMA_MEM_ERROR;
+ 
+ 		strm->internal->next = LZMA_NEXT_CODER_INIT;
++		strm->internal->liblzma2_compat = liblzma2_loaded();
+ 	}
+ 
+ 	memzero(strm->internal->supported_actions,
+@@ -168,6 +182,24 @@ lzma_strm_init(lzma_stream *strm)
+ }
+ 
+ 
++// Before v5.0.0~6 (liblzma: A few ABI tweaks to reserve space in
++// structures, 2010-10-23), the reserved fields in lzma_stream were:
++//
++//	void *reserved_ptr1;
++//	void *reserved_ptr2;
++//	uint64_t reserved_int1;
++//	uint64_t reserved_int2;
++//	lzma_reserved_enum reserved_enum1;
++//	lzma_reserved_enum reserved_enum2;
++//
++// Nowadays there are two more pointers between reserved_ptr2 and
++// reserved_int1 and two size_t fields between reserved_int2 and
++// reserved_enum1.
++//
++// When strm->internal->liblzma2_compat is set, limit the checks of
++// reserved fields to fields that were present in the old ABI to avoid
++// segfaults and spurious "Unsupported options" from callers sharing
++// the process image that expect the old ABI.
+ extern LZMA_API(lzma_ret)
+ lzma_code(lzma_stream *strm, lzma_action action)
+ {
+@@ -185,8 +217,12 @@ lzma_code(lzma_stream *strm, lzma_action action)
+ 	if (strm->reserved_ptr1 != NULL
+ 			|| strm->reserved_ptr2 != NULL
+ 			|| strm->reserved_ptr3 != NULL
+-			|| strm->reserved_ptr4 != NULL
+-			|| strm->reserved_int1 != 0
++			|| strm->reserved_ptr4 != NULL)
++		return LZMA_OPTIONS_ERROR;
++
++	if (strm->internal->liblzma2_compat)
++		; /* Enough checks. */
++	else if (strm->reserved_int1 != 0
+ 			|| strm->reserved_int2 != 0
+ 			|| strm->reserved_int3 != 0
+ 			|| strm->reserved_int4 != 0
+diff --git a/src/liblzma/common/common.h b/src/liblzma/common/common.h
+index 45aba4f0..475661d8 100644
+--- a/src/liblzma/common/common.h
++++ b/src/liblzma/common/common.h
+@@ -200,6 +200,10 @@ struct lzma_internal_s {
+ 	/// If true, lzma_code will return LZMA_BUF_ERROR if no progress was
+ 	/// made (no input consumed and no output produced by next.code).
+ 	bool allow_buf_error;
++
++	/// Indicates whether we are sharing a process image with
++	/// liblzma.so.2 and need to tread carefully.
++	bool liblzma2_compat;
+ };
+ 
+ 
+-- 
+1.7.10.2

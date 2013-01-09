@@ -1,0 +1,195 @@
+From: Jonathan Nieder <jrnieder@gmail.com>
+Date: Sat, 16 Jun 2012 05:57:42 -0500
+Subject: liblzma: make dlopen()-based liblzma2 compatibility optional
+
+Suppose I want to build a statically linked program:
+
+	gcc -static -o app app.c -lrpm -llzma
+
+Suppose further that librpm.a was built against a pre-5.0 version of
+liblzma so it does not allocate as much space for reserved fields at
+the end of lzma_stream as the current API requires.
+
+(This is a hypothetical scenario --- Debian librpm does not provide a
+static library.)
+
+If liblzma uses unpatched lzma_code() from XZ Utils >= 5.0, then
+during calls to librpm that try to compress or decompress an
+xz-compressed RPM, lzma_code’s reserved field checks will overflow the
+buffer and segfault.
+
+If liblzma uses the modified version of lzma_code() which asks libdl
+if liblzma.so.2 is resident and refrains from checking reserved fields
+past the end of the old lzma_stream struct when the answer is "yes",
+the behavior is no better.  The dynamic library liblzma.so.2 is _not_
+resident, so lzma_code() dutifully reads reserved fields past the end
+of the buffer --- segfault.
+
+So the only safe behavior in the static library is to unconditionally
+disable checks that might break for callers we want to continue to
+support.
+
+The new "./configure --enable-liblzma2-compat" option implements all
+three sets of semantics:
+
+ - "./configure --disable-liblzma2-compat" means to check the full set
+   of reserved fields unconditionally.  You can use this to check how
+   your application would behave with the unpatched library.
+
+ - "./configure --enable-liblzma2-compat=auto" means to skip checks of
+   reserved fields past the old end of struct lzma_stream when
+   liblzma.so.2 is resident.  If a DSO built against liblzma2 shares
+   the process image, the ABI-incompatible checks are skipped for
+   safety, whereas in the usual case when no such DSO is resident, the
+   full set of checks is run to help application developers remember
+   to zero all reserved fields.
+
+ - "./configure --enable-liblzma2-compat" makes liblzma skip the
+   ABI-incompatible checks unconditionallty.  You can use this if you
+   want your copy of liblzma to be usable by static libraries that
+   were built against the old library.
+
+Signed-off-by: Jonathan Nieder <jrnieder@gmail.com>
+---
+ configure.ac                |   33 +++++++++++++++++++++++++++++++--
+ src/liblzma/common/common.c |   40 +++++++++++++++++++++++++++++++++++-----
+ src/liblzma/common/common.h |    2 ++
+ 3 files changed, 68 insertions(+), 7 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index cbf92659..eb510fd9 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -468,10 +468,39 @@ if test "x$enable_threads" = xyes; then
+ 	CFLAGS=$OLD_CFLAGS
+ fi
+ 
+-# As a Debian-specific hack, liblzma uses dlopen() to check if extra
++# As a Debian-specific hack, liblzma can use dlopen() to check if extra
+ # paranoia is needed because unversioned symbols from liblzma.so.2 are
+ # present in the same process.  See src/liblzma/common/common.c.
+-AC_SEARCH_LIBS([dlopen], [dl])
++AC_MSG_CHECKING([if lzma_code checks should be relaxed for compatibility])
++AC_ARG_ENABLE([liblzma2-compat], [AC_HELP_STRING([--enable-liblzma2-compat],
++		[Relax run-time checks to accomodate old binaries built
++		with smaller sizeof(lzma_stream).  The default is "dynamic",
++		which means to only use the relaxed checks when the dynamic
++		loader reports that liblzma.so.2 is loaded in the same process.])],
++	[], [enable_liblzma2_compat=dynamic])
++case $enable_liblzma2_compat in
++dynamic)
++	AC_SEARCH_LIBS([dlopen], [dl])
++	AC_DEFINE([LIBLZMA2_COMPAT_DYNAMIC], [1],
++		[Define to 1 to use dlopen() to check if lzma_code() checks
++		should be more tolerant because the process is also linked to
++		liblzma from Debian 6.0.])
++	AC_MSG_RESULT([auto])
++	;;
++yes)
++	AC_DEFINE([LIBLZMA2_COMPAT], [1],
++		[Define to 1 to unconditionally make lzma_code() checks tolerant
++		to accomodate callers built against liblzma from Debian 6.0.])
++	AC_MSG_RESULT([yes])
++	;;
++no)
++	AC_MSG_RESULT([no])
++	;;
++*)
++	AC_MSG_RESULT([])
++	AC_MSG_ERROR([--enable-liblzma2: unrecognized value $enable_liblzma2_compat])
++	;;
++esac
+ 
+ echo
+ echo "Initializing Libtool:"
+diff --git a/src/liblzma/common/common.c b/src/liblzma/common/common.c
+index e61d940d..3bfdb755 100644
+--- a/src/liblzma/common/common.c
++++ b/src/liblzma/common/common.c
+@@ -143,16 +143,46 @@ lzma_next_end(lzma_next_coder *next, lzma_allocator *allocator)
+ // External to internal API wrapper //
+ //////////////////////////////////////
+ 
+-static bool
+-liblzma2_loaded(void)
++#ifdef LIBLZMA2_COMPAT_DYNAMIC
++
++static void
++init_liblzma2_compat(lzma_stream *strm)
+ {
+ 	void *handle = dlopen("liblzma.so.2", RTLD_LAZY | RTLD_NOLOAD);
+ 	if (handle) {
+ 		dlclose(handle);
+-		return true;
++		strm->internal->liblzma2_compat = true;
++		return;
+ 	}
++	strm->internal->liblzma2_compat = false;
++}
++
++static bool
++liblzma2_loaded(lzma_stream *strm)
++{
++	return strm->internal->liblzma2_compat;
++}
++
++#else
++
++static void
++init_liblzma2_compat(lzma_stream *strm)
++{
++}
++
++#ifdef LIBLZMA2_COMPAT
++static bool liblzma2_loaded(lzma_stream *strm)
++{
++	return true;
++}
++#else
++static bool liblzma2_loaded(lzma_stream *strm)
++{
+ 	return false;
+ }
++#endif
++
++#endif
+ 
+ extern lzma_ret
+ lzma_strm_init(lzma_stream *strm)
+@@ -167,7 +197,7 @@ lzma_strm_init(lzma_stream *strm)
+ 			return LZMA_MEM_ERROR;
+ 
+ 		strm->internal->next = LZMA_NEXT_CODER_INIT;
+-		strm->internal->liblzma2_compat = liblzma2_loaded();
++		init_liblzma2_compat(strm);
+ 	}
+ 
+ 	memzero(strm->internal->supported_actions,
+@@ -220,7 +250,7 @@ lzma_code(lzma_stream *strm, lzma_action action)
+ 			|| strm->reserved_ptr4 != NULL)
+ 		return LZMA_OPTIONS_ERROR;
+ 
+-	if (strm->internal->liblzma2_compat)
++	if (liblzma2_loaded(strm))
+ 		; /* Enough checks. */
+ 	else if (strm->reserved_int1 != 0
+ 			|| strm->reserved_int2 != 0
+diff --git a/src/liblzma/common/common.h b/src/liblzma/common/common.h
+index 475661d8..4081c2d3 100644
+--- a/src/liblzma/common/common.h
++++ b/src/liblzma/common/common.h
+@@ -201,9 +201,11 @@ struct lzma_internal_s {
+ 	/// made (no input consumed and no output produced by next.code).
+ 	bool allow_buf_error;
+ 
++#ifdef LIBLZMA2_COMPAT_DYNAMIC
+ 	/// Indicates whether we are sharing a process image with
+ 	/// liblzma.so.2 and need to tread carefully.
+ 	bool liblzma2_compat;
++#endif
+ };
+ 
+ 
+-- 
+1.7.10.4
+

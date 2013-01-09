@@ -1,0 +1,69 @@
+From: Lasse Collin <lasse.collin@tukaani.org>
+Date: Thu, 28 Jun 2012 10:47:49 +0300
+Subject: liblzma: Check that the first byte of range encoded data is 0x00.
+
+It is just to be more pedantic and thus perhaps catch broken
+files slightly earlier.
+
+Signed-off-by: Jonathan Nieder <jrnieder@gmail.com>
+---
+ src/liblzma/lzma/lzma_decoder.c        |    8 ++++++--
+ src/liblzma/rangecoder/range_decoder.h |   12 +++++++++---
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/src/liblzma/lzma/lzma_decoder.c b/src/liblzma/lzma/lzma_decoder.c
+index 5abbc0d..b8f9317 100644
+--- a/src/liblzma/lzma/lzma_decoder.c
++++ b/src/liblzma/lzma/lzma_decoder.c
+@@ -289,8 +289,12 @@ lzma_decode(lzma_coder *restrict coder, lzma_dict *restrict dictptr,
+ 	// Initialization //
+ 	////////////////////
+ 
+-	if (!rc_read_init(&coder->rc, in, in_pos, in_size))
+-		return LZMA_OK;
++	{
++		const lzma_ret ret = rc_read_init(
++				&coder->rc, in, in_pos, in_size);
++		if (ret != LZMA_STREAM_END)
++			return ret;
++	}
+ 
+ 	///////////////
+ 	// Variables //
+diff --git a/src/liblzma/rangecoder/range_decoder.h b/src/liblzma/rangecoder/range_decoder.h
+index fb96180..e0b051f 100644
+--- a/src/liblzma/rangecoder/range_decoder.h
++++ b/src/liblzma/rangecoder/range_decoder.h
+@@ -25,20 +25,26 @@ typedef struct {
+ 
+ 
+ /// Reads the first five bytes to initialize the range decoder.
+-static inline bool
++static inline lzma_ret
+ rc_read_init(lzma_range_decoder *rc, const uint8_t *restrict in,
+ 		size_t *restrict in_pos, size_t in_size)
+ {
+ 	while (rc->init_bytes_left > 0) {
+ 		if (*in_pos == in_size)
+-			return false;
++			return LZMA_OK;
++
++		// The first byte is always 0x00. It could have been omitted
++		// in LZMA2 but it wasn't, so one byte is wasted in every
++		// LZMA2 chunk.
++		if (rc->init_bytes_left == 5 && in[*in_pos] != 0x00)
++			return LZMA_DATA_ERROR;
+ 
+ 		rc->code = (rc->code << 8) | in[*in_pos];
+ 		++*in_pos;
+ 		--rc->init_bytes_left;
+ 	}
+ 
+-	return true;
++	return LZMA_STREAM_END;
+ }
+ 
+ 
+-- 
+1.7.9.6 (Apple Git-31.1)
+

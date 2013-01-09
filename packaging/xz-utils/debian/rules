@@ -1,0 +1,164 @@
+#!/usr/bin/make -f
+
+build clean install binary-arch binary-indep binary:
+	+dh $@ --parallel $(opt_no_act)
+
+# Runs tests, too, if and only if nocheck is unset (see below).
+build-arch:: build-plain build-static build-small
+
+build-indep: debian/normal-build/Makefile
+	cd debian/normal-build && doxygen Doxyfile
+
+autoreconf_sources := $(wildcard Makefile.am */Makefile.am */*/Makefile.am)
+autoreconf_sources += configure.ac
+
+autoreconf_products := $(wildcard Makefile.in */Makefile.in */*/Makefile.in)
+autoreconf_products += configure	# and more, but these will do
+
+configure_input := $(autoreconf_products)
+configure_input += Doxyfile.in
+configure_input += src/liblzma/liblzma.pc.in
+configure_input += $(wildcard src/scripts/*.in)
+
+override_dh_auto_clean:
+	rm -f debian/*-stamp
+	dh_auto_clean --builddirectory debian/xzdec-build
+	dh_auto_clean --builddirectory debian/normal-build
+	dh_auto_clean --builddirectory debian/static-build
+	sh debian/clean.sh
+
+override_dh_auto_install:
+	dh_auto_install --builddirectory debian/xzdec-build
+	dh_auto_install --builddirectory debian/normal-build
+	dh_auto_install --builddirectory debian/static-build
+	set -e; arch=$$(dpkg-architecture -qDEB_HOST_MULTIARCH); \
+	install -d debian/tmp/lib/$$arch; \
+	mv debian/tmp/usr/lib/$$arch/liblzma.so.* debian/tmp/lib/$$arch/; \
+	dso=$$(basename $$(readlink debian/tmp/usr/lib/$$arch/liblzma.so)); \
+	ln -s -f /lib/$$arch/$$dso debian/tmp/usr/lib/$$arch/liblzma.so
+
+override_dh_installchangelogs:
+	dh_installchangelogs debian/changelog.upstream
+
+build-plain: debian/normal-build/Makefile
+	dh_auto_build --builddirectory debian/normal-build
+
+build-static: debian/static-build/Makefile
+	dh_auto_build --builddirectory debian/static-build
+
+build-small: debian/xzdec-build/Makefile
+	dh_auto_build --builddirectory debian/xzdec-build
+
+debian/test-plain-stamp: | build-plain
+	dh_auto_test --builddirectory debian/normal-build
+	>$@
+
+debian/test-static-stamp: | build-static
+	dh_auto_test --builddirectory debian/static-build
+	>$@
+
+debian/test-xzdec-stamp: | build-small
+	$(MAKE) -C debian/xzdec-build/tests create_compress_files
+	$(MAKE) -C debian/xzdec-build/tests \
+		TESTS="test_check test_files.sh test_compress.sh" \
+		check-TESTS
+	>$@
+
+debian/normal-build/Makefile debian/normal-build/Doxyfile: $(configure_input)
+	dh_auto_configure --builddirectory debian/normal-build -- \
+		--disable-threads --disable-static \
+		$(opt_optimize) $(opt_quiet) \
+		--disable-xzdec --disable-lzmadec
+
+debian/static-build/Makefile: $(configure_input)
+	dh_auto_configure --builddirectory debian/static-build -- \
+		--disable-threads --disable-shared \
+		--enable-liblzma2-compat \
+		$(opt_optimize) $(opt_quiet) \
+		--disable-lzmainfo --disable-scripts \
+		--disable-xzdec --disable-lzmadec \
+		--disable-xz --disable-lzma-links
+
+debian/xzdec-build/Makefile: $(configure_input)
+	dh_auto_configure --builddirectory debian/xzdec-build -- \
+		--disable-shared --disable-nls --disable-encoders \
+		--enable-small --disable-threads \
+		--disable-liblzma2-compat \
+		$(opt_optimize_small) $(opt_quiet) \
+		--disable-lzmainfo --disable-scripts \
+		--disable-xz --disable-lzma-links
+
+$(autoreconf_products): $(autoreconf_sources)
+	autoreconf -is
+
+small_flags_env =
+small_flags_env += DEB_CFLAGS_MAINT_STRIP='-O2 -O3'
+small_flags_env += DEB_CFLAGS_MAINT_PREPEND=-Os
+flags_cmd = dpkg-buildflags --export=configure
+opt_optimize = $(shell $(flags_cmd))
+opt_optimize_small = $(shell $(small_flags_env) $(flags_cmd))
+
+opt_no_act =
+opt_quiet =
+
+# Unless noopt is set, use optimized CRC32 routine on the Hurd.
+ifeq (hurd,$(shell dpkg-architecture -qDEB_HOST_ARCH_OS))
+    cputype := $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+    ifeq (i386,$(cputype))
+        opt_optimize += --enable-assembler=x86
+        opt_optimize_small += --enable-assembler=x86
+    endif
+    ifeq (amd64,$(cputype))
+        opt_optimize += --enable-assembler=x86_64
+        opt_optimize_small += --enable-assembler=x86_64
+    endif
+endif
+
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+    opt_optimize += --disable-assembler
+    opt_optimize_small += --disable-assembler
+endif
+
+ifneq (,$(findstring n,$(MAKEFLAGS)))
+    opt_no_act = --no-act
+endif
+
+ifneq (,$(filter quiet,$(DEB_BUILD_OPTIONS)))
+    opt_quiet = --quiet
+    MAKEFLAGS += --quiet
+endif
+
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+build-arch:: debian/test-plain-stamp
+build-arch:: debian/test-static-stamp
+build-arch:: debian/test-xzdec-stamp
+endif
+
+# Build a tarball with the latest upstream version.
+# This is made complicated by the need to choose a nice version number.
+REPO = http://git.tukaani.org/xz.git
+BRANCH = master
+get-orig-source:
+	mkdir debian-orig-source
+	-set -e; cd debian-orig-source; \
+	: Fetch latest upstream version.; \
+		git init -q; \
+		git fetch -q --tags $(REPO); \
+		git fetch -q $(REPO) $(BRANCH); \
+	: Determine version number.; \
+		commit_name=$$(git describe FETCH_HEAD); \
+		release=$${commit_name%%-*}; \
+		date=$$(date --utc --date="$$( \
+			git log -1 --pretty=format:%cD "$$commit_name" \
+			)" "+%Y%m%d"); \
+		if test "$$commit_name" = "$$release"; \
+		then upstream_version=$${commit_name#v}; \
+		else upstream_version="$${release#v}+$${date}"; \
+		fi; \
+	: Generate tarball.; \
+		echo "packaging $$commit_name"; \
+		git archive --format=tar "$$commit_name" \
+			--prefix="xz-utils-$$upstream_version/" | \
+		gzip -n --rsyncable -9 \
+			> "../xz-utils_$$upstream_version.orig.tar.gz"
+	rm -fr debian-orig-source
