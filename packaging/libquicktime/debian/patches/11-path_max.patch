@@ -1,0 +1,97 @@
+Description: Avoid the use of PATH_MAX to allow building quicktime on hurd.
+Author: Cyril Roelandt <tipecaml@gmail.com>
+Bug-Debian: http://bugs.debian.org/670338
+Reviewed-by: Alessio Treglia <alessio@debian.org>
+Last-Update: 2012-05-21
+Forwarded: Burkhard Plaum <plaum@ipf.uni-stuttgart.de>
+---
+ src/lqt_codecinfo.c |   13 ++++++++++---
+ utils/rechunk.c     |   17 +++++++++++++++++
+ 2 files changed, 27 insertions(+), 3 deletions(-)
+
+--- libquicktime.orig/src/lqt_codecinfo.c
++++ libquicktime/src/lqt_codecinfo.c
+@@ -601,7 +601,8 @@ static int scan_for_plugins(const char *
+   {
+   char * pos;
+   int ret;
+-  char * filename;
++  char * filename = NULL;
++  size_t filename_len = 0, new_size = 0;
+   DIR * directory;
+   struct dirent * directory_entry;
+   struct stat status;
+@@ -611,8 +612,6 @@ static int scan_for_plugins(const char *
+   lqt_codec_info_t * video_codecs_end;
+   lqt_codec_info_t * audio_codecs_end;
+ 
+-  filename = malloc(PATH_MAX * sizeof(char));
+-  
+   /* Set the end pointers so we can quickly add codecs after */
+ 
+   
+@@ -662,6 +661,14 @@ static int scan_for_plugins(const char *
+     
+     /* Now, the file should be a valid plugin, construct the filename */
+     
++    new_size = strlen(plugin_dir) + strlen(directory_entry->d_name) + 2;
++    if (new_size > filename_len)
++      {
++      filename_len = new_size;
++      filename = realloc(filename, filename_len);
++      if (!filename)
++        exit(EXIT_FAILURE);
++      }
+     strcpy(filename, plugin_dir);
+     strcat(filename, "/");
+     strcat(filename, directory_entry->d_name);
+--- libquicktime.orig/utils/rechunk.c
++++ libquicktime/utils/rechunk.c
+@@ -46,7 +46,11 @@ static char ** add_frames_from_file(char
+   {
+   FILE * input;
+   char * pos;
++#ifdef PATH_MAX
+   char filename[PATH_MAX+10];
++#else
++  char *filename = NULL;
++#endif
+ 
+   input = fopen(list_filename, "r");
+   if(!input)
+@@ -56,7 +60,11 @@ static char ** add_frames_from_file(char
+     return (char**)0;
+     }
+ 
++#ifdef PATH_MAX
+   while(fgets(filename, PATH_MAX+10, input))
++#else
++  while(getline(&filename, NULL, input) != -1)
++#endif
+     {
+     /* Delete trailing '\n' and '\r' */
+ 
+@@ -72,7 +80,12 @@ static char ** add_frames_from_file(char
+         break;
+ 
+       if(pos == filename)
++        {
++#ifndef PATH_MAX
++        free(filename);
++#endif
+         return input_frames;
++        }
+       
+       pos--;      
+       }
+@@ -83,6 +96,10 @@ static char ** add_frames_from_file(char
+     input_frames = realloc(input_frames, sizeof(char*) * *total_input_frames);
+     input_frames[*total_input_frames - 1] = strdup(filename);
+     //    fprintf(stderr, "Adding file %s\n", input_frames[*total_input_frames - 1]);
++#ifndef PATH_MAX
++    free(filename);
++    filename = NULL;
++#endif
+     }
+   return input_frames;
+   }
