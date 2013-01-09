@@ -3558,12 +3558,12 @@ $(XAUTH): $(SPREZZ)/xauth/debian/changelog
 	tar xzvf xauth-$(xauth_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xawtv
-xawtv:$(XAWTV)_$(ARCH).deb
-$(XAWTV): $(SPREZZ)/xawtv/debian/changelog
+xawtv:$(xawtv)_$(ARCH).deb
+$(xawtv): $(SPREZZ)/xawtv/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xawtv-$(xawtv_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf xawtv-$(xawtv_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: xft
 xft:$(XFT)_$(ARCH).deb
