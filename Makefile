@@ -5400,8 +5400,8 @@ $(REAVER): $(SPREZZ)/reaver/debian/changelog
 	tar xzvf reaver-$(reaver_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: rpcbind
-rpcbind:$(RPCBIND)_$(ARCH).deb
-$(RPCBIND): $(SPREZZ)/rpcbind/debian/changelog
+rpcbind:$(rpcbind)_$(ARCH).deb
+$(rpcbind): $(SPREZZ)/rpcbind/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
