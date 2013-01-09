@@ -775,6 +775,14 @@ $(ARGYLL): $(SPREZZ)/argyll/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf Argyll_V$(argyll_UPVER)_src.tar.gz $(TARARGS) $@
 
+.PHONY: ario
+ario:$(ARIO)_$(ARCH).deb
+$(ARIO): $(SPREZZ)/ario/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf ario-$(ario_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: arp-scan
 arp-scan:$(ARPSCAN)_$(ARCH).deb
 $(ARPSCAN): $(SPREZZ)/arp-scan/debian/changelog
