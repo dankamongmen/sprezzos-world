@@ -1,0 +1,138 @@
+#!/usr/bin/python
+
+import sys, re, os, initdutils
+
+if len(sys.argv) > 1:
+    initfile = sys.argv[1]
+    # If the absolute path isn't specified, assume it's relative to
+    # cwd; if that doesn't exist, try /etc/init.d
+    ap = os.path.abspath(initfile)
+    if os.path.exists(ap):
+        initfile = ap
+    else:
+        initfile = os.path.join('/etc/init.d', initfile)
+else:
+    print >> sys.stderr, 'Usage: %s /etc/init.d/<init-script>' % sys.argv[0]
+    sys.exit(1)
+
+# Default priorities
+startpri = stoppri = 20
+defstart = [2, 3, 4, 5]
+defstop = [0, 1, 6]
+
+# Estimated priorities of these facilities in Debian
+os_facilities = {
+    "$local_fs" : {'lsb' : (0, 100)},
+    "$network" : {'lsb' : (10, 50)},
+    "$remote_fs" : {'lsb': (19, 20)},
+    "$named" : {'lsb': (19, 19)},
+    "$syslog" : {'lsb' : (10, 89)},
+    # No longer present in gLSB 1.2; however, required for gLSB 1.1
+    # compat.  Note that these are looser than $portmap and $time;
+    # anything specifying $netdaemons will be run later, which may not
+    # be what you want...
+    "$netdaemons" : {'lsb': (80, 19)},
+    # gLSB 1.2
+    "$portmap" : {'lsb' : (19, 34)},
+    "$time" : {'lsb' : (24, 21)},
+    }
+
+facilities = initdutils.load_facilities()
+facilities.update(os_facilities)
+
+depends = initdutils.load_depends()
+depends[initfile] = []
+
+headers = initdutils.scan_initfile(initfile)
+
+reqstart = headers.get('Required-Start', [])
+shouldstart = headers.get('Should-Start', [])
+if reqstart or shouldstart:
+    startpri = 5
+    for facility in reqstart:
+        if facility not in facilities:
+            print >> sys.stderr, 'Missing required start facility', facility
+            sys.exit(1)
+        else:
+            for script, pri in facilities[facility].iteritems():
+                if script != initfile:
+                    start, stop = pri
+                    startpri = max(startpri, start+1)
+            if facility not in depends[initfile]:
+                depends[initfile].append(facility)
+    
+    for facility in shouldstart:
+        if facility not in facilities:
+            print >> sys.stderr, 'Missing should-start facility', facility, '(ignored)'
+        else:
+            for script, pri in facilities[facility].iteritems():
+                if script != initfile:
+                    start, stop = pri
+                    startpri = max(startpri, start+1)
+    startpri = min(max(startpri, 1), 99)
+
+reqstop = headers.get('Required-Stop', [])
+shouldstop = headers.get('Should-Stop', [])
+if reqstop or shouldstop:
+    stoppri = 95
+    for facility in reqstop:
+        if facility not in facilities:
+            print >> sys.stderr, 'Missing required stop facility', facility
+            sys.exit(1)
+        else:
+            for script, pri in facilities[facility].iteritems():
+                if script != initfile:
+                    start, stop = pri
+                    stoppri = min(stoppri, stop-1)
+            if facility not in depends[initfile]:
+                depends[initfile].append(facility)
+
+    for facility in shouldstop:
+        if facility not in facilities:
+            print >> sys.stderr, 'Missing should-stop facility', facility, '(ignored)'
+        else:
+            for script, pri in facilities[facility].iteritems():
+                if script != initfile:
+                    start, stop = pri
+                    stoppri = min(stoppri, stop-1)
+
+    stoppri = min(max(stoppri, 1), 99)
+
+if depends[initfile]:
+    initdutils.save_depends(depends)
+
+provides = headers.get('Provides', [])
+if provides:
+    for facility in provides:
+        if facility[0] == '$':
+            print >> sys.stderr, 'Ignoring system-provided facility', facility
+            continue
+        if not facilities.has_key(facility):
+            facilities[facility] = {}
+
+        facilities[facility][initfile] = (startpri, stoppri)
+    initdutils.save_facilities(facilities)
+
+defstart = headers.get('Default-Start', defstart)
+defstop = headers.get('Default-Stop', defstop)
+
+# A set type would be nice... [range(2,6) = 2..5]
+for level in range(2,6):
+    if level in defstart:
+        for i in range(2,6):
+            if i not in defstart:
+                defstart.append(i)
+    if level in defstop:
+        for i in range(2,6):
+            if i not in defstop:
+                defstop.append(i)
+
+defstart.sort()
+defstop.sort()
+
+start_runlevels = " ".join(map(str, defstart))
+stop_runlevels = " ".join(map(str, defstop))
+
+initfile = initfile.replace('/etc/init.d/', '')
+
+os.system("/usr/sbin/update-rc.d %(initfile)s start %(startpri)d %(start_runlevels)s . stop %(stoppri)d %(stop_runlevels)s ." % locals())
