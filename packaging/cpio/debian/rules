@@ -1,0 +1,155 @@
+#!/usr/bin/make -f
+
+package=cpio
+
+CFLAGS = -Wall -g
+INSTALL = install
+INSTALL_FILE    = $(INSTALL) -p    -o root -g root  -m  644
+INSTALL_PROGRAM = $(INSTALL) -p    -o root -g root  -m  755
+INSTALL_SCRIPT  = $(INSTALL) -p    -o root -g root  -m  755
+INSTALL_DIR     = $(INSTALL) -p -d -o root -g root  -m  755
+
+DEB_HOST_GNU_TYPE=$(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE=$(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+STRIP = $(DEB_HOST_GNU_TYPE)-strip
+else
+CROSS= --build $(DEB_BUILD_GNU_TYPE)
+STRIP = strip
+endif
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+INSTALL_PROGRAM += -s
+endif
+
+obj/Makefile:
+	$(checkdir)
+	mkdir -p obj
+	cd obj && CPIO_MT_PROG=mt ../configure $(shell dpkg-buildflags --export=configure) --prefix=/usr $(CROSS) \
+	       --mandir=/usr/share/man \
+	       --infodir=/usr/share/info \
+	       --bindir=/bin \
+	       --libexecdir=/usr/sbin
+
+	touch tests/testsuite tests/package.m4
+
+obj-win32/Makefile:
+	$(checkdir)
+	mkdir -p obj-win32
+	cd obj-win32 && CFLAGS='$(CFLAGS)' ../configure --host i586-mingw32msvc
+
+build-arch: build
+build-indep: build
+build:	obj/Makefile
+	$(checkdir)
+	$(MAKE) -C obj
+	touch tests/testsuite.at tests/testsuite tests/package.m4
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	$(MAKE) -C obj check
+endif
+	touch build
+
+build-win32:	obj-win32/Makefile
+	$(checkdir)
+	$(MAKE) -C obj-win32
+	touch build-win32
+
+clean:
+	$(checkdir)
+	$(RM) build
+	test ! -f Makefile || $(MAKE) distclean
+	$(RM) config.cache
+	$(RM) -r obj obj-win32
+	$(RM) -r *~ debian/tmp debian/tmp-win32 debian/*~ debian/files*
+	$(RM) -f debian/substvars
+#	$(RM) -rf autom4te.cache
+
+binary-indep:	checkroot build build-win32
+	$(checkdir)
+	$(RM) -r debian/tmp-win32
+	$(INSTALL_DIR) debian/tmp-win32 debian/tmp-win32/DEBIAN
+	$(INSTALL_DIR) debian/tmp-win32/usr/share/doc/$(package)-win32
+# Install directories
+	$(INSTALL_DIR) 	\
+		debian/tmp-win32/usr/share/win32
+# Install files
+	install -m 755 obj-win32/src/cpio.exe debian/tmp-win32/usr/share/win32/
+	i586-mingw32msvc-strip debian/tmp-win32/usr/share/win32/cpio.exe
+# Install changelog & copyright
+	install -m 644 debian/changelog \
+	  debian/tmp-win32/usr/share/doc/$(package)-win32/changelog.Debian
+	gzip -9v debian/tmp-win32/usr/share/doc/$(package)-win32/*
+	install -m 644 debian/copyright debian/tmp-win32/usr/share/doc/$(package)-win32/.
+
+# Generate md5sums
+	cd debian/tmp-win32 && find * -type f ! -regex '^DEBIAN/.*' -print0 | xargs -r0 md5sum > DEBIAN/md5sums
+
+# Generate deb file
+	dpkg-gencontrol -pcpio-win32 -Pdebian/tmp-win32
+	chown -R root.root debian/tmp-win32
+	chmod -R g-ws debian/tmp-win32
+	dpkg-deb --build debian/tmp-win32 ..
+
+binary-arch:	checkroot build
+	$(checkdir)
+	$(RM) -r debian/tmp
+	$(INSTALL_DIR) debian/tmp debian/tmp/DEBIAN
+	$(INSTALL_DIR) debian/tmp/usr/share/doc/$(package)
+# Install Debian package control information files
+	$(INSTALL_SCRIPT) debian/postinst \
+		debian/prerm debian/tmp/DEBIAN/.
+# Install directories
+	$(INSTALL_DIR) 	\
+		debian/tmp/bin	\
+		debian/tmp/usr/share/man/man1	\
+		debian/tmp/usr/share/info
+# Install files
+	$(MAKE) -C obj install DESTDIR=$(CURDIR)/debian/tmp
+	rm -rf debian/tmp/usr/libexec
+	mv debian/tmp/bin/mt debian/tmp/bin/mt-gnu
+	mv debian/tmp/usr/share/man/man1/mt.1 \
+	  debian/tmp/usr/share/man/man1/mt-gnu.1
+# Strip binaries (including hack by policy wonks)
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	$(STRIP) -R.note -R.comment debian/tmp/bin/*
+endif
+	rm -rf debian/tmp/usr/sbin
+# Install documentation
+	install -m 644 ChangeLog debian/tmp/usr/share/doc/$(package)/changelog
+	install -m 644 NEWS README debian/tmp/usr/share/doc/$(package)/.
+# Install changelog & copyright
+	install -m 644 debian/changelog \
+	  debian/tmp/usr/share/doc/$(package)/changelog.Debian
+	gzip -9v debian/tmp/usr/share/doc/$(package)/*
+	gzip -9v debian/tmp/usr/share/man/*/*
+	rm -rf debian/tmp/usr/share/info
+	install -m 644 debian/copyright debian/tmp/usr/share/doc/$(package)/.
+# Determine shared library dependencies
+	dpkg-shlibdeps debian/tmp/bin/cpio debian/tmp/bin/mt-gnu
+
+# Generate md5sums
+	cd debian/tmp && find * -type f ! -regex '^DEBIAN/.*' -print0 | xargs -r0 md5sum > DEBIAN/md5sums
+
+# Generate deb file
+	dpkg-gencontrol -pcpio -Pdebian/tmp
+	chown -R root.root debian/tmp
+	chmod -R g-ws debian/tmp
+	dpkg-deb --build debian/tmp ..
+
+define checkdir
+	test -f src/$(package).h && test -f debian/rules
+endef
+
+# Below here is fairly generic really
+
+binary:		binary-indep binary-arch
+
+source diff:
+	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false
+
+checkroot:
+	$(checkdir)
+	test root = "`whoami`"
+
+.PHONY: binary binary-arch binary-indep clean checkroot
