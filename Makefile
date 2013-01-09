@@ -1320,8 +1320,8 @@ $(COGL): $(SPREZZ)/cogl/debian/changelog
 	tar xJvf cogl-$(cogl_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: colord
-colord:$(COLORD)_$(ARCH).deb
-$(COLORD): $(SPREZZ)/colord/debian/changelog
+colord:$(colord)_$(ARCH).deb
+$(colord): $(SPREZZ)/colord/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
@@ -6176,6 +6176,14 @@ $(XINELIB): $(SPREZZ)/xine-lib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf xine-lib-$(xine-lib_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: xqilla
+xqilla:$(xqilla)_$(ARCH).deb
+$(xqilla): $(SPREZZ)/xqilla/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf XQilla-$(xqilla_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxinerama
 libxinerama:$(LIBXINERAMA)_$(ARCH).deb
