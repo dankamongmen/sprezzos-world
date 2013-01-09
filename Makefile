@@ -4871,6 +4871,14 @@ $(ilmbase): $(SPREZZ)/ilmbase/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ilmbase-$(ilmbase_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: isomaster
+isomaster:$(ISOMASTER)_$(ARCH).deb
+$(ISOMASTER): $(SPREZZ)/isomaster/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf isomaster-$(isomaster_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: opengtl
 opengtl:$(OPENGTL)_$(ARCH).deb
 $(OPENGTL): $(SPREZZ)/opengtl/debian/changelog
