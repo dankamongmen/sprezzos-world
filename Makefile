@@ -4895,6 +4895,14 @@ $(openimageio): $(SPREZZ)/openimageio/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Release-$(openimageio_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: openjpeg
+openjpeg:$(OPENJPEG)_$(ARCH).deb
+$(OPENJPEG): $(SPREZZ)/openjpeg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openjpeg-$(openjpeg_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: openldap
 openldap:$(OPENLDAP)_$(ARCH).deb
 $(OPENLDAP): $(SPREZZ)/openldap/debian/changelog
