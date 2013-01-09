@@ -4952,8 +4952,8 @@ $(LIBPTHREADSTUBS): $(SPREZZ)/libpthread-stubs/debian/changelog
 	tar xzvf libpthread-stubs-$(libpthread-stubs_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libquicktime
-libquicktime:$(libquicktime)_$(ARCH).deb
-$(libquicktime): $(SPREZZ)/libquicktime/debian/changelog
+libquicktime:$(LIBQUICKTIME)_$(ARCH).deb
+$(LIBQUICKTIME): $(SPREZZ)/libquicktime/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
