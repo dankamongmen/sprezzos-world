@@ -46,6 +46,14 @@ $(GHEMICAL): $(SPREZZ)/ghemical/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ghemical-$(ghemical_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: glabels
+glabels:$(GLABELS)_$(ARCH).deb
+$(GLABELS): $(SPREZZ)/glabels/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf glabels-$(glabels_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gnome-documents
 gnome-documents:$(GNOMEDOCUMENTS)_$(ARCH).deb
 $(GNOMEDOCUMENTS): $(SPREZZ)/gnome-documents/debian/changelog
