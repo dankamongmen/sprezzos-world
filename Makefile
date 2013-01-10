@@ -55,8 +55,6 @@ GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-sche
 SPLORIG:=spl_$(shell echo $(spl_UPVER) | cut -d- -f1).orig.tar.xz
 ZFSORIG:=zfs_$(shell echo $(zfs_UPVER) | cut -d- -f1).orig.tar.xz
 GRUBUP:=grub-$(shell echo $(grub2_UPVER) | cut -d- -f1 | cut -d= -f2- | tr : -)
-HARFBUZZUP:=harfbuzz-$(shell echo $(harfbuzz_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-HARFBUZZORIG:=harfbuzz_$(shell echo $(harfbuzz_UPVER) | cut -d- -f1).orig.tar.gz
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_UPVER) | cut -d- -f1).orig.tar.gz
 IBUSUP:=ibus-$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1)
@@ -2840,6 +2838,14 @@ $(HANDBRAKE): $(SPREZZ)/handbrake/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf HandBrake-$(handbrake_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: harfbuzz
+harfbuzz:$(HARFBUZZ)_$(ARCH).deb
+$(HARFBUZZ): $(SPREZZ)/harfbuzz/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf harfbuzz-$(harfbuzz_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: hddtemp
 hddtemp:$(HDDTEMP)_$(ARCH).deb
@@ -6591,20 +6597,6 @@ fbterm:$(FBTERM)_$(ARCH).deb
 $(FBTERM): $(SPREZZ)/fbterm/debian/changelog $(FBTERMORIG)
 	mkdir $@
 	tar xzvf $(FBTERMORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(HARFBUZZUP).tar.gz
-$(HARFBUZZUP).tar.gz:
-	wget -nc -O$@ http://cgit.freedesktop.org/harfbuzz/snapshot/$@
-
-$(HARFBUZZORIG): $(HARFBUZZUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: harfbuzz
-harfbuzz:$(HARFBUZZ)_$(ARCH).deb
-$(HARFBUZZ): $(SPREZZ)/harfbuzz/debian/changelog $(HARFBUZZORIG)
-	mkdir $@
-	tar xzvf $(HARFBUZZORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(HFSUTILSUP).tar.gz
