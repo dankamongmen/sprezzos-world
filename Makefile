@@ -1355,6 +1355,14 @@ $(COMPIZ): $(SPREZZ)/compiz/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf compiz-$(compiz_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: compiz-boxmenu
+compiz-boxmenu:$(COMPIZBOXMENU)_$(ARCH).deb
+$(COMPIZBOXMENU): $(SPREZZ)/compiz-boxmenu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf compiz-boxmenu_-_$(compiz-boxmenu_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: conntrack
 conntrack:$(CONNTRACK)_$(ARCH).deb
 $(CONNTRACK): $(SPREZZ)/conntrack/debian/changelog
