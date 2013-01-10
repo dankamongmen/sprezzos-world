@@ -3927,6 +3927,14 @@ $(LIBXFONT): $(SPREZZ)/libxfont/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxfont_$(libxfont_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libfcgi
+libfcgi:$(LIBFCGI)_$(ARCH).deb
+$(LIBFCGI): $(SPREZZ)/libfcgi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fcgi-$(libfcgi_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libfontenc
 libfontenc:$(LIBFONTENC)_$(ARCH).deb
 $(LIBFONTENC): $(SPREZZ)/libfontenc/debian/changelog
