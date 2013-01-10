@@ -6780,6 +6780,14 @@ $(SUDO): $(SPREZZ)/sudo/debian/changelog sudo-1.8.5p3.tar.gz
 	tar xzvf sudo-1.8.5p3.tar.gz $(TARARGS) $@
 	cp -r $(<D) $@/
 
+.PHONY: supertuxkart
+supertuxkart:$(SUPERTUXKART)_$(ARCH).deb
+$(SUPERTUXKART): $(SPREZZ)/supertuxkart/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf supertuxkart-$(supertuxkart_UPVER).tar.gz $(TARARGS) $@
+
 FETCHED:=$(FETCHED) $(IBUSUP).tar.gz
 $(IBUSUP).tar.gz:
 	wget -nc -O$@ http://ibus.googlecode.com/files/$@
