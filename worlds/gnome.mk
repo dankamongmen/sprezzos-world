@@ -86,6 +86,14 @@ $(GNOMEMIMEDATA): $(SPREZZ)/gnome-mime-data/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-mime-data-$(gnome-mime-data_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: goffice
+goffice:$(GOFFICE)_$(ARCH).deb
+$(GOFFICE): $(SPREZZ)/goffice/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf goffice-$(goffice_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gst-plugins-bad1.0
 gst-plugins-bad1.0:$(GSTPLUGINSBAD1.0)_$(ARCH).deb
 $(GSTPLUGINSBAD1.0): $(SPREZZ)/gst-plugins-bad1.0/debian/changelog
