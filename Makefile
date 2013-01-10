@@ -4961,6 +4961,14 @@ $(ISOMASTER): $(SPREZZ)/isomaster/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf isomaster-$(isomaster_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: opencolorio
+opencolorio:$(OPENCOLORIO)_$(ARCH).deb
+$(OPENCOLORIO): $(SPREZZ)/opencolorio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf v$(opencolorio_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: opengtl
 opengtl:$(OPENGTL)_$(ARCH).deb
 $(OPENGTL): $(SPREZZ)/opengtl/debian/changelog
