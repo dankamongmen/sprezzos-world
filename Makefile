@@ -2575,6 +2575,14 @@ $(GNUPG2): $(SPREZZ)/gnupg2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gnupg-$(gnupg2_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: gnuradio
+gnuradio:$(GNURADIO)_$(ARCH).deb
+$(GNURADIO): $(SPREZZ)/gnuradio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnuradio-$(gnuradio_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnutls
 gnutls:$(GNUTLS)_$(ARCH).deb
 $(GNUTLS): $(SPREZZ)/gnutls/debian/changelog
