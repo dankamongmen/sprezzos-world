@@ -52,8 +52,6 @@ FBTERMUP:=nfbterm-$(shell echo $(fbterm_UPVER) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_UPVER) | cut -d- -f1).orig.tar.gz
 FONTCONFIGUP:=fontconfig-$(shell echo $(fontconfig_UPVER) | cut -d- -f1)
 FONTCONFIGORIG:=fontconfig_$(shell echo $(fontconfig_UPVER) | cut -d- -f1).orig.tar.gz
-GDKPIXBUFUP:=gdk-pixbuf-$(shell echo $(gdk-pixbuf_UPVER) | cut -d- -f1)
-GDKPIXBUFORIG:=gdk-pixbuf_$(shell echo $(gdk-pixbuf_UPVER) | cut -d- -f1).orig.tar.xz
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1)
 GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1).orig.tar.xz
 SPLORIG:=spl_$(shell echo $(spl_UPVER) | cut -d- -f1).orig.tar.xz
@@ -1932,6 +1930,14 @@ $(GDISK): $(SPREZZ)/gdisk/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gptfdisk-$(gdisk_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gdk-pixbuf
+gdk-pixbuf:$(GDKPIXBUF)_$(ARCH).deb
+$(GDKPIXBUF): $(SPREZZ)/gdk-pixbuf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gpk-pixbuf-$(gdk-pixbuf_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gdl
 gdl:$(GDL)_$(ARCH).deb
@@ -6561,20 +6567,6 @@ fontconfig:$(FONTCONFIG)_$(ARCH).deb
 $(FONTCONFIG): $(SPREZZ)/fontconfig/debian/changelog $(FONTCONFIGORIG)
 	mkdir $@
 	tar xzvf $(FONTCONFIGORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GDKPIXBUFUP).tar.xz
-$(GDKPIXBUFUP).tar.xz:
-	wget -nc -O$@ http://ftp.acc.umu.se/pub/gnome/sources/gdk-pixbuf/2.26/$@
-
-$(GDKPIXBUFORIG): $(GDKPIXBUFUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gdk-pixbuf
-gdk-pixbuf:$(GDKPIXBUF)_$(ARCH).deb
-$(GDKPIXBUF): $(SPREZZ)/gdk-pixbuf/debian/changelog $(GDKPIXBUFORIG)
-	mkdir $@
-	tar xJvf $(GDKPIXBUFORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(HARFBUZZUP).tar.gz
