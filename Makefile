@@ -6713,6 +6713,14 @@ $(PANGOMM): $(SPREZZ)/pangomm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf pangomm-$(pangomm_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gtkmm3
+gtkmm3:$(GTKMM3)_$(ARCH).deb
+$(GTKMM3): $(SPREZZ)/gtkmm3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gtkmm-$(gtkmm3_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: poppler
 poppler:$(POPPLER)_$(ARCH).deb
 $(POPPLER): $(SPREZZ)/poppler/debian/changelog
