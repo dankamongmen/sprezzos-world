@@ -6786,7 +6786,7 @@ $(SUPERTUXKART): $(SPREZZ)/supertuxkart/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf supertuxkart-$(supertuxkart_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf supertuxkart-$(supertuxkart_UPVER).tar.bz2 $(TARARGS) $@
 
 FETCHED:=$(FETCHED) $(IBUSUP).tar.gz
 $(IBUSUP).tar.gz:
