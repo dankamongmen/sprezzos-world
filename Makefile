@@ -241,14 +241,25 @@ $(CHEESE): $(SPREZZ)/cheese/debian/changelog
 .PHONY: apitrace
 apitrace:$(APITRACE)_$(ARCH).deb
 $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	git clone git://github.com/apitrace/apitrace.git $@
-	tar cJf apitrace-$(apitrace_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	tar cJf apitrace-$(apitrace_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf apitrace-$(apitrace_UPVER).tar.xz apitrace_$(apitrace_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+.PHONY: xbmc
+xbmc:$(XBMC)_$(ARCH).deb
+$(XBMC): $(SPREZZ)/xbmc/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	git clone git://github.com/xbmc/xbmc.git $@
+	tar cJf xbmc-$(xbmc_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf xbmc-$(xbmc_UPVER).tar.xz xbmc_$(xbmc_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: gnome-xcf-thumbnailer
 gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
 $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	git clone git@github.com:dankamongmen/gnome-xcf-thumbnailer.git $@
 	tar cJf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz gnome-xcf-thumbnailer_$(gnome-xcf-thumbnailer_UPVER).orig.tar.xz
@@ -257,6 +268,7 @@ $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
 .PHONY: growlight
 growlight: $(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	git clone git://github.com/dankamongmen/growlight.git $@
 	tar cJf $(GROWLIGHTORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
@@ -264,6 +276,7 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 .PHONY: reportbug
 reportbug: $(REPORTBUG)_$(ARCH).deb
 $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	git clone git://anonscm.debian.org/reportbug/reportbug.git $@
 	tar cJf reportbug-$(reportbug_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf reportbug-$(reportbug_UPVER).tar.xz reportbug_$(reportbug_UPVER).orig.tar.xz
@@ -272,6 +285,7 @@ $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
 .PHONY: mcelog
 mcelog:$(MCELOG)_$(ARCH).deb
 $(MCELOG): $(SPREZZ)/mcelog/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	git clone git://git.kernel.org/pub/scm/utils/cpu/mce/mcelog.git $@
 	tar cJf $(MCELOGORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
@@ -376,12 +390,6 @@ $(FBV): $(SPREZZ)/fbv/debian/changelog
 	git clone git@github.com:dankamongmen/nfbv.git $@
 	tar cJf nfbv-$(fbv_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf nfbv-$(fbv_UPVER).tar.xz nfbv_$(fbv_UPVER).orig.tar.xz
-	cp -r $(<D) $@/
-
-.PHONY: xbmc
-xbmc:$(XBMC)_$(ARCH).deb
-$(XBMC): $(SPREZZ)/xbmc/debian/changelog
-	git clone git://github.com/xbmc/xbmc.git $@
 	cp -r $(<D) $@/
 
 .PHONY: gyp
