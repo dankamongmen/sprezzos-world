@@ -4,7 +4,7 @@ $(EPIPHANYBROWSER): $(SPREZZ)/epiphany-browser/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf epiphany-browser-$(epiphany-browser_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf epiphany-$(epiphany-browser_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: evolution
 evolution:$(EVOLUTION)_$(ARCH).deb
