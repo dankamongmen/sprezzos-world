@@ -5724,8 +5724,8 @@ $(STARTUPNOTIFICATION): $(SPREZZ)/startup-notification/debian/changelog
 	tar xzvf startup-notification-$(startup-notification_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: systemd
-systemd:$(systemd)_$(ARCH).deb
-$(systemd): $(SPREZZ)/systemd/debian/changelog
+systemd:$(SYSTEMD)_$(ARCH).deb
+$(SYSTEMD): $(SPREZZ)/systemd/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
