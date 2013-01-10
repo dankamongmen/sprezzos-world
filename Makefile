@@ -1027,6 +1027,14 @@ $(FLICKCURL): $(SPREZZ)/flickcurl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf flickcurl-$(flickcurl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ftgl
+ftgl:$(FTGL)_$(ARCH).deb
+$(FTGL): $(SPREZZ)/ftgl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ftgl-$(ftgl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: blender
 blender:$(BLENDER)_$(ARCH).deb
 $(BLENDER): $(SPREZZ)/blender/debian/changelog
