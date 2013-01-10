@@ -6663,7 +6663,7 @@ $(PANGO): $(SPREZZ)/pango/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf pango-$(pango_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf pango-$(pango_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: pangomm
 pangomm:$(PANGOMM)_$(ARCH).deb
