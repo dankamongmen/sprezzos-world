@@ -50,8 +50,6 @@ BRASEROORIG:=brasero_$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1)
 FBIUP:=fbida-$(shell echo $(fbi_UPVER) | cut -d= -f2- | cut -d- -f1)
 FBTERMUP:=nfbterm-$(shell echo $(fbterm_UPVER) | cut -d= -f2 | cut -d- -f1)
 FBTERMORIG:=fbterm_$(shell echo $(fbterm_UPVER) | cut -d- -f1).orig.tar.gz
-FONTCONFIGUP:=fontconfig-$(shell echo $(fontconfig_UPVER) | cut -d- -f1)
-FONTCONFIGORIG:=fontconfig_$(shell echo $(fontconfig_UPVER) | cut -d- -f1).orig.tar.gz
 GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1)
 GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1).orig.tar.xz
 SPLORIG:=spl_$(shell echo $(spl_UPVER) | cut -d- -f1).orig.tar.xz
@@ -81,7 +79,7 @@ SOCATORIG:=socat_$(shell echo $(socat_UPVER) | cut -d- -f1).orig.tar.bz2
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -j8 -k$(DEBKEY)
+	cd $< && debuild -k$(DEBKEY)
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -516,6 +514,14 @@ $(LENSFUN): $(SPREZZ)/lensfun/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf lensfun-$(lensfun_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: luminance-hdr
+luminance-hdr:$(LUMINANCEHDR)_$(ARCH).deb
+$(LUMINANCEHDR): $(SPREZZ)/luminance-hdr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf luminance-hdr-$(luminance-hdr_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: lvm2
 lvm2:$(LVM2)_$(ARCH).deb
@@ -1756,6 +1762,14 @@ $(FINDUTILS): $(SPREZZ)/findutils/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf findutils-$(findutils_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: fontconfig
+fontconfig:$(FONTCONFIG)_$(ARCH).deb
+$(FONTCONFIG): $(SPREZZ)/fontconfig/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf fontconfig-$(fontconfig_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: fonts-awesome
 fonts-awesome:$(FONTSAWESOME)_$(ARCH).deb
@@ -6553,20 +6567,6 @@ fbterm:$(FBTERM)_$(ARCH).deb
 $(FBTERM): $(SPREZZ)/fbterm/debian/changelog $(FBTERMORIG)
 	mkdir $@
 	tar xzvf $(FBTERMORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(FONTCONFIGUP).tar.gz
-$(FONTCONFIGUP).tar.gz:
-	wget -nc -O$@ http://www.freedesktop.org/software/fontconfig/release/$@
-
-$(FONTCONFIGORIG): $(FONTCONFIGUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: fontconfig
-fontconfig:$(FONTCONFIG)_$(ARCH).deb
-$(FONTCONFIG): $(SPREZZ)/fontconfig/debian/changelog $(FONTCONFIGORIG)
-	mkdir $@
-	tar xzvf $(FONTCONFIGORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(HARFBUZZUP).tar.gz
