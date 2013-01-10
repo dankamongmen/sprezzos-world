@@ -4970,8 +4970,8 @@ $(OPENGTL): $(SPREZZ)/opengtl/debian/changelog
 	tar xjvf OpenGTL-$(opengtl_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: openimageio
-openimageio:$(openimageio)_$(ARCH).deb
-$(openimageio): $(SPREZZ)/openimageio/debian/changelog
+openimageio:$(OPENIMAGEIO)_$(ARCH).deb
+$(OPENIMAGEIO): $(SPREZZ)/openimageio/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
