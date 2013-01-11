@@ -1,0 +1,158 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+# Copyright 2003-2010 Jonas Smedegaard <dr@jones.dk>
+# Copyright 2009-2010 Frank Lin PIAT <fpiat@klabs.be>
+# Description: Main Debian packaging script for MoinMoin
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+include /usr/share/cdbs/1/rules/upstream-tarball.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/class/python-distutils.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+DEB_UPSTREAM_URL = http://static.moinmo.in/files
+DEB_UPSTREAM_TARBALL_BASENAME_MANGLE = s/~(alpha|beta|rc)/\1/
+DEB_UPSTREAM_TARBALL_MD5 = adfa15e3e37cf26b4b014f209959e9d9
+
+# Use local fork handling variations in owner names and license strings
+DEB_COPYRIGHT_CHECK_SCRIPT = debian/licensecheck
+
+pkg = python-moinmoin
+
+libdir = /usr/share/moin/server
+DEB_PYTHON_PRIVATE_MODULES_DIRS_$(pkg_data) = /usr/share/moin/data/plugin /usr/share/moin/server
+# Grrr - this is needed thanks to broken defaults with new python policy!
+DEB_PYTHON_DESTDIR = $(CURDIR)/debian/$(cdbs_curpkg)
+
+DEB_MAKE_CHECK_TARGET = test
+DEB_COMPRESS_EXCLUDE = .py
+DEB_INSTALL_EXAMPLES_$(pkg) += wikiserver.py wikiconfig.py wiki/config debian/examples/*
+DEB_INSTALL_DOCS_ALL += debian/README.Debian
+DEB_INSTALL_DOCS_$(pkg) += docs/README.migration docs/INSTALL.html
+DEB_INSTALL_DOCS_$(pkg) += docs/UPDATE.html docs/REQUIREMENTS
+DEB_INSTALL_CHANGELOGS_ALL = docs/CHANGES
+DEB_INSTALL_MANPAGES_$(pkg) += debian/moin-mass-migrate.8 debian/moin-update-wikilist.1 debian/moin.1
+
+# Grab staticpath from some config file for use in our documentation
+# (Make ignores exitlevel, so doublecheck result)
+grep -q "url_prefix_static = '/moin_static' + version.release_short" MoinMoin/config/__init__.py || echo "Test failed"
+staticpath := $(shell sed -n -e "s|^\s*release_short\s*=\s*'\([^']*\)'.*|/moin_static\1|p" MoinMoin/version.py)
+$(if $(staticpath),,$(error Failed to resolve staticpath))
+
+SEDRULE_CONTENT = -e 's,__STATICPATH__,$(staticpath),g'
+
+# just being lazy...
+datadir = /usr/share/moin
+
+# Create (and cleanup) files, expanding variables static per build
+update-config:: pre-build
+	for file in `find debian -maxdepth 2 -type f -name '*.in' -not -name control.in -not -name control.in.in -not -name POTFILES.in`; do \
+		targetfile=`echo $$file | sed -e 's/\\.in$$//'`; \
+		sed $(SEDRULE_CONTENT) <$$file >$$targetfile; \
+	done
+
+clean::
+	for file in `find debian -maxdepth 2 -type f -name '*.in' -not -name control.in -not -name control.in.in -not -name README.source.in -not -name POTFILES.in -not -name 'watch.in'`; do \
+		targetfile=`echo $$file | sed -e 's/\\.in$$//'`; \
+		rm -f $$targetfile; \
+	done
+
+# Ensure proper hash-bang in Python scripts (Python Policy 0.9.0.0 §3.1)
+binary-fixup/$(pkg)::
+	egrep -r -l -Z '^#! ?/usr/bin/(env )?python[[:print:]]*$$' debian/$(cdbs_curpkg)$(datadir)/server/* debian/$(cdbs_curpkg)/usr/share/doc/* \
+		| xargs -r -0 perl -pi -e 's,^#! ?/usr/bin/(env )?python[[:print:]]*$$,#!/usr/bin/python$(cdbs_python_nondefault_version),'
+
+# Strip notes in underlay about editing only on moinmaster.
+binary-fixup/$(pkg)::
+	sh debian/process_language_pages debian/$(cdbs_curpkg)
+
+# moin is modular, insert sub-commands description
+common-build-indep::
+	bash debian/tweak-moin-manpage debian/moin.1.template debian/moin.1
+
+# Make sure scripts are executable
+binary-fixup/$(pkg)::
+	egrep -r -l -Z '^#! ?/usr/bin/(env )?python[[:print:]]*$$' debian/$(cdbs_curpkg)$(libdir) \
+		| xargs -r -0 chmod a+x
+
+# Include Moinmoin Desktop editions files.
+binary-fixup/$(pkg)::
+	mkdir -p debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/examples/desktop-edition
+	cp wikiserver.py wikiconfig.py debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/examples/desktop-edition
+	chmod a+x debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/examples/wikiserver-init.sh
+
+# Make sure translations are up-to-date
+common-build-indep:: debian/stamp-update-translations
+
+debian/stamp-update-translations: common-configure-indep
+	cd MoinMoin/i18n && make
+	touch debian/stamp-update-translations
+
+clean::
+	cd MoinMoin/i18n && make clean
+	rm -f MoinMoin/i18n/meta.py
+	rm -f debian/stamp-update-translations
+	rm -f debian/moin.1
+
+# Setup system wide farmconfig.
+binary-fixup/$(pkg)::
+	mkdir -p debian/$(cdbs_curpkg)/etc/moin
+	for file in `find debian/$(cdbs_curpkg)$(datadir)/config/wikifarm -type f -print`; do \
+		sed -f debian/configtweaks.sed $$file > debian/$(cdbs_curpkg)/etc/moin/$${file##*/}; \
+	done
+	for file in `find debian/$(cdbs_curpkg)$(datadir)/server -type f -printf '%f\n'`; do \
+		cat debian/$(cdbs_curpkg)$(datadir)/server/$$file | sed -f debian/servertweaks.sed > debian/$(cdbs_curpkg)$(datadir)/server/$$file.new; \
+		chmod --reference=debian/$(cdbs_curpkg)$(datadir)/server/$$file debian/$(cdbs_curpkg)$(datadir)/server/$$file.new; \
+		mv -f debian/$(cdbs_curpkg)$(datadir)/server/$$file.new debian/$(cdbs_curpkg)$(datadir)/server/$$file; \
+	done
+
+# Use systemwide word file as main dictionary
+binary-fixup/$(pkg)::
+	mkdir -p  debian/$(cdbs_curpkg)/usr/share/pyshared/MoinMoin/
+	ln -s /etc/moin/words debian/$(cdbs_curpkg)/usr/share/pyshared/MoinMoin/
+	ln -s /usr/share/dict/words debian/$(cdbs_curpkg)/etc/moin/words
+
+# Move underlay to /usr/share/moin
+install/$(pkg)::
+	mkdir -p debian/$(cdbs_curpkg)$(datadir)
+	mv debian/$(cdbs_curpkg)/usr/lib/python*/*-packages/MoinMoin/web/static/htdocs debian/$(cdbs_curpkg)$(datadir)
+	ln -s debian/$(cdbs_curpkg)$(datadir)/htdocs debian/$(cdbs_curpkg)/usr/lib/python*/*-packages/MoinMoin/web/static/
+
+# Strip TwikiDrawPlugin as we need to compile from source
+binary-fixup/$(pkg)::
+	rm -f debian/$(cdbs_curpkg)$(datadir)/htdocs/applets/TWikiDrawPlugin/twikidraw.jar
+	echo "This applet has not yet been packaged for Debian. for now it is available at http://debian.jones.dk/auryn/pool-all/official/moin/twikidraw/" > debian/$(cdbs_curpkg)$(datadir)/htdocs/applets/TWikiDrawPlugin/README
+
+# Strip FCKeditor, as it's provided by packages fckeditor
+binary-fixup/$(pkg)::
+	rm -rf debian/$(cdbs_curpkg)$(datadir)/htdocs/applets/FCKeditor/*
+	echo "This applet is provided by Debian's fckeditor package." > debian/$(cdbs_curpkg)$(datadir)/htdocs/applets/FCKeditor/README
+	echo "More info at /usr/share/doc/$(cdbs_curpkg)/README.Debian(.gz)" >> debian/$(cdbs_curpkg)$(datadir)/htdocs/applets/FCKeditor/README
+
+# Strip AnyWikiDrawForTWiki as needs to compile from source
+binary-fixup/$(pkg)::
+	rm -rf debian/$(cdbs_curpkg)$(datadir)/htdocs/applets/anywikidraw/*
+	echo "This applet has not yet been packaged for Debian." > debian/$(cdbs_curpkg)$(datadir)/htdocs/applets/anywikidraw/README
+
+# Needed for our packaging
+CDBS_BUILD_DEPENDS += , unzip, zip
+
+# Needed (always, often or sometimes) at runtime
+CDBS_DEPENDS += python-werkzeug, python-pygments, python-parsedatetime, python-recaptcha
+CDBS_RECOMMENDS += , default-mta | mail-transport-agent, python-xapian, python-xappy, fckeditor
+CDBS_RECOMMENDS += , libapache2-mod-wsgi | httpd-cgi
+CDBS_SUGGESTS += , python-flup
+CDBS_SUGGESTS += , python-4suite-xml, python-xml, python-gdchart, python-docutils, python-pyxmpp, python-openid, python-tz, python-ldap, python-mysqldb
+CDBS_SUGGESTS += , miscfiles | wordlist, antiword, catdoc, cifs-utils, poppler-utils | xpdf-utils, docbook-dsssl

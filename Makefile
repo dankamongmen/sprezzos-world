@@ -72,8 +72,6 @@ NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_UPVER) | cut -d- -
 FREI0RORIG:=frei0r_$(shell echo $(frei0r_UPVER) | cut -d- -f1).orig.tar.xz
 PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_UPVER) | cut -d- -f1)
 PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
-SOCATUP:=socat-$(shell echo $(socat_UPVER) | cut -d- -f1 | tr \~ -)
-SOCATORIG:=socat_$(shell echo $(socat_UPVER) | cut -d- -f1).orig.tar.bz2
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
@@ -640,6 +638,14 @@ $(SIGNON): $(SPREZZ)/signon/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf signon-$(signon_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: sox
+sox:$(SOX)_$(ARCH).deb
+$(SOX): $(SPREZZ)/sox/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf sox-$(sox_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: swig
 swig:$(SWIG2.0)_$(ARCH).deb
@@ -6766,20 +6772,6 @@ $(SLANG2): $(SPREZZ)/slang2/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf slang-$(slang2_UPVER).tar.bz2 $(TARARGS) $@
-
-FETCHED:=$(FETCHED) $(SOCATUP).tar.bz2
-$(SOCATUP).tar.bz2:
-	wget -nc -O$@ http://www.dest-unreach.org/socat/download/$(@F)
-
-$(SOCATORIG): $(SOCATUP).tar.bz2
-	ln -sf $< $@
-
-.PHONY: socat
-socat:$(SOCAT)_$(ARCH).deb
-$(SOCAT): $(SPREZZ)/socat/debian/changelog $(SOCATORIG)
-	mkdir $@
-	tar xjvf $(SOCATORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
 
 .PHONY: subversion
 subversion:$(subversion)_$(ARCH).deb

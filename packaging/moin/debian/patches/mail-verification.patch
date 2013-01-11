@@ -1,0 +1,257 @@
+Description: Add support for requiring new accounts to be verified by email
+Origin: http://moinmo.in/MoinMoinPatch/VerifyAccountCreationByEmail
+Author: Steve McIntyre
+Last-Update: 2012-07-29
+
+--- a/MoinMoin/action/newaccount.py	2012-04-22 18:17:14.000000000 +0100
++++ b/MoinMoin/action/newaccount.py	2012-04-25 17:26:50.066917370 +0100
+@@ -12,7 +12,29 @@
+ from MoinMoin.security.textcha import TextCha
+ from MoinMoin.security.sec_recaptcha import ReCaptcha
+ from MoinMoin.auth import MoinAuth
++from MoinMoin.mail import sendmail
++import subprocess
+ 
++def _send_verification_mail(request, user):
++    _ = request.getText
++    querystr = {'action': 'verifyaccount',
++                'i': user.id,
++                'v': user.account_verification}
++    page = Page(request, "FrontPage")
++    pagelink = "%(link)s" % {'link': request.getQualifiedURL(page.url(request, querystr))}
++    subject = _('[%(sitename)s] account verification check for new user %(username)s') % {
++            'sitename': request.page.cfg.sitename or request.url_root,
++            'username': user.name,
++        }
++
++    text = "Please verify your account by visiting this URL:\n\n  %(link)s\n\n" % {
++        'link': pagelink}
++
++    mailok, msg = sendmail.sendmail(request, user.email, subject, text, request.cfg.mail_from)
++    if mailok:
++        return (1, _("Verification message sent to %(email)s" % {'email': user.email}))
++    else:
++        return (mailok, msg)
+ 
+ def _create_user(request):
+     _ = request.getText
+@@ -46,8 +67,18 @@
+ space between words. Group page name is not allowed.""", wiki=True) % wikiutil.escape(theuser.name)
+ 
+     # Name required to be unique. Check if name belong to another user.
+-    if user.getUserId(request, theuser.name):
+-        return _("This user name already belongs to somebody else.")
++    userid = user.getUserId(request, theuser.name)
++    if userid:
++        if request.cfg.require_email_verification and theuser.account_verification:
++            resendlink = request.page.url(request, querystr={
++                'action': 'newaccount',
++                'i': userid,
++                'resend': '1'})
++            return _('This user name already belongs to somebody else. If this is a new account'
++                     ' and you need another verification link, try <a href="%s">'
++                     'sending another one</a>. ' % resendlink)
++        else:
++            return _("This user name already belongs to somebody else.")
+ 
+     # try to get the password and pw repeat
+     password = form.get('password1', '')
+@@ -77,18 +108,49 @@
+     email = wikiutil.clean_input(form.get('email', ''))
+     theuser.email = email.strip()
+     if not theuser.email and 'email' not in request.cfg.user_form_remove:
+-        return _("Please provide your email address. If you lose your"
+-                 " login information, you can get it by email.")
++        if request.cfg.require_email_verification:
++            return _("Please provide your email address. You will need it"
++                     " to be able to confirm your registration.")
++        else:
++            return _("Please provide your email address. If you lose your"
++                     " login information, you can get it by email.")
+ 
+     # Email should be unique - see also MoinMoin/script/accounts/moin_usercheck.py
+     if theuser.email and request.cfg.user_email_unique:
+-        if user.get_by_email_address(request, theuser.email):
+-            return _("This email already belongs to somebody else.")
++        emailuser = user.get_by_email_address(request, theuser.email)
++        if emailuser:
++            if request.cfg.require_email_verification and theuser.account_verification:
++                resendlink = request.page.url(request, querystr={
++                    'action': 'newaccount',
++                    'i': emailuser.id,
++                    'resend': '1'})
++                return _('This email already belongs to somebody else. If this is a new account'
++                         ' and you need another verification link, try <a href="%s">'
++                         'sending another one</a>. ' % resendlink)
++            else:
++                return _("This email already belongs to somebody else.")
++
++    # Send verification links if desired
++    if request.cfg.require_email_verification:        
++        if request.cfg.external_creation_check:
++            p = subprocess.Popen([request.cfg.external_creation_check,
++                                  theuser.name,
++                                  theuser.email,
++                                  theuser.account_creation_host], shell=False, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
++            (create_error, ignored) = p.communicate(None)
++            if create_error:
++                request.theme.add_msg(_("Account creation failed: %s." % create_error), "error")
++        mailok, msg = _send_verification_mail(request, theuser)
++        if mailok:
++            result = _("User account created! Use the link in your email (%s) to verify your account"
++                       " then you will be able to use this account to login..." % theuser.email)
++        else:
++            request.theme.add_msg(_("Unable to send verification mail, %s. Account creation aborted." % msg), "error")
++    else:
++        result = _("User account created! You can use this account to login now...")
+ 
+     # save data
+     theuser.save()
+-
+-    result = _("User account created! You can use this account to login now...")
+     return result
+ 
+ 
+@@ -186,9 +240,20 @@
+ 
+     submitted = form.has_key('create')
+ 
++    uid = request.values.get('i', None)
++    resend = request.values.get('resend', None)
++
+     if submitted: # user pressed create button
+         request.theme.add_msg(_create_user(request), "dialog")
+         return page.send_page()
++    if resend and uid:
++        theuser = user.User(request, id=uid)
++        mailok, msg = _send_verification_mail(request, theuser)
++        if mailok:
++            request.theme.add_msg(_("Verification message re-sent to %s" % theuser.email), "dialog")
++        else:
++            request.theme.add_msg(_("Unable to re-send verification message, %s" % msg), "dialog")
++        return page.send_page()
+     else: # show create form
+         request.theme.send_title(_("Create Account"), pagename=pagename)
+ 
+--- a/MoinMoin/action/verifyaccount.py	1970-01-01 01:00:00.000000000 +0100
++++ b/MoinMoin/action/verifyaccount.py	2012-04-23 18:59:45.107695958 +0100
+@@ -0,0 +1,64 @@
++# -*- coding: iso-8859-1 -*-
++"""
++    MoinMoin - verify account action
++
++    @copyright: 2012 Steve McIntyre
++    @license: GNU GPL, see COPYING for details.
++"""
++
++from MoinMoin import user, wikiutil
++from MoinMoin.Page import Page
++from MoinMoin.widget import html
++from MoinMoin.auth import MoinAuth
++
++def execute(pagename, request):
++    found = False
++    for auth in request.cfg.auth:
++        if isinstance(auth, MoinAuth):
++            found = True
++            break
++
++    if not found:
++        # we will not have linked, so forbid access
++        request.makeForbidden(403, 'No MoinAuth in auth list')
++        return
++
++    page = Page(request, "FrontPage")
++    _ = request.getText
++
++    if not request.cfg.require_email_verification:
++        result = _("Verification not configured!")
++        request.theme.add_msg(result, "error")
++        return page.send_page()
++
++    uid = request.values.get('i', None)
++    verify = request.values.get('v', None)
++
++    # Grab user profile
++    theuser = user.User(request, id=uid)
++
++    # Compare the verification code
++    if not theuser.valid:
++        result = _("Unable to verify user account i=%s v=%s") % (uid, verify)
++        request.theme.add_msg(result, "error")
++        return page.send_page()
++
++    if not theuser.account_verification:
++        result = _("User account has already been verified!")
++        request.theme.add_msg(result, "error")
++        return page.send_page()
++
++    if theuser.account_verification != verify:
++        result = _("Unable to verify user account i=%s v=%s") % (uid, verify)
++        request.theme.add_msg(result, "error")
++        return page.send_page()
++
++    # All looks sane. Mark verification as done, save data
++    theuser.account_verification = ""
++    theuser.save()
++
++    loginlink = request.page.url(request, querystr={'action': 'login'})
++    result = _('User account verified! You can use this account to <a href="%s">login</a> now...' % loginlink)
++    request.theme.add_msg(result, "dialog")
++    return page.send_page()
++
+--- a/MoinMoin/auth/__init__.py	2012-02-07 21:36:47.000000000 +0000
++++ b/MoinMoin/auth/__init__.py	2012-04-25 16:20:15.751423108 +0100
+@@ -242,8 +242,15 @@
+         if username and not password:
+             return ContinueLogin(user_obj, _('Missing password. Please enter user name and password.'))
+ 
+-        u = user.User(request, name=username, password=password, auth_method=self.name)
++        u = user.User(request, name=username, password=password, auth_method=self.name)            
+         if u.valid:
++            try:
++                verification = u.account_verification
++            except:
++                verification = False
++            if request.cfg.require_email_verification and verification:
++                logging.debug("%s: could not authenticate user %r (not verified yet)" % (self.name, username))
++                return ContinueLogin(user_obj, _("User account not verified yet."))
+             logging.debug("%s: successfully authenticated user %r (valid)" % (self.name, u.name))
+             return ContinueLogin(u)
+         else:
+--- a/MoinMoin/config/multiconfig.py	2012-04-22 18:17:14.000000000 +0100
++++ b/MoinMoin/config/multiconfig.py	2012-04-23 14:26:10.035695888 +0100
+@@ -1040,6 +1040,10 @@
+ 
+     ('userprefs_disabled', [],
+      "Disable the listed user preferences plugins."),
++    ('require_email_verification', False ,
++     "Require verification of new user accounts."),
++    ('external_creation_check', None,
++     "Name of external program to call for checking new account creation."),
+   )),
+   # ==========================================================================
+   'various': ('Various', None, (
+--- a/MoinMoin/user.py	2012-04-22 18:17:14.000000000 +0100
++++ b/MoinMoin/user.py	2012-04-23 14:27:05.876196152 +0100
+@@ -22,6 +22,7 @@
+ 
+ import os, time, codecs, base64
+ import md5crypt
++import uuid
+ 
+ try:
+     import crypt
+@@ -355,6 +356,12 @@
+             self.id = self.make_id()
+             if password is not None:
+                 self.enc_password = encodePassword(password)
++            self.account_creation_date = str(time.time())
++            self.account_creation_host = self._request.remote_addr
++            if self._cfg.require_email_verification:
++                self.account_verification = uuid.uuid4()
++            else:
++                self.account_verification = ""
+ 
+         # "may" so we can say "if user.may.read(pagename):"
+         if self._cfg.SecurityPolicy:

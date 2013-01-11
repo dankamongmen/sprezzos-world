@@ -1,0 +1,122 @@
+#!/usr/bin/perl
+# based on ikiwiki-mass-rebuild, part of ikiwiki, written by Joey Hess
+
+use warnings;
+use strict;
+
+sub supplemental_groups {
+	my $user=shift;
+
+	my @list;
+	while (my @fields=getgrent()) {
+		if (grep { $_ eq $user } split(' ', $fields[3])) {
+			push @list, $fields[2];
+		}
+	}
+
+	return @list;
+}
+
+sub samelists {
+	my %a=map { $_ => 1 } split(' ', shift());
+	my %b=map { $_ => 1 } split(' ', shift());
+
+	foreach my $i (keys %b) {
+		if (! exists $a{$i}) { 
+			return 0;
+		}
+	}
+	foreach my $i (keys %a) {
+		if (! exists $b{$i}) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+sub processline {
+	my $user=shift;
+	my $url=shift;
+	
+	if (! getpwnam("$user")) {
+		print STDERR "warning: user $user does not exist\n";
+		return
+	}
+	# TODO: add sanity check for $url
+	print "Processing moin wiki at $url as user $user ...\n";
+	# su is not used because it passes arguments through the shell,
+	# which might not be safe.
+	defined(my $pid = fork) or die "Can’t fork: $!";
+	if (! $pid) {
+		my ($uuid, $ugid) = (getpwnam($user))[2, 3];
+		my $grouplist=join(" ", $ugid, $ugid, supplemental_groups($user));
+		if (! samelists(($)=$grouplist), $grouplist)) {
+			die "failed to set egid $grouplist: $!";
+		}
+		$(=$ugid;
+		$<=$uuid;
+		$>=$uuid;
+		if ($< != $uuid || $> != $uuid || $( != $ugid) {
+			die "failed to drop permissions to $user";
+		}
+		%ENV=(
+			PATH => $ENV{PATH},
+			HOME => (getpwnam($user))[7],
+		);
+		exec("moin", "--wiki-url", $url, "migration", "data", @ARGV);
+		die "failed to run moin: $!";
+	}
+	waitpid($pid,0);
+	if ($?) {
+		print STDERR "Processing moin wiki at $url as user $user failed with code $?\n";
+	}
+}
+
+sub processlist {
+	my $file=shift;
+	my $forceuser=shift;
+
+	my $list;
+	open ($list, "<$file") || die "$file: $!";
+	while (<$list>) {
+		chomp;
+		s/^\s+//;
+		s/\s+$//;
+		next if /^#/ || ! length;
+
+		if (/^([^\s]+)\s+([^\s]+)$/) {
+			my $user=$1;
+			my $url=$2;
+			if (defined $forceuser && $forceuser ne $user) {
+				print STDERR "warning: in $file line $., attempt to set user to $user, but user forced to $forceuser. Skipping\n";
+			}
+			processline($user, $url);
+		# We once supported a middle config_dir value...
+		} elsif (/^([^\s]+)\s+([^\s]+)\s+([^\s]+)$/) {
+			my $user=$1;
+			my $url=$3;
+			print STDERR "\nWARNING: $file line $., deprecated 3-value format (not \"USER URL\"). Stripping middle value\n\n";
+			if (defined $forceuser && $forceuser ne $user) {
+				print STDERR "warning: in $file line $., attempt to set user to $user, but user forced to $forceuser. Skipping\n";
+			}
+			processline($user, $url);
+		}
+		elsif (/^([^\s]+)$/) {
+			my $user=$1;
+			my $home=(getpwnam($user))[7];
+			if (defined $home && -d $home) {
+				my $dotfile="$home/.moin/wikilist";
+				if (-e $dotfile) {
+					processlist($dotfile, $user);
+				}
+			}
+		}
+	}
+	close $list;
+}
+
+my $wikilist="/etc/moin/wikilist";
+
+if (-e $wikilist) {
+	processlist($wikilist);
+}
