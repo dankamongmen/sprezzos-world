@@ -179,6 +179,15 @@ $(LIBUNITYMISC): $(SPREZZ)/libunity-misc/debian/changelog
 		libunity_misc-$(libunity-misc_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: unity
+unity:$(UNITY)_$(ARCH).deb
+$(UNITY): $(SPREZZ)/unity/debian/changelog
+	bzr branch lp:unity $@
+	rm -rf $@/debian
+	tar cJf unity-$(unity_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf unity-$(unity_UPVER).tar.xz unity_misc-$(unity_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 # We're building from bzr in Makefile
 #.PHONY: nux
 #nux:$(NUX)_$(ARCH).deb
