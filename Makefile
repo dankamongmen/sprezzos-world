@@ -54,7 +54,6 @@ GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schema
 GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1).orig.tar.xz
 SPLORIG:=spl_$(shell echo $(spl_UPVER) | cut -d- -f1).orig.tar.xz
 ZFSORIG:=zfs_$(shell echo $(zfs_UPVER) | cut -d- -f1).orig.tar.xz
-GRUBUP:=grub-$(shell echo $(grub2_UPVER) | cut -d- -f1 | cut -d= -f2- | tr : -)
 HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
 HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_UPVER) | cut -d- -f1).orig.tar.gz
 IBUSUP:=ibus-$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1)
@@ -75,7 +74,7 @@ PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -j8 -k$(DEBKEY)
+	cd $< && debuild  -k$(DEBKEY)
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -2733,6 +2732,14 @@ $(GROFF): $(SPREZZ)/groff/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf groff-$(groff_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: grub2
+grub2:$(GRUB2)_$(ARCH).deb
+$(GRUB2): $(SPREZZ)/grub2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf grub2-$(grub2_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gsoap
 gsoap:$(GSOAP)_$(ARCH).deb
@@ -5520,6 +5527,14 @@ $(RUBY1.8): $(SPREZZ)/ruby1.8/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ruby1.8_$(ruby1.8_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ruby1.9.1
+ruby1.9.1:$(RUBY1.9.1)_$(ARCH).deb
+$(RUBY1.9.1): $(SPREZZ)/ruby1.9.1/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby1.9.1_$(ruby1.9.1_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: libraw
 libraw:$(LIBRAW)_$(ARCH).deb
 $(LIBRAW): $(SPREZZ)/libraw/debian/changelog
@@ -6865,17 +6880,6 @@ ibus:$(IBUS)_$(ARCH).deb
 $(IBUS): $(SPREZZ)/ibus/debian/changelog $(IBUSORIG)
 	mkdir -p $@
 	tar xzvf $(IBUSORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GRUBUP).tar.xz
-$(GRUBUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnu.org/gnu/grub/$(GRUBUP).tar.xz
-
-.PHONY: grub2
-grub2:$(GRUB2)_$(ARCH).deb
-$(GRUB2): $(SPREZZ)/grub2/debian/changelog $(GRUBUP).tar.xz
-	mkdir -p $@
-	tar xJvf $(GRUBUP).tar.xz $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) $(LIBXMLUP).tar.gz
