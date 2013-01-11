@@ -2374,6 +2374,14 @@ $(LIBGNOMEKEYRING): $(SPREZZ)/libgnome-keyring/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgnome-keyring_$(libgnome-keyring_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: libgpg-error
+libgpg-error:$(LIBGPGERROR)_$(ARCH).deb
+$(LIBGPGERROR): $(SPREZZ)/libgpg-error/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libgpg-error-$(libgpg-error_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libgpod
 libgpod:$(LIBGPOD)_$(ARCH).deb
 $(LIBGPOD): $(SPREZZ)/libgpod/debian/changelog
@@ -6481,6 +6489,14 @@ $(XSERVERXORGVIDEOMODESETTING): $(SPREZZ)/xserver-xorg-video-modesetting/debian/
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86-video-modesetting-$(xserver-xorg-video-modesetting_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-nouveau
+xserver-xorg-video-nouveau:$(XSERVERXORGVIDEONOUVEAU)_$(ARCH).deb
+$(XSERVERXORGVIDEONOUVEAU): $(SPREZZ)/xserver-xorg-video-nouveau/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-video-nouveau-$(xserver-xorg-video-nouveau_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xserver-xorg-video-vesa
 xserver-xorg-video-vesa:$(XSERVERXORGVIDEOVESA)_$(ARCH).deb
