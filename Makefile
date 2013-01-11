@@ -4983,6 +4983,14 @@ $(OPENCV): $(SPREZZ)/opencv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf OpenCV-$(opencv_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: openipmi
+openipmi:$(OPENIPMI)_$(ARCH).deb
+$(OPENIPMI): $(SPREZZ)/openipmi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf OpenIPMI-$(openipmi_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: openmpi
 openmpi:$(OPENMPI)_$(ARCH).deb
 $(OPENMPI): $(SPREZZ)/openmpi/debian/changelog
