@@ -1,0 +1,94 @@
+Debian-bug: #595034
+Upstream-bug: http://redmine.ruby-lang.org/issues/show/3779
+
+- in process.c (re-)start timer thread (after_exec) only in parent,
+  as in child we know for sure that there is only one thread.
+  The fix-up in child is performed slightly later in rb_thread_atfork().
+  Also unify linux with rest of the systems.
+  In 1.9 series the code is completely reworked.
+
+- in signal.c use pthread_sigmask instead of sigprocmask,
+  behaviour of sigprocmask is undefined in threaded programs, as stated in POSIX
+  (http://www.opengroup.org/onlinepubs/9699919799/functions/pthread_sigmask.html).
+  In 1.9 series the code already uses pthread_sigmask:
+
+  Sat Apr 24 00:41:52 2010  Yusuke Endoh  <mame@tsg.ne.jp>
+
+        * signal.c: use pthread_sigmask() instead of sigprocmask().
+          sigprocmask() is unspecified behavior on multi-thread programs.
+          [ruby-core:25217]
+
+--- a/process.c
++++ b/process.c
+@@ -1332,13 +1332,11 @@ rb_f_fork(obj)
+ 
+     before_exec();
+     pid = fork();
+-    after_exec();
++    if (pid != 0)
++      after_exec();
+ 
+     switch (pid) {
+       case 0:
+-#ifdef linux
+-	after_exec();
+-#endif
+ 	rb_thread_atfork();
+ 	if (rb_block_given_p()) {
+ 	    int status;
+--- a/signal.c
++++ b/signal.c
+@@ -545,7 +545,7 @@ sigsend_to_ruby_thread(int sig)
+ 
+ # ifdef HAVE_SIGPROCMASK
+     sigfillset(&mask);
+-    sigprocmask(SIG_BLOCK, &mask, &old_mask);
++    pthread_sigmask(SIG_BLOCK, &mask, &old_mask);
+ # else
+     mask = sigblock(~0);
+     sigsetmask(mask);
+@@ -843,7 +843,7 @@ trap_ensure(arg)
+ {
+     /* enable interrupt */
+ #ifdef HAVE_SIGPROCMASK
+-    sigprocmask(SIG_SETMASK, &arg->mask, NULL);
++    pthread_sigmask(SIG_SETMASK, &arg->mask, NULL);
+ #else
+     sigsetmask(arg->mask);
+ #endif
+@@ -857,7 +857,7 @@ rb_trap_restore_mask()
+ {
+ #if USE_TRAP_MASK
+ # ifdef HAVE_SIGPROCMASK
+-    sigprocmask(SIG_SETMASK, &trap_last_mask, NULL);
++    pthread_sigmask(SIG_SETMASK, &trap_last_mask, NULL);
+ # else
+     sigsetmask(trap_last_mask);
+ # endif
+@@ -919,7 +919,7 @@ sig_trap(argc, argv)
+     /* disable interrupt */
+ # ifdef HAVE_SIGPROCMASK
+     sigfillset(&arg.mask);
+-    sigprocmask(SIG_BLOCK, &arg.mask, &arg.mask);
++    pthread_sigmask(SIG_BLOCK, &arg.mask, &arg.mask);
+ # else
+     arg.mask = sigblock(~0);
+ # endif
+@@ -1011,7 +1011,7 @@ init_sigchld(sig)
+     /* disable interrupt */
+ # ifdef HAVE_SIGPROCMASK
+     sigfillset(&mask);
+-    sigprocmask(SIG_BLOCK, &mask, &mask);
++    pthread_sigmask(SIG_BLOCK, &mask, &mask);
+ # else
+     mask = sigblock(~0);
+ # endif
+@@ -1027,7 +1027,7 @@ init_sigchld(sig)
+ #if USE_TRAP_MASK
+ #ifdef HAVE_SIGPROCMASK
+     sigdelset(&mask, sig);
+-    sigprocmask(SIG_SETMASK, &mask, NULL);
++    pthread_sigmask(SIG_SETMASK, &mask, NULL);
+ #else
+     mask &= ~sigmask(sig);
+     sigsetmask(mask);

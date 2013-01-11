@@ -1,0 +1,259 @@
+#!/usr/bin/make -f
+
+ruby_ver = 1.8
+tcltk_ver = 8.4
+
+arch_name = $(subst linux-gnu,linux-,$(patsubst %linux-gnu,%linux,$(DEB_BUILD_GNU_TYPE)))
+ruby_libdir = usr/lib/ruby/$(ruby_ver)
+ruby_archdir = usr/lib/ruby/$(ruby_ver)/$(arch_name)
+bin_dir = usr/bin
+man_dir = usr/share/man/man1
+
+el_etc = etc/emacs/site-start.d
+
+examples_dir = $(CURDIR)/debian/ruby$(ruby_ver)-examples/usr/share/doc/ruby$(ruby_ver)-examples/examples
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/makefile.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+DEB_AUTO_UPDATE_AUTOCONF = YES
+
+CC = gcc-4.6 # see #674541; same version must be in Depends of ruby1.8-dev
+CFLAGS += -fno-strict-aliasing -g
+CXXFLAGS += -fno-strict-aliasing -g
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g -O0
+else
+	CFLAGS += -g -O2
+# Workaround for #634260. Can be removed when #635126 is fixed.
+ifeq ($(DEB_BUILD_ARCH),armel)
+	CFLAGS += -fno-tree-sra
+endif
+endif
+
+ifneq (,$(filter $(DEB_BUILD_GNU_CPU),i386 i486 i586 i686))
+	DEB_CONFIGURE_USER_FLAGS += --enable-frame-address
+endif
+ifeq ($(DEB_BUILD_GNU_CPU),i686)
+	DEB_CONFIGURE_USER_FLAGS += --with-extra-site-search-path='/usr/local/lib/site_ruby/$(ruby_ver)/i486-linux'
+	DEB_CONFIGURE_USER_FLAGS += --with-extra-search-path='/usr/lib/ruby/$(ruby_ver)/i486-linux'
+endif
+ifeq ($(DEB_BUILD_GNU_CPU),i486)
+	DEB_CONFIGURE_USER_FLAGS += --with-extra-site-search-path='/usr/local/lib/site_ruby/$(ruby_ver)/i386-linux'
+	DEB_CONFIGURE_USER_FLAGS += --with-extra-search-path='/usr/lib/ruby/$(ruby_ver)/i386-linux'
+endif
+DEB_CONFIGURE_USER_FLAGS += --program-suffix=$(ruby_ver)
+DEB_CONFIGURE_USER_FLAGS += --enable-pthread
+DEB_CONFIGURE_USER_FLAGS += --enable-shared
+DEB_CONFIGURE_USER_FLAGS += --enable-ipv6
+DEB_CONFIGURE_USER_FLAGS += --disable-rpath
+DEB_CONFIGURE_USER_FLAGS += --disable-install-doc
+DEB_CONFIGURE_USER_FLAGS += --with-sitedir='/usr/local/lib/site_ruby'
+DEB_CONFIGURE_USER_FLAGS += --with-default-kcode=none
+DEB_CONFIGURE_USER_FLAGS += --with-dbm-type=gdbm_compat
+DEB_CONFIGURE_USER_FLAGS += --with-tklib=tk$(tcltk_ver)
+DEB_CONFIGURE_USER_FLAGS += --with-tcllib=tcl$(tcltk_ver)
+DEB_CONFIGURE_USER_FLAGS += --with-tcl-include=/usr/include/tcl$(tcltk_ver)
+DEB_CONFIGURE_USER_FLAGS += --with-bundled-sha1
+DEB_CONFIGURE_USER_FLAGS += --with-bundled-md5
+DEB_CONFIGURE_USER_FLAGS += --with-bundled-rmd160
+
+DEB_MAKE_BUILD_TARGET = all test
+
+common-post-build-arch::
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	# avoid running drb tests -- they make buildds hang forever
+	mv test/drb _test_drb
+	-timeout 2h make test-all
+	mv _test_drb test/drb
+endif
+
+
+DEB_INSTALL_DOCS_libtcltk-ruby$(ruby_ver) += $(DEB_SRCDIR)/ext/tk/README*
+DEB_INSTALL_DOCS_libtcltk-ruby$(ruby_ver) += $(DEB_SRCDIR)/ext/tk/MANUAL*
+
+DEB_INSTALL_DIRS_ruby$(ruby_ver) += $(bin_dir)
+DEB_INSTALL_DIRS_ruby$(ruby_ver) += $(man_dir)
+DEB_INSTALL_DOCS_ruby$(ruby_ver) += 
+DEB_INSTALL_DOCS_ruby$(ruby_ver) += $(DEB_SRCDIR)/LEGAL
+DEB_INSTALL_DOCS_ruby$(ruby_ver) += $(DEB_SRCDIR)/README
+DEB_INSTALL_DOCS_ruby$(ruby_ver) += $(DEB_SRCDIR)/README.ja
+DEB_INSTALL_DOCS_ruby$(ruby_ver) += $(DEB_SRCDIR)/ToDo
+DEB_INSTALL_DOCS_ruby$(ruby_ver) += $(DEB_SRCDIR)/NEWS
+DEB_INSTALL_DOCS_ruby$(ruby_ver) += $(DEB_SRCDIR)/doc/NEWS-1.8.0
+DEB_INSTALL_MANPAGES_ruby$(ruby_ver) += debian/testrb$(ruby_ver).1
+DEB_INSTALL_MANPAGES_ruby$(ruby_ver) += debian/erb$(ruby_ver).1
+DEB_INSTALL_MANPAGES_ruby$(ruby_ver) += debian/rdoc$(ruby_ver).1
+DEB_INSTALL_MANPAGES_ruby$(ruby_ver) += debian/irb$(ruby_ver).1
+DEB_INSTALL_MANPAGES_ruby$(ruby_ver) += debian/ri$(ruby_ver).1
+
+DEB_INSTALL_DOCS_libruby$(ruby_ver) += $(DEB_SRCDIR)/lib/README
+DEB_INSTALL_DOCS_libruby$(ruby_ver) += $(DEB_SRCDIR)/NEWS
+DEB_INSTALL_DOCS_libruby$(ruby_ver) += $(DEB_SRCDIR)/doc/NEWS-1.8.0
+DEB_INSTALL_DOCS_libruby$(ruby_ver) += $(DEB_SRCDIR)/doc/*.rd*
+
+
+DEB_INSTALL_DOCS_ruby$(ruby_ver)-dev += $(DEB_SRCDIR)/README.EXT*
+
+DEB_COMPRESS_EXCLUDE = .rb .pl .py .scm .awk .dat
+DEB_SHLIBDEPS_INCLUDE = $(CURDIR)/debian/libruby$(ruby_ver)/usr/lib
+DEB_DH_MAKESHLIBS_ARGS_ALL = -m$(ruby_ver)
+
+binary-install/libtcltk-ruby$(ruby_ver)::
+	dh_movefiles -p$(cdbs_curpkg) \
+	    $(ruby_archdir)/tcltklib.so \
+	    $(ruby_archdir)/tkutil.so
+	sh $(CURDIR)/debian/extfixup_rubylibs.sh $(cdbs_curpkg) \
+	    $(DEB_SRCDIR)/ext/tk
+
+	install -d \
+	    $(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/examples
+	(cd $(DEB_SRCDIR)/ext/tk/sample && \
+	 tar cf - .) | \
+	  (cd $(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/examples && tar xf -)
+	chmod a-x $(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/examples/tkextlib/tktable/tcllogo.gif
+	mv $(CURDIR)/debian/tmp/usr/lib/ruby/$(ruby_ver)/tkextlib/SUPPORT_STATUS \
+	    $(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/
+	install \
+	    $(DEB_SRCDIR)/ext/tk/lib/README \
+	    $(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/README.lib
+	install \
+	    $(DEB_SRCDIR)/ext/tk/lib/tkextlib/tcllib/README \
+	    $(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/README.tcllib
+	install \
+	    $(DEB_SRCDIR)/ext/tk/lib/tkextlib/tkimg/README \
+	    $(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/README.tkimg
+
+binary-install/libruby$(ruby_ver):: $(patsubst %,binary-install/%,$(filter-out libruby$(ruby_ver),$(DEB_PACKAGES)))
+	install -d $(CURDIR)/debian/$(cdbs_curpkg)/$(ruby_archdir)
+	for s in $(CURDIR)/debian/$(cdbs_curpkg).*.in; do \
+	    sed -e 's/@@arch@@/$(arch_name)/g' \
+		< $$s > `expr $$s : '\(.*\)\.in$$'`; \
+	done
+
+	(cd $(CURDIR)/debian/tmp/usr/lib && \
+	    for f in libruby$(ruby_ver).so.$(ruby_ver)*; do \
+		echo usr/lib/$$f; \
+	    done) | xargs dh_movefiles -p$(cdbs_curpkg) 
+	dh_movefiles -p$(cdbs_curpkg) usr/lib/ruby/$(ruby_ver)
+
+	cd $(DEB_SRCDIR)/ext && \
+	for dir in \
+	    bigdecimal curses digest dl enumerator etc \
+	    fcntl iconv io nkf pty racc readline openssl sdbm socket \
+	    stringio strscan syck syslog thread zlib \
+	    ; \
+	do \
+	    install -d "$(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/$$dir"; \
+	    find $$dir \
+	  	    -name '*README*' -or -name '*.html*' -or \
+	  	    -name '*.txt*' -or -name '*.rd*' | \
+		while read fname; \
+		do \
+		    cp "$$fname" \
+		     	"$(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/$$dir"; \
+		done; \
+		rmdir "$(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/$$dir" 2>/dev/null || :; \
+	    done
+
+binary-install/ruby$(ruby_ver)-dev::
+	dh_movefiles -p$(cdbs_curpkg) \
+	    usr/lib/libruby$(ruby_ver).so \
+	    usr/lib/libruby$(ruby_ver)-static.a \
+	    usr/lib/ruby/$(ruby_ver)/mkmf.rb
+	(cd $(CURDIR)/debian/tmp/usr/lib/ruby/$(ruby_ver)/$(arch_name) && \
+	    for h in *.h; do \
+		echo usr/lib/ruby/$(ruby_ver)/$(arch_name)/$$h; \
+		chmod a-x $$h; \
+	    done) | xargs dh_movefiles -p$(cdbs_curpkg)
+
+binary-install/ruby$(ruby_ver)::
+	dh_movefiles -p$(cdbs_curpkg) \
+	    usr/bin/ruby$(ruby_ver) \
+	    usr/bin/erb$(ruby_ver) \
+	    usr/bin/testrb$(ruby_ver) \
+	    usr/bin/rdoc$(ruby_ver) \
+	    usr/bin/irb$(ruby_ver) \
+	    usr/bin/ri$(ruby_ver) \
+	    usr/share/man/man1/ruby$(ruby_ver).1
+
+binary-post-install/ri$(ruby_ver)::
+ifeq (,$(filter nordoc,$(DEB_BUILD_OPTIONS)))
+	$(DEB_MAKE_INVOKE) install-doc DESTDIR=$(CURDIR)/debian/$(cdbs_curpkg)
+endif
+
+binary-post-install/ruby$(ruby_ver)-examples::
+	install -d $(examples_dir)/bigdecimal
+	cp -a $(DEB_SRCDIR)/ext/bigdecimal/sample/* $(examples_dir)/bigdecimal
+	install -d $(examples_dir)/curses
+	cd $(DEB_SRCDIR)/ext/curses && \
+	  cp hello.rb mouse.rb rain.rb view.rb view2.rb \
+	    $(examples_dir)/curses
+#	install -d $(examples_dir)/digest
+#	install -d $(examples_dir)/dl
+#	install -d $(examples_dir)/enumerator
+#	install -d $(examples_dir)/etc
+#	install -d $(examples_dir)/fcntl
+#	install -d $(examples_dir)/iconv
+#	install -d $(examples_dir)/io
+#	install -d $(examples_dir)/nkf
+	install -d $(examples_dir)/pty
+	cd $(DEB_SRCDIR)/ext/pty && \
+	  cp expect_sample.rb script.rb shl.rb \
+	    $(examples_dir)/pty
+#	install -d $(examples_dir)/racc
+#	install -d $(examples_dir)/sdbm
+#	install -d $(examples_dir)/socket
+#	install -d $(examples_dir)/stringio
+#	install -d $(examples_dir)/strscan
+#	install -d $(examples_dir)/syck
+#	install -d $(examples_dir)/syslog
+#	install -d $(examples_dir)/zlib
+
+	(cd $(DEB_SRCDIR)/sample && tar cf - .) | \
+	  (cd $(examples_dir) && tar xf -)
+
+$(patsubst %,binary-post-install/%,$(DEB_PACKAGES))::
+	bash $(CURDIR)/debian/fixshebang.sh ruby$(ruby_ver) \
+	    '$(CURDIR)/debian/$(cdbs_curpkg)/$(bin_dir)'
+	bash $(CURDIR)/debian/fixshebang.sh ruby$(ruby_ver) \
+	    '$(CURDIR)/debian/$(cdbs_curpkg)/usr/share/doc/$(cdbs_curpkg)/examples'
+	sh $(CURDIR)/debian/rmshebang.sh \
+	    '$(CURDIR)/debian/$(cdbs_curpkg)/$(ruby_libdir)'
+
+clean::
+	rm -f \
+	    .installed.list \
+	    configure \
+	    parse.c \
+	    debian/libruby$(ruby_ver).postinst \
+	    debian/libruby$(ruby_ver).prerm
+
+	if [ -f $(DEB_SRCDIR)/config.guess.cdbs-orig ]; \
+	then \
+	    mv $(DEB_SRCDIR)/config.guess.cdbs-orig \
+		$(DEB_SRCDIR)/config.guess; \
+	fi
+	if [ -f $(DEB_SRCDIR)/config.sub.cdbs-orig ]; \
+	then \
+	    mv $(DEB_SRCDIR)/config.sub.cdbs-orig \
+		$(DEB_SRCDIR)/config.sub; \
+	fi
+
+PACKAGE = ruby1.8
+SRC_VERSION := $(shell dpkg-parsechangelog | sed -ne 's/^Version: \(\([0-9]\+\):\)\?\(.*\)-.*/\3/p')
+SVN_REVISION := $(shell echo $(SRC_VERSION) | awk -F"+" '{ print $$2 }' | sed 's/svn//' )
+TARBALL = $(PACKAGE)_$(SRC_VERSION).orig.tar.gz
+.PHONY: get-orig-source check-orig-source
+get-orig-source:
+	rm -rf get-orig-source $(TARBALL)
+	mkdir get-orig-source
+	svn export -r $(SVN_REVISION) http://svn.ruby-lang.org/repos/ruby/branches/ruby_1_8_7 \
+	get-orig-source/$(PACKAGE)-$(SRC_VERSION).orig
+	GZIP=--best tar czf $(TARBALL) -C get-orig-source $(PACKAGE)-$(SRC_VERSION).orig
+	rm -rf get-orig-source
+	echo "  "$(TARBALL)" created; move it to the right destination to build the package"
+
+check-orig-source:
+	svn log http://svn.ruby-lang.org/repos/ruby/branches/ruby_1_8_7 | head -20

@@ -1,0 +1,294 @@
+Author: akira yamada <akira@debian.org>
+Description: Fix for Debian bug #393685 - SOAP4R consumes too much memory
+This was not backported into ruby 1.8 upstream (and soap is no
+longer shipped with ruby 1.9)
+refreshed for 1.8.7.72 so it can unapply - only whitespace changes.
+--- a/lib/soap/baseData.rb
++++ b/lib/soap/baseData.rb
+@@ -1,5 +1,5 @@
+ # soap/baseData.rb: SOAP4R - Base type library
+-# Copyright (C) 2000, 2001, 2003-2005  NAKAMURA, Hiroshi <nahi@ruby-lang.org>.
++# Copyright (C) 2000, 2001, 2003-2006  NAKAMURA, Hiroshi <nahi@ruby-lang.org>.
+ 
+ # This program is copyrighted free software by NAKAMURA, Hiroshi.  You can
+ # redistribute it and/or modify it under the same terms of Ruby's license;
+@@ -657,37 +657,30 @@ private
+     value
+   end
+ 
+-  if RUBY_VERSION > "1.7.0"
++  # Mapping.define_singleton_method calls define_method with proc and it
++  # exhausts much memory for each singleton Object.  just instance_eval instead
++  # of it.
+     def add_accessor(name)
+-      methodname = name
+-      if self.respond_to?(methodname)
+-        methodname = safe_accessor_name(methodname)
+-      end
+-      Mapping.define_singleton_method(self, methodname) do
+-        @data[@array.index(name)]
+-      end
+-      Mapping.define_singleton_method(self, methodname + '=') do |value|
+-        @data[@array.index(name)] = value
+-      end
+-    end
+-  else
+-    def add_accessor(name)
+-      methodname = safe_accessor_name(name)
++    # untaint depends GenSupport.safemethodname
++    methodname = XSD::CodeGen::GenSupport.safemethodname(name).untaint
++    methodname = "var_#{methodname}" if self.respond_to?(methodname) # XXX: Debian: compatiblity with original SOAP4R of Ruby 1.8.x.
++    # untaint depends String#dump and Array#index
++    namedump = name.dump.untaint
++    unless self.respond_to?(methodname)
+       instance_eval <<-EOS
+         def #{methodname}
+-          @data[@array.index(#{name.dump})]
++          @data[@array.index(#{namedump})]
+         end
+-
++      EOS
++    end
++    unless self.respond_to?(methodname + "=")
++      instance_eval <<-EOS
+         def #{methodname}=(value)
+-          @data[@array.index(#{name.dump})] = value
++          @data[@array.index(#{namedump})] = value
+         end
+       EOS
+     end
+   end
+-
+-  def safe_accessor_name(name)
+-    "var_" << name.gsub(/[^a-zA-Z0-9_]/, '')
+-  end
+ end
+ 
+ 
+--- a/lib/soap/mapping/mapping.rb
++++ b/lib/soap/mapping/mapping.rb
+@@ -42,7 +42,8 @@ module Mapping
+     soap_obj = nil
+     protect_threadvars(:SOAPMarshalDataKey, :SOAPExternalCES, :SOAPMarshalNoReference) do
+       Thread.current[:SOAPMarshalDataKey] = {}
+-      Thread.current[:SOAPExternalCES] = opt[:external_ces] || $KCODE
++      Thread.current[:SOAPExternalCES] =
++        opt[:external_ces] || XSD::Charset.encoding
+       Thread.current[:SOAPMarshalNoReference] = opt[:no_reference]
+       soap_obj = _obj2soap(obj, registry, type)
+     end
+@@ -54,7 +55,8 @@ module Mapping
+     obj = nil
+     protect_threadvars(:SOAPMarshalDataKey, :SOAPExternalCES, :SOAPMarshalNoReference) do
+       Thread.current[:SOAPMarshalDataKey] = {}
+-      Thread.current[:SOAPExternalCES] = opt[:external_ces] || $KCODE
++      Thread.current[:SOAPExternalCES] =
++        opt[:external_ces] || XSD::Charset.encoding
+       Thread.current[:SOAPMarshalNoReference] = opt[:no_reference]
+       obj = _soap2obj(node, registry, klass)
+     end
+@@ -67,7 +69,8 @@ module Mapping
+     soap_ary = SOAPArray.new(ValueArrayName, 1, type)
+     protect_threadvars(:SOAPMarshalDataKey, :SOAPExternalCES, :SOAPMarshalNoReference) do
+       Thread.current[:SOAPMarshalDataKey] = {}
+-      Thread.current[:SOAPExternalCES] = opt[:external_ces] || $KCODE
++      Thread.current[:SOAPExternalCES] =
++        opt[:external_ces] || XSD::Charset.encoding
+       Thread.current[:SOAPMarshalNoReference] = opt[:no_reference]
+       ary.each do |ele|
+         soap_ary.add(_obj2soap(ele, registry, type))
+@@ -82,7 +85,8 @@ module Mapping
+     md_ary = SOAPArray.new(ValueArrayName, rank, type)
+     protect_threadvars(:SOAPMarshalDataKey, :SOAPExternalCES, :SOAPMarshalNoReference) do
+       Thread.current[:SOAPMarshalDataKey] = {}
+-      Thread.current[:SOAPExternalCES] = opt[:external_ces] || $KCODE
++      Thread.current[:SOAPExternalCES] =
++        opt[:external_ces] || XSD::Charset.encoding
+       Thread.current[:SOAPMarshalNoReference] = opt[:no_reference]
+       add_md_ary(md_ary, ary, [], registry)
+     end
+@@ -292,16 +296,28 @@ module Mapping
+       end
+     else
+       values.each do |attr_name, value|
+-        name = XSD::CodeGen::GenSupport.safevarname(attr_name)
++        # untaint depends GenSupport.safevarname
++        name = XSD::CodeGen::GenSupport.safevarname(attr_name).untaint
+         setter = name + "="
+         if obj.respond_to?(setter)
+           obj.__send__(setter, value)
+         else
+           obj.instance_variable_set('@' + name, value)
+           begin
+-            define_attr_accessor(obj, name,
+-              proc { instance_variable_get('@' + name) },
+-              proc { |value| instance_variable_set('@' + name, value) })
++            unless obj.respond_to?(name)
++              obj.instance_eval <<-EOS
++                def #{name}
++                  @#{name}
++                end
++              EOS
++            end
++            unless self.respond_to?(name + "=")
++              obj.instance_eval <<-EOS
++                def #{name}=(value)
++                  @#{name} = value
++                end
++              EOS
++            end
+           rescue TypeError
+             # singleton class may not exist (e.g. Float)
+           end
+@@ -310,11 +326,6 @@ module Mapping
+     end
+   end
+ 
+-  def self.define_attr_accessor(obj, name, getterproc, setterproc = nil)
+-    define_singleton_method(obj, name, &getterproc)
+-    define_singleton_method(obj, name + '=', &setterproc) if setterproc
+-  end
+-
+   def self.schema_type_definition(klass)
+     class_schema_variable(:schema_type, klass)
+   end
+--- a/lib/soap/mapping/registry.rb
++++ b/lib/soap/mapping/registry.rb
+@@ -133,23 +133,24 @@ class Object; include Marshallable
+ 
+ private
+ 
+-  if RUBY_VERSION > "1.7.0"
++  # Mapping.define_attr_accessor calls define_method with proc and it exhausts
++  # much memory for each singleton Object.  just instance_eval instead of it.
+     def __define_attr_accessor(qname)
+-      name = XSD::CodeGen::GenSupport.safemethodname(qname.name)
+-      Mapping.define_attr_accessor(self, name,
+-        proc { self[qname] },
+-        proc { |value| self[qname] = value })
+-    end
+-  else
+-    def __define_attr_accessor(qname)
+-      name = XSD::CodeGen::GenSupport.safemethodname(qname.name)
++    # untaint depends GenSupport.safemethodname
++    name = XSD::CodeGen::GenSupport.safemethodname(qname.name).untaint
++    # untaint depends QName#dump
++    qnamedump = qname.dump.untaint
++    unless self.respond_to?(name)
+       instance_eval <<-EOS
+         def #{name}
+-          self[#{qname.dump}]
++          self[#{qnamedump}]
+         end
+-
++      EOS
++    end
++    unless self.respond_to?(name + "=")
++      instance_eval <<-EOS
+         def #{name}=(value)
+-          self[#{qname.dump}] = value
++          self[#{qnamedump}] = value
+         end
+       EOS
+     end
+--- a/lib/soap/mapping/wsdlliteralregistry.rb
++++ b/lib/soap/mapping/wsdlliteralregistry.rb
+@@ -360,36 +360,27 @@ private
+     end
+   end
+ 
+-  if RUBY_VERSION > "1.7.0"
+-    def define_xmlattr_accessor(obj, qname)
+-      name = XSD::CodeGen::GenSupport.safemethodname(qname.name)
+-      Mapping.define_attr_accessor(obj, 'xmlattr_' + name,
+-        proc { @__xmlattr[qname] },
+-        proc { |value| @__xmlattr[qname] = value })
+-    end
+-  else
++
++  # Mapping.define_attr_accessor calls define_method with proc and it exhausts
++  # much memory for each singleton Object.  just instance_eval instead of it.
+     def define_xmlattr_accessor(obj, qname)
+-      name = XSD::CodeGen::GenSupport.safemethodname(qname.name)
++    # untaint depends GenSupport.safemethodname
++    name = XSD::CodeGen::GenSupport.safemethodname('xmlattr_' + qname.name).untaint
++    # untaint depends QName#dump
++    qnamedump = qname.dump.untaint
+       obj.instance_eval <<-EOS
+         def #{name}
+-          @__xmlattr[#{qname.dump}]
++        @__xmlattr[#{qnamedump}]
+         end
+ 
+         def #{name}=(value)
+-          @__xmlattr[#{qname.dump}] = value
++        @__xmlattr[#{qnamedump}] = value
+         end
+       EOS
+     end
+-  end
+ 
+-  if RUBY_VERSION > "1.7.0"
+-    def define_xmlattr(obj)
+-      obj.instance_variable_set('@__xmlattr', {})
+-      unless obj.respond_to?(:__xmlattr)
+-        Mapping.define_attr_accessor(obj, :__xmlattr, proc { @__xmlattr })
+-      end
+-    end
+-  else
++  # Mapping.define_attr_accessor calls define_method with proc and it exhausts
++  # much memory for each singleton Object.  just instance_eval instead of it.
+     def define_xmlattr(obj)
+       obj.instance_variable_set('@__xmlattr', {})
+       unless obj.respond_to?(:__xmlattr)
+@@ -400,7 +391,6 @@ private
+         EOS
+       end
+     end
+-  end
+ 
+   # it caches @@schema_element.  this means that @@schema_element must not be
+   # changed while a lifetime of a WSDLLiteralRegistry.
+--- a/lib/soap/rpc/driver.rb
++++ b/lib/soap/rpc/driver.rb
+@@ -222,18 +222,9 @@ private
+     add_method_interface(name, param_count)
+   end
+ 
+-  if RUBY_VERSION > "1.7.0"
+-    def add_method_interface(name, param_count)
+-      ::SOAP::Mapping.define_singleton_method(self, name) do |*arg|
+-        unless arg.size == param_count
+-          raise ArgumentError.new(
+-          "wrong number of arguments (#{arg.size} for #{param_count})")
+-        end
+-        call(name, *arg)
+-      end
+-      self.method(name)
+-    end
+-  else
++  # Mapping.define_singleton_method calls define_method with proc and it
++  # exhausts much memory for each singleton Object.  just instance_eval instead
++  # of it.
+     def add_method_interface(name, param_count)
+       instance_eval <<-EOS
+         def #{name}(*arg)
+@@ -246,7 +237,6 @@ private
+       EOS
+       self.method(name)
+     end
+-  end
+ end
+ 
+ 
+--- a/lib/xsd/charset.rb
++++ b/lib/xsd/charset.rb
+@@ -167,7 +167,7 @@ public
+     SJISRegexp =~ str
+   end
+ 
+-  def Charset.is_ces(str, code = $KCODE)
++  def Charset.is_ces(str, code = @internal_encoding)
+     case code
+     when 'NONE'
+       is_us_ascii(str)
