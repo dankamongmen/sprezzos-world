@@ -198,6 +198,14 @@ $(LIBWNCK3): $(SPREZZ)/libwnck3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libwnck3-$(libwnck3_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: clearlooks-phenix-theme
+clearlooks-phenix-theme:$(CLEARLOOKSPHENIXTHEME)_$(ARCH).deb
+$(CLEARLOOKSPHENIXTHEME): $(SPREZZ)/clearlooks-phenix-theme/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf clearlooks-phenix-$(clearlooks-phenix-theme_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: seed
 seed:$(SEED)_$(ARCH).deb
 $(SEED): $(SPREZZ)/seed/debian/changelog
