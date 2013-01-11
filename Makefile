@@ -5487,6 +5487,14 @@ $(RRDTOOL): $(SPREZZ)/rrdtool/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf rrdtool-$(rrdtool_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ruby1.8
+ruby1.8:$(RUBY1.8)_$(ARCH).deb
+$(RUBY1.8): $(SPREZZ)/ruby1.8/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby1.8_$(ruby1.8_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: libraw
 libraw:$(LIBRAW)_$(ARCH).deb
 $(LIBRAW): $(SPREZZ)/libraw/debian/changelog
