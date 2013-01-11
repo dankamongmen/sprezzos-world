@@ -1,0 +1,58 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 919_common.mk_tweaks.dpatch by Lucas Nussbaum <lucas@lucas-nussbaum.net>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Adds more verbosity to the build process. Build parse.o with -Q to
+## DP: avoid timeouts on mips(el). Run the testsuite with -v, to see which
+## DP: tests are blocking.
+## DP: Also run a "watcher", which outputs the result of ps on a regular
+## DP: basis. This avoids a timeout on slow arches.
+
+@DPATCH@
+Index: b/common.mk
+===================================================================
+--- a/common.mk	2010-07-20 21:45:45.000000000 +0900
++++ b/common.mk	2010-07-20 21:46:15.000000000 +0900
+@@ -393,7 +393,7 @@
+ test: test-sample btest-ruby test-knownbug
+ 
+ test-all:
+-	$(RUNRUBY) "$(srcdir)/test/runner.rb" $(TESTS)
++	$(RUNRUBY) "$(srcdir)/test/runner.rb" -v $(TESTS)
+ 
+ extconf: $(PREP)
+ 	$(MAKEDIRS) "$(EXTCONFDIR)"
+@@ -424,6 +424,33 @@
+ {$(VPATH)}parse.c: {$(VPATH)}parse.y $(srcdir)/tool/ytab.sed
+ parse.h {$(VPATH)}parse.h: {$(VPATH)}parse.c
+ 
++clean-local::
++	rm -f start-watch.stamp
++
++# wait at least 10 secs for gcc to start.
++# then wait for gcc to finish
++# touch -d "1 hour ago" to allow re-running builds without rebuilding parse.o
++start-watcher.stamp:
++	( n=0 ;\
++	while [ $$n -lt 10 ]; do \
++	[ $$(ps aux | grep gcc | grep parse.o | grep -v grep | wc -l) -gt 0 ] && echo "# gcc parse.o started!" && break ;\
++	n=$$(expr $$n + 1) ;\
++	sleep 1 ;\
++	done ;\
++	[ $$n -eq 60 ] && echo "# gcc never started, exiting." && exit 1 ;\
++	str="starting..." ;\
++	while [ "$$str" != "" ]; do \
++	echo "# running... $$str" ;\
++	sleep 5 ;\
++	str=$$(ps aux | grep gcc | grep parse.o | grep -v grep) ;\
++	done ;\
++	echo "# watched finished." ; \
++	touch -d "1 hour ago" start-watcher.stamp ) &
++
++parse.o: start-watcher.stamp
++
++parse.o: CFLAGS += -Q
++
+ {$(srcdir)}.y.c:
+ 	$(YACC) -d $(YFLAGS) -o y.tab.c $(SRC_FILE)
+ 	sed -f $(srcdir)/tool/ytab.sed -e "/^#/s!y\.tab\.c!$@!" y.tab.c > $@.new

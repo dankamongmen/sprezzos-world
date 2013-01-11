@@ -1,0 +1,98 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 100518_r27464_threading_non-nptl.dpatch by Lucas Nussbaum <lucas@lucas-nussbaum.net>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Fixes threading issues on non-NPTL platforms.
+## DP: backport from upstream.
+## DP: git-svn-id: http://svn.ruby-lang.org/repos/ruby/trunk@27464
+## DP: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=542927
+## DP: http://redmine.ruby-lang.org/issues/show/2025
+
+@DPATCH@
+Index: b/process.c
+===================================================================
+--- a/process.c	2010-07-20 21:45:44.000000000 +0900
++++ b/process.c	2010-07-20 21:46:19.000000000 +0900
+@@ -2383,9 +2383,6 @@
+ 
+     switch (pid = rb_fork(0, 0, 0, Qnil)) {
+       case 0:
+-#ifdef linux
+-	after_exec();
+-#endif
+ 	rb_thread_atfork();
+ 	if (rb_block_given_p()) {
+ 	    int status;
+Index: b/signal.c
+===================================================================
+--- a/signal.c	2010-07-20 21:45:44.000000000 +0900
++++ b/signal.c	2010-07-20 21:46:19.000000000 +0900
+@@ -876,11 +876,7 @@
+ trap_ensure(struct trap_arg *arg)
+ {
+     /* enable interrupt */
+-#ifdef HAVE_SIGPROCMASK
+-    sigprocmask(SIG_SETMASK, &arg->mask, NULL);
+-#else
+-    sigsetmask(arg->mask);
+-#endif
++    pthread_sigmask(SIG_SETMASK, &arg->mask, NULL);
+     trap_last_mask = arg->mask;
+     return 0;
+ }
+@@ -890,11 +886,7 @@
+ rb_trap_restore_mask(void)
+ {
+ #if USE_TRAP_MASK
+-# ifdef HAVE_SIGPROCMASK
+-    sigprocmask(SIG_SETMASK, &trap_last_mask, NULL);
+-# else
+-    sigsetmask(trap_last_mask);
+-# endif
++    pthread_sigmask(SIG_SETMASK, &trap_last_mask, NULL);
+ #endif
+ }
+ 
+@@ -954,12 +946,8 @@
+     }
+ #if USE_TRAP_MASK
+     /* disable interrupt */
+-# ifdef HAVE_SIGPROCMASK
+     sigfillset(&arg.mask);
+-    sigprocmask(SIG_BLOCK, &arg.mask, &arg.mask);
+-# else
+-    arg.mask = sigblock(~0);
+-# endif
++    pthread_sigmask(SIG_BLOCK, &arg.mask, &arg.mask);
+ 
+     return rb_ensure(trap, (VALUE)&arg, trap_ensure, (VALUE)&arg);
+ #else
+@@ -1014,12 +1002,8 @@
+ 
+ #if USE_TRAP_MASK
+     /* disable interrupt */
+-# ifdef HAVE_SIGPROCMASK
+     sigfillset(&mask);
+-    sigprocmask(SIG_BLOCK, &mask, &mask);
+-# else
+-    mask = sigblock(~0);
+-# endif
++    pthread_sigmask(SIG_BLOCK, &mask, &mask);
+ #endif
+ 
+     oldfunc = ruby_signal(sig, SIG_DFL);
+@@ -1030,13 +1014,8 @@
+     }
+ 
+ #if USE_TRAP_MASK
+-#ifdef HAVE_SIGPROCMASK
+     sigdelset(&mask, sig);
+-    sigprocmask(SIG_SETMASK, &mask, NULL);
+-#else
+-    mask &= ~sigmask(sig);
+-    sigsetmask(mask);
+-#endif
++    pthread_sigmask(SIG_SETMASK, &mask, NULL);
+     trap_last_mask = mask;
+ #endif
+ }
