@@ -2739,7 +2739,7 @@ $(GRUB2): $(SPREZZ)/grub2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf grub2-$(grub2_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf grub-$(grub2_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gsoap
 gsoap:$(GSOAP)_$(ARCH).deb
