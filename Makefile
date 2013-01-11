@@ -6466,6 +6466,14 @@ $(XSERVERXORGINPUTWACOM): $(SPREZZ)/xserver-xorg-input-wacom/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xf86-input-wacom-$(xserver-xorg-input-wacom_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: xserver-xorg-video-ati
+xserver-xorg-video-ati:$(XSERVERXORGVIDEOATI)_$(ARCH).deb
+$(XSERVERXORGVIDEOATI): $(SPREZZ)/xserver-xorg-video-ati/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-video-ati-$(xserver-xorg-video-ati_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xserver-xorg-video-geode
 xserver-xorg-video-geode:$(XSERVERXORGVIDEOGEODE)_$(ARCH).deb
 $(XSERVERXORGVIDEOGEODE): $(SPREZZ)/xserver-xorg-video-geode/debian/changelog
