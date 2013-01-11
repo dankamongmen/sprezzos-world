@@ -30,6 +30,14 @@ $(THUNAR): $(SPREZZ)/thunar/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf Thunar-$(thunar_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: tumbler
+tumbler:$(TUMBLER)_$(ARCH).deb
+$(TUMBLER): $(SPREZZ)/tumbler/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf tumbler-$(tumbler_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: xfce4-session
 xfce4-session:$(XFCE4SESSION)_$(ARCH).deb
 $(XFCE4SESSION): $(SPREZZ)/xfce4-session/debian/changelog

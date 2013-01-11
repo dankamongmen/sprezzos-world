@@ -4817,6 +4817,14 @@ $(LIBOAUTH): $(SPREZZ)/liboauth/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf liboauth-$(liboauth_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libopenraw
+libopenraw:$(LIBOPENRAW)_$(ARCH).deb
+$(LIBOPENRAW): $(SPREZZ)/libopenraw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libopenraw-$(libopenraw_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libosinfo
 libosinfo:$(LIBOSINFO)_$(ARCH).deb
 $(LIBOSINFO): $(SPREZZ)/libosinfo/debian/changelog
