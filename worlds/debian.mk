@@ -95,6 +95,15 @@ $(PYTHONSUPPORT): $(SPREZZ)/python-support/debian/changelog
 	tar cJvf python-support_$(python-support_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: ruby-defaults
+ruby-defaults:$(RUBYDEFAULTS)_$(ARCH).deb
+$(RUBYDEFAULTS): $(SPREZZ)/ruby-defaults/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf ruby-defaults_$(ruby-defaults_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: sensible-utils
 sensible-utils:$(SENSIBLEUTILS)_$(ARCH).deb
 $(SENSIBLEUTILS): $(SPREZZ)/sensible-utils/debian/changelog
