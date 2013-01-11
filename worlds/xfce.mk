@@ -76,7 +76,7 @@ $(XFDESKTOP4): $(SPREZZ)/xfdesktop4/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf xfdesktop4-$(xfdesktop4_UPVER).tar.bz2 $(TARARGS) $@
+	tar xjvf xfdesktop-$(xfdesktop4_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: xfwm4
 xfwm4:$(XFWM4)_$(ARCH).deb
