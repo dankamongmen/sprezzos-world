@@ -5151,6 +5151,14 @@ $(PATCH): $(SPREZZ)/patch/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf patch-$(patch_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: patchutils
+patchutils:$(PATCHUTILS)_$(ARCH).deb
+$(PATCHUTILS): $(SPREZZ)/patchutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf patchutils-$(patchutils_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: pciutils
 pciutils:$(PCIUTILS)_$(ARCH).deb
 $(PCIUTILS): $(SPREZZ)/pciutils/debian/changelog
