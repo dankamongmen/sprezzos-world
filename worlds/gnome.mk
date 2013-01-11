@@ -78,6 +78,14 @@ $(GNOMEDVBDAEMON): $(SPREZZ)/gnome-dvb-daemon/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-dvb-daemon-$(gnome-dvb-daemon_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gnome-extra-icons
+gnome-extra-icons:$(GNOMEEXTRAICONS)_$(ARCH).deb
+$(GNOMEEXTRAICONS): $(SPREZZ)/gnome-extra-icons/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-extra-icons-$(gnome-extra-icons_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gnome-icon-theme
 gnome-icon-theme:$(GNOMEICONTHEME)_$(ARCH).deb
 $(GNOMEICONTHEME): $(SPREZZ)/gnome-icon-theme/debian/changelog
@@ -125,6 +133,14 @@ $(GSTREAMER): $(SPREZZ)/gstreamer/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gstreamer-$(gstreamer_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gtk-doc
+gtk-doc:$(GTKDOC)_$(ARCH).deb
+$(GTKDOC): $(SPREZZ)/gtk-doc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gtk-doc-$(gtk-doc_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libgdata
 libgdata:$(LIBGDATA)_$(ARCH).deb
