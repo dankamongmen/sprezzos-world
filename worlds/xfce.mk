@@ -69,3 +69,19 @@ $(XFCONF): $(SPREZZ)/xfconf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfconf-$(xfconf_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xfdesktop4
+xfdesktop4:$(XFDESKTOP4)_$(ARCH).deb
+$(XFDESKTOP4): $(SPREZZ)/xfdesktop4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfdesktop4-$(xfdesktop4_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xfwm4
+xfwm4:$(XFWM4)_$(ARCH).deb
+$(XFWM4): $(SPREZZ)/xfwm4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfwm4-$(xfwm4_UPVER).tar.bz2 $(TARARGS) $@
