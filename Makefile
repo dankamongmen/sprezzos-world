@@ -4413,6 +4413,14 @@ $(LOGSTALGIA): $(SPREZZ)/logstalgia/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf logstalgia-$(logstalgia_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: moin
+moin:$(MOIN)_$(ARCH).deb
+$(MOIN): $(SPREZZ)/moin/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf moin-$(moin_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: mon
 mon:$(MON)_$(ARCH).deb
 $(MON): $(SPREZZ)/mon/debian/changelog
