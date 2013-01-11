@@ -1551,6 +1551,14 @@ $(DIALOG): $(SPREZZ)/dialog/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dialog-$(dialog_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: diffstat
+diffstat:$(DIFFSTAT)_$(ARCH).deb
+$(DIFFSTAT): $(SPREZZ)/diffstat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf diffstat-$(diffstat_UPVER).tgz $(TARARGS) $@
+
 .PHONY: dirac
 dirac:$(DIRAC)_$(ARCH).deb
 $(DIRAC): $(SPREZZ)/dirac/debian/changelog
