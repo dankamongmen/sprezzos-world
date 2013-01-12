@@ -62,6 +62,14 @@ $(KACTIVITIES): $(SPREZZ)/kactivities/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kactivities_$(kactivities_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: kate
+kate:$(KATE)_$(ARCH).deb
+$(KATE): $(SPREZZ)/kate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kate-$(kate_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: kde4libs
 kde4libs:$(KDE4LIBS)_$(ARCH).deb
 $(KDE4LIBS): $(SPREZZ)/kde4libs/debian/changelog
