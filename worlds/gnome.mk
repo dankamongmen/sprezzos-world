@@ -150,6 +150,22 @@ $(GTKDOC): $(SPREZZ)/gtk-doc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gtk-doc-$(gtk-doc_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gtk-sharp
+gtk-sharp:$(GTKSHARP2)_$(ARCH).deb
+$(GTKSHARP2): $(SPREZZ)/gtk-sharp2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gtk-sharp-$(gtk-sharp2_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gtk2-engines
+gtk2-engines:$(GTK2ENGINES)_$(ARCH).deb
+$(GTK2ENGINES): $(SPREZZ)/gtk2-engines/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtk-engines-$(gtk2-engines_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libgdata
 libgdata:$(LIBGDATA)_$(ARCH).deb
 $(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
