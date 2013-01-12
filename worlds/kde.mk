@@ -206,6 +206,14 @@ $(QSCINTILLA2): $(SPREZZ)/qscintilla2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf QScintilla-gpl-$(qscintilla2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: qtzeitgeist
+qtzeitgeist:$(QTZEITGEIST)_$(ARCH).deb
+$(QTZEITGEIST): $(SPREZZ)/qtzeitgeist/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf QtZeitgeist-$(qtzeitgeist_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: qt-assistant-compat
 qt-assistant-compat:$(QTASSISTANTCOMPAT)_$(ARCH).deb
 $(QTASSISTANTCOMPAT): $(SPREZZ)/qt-assistant-compat/debian/changelog
