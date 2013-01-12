@@ -187,6 +187,14 @@ $(LIBZEITGEIST): $(SPREZZ)/libzeitgeist/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libzeitgeist-$(libzeitgeist_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: zeitgeist
+zeitgeist:$(ZEITGEIST)_$(ARCH).deb
+$(ZEITGEIST): $(SPREZZ)/zeitgeist/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf zeitgeist-$(zeitgeist_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: ntrack
 ntrack:$(NTRACK)_$(ARCH).deb
 $(NTRACK): $(SPREZZ)/ntrack/debian/changelog
