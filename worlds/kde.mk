@@ -102,6 +102,14 @@ $(KDESDK): $(SPREZZ)/kdesdk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kdesdk-$(kdesdk_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: kde-runtime
+kde-runtime:$(KDERUNTIME)_$(ARCH).deb
+$(KDERUNTIME): $(SPREZZ)/kde-runtime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kde-runtime-$(kde-runtime_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: kde-workspace
 kde-workspace:$(KDEWORKSPACE)_$(ARCH).deb
 $(KDEWORKSPACE): $(SPREZZ)/kde-workspace/debian/changelog
