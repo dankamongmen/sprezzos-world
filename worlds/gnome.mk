@@ -1,3 +1,11 @@
+.PHONY: caribou
+caribou:$(CARIBOU)_$(ARCH).deb
+$(CARIBOU): $(SPREZZ)/caribou/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf caribou-$(caribou_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: epiphany-browser
 epiphany-browser:$(EPIPHANYBROWSER)_$(ARCH).deb
 $(EPIPHANYBROWSER): $(SPREZZ)/epiphany-browser/debian/changelog
