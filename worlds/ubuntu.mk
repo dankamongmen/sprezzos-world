@@ -179,6 +179,14 @@ $(LIBUNITYMISC): $(SPREZZ)/libunity-misc/debian/changelog
 		libunity_misc-$(libunity-misc_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: ntrack
+ntrack:$(NTRACK)_$(ARCH).deb
+$(NTRACK): $(SPREZZ)/ntrack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ntrack-$(ntrack_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: unity
 unity:$(UNITY)_$(ARCH).deb
 $(UNITY): $(SPREZZ)/unity/debian/changelog
