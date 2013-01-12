@@ -166,6 +166,14 @@ $(LIBKATE): $(SPREZZ)/libkate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libkate-$(libkate_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: nepomukcore
+nepomukcore:$(NEPOMUKCORE)_$(ARCH).deb
+$(NEPOMUKCORE): $(SPREZZ)/nepomukcore/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf nepomuk-core-$(nepomukcore_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: oxygen-icons
 oxygen-icons:$(OXYGENICONS)_$(ARCH).deb
 $(OXYGENICONS): $(SPREZZ)/oxygen-icons/debian/changelog
