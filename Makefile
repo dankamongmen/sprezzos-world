@@ -4773,6 +4773,14 @@ $(LIBNICE): $(SPREZZ)/libnice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libnice-$(libnice_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libnids
+libnids:$(LIBNIDS)_$(ARCH).deb
+$(LIBNIDS): $(SPREZZ)/libnids/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnids-$(libnids_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnl3
 libnl3:$(LIBNL3)_$(ARCH).deb
 $(LIBNL3): $(SPREZZ)/libnl3/debian/changelog
