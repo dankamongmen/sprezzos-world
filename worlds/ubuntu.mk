@@ -179,6 +179,14 @@ $(LIBUNITYMISC): $(SPREZZ)/libunity-misc/debian/changelog
 		libunity_misc-$(libunity-misc_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: libzeitgeist
+libzeitgeist:$(LIBZEITGEIST)_$(ARCH).deb
+$(LIBZEITGEIST): $(SPREZZ)/libzeitgeist/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libzeitgeist-$(libzeitgeist_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ntrack
 ntrack:$(NTRACK)_$(ARCH).deb
 $(NTRACK): $(SPREZZ)/ntrack/debian/changelog
