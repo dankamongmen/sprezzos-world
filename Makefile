@@ -519,6 +519,14 @@ $(ACCOUNTSSERVICE): $(SPREZZ)/accountsservice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf accountsservice-$(accountsservice_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gimplensfun
+gimplensfun:$(GIMPLENSFUN)_$(ARCH).deb
+$(GIMPLENSFUN): $(SPREZZ)/gimplensfun/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gimplensfun-$(gimplensfun_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: lensfun
 lensfun:$(LENSFUN)_$(ARCH).deb
 $(LENSFUN): $(SPREZZ)/lensfun/debian/changelog
