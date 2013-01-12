@@ -110,6 +110,14 @@ $(KDEVELOP): $(SPREZZ)/kdevelop/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kdevelop-$(kdevelop_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: kdevplatform
+kdevplatform:$(KDEVPLATFORM)_$(ARCH).deb
+$(KDEVPLATFORM): $(SPREZZ)/kdevplatform/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf kdevplatform-$(kdevplatform_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: kde-runtime
 kde-runtime:$(KDERUNTIME)_$(ARCH).deb
 $(KDERUNTIME): $(SPREZZ)/kde-runtime/debian/changelog
