@@ -108,7 +108,7 @@ $(KDEVELOP): $(SPREZZ)/kdevelop/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf kdevelop-$(kdevelop_UPVER).tar.xz $(TARARGS) $@
+	tar xjvf kdevelop-$(kdevelop_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: kdevplatform
 kdevplatform:$(KDEVPLATFORM)_$(ARCH).deb
