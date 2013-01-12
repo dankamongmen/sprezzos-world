@@ -94,6 +94,14 @@ $(KDEBASEAPPS): $(SPREZZ)/kde-baseapps/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kde-baseapps_$(kde-baseapps_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: kdemultimedia
+kdemultimedia:$(KDEMULTIMEDIA)_$(ARCH).deb
+$(KDEMULTIMEDIA): $(SPREZZ)/kdemultimedia/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kdemultimedia-$(kdemultimedia_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: kdepimlibs
 kdepimlibs:$(KDEPIMLIBS)_$(ARCH).deb
 $(KDEPIMLIBS): $(SPREZZ)/kdepimlibs/debian/changelog
