@@ -182,6 +182,14 @@ $(OXYGENICONS): $(SPREZZ)/oxygen-icons/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf oxygen-icons-$(oxygen-icons_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: phonon
+phonon:$(PHONON)_$(ARCH).deb
+$(PHONON): $(SPREZZ)/phonon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf phonon-$(phonon_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: qimageblitz
 qimageblitz:$(QIMAGEBLITZ)_$(ARCH).deb
 $(QIMAGEBLITZ): $(SPREZZ)/qimageblitz/debian/changelog
