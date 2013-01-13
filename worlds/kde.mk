@@ -238,6 +238,14 @@ $(QSCINTILLA2): $(SPREZZ)/qscintilla2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf QScintilla-gpl-$(qscintilla2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: qtmobility
+qtmobility:$(QTMOBILITY)_$(ARCH).deb
+$(QTMOBILITY): $(SPREZZ)/qtmobility/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qt-mobility-opensource-src-$(qtmobility_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: qtzeitgeist
 qtzeitgeist:$(QTZEITGEIST)_$(ARCH).deb
 $(QTZEITGEIST): $(SPREZZ)/qtzeitgeist/debian/changelog
