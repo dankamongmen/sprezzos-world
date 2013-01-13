@@ -3771,7 +3771,7 @@ $(LIBJPEG): $(SPREZZ)/libjpeg/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libjpeg8_$(libjpeg_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xzvf libjpeg9_$(libjpeg_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libsamplerate
 libsamplerate:$(LIBSAMPLERATE)_$(ARCH).deb
