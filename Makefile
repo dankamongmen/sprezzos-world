@@ -4413,6 +4413,14 @@ $(MLOCATE): $(SPREZZ)/mlocate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf mlocate-$(mlocate_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: mlt
+mlt:$(MLT)_$(ARCH).deb
+$(MLT): $(SPREZZ)/mlt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mlt-$(mlt_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: p11-kit
 p11-kit:$(P11KIT)_$(ARCH).deb
 $(P11KIT): $(SPREZZ)/p11-kit/debian/changelog
