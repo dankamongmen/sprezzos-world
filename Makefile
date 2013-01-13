@@ -1871,6 +1871,14 @@ $(FONTSLIBERATION): $(SPREZZ)/fonts-liberation/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf liberation-fonts-$(fonts-liberation_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: fonts-linuxlibertine
+fonts-linuxlibertine:$(FONTSLINUXLIBERTINE)_$(ARCH).deb
+$(FONTSLINUXLIBERTINE): $(SPREZZ)/fonts-linuxlibertine/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fonts-linuxlibertine_$(fonts-linuxlibertine_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: fonts-sourcesanspro
 fonts-sourcesanspro:$(FONTSADOBESOURCESANSPRO)_$(ARCH).deb
 $(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
