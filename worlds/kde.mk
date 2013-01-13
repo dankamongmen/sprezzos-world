@@ -158,6 +158,14 @@ $(KDEWORKSPACE): $(SPREZZ)/kde-workspace/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kde-workspace_$(kde-workspace_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: kgamma
+kgamma:$(KGAMMA)_$(ARCH).deb
+$(KGAMMA): $(SPREZZ)/kgamma/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kgamma-$(kgamma_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: konsole
 konsole:$(KONSOLE)_$(ARCH).deb
 $(KONSOLE): $(SPREZZ)/konsole/debian/changelog
