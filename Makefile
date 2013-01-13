@@ -2085,6 +2085,14 @@ $(GIT): $(SPREZZ)/git/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf git-$(git_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gitextras
+gitextras:$(GITEXTRAS)_$(ARCH).deb
+$(GITEXTRAS): $(SPREZZ)/gitextras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gitextras-$(gitextras_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gjs
 gjs:$(GJS)_$(ARCH).deb
 $(GJS): $(SPREZZ)/gjs/debian/changelog
