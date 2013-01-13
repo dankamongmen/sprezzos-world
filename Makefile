@@ -303,14 +303,22 @@ $(GTKPOD): $(SPREZZ)/gtkpod/debian/changelog
 	ln -sf gtkpod-$(gtkpod_UPVER).tar.xz gtkpod_$(gtkpod_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+#.PHONY: miro
+#miro:$(MIRO)_$(ARCH).deb
+#$(MIRO): $(SPREZZ)/miro/debian/changelog
+#	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+#	git clone git@github.com:dankamongmen/miro.git $@
+#	tar cJf miro-$(miro_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf miro-$(miro_UPVER).tar.xz miro_$(miro_UPVER).orig.tar.xz
+#	cp -r $(<D) $@/
+
 .PHONY: miro
 miro:$(MIRO)_$(ARCH).deb
 $(MIRO): $(SPREZZ)/miro/debian/changelog
-	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
-	git clone git@github.com:dankamongmen/miro.git $@
-	tar cJf miro-$(miro_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf miro-$(miro_UPVER).tar.xz miro_$(miro_UPVER).orig.tar.xz
+	mkdir $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf miro-$(miro_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: omphalos
 omphalos:$(OMPHALOS)_$(ARCH).deb
@@ -2085,13 +2093,13 @@ $(GIT): $(SPREZZ)/git/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf git-$(git_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: gitextras
-gitextras:$(GITEXTRAS)_$(ARCH).deb
-$(GITEXTRAS): $(SPREZZ)/gitextras/debian/changelog
+.PHONY: git-extras
+git-extras:$(GITEXTRAS)_$(ARCH).deb
+$(GITEXTRAS): $(SPREZZ)/git-extras/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gitextras-$(gitextras_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf $(git-extras_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gjs
 gjs:$(GJS)_$(ARCH).deb
