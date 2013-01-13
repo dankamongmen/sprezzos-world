@@ -1,0 +1,87 @@
+#!/usr/bin/python
+
+# check for missing packages in mirrors
+
+# copyright 2006 Vagrant Cascadian <vagrant@freegeek.org>, distributed under
+# the terms of the GNU General Public License version 2 or any later version.
+
+# this expects three environment variables to be set:
+# CHECK_MIRROR: a space separated list of mirror locations to check
+# profiles: a space separated list of profiles to be included
+# simple_cdd_dir: directory where simple-cdd is being build
+
+# TODO: refactor with functions for duplicated code
+
+import os
+import sys
+
+mirrors=os.environ.get('CHECK_MIRROR')
+profiles=os.environ.get('profiles').split()
+simple_cdd_dir=os.environ.get('simple_cdd_dir')
+
+x=os.popen("find %s -type f -name '*.deb' -o -name '*.udeb' | sed -e 's,.*/,,g' -e 's,_.*,,g'" % mirrors)
+y=x.readlines()
+x.close()
+
+available_packages=list()
+for p in y:
+    available_packages.append(p.rstrip())
+
+missing_required_packages=list()
+
+def check_missing_packages(packagelist, available_packages):
+    missing=list()
+    x=file(packagelist)
+    y=x.readlines()
+    x.close()
+    for line in y:
+        if not line.startswith('#') and not line.startswith('\n'):
+            p=line.rstrip()
+            if available_packages.count(p) < 1:
+                missing.append(p)
+    return missing
+
+def get_missing_packages (packagelist, alt_packagelist, available_packages):
+    if os.path.exists(packagelist):
+        return check_missing_packages(packagelist, available_packages)
+    elif os.path.exists(alt_packagelist):
+        return check_missing_packages(alt_packagelist, available_packages)
+
+def report_missing_packages (profile, packages, packagetype):
+    m=''
+    if packagetype == 'required':
+        errortype='ERROR'
+    else:
+        errortype='WARNING'
+    for p in packages:
+        m=m + ' ' + p
+    print '%s: missing %s packages from profile %s: %s' % (errortype, packagetype, profile, m)
+
+for profile in profiles:
+    missing_profile_packages=list()
+    missing_profile_downloads=list()
+    profile_base=simple_cdd_dir+'/profiles/'+profile
+    alt_profile_base='/usr/share/simple-cdd/profiles/'+profile
+    missing_profile_packages=get_missing_packages(profile_base+'.packages', alt_profile_base+'.packages', available_packages)
+    missing_profile_downloads=get_missing_packages(profile_base+'.downloads', alt_profile_base+'.downloads', available_packages)
+    missing_profile_udebs=get_missing_packages(profile_base+'.udebs', alt_profile_base+'.udebs', available_packages)
+
+    if missing_profile_packages:
+        missing_required_packages.extend(missing_profile_packages)
+        report_missing_packages(profile, missing_profile_packages, 'required')
+
+    if missing_profile_udebs:
+        missing_required_packages.extend(missing_profile_udebs)
+        report_missing_packages(profile, missing_profile_udebs, 'required')
+
+    if missing_profile_downloads:
+        warn='optional'
+        if os.environ.get('require_optional_packages') == "true":
+            missing_required_packages.extend(missing_profile_downloads)
+            warn='required'
+        report_missing_packages(profile, missing_profile_downloads, warn)
+
+if missing_required_packages:
+    sys.exit(1)
+
+sys.exit(0)

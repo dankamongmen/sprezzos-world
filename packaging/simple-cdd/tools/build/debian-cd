@@ -1,0 +1,169 @@
+#= -*- Mode: shell-script -*-
+
+export PATH="$debian_cd_dir/tools:$PATH"
+
+# copy debian-cd files into working dir
+rsync --delete -aWHr $debian_cd_dir/. $BASEDIR/
+
+# update the tasks files
+cd $BASEDIR/tasks
+for a in generate_di_list generate_di+k_list ; do
+  ../tools/$a || echo "WARNING: $a failed."
+done
+
+cd $BASEDIR
+
+# if using non-official CODENAME, create links to emulate an existing codename.
+# http://bugs.debian.org/542241
+if [ -n "$debian_cd_emulate_codename" ]; then
+    for x in data/ tools/ tools/boot/ ; do
+        link="$x/$CODENAME"
+        if [ ! -e "$link" ]; then
+            echo "Creating link from $debian_cd_emulate_codename to $link"
+            ln -s $debian_cd_emulate_codename $link
+        fi
+    done
+fi
+
+echo "simple-cdd: Running debian-cd makefile"
+make distclean
+make status
+
+if [ -n "$EXCLUDE" ]; then
+    mv $EXCLUDE $TDIR/$CODENAME/tasks/simple-cdd.exclude
+    export EXCLUDE=simple-cdd.exclude
+fi
+
+# add include files to the task
+test -r "$TASK" && mv -f $TASK $TASK.bak
+for i in $includes ; do
+  echo '#include <'"$i"'>'
+  # ensure includes exist in the appropriate place
+  if [ -f "$BASEDIR/tasks/$i" ]; then
+    cp $BASEDIR/tasks/$i $TDIR/$CODENAME/tasks/
+  fi
+done | sort -u > $TASK
+
+# add all desired packages to the task
+for p in $all_packages ; do
+  echo $p
+done | sort -u >> $TASK
+
+mv $TASK $TDIR/$CODENAME/tasks/simple-cdd.task
+make packagelists TASK=simple-cdd.task
+
+make image-trees
+
+isolinuxcfg="$TDIR/$CODENAME/boot1/isolinux/isolinux.cfg"
+if [ -f "$isolinuxcfg" ]; then
+    if [ "true" = "$use_serial_console" ] && [ -n "$serial_console_speed" ]; then
+        echo "SERIAL 0 $serial_console_speed 0" >> $isolinuxcfg
+    fi
+    if [ -n "$BOOT_TIMEOUT" ]; then
+        sed -r -i -e "s,(TIMEOUT|timeout).*,TIMEOUT $BOOT_TIMEOUT,g" $isolinuxcfg
+    fi
+fi
+
+# hack to ensure that vga=normal in KERNEL_PARAMS is respected, which may be
+# needed to use -curses with qemu/kvm.
+if [ "true" = "$vga_normal" ]; then
+    sed -i -e 's,vga=788,vga=normal,g' $TDIR/$CODENAME/boot1/isolinux/*.cfg
+fi
+
+for dir in etc install ; do
+    yabootconf="$TDIR/$CODENAME/CD1/$dir/yaboot.conf"
+    if [ -f "$yabootconf" ]; then
+        if [ -n "$KERNEL_PARAMS" ]; then
+            # workaround for http://bugs.debian.org/416230
+            sed -i -e "s|append=\"|append=\"$KERNEL_PARAMS |g" $yabootconf
+        fi
+        if [ -n "$BOOT_TIMEOUT" ]; then
+            echo timeout=$BOOT_TIMEOUT >> $yabootconf
+        fi
+    fi
+done
+
+extras_base_dir="$simple_cdd_temp/extras"
+
+if [ -n "$extras_base_dir" ] && [ -d "$extras_base_dir" ]; then
+  echo "purging $extras_base_dir"
+  rm -rf $extras_base_dir
+fi
+
+extras_dir="$extras_base_dir/simple-cdd"
+mkdir -p "$extras_dir"
+
+# copy some build information onto the CD
+mkdir -p "$extras_dir/.build-info/"
+echo $commandline_opts > $extras_dir/.build-info/commandline
+# TODO: copy configuration files in
+for p in $profiles $build_profiles ; do
+  file="$(profile_files $p conf)"
+  if [ -f "$file" ]; then
+    cp $file $extras_dir/.build-info/
+  fi
+done
+
+all_extras="$all_extras $package_files $preseed_files $exclude_files"
+# copy files to extras directory
+for file in $all_extras ; do
+  test -r "$file" && cp -f $file $extras_dir/
+done
+
+# FIXME: include extra mirror in extras dir.
+
+# populate the choices file.
+for p in $profiles ; do
+  if [ -z "$choices" ]; then
+    choices="$p"
+  else
+    choices="$choices,$p"
+  fi
+done
+
+for p in $default_profiles ; do
+  if [ -z "$default_choices" ]; then
+    default_choices="$p"
+  else
+    default_choices="$default_choices,$p"
+  fi
+done
+
+if [ -n "$profiles" ]; then
+  simple_cdd_template="$(find_files simple-cdd.templates)"
+  if [ ! -f "$simple_cdd_template" ]; then
+    echo "ERROR: cannot find simple-cdd.templates"
+    exit 1
+  fi
+  cat $simple_cdd_template | sed s/CHOICES/$choices/g | sed s/DEFAULTS/$default_choices/g | sed -e 's/,/, /g' > $extras_dir/simple-cdd.templates
+  for p in $profiles ; do
+    file="$(profile_files $p description)"
+    if [ -f "$file" ]; then
+      echo "including description: $file"
+      echo " ." >> $extras_dir/simple-cdd.templates
+      echo " $p: $(egrep -v ^# $file)" >> $extras_dir/simple-cdd.templates
+    fi
+  done
+fi
+
+echo simple-cdd: extra files for simple-cdd
+
+# TODO: use the hook mechanism of debian-cd to first indicate the
+# size that must be reserved and then copy the files at the appropriate time in
+# the process (see RESERVED_BLOCKS_HOOK and DISC_START_HOOK).  The current
+# approach can overflow the media.
+cp -a $extras_base_dir/. $TDIR/$CODENAME/CD1
+
+# check to make sure all the packages we want are present.
+CHECK_MIRROR="$TDIR/$CODENAME/CD1/pool" profiles="default $build_profiles $profiles" simple_cdd_dir="$simple_cdd_dir" check_not_requested="$check_not_requested" checkpackages || exit $?
+
+echo simple-cdd: image
+make image CD=1
+
+if [ -x /usr/bin/edos-debcheck ]; then
+    # check for missing dependencies with edos-debcheck, ignoring debian-installer files which are a little unusual
+    for p in $(find $TDIR/$CODENAME/CD1/dists/ -name Packages | egrep -v debian-installer) ; do
+        echo "checking for missing dependencies with edos-debcheck: $p"
+        edos-debcheck -failures -explain < $p
+    done
+fi

@@ -1,0 +1,92 @@
+# run qemu to install the system and boot the system with qemu.
+
+if [ -z "$qemu" ]; then
+	case $ARCH in
+            i386) qemu=qemu ;;
+            amd64) qemu=qemu-system-x86_64 ;;
+            powerpc) qemu=qemu-system-ppc ;;
+            *) qemu=qemu-system-$ARCH ;;
+        esac
+fi
+
+if [ -z "$(which $qemu)" ]; then
+    qemu=kvm
+fi
+
+if [ -z "$(which $qemu)" ]; then
+        echo "ERROR: qemu not installed: $qemu"
+        exit 1
+fi
+
+# set some defaults
+test -z "$hd_img" && hd_img="$simple_cdd_dir/qemu-test.hd.img"
+if [ -z "$cd_img" ]; then
+    # check alternate locations for cd images...
+    for x in $DEBVERSION $(echo $DEBVERSION | sed -e 's/[. ]//g'); do
+        cd_img="$OUT/${CDNAME:-debian}-$x-$(echo $ARCHES | tr ' ' '-')-CD-1.iso"
+        if [ -r "$cd_img" ]; then
+           echo "found cd image: $cd_img"
+           break 
+        fi
+    done
+fi
+
+# detect if qemu/kvm support is available.
+if [ "false" != "$autodetect_kvm" ] && [ -c "/dev/kvm" ]; then
+    case $(uname -r) in
+        2.6.[3-9][0-9]*)
+            if $qemu -help | grep -q enable-kvm ; then
+                echo "enabling kvm support..."
+                qemu_opts="$qemu_opts -enable-kvm"
+            fi
+            ;;
+    esac
+fi
+
+if [ "true" = "$use_serial_console" ]; then
+        echo "enabling qemu's serial console..."
+        qemu_opts="$qemu_opts -nographic"
+fi
+
+if [ -n "$mem" ]; then
+        qemu_opts="$qemu_opts -m $mem"
+fi
+
+if [ -n "$hd_img" ] && [ -r "$hd_img" ]; then
+        echo "using disk image: $hd_img"
+elif [ -n "$hd_img" ] && [ -n "$(which qemu-img)" ]; then
+        test -z "$hd_size" && hd_size="4G"
+        echo "creating $hd_size qemu disk image: $hd_img"
+        qemu-img create -f qcow $hd_img $hd_size
+else
+        echo "ERROR: hard drive image not readable: $hd_img"
+        exit 1
+fi
+
+if [ -r "$hd_img" ]; then
+        qemu_opts="$qemu_opts -hda $hd_img"
+fi
+
+if [ -n "$cd_img" ] && [ -r "$cd_img" ]; then
+        qemu_opts="$qemu_opts -cdrom $cd_img"
+else
+        echo "ERROR: CD image not readable: $cd_img"
+        exit 1
+fi
+
+# boot the installer
+echo
+date
+echo "loading installer"
+$qemu $qemu_opts -boot d 
+
+# take a break and start fresh
+sleep 5 
+reset
+
+# boot to the installed system
+echo
+date
+echo "initial boot"
+$qemu $qemu_opts -boot c 
+

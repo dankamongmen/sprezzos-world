@@ -1,0 +1,502 @@
+#!/bin/sh
+
+# Copyright 2004-2007 Vagrant Cascadian <vagrant@freegeek.org>.  Licensed under
+# the terms of the GNU General Public License, version 2 or any later version.
+
+# FIXME: call with LANG=C for parts that need it
+
+die() {
+  echo "build-simple-cdd error: $*" > /dev/stderr
+  exit 1
+}
+
+get_help() {
+  test -n "$@" && echo "$@"
+  cat<<EOF
+simple-cdd - create custom debian-installer CDs
+
+Usage:
+--conf  specify a configuration file
+--dist  specify distribution (etch, lenny, sid)
+--graphical-installer|-g  enable graphical installer by default
+--serial-console|-s  set defaults for serial console
+--do-mirror  generate mirror
+--no-do-mirror  do not generate mirror
+--profiles|-p  select profiles (examples in profiles/ dir)
+--build-profiles|-b  profiles only used while building the CD
+--auto-profiles|-a  automatically install these profiles
+--local-packages  list of files included on CD's local package repository
+--locale  select locale
+--keyboard  select keyboard (console-keymaps-at/keymap debconf question)
+--debian-mirror  specify debian mirror. default: ftp://ftp.us.debian.org/debian
+--security-mirror  specify security mirror. default: http://security.debian.org/
+--proposed-updates  specify if proposed updates should be used. default is no.
+--mirror-tools  list the mirror tools to be used
+--build-tools  list the build tools to be used
+--kernel-packages  list of kernel packages to include on the CD
+--help|-h  display this help
+--qemu|-q  use qemu to test the image
+--force-preseed  only issue a warning if a preseeding file is invalid
+--force-root  allow running as root
+--profiles-udeb-dist  pull simple-cdd-profiles udeb from other distribution
+--extra-udeb-dist  also pull in udebs from specified distribution
+--require-optional-packages  fail if missing optional packages (*.downloads)
+EOF
+}
+
+commandline_opts="$@"
+while [ -n "$1" ]; do
+  opt=${1}
+  case "${opt}" in
+    --conf)
+      if [ -f "$2" ]; then
+            . "$2"
+        else
+            echo "ERROR: simple-cdd configuration file not found: $2"
+            exit 1
+      fi
+      shift ;;
+    --dist) export CODENAME="$2"
+      shift ;;
+    -g|--g|--graphical-installer) export ISOLINUX_DEFAULT="installgui" ;;
+    --serial-console|-s) use_serial_console="true" ;;
+    --do-mirror) do_mirror="true" ;;
+    --no-do-mirror) do_mirror="false" ;;
+    --profiles|-p) profiles="$2" 
+      shift ;;
+    --build-profiles|-b) build_profiles="$2" 
+      shift ;;
+    --auto-profiles|-a) auto_profiles="$2" 
+      shift ;;
+    --local-packages) local_packages="$2" 
+      shift ;;
+    --locale) locale="$2" 
+      shift ;;
+    --keyboard) keyboard="$2"
+      shift ;;
+    --debian-mirror) debian_mirror="$2" 
+      shift ;;
+    --security-mirror) security_mirror="$2" 
+      shift ;;
+    --proposed-updates) proposed_updates="true" 
+      shift ;;
+    --mirror-tools) mirror_tools="$2"
+      shift ;;
+    --build-tools) build_tools="$2"
+      shift ;;
+    --kernel-packages) kernel_packages="$2"
+      shift ;;
+    --help|-h) get_help
+      exit 0 ;;
+    --qemu|-q) use_qemu="true" ;;
+    --force-preseed) force_preseed="true" ;;
+    --profiles-udeb-dist) profiles_udeb_dist="$2"
+      shift ;;
+    --extra-udeb-dist) extra_udeb_dist="$2"
+      shift ;;
+    --require-optional-packages) export require_optional_packages="true" ;;
+    --force-root) force_root="true" ;;
+    *) get_help "ERROR: unknown commandline option: $1" > /dev/stderr
+      exit 1 ;;
+  esac
+  shift || die "no argument supplied for ${opt} option"
+done
+
+# set defaults
+test -z "$simple_cdd_dir" && simple_cdd_dir=$(pwd)
+test -z "$simple_cdd_dirs" && simple_cdd_dirs="$simple_cdd_dir /usr/share/simple-cdd"
+
+# turn comma-separated list into whitespace-separated list
+profiles="$(echo $profiles | tr ',' ' ')"
+default_profiles="$(echo $default_profiles | tr ',' ' ')"
+all_extras="$(echo $all_extras | tr ',' ' ')"
+local_packages="$(echo $local_packages | tr ',' ' ')"
+all_packages="$(echo $all_packages | tr ',' ' ')"
+build_profiles="$(echo $build_profiles | tr ',' ' ')"
+mirror_tools="$(echo $mirror_tools | tr ',' ' ')"
+build_tools="$(echo $build_tools | tr ',' ' ')"
+
+new_profiles=""
+for p in $profiles ; do
+  if [ "$p" = "default" ]; then
+    echo "NOTE: profile 'default' is automatically included in this version of simple-cdd."
+    echo "NOTE: to disable this message, remove it from the 'profiles' value in simple-cdd.conf"
+  else
+    new_profiles="$new_profiles $p"
+  fi
+done
+
+profiles="$new_profiles"
+
+find_files(){
+  file="$1"
+  for dir in $simple_cdd_dirs ; do
+    f="$dir/$file"
+    if [ -r "$f" ]; then
+        echo "$f"
+        break
+    fi
+  done
+}
+
+profile_files(){
+  profile="$1"
+  type="$2"
+  find_files "profiles/$profile.$type"
+}
+
+get_config() {
+# get configuration files
+for p in $@ ; do
+  file="$(profile_files $p conf)"
+  if [ -f "$file" ]; then
+    echo "including configuration values for: $file"
+    . "$file"
+  fi
+done
+}
+
+# get defaults, and have build profiles over-ride all others
+get_config default $profiles $build_profiles
+
+if [ "$force_root" != "true" ] && [ "$(id -ru)" = "0" ]; then
+   die "Running as root is strongly discouraged. please run as a non-root user." 
+fi
+
+test -z "$server" && server="ftp.us.debian.org"
+test -z "$debian_mirror" && debian_mirror="ftp://$server/debian/"
+test -z "$wget_debian_mirror" && wget_debian_mirror="$debian_mirror"
+test -z "$rsync_debian_mirror" && rsync_debian_mirror="$server::debian"
+test -z "$use_security_mirror" && use_security_mirror="true"
+if [ -z "$security_mirror" ] && [ "true" = "$use_security_mirror" ]; then
+    security_mirror="http://security.debian.org/"
+fi
+test -z "$mirror_tools" && mirror_tools="wget reprepro"
+test -z "$mirror_components" && mirror_components="main"
+test -z "$mirror_components_extra" && mirror_components_extra="$mirror_components"
+test -z "$mirror_files" && mirror_files="README doc/ tools/"
+test -z "$simple_cdd_temp" && simple_cdd_temp="$simple_cdd_dir/tmp/"
+test -z "$ARCH" && ARCH="$(dpkg --print-architecture)" 
+test -z "$ARCHES" && ARCHES=$ARCH
+test -z "$simple_cdd_mirror" && simple_cdd_mirror="$simple_cdd_temp/mirror"
+test -z "$simple_cdd_basedir" && simple_cdd_basedir="$simple_cdd_temp/debian-cd" 
+test -z "$simple_cdd_preseed" && simple_cdd_preseed="preseed/file=/cdrom/simple-cdd/default.preseed"
+test -z "$TASK" && TASK=$simple_cdd_temp/simple-cdd.task
+
+# set path to include simple-cdd dirs
+simple_cdd_path=""
+for dir in $simple_cdd_dirs ; do
+    if [ -z "$simple_cdd_path" ]; then
+        simple_cdd_path="$dir"
+    else
+        simple_cdd_path="$simple_cdd_path:$dir"
+    fi
+done
+export PATH="$simple_cdd_path:$PATH"
+
+# set default values
+test -z "$CODENAME" && export CODENAME="$(lsb_release --short --codename)"
+test -z "$DI_CODENAME" && export DI_CODENAME="$CODENAME"
+test -z "$DEBVERSION" && export DEBVERSION="$(lsb_release --short --release)"
+test -z "$OFFICIAL" && export OFFICIAL="Unofficial"
+test -z "$OFFICIAL_VAL" && export OFFICIAL_VAL=0
+test -z "$ISOLINUX" && export ISOLINUX=1
+test -z "$DISKTYPE" && export DISKTYPE=CD
+test -z "$NORECOMMENDS" && export NORECOMMENDS=1
+test -z "$MAXCDS" && export MAXCDS=1
+test -z "$OMIT_RELEASE_NOTES" && export OMIT_RELEASE_NOTES=1
+test -z "$DOJIGDO" && export DOJIGDO="0"
+test -z "$MAXJIGDOS" && export MAXJIGDOS="0"
+
+export MIRROR="$simple_cdd_mirror"
+export BASEDIR="$simple_cdd_basedir"
+export TDIR="$simple_cdd_temp/cd-build"
+export APTTMP="$TDIR/apt/"
+export OUT="$simple_cdd_dir/images"
+test -z "$INSTALLER_CD" && export INSTALLER_CD=2
+
+for component in $mirror_components $mirror_components_extra ; do
+   case $component in
+        contrib) export CONTRIB=1 ;;
+        non-free) export NONFREE=1 ;;
+   esac
+done
+
+test -z "$build_tools" && build_tools="debian-cd"
+for tool in $build_tools ; do
+    case $tool in 
+        debian-cd) 
+            test -z "$debian_cd_dir" && debian_cd_dir="/usr/share/debian-cd"
+            # set include files for debian-cd
+            test -z "$includes" && includes="debian-installer+kernel debian-installer"
+            # ensure that ISO images are built
+            test -z "$MAXISOS" && export MAXISOS="ALL"
+            ;;
+    esac
+done
+
+# set some debian-installer defaults
+test -z "$di_release" && di_release="current"
+
+# ensure variables are exported
+export ARCH
+export ARCHES
+
+mkdir -p "$simple_cdd_dir"
+# create temp directory
+mkdir -p "$simple_cdd_temp"
+
+if [ ! -d "$simple_cdd_dir" ] ; then
+  echo "ERROR: directory not found: $simple_cdd_dir"
+  exit 1
+fi
+
+# include package and preseed files for profiles
+for p in default $profiles $build_profiles ; do
+  preseed_files="$preseed_files $(profile_files $p preseed)"
+  package_files="$package_files $(profile_files $p packages)"
+  package_files="$package_files $(profile_files $p downloads)"
+  package_files="$package_files $(profile_files $p udebs)"
+  all_extras="$all_extras $(profile_files $p postinst)"
+  for file in $(profile_files $p extra) ; do
+    # include the extra file itself, as well as the contents it references
+    all_extras="$all_extras $file $(egrep -v ^# $file)"
+  done
+  exclude_files="$exclude_files $(profile_files $p excludes)"
+done
+
+preseed_check_failure() {
+    if [ "true" = "$force_preseed" ]; then
+        echo "WARNING: preseed file invalid: $1"
+    else
+        echo "ERROR: preseed file invalid: $1"
+        exit 1
+    fi
+}
+
+# verify that preseeding files are valid
+for p in $preseed_files ; do
+    /usr/bin/debconf-set-selections --checkonly $p || preseed_check_failure $p
+done
+
+for a in $ARCHES ; do
+    base_include_packages=""
+    debootstrap_dir="$simple_cdd_temp/debootstrap"
+    debootstrap_file="$debootstrap_dir/$CODENAME-$a"
+    if [ -f "$debootstrap_file" ]; then
+            base_include_packages="$(cat $debootstrap_file)"
+    fi
+    if [ -z "$base_include_packages" ]; then
+        echo "Trying to run debootstrap for $a architecture"
+        base_include_packages="$(/usr/sbin/debootstrap --print-debs --arch $a $CODENAME /tmp/debootstrap.$$ $debian_mirror)"
+        # cache the results
+        mkdir -p $debootstrap_dir
+        for p in $base_include_packages ; do
+            echo $p >> $debootstrap_file
+        done
+    fi
+    # include base packages
+    all_packages="$all_packages $base_include_packages"
+done  
+
+if [ -n "$exclude_files" ]; then
+  export EXCLUDE=$simple_cdd_temp/simple-cdd.excludes
+  test -r "$EXCLUDE" && mv -f "$EXCLUDE" "$EXCLUDE".bak
+  touch $EXCLUDE
+  for f in $exclude_files ; do
+    for p in $(egrep -v ^# $f); do
+      echo $p >> $EXCLUDE
+    done
+  done
+fi
+
+# get lists of packages from files
+for l in $package_files $BASE_INCLUDE ; do
+  all_packages="$all_packages $(egrep -v ^# $l)"
+done
+
+if [ -z "$kernel_packages" ]; then
+    # guess appropriate kernel for architectures
+    for kernel_base in linux-image- linux-image-2.6- ; do
+        for a in $ARCHES ; do
+            case $a in
+                i386) kernel_packages="$kernel_packages ${kernel_base}486" ;;
+                powerpc|amd64|s390) kernel_packages="$kernel_packages ${kernel_base}$a" ;;
+                alpha) kernel_packages="$kernel_packages ${kernel_base}alpha-generic" ;;
+                sparc) kernel_packages="$kernel_packages ${kernel_base}sparc64" ;;
+                *) echo "WARNING: unable to guess kernel for architecture: $a" ;;
+            esac
+        done
+    done
+fi
+
+if [ -n "$kernel_packages" ]; then
+    all_packages="$all_packages $kernel_packages"
+fi
+
+# create local package repository, unless using reprepro (which includes
+# local_packages directly into the repository)
+if [ -n "$local_packages" ] && [ -z "$(echo $mirror_tools | egrep reprepro)" ]; then
+  echo "NOTE: building local package repository"
+  local_base_package_dir="$simple_cdd_temp/local-packages"
+  local_package_dir="$local_base_package_dir/pool/local/"
+  if [ -d "$local_base_package_dir.old" ]; then
+    rm -rf "$local_base_package_dir.old"
+  fi
+  if [ -d "$local_base_package_dir" ]; then
+    mv -f "$local_base_package_dir" "$local_base_package_dir.old"
+  fi
+  mkdir -p "$local_package_dir"
+  for file in $local_packages ; do
+    if [ -f "$file" ] ; then
+      cp -vf $file $local_package_dir
+    elif [ -d "$file" ]; then
+      cp -vrf $file $local_package_dir
+    else
+      echo "WARNING: local packages file not found: $file"
+    fi
+  done
+  cd $local_base_package_dir
+  local_packages_file=dists/$CODENAME/local/binary-$ARCH/Packages
+  local_sources_file=dists/$CODENAME/local/source/Sources
+  for a in $local_packages_file $local_sources_file ; do
+    a_dir=$(dirname $a)
+    mkdir -p $a_dir
+    if [ "$a" = "$local_packages_file" ]; then
+      apt-ftparchive packages . > $local_packages_file
+    elif [ "$a" = "$local_sources_file" ]; then
+      apt-ftparchive sources . > $local_sources_file
+    fi
+    # TODO: set suite and whatnot for pinning
+    apt-ftparchive release $a_dir > $a_dir/Release
+    gzip -c $a > $a.gz
+  done
+  # TODO: set suite and whatnot for pinning
+  apt-ftparchive release dists/$CODENAME > dists/$CODENAME/Release
+  export LOCAL=1
+  export LOCALDEBS="$local_base_package_dir"
+  # get dependencies from local packages
+  for p in $(find $local_package_dir -type f -name '*.deb' -o -name '*.udeb') ; do
+    dep_line="$(dpkg-deb --info $p | awk -F Depends: '/Depends/{print $2}' | sed s/,//g)"
+    for d in $dep_line; do
+      case $d in
+        [a-z0-9]*) all_packages="$all_packages $d"
+      esac
+    done
+  done
+fi
+
+mkdir -p $BASEDIR
+
+if [ "true" = "$do_mirror" ] || [ -z "$do_mirror" ] ; then
+    if [ -z "$custom_installer" ] && [ -z "$DI_WWW_HOME" ]; then
+        # add d-i files for each architecture
+        for a in $ARCHES ; do
+            case $a in
+                i386|amd64) cdrom="/cdrom" ;;
+                *) cdrom="" ;;
+            esac
+            mirror_files="$mirror_files dists/$DI_CODENAME/main/installer-$a/$di_release/images$cdrom/"
+        done
+    fi
+    # run mirroring hooks
+    for tool in $mirror_tools ; do
+        file="$(find_files tools/mirror/$tool)"
+        if [ -f "$file" ]; then
+            . "$file"
+        fi
+    done
+fi
+
+if [ -z "$SECURITY" ] && [ -n "$security_mirror" ]; then
+  if [ -d "$MIRROR/$CODENAME-security" ]; then
+    export SECURITY="$MIRROR/$CODENAME-security/"
+  fi
+fi
+
+if [ -n "$(echo $mirror_tools | grep debpartial-mirror)" ] && [ -d "$MIRROR/$CODENAME" ]; then
+  # FIXME: better check for new-style debpartial-mirror re-location ?
+  MIRROR="$MIRROR/$CODENAME"
+  echo "re-setting mirror for new debpartial-mirror dir: $MIRROR"
+fi
+
+if [ ! -d "$MIRROR" ]; then
+  echo "ERROR: mirror dir not a dir: $MIRROR"
+  exit 1
+fi
+
+# check to make sure all the packages we want are present.
+CHECK_MIRROR="$MIRROR $local_packages $SECURITY" profiles="default $build_profiles $profiles" simple_cdd_dir="$simple_cdd_dir" checkpackages || exit $?
+
+cd $MIRROR
+for a in $ARCHES ; do
+    current_installer="dists/$DI_CODENAME/main/installer-$a/current/"
+    di_dir=""
+    if [ -n "$custom_installer" ] && [ -d "$custom_installer/$a" ]; then
+        di_dir="$custom_installer/$a"
+    elif [ "$CODENAME" != "$DI_CODENAME" ] || [ "current" != "$di_release" ]; then
+        di_dir="dists/$DI_CODENAME/main/installer-$a/$di_release"
+    fi
+    if [ -d "$di_dir" ]; then
+        echo "NOTE: using installer from: $di_dir"
+        mkdir -p $current_installer
+        rsync --delete -aWHr $di_dir/. $current_installer/
+    fi
+done
+
+if [ -n "$simple_cdd_preseed" ]; then
+    echo "setting preseed file..."
+    KERNEL_PARAMS="$KERNEL_PARAMS $simple_cdd_preseed"
+    echo "KERNEL_PARAMS: $KERNEL_PARAMS"
+fi
+
+if [ "true" = "$use_serial_console" ]; then
+  echo "enabling serial console hacks..."
+  test -z "$serial_console_speed" && serial_console_speed="38400"
+  test -z "$serial_console_opts" && serial_console_opts="ttyS0,$serial_console_speed"
+  KERNEL_PARAMS="$KERNEL_PARAMS console=$serial_console_opts"
+  echo "KERNEL_PARAMS: $KERNEL_PARAMS"
+fi
+
+if [ -n "$locale" ]; then
+  echo "setting default locale..."
+  KERNEL_PARAMS="$KERNEL_PARAMS debian-installer/locale=$locale"
+  echo "KERNEL_PARAMS: $KERNEL_PARAMS"
+fi
+
+if [ -n "$keyboard" ]; then
+  echo "setting default keyboard..."
+  KERNEL_PARAMS="$KERNEL_PARAMS console-keymaps-at/keymap=$keyboard"
+  echo "KERNEL_PARAMS: $KERNEL_PARAMS"
+fi
+
+if [ -n "$auto_profiles" ]; then
+  for p in $auto_profiles ; do
+    if [ -z "$new_auto_profiles" ]; then
+        new_auto_profiles="$p"
+    else
+        new_auto_profiles="$new_auto_profiles,$p"
+    fi
+  done
+  echo "setting automatically selected profiles..."
+  KERNEL_PARAMS="$KERNEL_PARAMS simple-cdd/profiles=$new_auto_profiles"
+  echo "KERNEL_PARAMS: $KERNEL_PARAMS"
+fi
+
+export KERNEL_PARAMS
+
+for buildtool in $build_tools ; do
+    file="$(find_files tools/build/$buildtool)"
+    if [ -f "$file" ]; then
+        . "$file"
+    fi
+done
+
+if [ "true" = "$use_qemu" ]; then
+  file="$(find_files tools/testing/qemu)"
+  if [ -f "$file" ] ; then
+    . "$file"
+  else
+    echo "Warning: unable to find qemu testing script"
+  fi
+fi

@@ -1,0 +1,83 @@
+#!/bin/sh
+
+# Copyright 2006 Gustavo Franco <stratus@debian.org>.
+# Copyright 2004-2006 Vagrant Cascadian <vagrant@freegeek.org>.
+# Licensed under the terms of the GNU General Public License,
+# version 2 or any later version.
+
+# TODO: figure out a better way to avoid asking about profiles when there are
+# no profiles specified
+
+SIMPLE_CDD_DIR=/cdrom/simple-cdd
+
+set -e
+
+if [ ! -d "$SIMPLE_CDD_DIR" ]; then
+    exit 1
+fi
+
+# load debconf
+. /usr/share/debconf/confmodule
+
+if [ -f $SIMPLE_CDD_DIR/simple-cdd.templates ]; then
+  echo "loading simple-cdd templates..."
+
+  debconf-loadtemplate simple-cdd $SIMPLE_CDD_DIR/simple-cdd.templates
+
+  echo "asking simple-cdd debconf questions..."
+
+  db_input high simple-cdd/profiles || /bin/true
+  db_go
+else
+  echo "NOTE: simple-cdd templates not found, not asking about profiles."
+fi
+
+db_get simple-cdd/profiles || /bin/true
+profiles="$(echo $RET | tr ',' ' ')"
+echo "loading simple-cdd preseeding files"
+echo "profiles: $profiles"
+
+cd $SIMPLE_CDD_DIR
+
+for p in $profiles ; do
+    echo
+    if [ "$p" = "$default" ]; then
+      echo "default Debconf preseeding already loaded. skipping."
+    elif [ -r "$p.preseed" ]; then
+      echo "Debconf preseeding for: $p"
+      debconf-set-selections $p.preseed
+    else
+      echo "no Debconf preseeding for: $p"
+    fi
+done
+echo "Finished with simple-cdd debconf preseeding"
+
+echo "Queuing simple-cdd udebs..."
+for p in default $profiles ; do
+     echo
+     if [ -r "$p.udebs" ]; then
+        echo "Queuing udebs for profile: $p"
+        wanted_packages="$(egrep -v ^# $p.udebs)"
+        anna-install $wanted_packages || true
+     else
+        echo "No udeb list for profile: $p"
+     fi
+done
+echo "Finished queueing simple-cdd udebs"
+
+echo "Queuing simple-cdd packages..."
+for p in default $profiles ; do
+     echo
+     if [ -r "$p.packages" ]; then
+        echo "Queuing packages for profile: $p"
+        wanted_packages="$(egrep -v ^# $p.packages)"
+        apt-install $wanted_packages || true
+     else
+        echo "No package list for profile: $p"
+     fi
+done
+echo "Finished queueing simple-cdd packages"
+
+#DEBHELPER#
+
+exit 0

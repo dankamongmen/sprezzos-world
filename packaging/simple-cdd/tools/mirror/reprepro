@@ -1,0 +1,241 @@
+mkdir -p $MIRROR
+
+generate_distributions(){
+    updates="default default-base default-udebs"
+    if [ -n "$security_mirror" ]; then
+        updates="$updates default-security"
+    fi
+    if [ -n "$debian_mirror_extra" ]; then
+        updates="$updates default-extra"
+    fi
+    if [ "true" = "$proposed_updates" ]; then
+        updates="$updates default-proposed-updates"
+    fi
+    if [ -n "$profiles_udeb_dist" ]; then
+        updates="$updates default-profiles-udeb"
+    fi
+    if [ -n "$extra_udeb_dist" ]; then
+        updates="$updates default-extra-udebs"
+    fi
+    if [ "true" = "$backports" ]; then
+        updates="$updates default-backports"
+    fi
+    cat << EOF > $conf/distributions
+Codename: $CODENAME
+Architectures: $ARCHES
+Components: $mirror_components
+UDebComponents: main
+Description: mirror for $CODENAME
+Update: $updates
+Suite: ${SUITE:-"stable"}
+
+EOF
+    if [ "$CODENAME" != "$DI_CODENAME" ]; then
+        cat << EOF >> $conf/distributions
+Codename: $DI_CODENAME
+Architectures: $ARCHES
+Components: $mirror_components
+UDebComponents: main
+Description: mirror for $CODENAME
+Update: default-udebs
+Suite: ${SUITE:-"stable"}
+EOF
+
+    fi
+
+}
+
+generate_updates(){
+    cat << EOF > $conf/updates
+Name: default
+Suite: *
+UDebComponents: 
+Method: $debian_mirror
+FilterList: deinstall package-list
+VerifyRelease: ${verify_release_keys}
+
+Name: default-base
+Suite: *
+UDebComponents: 
+Method: $debian_mirror
+FilterFormula: priority (== required) | priority (== important) | priority (== standard)
+VerifyRelease: ${verify_release_keys}
+
+Name: default-udebs
+Suite: *
+Components: 
+Method: $debian_mirror
+VerifyRelease: ${verify_release_keys}
+
+EOF
+
+    if [ -n "$security_mirror" ]; then
+        cat << EOF >> $conf/updates
+Name: default-security
+Suite: */updates
+UDebComponents: 
+Method: $security_mirror
+FilterList: deinstall package-list
+VerifyRelease: ${verify_release_keys}
+
+EOF
+    fi
+    if [ -n "$debian_mirror_extra" ]; then
+        cat << EOF >> $conf/updates
+Name: default-extra
+Suite: *
+Components: $mirror_components_extra
+UDebComponents: 
+Method: $debian_mirror_extra
+FilterList: deinstall package-list
+VerifyRelease: ${verify_release_keys}
+
+EOF
+    fi
+    if [ "true" = "$proposed_updates" ]; then
+        cat << EOF >> $conf/updates
+Name: default-proposed-updates
+Suite: $CODENAME-proposed-updates
+UDebComponents: main
+Method: $debian_mirror
+FilterList: deinstall package-list
+VerifyRelease: ${verify_release_keys}
+
+EOF
+    fi
+    if [ -n "$profiles_udeb_dist" ]; then
+        cat << EOF >> $conf/updates
+Name: default-profiles-udeb
+Suite: $profiles_udeb_dist
+Components: 
+FilterFormula: package (== simple-cdd-profiles)
+Method: $debian_mirror
+VerifyRelease: ${verify_release_keys}
+
+EOF
+    fi
+    if [ -n "$extra_udeb_dist" ]; then
+        cat << EOF >> $conf/updates
+Name: default-extra-udebs
+Suite: $extra_udeb_dist
+Components: 
+Method: $debian_mirror
+VerifyRelease: ${verify_release_keys}
+EOF
+	if [ -n "$extra_udeb_dist_packages" ]; then
+		p_line=""
+		for p in $extra_udeb_dist_packages ; do
+			if [ -z "$p_line" ]; then
+				p_line="package (== $p)"
+			else
+				p_line="package (== $p) | $p_line"
+			fi
+		done
+		if [ -n "$p_line" ]; then
+        		cat << EOF >> $conf/updates
+FilterFormula: $p_line
+EOF
+		fi
+	fi
+	echo >> $conf/updates
+    fi
+    if [ "true" = "$backports" ]; then
+        test -z "$backports_mirror" && backports_mirror="http://backports.org/debian"
+        touch $conf/backports-packages
+        for package in $backports_packages ; do
+            echo $package install
+        done | sort -u > $conf/backports-packages
+        cat << EOF >> $conf/updates
+Name: default-backports
+Suite: $CODENAME-backports
+UDebComponents: main
+Method: $backports_mirror
+FilterList: deinstall backports-packages 
+VerifyRelease: ${verify_release_keys}
+
+EOF
+    fi
+}
+
+export REPREPRO_BASE_DIR=$MIRROR
+conf=$MIRROR/conf
+mkdir -p $conf
+
+generate_distributions
+generate_updates
+
+touch $conf/package-list
+
+test -z "$reprepro_opts" && reprepro_opts="-V"
+
+# include local packages into the mirror
+if [ -n "$local_packages" ]; then
+    for p in $(find $local_packages -type f); do
+        case $p in
+            *.deb) 
+                reprepro $reprepro_opts --ignore=wrongdistribution includedeb $CODENAME $p
+                ;;
+            *.udeb) 
+                reprepro $reprepro_opts --ignore=wrongdistribution includeudeb $CODENAME $p
+                if [ "$CODENAME" != "$DI_CODENAME" ]; then
+                    reprepro $reprepro_opts --ignore=wrongdistribution includeudeb $DI_CODENAME $p                 
+                fi
+                ;;
+            *)
+                echo "unknown package type: $p"
+                ;;
+        esac
+    done
+fi
+
+reprepro $reprepro_opts --noskipold update 
+
+# attempt to resolve dependencies
+test -z "$reprepro_retries" && reprepro_retries="20"
+package_lists=""
+for a in $ARCHES ; do
+    for component in $mirror_components ; do
+        package_lists="$package_lists $MIRROR/dists/$CODENAME/$component/binary-$a/Packages"
+        upstream_package_lists="$upstream_package_lists $MIRROR/lists/${CODENAME}_default_deb_${component}_${a}"
+    done
+done
+
+# get a list of provides
+provides="$(zgrep ^Provides $upstream_package_lists | cut -d : -f 2 | tr ',' '\n' | sort -u)"
+for i in $(seq $reprepro_retries); do
+    cp $conf/package-list $conf/package-list.old
+
+    dependencies="$(awk -F Depends: '/Depends:/{print $2}' $package_lists | tr '|,' '\n' | awk '{print $1}' | sort -u)"
+    if [ "$NORECOMMENDS" != "1" ]; then
+        recommends="$(awk -F Recommends: '/Recommends:/{print $2}' $package_lists | tr '|,' '\n' | awk '{print $1}' | sort -u)"
+    fi
+
+    provide_dependencies="$(providecheck "$provides" "$all_packages $dependencies" | sort -u)"
+    if [ -n "$provide_dependencies" ]; then
+        for p in $provide_dependencies ; do
+            # see if a package already satisfies the provides
+            satisfies="$(grep-dctrl -n --show-field Package --field Provides --field Package $p $package_lists)"
+            if [ -z "$satisfies" ]; then
+                # search for other packages that provide the desired features
+                dependencies="$dependencies $(zcat $upstream_package_lists | grep-dctrl -n --show-field Package --field Provides $p)"
+            fi
+        done
+    fi
+
+    for p in $dependencies $recommends $all_packages ; do
+        echo $p install 
+    done | sort -u > $conf/package-list
+
+    if diff -q $conf/package-list $conf/package-list.old ; then
+        echo "no new dependencies, finished in $i attempts."
+        break
+    else
+        echo "getting missing dependencies... attempt $i"
+        reprepro $reprepro_opts --nolistsdownload --noskipold update
+    fi
+done
+
+if [ -x /usr/bin/edos-debcheck ] && [ -n "$package_lists" ]; then
+    echo "checking for missing dependencies with edos-debcheck: $package_lists"
+    cat $package_lists | edos-debcheck -failures -explain
+fi
