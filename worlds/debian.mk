@@ -113,3 +113,12 @@ $(SENSIBLEUTILS): $(SPREZZ)/sensible-utils/debian/changelog
 	tar cJvf sensible-utils_$(sensible-utils_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: simple-cdd
+simple-cdd:$(SIMPLECDD)_$(ARCH).deb
+$(SIMPLECDD): $(SPREZZ)/simple-cdd/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf simple-cdd_$(simple-cdd_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
