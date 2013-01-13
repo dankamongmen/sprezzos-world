@@ -190,6 +190,14 @@ $(LIBKATE): $(SPREZZ)/libkate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libkate-$(libkate_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: marble
+marble:$(MARBLE)_$(ARCH).deb
+$(MARBLE): $(SPREZZ)/marble/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf marble-$(marble_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: nepomukcore
 nepomukcore:$(NEPOMUKCORE)_$(ARCH).deb
 $(NEPOMUKCORE): $(SPREZZ)/nepomukcore/debian/changelog
