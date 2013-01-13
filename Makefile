@@ -3053,6 +3053,14 @@ $(KBD): $(SPREZZ)/kbd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf kbd-$(kbd_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: kdenlive
+kdenlive:$(KDENLIVE)_$(ARCH).deb
+$(KDENLIVE): $(SPREZZ)/kdenlive/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf kdenlive-$(kdenlive_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: krb
 krb:$(KRB)_$(ARCH).deb
 $(KRB): $(SPREZZ)/krb/debian/changelog

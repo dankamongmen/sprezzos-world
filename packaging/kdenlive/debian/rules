@@ -1,0 +1,97 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+export DEB_BUILD_HARDENING=1
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+NCPUS := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+
+ifeq ($(NCPUS),-1)
+	NCPUS:=1
+endif
+
+ifeq ($(NCPUS),0)
+	NCPUS:=1
+endif
+
+EXTRAFLAGS :=
+ifeq ($(DEB_BUILD_ARCH_OS),kfreebsd)
+	EXTRAFLAGS := -DNO_JOGSHUTTLE=YES
+endif
+
+CMAKE_SYSTEM_PROCESSOR = $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	[ -d build ] || mkdir build
+	cd build && cmake .. \
+		-DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_SKIP_RPATH:BOOL=YES $(EXTRAFLAGS)
+	touch $@
+
+build: build-stamp
+build-stamp: configure
+	dh_testdir
+	cd build && $(MAKE) -j $(NCPUS)
+	touch $@
+
+build-arch: build
+
+build-indep: build
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	rm -rf build
+	rm -rf $(CURDIR)/debian/tmp
+	rm -f $(CURDIR)/kdenlive.menu
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	cd build && $(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	rm -f $(CURDIR)/debian/tmp/usr/share/doc/kde/HTML/*/kdenlive/common
+	cp $(CURDIR)/data/kdenlive.menu $(CURDIR)/debian/
+	dh_install --list-missing
+
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs -i
+	dh_installdocs -i
+	dh_installdirs -i
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i -- -Zxz
+
+binary-arch: build install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installchangelogs -a
+	dh_installdocs -a
+	dh_installmenu -a
+	dh_strip -a --dbg-package=kdenlive-dbg
+	dh_compress -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a -- -Zxz
+
+get-orig-source:
+	@@dh_testdir
+	@@[ -d ../tarballs/. ]||mkdir -p ../tarballs
+	@@uscan --force-download --destdir ../tarballs
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
