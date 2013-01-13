@@ -1,0 +1,81 @@
+#!/usr/bin/make -f
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	DEBUG_FLAGS = --enable-debug
+endif
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	./configure $(DEBUG_FLAGS) \
+		--prefix=/usr --mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--with-libxml2-libs="$(shell pkg-config --libs libxml-2.0)" \
+		--with-libxml2-cflags="$(shell pkg-config --cflags libxml-2.0)" \
+		--host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) \
+		$(shell DEB_LDFLAGS_MAINT_APPEND=-Wl,--as-needed DEB_CFLAGS_MAINT_APPEND=-Wall dpkg-buildflags --export=configure)
+	touch $@
+
+build: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE)
+	$(MAKE) check
+	$(MAKE) -C doc autogen.ps info
+	cd doc && texi2html -split=chapter -subdir=html autogen.texi
+	touch $@
+
+build-indep:
+	# Nothing to do (no arch-indep packages).
+build-arch: build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	rm -f snprintfv/snprintfv.h
+	rm -Rf doc/html
+	rm -f agen5/test/defs autoopts/test/*.o autoopts/test/*.c \
+		autoopts/test/*.h autoopts/test/getopt.def getdefs/opts.c \
+		snprintfv/snv.c xml2ag/fork.c xml2ag/xmlopts.c xml2ag/xmlopts.h \
+		autoopts/autoopts.pc autoopts/pathfind.3
+	rm -f autoopts/*.tar.gz
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp/
+	rm -f $(CURDIR)/debian/tmp/usr/share/autogen/*.tar.gz
+	rm -f $(CURDIR)/debian/tmp/usr/share/info/dir
+	rm -f $(CURDIR)/debian/tmp/usr/lib/libopts.la
+
+binary-indep: build install
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install --fail-missing
+	dh_installdocs
+	dh_installexamples
+	dh_installman
+	dh_installinfo
+	dh_installchangelogs ChangeLog
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs -V
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure build build-indep build-arch
