@@ -198,6 +198,14 @@ $(MARBLE): $(SPREZZ)/marble/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf marble-$(marble_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: nas
+nas:$(NAS)_$(ARCH).deb
+$(NAS): $(SPREZZ)/nas/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf nas-$(nas_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: nepomukcore
 nepomukcore:$(NEPOMUKCORE)_$(ARCH).deb
 $(NEPOMUKCORE): $(SPREZZ)/nepomukcore/debian/changelog
