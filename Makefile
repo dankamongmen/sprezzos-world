@@ -4645,6 +4645,14 @@ $(MUTTER): $(SPREZZ)/mutter/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf mutter_$(mutter_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: nasm
+nasm:$(NASM)_$(ARCH).deb
+$(NASM): $(SPREZZ)/nasm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf nasm-$(nasm_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: nautilus
 nautilus:$(NAUTILUS)_$(ARCH).deb
 $(NAUTILUS): $(SPREZZ)/nautilus/debian/changelog
