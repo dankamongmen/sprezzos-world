@@ -1,0 +1,69 @@
+#!/usr/bin/make -f
+
+export NOCOLOR=1
+
+PYVERSIONS := $(shell pyversions -s)
+RUBYVERSIONS := ruby1.8 ruby1.9.1
+VENDOR ?= $(shell if dpkg-vendor --is Ubuntu || dpkg-vendor --derives-from Ubuntu; then echo "Ubuntu"; else echo "Debian"; fi)
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS := $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+else
+	NUMJOBS := 1
+endif
+
+ifeq ($(DEB_HOST_ARCH_OS), kfreebsd)
+	NUMJOBS := 1
+endif
+
+WAFFLAGS := --nocache --prefix=/usr -j $(NUMJOBS)
+ifeq ($(VENDOR),Ubuntu)
+additional_wafflags := --with-default-output-plugin=pulse
+endif
+
+define \n
+
+
+endef
+
+%:
+	dh $@ --with python2
+
+override_dh_auto_clean:
+	rm -rf _build_*_
+	./waf distclean
+	# Clean up after waf
+	find waflib waftools -name '*.pyc' -delete
+
+override_dh_auto_configure:
+	./waf configure $(WAFFLAGS) \
+		--with-perl-archdir=$(shell /usr/bin/perl -MConfig -le'print $$Config{vendorarch}') \
+		--with-perl-binary=/usr/bin/perl \
+		--without-optionals=ruby,et,python $(additional_wafflags)
+	mv _build_ _build_without_python_
+	$(foreach pyversion,$(PYVERSIONS),\
+		PYTHON=$(pyversion) ./waf configure $(WAFFLAGS) --without-xmms2d --with-optionals=python && \
+		mv _build_ _build_$(pyversion)_$(\n))
+	$(foreach rubyversion,$(RUBYVERSIONS),\
+		RUBY=/usr/bin/$(rubyversion) ./waf configure $(WAFFLAGS) --without-xmms2d --with-optionals=ruby \
+		--with-ruby-archdir=$(shell $(rubyversion) -rrbconfig -e'print RbConfig::CONFIG["vendorarchdir"]') \
+		--with-ruby-libdir=$(shell $(rubyversion) -rrbconfig -e'print RbConfig::CONFIG["vendordir"]') && \
+		mv _build_ _build_$(rubyversion)_$(\n))
+
+override_dh_auto_build:
+	$(foreach pyversion,without_python $(PYVERSIONS) $(RUBYVERSIONS),\
+		mv _build_$(pyversion)_ _build_ && \
+		./waf -v && \
+		mv _build_ _build_$(pyversion)_$(\n))
+
+override_dh_auto_install:
+	$(foreach pyversion,without_python $(PYVERSIONS) $(RUBYVERSIONS),\
+		mv _build_$(pyversion)_ _build_ && \
+		./waf install --destdir=$(CURDIR)/debian/tmp --without-ldconfig && \
+		mv _build_ _build_$(pyversion)_$(\n))
+ifeq ($(VENDOR),Ubuntu)
+	echo "misc:Depends=xmms2-plugin-pulse" >> debian/xmms2.substvars
+endif
+
+override_dh_install:
+	dh_install --fail-missing

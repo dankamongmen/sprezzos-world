@@ -204,7 +204,7 @@ $(NAS): $(SPREZZ)/nas/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf nas-$(nas_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf nas-$(nas_UPVER).src.tar.gz $(TARARGS) $@
 
 .PHONY: nepomukcore
 nepomukcore:$(NEPOMUKCORE)_$(ARCH).deb
