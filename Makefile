@@ -5655,6 +5655,14 @@ $(RAPTOR2): $(SPREZZ)/raptor2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf raptor2-$(raptor2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: rasqal
+rasqal:$(RASQAL)_$(ARCH).deb
+$(RASQAL): $(SPREZZ)/rasqal/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rasqal-$(rasqal_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rawstudio
 rawstudio:$(RAWSTUDIO)_$(ARCH).deb
 $(RAWSTUDIO): $(SPREZZ)/rawstudio/debian/changelog
