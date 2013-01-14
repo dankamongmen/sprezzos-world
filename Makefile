@@ -5647,6 +5647,14 @@ $(LIBRPCSECGSS): $(SPREZZ)/librpcsecgss/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf librpcsecgss-$(librpcsecgss_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: raptor2
+raptor2:$(RAPTOR2)_$(ARCH).deb
+$(RAPTOR2): $(SPREZZ)/raptor2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf raptor2-$(raptor2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rawstudio
 rawstudio:$(RAWSTUDIO)_$(ARCH).deb
 $(RAWSTUDIO): $(SPREZZ)/rawstudio/debian/changelog
