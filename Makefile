@@ -3150,8 +3150,8 @@ $(LCMS2): $(SPREZZ)/lcms2/debian/changelog
 	tar xzvf lcms2-$(lcms2_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libarchive
-libarchive:$(libarchive)_$(ARCH).deb
-$(libarchive): $(SPREZZ)/libarchive/debian/changelog
+libarchive:$(LIBARCHIVE)_$(ARCH).deb
+$(LIBARCHIVE): $(SPREZZ)/libarchive/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
