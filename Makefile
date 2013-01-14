@@ -1957,6 +1957,14 @@ $(FUSEISO): $(SPREZZ)/fuseiso/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf fuseiso-$(fuseiso_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: game-music-emu
+game-music-emu:$(GAMEMUSICEMU)_$(ARCH).deb
+$(GAMEMUSICEMU): $(SPREZZ)/game-music-emu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf game-music-emu-$(game-music-emu_UPVER).tbz2 $(TARARGS) $@
+
 .PHONY: gawk
 gawk:$(GAWK)_$(ARCH).deb
 $(GAWK): $(SPREZZ)/gawk/debian/changelog
@@ -6560,6 +6568,14 @@ $(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xmlstarlet-$(xmlstarlet_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xmms2
+xmms2:$(XMMS2)_$(ARCH).deb
+$(XMMS2): $(SPREZZ)/xmms2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xmms2_$(xmms2_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: xorg
 xorg:$(XORG)_$(ARCH).deb
