@@ -5679,6 +5679,14 @@ $(REAVER): $(SPREZZ)/reaver/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf reaver-$(reaver_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: redland
+redland:$(REDLAND)_$(ARCH).deb
+$(REDLAND): $(SPREZZ)/redland/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf redland-$(redland_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rpcbind
 rpcbind:$(rpcbind)_$(ARCH).deb
 $(rpcbind): $(SPREZZ)/rpcbind/debian/changelog
