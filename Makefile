@@ -4943,6 +4943,14 @@ $(LIBOAUTH): $(SPREZZ)/liboauth/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf liboauth-$(liboauth_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libofa
+libofa:$(LIBOFA)_$(ARCH).deb
+$(LIBOFA): $(SPREZZ)/libofa/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libofa-$(libofa_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libopenraw
 libopenraw:$(LIBOPENRAW)_$(ARCH).deb
 $(LIBOPENRAW): $(SPREZZ)/libopenraw/debian/changelog
@@ -6575,7 +6583,7 @@ $(XMMS2): $(SPREZZ)/xmms2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xmms2_$(xmms2_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf xmms2_$(xmms2_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: xorg
 xorg:$(XORG)_$(ARCH).deb
