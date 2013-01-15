@@ -342,3 +342,10 @@ $(SOPRANO): $(SPREZZ)/soprano/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf soprano-$(soprano_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: yakuake
+yakuake:$(YAKUAKE)_$(ARCH).deb
+$(YAKUAKE): $(SPREZZ)/yakuake/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf yakuake-$(yakuake_UPVER).tar.bz2 $(TARARGS) $@
