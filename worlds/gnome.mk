@@ -342,6 +342,30 @@ $(GTK2ENGINES): $(SPREZZ)/gtk2-engines/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gtk-engines-$(gtk2-engines_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gtk2-engines-oxygen
+gtk2-engines-oxygen:$(GTK2ENGINESOXYGEN)_$(ARCH).deb
+$(GTK2ENGINESOXYGEN): $(SPREZZ)/gtk2-engines-oxygen/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf oxygen-gtk2-$(gtk2-engines-oxygen_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: gtk3-engines-unico
+gtk3-engines-unico:$(GTK3ENGINESUNICO)_$(ARCH).deb
+$(GTK3ENGINESUNICO): $(SPREZZ)/gtk3-engines-unico/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unico-$(gtk3-engines-unico_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: oxygen-gtk3
+oxygen-gtk3:$(OXYGENGTK3)_$(ARCH).deb
+$(OXYGENGTK3): $(SPREZZ)/oxygen-gtk3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf oxygen-gtk3-$(oxygen-gtk3_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libgdata
 libgdata:$(LIBGDATA)_$(ARCH).deb
 $(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
