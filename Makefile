@@ -1912,6 +1912,14 @@ $(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	unzip SourceSansPro_FontsOnly-$(fonts-adobe-sourcesanspro_UPVER).zip -d $@
 
+.PHONY: fraqtive
+fraqtive:$(FRAQTIVE)_$(ARCH).deb
+$(FRAQTIVE): $(SPREZZ)/fraqtive/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fraqtive-$(fraqtive_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: freeglut
 freeglut:$(FREEGLUT)_$(ARCH).deb
 $(FREEGLUT): $(SPREZZ)/freeglut/debian/changelog
