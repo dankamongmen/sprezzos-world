@@ -102,6 +102,14 @@ $(KDEMULTIMEDIA): $(SPREZZ)/kdemultimedia/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kdemultimedia-$(kdemultimedia_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: kdenetwork
+kdenetwork:$(KDENETWORK)_$(ARCH).deb
+$(KDENETWORK): $(SPREZZ)/kdenetwork/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kdenetwork-$(kdenetwork_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: kdepim-runtime
 kdepim-runtime:$(KDEPIMRUNTIME)_$(ARCH).deb
 $(KDEPIMRUNTIME): $(SPREZZ)/kdepim-runtime/debian/changelog
