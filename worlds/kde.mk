@@ -142,6 +142,14 @@ $(KDEVPLATFORM): $(SPREZZ)/kdevplatform/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf kdevplatform-$(kdevplatform_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: kde-gtk-config
+kde-gtk-config:$(KDEGTKCONFIG)_$(ARCH).deb
+$(KDEGTKCONFIG): $(SPREZZ)/kde-gtk-config/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf kde-gtk-config-$(kde-gtk-config_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: kde-runtime
 kde-runtime:$(KDERUNTIME)_$(ARCH).deb
 $(KDERUNTIME): $(SPREZZ)/kde-runtime/debian/changelog
