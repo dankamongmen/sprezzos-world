@@ -102,6 +102,14 @@ $(KDEMULTIMEDIA): $(SPREZZ)/kdemultimedia/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kdemultimedia-$(kdemultimedia_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: kdepim-runtime
+kdepim-runtime:$(KDEPIMRUNTIME)_$(ARCH).deb
+$(KDEPIMRUNTIME): $(SPREZZ)/kdepim-runtime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kdepim-runtime-$(kdepim-runtime_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: kdepimlibs
 kdepimlibs:$(KDEPIMLIBS)_$(ARCH).deb
 $(KDEPIMLIBS): $(SPREZZ)/kdepimlibs/debian/changelog
