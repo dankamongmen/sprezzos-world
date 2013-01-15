@@ -5918,7 +5918,7 @@ $(TBB): $(SPREZZ)/tbb/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf tbb-$(tbb_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf tbb_$(tbb_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: tdb
 tdb:$(TDB)_$(ARCH).deb
