@@ -1376,6 +1376,14 @@ $(TTFAUTOHINT): $(SPREZZ)/ttfautohint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ttfautohint-$(ttfautohint_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: clang
+clang:$(CLANG)_$(ARCH).deb
+$(CLANG): $(SPREZZ)/clang/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf clang-$(clang_UPVER).src.tar.gz $(TARARGS) $@
+
 .PHONY: clutter
 clutter:$(CLUTTER)_$(ARCH).deb
 $(CLUTTER): $(SPREZZ)/clutter/debian/changelog

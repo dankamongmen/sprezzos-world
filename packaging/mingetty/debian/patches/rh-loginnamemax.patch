@@ -1,0 +1,49 @@
+Description: Allow login name up to LOGIN_NAME_MAX length
+ POSIX mandates 9 bytes minimal length including trailing '\0'
+ (limits.h:_POSIX_LOGIN_NAME_MAX). Current GNU/Linux run time limit is 256
+ (getconf LOGIN_NAME_MAX).
+ .
+ This patch removes hard-coded 40 bytes limit.
+Author: Petr Pisar <ppisar@redhat.com>
+Origin: vendor
+Bug-Fedora: https://bugzilla.redhat.com/show_bug.cgi?id=647143
+Reviewed-By: Paul Martin <pm@debian.org>
+Last-Update: 2012-05-01
+
+--- mingetty-1.08.orig/mingetty.c	2012-05-01 12:39:47.233432675 +0100
++++ mingetty-1.08/mingetty.c	2012-05-01 12:40:01.629647425 +0100
+@@ -314,10 +314,21 @@
+ 
+ static char *get_logname (void)
+ {
+-	static char logname[40];
++	long int logname_size;
++	static char *logname = NULL;
++	char *logname_new;
+ 	char *bp;
+ 	unsigned char c;
+ 
++	logname_size = sysconf (_SC_LOGIN_NAME_MAX);
++	if (logname_size <= 0)
++		error ("Could not get maximal login name length");
++
++	logname_new = realloc (logname, logname_size);
++	if (!logname_new)
++		error ("Not enough memory");
++	logname = logname_new;
++
+ 	tcflush (0, TCIFLUSH);		/* flush pending input */
+ 	for (*logname = 0; *logname == 0;) {
+ 		do_prompt (1);
+@@ -334,8 +345,9 @@
+ 			} else if (!isprint (c))
+ 				error ("%s: invalid character 0x%x in login"
+ 					" name", tty, c);
+-			else if ((size_t)(bp - logname) >= sizeof (logname) - 1)
+-				error ("%s: too long login name", tty);
++			else if ((bp - logname) >= (logname_size - 1))
++				error ("%s: too long login name "
++					"(limit is %ld B)", tty, logname_size);
+ 			else
+ 				*bp++ = c;
+ 		}
