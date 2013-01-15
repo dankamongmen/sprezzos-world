@@ -175,6 +175,15 @@ $(DOCKMANAGER): $(SPREZZ)/dockmanager/debian/changelog
 	ln -fs dockmanager-$(dockmanager_UPVER).tar.xz dockmanager_$(dockmanager_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: synaesthesia
+synaesthesia:$(SYNAESTHESIA)_$(ARCH).deb
+$(SYNAESTHESIA): $(SPREZZ)/synaesthesia/debian/changelog
+	bzr branch lp:synaesthesia $@
+	rm -rf $@/debian
+	tar cJf synaesthesia-$(synaesthesia_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf synaesthesia-$(synaesthesia_UPVER).tar.xz synaesthesia_$(synaesthesia_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: synaptic
 synaptic:$(SYNAPTIC)_$(ARCH).deb
 $(SYNAPTIC): $(SPREZZ)/synaptic/debian/changelog
