@@ -446,6 +446,14 @@ $(CLEARLOOKSPHENIXTHEME): $(SPREZZ)/clearlooks-phenix-theme/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf clearlooks-phenix-$(clearlooks-phenix-theme_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pitivi
+pitivi:$(PITIVI)_$(ARCH).deb
+$(PITIVI): $(SPREZZ)/pitivi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf pitivi-$(pitivi_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: seed
 seed:$(SEED)_$(ARCH).deb
 $(SEED): $(SPREZZ)/seed/debian/changelog
