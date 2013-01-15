@@ -1918,7 +1918,7 @@ $(FRAQTIVE): $(SPREZZ)/fraqtive/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf fraqtive-$(fraqtive_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf fraqtive-$(fraqtive_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: freeglut
 freeglut:$(FREEGLUT)_$(ARCH).deb
