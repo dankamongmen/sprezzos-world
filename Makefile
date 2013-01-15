@@ -6031,6 +6031,14 @@ $(TELEPATHYGLIB): $(SPREZZ)/telepathy-glib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf telepathy-glib-$(telepathy-glib_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: telepathy-qt
+telepathy-qt:$(TELEPATHYQT)_$(ARCH).deb
+$(TELEPATHYQT): $(SPREZZ)/telepathy-qt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf telepathy-qt-$(telepathy-qt_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: tevent
 tevent:$(TEVENT)_$(ARCH).deb
 $(TEVENT): $(SPREZZ)/tevent/debian/changelog
