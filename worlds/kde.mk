@@ -334,6 +334,14 @@ $(QWT): $(SPREZZ)/qwt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf qwt-$(qwt_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: skrooge
+skrooge:$(SKROOGE)_$(ARCH).deb
+$(SKROOGE): $(SPREZZ)/skrooge/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf skrooge-$(skrooge_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: simon
 simon:$(SIMON)_$(ARCH).deb
 $(SIMON): $(SPREZZ)/simon/debian/changelog
