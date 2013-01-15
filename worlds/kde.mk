@@ -158,6 +158,14 @@ $(KDESTYLEQTCURVE): $(SPREZZ)/kde-style-qtcurve/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf QtCurve-KDE4-$(kde-style-qtcurve_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: kde-wallpapers
+kde-wallpapers:$(KDEWALLPAPERS)_$(ARCH).deb
+$(KDEWALLPAPERS): $(SPREZZ)/kde-wallpapers/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kde-wallpapers-$(kde-wallpapers_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: kde-workspace
 kde-workspace:$(KDEWORKSPACE)_$(ARCH).deb
 $(KDEWORKSPACE): $(SPREZZ)/kde-workspace/debian/changelog
