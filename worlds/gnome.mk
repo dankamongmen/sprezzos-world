@@ -70,6 +70,174 @@ $(GLABELS): $(SPREZZ)/glabels/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf glabels-$(glabels_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gnome-applets
+gnome-applets:$(GNOMEAPPLETS)_$(ARCH).deb
+$(GNOMEAPPLETS): $(SPREZZ)/gnome-applets/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-applets-$(gnome-applets_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gnome-bluetooth
+gnome-bluetooth:$(GNOMEBLUETOOTH)_$(ARCH).deb
+$(GNOMEBLUETOOTH): $(SPREZZ)/gnome-bluetooth/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-bluetooth_$(gnome-bluetooth_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-boxes
+gnome-boxes:$(GNOMEBOXES)_$(ARCH).deb
+$(GNOMEBOXES): $(SPREZZ)/gnome-boxes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-boxes_$(gnome-boxes_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-colors
+gnome-colors:$(GNOMECOLORS)_$(ARCH).deb
+$(GNOMECOLORS): $(SPREZZ)/gnome-colors/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-colors-$(gnome-colors_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnome-color-chooser
+gnome-color-chooser:$(GNOMECOLORCHOOSER)_$(ARCH).deb
+$(GNOMECOLORCHOOSER): $(SPREZZ)/gnome-color-chooser/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-color-chooser-$(gnome-color-chooser_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnome-color-manager
+gnome-color-manager:$(GNOMECOLORMANAGER)_$(ARCH).deb
+$(GNOMECOLORMANAGER): $(SPREZZ)/gnome-color-manager/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-color-manager_$(gnome-color-manager_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-common
+gnome-common:$(GNOMECOMMON)_$(ARCH).deb
+$(GNOMECOMMON): $(SPREZZ)/gnome-common/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-common-$(gnome-common_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gnome-contacts
+gnome-contacts:$(GNOMECONTACTS)_$(ARCH).deb
+$(GNOMECONTACTS): $(SPREZZ)/gnome-contacts/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-contacts-$(gnome-contacts_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gnome-control-center
+gnome-control-center:$(GNOMECONTROLCENTER)_$(ARCH).deb
+$(GNOMECONTROLCENTER): $(SPREZZ)/gnome-control-center/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-control-center-$(gnome-control-center_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gnome-desktop
+gnome-desktop:$(GNOMEDESKTOP)_$(ARCH).deb
+$(GNOMEDESKTOP): $(SPREZZ)/gnome-desktop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-desktop-$(gnome-desktop_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gnome-dictionary
+gnome-dictionary:$(GNOMEDICTIONARY)_$(ARCH).deb
+$(GNOMEDICTIONARY): $(SPREZZ)/gnome-dictionary/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-dictionary_$(gnome-dictionary_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-disk-utility
+gnome-disk-utility:$(GNOMEDISKUTILITY)_$(ARCH).deb
+$(GNOMEDISKUTILITY): $(SPREZZ)/gnome-disk-utility/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-disk-utility_$(gnome-disk-utility_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-do
+gnome-do:$(GNOMEDO)_$(ARCH).deb
+$(GNOMEDO): $(SPREZZ)/gnome-do/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-do-$(gnome-do_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnome-do-plugins
+gnome-do-plugins:$(GNOMEDOPLUGINS)_$(ARCH).deb
+$(GNOMEDOPLUGINS): $(SPREZZ)/gnome-do-plugins/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-do-plugins-$(gnome-do-plugins_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnome-doc-utils
+gnome-doc-utils:$(GNOMEDOCUTILS)_$(ARCH).deb
+$(GNOMEDOCUTILS): $(SPREZZ)/gnome-doc-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-doc-utils_$(gnome-doc-utils_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-font-viewer
+gnome-font-viewer:$(GNOMEFONTVIEWER)_$(ARCH).deb
+$(GNOMEFONTVIEWER): $(SPREZZ)/gnome-font-viewer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-font-viewer_$(gnome-font-viewer_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-gmail
+gnome-gmail:$(GNOMEGMAIL)_$(ARCH).deb
+$(GNOMEGMAIL): $(SPREZZ)/gnome-gmail/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-gmail-$(gnome-gmail_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnome-icon-theme-extras
+gnome-icon-theme-extras:$(GNOMEICONTHEMEEXTRAS)_$(ARCH).deb
+$(GNOMEICONTHEMEEXTRAS): $(SPREZZ)/gnome-icon-theme-extras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-icon-theme-extras_$(gnome-icon-theme-extras_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-icon-theme-symbolic
+gnome-icon-theme-symbolic:$(GNOMEICONTHEMESYMBOLIC)_$(ARCH).deb
+$(GNOMEICONTHEMESYMBOLIC): $(SPREZZ)/gnome-icon-theme-symbolic/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-icon-theme-symbolic_$(gnome-icon-theme-symbolic_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-js-common
+gnome-js-common:$(GNOMEJSCOMMON)_$(ARCH).deb
+$(GNOMEJSCOMMON): $(SPREZZ)/gnome-js-common/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnome-js-common-$(gnome-js-common_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gnome-keyring
+gnome-keyring:$(GNOMEKEYRING)_$(ARCH).deb
+$(GNOMEKEYRING): $(SPREZZ)/gnome-keyring/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-keyring_$(gnome-keyring_UPVER).orig.tar.xz $(TARARGS) $@
+
 .PHONY: gnome-documents
 gnome-documents:$(GNOMEDOCUMENTS)_$(ARCH).deb
 $(GNOMEDOCUMENTS): $(SPREZZ)/gnome-documents/debian/changelog
