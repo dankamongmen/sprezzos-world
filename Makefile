@@ -260,14 +260,22 @@ $(XBMC): $(SPREZZ)/xbmc/debian/changelog
 	ln -sf xbmc-$(xbmc_UPVER).tar.xz xbmc_$(xbmc_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+#.PHONY: gtk-theme-config
+#gtk-theme-config:$(GTKTHEMECONFIG)_$(ARCH).deb
+#$(GTKTHEMECONFIG): $(SPREZZ)/gtk-theme-config/debian/changelog
+#	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+#	git clone git://github.com/satya164/gtk-theme-config.git $@
+#	tar cJf gtk-theme-config-$(gtk-theme-config_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf gtk-theme-config-$(gtk-theme-config_UPVER).tar.xz gtk-theme-config_$(gtk-theme-config_UPVER).orig.tar.xz
+#	cp -r $(<D) $@/
+
 .PHONY: gtk-theme-config
 gtk-theme-config:$(GTKTHEMECONFIG)_$(ARCH).deb
 $(GTKTHEMECONFIG): $(SPREZZ)/gtk-theme-config/debian/changelog
-	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
-	git clone git://github.com/satya164/gtk-theme-config.git $@
-	tar cJf gtk-theme-config-$(gtk-theme-config_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf gtk-theme-config-$(gtk-theme-config_UPVER).tar.xz gtk-theme-config_$(gtk-theme-config_UPVER).orig.tar.xz
+	mkdir $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtk-theme-config_$(gtk-theme-config_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: gnome-xcf-thumbnailer
 gnome-xcf-thumbnailer:$(GNOMEXCFTHUMBNAILER)_$(ARCH).deb
