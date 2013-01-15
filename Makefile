@@ -242,6 +242,15 @@ $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
 	ln -sf apitrace-$(apitrace_UPVER).tar.xz apitrace_$(apitrace_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: emap
+emap:$(EMAP)_$(ARCH).deb
+$(EMAP): $(SPREZZ)/emap/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	git clone git://git.enlightenment.fr/vcs/svn/PROTO/emap.git $@
+	tar cJf emap-$(emap_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf emap-$(emap_UPVER).tar.xz emap_$(emap_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: xbmc
 xbmc:$(XBMC)_$(ARCH).deb
 $(XBMC): $(SPREZZ)/xbmc/debian/changelog
@@ -5094,6 +5103,14 @@ $(OPENMPI): $(SPREZZ)/openmpi/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openmpi-$(openmpi_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: openshot
+openshot:$(OPENSHOT)_$(ARCH).deb
+$(OPENSHOT): $(SPREZZ)/openshot/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openshot-$(openshot_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: orc
 orc:$(ORC)_$(ARCH).deb
