@@ -6,6 +6,14 @@ $(CARIBOU): $(SPREZZ)/caribou/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf caribou-$(caribou_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: cups-pk-helper
+cups-pk-helper:$(CUPSPKHELPER)_$(ARCH).deb
+$(CUPSPKHELPER): $(SPREZZ)/cups-pk-helper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf cups-pk-helper-$(cups-pk-helper_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: epiphany-browser
 epiphany-browser:$(EPIPHANYBROWSER)_$(ARCH).deb
 $(EPIPHANYBROWSER): $(SPREZZ)/epiphany-browser/debian/changelog
