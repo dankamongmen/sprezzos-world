@@ -4286,6 +4286,14 @@ $(LFTP): $(SPREZZ)/lftp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf lftp_$(lftp_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: mingetty
+mingetty:$(MINGETTY)_$(ARCH).deb
+$(MINGETTY): $(SPREZZ)/mingetty/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mingetty-$(mingetty_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: mm-common
 mm-common:$(MMCOMMON)_$(ARCH).deb
 $(MMCOMMON): $(SPREZZ)/mm-common/debian/changelog
