@@ -3375,8 +3375,8 @@ $(LAME): $(SPREZZ)/lame/debian/changelog
 	tar xzvf lame-$(lame_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: lapack
-lapack:$(LAPAC)_$(ARCH).deb
-$(LAPAC): $(SPREZZ)/lapack/debian/changelog
+lapack:$(LAPACK)_$(ARCH).deb
+$(LAPACK): $(SPREZZ)/lapack/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
@@ -5911,6 +5911,14 @@ $(UTILLINUX): $(SPREZZ)/util-linux/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf util-linux-$(util-linux_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: tbb
+tbb:$(TBB)_$(ARCH).deb
+$(TBB): $(SPREZZ)/tbb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tbb-$(tbb_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: tdb
 tdb:$(TDB)_$(ARCH).deb
