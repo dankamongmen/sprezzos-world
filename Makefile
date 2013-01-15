@@ -1648,6 +1648,14 @@ $(DIRECTFB): $(SPREZZ)/directfb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf DirectFB-$(directfb_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: dispcalgui
+dispcalgui:$(DISPCALGUI)_$(ARCH).deb
+$(DISPCALGUI): $(SPREZZ)/dispcalgui/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dispcalGUI-$(dispcalgui_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: distribute
 distribute:$(DISTRIBUTE)_$(ARCH).deb
 $(DISTRIBUTE): $(SPREZZ)/distribute/debian/changelog
