@@ -4438,6 +4438,14 @@ $(MDADM): $(SPREZZ)/mdadm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mdadm_$(mdadm_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: meanwhile
+meanwhile:$(MEANWHILE)_$(ARCH).deb
+$(MEANWHILE): $(SPREZZ)/meanwhile/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf meanwhile-$(meanwhile_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: metacity
 metacity:$(METACITY)_$(ARCH).deb
 $(METACITY): $(SPREZZ)/metacity/debian/changelog
@@ -6191,6 +6199,14 @@ $(VALGRIND): $(SPREZZ)/valgrind/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf valgrind-$(valgrind_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: vamp-plugin-sdk
+vamp-plugin-sdk:$(VAMPPLUGINSDK)_$(ARCH).deb
+$(VAMPPLUGINSDK): $(SPREZZ)/vamp-plugin-sdk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vamp-plugin-sdk-$(vamp-plugin-sdk_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: v4l-utils
 v4l-utils:$(V4LUTILS)_$(ARCH).deb
