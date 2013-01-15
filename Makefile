@@ -1104,6 +1104,14 @@ $(FTGL): $(SPREZZ)/ftgl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ftgl-$(ftgl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: blas
+blas:$(BLAS)_$(ARCH).deb
+$(BLAS): $(SPREZZ)/blas/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blas-$(blas_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: blender
 blender:$(BLENDER)_$(ARCH).deb
 $(BLENDER): $(SPREZZ)/blender/debian/changelog
@@ -3365,6 +3373,14 @@ $(LAME): $(SPREZZ)/lame/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lame-$(lame_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: lapack
+lapack:$(LAPAC)_$(ARCH).deb
+$(LAPAC): $(SPREZZ)/lapack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lapack-$(lapack_UPVER).tgz $(TARARGS) $@
 
 .PHONY: lastfmsubmitd
 lastfmsubmitd:$(LASTFMSUBMITD)_$(ARCH).deb

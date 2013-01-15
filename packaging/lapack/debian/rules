@@ -1,0 +1,279 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+SO:=3
+MN:=0
+VERS:=$(SO).$(MN)
+
+CC:=/usr/bin/cc
+
+ARCH:=$(shell dpkg --print-architecture)
+F77:=gfortran
+FOPTS:= #-ff90
+#OPTOPTS:=-g
+#UNROLL:=
+OPTOPTS:=-g -O3 -Wall
+UNROLL:=-funroll-all-loops
+ifneq (,$(filter $(ARCH), arm armel))
+  OPTOPTS:=-g -O0
+  UNROLL:=
+endif
+
+ifneq (,$(filter $(ARCH), m68k))
+  #FOPTS:=-ffloat-store
+  UNROLL:=
+endif
+
+ifeq ($(ARCH),alpha)
+  FOPTS:=-mieee
+endif
+
+ifeq ($(ARCH),s390)
+  OPTOPTS:=-g -O0
+endif
+
+ifneq (,$(filter $(ARCH), none))
+  export ignore_testing_failures = -
+endif
+
+doc: 
+	$(MAKE) html
+	$(MAKE) man
+
+#
+#
+# Configure
+#
+#
+
+make.inc: install/make.inc.gfortran
+	cat $< | sed -e "s,g77,$(F77),g" \
+		     -e "s,\(^NOOPT  *=\),\1 \$$(PICOPTS) $(FOPTS),1" \
+		     -e "s,-O3,\$$(PICOPTS) $(FOPTS) $(OPTOPTS),1" \
+		     -e "s,\(^OPTS  *=\).*,\1 $(UNROLL) \$$(PICOPTS) $(OPTOPTS),1" \
+		     -e "s,[^ ]*blas[^ ]*\.a,-lblas,1" \
+		     -e "s,TIMER. *,#&," > $@
+	echo "TIMER = INT_ETIME" >> $@
+
+TIMEOUT:=1800
+
+testing/Makefile.ori:
+	cp testing/Makefile $@
+
+testing/Makefile: testing/Makefile.ori
+	cat $< | sed -e "s,\./x,$(ignore_testing_failures)../debian/trun $(TIMEOUT) ./x,g" >$@
+
+#
+#
+# Build rules for libraries
+#
+#
+
+
+liblapack_pic.a: make.inc testing/Makefile
+	echo "Building liblapack_pic.a"
+	$(MAKE) cleanlib
+	$(MAKE) lapack_install PICOPTS=-fPIC
+	$(MAKE) lib        PICOPTS=-fPIC
+	mv liblapack.a $@
+
+liblapack.so.$(VERS): liblapack_pic.a 
+	echo "Building liblapack.so.$(VERS) from liblapack_pic.a"
+	mkdir -p tmp
+	cd tmp && ar x ../$<
+	$(F77) -shared -Wl,-soname=liblapack.so.$(SO) -o $@ tmp/*.o  -L. -lblas $(shell dpkg-buildflags --get LDFLAGS)
+	rm -rf tmp
+
+liblapack.so.$(SO): liblapack.so.$(VERS)
+	ln -snf $< $@
+
+liblapack.so: liblapack.so.$(SO)
+	ln -snf $< $@
+
+liblapack.a: make.inc testing/Makefile
+	echo "Building liblapack.a"
+	$(MAKE) lapack_install
+	$(MAKE) lib
+#	mv lapack_LINUX.a $@
+
+liblapacke_pic.a: make.inc testing/Makefile
+	echo "Building liblapacke_pic.a"
+	cd lapacke; \
+	$(MAKE) cleanlib; \
+	$(MAKE) CFLAGS="$(OPTOPTS) -fPIC $(shell dpkg-buildflags --get CFLAGS)"; \
+	mv ../liblapacke.a $@
+
+
+liblapacke.so.$(VERS): liblapacke_pic.a 
+	echo "Building liblapacke.so.$(VERS) from liblapacke_pic.a"
+	cd lapacke; \
+	mkdir -p tmp; \
+	cd tmp && ar x ../$< && cd -; \
+	$(CC) -shared -Wl,-soname=liblapacke.so.$(SO) -o $@ tmp/*.o  -L.. -lblas -llapack $(shell dpkg-buildflags --get LDFLAGS); \
+	rm -rf tmp
+
+liblapacke.so.$(SO): liblapacke.so.$(VERS)
+	cd lapacke; \
+	ln -snf $< $@
+
+liblapacke.so: liblapacke.so.$(SO)
+	cd lapacke; \
+	ln -snf $< $@
+
+liblapacke.a: make.inc testing/Makefile
+	echo "Building liblapacke.a"
+	cd lapacke; \
+	$(MAKE) CFLAGS="$(OPTOPTS) $(shell dpkg-buildflags --get CFLAGS)"; \
+
+BF:=liblapack.a liblapack_pic.a liblapack.so  liblapacke.a  liblapacke_pic.a liblapacke.so
+
+#
+#
+# Testing rules
+#
+#
+
+TB:=s d c z
+TB:=$(addprefix tst,$(TB))
+TB:=$(addprefix eig,$(TB)) $(addprefix lin,$(TB))
+TB:=$(addprefix testing/x,$(TB))
+TESF:=cbak cbal cbb cec ced cgbak cgbal cgd cgg cglm cgqr cgsv\
+	clse cnep csb csep csg csvd ctest dbak dbal dbb dec ded\
+	dgbak dgbal dgd dgg dglm dgqr dgsv dlse dnep dsb dsep dsg\
+	dsvd dtest sbak sbal sbb sec sed sgbak sgbal sgd sgg sglm\
+	sgqr sgsv slse snep ssb ssep ssg ssvd stest zbak zbal zbb\
+	zec zed zgbak zgbal zgd zgg zglm zgqr zgsv zlse znep zsb\
+	zsep zsg zsvd ztest
+
+TESF:=$(addprefix testing/,$(addsuffix .out,$(TESF)))
+
+$(TB) $(TESF):  liblapack.so
+	chmod +x debian/trun
+	grep -q debian/trun testing/Makefile \
+	    || sed -i -e "s,\./x,$(ignore_testing_failures)../debian/trun $(TIMEOUT) ./x,g" testing/Makefile
+	$(ignore_testing_failures)LD_LIBRARY_PATH=$$(pwd):$$LD_LIBRARY_PATH \
+	    $(MAKE) PICOPTS= \
+		LLIB="-L $$(pwd) -llapack -lblas" lapack_testing & \
+		j=$$! ;\
+		tail -f --pid=$$j --retry $(TESF) & \
+		wait $$j
+
+
+$(subst testing,debian/test,$(TESF)):\
+	debian/test/%: testing/%
+	mkdir -m 777 -p $(@D)
+	echo Test file $(@F) >$@
+	cat $< >> $@
+
+debian/test_results: $(subst testing,debian/test,$(TESF))
+	echo "These libraries and tests were compiled with:" >$@
+	$(F77) -v >>$@
+	cat $^ >>$@
+
+debian/liblapack3gf.templates: debian/test_results
+	cp debian/main_templates $@
+
+#
+#
+# Install
+#
+#
+
+debian/tmp/usr/lib/lapack/%: %
+	dh_testdir
+
+	install -m 755 -d $(@D)
+	[ -L $* ] || install -m 644 $< $(@D)
+	! [ -L $* ] || cp -d $< $@
+
+$(addprefix debian/tmp/usr/lib/liblapack3gf/,$(subst testing/,,$(TB))): \
+	debian/tmp/usr/lib/liblapack3gf/%: testing/%
+	dh_testdir
+
+	install -m 755 -d $(@D)
+	install -m 755 $< $(@D)
+
+
+install: $(IF) $(MF3) debian/test_results debian/liblapack3gf.templates
+	dh_testdir
+
+
+#
+#
+# Clean
+#
+#
+
+
+clean:: make.inc
+	dh_testdir
+	rm -rf debian/*_stamp debian/*_results lib* testing/*out
+#	find man -name "*.$(MANEXT)" -exec rm {} \;
+	rm -rf *.a install/test* debian/test/ debian/time/
+	rm -f debian/test_results debian/liblapack3gf.templates
+	rm -f testing/tmp
+	cd lapacke && $(MAKE) clean
+	touch TESTING/xlinfoo TESTING/xeigfoo  && $(MAKE) clean
+	rm -f make.inc
+
+	-[ -e testing/Makefile.ori ] \
+		&& mv testing/Makefile.ori testing/Makefile
+
+	dh_clean
+
+#
+#
+# Package rules
+#
+#
+build: $(BF) make.inc build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: $(BF) make.inc
+
+# Build architecture-independent files here.
+binary-indep: doc install
+	dh_testdir -i
+	dh_install -i
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_installman -i -pliblapack-doc
+	dh_installchangelogs -i
+	dh_link -i
+	dh_lintian -i
+	dh_strip -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_makeshlibs -i -n
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: install
+	dh_testdir -a
+	dh_install -a
+	dh_installdocs -a
+	dh_installexamples -a
+	dh_installman -a -pliblapack-test
+	dh_installchangelogs -a
+	dh_link -a
+	dh_lintian -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a -pliblapack3 -V "liblapack3 | liblapack.so.3 | libatlas3-base" -n
+	dh_makeshlibs -a -Nliblapack3
+	dh_installdeb -a
+	dh_shlibdeps -a -l $$(pwd)
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: clean binary-indep binary-arch binary \
+	doc build

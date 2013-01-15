@@ -1,0 +1,329 @@
+#!/usr/bin/make -f
+
+ARCH:=$(shell dpkg --print-architecture)
+
+F77:=gfortran
+GCC:=gcc
+F77FLAGS:= -pipe -g  -fomit-frame-pointer -fno-whole-file
+
+F77FLAGS:=$(F77FLAGS) -O3
+
+ifneq (,$(filter $(ARCH),i386 lpia hurd-i386 kfreebsd-i386 m68k))
+  F77_EXTRA_FLAGS = -ffloat-store
+endif
+
+ifeq ($(ARCH),alpha)
+  F77FLAGS:=$(F77FLAGS) -mieee
+endif
+
+SO=3
+VERS=$(SO).0
+
+VN:=$(shell pwd)
+VO:=$(VN).orig
+UD:=$(shell dirname $$(pwd))
+
+PDF:=cinterface
+PDD:=debian/patched-docs
+PDP:=$(addprefix $(PDD)/,$(PDF))
+PDS:=$(addsuffix .tex,$(PDP))
+PDO:=$(addsuffix .pdf,$(PDP))
+
+$(UD)/blas.tgz:
+	mkdir -p $(@D)
+	cd $(@D) && wget -N ftp://ftp.netlib.org/blas/$(@F)
+
+$(UD)/cblas.tgz:
+	mkdir -p $(@D)
+	cd $(@D) && wget -N ftp://ftp.netlib.org/blas/blast-forum/$(@F)
+
+$(UD)/manpages.tgz:
+	mkdir -p $(@D)
+	cd $(@D) && wget -N ftp://ftp.netlib.org/lapack/$(@F)
+
+$(VO)/src: $(UD)/blas.tgz
+	mkdir -p $@
+	cd $@ && tar zxf $<
+
+TF:=s d c z
+TF:=$(addsuffix blat1,$(TF)) $(addsuffix blat2,$(TF)) $(addsuffix blat3,$(TF)) \
+	$(addsuffix blat2d,$(TF)) $(addsuffix blat3d,$(TF))
+
+$(addprefix $(VO)/test/,$(TF)):
+	mkdir -p $(@D)
+	cd $(@D) && wget -N ftp://ftp.netlib.org/blas/$(@F)
+
+$(VO)/test: $(addprefix $(VO)/test/,$(TF))
+
+$(VO)/man: $(UD)/manpages.tgz
+	mkdir -p $(@D)
+	cd $(VO) && tar zxf $< blas
+	rm -rf $@
+	mv $(VO)/blas/man $@
+	rmdir $(VO)/blas
+
+$(VO)/cblas: $(UD)/cblas.tgz
+	cd $(VO) && tar zxf $<
+	rm -rf $@
+	mv $(VO)/CBLAS $@
+
+DF:=faq.html 
+$(addprefix $(VO)/doc/,$(DF)):
+	mkdir -p $(@D)
+	cd $(@D) && wget -N ftp://ftp.netlib.org/blas/$(@F)
+
+$(VO)/doc/cinterface.pdf:
+	mkdir -p $(@D)
+	cd $(@D) && wget -N ftp://ftp.netlib.org/blas/blast-forum/$(@F)
+
+$(VO)/doc/blue.gif:
+	mkdir -p $(@D)
+	cd $(@D) && wget -N ftp://ftp.netlib.org/scalapack/html/gif/$(@F)
+
+%.png: %.gif
+	gif2png $<
+
+$(VO)/doc: $(addprefix $(VO)/doc/,$(DF)) $(VO)/doc/blue.png
+
+ori: $(addprefix $(VO)/,src test man cblas doc)
+
+BSRC:=$(shell echo src/*.f)
+BOBJ:=$(BSRC:.f=.o)
+BOBJ1:=$(filter-out src/izamax.o,$(filter-out src/icamax.o,$(BOBJ)))
+BOBJ2:=src/icamax.o src/izamax.o
+
+debian/patch_applied:
+	! [ -e debian/blas.patch ]    || patch -p1 <debian/blas.patch
+	! [ -e debian/$(ARCH)/patch ] || patch -p1 <debian/$(ARCH)/patch
+	touch $@
+
+debian/patch_unapplied:
+	! [ -e debian/blas.patch ]    || ! [ -e debian/patch_applied ] || patch -p1 -R <debian/blas.patch
+	! [ -e debian/$(ARCH)/patch ] || ! [ -e debian/patch_applied ] || patch -p1 -R <debian/$(ARCH)/patch
+	rm -f debian/patch_applied
+
+debian/shared_dir debian/static_dir debian/test_dir:
+	mkdir -p $(subst _dir,,$(@))
+	touch $@
+
+$(subst src/,debian/static/,$(BOBJ1)): \
+	debian/static/%.o : src/%.f debian/static_dir debian/patch_applied
+
+	$(F77) $(F77FLAGS) -c $< -o $@	
+
+$(subst src/,debian/shared/,$(BOBJ1)): \
+	debian/shared/%.o : src/%.f debian/shared_dir debian/patch_applied
+
+	$(F77) $(F77FLAGS) -fPIC -c $< -o $@	
+
+$(subst src/,debian/static/,$(BOBJ2)): \
+	debian/static/%.o : src/%.f debian/static_dir debian/patch_applied
+
+	$(F77) $(F77FLAGS) $(F77_EXTRA_FLAGS) -c $< -o $@	
+
+$(subst src/,debian/shared/,$(BOBJ2)): \
+	debian/shared/%.o : src/%.f debian/shared_dir debian/patch_applied
+
+	$(F77) $(F77FLAGS) $(F77_EXTRA_FLAGS) -fPIC -c $< -o $@	
+
+libblas.a: cblas/libcblas.a $(subst src/,debian/static/,$(BOBJ)) debian/static_dir
+	cd debian/static && ar x ../../$<
+	ar r $@ debian/static/*.o
+
+libblas.so.$(VERS): cblas/libcblas_pic.a $(subst src/,debian/shared/,$(BOBJ)) debian/shared_dir
+	cd debian/shared && ar x ../../$<
+	$(F77) -shared -Wl,-soname=libblas.so.$(SO) -o $@ debian/shared/*.o
+
+libblas.so.$(SO): libblas.so.$(VERS)
+	ln -snf $< $@
+
+libblas.so: libblas.so.$(SO)
+	ln -snf $< $@
+
+cblas/Makefile.in: cblas/Makefile.LINUX
+	cat $< | sed -e "s,^BLLIB = .*,BLLIB = -L $$(pwd) -lblas,1" \
+		     -e "s,^CBDIR = .*,CBDIR = $$(pwd)/cblas,1" \
+		     -e "s,^CC = gcc,CC = \$$(GCC) ,1" \
+		     -e "s,^FC = g77,FC = \$$(F77) ,1" \
+		     -e "s,^CFLAGS = ,CFLAGS = \$$(PICOPTS) ,1" \
+		     -e "s,^FFLAGS = ,FFLAGS = \$$(PICOPTS) ,1" \
+		     -e "s,-O3,$(F77FLAGS),g" \
+		     -e "/^CFLAGS/s,-ffloat-store,,g" \
+			>$@
+
+cblas/libcblas.a: cblas/Makefile.in debian/patch_applied
+	cd $(@D) && $(MAKE) cleanobj 
+	cd $(@D) && $(MAKE) rmlib
+	cd $(@D) && $(MAKE) CC=$(GCC) F77=$(F77) alllib
+	cp cblas/lib/LINUX/cblas_LINUX.a $@
+
+cblas/libcblas_pic.a: cblas/Makefile.in debian/patch_applied
+	cd $(@D) && $(MAKE) cleanobj 
+	cd $(@D) && $(MAKE) rmlib
+	cd $(@D) && $(MAKE) CC=$(GCC) F77=$(F77) PICOPTS=-fPIC alllib
+	cp cblas/lib/LINUX/cblas_LINUX.a $@
+
+BIN:=s d c z
+BIN:=$(addsuffix cblat1,$(BIN)) $(addsuffix cblat2,$(BIN)) $(addsuffix cblat3,$(BIN))
+BIN:=$(addprefix cblas/testing/x,$(BIN))
+
+$(BIN): libblas.so
+	cd cblas && $(MAKE) alltst CC=$(GCC) F77=$(F77) CBLIB=
+
+FBN:=s d c z
+FBN:=$(addsuffix blat1,$(FBN)) $(addsuffix blat2,$(FBN)) $(addsuffix blat3,$(FBN))
+FBN:=$(addprefix test/x,$(FBN))
+
+test/%.f: test/%
+	cp $< $@
+
+test/x%: test/%.f libblas.so 
+	$(F77) $(F77FLAGS) -o $@ $< -L $$(pwd) -lblas
+
+OUT:=$(subst cblas/testing/,debian/test/,$(BIN))
+OUT1:=$(filter %1,$(OUT))
+OUT23:=$(filter-out %1,$(OUT))
+
+$(OUT1): \
+	debian/test/%: cblas/testing/% debian/test_dir libblas.so
+	LD_LIBRARY_PATH=$$(pwd):$$LD_LIBRARY_PATH $< > $@
+	awk '/fail/ || /FAIL/ {exit 1}' $@ || (cat $@ && false)
+
+$(OUT23): \
+	debian/test/%: cblas/testing/% debian/test_dir libblas.so
+	LD_LIBRARY_PATH=$$(pwd):$$LD_LIBRARY_PATH $< \
+		< cblas/testing/$(subst x,,$(subst cblat,in,$*)) > $@
+	awk '/fail/ || /FAIL/ {exit 1}' $@ || (cat $@ && false)
+
+FOT:=$(subst test/,debian/test/,$(FBN))
+FOT1:=$(filter %1,$(FOT))
+FOT23:=$(filter-out %1,$(FOT))
+
+$(FOT1): \
+	debian/test/%: test/% debian/test_dir libblas.so
+	LD_LIBRARY_PATH=$$(pwd):$$LD_LIBRARY_PATH $< > $@
+	awk '/fail/ || /FAIL/ {exit 1}' $@ || (cat $@ && false)
+
+$(FOT23): \
+	debian/test/%: test/% debian/test_dir libblas.so
+	rm -f *.SUMM
+	LD_LIBRARY_PATH=$$(pwd):$$LD_LIBRARY_PATH $< \
+		< test/$(subst x,,$*)d
+	cat *.SUMM >$@
+	awk '/fail/ || /FAIL/ {exit 1}' $@ || (cat $@ && false)
+
+debian/test_results: $(OUT) $(FOT)
+	cat $^ > $@
+	cat $@ | awk '/fail/ || /FAIL/ {exit 1}'
+
+
+debian/tmp/usr/lib/libblas/%: %
+	dh_testroot
+	mkdir -p $(@D)
+	[ -L $* ] || install -m 644 $* $(@D)
+	! [ -L $* ] || cp -d $* $(@D)
+
+# For libcblas-test (which does not exist?)
+debian/tmp/usr/lib/libblas3/%: cblas/testing/%
+	dh_testroot
+	mkdir -p $(@D)
+	install -m 755 cblas/testing/$* $(@D)
+
+# For libblas
+debian/tmp/usr/lib/libblas3/%: test/%
+	dh_testroot
+	mkdir -p $(@D)
+	install -m 755 test/$* $(@D)
+
+debian/tmp/usr/include/%: cblas/src/%
+	dh_testroot
+	mkdir -p $(@D)
+	install -m 644 cblas/src/$* $(@D)
+
+MFL:=$(shell echo man/manl/*)
+%.3: %.l
+	cat $< | sed "s,^.TH  *\([^ ]*\)  *l  *\(.*\),.TH \1 3 \2,1" >$@
+	echo Convervted $< to $@, diff: 
+	diff -u $< $@ || true
+MF:=$(subst .l,.3,$(MFL))
+
+IF:=so so.$(SO) so.$(VERS) a
+IF:=$(addprefix debian/tmp/usr/lib/libblas/libblas.,$(IF))
+IF:=$(IF) $(subst cblas/testing/,debian/tmp/usr/lib/libblas3/,$(BIN))
+IF:=$(IF) $(subst test/,debian/tmp/usr/lib/libblas3/,$(FBN))
+IF:=$(IF) $(addprefix debian/tmp/usr/include/cblas,.h _f77.h) $(MF) debian/test_results
+
+$(PDO): %.pdf: %.tex
+	cd $(@D) && pdflatex $(<F) && pdflatex $(<F)
+
+install: $(IF) $(PDO)
+	dh_movefiles
+
+build-arch: build
+build-indep: build
+
+build: libblas.so libblas.a 
+
+clean: cblas/Makefile.in debian/patch_unapplied
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	rm -f debian/static/* debian/shared/* test/x* test/*.f libblas* cblas/libcblas* man/manl/*.3
+	rm -f *SUMM
+	rm -rf debian/test* debian/shared* debian/static*
+	cd $(PDD) && rm -rf *.pdf *.log *.aux *.ps *.dvi
+
+	-rm -rf static shared
+	cd cblas && $(MAKE) clean && $(MAKE) rmlib
+	rm -f $<
+
+	dh_clean
+
+# Build architecture-independent files here.
+binary-indep: install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installdirs -i
+	dh_installdocs -i
+	cp $(PDO) debian/libblas-doc/usr/share/doc/libblas-doc/
+	dh_installman -p libblas-doc man/manl/*.3
+	dh_installchangelogs -i 
+	dh_strip -i
+	dh_lintian -i
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdirs -a
+	dh_installdocs -a
+	dh_installexamples -a
+	dh_installman -p libblas-test debian/*.1 #man/manl/dcabs1*
+	dh_installchangelogs -a
+	dh_strip -a
+	dh_lintian -a
+	dh_link -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a -V "libblas3 | libblas.so.3 | libatlas3-base" -n
+	dh_installdeb -a
+	dh_shlibdeps -a -l $$(pwd)
+	dh_gencontrol -a # -u"-Vg77=$(F77)"
+	dh_md5sums -a
+	dh_builddeb -a
+
+source diff:                                                                  
+	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary \
+	$(addprefix $(UD)/,blas.tgz cblas.tgz manpages.tgz)
+.SUFFIXES:
+.INTERMEDIATE: $(VO)/doc/blue.gif

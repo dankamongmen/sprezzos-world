@@ -1,0 +1,1685 @@
+\documentclass{article}
+\oddsidemargin 0.25in
+\textwidth 6.0in
+\usepackage{fancyvrb}
+
+\begin{document}
+
+%
+% cinterface.tex
+%
+
+%% Chapter Authors: Clint, Sven, Zohair, Linda, Susan
+
+\section{C interface to the Legacy BLAS}\label{legacy:c}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c}, passed 9/0/0, 8/97.\\
+%Second vote taken on section~\ref{legacy:c}, passed 8/0/0, 12/97.\\
+%Third vote taken on section~\ref{legacy:c}, passed 13/0/0, 4/98. \\
+%Fourth vote taken on section~\ref{legacy:c}, passed 8/0/1 with 16 eligible voters, 8/98.} \\
+ 
+This section gives a detailed discussion of the proposed C interface to the
+legacy BLAS.  Every mention of ``BLAS'' in this chapter should be taken to mean
+the legacy BLAS.  Each interface decision is discussed in its own section. 
+Each section also contains a {\em Considered methods} subsection, where
+other solutions to that particular problem are discussed, along with
+the reasons why those options were not chosen.  These {\em Considered methods}
+subsections are indented and {\it italicized} in order to distinguish them
+from the rest of the text.
+
+It is largely agreed among the group (and unanimous among the vendors)
+that user demand for a C interface to the BLAS is insufficient to motivate
+vendors to support a completely separate standard.  This proposal therefore
+confines itself to an interface
+which can be readily supported on top of the already existing
+Fortran 77 callable BLAS (i.e., the legacy BLAS).
+
+The interface is expressed in terms of ANSI/ISO C.  Very few platforms fail
+to provide ANSI/ISO C compilers at this time, and for those platforms, free
+ANSI/ISO C compilers are almost always available (eg., {\tt gcc}).
+
+\subsection{Naming scheme}\label{legacy:c_namingscheme}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c_namingscheme}, passed 9/0/0, 8/97.\\
+%Second vote taken on section~\ref{legacy:c_namingscheme}, passed 8/0/0, 12/97.\\
+%Third vote taken on section~\ref{legacy:c_namingscheme}, passed 14/0/0, 4/98. \\
+%Fourth vote taken on section~\ref{legacy:c_namingscheme}, passed 8/0/1 with 16 eligible voters, 8/98.} \\
+
+The naming scheme consists of taking the Fortran 77 routine name, making it
+lower case, and adding the prefix {\tt cblas\_}.  Therefore, the routine
+{\tt DGEMM} becomes {\tt cblas\_dgemm}.
+
+\subsubsection{Considered methods}
+{\it
+\begin{quotation}
+Various other naming schemes have been proposed, such as adding {\tt C\_} 
+or {\tt c\_} to the name.  Most of these schemes accomplish the requirement
+of separating the Fortran 77 and C name spaces.  It was argued, however, that
+the addition of the {\tt blas} prefix unifies the naming scheme in a logical
+and useful way (making it easy to search for BLAS use in a code, for instance),
+while not placing too great a burden on the typist.  The letter {\tt c} is used
+to distinguish this language interface from possible future interfaces.
+\end{quotation}
+}
+
+\subsection{Indices and I\_AMAX} \label{sec-Indices}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{sec-Indices}, passed 9/0/0, 8/97.\\
+%Second vote taken on section~\ref{sec-Indices}, passed 8/0/0, 12/97.\\
+%Third vote taken on section~\ref{sec-Indices}, passed 14/0/0, 4/98.\\
+%A binding vote for section~\ref{sec-Indices} was taken to see if we
+%should allow N=0, passed 8/2/4, 4/98. \\
+%Fourth vote taken on section~\ref{sec-Indices}, passed 8/0/1 with 16 eligible voters, 8/98.}\\
+
+The Fortran 77 BLAS return indices in the range $1 \leq I \leq N$ (where $N$
+is the number of entries in the dimension in question, and $I$ is the index),
+in accordance with Fortran 77 array indexing conventions.  This allows functions
+returning indices to be directly used to index standard arrays.  The C interface 
+therefore returns indices in the range $0 \leq I < N$ for the same reason.
+
+The only BLAS routine which returns an index is the function {\tt I\_AMAX}.
+This function is declared to be of type {\tt CBLAS\_INDEX}, which is guaranteed
+to be an integer type (i.e., no cast is required when assigning to any integer
+type).  {\tt CBLAS\_INDEX} will usually correspond to {\tt size\_t} to ensure
+any array can be indexed, but implementors might choose the integer type which
+matches their Fortran 77 {\tt INTEGER}, for instance.  It is defined that zero
+is returned as the index for a zero length vector (eg., For $N=0$, 
+{\tt I\_AMAX} will always return zero).
+
+
+\subsection{Character arguments}
+\label{sec-EnumType}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{sec-EnumType}, passed 9/0/0, 8/97.\\
+%Second vote taken on section~\ref{sec-EnumType}, passed 8/0/0, 12/97.\\
+%Third vote taken on section~\ref{sec-EnumType}, passed 14/0/0, 4/98. \\
+%Fourth vote taken on section~\ref{sec-EnumType}, passed 8/0/1 with 16 eligible voters, 8/98.} \\
+
+All arguments which were characters in the Fortran 77 interface are handled by
+enumerated types in the C interface.  This allows for tighter error checking,
+and provides less opportunity for user error.  The character arguments present
+in the Fortran 77 interface are: {\tt SIDE}, {\tt UPLO}, {\tt TRANSPOSE}, and
+{\tt DIAG}.  This interface adds another such argument to all routines involving 
+two dimensional arrays, {\tt ORDER}.  The standard dictates the following
+enumerated types:
+
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+enum CBLAS_ORDER     {CblasRowMajor=101, CblasColMajor=102};
+enum CBLAS_TRANSPOSE {CblasNoTrans=111, CblasTrans=112, CblasConjTrans=113};
+enum CBLAS_UPLO      {CblasUpper=121, CblasLower=122};
+enum CBLAS_DIAG      {CblasNonUnit=131, CblasUnit=132};
+enum CBLAS_SIDE      {CblasLeft=141, CblasRight=142};
+\end{Verbatim}
+
+\subsubsection{Considered methods}
+{\it
+\begin{quotation}
+The other two most commonly suggested methods were accepting these arguments as
+either {\tt char~*} or {\tt char}.  It was noted that both of these options
+require twice as many comparisons as normally required to branch (so that the
+character may be either upper or lower case).  Both methods also suffered from
+ambiguity (what does it mean to have {\tt DIAG='H'}, for instance).
+If {\tt char} was chosen, the words could not be written out as they can for the
+Fortran 77 interface (you couldn't write "NoTranspose").  If {\tt char~*} were
+used, some compilers might fail to optimize string constant use, causing
+unnecessary memory usage.
+
+The main advantage of enumerated data types, however, is that much of the error
+checking can be done at compile time, rather than at runtime (i.e., if the
+user fails to pass one of the valid options, the compiler can issue the error).
+
+There was much discussion as to whether the integer values should be specified,
+or whether only the enumerated names should be so specified.  The group could
+find no substansive way in which specifying the integer values would restrict
+an implementor, and specifying the integer values was seen as an aid to
+inter-language calls.
+\end{quotation}
+}
+
+\subsection{Handling of complex data types}\label{legacy:c_handlingcomplex}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c_handlingcomplex}, passed 9/0/0, 8/97.\\
+%Second vote taken on section~\ref{legacy:c_handlingcomplex}, passed 7/0/1, 12/97.\\
+%Third vote taken on section~\ref{legacy:c_handlingcomplex}, passed 14/0/0, 4/98. \\
+%Fourth vote taken on section~\ref{legacy:c_handlingcomplex}, passed 8/0/1 with 16 eligible voters, 8/98.} \\
+
+All complex arguments are accepted as {\tt void *}.  A complex element consists
+of two consecutive memory locations of the underlying data type
+(i.e., {\tt float} or {\tt double}), where the first location contains the
+real component, and the second contains the imaginary part of the number.
+
+In practice, programmers' methods of handling complex types in C vary.
+Some use various data structures (some examples are discussed below).
+Others accept complex numbers as arrays of the underlying type.  
+
+Complex numbers are accepted as void pointers so that widespread type casting
+will not be required to avoid warning or errors during compilation of
+complex code.
+
+An ANSI/ISO committee is presently working on an extension to ANSI/ISO C
+which defines complex data types.  The definition of a complex element
+is the same as given above, and so the handling of complex types by this
+interface will not need to be changed when ANSI/ISO C standard is
+extended.
+
+\subsubsection{Considered methods}
+{\it
+\begin{quotation}
+Probably the most strongly advocated alternative was defining complex numbers
+via a structure such as \\
+{\tt struct NON\_PORTABLE\_COMPLEX~\{float~r;~float~i;\};}
+The main problem with this solution is the lack of portability.  By the
+ANSI/ISO C standard, elements in a structure are not guaranteed to be
+contiguous.
+With the above structure, padding between elements has been experimentally
+observed (on the CRAY T3D), so this problem is not purely theoretical.
+
+To get around padding problems within the structure, a structure
+such as \\
+{\tt struct NON\_PORTABLE\_COMPLEX~\{float~v[2];\};}
+has been suggested.  With this
+structure there will obviously be no padding
+between the real and imaginary parts.  However, there still exists the
+possibility of padding between elements within an array.  More importantly, this
+structure does not lend itself nearly as well as the first to code clarity.
+
+A final proposal is to define a structure which may be addressed the same
+as the one above (i.e., \verb+ptr->r+, \verb+ptr->i+), but whose actual
+definition is platform dependent.  Then, hopefully, various vendors will
+either use the above structure and ensure via their compilers its
+contiguousness, or they will create a different structure which can be
+accessed in the same way.
+
+This requires vendors to support something which is not in the ANSI C standard,
+and so there is no way to ensure this would take place.  More to the point,
+use of such a structure turns out to not offer much in the way of real
+advantage, as discussed in the following section.
+
+All of these approaches require the programmer to either use the specified
+data type throughout the code which will call the BLAS, or to perform type
+casting on each BLAS call.  When complex numbers are accepted as void pointers,
+no type casting or data type is dictated, with the only restriction being
+that a complex number have the definition given above.
+\end{quotation}
+}
+
+\subsection{Return values of complex functions}\label{legacy:c_returncomplex}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c_returncomplex}, passed 9/0/0, 8/97.\\
+%Second vote taken on section~\ref{legacy:c_returncomplex}, passed 7/0/1, 12/97.\\
+%Third vote taken on section~\ref{legacy:c_returncomplex}, passed 13/0/1, 4/98. \\
+%Fourth vote taken on section~\ref{legacy:c_returncomplex}, passed 8/0/1 with 16 eligible voters, 8/98.} \\
+
+BLAS routines which return complex values in Fortran 77 are instead recast as
+subroutines in the C interface, with the return value being an output parameter
+added to the end of the argument list.  This allows the output parameter to
+be accepted as void pointers, as discussed above.
+
+Further, the name is suffixed by {\tt \_sub}.  There are two main reasons
+for this name change.  First, the change from a function to a subroutine
+is a significant change, and thus the name should reflect this.  More
+importantly, the ``traditional'' name space is specifically reserved
+for use when the forthcoming ANSI/ISO C extension is finalized.  When
+this is done, this C interface will be extended to include functions using
+the ``traditional'' names which utilize the new ANSI/ISO complex type to
+return the values.
+
+\subsubsection{Considered methods}
+{\it
+\begin{quotation}
+This is the area where use of a structure is most desired.  Again, the most
+common suggestion is a structure such as\\
+\verb+struct NON_PORTABLE_COMPLEX {float r; float i;};+.
+
+If one is willing to use this structure throughout one's code, then this
+provides a natural and convenient mechanism.  If, however, the programmer has
+utilized a different structure for complex, this ease of use breaks down.  Then,
+something like the following code fragment is required:
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+   NON_PORTABLE_COMPLEX ctmp;
+   float cdot[2];
+
+   ctmp = cblas_cdotc(n, x, 1, y, 1);
+   cdot[0] = ctmp.r;
+   cdot[1] = ctmp.i;
+\end{Verbatim}
+which is certainly much less convenient than:\\
+\verb+cblas_cdotc_sub(n, x, 1, y, 1, cdot)+.
+
+It should also be noted that the primary reason for having a function instead
+of a subroutine is already invalidated by C's lack of a standard complex type.
+Functions are most useful when the result may be used directly as part of
+an in-line computation.  However, since ANSI/ISO C lacks support for
+complex arithmetic primitives or operator overloading, complex functions cannot
+be standardly used in this way.  Since the function cannot be used as a part
+of a larger expression, nothing is lost by recasting it as a subroutine;
+indeed a slight performance win may be obtained.
+\end{quotation}
+}
+
+\subsection{Array arguments}\label{legacy:c_arrayarguments}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c_arrayarguments}, passed 9/0/0, 8/97.\\
+%Second vote taken on section~\ref{legacy:c_arrayarguments}, passed 8/0/0, 12/97.\\
+%Third vote taken on section~\ref{legacy:c_arrayarguments}, passed 13/0/1, 4/98. \\
+%Fourth vote taken on section~\ref{legacy:c_arrayarguments}, passed 8/0/1 with 16 eligible voters, 8/98.} \\
+
+Arrays are constrained to being contiguous in memory.  They
+are accepted as pointers, not as arrays of pointers.  
+%This means that
+%the C definition of a two dimensional array may not be used directly, since each
+%row is an arbitrary pointer (i.e., the address of the second row cannot
+%be obtained from the address of the first row).  Note that if the user
+%somehow ensures the C array is actually contiguous (eg. by allocating
+%it himself), C two dimensional arrays can indeed be used.
+
+All BLAS routines which take one or more two dimensional arrays as arguments
+receive one extra parameter as their first argument.  This argument is
+of the enumerated type \\
+{\tt enum~CBLAS\_ORDER~\{CblasRowMajor=101,~CblasColMajor=102\};}.\\
+If this parameter
+is set to {\tt CblasRowMajor}, it is assumed that elements within a row of
+the array(s) are contiguous in memory, while elements within array columns
+are separated by a constant stride given in the {\tt stride} parameter (this
+parameter corresponds to the leading dimension [e.g. {\tt LDA}] in the
+Fortran 77 interface).
+
+If the order is given as {\tt CblasColMajor}, elements within array columns
+are assumed to be contiguous, with elements within array rows separated
+by {\tt stride} memory elements.
+
+Note that there is only one {\tt CBLAS\_ORDER} parameter
+to a given routine: all array operands are required to use the same ordering.
+
+\subsubsection{Considered methods}
+{\it
+\begin{quotation}
+This solution comes after much discussion.  C users appear to split roughly
+into two camps.  Those people who have a history
+of mixing C and Fortran 77 (in particular making use of the Fortran 77 BLAS
+from C), tend to use column-major arrays in order to allow ease of
+inter-language operations.  Because of the flexibility of pointers, this
+is not appreciably harder than using row-major arrays, even though C
+``natively'' possesses row-major arrays.
+
+The second camp of C users 
+are not interested in overt C/Fortran 77 interoperability, and wish to 
+have arrays which are row-major, in accordance with standard C conventions.
+The idea that they must recast their row-oriented algorithms to column-major
+algorithms is unacceptable; many in this camp would probably not utilize
+any BLAS which enforced a column-major constraint.
+
+Because both camps are fairly widely represented within the target
+audience, it is impossible to choose one solution to the exclusion of
+the other.
+
+Column-major array storage can obviously be supported directly on top of
+the legacy Fortran 77 BLAS.  Recent work, particularly code provided
+by D.P. Manley of DEC, has shown that row-major array storage may also
+be supported in this way with little cost.  Appendix~\ref{app-ArrayStore}
+discusses this issue in detail.  To preview it here, we can say the level
+1 and 3 BLAS require no extra operations or storage to support row-major
+operations on top of the legacy BLAS.  Level 2 real routines also require
+no extra operations or storage.  Some complex level 2 routines involving
+the conjugate transpose will require extra storage and operations in order
+to form explicit conjugates.  However, this will always involve vectors,
+not the matrix.  In the worst case, we will need $n$ extra storage, and
+$3n$ sign changes.
+
+One proposal was to accept arrays as arrays of pointers, instead of as
+a single pointer.  
+%This would correspond exactly to the standard ANSI/ISO C
+%two dimensional array.  
+The problems with this approach are manifold.  First,
+the existing Fortran 77 BLAS could not be used, since they demand contiguous
+(though strided) storage.  Second, this approach requires users of standard
+C 2D arrays or 1D arrays to allocate and assign the appropriate pointer array.
+
+Beyond this, many of the vectors used in level 1 and level 2 BLAS come
+from rows or columns of two dimensional arrays.  Elements within columns of
+row-major arrays are not uniformly strided, which means that a {\tt n}-element
+column vector would need {\tt n} pointers to represent it.  This then
+leads to vectors being accepted as arrays of pointers as well.
+
+Now, assuming both our one and two dimensional arrays are accepted as arrays
+of pointers,
+we have a problem when we wish to perform sub-array access.  If we wish to
+pass an $m \times n$ subsection of a this array of pointers, starting at row $i$
+and column $j$,
+we must allocate $m$ pointers, and assign them in a section of code such as:
+
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+   float **A, **subA;
+
+   subA = malloc(m*sizeof(float*));
+   for (k=0; k != m; k++) subA[k] = A[i+k] + j;
+   cblas_rout(... subA ...);
+\end{Verbatim}
+
+The same operation must be done if we wish to use a row or column as a vector.
+This is not only an inconvenience, but can add up to a non-negligible
+performance loss as well.
+
+A fix for these problems is that one and two dimensional arrays be passed
+as arrays of
+pointers, and then indices are passed in to indicate the sub-portion to
+access.  Thus you have a call that looks like:
+\verb|cblas_rout(... A, i, j, ...);|.
+This solution still requires some additional tweaks to allow using two 
+dimensional array rows and columns as vectors.  Users presently using
+C 2D arrays or 1D arrays would have to malloc the array of pointers as shown
+in the preceding example in order to use this kind of interface.  At any
+rate, a library accepting pointers to pointers cannot be supported on top
+of the Fortran 77 BLAS, while one supporting simple pointers can.
+
+If the programmer is utilizing the pointer to pointer style of array indexing,
+it is still possible to use this library providing that the user ensures that
+the operand matrix is contiguous, and that the rows are constantly
+strided.  If this is the case, the user may pass the operand matrix
+to the library in precicely the same way as with a 2D C array:
+\verb|cblas_rout(... &A[i][j] ...);|.
+
+\noindent
+{\bf Example 1: making a library call with a C 2D array:}
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+   double A[50][25];  /* standard C 2D array */
+
+   cblas_rout(CblasRowMajor, ... &A[i][j], 25, ...);
+\end{Verbatim}
+
+\noindent
+{\bf Example 2: Legal use of pointer to pointer style programming and the CBLAS}
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+   double **A, *p;
+
+   A = malloc(M*sizeof(double *));
+   p = malloc(M*N*sizeof(double));
+   for (i=0; i < M; i++) A[i] = &p[i*N];
+
+   cblas_rout(CblasRowMajor, ... &A[i][j], N, ...);
+\end{Verbatim}
+
+\noindent
+{\bf Example 3: Illegal use of pointer to pointer style programming and the CBLAS}
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+   double **A, *p;
+
+   A = malloc(M*sizeof(double *));
+   p = malloc(M*N*sizeof(double));
+   for (i=0; i < M; i++) A[i] = malloc(N*sizeof(double));
+
+   cblas_rout(CblasRowMajor, ... &A[i][j], N, ...);
+\end{Verbatim}
+   
+
+Note that Example 3 is illegal because the rows of A have no guaranteed stride.
+\end{quotation}
+}
+
+\subsection{Aliasing of arguments}\label{legacy:c_aliasing}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c_aliasing}, failed, too restrictive,
+%back to subcommittee, 4/98.\\
+%Second vote taken on section~\ref{legacy:c_aliasing}, passed 13/0/0, 4/98.\\
+%Third vote taken on section~\ref{legacy:c_aliasing}, passed 8/0/1 with 16 eligible voters, 8/98.}\\
+ 
+Unless specified otherwise, only input-only arguments (specified with the
+{\tt const} qualifier), may be legally aliased on a call to the C interface
+to the BLAS.
+
+\subsubsection{Considered methods}
+The ANSI C standard allows for the aliasing of output arguments.  However,
+allowing this often carries a substantial performance penalty.  This, along
+with the fact that Fortran 77 (which we hope to call for optimized libraries)
+does not allow aliasing of output arguments, led us to make this restriction.
+
+\subsection{C interface include file}\label{legacy:c_includefile}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c_includefile}, passed 14/0/0, 4/98.\\
+%Second vote taken on section~\ref{legacy:c_includefile}, passed 13/0/0, 4/98.\\
+%Third vote taken on section~\ref{legacy:c_includefile}, passed 8/0/1 with 16 eligible voters, 8/98.}\\
+
+The C interface to the BLAS will have a standard include file, called 
+{\tt cblas.h}, which minimally contains the definition of the CBLAS types
+and ANSI/ISO C prototypes for all BLAS routines.  
+It is not an error to include this file multiple times.
+Section~\ref{sec-cblash} contains an example of a minimal {\tt cblas.h}.
+
+{{\bf ADVICE TO THE IMPLEMENTOR:}\\ \em
+Note that the vendor is not constrained to using precisely
+this include file; only the enumerated type definitions are fully specified.
+The implementor is free to make any other changes which are not apparent
+to the user.  For instance, all matrix dimensions might be accepted as
+{\tt size\_t} instead of {\tt int}, or the implementor might choose to
+make some routines inline.
+}
+
+\subsection{Error checking}\label{legacy:c_errorchecking}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c_errorchecking}, passed 9/0/0, 8/97.\\
+%Second vote taken on section~\ref{legacy:c_errorchecking}, passed 8/0/0, 12/97.\\
+%Third vote taken on section~\ref{legacy:c_errorchecking}, passed 13/0/0, 4/98.\\
+%Fourth vote taken on section~\ref{legacy:c_errorchecking}, passed 8/0/1 with 16 eligible voters, 8/98.}\\
+
+The C interface to the legacy BLAS must supply error checking corresponding
+to that provided by the reference Fortran 77 BLAS implementation.
+
+%{\it {\bf ADVICE TO IMPLEMENTOR:}
+%If the Fortran 77 code is used to implement the C interface, most of the error
+%checking may be done by Fortran 77 code, assuming error reporting is 
+%changed to reflect the differing C interface.
+%}
+
+\subsection{Rules for obtaining the C interface from the Fortran 77}
+\label{legacy:c_rules}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{legacy:c_rules}, passed 9/0/1 with 16 eligible voters, 8/98.}\\
+
+\begin{itemize}
+   \item The Fortran 77 routine name is changed to lower case, and prefixed by {\tt cblas\_}.
+   \item All routines which accept two dimensional arrays (i.e., level 2 and 3),
+         acquire a new parameter of type {\tt CBLAS\_ORDER} as their first
+         argument, which determines if the two dimensional arrays are row or
+         column major.
+   \item {\em Character arguments} are replaced by the appropriate enumerated type,
+         as shown in Section~\ref{sec-EnumType}.
+   \item {\em Input arguments} are declared with the {\tt const} modifier.
+   \item {\em Non-complex scalar input arguments} are passed by value.  This
+         allows the user to put in constants when desired (eg., passing 10 on
+         the command line for \verb+N+).
+   \item {\em Complex scalar input arguments} are passed as void pointers,
+         since they do not exist as a predefined data type in ANSI/ISO C.
+   \item {\em Array arguments} are passed by address.
+   \item {\em Output scalar arguments} are passed by address.
+   \item {\em Complex functions} become subroutines which return the result via
+         a void pointer, added as the last parameter.  The name is suffixed
+         with {\tt \_sub}.
+\end{itemize}
+
+\subsection{cblas.h include file}
+\label{sec-cblash}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{sec-cblash}, passed 9/0/1 with 16 eligible voters, 8/98.}\\
+
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+#ifndef CBLAS_H
+#define CBLAS_H
+#include <stddef.h>
+
+/*
+ * Enumerated and derived types
+ */
+#define CBLAS_INDEX size_t  /* this may vary between platforms */
+enum CBLAS_ORDER     {CblasRowMajor=101, CblasColMajor=102};
+enum CBLAS_TRANSPOSE {CblasNoTrans=111, CblasTrans=112, CblasConjTrans=113};
+enum CBLAS_UPLO      {CblasUpper=121, CblasLower=122};
+enum CBLAS_DIAG      {CblasNonUnit=131, CblasUnit=132};
+enum CBLAS_SIDE      {CblasLeft=141, CblasRight=142};
+
+/*
+ * ===========================================================================
+ * Prototypes for level 1 BLAS functions (complex are recast as routines)
+ * ===========================================================================
+ */
+float  cblas_sdsdot(const int N, const float alpha, const float *X,
+                    const int incX, const float *Y, const int incY);
+double cblas_dsdot(const int N, const float *X, const int incX, const float *Y,
+                   const int incY);
+float  cblas_sdot(const int N, const float  *X, const int incX,
+                  const float  *Y, const int incY);
+double cblas_ddot(const int N, const double *X, const int incX,
+                  const double *Y, const int incY);
+
+/*
+ * Functions having prefixes Z and C only
+ */
+void   cblas_cdotu_sub(const int N, const void *X, const int incX,
+                       const void *Y, const int incY, void *dotu);
+void   cblas_cdotc_sub(const int N, const void *X, const int incX,
+                       const void *Y, const int incY, void *dotc);
+
+void   cblas_zdotu_sub(const int N, const void *X, const int incX,
+                       const void *Y, const int incY, void *dotu);
+void   cblas_zdotc_sub(const int N, const void *X, const int incX,
+                       const void *Y, const int incY, void *dotc);
+
+
+/*
+ * Functions having prefixes S D SC DZ
+ */
+float  cblas_snrm2(const int N, const float *X, const int incX);
+float  cblas_sasum(const int N, const float *X, const int incX);
+
+double cblas_dnrm2(const int N, const double *X, const int incX);
+double cblas_dasum(const int N, const double *X, const int incX);
+
+float  cblas_scnrm2(const int N, const void *X, const int incX);
+float  cblas_scasum(const int N, const void *X, const int incX);
+
+double cblas_dznrm2(const int N, const void *X, const int incX);
+double cblas_dzasum(const int N, const void *X, const int incX);
+
+
+/*
+ * Functions having standard 4 prefixes (S D C Z)
+ */
+CBLAS_INDEX cblas_isamax(const int N, const float  *X, const int incX);
+CBLAS_INDEX cblas_idamax(const int N, const double *X, const int incX);
+CBLAS_INDEX cblas_icamax(const int N, const void   *X, const int incX);
+CBLAS_INDEX cblas_izamax(const int N, const void   *X, const int incX);
+
+/*
+ * ===========================================================================
+ * Prototypes for level 1 BLAS routines
+ * ===========================================================================
+ */
+
+/* 
+ * Routines with standard 4 prefixes (s, d, c, z)
+ */
+void cblas_sswap(const int N, float *X, const int incX, 
+                 float *Y, const int incY);
+void cblas_scopy(const int N, const float *X, const int incX, 
+                 float *Y, const int incY);
+void cblas_saxpy(const int N, const float alpha, const float *X,
+                 const int incX, float *Y, const int incY);
+
+void cblas_dswap(const int N, double *X, const int incX, 
+                 double *Y, const int incY);
+void cblas_dcopy(const int N, const double *X, const int incX, 
+                 double *Y, const int incY);
+void cblas_daxpy(const int N, const double alpha, const double *X,
+                 const int incX, double *Y, const int incY);
+
+void cblas_cswap(const int N, void *X, const int incX, 
+                 void *Y, const int incY);
+void cblas_ccopy(const int N, const void *X, const int incX, 
+                 void *Y, const int incY);
+void cblas_caxpy(const int N, const void *alpha, const void *X,
+                 const int incX, void *Y, const int incY);
+
+void cblas_zswap(const int N, void *X, const int incX, 
+                 void *Y, const int incY);
+void cblas_zcopy(const int N, const void *X, const int incX, 
+                 void *Y, const int incY);
+void cblas_zaxpy(const int N, const void *alpha, const void *X,
+                 const int incX, void *Y, const int incY);
+
+
+/* 
+ * Routines with S and D prefix only
+ */
+void cblas_srotg(float *a, float *b, float *c, float *s);
+void cblas_srotmg(float *d1, float *d2, float *b1, const float b2, float *P);
+void cblas_srot(const int N, float *X, const int incX,
+                float *Y, const int incY, const float c, const float s);
+void cblas_srotm(const int N, float *X, const int incX,
+                float *Y, const int incY, const float *P);
+
+void cblas_drotg(double *a, double *b, double *c, double *s);
+void cblas_drotmg(double *d1, double *d2, double *b1, const double b2, double *P);
+void cblas_drot(const int N, double *X, const int incX,
+                double *Y, const int incY, const double c, const double s);
+void cblas_drotm(const int N, double *X, const int incX,
+                double *Y, const int incY, const double *P);
+
+
+/* 
+ * Routines with S D C Z CS and ZD prefixes
+ */
+void cblas_sscal(const int N, const float alpha, float *X, const int incX);
+void cblas_dscal(const int N, const double alpha, double *X, const int incX);
+void cblas_cscal(const int N, const void *alpha, void *X, const int incX);
+void cblas_zscal(const int N, const void *alpha, void *X, const int incX);
+void cblas_csscal(const int N, const float alpha, void *X, const int incX);
+void cblas_zdscal(const int N, const double alpha, void *X, const int incX);
+
+/*
+ * ===========================================================================
+ * Prototypes for level 2 BLAS
+ * ===========================================================================
+ */
+
+/* 
+ * Routines with standard 4 prefixes (S, D, C, Z)
+ */
+void cblas_sgemv(const enum CBLAS_ORDER order,
+                 const enum CBLAS_TRANSPOSE TransA, const int M, const int N,
+                 const float alpha, const float *A, const int lda,
+                 const float *X, const int incX, const float beta,
+                 float *Y, const int incY);
+void cblas_sgbmv(const enum CBLAS_ORDER order,
+                 const enum CBLAS_TRANSPOSE TransA, const int M, const int N,
+                 const int KL, const int KU, const float alpha,
+                 const float *A, const int lda, const float *X,
+                 const int incX, const float beta, float *Y, const int incY);
+void cblas_strmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const float *A, const int lda, 
+                 float *X, const int incX);
+void cblas_stbmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const int K, const float *A, const int lda, 
+                 float *X, const int incX);
+void cblas_stpmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const float *Ap, float *X, const int incX);
+void cblas_strsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const float *A, const int lda, float *X,
+                 const int incX);
+void cblas_stbsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const int K, const float *A, const int lda,
+                 float *X, const int incX);
+void cblas_stpsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const float *Ap, float *X, const int incX);
+
+void cblas_dgemv(const enum CBLAS_ORDER order,
+                 const enum CBLAS_TRANSPOSE TransA, const int M, const int N,
+                 const double alpha, const double *A, const int lda,
+                 const double *X, const int incX, const double beta,
+                 double *Y, const int incY);
+void cblas_dgbmv(const enum CBLAS_ORDER order,
+                 const enum CBLAS_TRANSPOSE TransA, const int M, const int N,
+                 const int KL, const int KU, const double alpha,
+                 const double *A, const int lda, const double *X,
+                 const int incX, const double beta, double *Y, const int incY);
+void cblas_dtrmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const double *A, const int lda, 
+                 double *X, const int incX);
+void cblas_dtbmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const int K, const double *A, const int lda, 
+                 double *X, const int incX);
+void cblas_dtpmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const double *Ap, double *X, const int incX);
+void cblas_dtrsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const double *A, const int lda, double *X,
+                 const int incX);
+void cblas_dtbsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const int K, const double *A, const int lda,
+                 double *X, const int incX);
+void cblas_dtpsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const double *Ap, double *X, const int incX);
+
+void cblas_cgemv(const enum CBLAS_ORDER order,
+                 const enum CBLAS_TRANSPOSE TransA, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 const void *X, const int incX, const void *beta,
+                 void *Y, const int incY);
+void cblas_cgbmv(const enum CBLAS_ORDER order,
+                 const enum CBLAS_TRANSPOSE TransA, const int M, const int N,
+                 const int KL, const int KU, const void *alpha,
+                 const void *A, const int lda, const void *X,
+                 const int incX, const void *beta, void *Y, const int incY);
+void cblas_ctrmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const void *A, const int lda, 
+                 void *X, const int incX);
+void cblas_ctbmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const int K, const void *A, const int lda, 
+                 void *X, const int incX);
+void cblas_ctpmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const void *Ap, void *X, const int incX);
+void cblas_ctrsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const void *A, const int lda, void *X,
+                 const int incX);
+void cblas_ctbsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const int K, const void *A, const int lda,
+                 void *X, const int incX);
+void cblas_ctpsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const void *Ap, void *X, const int incX);
+
+void cblas_zgemv(const enum CBLAS_ORDER order,
+                 const enum CBLAS_TRANSPOSE TransA, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 const void *X, const int incX, const void *beta,
+                 void *Y, const int incY);
+void cblas_zgbmv(const enum CBLAS_ORDER order,
+                 const enum CBLAS_TRANSPOSE TransA, const int M, const int N,
+                 const int KL, const int KU, const void *alpha,
+                 const void *A, const int lda, const void *X,
+                 const int incX, const void *beta, void *Y, const int incY);
+void cblas_ztrmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const void *A, const int lda, 
+                 void *X, const int incX);
+void cblas_ztbmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const int K, const void *A, const int lda, 
+                 void *X, const int incX);
+void cblas_ztpmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const void *Ap, void *X, const int incX);
+void cblas_ztrsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const void *A, const int lda, void *X,
+                 const int incX);
+void cblas_ztbsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const int K, const void *A, const int lda,
+                 void *X, const int incX);
+void cblas_ztpsv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE TransA, const enum CBLAS_DIAG Diag,
+                 const int N, const void *Ap, void *X, const int incX);
+
+
+/* 
+ * Routines with S and D prefixes only
+ */
+void cblas_ssymv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const float alpha, const float *A,
+                 const int lda, const float *X, const int incX,
+                 const float beta, float *Y, const int incY);
+void cblas_ssbmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const int K, const float alpha, const float *A,
+                 const int lda, const float *X, const int incX,
+                 const float beta, float *Y, const int incY);
+void cblas_sspmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const float alpha, const float *Ap,
+                 const float *X, const int incX,
+                 const float beta, float *Y, const int incY);
+void cblas_sger(const enum CBLAS_ORDER order, const int M, const int N,
+                const float alpha, const float *X, const int incX,
+                const float *Y, const int incY, float *A, const int lda);
+void cblas_ssyr(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const float alpha, const float *X,
+                const int incX, float *A, const int lda);
+void cblas_sspr(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const float alpha, const float *X,
+                const int incX, float *Ap);
+void cblas_ssyr2(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const float alpha, const float *X,
+                const int incX, const float *Y, const int incY, float *A,
+                const int lda);
+void cblas_sspr2(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const float alpha, const float *X,
+                const int incX, const float *Y, const int incY, float *A);
+
+void cblas_dsymv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const double alpha, const double *A,
+                 const int lda, const double *X, const int incX,
+                 const double beta, double *Y, const int incY);
+void cblas_dsbmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const int K, const double alpha, const double *A,
+                 const int lda, const double *X, const int incX,
+                 const double beta, double *Y, const int incY);
+void cblas_dspmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const double alpha, const double *Ap,
+                 const double *X, const int incX,
+                 const double beta, double *Y, const int incY);
+void cblas_dger(const enum CBLAS_ORDER order, const int M, const int N,
+                const double alpha, const double *X, const int incX,
+                const double *Y, const int incY, double *A, const int lda);
+void cblas_dsyr(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const double alpha, const double *X,
+                const int incX, double *A, const int lda);
+void cblas_dspr(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const double alpha, const double *X,
+                const int incX, double *Ap);
+void cblas_dsyr2(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const double alpha, const double *X,
+                const int incX, const double *Y, const int incY, double *A,
+                const int lda);
+void cblas_dspr2(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const double alpha, const double *X,
+                const int incX, const double *Y, const int incY, double *A);
+
+
+/* 
+ * Routines with C and Z prefixes only
+ */
+void cblas_chemv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const void *alpha, const void *A,
+                 const int lda, const void *X, const int incX,
+                 const void *beta, void *Y, const int incY);
+void cblas_chbmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const int K, const void *alpha, const void *A,
+                 const int lda, const void *X, const int incX,
+                 const void *beta, void *Y, const int incY);
+void cblas_chpmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const void *alpha, const void *Ap,
+                 const void *X, const int incX,
+                 const void *beta, void *Y, const int incY);
+void cblas_cgeru(const enum CBLAS_ORDER order, const int M, const int N,
+                 const void *alpha, const void *X, const int incX,
+                 const void *Y, const int incY, void *A, const int lda);
+void cblas_cgerc(const enum CBLAS_ORDER order, const int M, const int N,
+                 const void *alpha, const void *X, const int incX,
+                 const void *Y, const int incY, void *A, const int lda);
+void cblas_cher(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const float alpha, const void *X, const int incX,
+                void *A, const int lda);
+void cblas_chpr(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const float *alpha, const void *X,
+                const int incX, void *A);
+void cblas_cher2(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo, const int N,
+                const void *alpha, const void *X, const int incX,
+                const void *Y, const int incY, void *A, const int lda);
+void cblas_chpr2(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo, const int N,
+                const void *alpha, const void *X, const int incX,
+                const void *Y, const int incY, void *Ap);
+
+void cblas_zhemv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const void *alpha, const void *A,
+                 const int lda, const void *X, const int incX,
+                 const void *beta, void *Y, const int incY);
+void cblas_zhbmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const int K, const void *alpha, const void *A,
+                 const int lda, const void *X, const int incX,
+                 const void *beta, void *Y, const int incY);
+void cblas_zhpmv(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const int N, const void *alpha, const void *Ap,
+                 const void *X, const int incX,
+                 const void *beta, void *Y, const int incY);
+void cblas_zgeru(const enum CBLAS_ORDER order, const int M, const int N,
+                 const void *alpha, const void *X, const int incX,
+                 const void *Y, const int incY, void *A, const int lda);
+void cblas_zgerc(const enum CBLAS_ORDER order, const int M, const int N,
+                 const void *alpha, const void *X, const int incX,
+                 const void *Y, const int incY, void *A, const int lda);
+void cblas_zher(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const double alpha, const void *X, const int incX,
+                void *A, const int lda);
+void cblas_zhpr(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                const int N, const double *alpha, const void *X,
+                const int incX, void *A);
+void cblas_zher2(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo, const int N,
+                const void *alpha, const void *X, const int incX,
+                const void *Y, const int incY, void *A, const int lda);
+void cblas_zhpr2(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo, const int N,
+                const void *alpha, const void *X, const int incX,
+                const void *Y, const int incY, void *Ap);
+
+/*
+ * ===========================================================================
+ * Prototypes for level 3 BLAS
+ * ===========================================================================
+ */
+
+/* 
+ * Routines with standard 4 prefixes (S, D, C, Z)
+ */
+void cblas_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
+                 const int K, const float alpha, const float *A,
+                 const int lda, const float *B, const int ldb,
+                 const float beta, float *C, const int ldc);
+void cblas_ssymm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const int M, const int N,
+                 const float alpha, const float *A, const int lda,
+                 const float *B, const int ldb, const float beta,
+                 float *C, const int ldc);
+void cblas_ssyrk(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                 const float alpha, const float *A, const int lda,
+                 const float beta, float *C, const int ldc);
+void cblas_ssyr2k(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                  const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                  const float alpha, const float *A, const int lda,
+                  const float *B, const int ldb, const float beta,
+                  float *C, const int ldc);
+void cblas_strmm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_DIAG Diag, const int M, const int N,
+                 const float alpha, const float *A, const int lda,
+                 float *B, const int ldb);
+void cblas_strsm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_DIAG Diag, const int M, const int N,
+                 const float alpha, const float *A, const int lda,
+                 float *B, const int ldb);
+
+void cblas_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
+                 const int K, const double alpha, const double *A,
+                 const int lda, const double *B, const int ldb,
+                 const double beta, double *C, const int ldc);
+void cblas_dsymm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const int M, const int N,
+                 const double alpha, const double *A, const int lda,
+                 const double *B, const int ldb, const double beta,
+                 double *C, const int ldc);
+void cblas_dsyrk(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                 const double alpha, const double *A, const int lda,
+                 const double beta, double *C, const int ldc);
+void cblas_dsyr2k(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                  const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                  const double alpha, const double *A, const int lda,
+                  const double *B, const int ldb, const double beta,
+                  double *C, const int ldc);
+void cblas_dtrmm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_DIAG Diag, const int M, const int N,
+                 const double alpha, const double *A, const int lda,
+                 double *B, const int ldb);
+void cblas_dtrsm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_DIAG Diag, const int M, const int N,
+                 const double alpha, const double *A, const int lda,
+                 double *B, const int ldb);
+
+void cblas_cgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
+                 const int K, const void *alpha, const void *A,
+                 const int lda, const void *B, const int ldb,
+                 const void *beta, void *C, const int ldc);
+void cblas_csymm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 const void *B, const int ldb, const void *beta,
+                 void *C, const int ldc);
+void cblas_csyrk(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                 const void *alpha, const void *A, const int lda,
+                 const void *beta, void *C, const int ldc);
+void cblas_csyr2k(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                  const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                  const void *alpha, const void *A, const int lda,
+                  const void *B, const int ldb, const void *beta,
+                  void *C, const int ldc);
+void cblas_ctrmm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_DIAG Diag, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 void *B, const int ldb);
+void cblas_ctrsm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_DIAG Diag, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 void *B, const int ldb);
+
+void cblas_zgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
+                 const int K, const void *alpha, const void *A,
+                 const int lda, const void *B, const int ldb,
+                 const void *beta, void *C, const int ldc);
+void cblas_zsymm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 const void *B, const int ldb, const void *beta,
+                 void *C, const int ldc);
+void cblas_zsyrk(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                 const void *alpha, const void *A, const int lda,
+                 const void *beta, void *C, const int ldc);
+void cblas_zsyr2k(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                  const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                  const void *alpha, const void *A, const int lda,
+                  const void *B, const int ldb, const void *beta,
+                  void *C, const int ldc);
+void cblas_ztrmm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_DIAG Diag, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 void *B, const int ldb);
+void cblas_ztrsm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const enum CBLAS_TRANSPOSE TransA,
+                 const enum CBLAS_DIAG Diag, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 void *B, const int ldb);
+
+
+/* 
+ * Routines with prefixes C and Z only
+ */
+void cblas_chemm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 const void *B, const int ldb, const void *beta,
+                 void *C, const int ldc);
+void cblas_cherk(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                 const float alpha, const void *A, const int lda,
+                 const float beta, void *C, const int ldc);
+void cblas_cher2k(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                  const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                  const void *alpha, const void *A, const int lda,
+                  const void *B, const int ldb, const float beta,
+                  void *C, const int ldc);
+
+void cblas_zhemm(const enum CBLAS_ORDER Order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const int M, const int N,
+                 const void *alpha, const void *A, const int lda,
+                 const void *B, const int ldb, const void *beta,
+                 void *C, const int ldc);
+void cblas_zherk(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                 const double alpha, const void *A, const int lda,
+                 const double beta, void *C, const int ldc);
+void cblas_zher2k(const enum CBLAS_ORDER Order, const enum CBLAS_UPLO Uplo,
+                  const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                  const void *alpha, const void *A, const int lda,
+                  const void *B, const int ldb, const double beta,
+                  void *C, const int ldc);
+
+#endif
+\end{Verbatim}
+
+\subsection{Using Fortran 77 BLAS to support row-major BLAS operations}
+\label{app-ArrayStore}
+
+%{\footnotesize {\bf Current Status:}\\
+%First vote taken on section~\ref{app-ArrayStore}, passed 9/0/1 with 16 eligible voters, 8/98.}\\
+
+This section is not part of the standard per se.  Rather, it exists as an
+advice to the implementor on how row-major BLAS operations may be 
+implemented using column-major BLAS.  This allows vendors to leverage
+years of Fortran 77 BLAS developement in producing the C BLAS.
+
+Before this issue is examined in detail, a few general observations on array
+storage are helpful.  We must distinguish between the matrix and the array
+which is used to store the matrix.  The matrix, and its rows and columns,
+have mathematical meaning.  The array is simply the method of storing the
+matrix, and its rows and columns are significant only for memory addressing.
+
+Thus we see we can store the columns of a matrix in the rows of an array,
+for instance.  When this occurs in the BLAS, the matrix is said to be
+stored in transposed form.
+
+A row-major array stores elements along a row in contiguous storage, and
+separates the column elements by some constant stride (often the actual
+length of a row).  Column-major arrays have contiguous columns, and strided
+rows.  The importance of this is to note that a row-major array storing
+a matrix in the natural way, is a transposed column-major array (i.e.,
+it can be thought of as a column-major array where the rows of the matrix
+are stored in the columns of the array).
+
+Similarly, an upper triangular row-major array corresponds to a transposed
+lower triangular column-major array (the same is true in reverse [i.e.,
+lower-to-upper], obviously).  To see this, simply think of what a upper
+triangular matrix stored in a row-major array looks like.  The first $n$
+entries contain the first matrix row, followed by a non-negative gap, 
+followed by the second matrix row.
+
+If this same array is viewed as column-major, the first $n$ entries are a
+column, instead of a row, so that the columns of the array store the
+rows of the matrix (i.e., it is transposed).  This means that if we wish
+to use the Fortran 77 (column-major) BLAS with triangular matrices coming
+from C (possibly row-major), we will be reversing the setting of {\tt UPLO},
+while simultaneously reversing the setting of {\tt TRANS} (this gets slightly
+more complicated when the conjugate transpose is involved, as we will see).
+
+Finally, note that if a matrix is symmetric or Hermitian, its rows are the
+same as its columns, so we may merely switch {\tt UPLO}, without bothering with
+{\tt TRANS}.
+
+In the BLAS, there are two separate cases of importance.  one dimensional
+arrays (storage for vectors) have the same meaning in both C and Fortran 77,
+so if we are
+solving a linear algebra problem who's answer is a vector, we will need to
+solve the same problem for both languages.  However, if the answer is a
+matrix, in terms of calling routines which use column-major storage from
+one using row-major storage, we will want to solve the {\em transpose}
+of the problem.
+
+To get an idea of what this means, consider a contrived example.  Say we
+have routines for simple matrix-matrix and matrix-vector multiply.  The vector
+operation is $y \leftarrow A \times x$, and the matrix operation is
+$C \leftarrow A \times B$.  Now say we are implementing these as calls
+from row-major array storage to column-major storage.  Since the matrix-vector
+multiply's answer is a vector, the problem we are solving is remains the same,
+but we must remember that our C array $A$ is a Fortran 77 $A^T$.
+On the other hand, the matrix-matrix multiply has a matrix
+for a result, so when the differing array storage is taken into account,
+the problem we want to solve is $C^T \leftarrow B^T \times A^T$.
+
+This last example demonstrates another general result.  Some level 3 BLAS
+contain a {\tt SIDE} parameter, determining which side a matrix is applied
+on.  In general, if we are solving the transpose of this operation, the side
+parameter will be reversed.
+
+With these general principles, it is possible to show that all that 
+row-major level 3 BLAS can be expressed in terms of column-major BLAS without
+any extra array storage or extra operations.  In the level 2 BLAS, no
+extra storage or array accesses are required for the real routines.  Complex
+routines involving the conjugate transpose, however, may require a
+$n$-element temporary, and up to $3n$ more operations (vendors may avoid all
+extra workspace and operations
+by overloading the {\tt TRANS} option for the level 2 BLAS: letting it also
+allow conjugation without doing the transpose).
+The level 1 BLAS, which deal exclusively with vectors, are unaffected by
+this storage issue.
+
+With these ideas in mind, we will now show how to support a row-major BLAS
+on top of a column major BLAS.
+This information will be presented in tabular form.
+For brevity, row-major storage will be referred to as coming from C (even
+though column-major arrays can also come from C), while
+column-major storage will be referred to as F77.
+
+Each table will show a BLAS invocation coming from C, the operation that the
+BLAS should perform, the operation required once F77 storage is taken
+into account (if this changes), and the call to the appropriate F77 BLAS.
+Not every possible
+combination of parameters is shown, since many are simply reflections of
+another (i.e., when we are applying the {\tt Upper, NoTranspose} becomes
+{\tt Lower, Transpose} rule, we will show it for only the upper case.
+In order to make the notation more concise, let us define $\overline{x}$
+to be $conj(x)$.
+
+\subsubsection{Level 2 BLAS}
+\subsubsection{GEMV}
+
+\noindent
+{\small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_cgemv(CblasRowMajor, CblasNoTrans, m, n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+op       & $y \leftarrow \alpha A x + \beta y$\\
+F77 call & {\tt CGEMV('T', n, m, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\\\
+%
+C call   & {\tt cblas\_cgemv(CblasRowMajor, CblasTrans, m, n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+op       & $y \leftarrow \alpha A^T x + \beta y$\\
+F77 call & {\tt CGEMV('N', n, m, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\\\
+%
+C call   & {\tt cblas\_cgemv(CblasRowMajor, CblasConjTrans, m, n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+op       & $y \leftarrow \alpha A^H x + \beta y \Rightarrow 
+           \overline{(\overline{y} \leftarrow \overline{\alpha} A^T \overline{x} + 
+            \overline{\beta} \overline{y})}$\\
+F77 call & {\tt CGEMV('N', n, m, $\overline{\alpha}$, A, lda, $\overline{x}$, 1, $\overline{\beta}$, $\overline{y}$, incy)}\\\\
+\end{tabular}
+}
+
+Note that we switch the value of transpose to handle the row/column major
+ordering difference.
+In the last case, we will require $n$ elements of workspace so that
+we may store the conjugated vector $\overline{x}$.  Then, we set $y = \overline{y}$, and
+make the call.  This gives
+us the conjugate of the answer, so we once again set $y = \overline{y}$.  Therefore, we
+see that to support the conjugate transpose, we will need to allocate an $n$-element
+vector, and perform $2m+n$ extra operations. 
+
+\subsubsection{SYMV}
+
+SYMV requires no extra workspace or operations.
+
+{\small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_csymv(CblasRowMajor, CblasUpper, n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+op       & $y \leftarrow \alpha A x + \beta y \Rightarrow 
+            y \leftarrow \alpha A^T x + \beta y$\\
+F77 call & {\tt CSYMV('L', n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\\\
+%
+%C call   & {\tt cblas\_csymv(CblasRowMajor, CblasLower, n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+%op       & $y \leftarrow \alpha A x + \beta y$\\
+%F77 call & {\tt CSYMV('U', n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+\end{tabular}
+}
+
+\subsubsection{HEMV}
+HEMV routine requires $3n$ conjugations, and $n$ extra storage.
+
+{\small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_chemv(CblasRowMajor, CblasUpper, n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+op       & $y \leftarrow \alpha A x + \beta y \Rightarrow 
+           y \leftarrow \alpha A^H x + \beta y \Rightarrow 
+           \overline{(\overline{y} \leftarrow \overline{\alpha} A^T \overline{x}
+           + \overline{\beta} \overline{y})}$\\
+F77 call & {\tt CHEMV('L', n, $\overline{\alpha}$, A, lda, $\overline{x}$, incx, $\overline{\beta}$, $\overline{y}$, incy)}\\\\
+%
+%C call   & {\tt cblas\_chemv(CblasRowMajor, CblasLower, n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+%op       & $y \leftarrow \alpha A x + \beta y$\\
+%F77 call & {\tt CHEMV('U', n, $\alpha$, A, lda, x, incx, $\beta$, y, incy)}\\
+\end{tabular}
+}
+
+\subsubsection{TRMV/TRSV}
+
+\noindent
+{ \small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_ctrmv(CblasRowMajor, CblasUpper, CblasNoTrans, diag, n, A, lda, x, incx)}\\
+op       & $x \leftarrow A x$\\
+F77 call & {\tt CTRMV('L', 'T', diag, n, A, lda, x, incx)}\\\\
+%
+C call   & {\tt cblas\_ctrmv(CblasRowMajor, CblasUpper, CblasTrans, diag, n, A, lda, x, incx)}\\
+op       & $x \leftarrow A^T x$\\
+F77 call & {\tt CTRMV('L', 'N', diag, n, A, lda, x, incx)}\\\\
+%
+C call   & {\tt cblas\_ctrmv(CblasRowMajor, CblasUpper, CblasConjTrans, diag, n, A, lda, x, incx)}\\
+op       & $x \leftarrow A^H x \Rightarrow \overline{(\overline{x} = A^T \overline{x})}$\\
+F77 call & {\tt CTRMV('L', 'N', diag, n, A, lda, $\overline{x}$, incx)}\\\\
+\end{tabular}
+}
+
+Again, we see that we will need some extra operations when we are handling the
+conjugate transpose.  We conjugate $x$ before the call, giving us the conjugate
+of the answer we seek.  We then conjugate this again to return the correct answer.
+This routine therefore needs $2n$ extra operations for the complex conjugate case.
+
+The calls with the C array being {\tt Lower} are merely the reflection of these
+calls, and thus are not shown.  The analysis for TRMV is the same, since it
+involves the same principle of what a transpose of a triangular matrix is.
+
+\subsubsection{GER/GERU}
+
+This is our first routine that has a matrix as the solution.  Recalling that
+this means we solve the transpose of the original problem, we get:
+
+{ \small
+\noindent
+\begin{tabular}{ll}
+C call   & {\tt cblas\_cgeru(CblasRowMajor, m, n, $\alpha$, x, incx, y, incy, A, lda)}\\
+C op     & $A \leftarrow \alpha x y^T + A$ \\
+F77 op   & $A^T \leftarrow \alpha y x^T +A^T$ \\
+F77 call & {\tt CGERU(n, m, $\alpha$, y, incy, x, incx, A, lda)}\\\\
+\end{tabular}
+}
+
+No extra storage or operations are required.
+
+\subsubsection{GERC}
+{ \small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_cgerc(CblasRowMajor, m, n, $\alpha$, x, incx, y, incy, A, lda)}\\
+C op     & $A \leftarrow \alpha x y^H + A$ \\
+F77 op   & $A^T \leftarrow \alpha (x y^H)^T + A^T = \alpha \overline{y} x^T + A^T$ \\
+F77 call & {\tt CGERU(n, m, $\alpha$, $\overline{y}$, incy, x, incx, A, lda)}\\\\
+\end{tabular}
+}
+
+Note that we need to allocate $n$-element workspace to hold
+the conjugated $y$,  and we call {\tt GERU}, not {\tt GERC}.
+
+\subsubsection{HER}
+{ \small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_cher(CblasRowMajor, CblasUpper, n, $\alpha$, x, incx, A, lda)}\\
+C op     & $A \leftarrow \alpha x x^H + A$ \\
+F77 op   & $A^T \leftarrow \alpha \overline{x} x^T + A^T$ \\
+F77 call & {\tt CHER('L', n, $\alpha$, $\overline{x}$, 1, A, lda)}\\\\
+\end{tabular}
+}
+
+Again, we have an $n$-element workspace and $n$ extra operations.
+
+\subsubsection{HER2}
+{ \small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_cher2(CblasRowMajor, CblasUpper, n, $\alpha$, x, incx, y, incy, A, lda)}\\
+C op     & $A \leftarrow \alpha x y^H + y (\alpha x)^H + A$ \\
+F77 op   & $A^T \leftarrow \alpha \overline{y} x^T + \overline{\alpha} \overline{x} y^T + A^T = 
+                           \alpha \overline{y} (\overline{x})^H + \overline{x} (\alpha \overline{y})^H + A^T$ \\
+F77 call & {\tt CHER2('L', n, $\alpha$, $\overline{y}$, 1, $\overline{x}$, 1, A, lda)}\\\\
+\end{tabular}
+}
+
+So we need $2n$ extra workspace and operations to form the conjugates of $x$
+and $y$.
+
+\subsubsection{SYR}
+{\small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_ssyr(CblasRowMajor, CblasUpper, n, $\alpha$, x, incx, A, lda)}\\
+C op     & $A \leftarrow \alpha x x^T + A$ \\
+F77 op   & $A^T \leftarrow \alpha x x^T + A^T$ \\
+F77 call & {\tt SSYR('L', n, $\alpha$, x, incx, A, lda)}\\\\
+\end{tabular}
+}
+
+No extra storage or operations required.
+
+\subsubsection{SYR2}
+{\small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_ssyr2(CblasRowMajor, CblasUpper, n, $\alpha$, x, incx, y, incy, A, lda)}\\
+C op     & $A \leftarrow \alpha x y^T + \alpha y x^T + A$ \\
+F77 op   & $A^T \leftarrow \alpha y x^T + \alpha x y^T + A^T$ \\
+F77 call & {\tt SSYR2('L', n, $\alpha$, y, incy, x, incx, A, lda)}\\\\
+\end{tabular}
+}
+
+No extra storage or operations required.
+
+\subsubsection{Level 3 BLAS}
+
+\subsubsection{GEMM}
+{\footnotesize
+\begin{tabular}{ll}
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A B + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B^T A^T + \beta C^T$\\
+F77 call & {\tt CGEMM('N', 'N', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A B^T + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B A^T + \beta C^T$\\
+F77 call & {\tt CGEMM('T', 'N', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A B^H + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha \overline{B} A^T + \beta C^T$\\
+F77 call & {\tt CGEMM('C', 'N', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasTrans, CblasNoTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^T B + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B^T A + \beta C^T$\\
+F77 call & {\tt CGEMM('N', 'T', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasTrans, CblasTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^T B^T + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B A + \beta C^T$\\
+F77 call & {\tt CGEMM('T', 'T', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasTrans, CblasConjTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^T B^H + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha \overline{B} A + \beta C^T$\\
+F77 call & {\tt CGEMM('C', 'T', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^H B + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B^T \overline{A} + \beta C^T$\\
+F77 call & {\tt CGEMM('N', 'C', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasConjTrans, CblasTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^H B^T + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B \overline{A} + \beta C^T$\\
+F77 call & {\tt CGEMM('T', 'C', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cgemm(CblasRowMajor, CblasConjTrans, CblasConjTrans, m, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^H B^H + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha \overline{B} \overline{A} + \beta C^T$\\
+F77 call & {\tt CGEMM('C', 'C', n, m, k, $\alpha$, B, ldb, A, lda, $\beta$, C, ldc)}\\\\
+\end{tabular}
+}
+
+\subsubsection{SYMM/HEMM}
+{\small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_chemm(CblasRowMajor, CblasLeft, CblasUpper, m, n, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A B + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B^T A^T + \beta C^T$\\
+F77 call & {\tt CHEMM('R', 'L', n, m, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_chemm(CblasRowMajor, CblasRight, CblasUpper, m, n, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha B A + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha A^T B^T + \beta C^T$\\
+F77 call & {\tt CHEMM('L', 'L', n, m, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+\end{tabular}
+}
+
+\subsubsection{SYRK}
+{\small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_csyrk(CblasRowMajor, CblasUpper, CblasNoTrans, n, k, $\alpha$, A, lda, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A A^T + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha A A^T + \beta C^T$\\
+F77 call & {\tt CSYRK('L', 'T', n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_csyrk(CblasRowMajor, CblasUpper, CblasTrans, n, k, $\alpha$, A, lda, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^T A + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha A^T A + \beta C^T$\\
+F77 call & {\tt CSYRK('L', 'N', n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+\end{tabular}
+}
+
+In reading the above descriptions, it is important to remember a few things.
+First, the symmetric matrix is $C$, and thus we change {\tt UPLO} to accommodate
+the differing storage of $C$.  {\tt TRANSPOSE} is then varied to handle the
+storage effects on $A$.
+
+\subsubsection{HERK}
+{\small
+\begin{tabular}{ll}
+C call   & {\tt cblas\_cherk(CblasRowMajor, CblasUpper, CblasNoTrans, n, k, $\alpha$, A, lda, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A A^H + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha \overline{A} A^T + \beta C^T$\\
+F77 call & {\tt CHERK('L', 'C', n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cherk(CblasRowMajor, CblasUpper, CblasConjTrans, n, k, $\alpha$, A, lda, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^H A + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha A^T \overline{A} + \beta C^T$\\
+F77 call & {\tt CHERK('L', 'N', n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+\end{tabular}
+}
+
+\subsubsection{SYR2K}
+{ \footnotesize
+\begin{tabular}{ll}
+C call   & {\tt cblas\_csyr2k(CblasRowMajor, CblasUpper, CblasNoTrans, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A B^T + \alpha B A^T + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B A^T + \alpha A B^T + \beta C^T =
+           \alpha A B^T + \alpha B A^T + \beta C^T$\\
+F77 call & {\tt CSYR2K('L', 'T', n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_csyr2k(CblasRowMajor, CblasUpper, CblasTrans, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^T B + \alpha B^T A + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B^T A + \alpha A^T B + \beta C^T =
+           \alpha A^T B + \alpha B^T A + \beta C^T$\\
+F77 call & {\tt CSYR2K('L', 'N', n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+\end{tabular}
+}
+
+Note that we once again wind up with an operation that looks the same from C and
+Fortran 77, saving that the C operations wishes to form $C^T$, instead of $C$.
+So once again we flip the setting of {\tt UPLO} to handle the difference in the
+storage of $C$.  We then flip the setting of {\tt TRANS} to handle the storage
+effects for $A$ and $B$.
+
+\subsubsection{HER2K}
+{\footnotesize
+\begin{tabular}{ll}
+C call   & {\tt cblas\_cher2k(CblasRowMajor, CblasUpper, CblasNoTrans, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A B^H + \overline{\alpha} B A^H + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha \overline{B} A^T + \overline{\alpha} \overline{A} B^T + \beta C^T =
+           \overline{\alpha} \overline{A} B^T + \alpha \overline{B} A^T + \beta C^T$\\
+F77 call & {\tt CHER2K('L', 'C', n, k, $\overline{\alpha}$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+%
+C call   & {\tt cblas\_cher2k(CblasRowMajor, CblasUpper, CblasConjTrans, n, k, $\alpha$, A, lda, B, ldb, $\beta$, C, ldc)}\\
+C op     & $C \leftarrow \alpha A^H B + \overline{\alpha} B^H A + \beta C$\\
+F77 op   & $C^T \leftarrow \alpha B^T \overline{A} + \overline{\alpha} A^T \overline{B} + \beta C^T =
+           \overline{\alpha} A^T \overline{B} + \alpha B^T \overline{A} + \beta C^T$\\
+F77 call & {\tt CHER2K('L', 'N', n, k, $\overline{\alpha}$, A, lda, B, ldb, $\beta$, C, ldc)}\\\\
+\end{tabular}
+}
+
+\subsubsection{TRMM/TRSM}
+
+Because of their identical use of the {\tt SIDE}, {\tt UPLO}, and {\tt TRANSA}
+parameters, TRMM and TRSM share the same general analysis.
+Remember that A is a triangular matrix, and thus when we handle its storage by
+flipping {\tt UPLO}, we implicitly change its {\tt TRANS} setting as well.
+With this in mind, we have:
+
+{\footnotesize
+\noindent
+\begin{tabular}{ll}
+C call   & {\tt cblas\_ctrmm(CblasRowMajor, CblasLeft, CblasUpper, CblasNoTrans, diag, m, n, $\alpha$, A, lda, B, ldb)}\\
+C op     & $B \leftarrow \alpha A B$\\
+F77 op   & $B^T \leftarrow \alpha B^T A^T$\\
+F77 call & {\tt CTRMM('R', 'L', 'N', diag, n, m, $\alpha$, A, lda, B, ldb)}\\\\
+%
+C call   & {\tt cblas\_ctrmm(CblasRowMajor, CblasLeft, CblasUpper, CblasTrans, diag, m, n, $\alpha$, A, lda, B, ldb)}\\
+C op     & $B \leftarrow \alpha A^T B$\\
+F77 op   & $B^T \leftarrow \alpha B^T A$\\
+F77 call & {\tt CTRMM('R', 'L', 'T', diag, n, m, $\alpha$, A, lda, B, ldb)}\\\\
+%
+C call   & {\tt cblas\_ctrmm(CblasRowMajor, CblasLeft, CblasUpper, CblasConjTrans, diag, m, n, $\alpha$, A, lda, B, ldb)}\\
+C op     & $B \leftarrow \alpha A^H B$\\
+F77 op   & $B^T \leftarrow \alpha B^T \overline{A}$\\
+F77 call & {\tt CTRMM('R', 'L', 'C', diag, n, m, $\alpha$, A, lda, B, ldb)}\\\\
+\end{tabular}
+}
+
+\subsubsection{Banded routines}\label{cint:banded}
+The above techniques can be used for the banded routines only if a C (row-major)
+banded array has some sort of meaning when expanded as a Fortran banded
+array.  It turns out that when this is done, you get the transpose of
+the C array, just as in the dense case.
+
+In Fortran 77, the banded array is an array whose rows correspond to
+the diagonals of the matrix, and whose columns contain the selected portion
+of the matrix column.  To rephrase this, the diagonals of the matrix are
+stored in strided storage, and the relevant pieces of the columns of the
+matrix are stored in contiguous memory.  This makes sense: in a column-based
+algorithm, you will want your columns to be contiguous for efficiency 
+reasons.
+
+In order to ensure our columns are contiguous, we will structure the banded
+array as shown below.  Notice that the first $K_U$ rows
+of the array store the superdiagonals, appropriately spaced to line up
+correctly in the column direction with the main diagonal.  The last $K_L$
+rows contain the subdiagonals.
+
+{\samepage
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+       ------  Super diagonal KU
+  -----------  Super diagonal 2
+ ------------  Super diagonal 1
+-------------  main diagonal (D)
+------------   Sub diagonal 1
+-----------    Sub diagonal 2
+------         Sub diagonal KL
+\end{Verbatim}
+}
+
+If we have a row-major storage, and thus a row-oriented algorithm, we will
+similarly want our rows to be contiguous in order to ensure efficiency.
+The storage scheme that is thus dictated is shown below.  Notice
+that the first $K_L$ columns store the subdiagonals, appropriately padded
+to line up with the main diagonal along rows.
+
+{\samepage
+\begin{Verbatim}[fontsize=\small,fontfamily=tt,fontshape=rm]
+ KL   D   KU
+      | | | |  
+    | | | | |
+  | | | | | |
+| | | | | |  
+| | | | |    
+| | | |      
+\end{Verbatim}
+}
+
+Now, let us contrast these two storage schemes.  Both store
+the diagonals of the matrix along the non-contiguous dimension of the matrix.
+The column-major banded array stores the matrix columns along the contiguous
+dimension, whereas the row-major banded array stores the matrix rows along the
+contiguous storage.
+
+This gives us our first hint as to what to do: rows stored where columns
+should be, indicated, in the dense routines, that we needed to set a
+transpose parameter.  We will see that we can do this for the banded routines
+as well.
+
+We can further note that in the column-major banded array, the first part of the
+non-contiguous dimension (i.e. the first rows) store superdiagonals, whereas
+the first part of the non-contiguous dimension of row-major arrays (i.e., the
+first columns) store the subdiagonals.
+
+We now note that when you transpose a matrix, the superdiagonals of the matrix
+become the subdiagonals of the matrix transpose (and vice versa).
+
+Along the contiguous dimension, we note that we skip $K_U$ elements before
+coming to our first entry in a column-major banded array.  The same happens
+in our row-major banded array, except that the skipping factor is $K_L$.
+
+All this leads to the idea that when we have a row-major banded array, we can
+consider it as a transpose of the Fortran 77 column-major banded array, where
+we will swap not only $m$ and $n$, but also $K_U$ and $K_L$.  An example should
+help demonstrate this principle.  Let us say we have the matrix 
+$
+A = \left [
+\begin{array}{rrrr}
+1 & 3 & 5 & 7\\
+2 & 4 & 6 & 8
+\end{array}
+\right ]  
+$
+
+If we express this entire array in banded form (a fairly dumb thing to do,
+but good for example purposes), we get
+$K_U = 3$, $K_L = 1$.  In row-major banded storage this becomes:
+$
+C_b = \left [
+\begin{array}{rrrrr}
+X & 1 & 3 & 5 & 7\\
+2 & 4 & 6 & 8 & X
+\end{array}
+\right ]  $
+
+So, we believe this should be the transpose if interpreted as a Fortran 77
+banded array.  The matrix transpose, and its Fortran 77 banded storage is shown
+below:
+
+$A^T = \left [
+\begin{array}{rr}
+1 & 2\\
+3 & 4\\
+5 & 6\\
+7 & 8
+\end{array}
+\right ]  \Rightarrow
+F_b = \left [
+\begin{array}{rr}
+X & 2\\
+1 & 4\\
+3 & 6\\
+5 & 8\\
+7 & X
+\end{array}
+\right ]$
+
+Now we simply note that since $C_b$ is row major, and $F_b$ is column-major,
+they are actually the same array in memory.
+
+With the idea that row-major banded matrices produce the transpose of the matrix
+when interpreted as column-major banded matrices, we can use the same analysis
+for the banded BLAS as we used for the dense BLAS, noting that we must also
+always swap $K_U$ and $K_L$.
+
+\subsubsection{Packed routines}
+Packed routines are much simpler than banded.  Here we have a triangular,
+symmetric or Hermitian matrix which is packed so that only the relevant triangle
+is stored.  Thus if we have an upper triangular matrix stored in column-major
+packed storage, the first element holds the relevant portion of the first column
+of the matrix, the next two elements hold the relevant portion of the second
+column, etc.
+
+With an upper triangular matrix stored in row-major packed storage, the first
+$N$ elements hold the first row of the matrix, the next $N-1$ elements hold
+the next row, etc.
+
+Thus we see in the Hermitian and symmetric cases, to get a row-major packed
+array correctly interpreted by Fortran 77, we will simply switch the setting
+of {\tt UPLO}.  This will mean that the rows of the matrix will be read in as the
+columns, but this is not a problem, as we have seen before.  In the symmetric case,
+since $A = A^T$ the column and rows are the same, so there is obviously no
+problem.  In the Hermitian case, we must be sure that the imaginary component
+of the diagonal is not used, and it assumed to be zero.  However, the diagonal
+element in a row when our matrix is upper will correspond to the diagonal
+element in a column when our matrix is called lower, so this is handled as well.
+
+In the triangular cases, we will need to change both {\tt UPLO} and {\tt TRANS},
+just as in the dense routines.
+
+With these ideas in mind, the analysis for the dense routines may be used
+unchanged for packed.
+\clearpage
+\end{document}
