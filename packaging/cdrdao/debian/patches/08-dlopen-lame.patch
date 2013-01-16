@@ -1,0 +1,316 @@
+Author: Reuben Thomas <rrt@sc3d.org>
+Description:
+ Patch to toc2mp3 to dlopen lame, without needing any part of LAME while
+ building, so that toc2mp3 can be distributed (Closes: #457805).
+
+diff -Naurp cdrdao.orig/configure.ac cdrdao/configure.ac
+--- cdrdao.orig/configure.ac	2009-06-14 08:36:45.000000000 +0000
++++ cdrdao/configure.ac	2009-07-16 22:49:37.000000000 +0000
+@@ -218,14 +218,14 @@ else
+   CPPFLAGS="$ac_save_CPPFLAGS"
+ fi
+ 
+-utiltools="toc2cue cue2toc"
++utiltools="toc2cue cue2toc toc2mp3"
+ en_cdrdao=yes
+ en_toc2cue=yes
+ en_cue2toc=yes
+-en_toc2mp3=no
++en_toc2mp3=yes
+ 
+-AC_PATH_LAME(3.92, [utiltools="$utiltools toc2mp3" en_toc2mp3=yes],
+-        [echo "Building of toc2mp3 disabled"])
++#AC_PATH_LAME(3.92, [utiltools="$utiltools toc2mp3" en_toc2mp3=yes],
++#        [echo "Building of toc2mp3 disabled"])
+ 
+ dnl Determine whether we're building the gcdaster GUI front-end
+ en_xdao=no
+diff -Naurp cdrdao.orig/utils/Makefile.am cdrdao/utils/Makefile.am
+--- cdrdao.orig/utils/Makefile.am	2009-06-14 08:36:45.000000000 +0000
++++ cdrdao/utils/Makefile.am	2009-07-16 22:49:37.000000000 +0000
+@@ -13,7 +13,7 @@ toc2mp3_SOURCES = toc2mp3.cc
+ 
+ toc2cddb_LDADD = -L$(top_builddir)/trackdb -ltrackdb
+ toc2cue_LDADD = -L$(top_builddir)/trackdb -ltrackdb
+-toc2mp3_LDADD = -L$(top_builddir)/trackdb -ltrackdb @LAME_LIBS@
++toc2mp3_LDADD = -L$(top_builddir)/trackdb -ltrackdb -lmad -lm
+ 
+ if COND_MP3
+ toc2cddb_LDADD += @MAD_LIBS@
+diff -Naurp cdrdao.orig/utils/toc2mp3.cc cdrdao/utils/toc2mp3.cc
+--- cdrdao.orig/utils/toc2mp3.cc	2009-06-14 08:36:45.000000000 +0000
++++ cdrdao/utils/toc2mp3.cc	2009-07-16 22:49:37.000000000 +0000
+@@ -33,8 +33,6 @@
+ #include <sys/stat.h>
+ #include <fcntl.h>
+ 
+-#include <lame/lame.h>
+-
+ #include "util.h"
+ #include "Toc.h"
+ #include "CdTextItem.h"
+@@ -47,6 +45,101 @@ static int VERBOSE = 1;
+ static int CREATE_ALBUM_DIRECTORY = 0;
+ static std::string TARGET_DIRECTORY;
+ 
++#include <dlfcn.h>
++ 
++#define STEREO 0
++#define LAME_MAXMP3BUFFER   16384
++
++typedef void *lame_global_flags;
++static lame_global_flags *(*dl_lame_init)(void);
++typedef void lame_msgfun(const char *fmt, va_list args);
++static void (*dl_lame_set_msgf)(lame_global_flags *lf, lame_msgfun *f);
++static void (*dl_lame_set_debugf)(lame_global_flags *lf, lame_msgfun *f);
++static void (*dl_lame_set_errorf)(lame_global_flags *lf, lame_msgfun *f);
++static void (*dl_lame_set_in_samplerate)(lame_global_flags *lf, int rate);
++static void (*dl_lame_set_num_channels)(lame_global_flags *lf, int chans);
++static void (*dl_lame_set_quality)(lame_global_flags *lf, int q);
++static void (*dl_lame_set_mode)(lame_global_flags *lf, int mode);
++static void (*dl_lame_set_brate)(lame_global_flags *lf, int bitrate);
++static int (*dl_lame_encode_buffer)(lame_global_flags *lf, short int *leftSamples, short int *rightSamples, int samples, unsigned char *mp3buffer, int bufsize);
++static int (*dl_lame_encode_flush_nogap)(lame_global_flags *lf, unsigned char *mp3buffer, int bufsize);
++static void (*dl_lame_mp3_tags_fid)(lame_global_flags *lf, FILE *fp);
++static int (*dl_lame_init_params)(lame_global_flags *lf);
++static void (*dl_lame_print_config)(lame_global_flags *lf);
++static void (*dl_lame_print_internals)(lame_global_flags *lf);
++static int (*dl_lame_init_bitstream)(lame_global_flags *lf);
++static void (*dl_lame_close)(lame_global_flags *lf);
++static char *(*dl_get_lame_version)(void);
++static int (*dl_bitrate_table)[3][16];
++static void (*dl_id3tag_init)(lame_global_flags *lf);
++static void (*dl_id3tag_add_v2)(lame_global_flags *lf);
++static void (*dl_id3tag_set_title)(lame_global_flags *lf, const char *title);
++static void (*dl_id3tag_set_artist)(lame_global_flags *lf, const char *artist);
++static void (*dl_id3tag_set_album)(lame_global_flags *lf, const char *album);
++static void (*dl_id3tag_set_track)(lame_global_flags *lf, const char *track);
++
++static int load_lame(void) {
++  static int loaded=0;
++  void *library;
++
++  if (loaded) return 0;
++
++  library = dlopen("libmp3lame.so", RTLD_NOW);
++
++  if (!(dl_lame_init = (lame_global_flags *(*)(void))dlsym(library, "lame_init")))
++    return -1;
++  if (!(dl_lame_set_msgf = (void (*)(lame_global_flags *, lame_msgfun *))dlsym(library, "lame_set_msgf")))
++    return -1;
++  if (!(dl_lame_set_debugf = (void (*)(lame_global_flags *, lame_msgfun *))dlsym(library, "lame_set_debugf")))
++    return -1;
++  if (!(dl_lame_set_errorf = (void (*)(lame_global_flags *, lame_msgfun *))dlsym(library, "lame_set_errorf")))
++    return -1;
++  if (!(dl_lame_set_in_samplerate = (void (*)(lame_global_flags *, int))dlsym(library, "lame_set_in_samplerate")))
++    return -1;
++  if (!(dl_lame_set_num_channels = (void (*)(lame_global_flags *, int))dlsym(library, "lame_set_num_channels")))
++    return -1;
++  if (!(dl_lame_set_quality = (void (*)(lame_global_flags *, int))dlsym(library, "lame_set_quality")))
++    return -1;
++  if (!(dl_lame_set_mode = (void (*)(lame_global_flags *, int))dlsym(library, "lame_set_mode")))
++    return -1;
++  if (!(dl_lame_set_brate = (void (*)(lame_global_flags *, int))dlsym(library, "lame_set_brate")))
++    return -1;
++  if (!(dl_lame_encode_buffer = (int (*)(lame_global_flags *, short int *, short int *, int, unsigned char *, int))dlsym(library, "lame_encode_buffer")))
++    return -1;
++  if (!(dl_lame_encode_flush_nogap = (int (*)(lame_global_flags *, unsigned char *, int))dlsym(library, "lame_encode_flush_nogap")))
++    return -1;
++  if (!(dl_lame_mp3_tags_fid = (void (*)(lame_global_flags *, FILE *))dlsym(library, "lame_mp3_tags_fid")))
++    return -1;
++  if (!(dl_lame_init_params = (int (*)(lame_global_flags *))dlsym(library, "lame_init_params")))
++    return -1;
++  if (!(dl_lame_print_config = (void (*)(lame_global_flags *))dlsym(library, "lame_print_config")))
++    return -1;
++  if (!(dl_lame_print_internals = (void (*)(lame_global_flags *))dlsym(library, "lame_print_internals")))
++    return -1;
++  if (!(dl_lame_init_bitstream = (int (*)(lame_global_flags *))dlsym(library, "lame_init_bitstream")))
++    return -1;
++  if (!(dl_lame_close = (void (*)(lame_global_flags *))dlsym(library, "lame_close")))
++    return -1;
++  if (!(dl_get_lame_version = (char * (*)(void))dlsym(library, "get_lame_version")))
++    return -1;
++  if (!(dl_bitrate_table = (int (*)[3][16])dlsym(library, "bitrate_table")))
++    return -1;
++  if (!(dl_id3tag_init = (void (*)(lame_global_flags *))dlsym(library, "id3tag_init")))
++    return -1;
++  if (!(dl_id3tag_add_v2 = (void (*)(lame_global_flags *lf))dlsym(library, "id3tag_add_v2")))
++    return -1;
++  if (!(dl_id3tag_set_title = (void (*)(lame_global_flags *, const char *))dlsym(library, "id3tag_set_title")))
++    return -1;
++  if (!(dl_id3tag_set_artist = (void (*)(lame_global_flags *, const char *))dlsym(library, "id3tag_set_artist")))
++    return -1;
++  if (!(dl_id3tag_set_album = (void (*)(lame_global_flags *, const char *))dlsym(library, "id3tag_set_album")))
++    return -1;
++  if (!(dl_id3tag_set_track = (void (*)(lame_global_flags *, const char *))dlsym(library, "id3tag_set_track")))
++    return -1;
++
++  loaded++;
++  return 0;
++}
+ 
+ void message_args(int level, int addNewLine, const char *fmt, va_list args)
+ {
+@@ -141,10 +234,10 @@ static void printUsage()
+ 
+   message(0, "");
+ 
+-  message(0, "LAME encoder version: %s", get_lame_version());
++  message(0, "LAME encoder version: %s", dl_get_lame_version());
+   message(0, "Supported bit rates: ");
+-  for (int i = 0; i < 16 && bitrate_table[1][i] >= 0; i++) {
+-    message(0, "%d ", bitrate_table[1][i]);
++  for (int i = 0; i < 16 && (*dl_bitrate_table)[1][i] >= 0; i++) {
++    message(0, "%d ", (*dl_bitrate_table)[1][i]);
+   }
+   message(0, "");
+ }
+@@ -238,8 +331,8 @@ lame_global_flags *init_encoder(int bitr
+   lame_global_flags *lf;
+   int bitrateOk = 0;
+ 
+-  for (int i = 0; bitrate_table[1][i] >= 0 && !bitrateOk; i++) {
+-    if (bitrate == bitrate_table[1][i])
++  for (int i = 0; (*dl_bitrate_table)[1][i] >= 0 && !bitrateOk; i++) {
++    if (bitrate == (*dl_bitrate_table)[1][i])
+       bitrateOk = 1;
+   }
+ 
+@@ -248,23 +341,23 @@ lame_global_flags *init_encoder(int bitr
+     return NULL;
+   }
+ 
+-  if ((lf = lame_init()) == NULL) {
++  if ((lf = dl_lame_init()) == NULL) {
+     return NULL;
+   }
+ 
+-  lame_set_msgf(lf, lame_message);
+-  lame_set_debugf(lf, lame_message);
+-  lame_set_errorf(lf, lame_error_message);
++  dl_lame_set_msgf(lf, lame_message);
++  dl_lame_set_debugf(lf, lame_message);
++  dl_lame_set_errorf(lf, lame_error_message);
+ 
+-  lame_set_in_samplerate(lf, 44100);
++  dl_lame_set_in_samplerate(lf, 44100);
+ 
+-  lame_set_num_channels(lf, 2);
++  dl_lame_set_num_channels(lf, 2);
+ 
+-  lame_set_quality(lf, 2);
++  dl_lame_set_quality(lf, 2);
+ 
+-  lame_set_mode(lf, STEREO);
++  dl_lame_set_mode(lf, STEREO);
+ 
+-  lame_set_brate(lf, bitrate);
++  dl_lame_set_brate(lf, bitrate);
+   
+   //lame_set_VBR(lf, vbr_abr);
+ 
+@@ -287,22 +380,22 @@ void set_id3_tags(lame_global_flags *lf,
+ {
+   char buf[100];
+ 
+-  id3tag_init(lf);
++  dl_id3tag_init(lf);
+ 
+-  id3tag_add_v2(lf);
++  dl_id3tag_add_v2(lf);
+ 
+   if (!title.empty())
+-    id3tag_set_title(lf, title.c_str());
++    dl_id3tag_set_title(lf, title.c_str());
+ 
+   if (!artist.empty())
+-    id3tag_set_artist(lf, artist.c_str());
++    dl_id3tag_set_artist(lf, artist.c_str());
+ 
+   if (!album.empty())
+-    id3tag_set_album(lf, album.c_str());
++    dl_id3tag_set_album(lf, album.c_str());
+ 
+   if (tracknr > 0 && tracknr <= 255) {
+     sprintf(buf, "%d", tracknr);
+-    id3tag_set_track(lf, buf);
++    dl_id3tag_set_track(lf, buf);
+   }
+ }
+ 
+@@ -346,7 +439,7 @@ int encode_track(lame_global_flags *lf, 
+       rightSamples[i] = audioData[i].right();
+     }
+ 
+-    int count = lame_encode_buffer(lf, leftSamples, rightSamples,
++    int count = dl_lame_encode_buffer(lf, leftSamples, rightSamples,
+ 				   SAMPLES_PER_BLOCK, mp3buffer,
+ 				   sizeof(mp3buffer));
+ 
+@@ -368,7 +461,7 @@ int encode_track(lame_global_flags *lf, 
+   }
+     
+   if (ret != 0) {
+-    int count = lame_encode_flush_nogap(lf, mp3buffer, sizeof(mp3buffer));
++    int count = dl_lame_encode_flush_nogap(lf, mp3buffer, sizeof(mp3buffer));
+ 
+     if (count > 0) {
+       if (fullWrite(fd, mp3buffer, count) != count) {
+@@ -387,7 +480,7 @@ int encode_track(lame_global_flags *lf, 
+     FILE *fp = fopen(fileName.c_str(), "a+");
+ 
+     if (fp != NULL) {
+-      lame_mp3_tags_fid(lf, fp);
++      dl_lame_mp3_tags_fid(lf, fp);
+       fclose(fp);
+     }
+     else {
+@@ -449,6 +542,9 @@ int main(int argc, char **argv)
+ 
+   PRGNAME = *argv;
+ 
++  if (load_lame())
++     message(-10, "Cannot load libmp3lame.so");
++
+   switch (parseCommandLine(argc, argv, &tocFile, &bitrate)) {
+   case 0:
+     printUsage();
+@@ -600,17 +696,17 @@ int main(int argc, char **argv)
+ 	set_id3_tags(lf, trackNr, title, performer, album);
+ 
+ 	if (firstEncodedTrack) {
+-	  if (lame_init_params(lf) < 0) {
++	  if (dl_lame_init_params(lf) < 0) {
+ 	    message(-2, "Setting of lame parameters failed");
+ 	    err = 1;
+ 	    break;
+ 	  }
+ 	  message(1, "Lame encoder settings:");
+-	  lame_print_config(lf);
++	  dl_lame_print_config(lf);
+ 	  message(1, "Selected bit rate: %d kbit/s", bitrate);
+ 
+ 	  if (VERBOSE >= 2)
+-	    lame_print_internals(lf);
++	    dl_lame_print_internals(lf);
+ 
+ 	  message(1, "");
+ 
+@@ -621,7 +717,7 @@ int main(int argc, char **argv)
+ 	  firstEncodedTrack = 0;
+ 	}
+ 	else {
+-	  if (lame_init_bitstream(lf) != 0) {
++	  if (dl_lame_init_bitstream(lf) != 0) {
+ 	    message(-2, "Cannot initialize bit stream.");
+ 	    err = 1;
+ 	    break;
+@@ -648,7 +744,7 @@ int main(int argc, char **argv)
+       nextTrack = titr.next(nstart, nend);
+   }
+ 
+-  lame_close(lf);
++  dl_lame_close(lf);
+ 
+   exit(err);
+ }
