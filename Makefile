@@ -6882,20 +6882,6 @@ $(ATK): $(SPREZZ)/atk/debian/changelog $(ATKORIG)
 	tar xJvf $(ATKORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(EVINCEUP).tar.xz
-$(EVINCEUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/evince/3.6/$@
-
-$(EVINCEORIG): $(EVINCEUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: evince
-evince:$(EVINCE)_$(ARCH).deb
-$(EVINCE): $(SPREZZ)/evince/debian/changelog $(EVINCEORIG)
-	mkdir -p $@
-	tar xJvf $(EVINCEORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
 .PHONY: pango
 pango:$(PANGO)_$(ARCH).deb
 $(PANGO): $(SPREZZ)/pango/debian/changelog

@@ -22,6 +22,14 @@ $(EPIPHANYBROWSER): $(SPREZZ)/epiphany-browser/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf epiphany-$(epiphany-browser_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: evince
+evince:$(EVINCE)_$(ARCH).deb
+$(EVINCE): $(SPREZZ)/evince/debian/changelog $(EVINCEORIG)
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf evince-$(evince_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: evolution
 evolution:$(EVOLUTION)_$(ARCH).deb
 $(EVOLUTION): $(SPREZZ)/evolution/debian/changelog
