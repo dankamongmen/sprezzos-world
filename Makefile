@@ -3014,6 +3014,14 @@ $(KRB): $(SPREZZ)/krb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xvf krb5-$(krb_UPVER)-signed.tar $(TARARGS) $@
 
+.PHONY: keybinder
+keybinder:$(KEYBINDER)_$(ARCH).deb
+$(KEYBINDER): $(SPREZZ)/keybinder/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf keybinder-$(keybinder_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: keyutils
 keyutils:$(KEYUTILS)_$(ARCH).deb
 $(KEYUTILS): $(SPREZZ)/keyutils/debian/changelog
