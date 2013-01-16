@@ -4877,7 +4877,7 @@ $(NVIDIAGRAPHICSDRIVERS): $(SPREZZ)/nvidia-graphics-drivers/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	mv NVIDIA-Linux-*.run $@
-	tar czvf nvidia-graphics-drivers_313.09.orig.tar.gz $@ --exclude-vcs --exclude=debian
+	tar czvf $(NVIDIAGRAPHICSDRIVERS).orig.tar.gz $@ --exclude-vcs --exclude=debian
 
 .PHONY: nvidia-kernel-dkms
 nvidia-kernel-dkms:$(NVIDIAKERNELDKMS)_$(ARCH).deb
