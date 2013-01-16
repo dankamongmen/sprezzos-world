@@ -1,0 +1,140 @@
+Description: Dumps start/stop bit, sequence number, runlevels and script
+ basename for all scripts in the format:
+   SK:NUM:RUNLEVELS:SCRIPT
+Bug-Debian: http://bugs.debian.org/573004
+From: Kel Modderman <kel@otaku42.de>
+---
+--- a/insserv.c
++++ b/insserv.c
+@@ -2351,6 +2351,7 @@ static struct option long_options[] =
+     {"path",	1, (int*)0, 'p'},
+     {"override",1, (int*)0, 'o'},
+     {"upstart-job",1, (int*)0, 'u'},
++    {"showall",	0, (int*)0, 's'},
+     {"help",	0, (int*)0, 'h'},
+     { 0,	0, (int*)0,  0 },
+ };
+@@ -2368,6 +2369,7 @@ static void help(const char *restrict co
+     printf("  -o <path>, --override <path> Path to replace " OVERRIDEDIR ".\n");
+     printf("  -c <config>, --config <config>  Path to config file.\n");
+     printf("  -n, --dryrun     Do not change the system, only talk about it.\n");
++    printf("  -s, --showall    Output runlevel and sequence information.\n");
+     printf("  -d, --default    Use default runlevels a defined in the scripts\n");
+ }
+ 
+@@ -2390,6 +2392,7 @@ int main (int argc, char *argv[])
+     boolean defaults = false;
+     boolean ignore = false;
+     boolean loadarg = false;
++    boolean showall = false;
+ 
+     myname = basename(*argv);
+ 
+@@ -2404,7 +2407,7 @@ int main (int argc, char *argv[])
+     for (c = 0; c < argc; c++)
+ 	argr[c] = (char*)0;
+ 
+-    while ((c = getopt_long(argc, argv, "c:dfrhvno:p:u:", long_options, (int *)0)) != -1) {
++    while ((c = getopt_long(argc, argv, "c:dfrhvno:p:u:s", long_options, (int *)0)) != -1) {
+ 	size_t l;
+ 	switch (c) {
+ 	    case 'c':
+@@ -2429,6 +2432,10 @@ int main (int argc, char *argv[])
+ 		verbose ++;
+ 		dryrun = true;
+ 		break;
++	    case 's':
++		showall = true;
++		dryrun = true;
++		break;
+ 	    case 'p':
+ 		if (optarg == (char*)0 || *optarg == '\0')
+ 		    goto err;
+@@ -3368,6 +3375,9 @@ int main (int argc, char *argv[])
+     if (maxstart > MAX_DEEP || maxstop > MAX_DEEP)
+ 	error("Maximum of %u in ordering reached\n", MAX_DEEP);
+ 
++    if (showall)
++	show_all();
++
+ #if defined(DEBUG) && (DEBUG > 0)
+     printf("Maxorder %d/%d\n", maxstart, maxstop);
+     show_all();
+--- a/listing.c
++++ b/listing.c
+@@ -889,7 +889,6 @@ boolean is_loop_detected(void)
+ /*
+  * For debuging: show all services
+  */
+-#if defined(DEBUG) && (DEBUG > 0)
+ void show_all()
+ {
+     list_t *tmp;
+@@ -904,15 +903,23 @@ void show_all()
+ 	name = dir->name;
+ 	peg  = &dir->stopp;
+ 	lvl  = peg->run.lvl;
++	lvlstr = lvl2str(lvl);
+ 	deep = peg->deep;
+ 	if (attof(dir)->script)
+ 	    script = attof(dir)->script;
++#if defined(DEBUG) && (DEBUG > 0)
+ 	else if (*name == '$')
+ 	    script = "%system";
+ 	else
+ 	    script = "%guessed";
+-	lvlstr = lvl2str(lvl);
+-	info("K%.2d %s 0x%.2x '%s' (%s)\n", deep, name, lvl, lvlstr, script);
++	info(1, "K%.2d %s 0x%.2x '%s' (%s)\n", deep, name, lvl, lvlstr,
++	     script);
++#else
++	else
++	    script = NULL;
++	if (script && lvlstr)
++	    fprintf(stdout, "K:%.2d:%s:%s\n", deep, lvlstr, script);
++#endif
+ 	xreset(lvlstr);
+     }
+     if (maxstart > 0) list_for_each(tmp, d_start) {
+@@ -926,19 +933,26 @@ void show_all()
+ 	name = dir->name;
+ 	peg  = &dir->start;
+ 	lvl  = peg->run.lvl;
++	lvlstr = lvl2str(lvl);
+ 	deep = peg->deep;
+ 	if (attof(dir)->script)
+ 	    script = attof(dir)->script;
++#if defined(DEBUG) && (DEBUG > 0)
+ 	else if (*name == '$')
+ 	    script = "%system";
+ 	else
+ 	    script = "%guessed";
+-	lvlstr = lvl2str(lvl);
+-	info("S%.2d %s 0x%.2x '%s' (%s)\n", deep, name, lvl, lvlstr, script);
++	info(1, "S%.2d %s 0x%.2x '%s' (%s)\n", deep, name, lvl, lvlstr,
++	     script);
++#else
++	else
++	    script = NULL;
++	if (script && lvlstr)
++	    fprintf(stdout, "S:%.2d:%s:%s\n", deep, lvlstr, script);
++#endif
+ 	xreset(lvlstr);
+     }
+ }
+-#endif
+ 
+ /*
+  * Used within loops to get scripts not included in this runlevel
+--- a/insserv.8.in
++++ b/insserv.8.in
+@@ -286,6 +286,9 @@ the script will be ignored.
+ Path to replace existing upstart job path.  (default path is
+ .IR /lib/init/upstart-job ).
+ .TP
++.BR \-s ,\  \-\-showall
++Output runlevel and sequence information. Do not update symlinks.
++.TP
+ .BR \-h ,\  \-\-help
+ Print out short usage message.
+ .PP

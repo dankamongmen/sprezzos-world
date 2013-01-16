@@ -1,0 +1,2457 @@
+#!/bin/bash
+
+basedir=$(dirname $0)
+. $basedir/../tests/suite
+
+if head -1 debian/changelog | grep -q UNRELEASED ; then
+    # fatal
+    severity=check
+else
+    # non-fatal
+    severity=test
+fi
+
+update_conf() {
+set +C
+cat <<'EOF' > $insconf
+$local_fs       +mountall +umountfs
+$network        +networking +ifupdown
+$named          +named +dnsmasq +lwresd +bind9 $network
+$remote_fs      $local_fs +mountnfs +mountnfs-bootclean +umountnfs +sendsigs
+$syslog         +syslog +sysklogd
+$portmap        portmap
+$time           hwclock
+<interactive>   udev mountdevsubfs checkroot checkfs console-screen
+EOF
+set -C
+}
+##########################################################################
+test_normal_sequence() {
+echo
+echo "info: test normal boot sequence scripts, and their order"
+echo
+
+insertscript mountkernfs.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          mountkernfs
+# Required-Start:
+# Required-Stop:
+# Should-Start:      glibc
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript mountdevsubfs.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          mountdevsubfs mountvirtfs
+# Required-Start:    mountkernfs
+# Required-Stop:
+# Should-Start:      udev
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript checkroot.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          checkroot
+# Required-Start:    mountdevsubfs
+# Required-Stop:
+# Should-Start:      keymap hwclockfirst
+# Should-stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript ifupdown-clean <<'EOF'
+### BEGIN INIT INFO
+# Provides:          ifupdown-clean
+# Required-Start:    checkroot
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript ifupdown <<'EOF'
+### BEGIN INIT INFO
+# Provides:          ifupdown
+# Required-Start:    ifupdown-clean
+# Required-Stop:     $local_fs
+# Default-Start:     S
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+insertscript checkfs.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          checkfs
+# Required-Start:    checkroot
+# Required-Stop:
+# Should-Start:      lvm cryptdisks
+# Should-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript mountall.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          mountall
+# Required-Start:    checkfs
+# Required-Stop:
+# Should-Start:      lvm
+# Should-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript mountnfs.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          mountnfs
+# Required-Start:    $local_fs
+# Required-Stop:
+# Should-Start:      $network
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript beforenfs <<'EOF'
+### BEGIN INIT INFO
+# Provides:          beforenfs
+# Required-Start:    $local_fs
+# Required-Stop:
+# X-Start-Before:    mountnfs
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript hwclock.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          hwclock
+# Required-Start:    mountdevsubfs
+# Required-Stop:     $local_fs
+# Default-Start:     S
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+insertscript killprocs <<'EOF'
+### BEGIN INIT INFO
+# Provides:          killprocs
+# Required-Start:    $local_fs
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript single <<'EOF'
+### BEGIN INIT INFO
+# Provides:          single
+# Required-Start:    $local_fs killprocs $all
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript needlocalfs <<'EOF'
+### BEGIN INIT INFO
+# Provides:          needlocalfs
+# Required-Start:    $local_fs
+# Required-Stop:     $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+insertscript needallfs <<'EOF'
+### BEGIN INIT INFO
+# Provides:          needallfs
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+insertscript sysklogd <<'EOF'
+### BEGIN INIT INFO
+# Provides:          syslog
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+insertscript reboot <<'EOF'
+### BEGIN INIT INFO
+# Provides:          reboot
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+insertscript halt <<'EOF'
+### BEGIN INIT INFO
+# Provides:          halt
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:      0
+### END INIT INFO
+EOF
+
+insertscript umountroot <<'EOF'
+### BEGIN INIT INFO
+# Provides:          umountroot
+# Required-Start:
+# Required-Stop:
+# Should-Stop:       halt reboot
+# Default-Start:
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+insertscript umountfs <<'EOF'
+### BEGIN INIT INFO
+# Provides:          umountfs
+# Required-Start:
+# Required-Stop:     umountroot
+# Default-Start:
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+insertscript umountnfs <<'EOF'
+### BEGIN INIT INFO
+# Provides:          umountnfs
+# Required-Start:
+# Required-Stop:     umountfs
+# Should-Stop:       $network $portmap nfs-common
+# Default-Start:
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+insertscript needallfs2 <<'EOF'
+### BEGIN INIT INFO
+# Provides:          needallfs2
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# X-Start-Before:    needallfs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+insertscript kexec <<'EOF'
+### BEGIN INIT INFO
+# Provides:             kexec
+# Required-Start:
+# Required-Stop:        reboot
+# X-Stop-After:         umountroot
+# Default-Start:
+# Default-Stop:         6
+### END INIT INFO
+EOF
+
+insertscript networking <<'EOF'
+### BEGIN INIT INFO
+# Provides:          networking
+# Required-Start:    mountkernfs ifupdown $local_fs
+# Required-Stop:     ifupdown $local_fs
+# Default-Start:     S
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+insertscript nolsbheader <<'EOF'
+EOF
+
+list_rclinks
+
+check_order S mountkernfs.sh mountdevsubfs.sh
+check_order S ifupdown-clean ifupdown
+check_order S ifupdown-clean ifupdown
+check_order S mountall.sh mountnfs.sh
+check_order S mountall.sh beforenfs
+check_order S beforenfs mountnfs.sh
+
+check_order 0 needallfs umountnfs
+check_order 0 umountroot halt
+
+check_order 1 killprocs single
+check_order 1 needallfs killprocs
+
+check_order 2 needlocalfs needallfs
+check_order 2 needlocalfs nolsbheader
+check_order 2 sysklogd nolsbheader
+check_order 2 needallfs2 needallfs
+
+check_order 6 needallfs umountnfs
+check_order 6 nolsbheader umountnfs
+check_order 6 umountfs umountroot
+check_order 6 umountnfs networking
+check_order 6 networking ifupdown
+check_order 6 umountnfs umountfs
+check_order 6 umountroot reboot
+check_order 6 umountroot kexec
+check_order 6 kexec reboot
+}
+##########################################################################
+test_override_files() {
+echo
+echo "info: test if override files replace headers in the file"
+echo
+
+initdir_purge
+
+# Two scripts with a loop between them
+insertscript base <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          base
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript mover <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          mover
+# Required-Start:    base
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+check_order S base mover
+
+mkdir -p $overridedir
+cat <<'EOF' > $overridedir/mover
+### BEGIN INIT INFO
+# Provides:          mover
+# Required-Start:
+# Required-Stop:
+# X-Start-Before:    base
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insserv_reg mover
+
+list_rclinks
+
+# Make sure the override file moved mover before base
+check_order S mover base
+rm -rf $overridedir
+}
+##########################################################################
+test_override_loop() {
+echo
+echo "info: testing to insert scripts with a loop, and the effect of an override file"
+echo
+
+initdir_purge
+
+# Two scripts with a loop between them
+if insertscript loop1 <<'EOF' ; then
+### BEGIN INIT INFO
+# Provides:          loop1
+# Required-Start:    loop2
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+    error "inserting script with missing dependencies did not fail"
+fi
+
+insertscript loop2 <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          loop2
+# Required-Start:    loop1
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+# Test if override file can be used to break the loop
+mkdir -p $overridedir
+cat <<'EOF' > $overridedir/loop1
+### BEGIN INIT INFO
+# Provides:          loop1
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+check_script_not_present S loop1
+check_script_not_present S loop2
+
+insserv_reg loop1 || true
+insserv_reg loop2 || true
+
+check_order S loop1 loop2
+rm -rf $overridedir
+}
+##########################################################################
+
+test_override_remove() {
+echo
+echo "info: Try to reproduce BTS #540866"
+echo
+
+initdir_purge
+
+addscript testscript <<'EOF'
+### BEGIN INIT INFO
+# Provides:          testscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+mkdir -p ${overridedir}/.
+cat >${overridedir}/testscript <<'EOF'
+### BEGIN INIT INFO
+# Provides:          testscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+insserv_reg testscript
+
+list_rclinks
+
+check_script_not_present 3 testscript
+
+echo info: Trying to remove the script
+
+insserv_del testscript
+
+list_rclinks
+
+check_script_not_present 3 testscript
+}
+
+##########################################################################
+test_long_loop() {
+echo
+echo "info: testing to insert scripts with a longer loop, making sure it fail"
+echo
+
+initdir_purge
+
+# Three scripts with a loop between them, make sure introducing the
+# loop fail, as it will make insserv generate a unstable and broken
+# boot and shutdown sequence.
+insertscript loop1 <<'EOF'
+### BEGIN INIT INFO
+# Provides:          loop1
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript loop2 <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          loop2
+# Required-Start:    loop1
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+if insertscript loop3 <<'EOF' ; then
+### BEGIN INIT INFO
+# Provides:          loop3
+# Required-Start:    loop2
+# Required-Stop:
+# X-Start-Before:    loop1
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+    error "inserting script causing a loop did not fail"
+fi
+}
+##########################################################################
+test_combined_loop() {
+# Test real loop in the combined start and stop sequence.  There is no
+# loop in the start sequence, and no loop in the stop sequence, but in
+# the combined graph insserv is creating internally, there is a loop.
+# This make sense, as scripts need to be installed in dependency
+# order, and there is no way to install these scripts that make sure
+# both start and stop dependencies are fulfilled.
+echo
+echo "info: test handling of loops in the combination of start and stop sequences"
+echo
+
+initdir_purge
+
+insertscript startfirst <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          startfirst
+# Required-Start:
+# Required-Stop:     startsecond
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+insertscript startsecond <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          startsecond
+# Required-Start:    startfirst
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+list_rclinks
+
+test_order S startfirst startsecond
+test_order 6 startsecond startfirst
+}
+##########################################################################
+test_fake_loop() {
+# Test another fake loop.  This one should work, as it is possible to
+# install the two scripts in sequence because one of the dependencies
+# are optional.  It does not with insserv today.
+echo
+echo "info: test handling of 'fake' loops in the combination of start and stop sequences"
+echo
+
+initdir_purge
+
+insertscript startfirst_stopfirst <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          startfirst_stopfirst
+# Required-Start:
+# Required-Stop:
+# Should-Stop:       startsecond_stoplast
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+insertscript startsecond_stoplast <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          startsecond_stoplast
+# Required-Start:    startfirst_stopfirst
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_order S startfirst_stopfirst startsecond_stoplast
+check_order 6 startfirst_stopfirst startsecond_stoplast
+}
+##########################################################################
+test_fake_loop_reverse() {
+# Test another fake loop using reverse dependencies to document that
+# it can happen based on information provided in one package only.
+# This should work, as it is possible to install the two scripts in
+# sequence because one of the dependencies are optional.  It does not
+# with insserv today.  Note thought that the generated order is
+# different from the one above.
+
+echo
+echo "info: test handling of 'fake' loops using reverse depends"
+echo
+
+initdir_purge
+
+insertscript startfirst_stopfirst <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          startfirst_stopfirst
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+insertscript startsecond_stoplast <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          startsecond_stoplast
+# Required-Start:    startfirst_stopfirst
+# Required-Stop:
+# X-Stop-After:      startfirst_stopfirst
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+list_rclinks
+
+# #458582
+check_order S startfirst_stopfirst startsecond_stoplast
+check_order 6 startfirst_stopfirst startsecond_stoplast 
+}
+##########################################################################
+test_badscript() {
+echo
+echo "info: test if bad script in init.d/ with no symlinks in rc*.d/ make problems"
+echo
+
+initdir_purge
+
+addscript sitelocal <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          duplicate
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+insertscript distroglobal <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          dublicate
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present S distroglobal
+}
+##########################################################################
+test_onlystart() {
+echo
+echo "info: check that it work to insert scripts with only start runlevels"
+echo
+
+initdir_purge
+
+insertscript onlystart <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          onlystart
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present 2 onlystart
+check_script_present 3 onlystart
+check_script_present 4 onlystart
+check_script_present 5 onlystart
+
+check_script_not_present 0 onlystart
+check_script_not_present 1 onlystart
+check_script_not_present 6 onlystart
+}
+##########################################################################
+test_onlystop() {
+echo
+echo "info: check that it work to insert scripts with only stop runlevels"
+echo
+# This test check that the common way to update the runlevels used by
+# a given script is working.  It simulates these calls to update-rc.d:
+#  update-rc.d oldscript default
+#  update-rc.d -f oldscript remove
+#  update-rc.d oldscript start 20 2 3 4 5 . stop 20 1 .
+
+initdir_purge
+
+insertscript onlystop <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          onlystop
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# Default-Start:
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present 0 onlystop
+check_script_present 6 onlystop
+
+check_script_not_present 1 onlystop
+check_script_not_present 2 onlystop
+check_script_not_present 3 onlystop
+check_script_not_present 4 onlystop
+check_script_not_present 5 onlystop
+check_script_not_present S onlystop
+}
+##########################################################################
+test_removal() {
+echo
+echo "info: test if script removal removes all symlinks."
+echo
+# This test check that the common way to update the runlevels used by
+# a given script is working.  It simulates these calls to update-rc.d:
+#  update-rc.d oldscript default
+#  update-rc.d -f oldscript remove
+#  update-rc.d oldscript start 20 2 3 4 5 . stop 20 1 .
+
+initdir_purge
+
+insertscript oldscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          oldscript
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+# Check that the problematic symlinks are presend, as well as one that
+# is OK.
+check_script_present 0 oldscript
+check_script_present 1 oldscript
+check_script_present 3 oldscript
+check_script_present 6 oldscript
+
+set +C
+addscript oldscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          oldscript
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# Default-Start:     2 4 5
+# Default-Stop:      1
+### END INIT INFO
+EOF
+set -C
+
+# Remove old symlinks
+insserv_del oldscript
+# Insert new ones, this time without runlevel 0 and 6
+insserv_reg oldscript
+
+list_rclinks
+
+check_script_not_present 0 oldscript
+check_script_present 1 oldscript
+check_script_present 2 oldscript
+check_script_not_present 3 oldscript
+check_script_not_present 6 oldscript
+}
+
+##########################################################################
+test_segfault_virtfac() {
+echo
+echo "info: detect segfault caused by script providing virtual facility."
+echo
+
+initdir_purge
+
+insertscript badheaderscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          $syslog
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+# Problem is only triggered if there are start or stop symlinks for
+# the script present.
+mkdir -p $initddir/../rc2.d
+ln -s ../init.d/badheaderscript $initddir/../rc2.d/S02badheaderscript
+
+# This one segfaults
+insertscript okscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          okscript
+# Required-Start:    $syslog
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present 2 okscript
+}
+##########################################################################
+test_incorrect_startscripts() {
+echo
+echo "info: Check if insserv add start symlinks for scripts that"
+echo "info: currently do not have them. #492526"
+echo
+
+initdir_purge
+
+insertscript disablestartscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          disablestartscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+list_rclinks
+
+check_script_present 2 disablestartscript
+check_script_present 5 disablestartscript
+check_script_not_present S disablestartscript
+check_script_present 1 disablestartscript
+
+rm $initddir/../rc{2,3,4,5}.d/S??disablestartscript
+
+# Update symlinks, see if it add start symlinks
+insserv_reg .
+
+list_rclinks
+
+check_script_not_present 2 disablestartscript
+check_script_not_present 3 disablestartscript
+check_script_not_present 4 disablestartscript
+check_script_not_present 5 disablestartscript
+check_script_not_present S disablestartscript
+check_script_present 0 disablestartscript
+check_script_present 1 disablestartscript
+}
+##########################################################################
+test_incorrect_stopscripts() {
+echo
+echo "info: Check if insserv add stop symlinks for scripts that"
+echo "info: currently do not have them."
+echo
+
+initdir_purge
+
+insertscript disablestopscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          disablestopscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+list_rclinks
+
+check_script_present 2 disablestopscript
+check_script_present 5 disablestopscript
+check_script_not_present S disablestopscript
+check_script_present 1 disablestopscript
+
+rm $initddir/../rc{0,1}.d/K??disablestopscript
+
+# Update symlinks, see if it add stop symlinks
+insserv_reg .
+
+list_rclinks
+
+check_script_present 2 disablestopscript
+check_script_present 5 disablestopscript
+check_script_not_present S disablestopscript
+check_script_not_present 0 disablestopscript
+check_script_not_present 1 disablestopscript
+}
+##########################################################################
+test_newbug_keepoldorder() {
+echo
+echo "info: Verify that introducing a loop in a working system do"
+echo "info: not change the order of the scripts currently on disk."
+echo
+
+initdir_purge
+
+insertscript mountall <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          mountall
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript needlocal <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          needlocal
+# Required-Start:    $local_fs
+# Required-Stop:     $local_fs
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+insertscript needremote <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          needremote
+# Required-Start:    $remote_fs needlocal
+# Required-Stop:     $remote_fs needlocal
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+insertscript needboth <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          needboth
+# Required-Start:    needlocal needremote
+# Required-Stop:     needlocal needremote
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_order S mountall needlocal
+check_order S mountall needremote
+check_order S mountall needboth
+check_order S needlocal needremote
+check_order S needlocal needboth
+check_order S needremote needboth
+
+# Then introduce buggy dependencies in an existing script
+set +C
+addscript needboth <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          needboth
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
+# X-Start-Before:    $local_fs
+# Default-Start:     S
+# Default-Stop:      6
+### END INIT INFO
+EOF
+set -C
+
+echo "info: calling insserv after introducing a bug in script needboth"
+insserv_reg needboth || true
+
+list_rclinks
+
+# The severity of this test should be fatal, below is explanation about how
+# new (1.11.10) and old (1.11.0) insserv version behaviour changed in this
+# test.
+#
+# Hmm ... with this I've found out that the old insserv will
+# run on a loop and therefore exit.  This loop was caused
+# by the system facility $local_fs make the old insserv
+# to do an exit ... now the problem is that the new insserv
+# expands all system facility to their real requirements.
+# This leads to the new behaviour as there is no node during
+# the sorting algorithm which would cause such a loop.
+#
+# In other words: that the old insserv hasn't changed the
+# order was simply a side effect of having a ghost node
+# whereas the new insserv does not use such nodes anymore.
+#
+# If you would remove the `X-Start-Before: $local_fs' the
+# old insserv will also change the boot order.
+
+${severity}_order S mountall needlocal
+${severity}_order S mountall needremote
+${severity}_order S mountall needboth
+${severity}_order S needlocal needremote
+${severity}_order S needlocal needboth
+${severity}_order S needremote needboth
+}
+##########################################################################
+test_start_before() {
+echo
+echo "info: Verify that X-start-before work as it should."
+echo
+
+initdir_purge
+
+insertscript startlast <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          startlast
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript startfirst <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          startfirst
+# Required-Start:
+# Required-Stop:
+# X-Start-Before:    startlast
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_order S startfirst startlast
+}
+##########################################################################
+test_stop_after() {
+echo
+echo "info: Verify that X-stop-after work as it should."
+echo
+
+initdir_purge
+
+insertscript stopfirst <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          stopfirst
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+insertscript stopafter <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          stopafter
+# Required-Start:
+# Required-Stop:
+# X-Stop-After:      stopfirst
+# Default-Start:
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_order 0 stopfirst stopafter
+}
+##########################################################################
+test_adding_start() {
+echo
+echo "info: Make sure that adding start levels do not change an existing installation."
+echo
+
+initdir_purge
+
+insertscript addstartscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          addstartscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:      1
+### END INIT INFO
+EOF
+
+check_script_present 1 addstartscript
+
+check_script_not_present S addstartscript
+check_script_not_present 0 addstartscript
+check_script_not_present 2 addstartscript
+check_script_not_present 3 addstartscript
+check_script_not_present 4 addstartscript
+check_script_not_present 5 addstartscript
+check_script_not_present 6 addstartscript
+
+# Then change runlevel in existing script
+set +C
+addscript addstartscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          addstartscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      1
+### END INIT INFO
+EOF
+set -C
+
+# Update script after changing the header
+insserv_reg addstartscript || true
+
+list_rclinks
+
+check_script_present 1 addstartscript
+
+check_script_not_present S addstartscript
+check_script_not_present 0 addstartscript
+check_script_not_present 2 addstartscript
+check_script_not_present 3 addstartscript
+check_script_not_present 4 addstartscript
+check_script_not_present 5 addstartscript
+check_script_not_present 6 addstartscript
+}
+##########################################################################
+test_removing_start() {
+echo
+echo "info: Make sure that removing start levels do not change an existing installation."
+echo
+
+initdir_purge
+
+insertscript remstartscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          remstartscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+check_script_present 0 remstartscript
+check_script_present 1 remstartscript
+check_script_present 2 remstartscript
+check_script_present 3 remstartscript
+check_script_present 4 remstartscript
+check_script_present 5 remstartscript
+check_script_present 6 remstartscript
+
+# Then change runlevel in existing script
+set +C
+addscript remstartscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          remstartscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+set -C
+
+# Update script after changing the header
+insserv_reg remstartscript || true
+
+list_rclinks
+
+check_script_present 2 remstartscript
+check_script_present 3 remstartscript
+check_script_present 4 remstartscript
+check_script_present 5 remstartscript
+}
+##########################################################################
+test_adding_stop() {
+echo
+echo "info: Make sure that adding stop levels do not change an existing installation."
+echo
+
+initdir_purge
+
+insertscript addstopscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          addstopscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+check_script_present S addstopscript
+check_script_not_present 0 addstopscript
+check_script_not_present 1 addstopscript
+check_script_not_present 2 addstopscript
+check_script_not_present 3 addstopscript
+check_script_not_present 4 addstopscript
+check_script_not_present 5 addstopscript
+check_script_not_present 6 addstopscript
+
+# Then change runlevel in existing script
+set +C
+addscript addstopscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          addstopscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:      0
+### END INIT INFO
+EOF
+set -C
+
+# Update script after changing the header
+insserv_reg addstopscript || true
+
+list_rclinks
+
+check_script_present S addstopscript
+check_script_not_present 0 addstopscript
+check_script_not_present 1 addstopscript
+check_script_not_present 2 addstopscript
+check_script_not_present 3 addstopscript
+check_script_not_present 4 addstopscript
+check_script_not_present 5 addstopscript
+check_script_not_present 6 addstopscript
+}
+##########################################################################
+test_removing_stop() {
+echo
+echo "info: Make sure that removing stop levels do not change an existing installation."
+echo
+
+initdir_purge
+
+insertscript remstopscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          remstopscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+check_script_present S remstopscript
+check_script_present 0 remstopscript
+check_script_present 6 remstopscript
+
+check_script_not_present 1 remstopscript
+check_script_not_present 2 remstopscript
+check_script_not_present 3 remstopscript
+check_script_not_present 4 remstopscript
+check_script_not_present 5 remstopscript
+
+# Then change runlevel in existing script
+set +C
+addscript remstopscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          remstopscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+set -C
+
+# Update script after changing the header
+insserv_reg remstopscript || true
+
+list_rclinks
+
+check_script_present 0 remstopscript
+check_script_present 6 remstopscript
+}
+##########################################################################
+test_duplicate_provides() {
+echo
+echo "info: test two initscripts providing same facility."
+echo "info: Not sure if this should fail or not."
+echo
+
+initdir_purge
+
+addscript one <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          samefac
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+addscript two <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          samefac
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insserv_reg one || true
+insserv_reg two || true
+
+list_rclinks
+
+check_script_present S one
+${severity}_script_not_present S two
+}
+##########################################################################
+test_bogus_facility() {
+echo
+echo "info: test insertion of script requiring a virtual facility that doesn't exist"
+echo
+
+initdir_purge
+
+addscript needbogusvirtual <<'EOF'
+### BEGIN INIT INFO
+# Provides:          needbogusvirtual
+# Required-Start:    $bogusvirtualfacility
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insserv_reg needbogusvirtual || true
+
+list_rclinks
+
+test_script_not_present S needbogusvirtual
+}
+##########################################################################
+test_insserv_conf_d() {
+echo
+echo "info: test that /etc/insserv.conf.d/ is used"
+echo
+
+initdir_purge
+rm -rf ${insconf}.d
+mkdir -p ${insconf}.d
+
+# add a base service, to ensure check_order() is accurate
+insertscript dummy <<'EOF'
+### BEGIN INIT INFO
+# Provides:          dummy
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+cat <<'EOF' > ${insconf}.d/facone
+$commvirtfac       +facone
+EOF
+
+insertscript facone <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          facone
+# Required-Start:    dummy
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+cat <<'EOF' > ${insconf}.d/factwo
+$commvirtfac       +factwo
+EOF
+
+insertscript factwo <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          factwo
+# Required-Start:    dummy
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+addscript service <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          service
+# Required-Start:    $commvirtfac
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insserv_reg service || true
+
+list_rclinks
+
+check_script_present S service
+check_order S facone service
+check_order S factwo service
+
+rm -rf ${insconf}.d
+}
+##########################################################################
+test_broken_header() {
+echo
+echo "info: test insertion of script missing Required-{Start,Stop} fields"
+echo
+
+initdir_purge
+
+addscript badheader <<'EOF'
+### BEGIN INIT INFO
+# Provides:          badheader
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+insserv_reg badheader || true
+
+list_rclinks
+
+test_script_present 0 badheader
+test_script_present 1 badheader
+test_script_present 2 badheader
+test_script_present 3 badheader
+test_script_present 4 badheader
+test_script_present 5 badheader
+test_script_present 6 badheader
+}
+##########################################################################
+test_noprovides_header() {
+echo
+echo "info: test insertion of script missing Provides fields"
+echo
+
+initdir_purge
+
+addscript badheader <<'EOF'
+### BEGIN INIT INFO
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+insserv_reg badheader || true
+
+list_rclinks
+
+test_script_present 0 badheader
+test_script_present 1 badheader
+test_script_present 2 badheader
+test_script_present 3 badheader
+test_script_present 4 badheader
+test_script_present 5 badheader
+test_script_present 6 badheader
+}
+##########################################################################
+test_no_default_start() {
+echo
+echo "info: test insertion of script missing Default-Start field"
+echo
+
+initdir_purge
+
+addscript nodefstart <<'EOF'
+### BEGIN INIT INFO
+# Provides:          nodefstart
+# Required-Start:
+# Required-Stop:
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+insserv_reg nodefstart || true
+
+list_rclinks
+
+check_script_present 0 nodefstart
+check_script_present 6 nodefstart
+
+check_script_not_present 2 nodefstart
+check_script_not_present 3 nodefstart
+check_script_not_present 4 nodefstart
+check_script_not_present 5 nodefstart
+}
+##########################################################################
+test_no_default_stop() {
+echo
+echo "info: test insertion of script missing Default-Stop field"
+echo
+
+initdir_purge
+
+addscript nodefstop <<'EOF'
+### BEGIN INIT INFO
+# Provides:          nodefstop
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+### END INIT INFO
+EOF
+
+insserv_reg nodefstop || true
+
+list_rclinks
+
+check_script_present 2 nodefstop
+check_script_present 3 nodefstop
+check_script_present 4 nodefstop
+check_script_present 5 nodefstop
+
+check_script_not_present 0 nodefstop
+check_script_not_present 1 nodefstop
+check_script_not_present 6 nodefstop
+}
+##########################################################################
+test_initd_symlink() {
+echo
+echo "info: test that a symlink in /etc/init.d/ to another script does not cause problems"
+echo
+
+initdir_purge
+
+addscript symlinked <<'EOF'
+### BEGIN INIT INFO
+# Provides:          symlinked
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      1
+### END INIT INFO
+EOF
+
+addscript outsider <<'EOF'
+### BEGIN INIT INFO
+# Provides:          outsider
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      1
+### END INIT INFO
+EOF
+
+#addscript halt <<'EOF'
+### BEGIN INIT INFO
+# Provides:          halt
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:      0 6
+### END INIT INFO
+#EOF
+
+# Now make an illegal symlink to see if it causes problems, #485045
+ln -s symlinked ${initddir}/symlink
+
+insserv_reg symlinked || true
+insserv_reg symlink || true
+
+check_script_present 1 symlinked
+check_script_present 2 symlinked
+check_script_present 3 symlinked
+check_script_present 4 symlinked
+check_script_present 5 symlinked
+check_script_not_present 1 symlink
+check_script_not_present 2 symlink
+check_script_not_present 3 symlink
+check_script_not_present 4 symlink
+check_script_not_present 5 symlink
+
+# Add a /etc/init.d/reboot -> halt symlink, to make sure the SUSE case
+# is not broken with stricter symlink sanity checking
+#ln -s halt ${initddir}/reboot
+
+#insserv_reg reboot || true
+
+#check_script_present 0 reboot
+#check_script_present 6 reboot
+
+# Move outsider to a location other than /etc/init.d/ and create a symlink
+# to it. insserv should register it without problems.
+mv ${initddir}/outsider ${initddir}/../
+ln -s ../outsider ${initddir}/outsidelink
+
+insserv_reg outsidelink || true
+
+list_rclinks
+
+check_script_present 1 outsidelink
+check_script_present 2 outsidelink
+check_script_present 3 outsidelink
+check_script_present 4 outsidelink
+check_script_present 5 outsidelink
+
+rm -f ${initddir}/../outsider
+}
+##########################################################################
+test_deterministic_order() {
+echo
+echo "info: test two or more initscripts providing same facility, making sure"
+echo "info: that the first script can be registered with insserv, but others fail." 
+echo
+
+initdir_purge
+
+addscript abc <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          service
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+addscript xyz <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          service
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+addscript hjk <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          service
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insserv_reg xyz || true
+insserv_reg hjk || true
+insserv_reg abc || true
+
+list_rclinks
+
+# #494514
+check_script_present S xyz
+check_script_not_present S abc
+check_script_not_present S hjk
+}
+##########################################################################
+test_all_keyword() {
+echo
+echo "info: test behaviour of a script depending on another with the \$all keyword"
+echo "info: #491391"
+echo
+
+initdir_purge
+
+# Insert a few scripts to flesh out $initdir
+for script in one two three
+do
+insertscript $script <<EOF || true
+### BEGIN INIT INFO
+# Provides:          $script
+# Required-Start:    \$remote_fs
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+done
+
+insertscript four <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          four
+# Required-Start:    $remote_fs
+# Required-Stop:
+# Should-Start:      one two three
+# Should-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript rmnologin <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          rmnologin
+# Required-Start:    $remote_fs $all
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+# This version of bootchart LSB info is not the best, but it does reveal
+# an interesting and unexpected behaviour.
+insertscript bootchart <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          bootchart
+# Required-Start:    $remote_fs rmnologin
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present 5 rmnologin
+check_script_present 5 bootchart
+test_order 5 rmnologin bootchart
+
+echo
+echo "info: now add \$all keyword to bootchart script and reinsert"
+echo
+
+remscript bootchart
+# This information looks correct, but due to the way all_links() works two or
+# more scripts with keyword $all in Required-Start start at same sequence, but
+# do start after all other scripts
+addscript bootchart <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          bootchart
+# Required-Start:    $all rmnologin
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insserv_reg bootchart || true
+
+list_rclinks
+check_script_present 5 bootchart
+test_order 5 rmnologin bootchart
+
+echo
+echo "info: add yet another script depending on \$all"
+echo
+insertscript all <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          all
+# Required-Start:    $all
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+check_script_present 5 all
+}
+##########################################################################
+test_early_all() {
+echo
+echo "info: Check that start dependency on \$all only affect the start"
+echo "sequence. BTS #485307"
+
+echo
+
+initdir_purge
+
+# Insert a few scripts to flesh out $initdir
+insertscript early <<EOF || true
+### BEGIN INIT INFO
+# Provides:          early
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2
+# Default-Stop:      0
+### END INIT INFO
+EOF
+
+insertscript center <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          center
+# Required-Start:    early
+# Required-Stop:     early
+# Default-Start:     2
+# Default-Stop:      0
+### END INIT INFO
+EOF
+
+insertscript late <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          late
+# Required-Start:    center
+# Required-Stop:     center
+# Default-Start:     2
+# Default-Stop:      0
+### END INIT INFO
+EOF
+
+# This script should start early and stop before all other scripts
+insertscript zcomplex <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          zcompex
+# Required-Start:    early
+# X-Start-Before:    center
+# Required-Stop:     $all
+# Default-Start:     2
+# Default-Stop:      0
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present 2 early
+check_script_present 2 zcomplex
+check_order 2 early zcomplex
+check_order 2 zcomplex center
+check_order 0 zcomplex late
+check_order 0 zcomplex early
+}
+##########################################################################
+test_script_in_runlevel() {
+echo
+echo "info: add a regular file where only symlinks are expected (#493202)"
+echo
+
+initdir_purge
+
+# Create a regular file in runlevel directory where only symlinks are expected
+mkdir $initddir/../rcS.d
+touch $initddir/../rcS.d/S06badboy
+
+insertscript goodboy <<'EOF'
+### BEGIN INIT INFO
+# Provides:          goodboy
+# Required-Start:    $remote_fs
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present S goodboy
+
+rm $initddir/../rcS.d/S06badboy
+}
+##########################################################################
+test_x_interactive() {
+echo
+echo "info: Check if X-Interactive header work"
+echo "BTS #458224, #580564"
+echo
+  
+initdir_purge
+
+# Insert a few scripts to flesh out $initdir
+insertscript first <<EOF || true
+### BEGIN INIT INFO
+# Provides:          first
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2
+# Default-Stop:      0
+### END INIT INFO
+EOF
+
+# This test if X-Interactive work with existing scripts when a new
+# script is inserted.
+insertscript alone1 <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          alone1
+# Required-Start:    first
+# Required-Stop:     first
+# Default-Start:     2
+# Default-Stop:      0
+# X-Interactive:     true
+### END INIT INFO
+EOF
+
+insertscript after <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          after
+# Required-Start:    first
+# Required-Stop:     first
+# Default-Start:     2
+# Default-Stop:      0
+### END INIT INFO
+EOF
+
+# This test if X-Interactive work with new scripts too.  The code
+# paths in insserv are different for the two cases.
+insertscript alone2 <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          alone2
+# Required-Start:    first
+# Required-Stop:     first
+# Default-Start:     2
+# Default-Stop:      0
+# X-Interactive:     true
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present 2 first
+check_script_present 2 after
+check_script_present 2 alone1
+check_script_present 2 alone2
+check_order 2 first after
+check_order 2 first alone1
+check_order 2 first alone2
+# This ordering is not guaranteed, but currently interactive scripts
+# are put after the others on the same level.
+check_order 2 alone1 after
+check_order 2 alone2 after
+if grep INTERACTIVE ${initddir}/.depend.start | grep -q alone1 &&
+    grep INTERACTIVE ${initddir}/.depend.start | grep -q alone1 ; then
+    counttest
+else
+    error "scripts alone1 and alone2 are not flagged as interactive" 
+fi
+}
+##########################################################################
+
+test_insserv_conf_makefile() {
+echo
+echo "info: test how recursive /etc/insserv.conf settings show up"
+echo "info: in .depend.boot.  BTS #534526."
+echo
+
+initdir_purge
+
+list_rclinks
+
+# If $local_fs only depend on the mountall script, the test work.
+# Only the last script in $local_fs make it to the dependency file.
+set +C
+cat <<'EOF' > $insconf
+$local_fs       +mountall +nonexisting
+$remote_fs      $local_fs
+EOF
+set -C
+
+insertscript mountall <<'EOF'
+### BEGIN INIT INFO
+# Provides:          mountall
+# Required-Start:
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript dbus <<'EOF'
+### BEGIN INIT INFO
+# Provides:          dbus
+# Required-Start:
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript hal <<'EOF'
+### BEGIN INIT INFO
+# Provides:          hal
+# Required-Start:    $remote_fs dbus
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+if ! grep -q "^hal: mountall dbus" ${initddir}/.depend.start ; then
+    msg="hal should depend on dbus and mountall in .depend.start:"
+    if [ test = "$severity" ] ; then
+        warning "$msg"
+    else
+        error "$msg"
+    fi
+    grep  "^hal: " ${initddir}/.depend.start | sed 's/^/  /'
+fi
+
+update_conf
+}
+
+#########################
+
+test_insserv_virt_loop() {
+echo
+echo "info: test insserv handle virtual facilities depending on itself."
+echo
+
+initdir_purge
+
+list_rclinks
+
+# If $local_fs depend on itself, the error is triggered.
+set +C
+cat <<'EOF' > $insconf
+$local_fs       +mountall $local_fs
+EOF
+set -C
+
+# This used to hang and use unlimited amount of memory.  Now return
+# error instead.
+insertscript testscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          testscript
+# Required-Start:    $local_fs
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+update_conf
+}
+
+##########################################################################
+test_local_virtual() {
+echo
+echo "info: Test if home made virtual facilities work as they should."
+echo
+
+initdir_purge
+
+mkdir $insconf.d
+
+insertscript test1 <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          test1
+# Required-Start:    $mail-transport-agent
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript test2 <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          test2
+# Required-Start:    $mail-transport-agent
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+set +C
+cat <<'EOF' > $insconf.d/test3
+$mail-transport-agent       test3
+EOF
+insertscript test3 <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          test3
+# Required-Start:
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+cat <<'EOF' > $insconf.d/test4
+$mail-transport-agent       +test4
+EOF
+set -C
+insertscript test4 <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          test4
+# Required-Start:    test3
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_order 1 test3 test1
+check_order 1 test3 test2
+check_order 1 test4 test1
+check_order 1 test4 test2
+
+rm -f $insconf.d/test3 $insconf.d/test4
+}
+##########################################################################
+test_insserv_upstart() {
+echo
+echo "info: test if insserv handle upstart jobs properly."
+echo
+
+initdir_purge
+
+list_rclinks
+
+# This used to hang and use unlimited amount of memory.  Now return
+# error instead.
+upstartdir=${tmpdir}/etc/init
+
+upstartjob="${tmpdir}/lib/init/upstart-job"
+
+# Add upstart config
+oldconf="$insconf"
+insconf="$insconf -u $upstartjob"
+
+# Dummy entry
+mkdir -p $(dirname $upstartjob)
+cat > $upstartjob <<EOF
+#!/bin/sh
+cat <<END
+### BEGIN INIT INFO
+# Provides:          upstart-test
+# Required-Start:    
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+END
+EOF
+chmod a+x $upstartjob
+
+insert_upstart_job() {
+    name=$1
+    mkdir -p $upstartdir
+    cat > $upstartdir/$name
+    ln -s $upstartjob $initddir/$name
+    insserv_reg $name
+}
+
+remove_upstart_jobs() {
+    rm -rf $upstartdir
+}
+
+# XXX Someone that understand upstart need to fill in sensible stuff
+# here
+insert_upstart_job upstart-test <<EOF || true
+exec /bin/foo --opt -xyz foo bar
+EOF
+
+insertscript test <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          test
+# Required-Start:    upstart-test
+# Required-Stop:
+# Default-Start:     1
+# Default-Stop:
+### END INIT INFO
+EOF
+
+
+list_rclinks
+
+# Undo upstart config
+insconf="$oldconf"
+remove_upstart_jobs
+}
+##########################################################################
+
+test_undetected_loop() {
+echo
+echo "info: test if insserv detect loop involving virtual facility,"
+echo "info: x-start-before and should-start.  Issue detected in BTS"
+echo "info: report #554905."
+echo
+
+initdir_purge
+
+set +C
+cat <<'EOF' > $insconf
+$local_fs       mountall
+EOF
+set -C
+
+insertscript hibernate <<'EOF'
+### BEGIN INIT INFO
+# Provides:          hibernate-cleanup
+# Default-Start:     S
+# Default-Stop:
+# Required-Start:
+# Required-Stop:
+# Should-Start:      udev devfsd raid2 mdadm lvm evms cryptdisks
+# X-Start-Before:    mountall
+### END INIT INFO
+EOF
+
+insertscript mountall.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          mountall
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+# Short-Description: Mount all filesystems.
+### END INIT INFO
+EOF
+
+# Inserting this script should fail, as it introduces a loop
+insertscript mdadm <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          mdadm
+# Required-Start:    $local_fs
+# Required-Stop:     $local_fs
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+# Inserting this script should definitely fail, as it depend on a loop
+insertscript test <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          test
+# Required-Start:    $local_fs mdadm
+# Required-Stop:     $local_fs mdadm
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_not_present S mdadm
+check_script_not_present S test
+}
+
+##########################################################################
+
+test_invalid_core_string() {
+echo
+echo "info: test if insserv accepts 'corekeeper' but rejects core dumps"
+echo "info: named '*.core' or 'core'"
+echo "info: See bug report #554905."
+echo
+
+initdir_purge
+
+set +C
+cat <<'EOF' > $insconf
+$local_fs       mountall
+EOF
+set -C
+
+# should be accepted - valid name
+insertscript corekeeper <<'EOF'
+### BEGIN INIT INFO
+# Provides:          corekeeper
+# Default-Start:     S
+# Default-Stop:
+# Required-Start:
+# Required-Stop:
+### END INIT INFO
+EOF
+
+# should be rejected - invalid name
+insertscript somescript.core <<'EOF'
+### BEGIN INIT INFO
+# Provides:          somescript
+# Default-Start:     S
+# Default-Stop:
+# Required-Start:
+# Required-Stop:
+### END INIT INFO
+EOF
+
+# should be rejected - invalid name
+insertscript core <<'EOF'
+### BEGIN INIT INFO
+# Provides:          someotherscript
+# Default-Start:     S
+# Default-Stop:
+# Required-Start:
+# Required-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_not_present S core
+check_script_not_present S somescript
+check_script_present S corekeeper
+}
+##########################################################################
+insserv_show()
+{
+    $insserv $debug -c $insconf -p $initddir -o $overridedir -s
+}
+
+test_show_all() {
+echo
+echo "info: test if -s|--show-all option works as it should"
+echo
+
+initdir_purge
+
+insertscript bootscript <<'EOF'
+### BEGIN INIT INFO
+# Provides:          bootscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript localscript <<'EOF'
+### BEGIN INIT INFO
+# Provides:          localscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+EOF
+
+insertscript shutdownscript <<'EOF'
+### BEGIN INIT INFO
+# Provides:          shutdownscript
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:      0 6
+### END INIT INFO
+EOF
+
+check_script_present S bootscript
+check_script_present 2 localscript
+check_script_present 0 shutdownscript
+
+OLDIFS="$IFS"
+IFS=":"
+insserv_show | sort  -t: -k2 -k1 | while read IN_ACTION IN_SEQUENCE IN_LEVELS IN_BASENAME
+do
+    IN_LEVELS="$(echo "$IN_LEVELS" | sed -e 's; ;,;g')"
+    if [ "$IN_ACTION" = "S" ]; then
+	echo "$IN_SEQUENCE	-	$IN_LEVELS		/etc/init.d/$IN_BASENAME"
+    elif [ "$IN_ACTION" = "K" ]; then
+	echo "$IN_SEQUENCE	$IN_LEVELS	-		/etc/init.d/$IN_BASENAME"
+    fi
+done > ${tmpdir}/rc.conf
+IFS="$OLDIFS"
+
+cat ${tmpdir}/rc.conf
+
+if grep -qE '[[:digit:]]{2}[[:space:]]+-[[:space:]]+S[[:space:]]+/etc/init.d/bootscript' ${tmpdir}/rc.conf; then
+    counttest
+else
+    error "bootscript configuration error in rc.conf"
+fi
+
+if grep -qE '[[:digit:]]{2}[[:space:]]+-[[:space:]]+2,3,4,5[[:space:]]+/etc/init.d/localscript' ${tmpdir}/rc.conf && \
+   grep -qE '[[:digit:]]{2}[[:space:]]+0,1,6[[:space:]]+-[[:space:]]+/etc/init.d/localscript' ${tmpdir}/rc.conf; then
+    counttest
+else
+    error "localscript configuration error in rc.conf"
+fi
+
+if grep -qE '[[:digit:]]{2}[[:space:]]+0,6[[:space:]]+-[[:space:]]+/etc/init.d/shutdownscript' ${tmpdir}/rc.conf; then
+    counttest
+else
+    error "shutdownscript configuration error in rc.conf"
+fi
+
+rm -f ${tmpdir}/rc.conf
+}
+##########################################################################
+test_bootmisc_order() {
+# http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=677097
+echo
+echo "info: mountall-bootclean.sh must start before bootmisc.sh"
+echo
+
+initdir_purge
+
+set +C
+cat <<'EOF' > $insconf
+$local_fs       +mountall +mountall-bootclean
+$remote_fs      $local_fs
+EOF
+set -C
+
+insertscript mountall.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          mountall
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript mountall-bootclean.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          mountall-bootclean
+# Required-Start:    mountall
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript bootmisc.sh <<'EOF'
+### BEGIN INIT INFO
+# Provides:          bootmisc
+# Required-Start:    $remote_fs
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_order S mountall.sh mountall-bootclean.sh
+check_order S mountall-bootclean.sh bootmisc.sh
+
+update_conf
+}
+##########################################################################
+
+test_normal_sequence
+test_override_files
+test_override_loop
+test_override_remove
+test_long_loop
+test_combined_loop		# 1 non-fatal test failing
+test_fake_loop
+test_fake_loop_reverse
+test_badscript
+test_onlystart
+test_onlystop
+test_removal
+test_segfault_virtfac
+test_incorrect_startscripts
+test_incorrect_stopscripts
+test_newbug_keepoldorder	# 3 non-fatal tests failing
+test_start_before
+test_stop_after
+test_adding_start
+test_removing_start
+test_adding_stop
+test_removing_stop
+test_duplicate_provides
+test_bogus_facility		# 1 non-fatal test failing
+test_insserv_conf_d
+test_broken_header
+test_noprovides_header
+test_no_default_start
+test_no_default_stop
+test_initd_symlink
+test_deterministic_order
+test_all_keyword
+test_early_all
+test_script_in_runlevel
+test_x_interactive
+test_insserv_conf_makefile
+test_insserv_virt_loop
+test_local_virtual
+test_insserv_upstart
+test_undetected_loop		# 2 non-fatal tests failing
+test_invalid_core_string
+test_show_all
+test_bootmisc_order

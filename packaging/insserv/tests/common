@@ -1,0 +1,110 @@
+#!/bin/bash
+
+basedir=$(dirname $0)
+. $basedir/suite
+
+##########################################################################
+test_simple_sequence() {
+echo
+echo "info: test simple script ordering."
+echo
+
+initdir_purge
+
+insertscript firstscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          firstscript
+# Required-Start:    
+# Required-Stop:     
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript middlescript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          middlescript
+# Required-Start:    firstscript
+# Required-Stop:     firstscript
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+insertscript lastscript <<'EOF' || true
+### BEGIN INIT INFO
+# Provides:          lastscript
+# Required-Start:    middlescript
+# Required-Stop:     middlescript
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+EOF
+
+list_rclinks
+
+check_script_present 2 firstscript
+check_script_present 3 firstscript
+check_script_present 4 firstscript
+check_script_present 5 firstscript
+check_order 3 firstscript middlescript
+check_order 3 middlescript lastscript
+}
+##########################################################################
+test_undetected_loop() {
+echo
+echo "info: test if loop involving virtual facility is detected."
+echo
+
+initdir_purge
+set +C
+cat <<'EOF' > $insconf
+$local_fs       mountall
+EOF
+set -C
+
+insertscript hibernate <<EOF
+### BEGIN INIT INFO
+# Provides:          hibernate-cleanup
+# Default-Start:     3
+# Default-Stop:
+# Required-Start:
+# Required-Stop:
+# Should-Start:      udev devfsd raid2 mdadm lvm evms cryptdisks
+# X-Start-Before:    mountall
+### END INIT INFO
+EOF
+
+insertscript mountall.sh <<EOF
+### BEGIN INIT INFO
+# Provides:          mountall
+# Required-Start:
+# Required-Stop:
+# Default-Start:     3
+# Default-Stop:
+# Short-Description: Mount all filesystems.
+### END INIT INFO
+EOF
+
+# This should fail, as it introduce a loop
+if insertscript mdadm <<'EOF' ; then
+### BEGIN INIT INFO
+# Provides:          mdadm
+# Required-Start:    $local_fs
+# Required-Stop:     $local_fs
+# Default-Start:     3
+# Default-Stop:
+### END INIT INFO
+EOF
+    counttest
+    error "Able to insert mdadm even though it introduce a loop"
+fi
+echo insserv.conf:
+cat $insconf
+list_rclinks
+check_order 3 hibernate mountall.sh
+}
+##########################################################################
+
+test_simple_sequence
+test_undetected_loop

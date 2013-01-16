@@ -1,0 +1,339 @@
+#
+# Common test suite definitions, declarations, and functions
+#
+set -eC
+set +o posix
+unset ${!LC@}
+export LANG=POSIX
+
+: ${insserv:=${PWD}/insserv}
+: ${tmpdir:=${PWD}/root}
+: ${initddir:=${tmpdir}/etc/init.d}
+: ${insconf:=${tmpdir}/etc/insserv.conf}
+: ${overridedir:=${tmpdir}/etc/insserv/override}
+: ${issuse=""}
+: ${debug:=""}
+
+declare -i retval=0
+declare -i checkfailed=0
+declare -i testcount=0
+declare -i testfailed=0
+finish_test ()
+{
+    if test 0 -ne $retval ; then
+        echo "error: $testcount test executed, $checkfailed fatal tests failed, $testfailed nonfatal test failed."
+    else
+        echo "success: $testcount test executed, $testfailed nonfatal tests failed."
+    fi
+    rm -rf ${tmpdir}
+    return $retval
+}
+trap 'finish_test' EXIT
+
+mkdir -p $initddir
+
+if test -n "${issuse}" ; then
+    runlevel_path ()
+    {
+	local -a level=($@)
+	level=(${level[@]/%s/S})
+	level=(${level[@]/#/rc})
+	level=(${level[@]/rc[bB]*/boot})
+	printf "${initddir}/%s.d\n" ${level[@]}
+    }
+    list_rclinks()
+    {
+	pushd $initddir/ &> /dev/null
+	echo ${initddir##*/}:
+	ls ${1+"$@"} *
+	popd &> /dev/null
+    }
+    cat <<-'EOF' > $insconf
+	$local_fs	boot.localfs +boot.crypto
+	$network	network
+	$named		+named +dnsmasq +lwresd $network
+	$remote_fs	$local_fs +nfs +smbfs
+	$syslog		syslog
+	$portmap	portmap
+	$time		boot.clock +ntp
+	<interactive>	boot.crypto boot.clock boot.localfs boot.rootfsck apache apache2 kdump ntp
+	EOF
+else
+    runlevel_path ()
+    {
+	printf "${initddir}/../rc%s.d\n" ${1+"$@"}
+    }
+    list_rclinks()
+    {
+	pushd $initddir/../ &> /dev/null
+	ls ${1+"$@"} *
+	popd &> /dev/null
+    }
+    cat <<-'EOF' > $insconf
+	$local_fs	+mountall +umountfs
+	$network	+networking +ifupdown
+	$named		+named +dnsmasq +lwresd +bind9 $network
+	$remote_fs	$local_fs +mountnfs +mountnfs-bootclean +umountnfs +sendsigs
+	$syslog		+syslog +sysklogd
+	$portmap	portmap
+	$time		hwclock
+	<interactive>	udev mountdevsubfs checkroot checkfs console-screen
+	EOF
+    update_conf ()
+    {
+	set +C
+	cat <<-'EOF' > $insconf
+	$local_fs       +mountall +umountfs
+	$network        +networking +ifupdown
+	$named          +named +dnsmasq +lwresd +bind9 $network
+	$remote_fs      $local_fs +mountnfs +mountnfs-bootclean +umountnfs +sendsigs
+	$syslog         +syslog +sysklogd
+	$portmap        portmap
+	$time           hwclock
+	<interactive>   udev mountdevsubfs checkroot checkfs console-screen
+	EOF
+	set -C
+    }
+
+fi
+chmod u+w,a+r $insconf
+
+insserv_reg ()
+{
+    script=$(printf "${initddir}/%s\n" ${1+"$@"})
+    $insserv $debug -c $insconf -p $initddir -o $overridedir $script
+}
+
+insserv_del ()
+{
+    script=$(printf "${initddir}/%s\n" ${1+"$@"})
+    $insserv $debug -c $insconf -p $initddir -o $overridedir -r $script
+}
+
+initdir_purge ()
+{
+    rm -rf ${initddir}/../rc*.d ${initddir}
+    mkdir -p ${initddir}
+}
+
+relpath ()
+{
+    local OLDIFS IFS
+    local -a orgwords
+    local -a locwords
+    local -i relp=0
+    local -i deep=0
+    local p l
+    local path=""
+
+    OLDIFS="$IFS"; IFS=/
+    eval orgwords=(${1// /\\\\ }) ; shift
+    eval locwords=(${1// /\\\\ }) ; shift
+    IFS="$OLDIFS"
+    unset OLDIFS
+
+    deep=0
+    relp=0
+    for l in "${locwords[@]}" ; do
+        if test "$l" = ".." ; then
+	    ((deep++))
+	    continue
+	elif test $deep -gt 0 ; then
+	    while ((deep-- > 0)) ; do
+		unset locwords[$((relp+deep))]
+		(((relp-1)-deep < 0)) || unset locwords[$(((relp-1)-deep))]
+	    done
+	    continue
+        fi
+	((relp++))
+    done
+    locwords=(${locwords[@]})
+
+    deep=0
+    relp=0
+    for p in "${orgwords[@]}" ; do
+	if test "$p" = ".." ; then
+	    ((deep++))
+	    continue
+	elif test $deep -gt 0 ; then
+	    while ((deep-- > 0)) ; do
+		unset orgwords[$((relp+deep))]
+		(((relp-1)-deep < 0)) || unset orgwords[$(((relp-1)-deep))]
+	    done
+	    continue
+	fi
+	((relp++))
+    done
+    orgwords=(${orgwords[@]})
+
+    deep=0
+    relp=0
+    for p in "${orgwords[@]}" ; do
+	eval l="\${locwords[$((deep++))]}"
+	if test "$l" != "$p" -o $relp -ne 0 ; then
+	    ((relp++))
+	    path="${path}/$p"
+	    test -n "$l" || continue
+		if test $relp -eq 1 ; then
+		    path="..${path}"
+		else
+		    path="../${path}"
+		fi
+	 fi
+    done
+    unset orgwords p l
+
+    if test $deep -lt ${#locwords[@]} ; then
+	relp=0
+	while test $relp -lt $deep; do
+	    unset locwords[$((relp++))]
+	done
+	while test ${#locwords[@]} -gt 0  ; do
+	    path="../${path}"
+	    unset locwords[$((relp++))]
+	done
+    fi
+
+    echo "$path"
+}
+
+counttest ()
+{
+    testcount=$(expr $testcount + 1)
+}
+
+error ()
+{
+    echo error: $@
+    checkfailed=$(expr $checkfailed + 1)
+    retval=1
+}
+
+warning ()
+{
+    echo warning: $@
+    testfailed=$(expr $testfailed + 1)
+}
+
+addscript ()
+{
+    local scriptname=$1
+    local script=${initddir}/$scriptname
+    cat > $script
+    chmod u+w,a+rx $script
+}
+
+remscript ()
+{
+    local scriptname=$1
+    local script=${initddir}/$scriptname
+    rm -f $script
+}
+
+insertscript ()
+{
+    local scriptname=$1
+    addscript   $scriptname
+    insserv_reg $scriptname
+}
+
+present_ok ()
+{
+    local rcdpath=$(runlevel_path $1); shift
+    local script=$1;   shift
+    local ret=1
+    for f in ${rcdpath}/[KS][0-9][0-9]$script ; do
+	if [ -L $f ] ; then
+	    ret=0
+	fi
+    done
+    counttest
+    return $ret
+}
+
+check_script_present ()
+{
+    local runlevel=$1; shift
+    local script=$1;   shift
+    present_ok $runlevel $script && return 0
+    error "script $script not present in runlevel $runlevel"
+}
+
+test_script_present ()
+{
+    local runlevel=$1; shift
+    local script=$1;   shift
+    present_ok $runlevel $script && return 0
+    warning "script $script not present in runlevel $runlevel"
+}
+
+check_script_not_present ()
+{
+    local runlevel=$1; shift
+    local script=$1;   shift
+    if present_ok $runlevel $script ; then
+	error "script $script present in runlevel $runlevel"
+    fi
+    return 0
+}
+
+test_script_not_present ()
+{
+    local runlevel=$1; shift
+    local script=$1;   shift
+    if present_ok $runlevel $script ; then
+	warning "script $script present in runlevel $runlevel"
+    fi
+    return 0
+}
+
+order_ok ()
+{
+    local rcdpath=$(runlevel_path $1); shift
+    local script1=$1;  shift
+    local script2=$1;  shift
+    local ret=0 scr order=""
+    pushd $rcdpath &> /dev/null
+    if test -n "${issuse}" ; then
+	for scr in S[0-9][0-9]* ; do
+	    test -e "${scr}" || continue
+	    test -L "${scr}" || continue
+	    case "${scr#S[0-9][0-9]}" in
+	    ${script1}) order="${order:+$order }${script1}" ;;
+	    ${script2}) order="${order:+$order }${script2}" ;;
+	    esac
+	done
+    else
+	for scr in [SK][0-9][0-9]* ; do
+	    test -e "${scr}" || continue
+	    test -L "${scr}" || continue
+	    case "${scr#[SK][0-9][0-9]}" in
+	    ${script1}) order="${order:+$order }${script1}" ;;
+	    ${script2}) order="${order:+$order }${script2}" ;;
+	    esac
+	done
+    fi
+    popd &> /dev/null
+    test "$order" = "$script1 $script2" || ret=1
+    counttest
+    return $ret
+}
+
+# Fatal check
+check_order ()
+{
+    local runlevel=$1
+    local script1=$2
+    local script2=$3
+    order_ok ${1+"$@"} || error   "incorrect $runlevel sequence $script1 not before $script2" || true
+}
+
+# Non-fatal check
+test_order ()
+{
+    local runlevel=$1
+    local script1=$2
+    local script2=$3
+    order_ok ${1+"$@"} || warning "incorrect $runlevel sequence $script1 not before $script2" || true
+}
+
