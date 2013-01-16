@@ -38,6 +38,14 @@ $(TUMBLER): $(SPREZZ)/tumbler/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf tumbler-$(tumbler_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: xfce4-dev-tools
+xfce4-dev-tools:$(XFCE4DEVTOOLS)_$(ARCH).deb
+$(XFCE4DEVTOOLS): $(SPREZZ)/xfce4-dev-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfce4-dev-tools-$(xfce4-dev-tools_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: xfce4-session
 xfce4-session:$(XFCE4SESSION)_$(ARCH).deb
 $(XFCE4SESSION): $(SPREZZ)/xfce4-session/debian/changelog
