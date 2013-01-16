@@ -2878,6 +2878,14 @@ $(HWLOC): $(SPREZZ)/hwloc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf hwloc-$(hwloc_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: icedove
+icedove:$(ICEDOVE)_$(ARCH).deb
+$(ICEDOVE): $(SPREZZ)/icedove/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf icedove-$(icedove_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: icu
 icu:$(ICU)_$(ARCH).deb
 $(ICU): $(SPREZZ)/icu/debian/changelog
