@@ -1,0 +1,82 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+STAMPS_DIR = debian/stamps
+
+export COROSYNC_BUILD=$(if $(findstring debug,$(DEB_BUILD_OPTIONS)),DEBUG,RELEASE)
+
+# needed for rdmacm and ibverbs
+export rdmacm_LIBS=-lrdmacm
+export rdmacm_CFLAGS="-I/usr/include/rdma"
+export ibverbs_LIBS=-libverbs
+export ibverbs_CFLAGS="-I/usr/include/infiniband"
+
+configure-stamp:
+	dh_testdir
+	./configure --prefix=/usr \
+		    --libexecdir=/usr/lib/ \
+		    --localstatedir=/var \
+		    --sysconfdir=/etc \
+		    --with-socket-dir=/var/run/corosync \
+		    --enable-dbus \
+                    --enable-testagents \
+                    --enable-rdma \
+                    --enable-monitoring \
+                    --enable-watchdog \
+                    --enable-augeas 
+		    --enable-snmp \ 
+		    --enable-xmlconf
+	touch configure-stamp
+
+build: configure-stamp build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+
+build-stamp:
+	$(MAKE)
+
+clean:
+	dh_testdir
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -rf config.log
+	dh_clean configure-stamp
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp/ STATICLIBS=YES
+	dh_install --sourcedir=debian/tmp --list-missing
+	dh_installchangelogs ChangeLog
+	dh_installdirs
+	dh_installdocs
+	dh_installexamples
+	dh_installinit -p corosync --name corosync -- defaults 19 1
+	dh_installinit -p corosync --name corosync-notifyd -- defaults 19 1
+	dh_installlogrotate
+	dh_strip --dbg-package=corosync-dbg
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	# strip --remove-section=.comment --remove-section=.note --strip-unneeded debian/corosync/usr/lib/lcrso/*
+endif
+	# install example configuration file
+	cp -ax $(CURDIR)/debian/corosync.example-config $(CURDIR)/debian/corosync/etc/corosync/corosync.conf
+	dh_compress
+	# chmod 644 debian/corosync/usr/lib/lcrso/*.lcrso
+	for a in $(CURDIR)/debian/corosync/usr/sbin/*; do chrpath -d $$a; done
+	dh_fixperms
+	dh_makeshlibs -V
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-arch: install
+
+binary-indep:
+
+binary: binary-arch binary-indep
+

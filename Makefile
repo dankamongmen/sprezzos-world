@@ -5062,7 +5062,7 @@ $(OPENAIS): $(SPREZZ)/openais/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf openais-$(openais_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf openais-$(openais_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: opencv
 opencv:$(OPENCV)_$(ARCH).deb
