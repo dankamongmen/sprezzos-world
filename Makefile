@@ -2262,6 +2262,14 @@ $(GLUI): $(SPREZZ)/glui/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf glui-$(glui_UPVER).tgz $(TARARGS) $@
 
+.PHONY: glyr
+glyr:$(GLYR)_$(ARCH).deb
+$(GLYR): $(SPREZZ)/glyr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf glyr-$(glyr_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: lmms
 lmms:$(LMMS)_$(ARCH).deb
 $(LMMS): $(SPREZZ)/lmms/debian/changelog
@@ -4878,7 +4886,7 @@ $(NVIDIAKERNELDKMS): $(SPREZZ)/nvidia-kernel-dkms/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	mv NVIDIA-Linux-*.run $@
-	tar czvf nvidia-kernel-dkms_313.09.orig.tar.gz $@ --exclude-vcs --exclude=debian
+	tar czvf $(NVIDIAKERNELDKMS).orig.tar.gz $@ --exclude-vcs --exclude=debian
 
 .PHONY: nvidia-settings
 nvidia-settings:$(NVIDIASETTINGS)_$(ARCH).deb
