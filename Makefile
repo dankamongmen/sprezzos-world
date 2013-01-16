@@ -5056,6 +5056,14 @@ $(OPAL): $(SPREZZ)/opal/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf opal-$(opal_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: corosync
+corosync:$(COROSYNC)_$(ARCH).deb
+$(COROSYNC): $(SPREZZ)/corosync/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf corosync-$(corosync_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: openais
 openais:$(OPENAIS)_$(ARCH).deb
 $(OPENAIS): $(SPREZZ)/openais/debian/changelog
