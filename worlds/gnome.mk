@@ -382,6 +382,14 @@ $(LIBGDATA): $(SPREZZ)/libgdata/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgdata-$(libgdata_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libgnomeuimm2.6
+libgnomeuimm2.6:$(LIBGNOMEUIMM2.6)_$(ARCH).deb
+$(LIBGNOMEUIMM2.6): $(SPREZZ)/libgnomeuimm2.6/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libgnomeuimm-$(libgnomeuimm2.6_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libgnome-media-profiles
 libgnome-media-profiles:$(LIBGNOMEMEDIAPROFILES)_$(ARCH).deb
 $(LIBGNOMEMEDIAPROFILES): $(SPREZZ)/libgnome-media-profiles/debian/changelog

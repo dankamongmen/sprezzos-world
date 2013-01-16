@@ -1224,6 +1224,14 @@ $(CDPARANOIA): $(SPREZZ)/cdparanoia/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cdparanoia_$(cdparanoia_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cdrdao
+cdrdao:$(CDRDAO)_$(ARCH).deb
+$(CDRDAO): $(SPREZZ)/cdrdao/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf cdrdao-$(cdrdao_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: cdrkit
 cdrkit:$(CDRKIT)_$(ARCH).deb
 $(CDRKIT): $(SPREZZ)/cdrkit/debian/changelog
@@ -4991,6 +4999,22 @@ $(OBEXFS): $(SPREZZ)/obexfs/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf obexfs-$(obexfs_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: obexftp
+obexftp:$(OBEXFTP)_$(ARCH).deb
+$(OBEXFTP): $(SPREZZ)/obexftp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf obexftp-$(obexftp_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: obexpushd
+obexpushd:$(OBEXPUSHD)_$(ARCH).deb
+$(OBEXPUSHD): $(SPREZZ)/obexpushd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf obexpushd-$(obexpushd_UPVER)-source.tar.gz $(TARARGS) $@
 
 .PHONY: octave
 octave:$(OCTAVE)_$(ARCH).deb
