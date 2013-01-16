@@ -4992,6 +4992,14 @@ $(ID3LIB): $(SPREZZ)/id3lib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf id3lib-$(id3lib_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libopenobex
+libopenobex:$(LIBOPENOBEX)_$(ARCH).deb
+$(LIBOPENOBEX): $(SPREZZ)/libopenobex/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openobex-$(libopenobex_UPVER)-Source.tar.gz $(TARARGS) $@
+
 .PHONY: obexfs
 obexfs:$(OBEXFS)_$(ARCH).deb
 $(OBEXFS): $(SPREZZ)/obexfs/debian/changelog
