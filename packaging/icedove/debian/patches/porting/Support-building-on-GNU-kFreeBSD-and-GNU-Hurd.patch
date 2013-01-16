@@ -1,0 +1,283 @@
+From: Mike Hommey <glandium@debian.org>
+Date: Tue, 11 Mar 2008 08:29:25 +0100
+Subject: Support building on GNU/kFreeBSD and GNU/Hurd
+
+https://bugzilla.mozilla.org/show_bug.cgi?id=356011
+
+Squashed kFreeBSD/Hurd related fixes:
+- Fix FTBFS on Hurd-i386
+- Don't build oss support on *bsd and hurd
+- Fix FTBFS of liboggplay on hurd
+- Build fixes for GNU/kFreeBSD in directory/
+- Missing bits for Hurd support
+
+---
+ configure.in                                       |    7 ++---
+ ldap/sdks/c-sdk/config/nsinstall.c                 |    2 +-
+ ldap/sdks/c-sdk/configure.in                       |   15 +++++++----
+ ldap/sdks/c-sdk/ldap/include/portable.h            |   28 +++++++++++---------
+ .../c-sdk/ldap/libraries/libldap/Makefile.client   |    4 +--
+ ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.in |    2 +-
+ ldap/sdks/c-sdk/ldap/libraries/libldap/compat.c    |    2 +-
+ .../c-sdk/ldap/libraries/libprldap/ldappr-error.c  |    2 +-
+ 8 files changed, 36 insertions(+), 26 deletions(-)
+
+diff --git a/configure.in b/configure.in
+index 98470a8..659cd82 100644
+--- a/configure.in
++++ b/configure.in
+@@ -987,6 +987,7 @@ if test -n "$CROSS_COMPILE"; then
+     case "${target_os}" in
+         linux*)       OS_ARCH=Linux OS_TARGET=Linux ;;
+         kfreebsd*-gnu) OS_ARCH=GNU_kFreeBSD OS_TARGET=GNU_kFreeBSD ;;
++        gnu*)         OS_ARCH=GNU ;;
+         solaris*)     OS_ARCH=SunOS OS_RELEASE=5 ;;
+         mingw*)       OS_ARCH=WINNT ;;
+         wince*)       OS_ARCH=WINCE ;;
+@@ -1617,7 +1618,7 @@ case "$host" in
+     HOST_OPTIMIZE_FLAGS="${HOST_OPTIMIZE_FLAGS=-O3}"
+     ;;
+ 
+-*-linux*|*-kfreebsd*-gnu)
++*-linux*|*-kfreebsd*-gnu|*-gnu*)
+     HOST_CFLAGS="$HOST_CFLAGS -DXP_UNIX"
+     HOST_NSPR_MDCPUCFG='\"md/_linux.cfg\"'
+     HOST_OPTIMIZE_FLAGS="${HOST_OPTIMIZE_FLAGS=-O3}"
+@@ -2572,7 +2573,7 @@ dnl ========================================================
+ dnl = Flags to strip unused symbols from .so components
+ dnl ========================================================
+ case "$target" in
+-    *-linux*|*-kfreebsd*-gnu)
++    *-linux*|*-kfreebsd*-gnu|*-gnu*)
+         MOZ_COMPONENTS_VERSION_SCRIPT_LDFLAGS='-Wl,--version-script -Wl,$(BUILD_TOOLS)/gnu-ld-scripts/components-version-script'
+         ;;
+     *-solaris*)
+@@ -3219,7 +3220,7 @@ then
+ 			fi
+ 			;;
+ 
+-	    *-*-linux*|*-*-kfreebsd*-gnu)
++	    *-*-linux*|*-*-kfreebsd*-gnu|*-*-gnu*)
+ 			AC_DEFINE(_REENTRANT) 
+ 			;;
+ 
+diff --git a/ldap/sdks/c-sdk/config/nsinstall.c b/ldap/sdks/c-sdk/config/nsinstall.c
+index dfdb837..9f9c84a 100644
+--- a/ldap/sdks/c-sdk/config/nsinstall.c
++++ b/ldap/sdks/c-sdk/config/nsinstall.c
+@@ -109,7 +109,7 @@ my_getcwd (char *buf, size_t size)
+ }
+ #endif /* NEXTSTEP */
+ 
+-#ifdef LINUX
++#if defined(LINUX) || defined(__GLIBC__) || defined(__GNU__)
+ #include <getopt.h>
+ #endif
+ 
+diff --git a/ldap/sdks/c-sdk/configure.in b/ldap/sdks/c-sdk/configure.in
+index 3b1d5cb..32aa83e 100644
+--- a/ldap/sdks/c-sdk/configure.in
++++ b/ldap/sdks/c-sdk/configure.in
+@@ -794,6 +794,7 @@ if test -n "$CROSS_COMPILE"; then
+     OS_TEST="${target_cpu}"
+     case "${target_os}" in
+         linux*)       OS_ARCH=Linux ;;
++        kfreebsd*-gnu) OS_ARCH=GNU_kFreeBSD ;;
+         solaris*)     OS_ARCH=SunOS OS_RELEASE=5 ;;
+         mingw*)     OS_ARCH=WINNT ;;
+         darwin*)    OS_ARCH=Darwin ;;
+@@ -1519,7 +1520,7 @@ tools are selected during the Xcode/Developer Tools installation.])
+ 	esac
+     ;;
+ 
+-*-linux*)
++*-linux*|*-kfreebsd*-gnu|*-gnu*)
+     if test -z "$USE_NSPR_THREADS"; then
+         USE_PTHREADS=1
+     fi
+@@ -1529,8 +1530,12 @@ tools are selected during the Xcode/Developer Tools installation.])
+     AC_DEFINE(_SVID_SOURCE)
+     AC_DEFINE(_LARGEFILE64_SOURCE)
+     AC_DEFINE(HAVE_FCNTL_FILE_LOCKING)
+-    AC_DEFINE(LINUX)
+-    AC_DEFINE(linux)
++    case "${target_os}" in
++     linux*)
++        AC_DEFINE(LINUX)
++        AC_DEFINE(linux)
++        ;;
++    esac
+     LD='$(CC)'
+     CFLAGS="$CFLAGS -ansi -Wall"
+     CXXFLAGS="$CXXFLAGS -ansi -Wall"
+@@ -2405,7 +2410,7 @@ if test -n "$USE_PTHREADS"; then
+ 	        _PTHREAD_LDFLAGS=
+ 	    fi
+ 	    ;;
+-    *-linux*)
++    *-linux*|*-kfreebsd*-gnu)
+         AC_DEFINE(_REENTRANT)
+         ;;
+     esac
+@@ -2481,7 +2486,7 @@ case "$target" in
+         fi
+     fi
+     ;;
+-*-linux*)
++*-linux*|*-kfreebsd*-gnu)
+     if test -n "$USE_NSPR_THREADS"; then
+         AC_DEFINE(_PR_LOCAL_THREADS_ONLY)
+     fi
+diff --git a/ldap/sdks/c-sdk/ldap/include/portable.h b/ldap/sdks/c-sdk/ldap/include/portable.h
+index 89c1693..2e08971 100644
+--- a/ldap/sdks/c-sdk/ldap/include/portable.h
++++ b/ldap/sdks/c-sdk/ldap/include/portable.h
+@@ -122,7 +122,7 @@
+  * some systems don't have the BSD re_comp and re_exec routines
+  */
+ #ifndef NEED_BSDREGEX
+-#if ( defined( SYSV ) || defined( NETBSD ) || defined( FREEBSD ) || defined(__OpenBSD__) || defined( linux ) || defined( DARWIN )) && !defined(sgi)
++#if ( defined( SYSV ) || defined( NETBSD ) || defined( FREEBSD ) || defined(__OpenBSD__) || defined( linux ) || defined(__GNU__) || defined(__GLIBC__) || defined( DARWIN )) && !defined(sgi)
+ #define NEED_BSDREGEX
+ #endif
+ #endif
+@@ -151,7 +151,7 @@
+  * Is snprintf() part of the standard C runtime library?
+  */
+ #if !defined(HAVE_SNPRINTF)
+-#if defined(SOLARIS) || defined(LINUX) || defined(HPUX) || defined(AIX)
++#if defined(SOLARIS) || defined(LINUX) || defined(__GNU__) || defined(__GLIBC__) || defined(HPUX) || defined(AIX)
+ #define HAVE_SNPRINTF
+ #endif
+ #if defined(_WINDOWS)
+@@ -175,7 +175,7 @@
+  * for select()
+  */
+ #if !defined(WINSOCK) && !defined(_WINDOWS) && !defined(macintosh) && !defined(XP_OS2)
+-#if defined(hpux) || defined(LINUX) || defined(SUNOS4) || defined(XP_BEOS)
++#if defined(hpux) || defined(LINUX) || defined(__GNU__) || defined(__GLIBC__) || defined(SUNOS4) || defined(XP_BEOS)
+ #include <sys/time.h>
+ #else
+ #include <sys/select.h>
+@@ -247,15 +247,14 @@
+ #define HAVE_TIME_R
+ #endif
+ 
+-#if defined(SNI) || defined(LINUX1_2)
++#if defined(SNI) || defined(LINUX1_2) || defined(__GNU__) || defined(__GLIBC__)
+ int strcasecmp(const char *, const char *);
+ #ifdef SNI
+ int strncasecmp(const char *, const char *, int);
+-#endif /* SNI */
+-#ifdef LINUX1_2
++#else /* SNI */
+ int strncasecmp(const char *, const char *, size_t);
+-#endif /* LINUX1_2 */
+-#endif /* SNI || LINUX1_2 */
++#endif
++#endif /* SNI || LINUX1_2 || __GNU__ || __GLIBC__ */
+ 
+ #if defined(_WINDOWS) || defined(macintosh) || defined(XP_OS2) || defined(DARWIN)
+ #define GETHOSTBYNAME( n, r, b, l, e )  gethostbyname( n )
+@@ -273,7 +272,12 @@ int strncasecmp(const char *, const char *, size_t);
+ #define NSLDAPI_NETDB_BUF_SIZE	1024
+ #endif
+ 
+-#if defined(sgi) || defined(HPUX9) || defined(SCOOS) || \
++#if defined(__GLIBC__) && __GLIBC__ >= 2
++typedef char GETHOSTBYNAME_buf_t [NSLDAPI_NETDB_BUF_SIZE];
++#define GETHOSTBYNAME_BUF_T GETHOSTBYNAME_buf_t
++#define GETHOSTBYNAME( n, r, b, l, rp, e )  gethostbyname_r( n, r, b, l, rp, e )
++#define GETHOSTBYNAME_R_RETURNS_INT
++#elif defined(sgi) || defined(HPUX9) || defined(SCOOS) || \
+     defined(UNIXWARE) || defined(SUNOS4) || defined(SNI) || defined(BSDI) || \
+     defined(NCR) || defined(OSF1) || defined(NEC) || defined(VMS) || \
+     ( defined(HPUX10) && !defined(_REENTRANT)) || defined(HPUX11) || \
+@@ -295,7 +299,7 @@ typedef char GETHOSTBYNAME_buf_t [NSLDAPI_NETDB_BUF_SIZE];
+ #elif defined(HPUX10)
+ #define GETHOSTBYNAME_BUF_T struct hostent_data
+ #define GETHOSTBYNAME( n, r, b, l, e )	nsldapi_compat_gethostbyname_r( n, r, (char *)&b, l, e )
+-#elif defined(LINUX) || defined(DRAGONFLY)
++#elif defined(LINUX) || defined(__GNU__) || defined(__GLIBC__) || defined(DRAGONFLY)
+ typedef char GETHOSTBYNAME_buf_t [NSLDAPI_NETDB_BUF_SIZE];
+ #define GETHOSTBYNAME_BUF_T GETHOSTBYNAME_buf_t
+ #define GETHOSTBYNAME( n, r, b, l, rp, e )  gethostbyname_r( n, r, b, l, rp, e )
+@@ -317,7 +321,7 @@ typedef char GETHOSTBYNAME_buf_t [NSLDAPI_NETDB_BUF_SIZE];
+ 	|| defined(OSF1V4) || defined(AIX) || defined(UnixWare) \
+         || defined(hpux) || defined(HPUX11) || defined(NETBSD) \
+         || defined(IRIX6) || defined(FREEBSD) || defined(VMS) \
+-        || defined(NTO) || defined(OPENBSD) || defined(DRAGONFLY)
++        || defined(NTO) || defined(OPENBSD) || defined(__GLIBC__) || defined(DRAGONFLY)
+ #define NSLDAPI_CTIME( c, b, l )        ctime_r( c, b )
+ #elif defined( OSF1V3 )
+ #define NSLDAPI_CTIME( c, b, l )	(ctime_r( c, b, l ) ? NULL : b)
+@@ -458,7 +462,7 @@ int select(int, fd_set *, fd_set *, fd_set *, struct timeval *);
+ #define NSLDAPI_FOPEN( filename, mode )	fopen( filename, mode )
+ #endif
+ 
+-#if defined(LINUX) || defined(AIX) || defined(HPUX) || defined(_WINDOWS)
++#if defined(LINUX) || defined(__GNU__) || defined(__GLIBC__) || defined(AIX) || defined(HPUX) || defined(_WINDOWS)
+ size_t nsldapi_compat_strlcpy(char *dst, const char *src, size_t len);
+ #define STRLCPY nsldapi_compat_strlcpy
+ #else
+diff --git a/ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.client b/ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.client
+index 9b1af44..073f6fa 100644
+--- a/ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.client
++++ b/ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.client
+@@ -177,7 +177,7 @@ EXTRA_LIBS = -L$(NSCP_DISTDIR)/$(OBJDIR_NAME)/lib -l$(LBER_LIBNAME)
+ EXTRA_LIBS += -L$(NSCP_DISTDIR)/lib
+ endif
+ 
+-ifeq ($(OS_ARCH), Linux)
++ifneq (,$(filter Linux GNU GNU_%, $(OS_ARCH)))
+ EXTRA_LIBS = -L$(NSCP_DISTDIR)/$(OBJDIR_NAME)/lib -l$(LBER_LIBNAME)
+ EXTRA_LIBS += -L$(NSCP_DISTDIR)/lib
+ endif
+@@ -253,7 +253,7 @@ endif
+ ifeq ($(OS_ARCH), AIX)
+ 	$(LINK_LIB) ../liblber/$(OBJDIR_NAME)/*.a
+ else
+-ifeq ($(OS_ARCH), Linux)
++ifneq (,$(filter Linux GNU GNU_%, $(OS_ARCH)))
+ 	$(LINK_LIB) ../liblber/$(OBJDIR_NAME)/*.a
+ else
+ 	$(LINK_LIB) $(EXTRA_LIBS)
+diff --git a/ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.in b/ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.in
+index eb68d99..c999b96 100644
+--- a/ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.in
++++ b/ldap/sdks/c-sdk/ldap/libraries/libldap/Makefile.in
+@@ -202,7 +202,7 @@ ifeq ($(OS_ARCH), IRIX)
+ EXTRA_LIBS = -L$(dist_libdir) -l$(LBER_LIBNAME) $(OS_LIBS) -lc
+ endif
+ 
+-ifeq ($(OS_ARCH), Linux)
++ifneq (,$(filter Linux GNU GNU_%, $(OS_ARCH)))
+ EXTRA_LIBS = -L$(dist_libdir) -l$(LBER_LIBNAME)
+ endif
+ 
+diff --git a/ldap/sdks/c-sdk/ldap/libraries/libldap/compat.c b/ldap/sdks/c-sdk/ldap/libraries/libldap/compat.c
+index 94e58ca7..8cc1a71 100644
+--- a/ldap/sdks/c-sdk/ldap/libraries/libldap/compat.c
++++ b/ldap/sdks/c-sdk/ldap/libraries/libldap/compat.c
+@@ -83,7 +83,7 @@ nsldapi_compat_ctime_r( const time_t *clock, char *buf, int buflen )
+ }
+ #endif /* HPUX10 && _REENTRANT && !HPUX11 */
+ 
+-#if defined(LINUX) || defined(AIX) || defined(HPUX) || defined(_WINDOWS)
++#if defined(LINUX) || defined(__GNU__) || defined(__GLIBC__) || defined(AIX) || defined(HPUX) || defined(_WINDOWS)
+ /* 
+  * Copies src to the dstsize buffer at dst. The copy will never 
+  * overflow the destination buffer and the buffer will always be null 
+diff --git a/ldap/sdks/c-sdk/ldap/libraries/libprldap/ldappr-error.c b/ldap/sdks/c-sdk/ldap/libraries/libprldap/ldappr-error.c
+index b0cb6ed..16e9d59 100644
+--- a/ldap/sdks/c-sdk/ldap/libraries/libprldap/ldappr-error.c
++++ b/ldap/sdks/c-sdk/ldap/libraries/libprldap/ldappr-error.c
+@@ -231,7 +231,7 @@ struct prldap_errormap_entry {
+ 
+ #if defined(__hpux) || defined(_AIX) || defined(OSF1) || defined(DARWIN) || \
+   defined(BEOS) || defined(FREEBSD) || defined(BSDI) || defined(VMS) || \
+-  defined(OPENBSD) || defined(NETBSD)
++  defined(OPENBSD) || defined(NETBSD) || defined(__FreeBSD_kernel__)
+ #define EDEADLOCK       -1
+ #endif
+ 
