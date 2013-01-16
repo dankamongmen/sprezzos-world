@@ -3156,7 +3156,7 @@ $(LIGHTSPEED): $(SPREZZ)/lightspeed/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf lightspeed-$(lightspeed_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf lightspeed-$(lightspeed_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: lynx
 lynx:$(LYNX)_$(ARCH).deb
@@ -5319,6 +5319,14 @@ $(PIDGINOTR): $(SPREZZ)/pidgin-otr/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pidgin-otr-$(pidgin-otr_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libotr
+libotr:$(LIBOTR)_$(ARCH).deb
+$(LIBOTR): $(SPREZZ)/libotr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libotr-$(libotr_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: pinentry
 pinentry:$(PINENTRY)_$(ARCH).deb
