@@ -5056,6 +5056,14 @@ $(OPAL): $(SPREZZ)/opal/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf opal-$(opal_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: openais
+openais:$(OPENAIS)_$(ARCH).deb
+$(OPENAIS): $(SPREZZ)/openais/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf openais-$(openais_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: opencv
 opencv:$(OPENCV)_$(ARCH).deb
 $(OPENCV): $(SPREZZ)/opencv/debian/changelog
