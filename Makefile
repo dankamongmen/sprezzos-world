@@ -5680,6 +5680,14 @@ $(LIBRAW): $(SPREZZ)/libraw/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf LibRaw-$(libraw_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: librdmacm
+librdmacm:$(LIBRDMACM)_$(ARCH).deb
+$(LIBRDMACM): $(SPREZZ)/librdmacm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf librdmacm-$(librdmacm_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: librsvg
 librsvg:$(LIBRSVG)_$(ARCH).deb
 $(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog
