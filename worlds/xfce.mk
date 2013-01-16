@@ -78,6 +78,14 @@ $(XFCE4UTILS): $(SPREZZ)/xfce4-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfce-utils-$(xfce4-utils_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: xfce4-volumed
+xfce4-volumed:$(XFCE4VOLUMED)_$(ARCH).deb
+$(XFCE4VOLUMED): $(SPREZZ)/xfce4-volumed/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfce4-volumed-$(xfce4-volumed_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: xfconf
 xfconf:$(XFCONF)_$(ARCH).deb
 $(XFCONF): $(SPREZZ)/xfconf/debian/changelog
