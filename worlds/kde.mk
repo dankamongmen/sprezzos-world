@@ -366,6 +366,14 @@ $(SOPRANO): $(SPREZZ)/soprano/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf soprano-$(soprano_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: strigi
+strigi:$(STRIGI)_$(ARCH).deb
+$(STRIGI): $(SPREZZ)/strigi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf strigi-$(strigi_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: yakuake
 yakuake:$(YAKUAKE)_$(ARCH).deb
 $(YAKUAKE): $(SPREZZ)/yakuake/debian/changelog

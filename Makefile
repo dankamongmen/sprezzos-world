@@ -6102,7 +6102,7 @@ $(TOTEMPLPARSER): $(SPREZZ)/totem-pl-parser/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf totem-pl-parser-$(totem-pl-parser_UPVER).tar.bz2 $(TARARGS) $@
+	tar xJvf totem-pl-parser-$(totem-pl-parser_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: tokyocabinet
 tokyocabinet:$(TOKYOCABINET)_$(ARCH).deb
