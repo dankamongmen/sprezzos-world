@@ -2575,8 +2575,8 @@ $(GNUTLS26): $(SPREZZ)/gnutls26/debian/changelog
 	tar xjvf gnutls26-$(gnutls26_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: gobject-introspection
-gobject-introspection:$(GOBJECTINTROSPECTION)_$(ARCH).deb
-$(GOBJECTINTROSPECTION): $(SPREZZ)/gobject-introspection/debian/changelog
+gobject-introspection:$(gobjectintrospection)_$(ARCH).deb
+$(gobjectintrospection): $(SPREZZ)/gobject-introspection/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
