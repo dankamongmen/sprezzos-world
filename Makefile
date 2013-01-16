@@ -1168,6 +1168,14 @@ $(BZIP2): $(SPREZZ)/bzip2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bzip2-$(bzip2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: c-icap
+c-icap:$(CICAP)_$(ARCH).deb
+$(CICAP): $(SPREZZ)/c-icap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf c_icap-$(c-icap_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: cairo
 cairo:$(CAIRO)_$(ARCH).deb
 $(CAIRO): $(SPREZZ)/cairo/debian/changelog
