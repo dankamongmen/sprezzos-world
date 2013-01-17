@@ -5881,6 +5881,14 @@ $(SBC): $(SPREZZ)/sbc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf sbc-$(sbc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: snes9x
+snes9x:$(SNES9X)_$(ARCH).deb
+$(SNES9X): $(SPREZZ)/snes9x/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf snes9x-$(snes9x_UPVER)-src.tar.bz2 $(TARARGS) $@
+
 .PHONY: sqlite3
 sqlite3:$(SQLITE3)_$(ARCH).deb
 $(SQLITE3): $(SPREZZ)/sqlite3/debian/changelog
