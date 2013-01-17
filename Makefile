@@ -1721,6 +1721,22 @@ $(DOCBOOKXML): $(SPREZZ)/docbook-xml/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf docbook-xml-$(docbook-xml_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: dosbox
+dosbox:$(DOSBOX)_$(ARCH).deb
+$(DOSBOX): $(SPREZZ)/dosbox/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf dosbox-$(dosbox_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: dosfstools
+dosfstools:$(DOSFSTOOLS)_$(ARCH).deb
+$(DOSFSTOOLS): $(SPREZZ)/dosfstools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf dosfstools-$(dosfstools_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: dri2proto
 dri2proto:$(DRI2PROTO)_$(ARCH).deb
 $(DRI2PROTO): $(SPREZZ)/dri2proto/debian/changelog
@@ -2037,7 +2053,7 @@ $(UNISON): $(SPREZZ)/unison/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf unison_$(unison_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf unison-$(unison_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: fuseiso
 fuseiso:$(FUSEISO)_$(ARCH).deb
