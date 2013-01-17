@@ -6385,6 +6385,14 @@ $(WGET): $(SPREZZ)/wget/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf wget_$(wget_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: wicd
+wicd:$(WICD)_$(ARCH).deb
+$(WICD): $(SPREZZ)/wicd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf wicd-$(wicd_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: wifite
 wifite:$(WIFITE)_$(ARCH).deb
 $(WIFITE): $(SPREZZ)/wifite/debian/changelog
