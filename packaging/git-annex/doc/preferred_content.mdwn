@@ -1,0 +1,128 @@
+git-annex tries to ensure that the configured number of [[copies]] of your
+data always exist, and leaves it up to you to use commands like `git annex
+get` and `git annex drop` to move the content to the repositories you want
+to contain it. But sometimes, it can be good to have more fine-grained
+control over which repositories prefer to have which content. Configuring
+this allows `git annex get --auto`, `git annex drop --auto`, etc to do
+smarter things.
+
+Currently, preferred content settings can only be edited using `git
+annex vicfg`. Each repository can have its own settings, and other
+repositories may also try to honor those settings. So there's no local
+`.git/config` setting it.
+
+The idea is that you write an expression that files are matched against.
+If a file matches, it's preferred to have its content stored in the
+repository. If it doesn't, it's preferred to drop its content from
+the repository (if there are enough copies elsewhere).
+
+The expressions are very similar to the file matching options documented
+on the [[git-annex]] man page. At the command line, you can use those
+options in commands like this:
+
+	git annex get --include='*.mp3' --and -'(' --not --largerthan=100mb -')'
+
+The equivilant preferred content expression looks like this:
+
+	include=*.mp3 and (not largerthan=100mb)
+
+So, just remove the dashes, basically. However, there are some differences
+from the command line options to keep in mind:
+
+### difference: file matching
+
+While --include and --exclude match files relative to the current
+directory, preferred content expressions always match files relative to the
+top of the git repository. Perhaps you put files into `archive` directories
+when you're done with them. Then you could configure your laptop to prefer
+to not retain those files, like this:
+
+	exclude=*/archive/*
+
+### difference: no "in="
+
+Preferred content expressions have no direct equivilant to `--in`.
+
+Often, it's best to add repositories to groups, and match against
+the groups in a preferred content expression. So rather than
+`--in=usbdrive`, put all the USB drives into a "transfer" group,
+and use "copies=transfer:1"
+
+### difference: dropping
+
+To decide if content should be dropped, git-annex evaluates the preferred
+content expression under the assumption that the content has *already* been
+dropped. If the content would not be preferred then, the drop can be done.
+So, for example, `copies=2` in a preferred content expression lets
+content be dropped only when there are currently 3 copies of it, including
+the repo it's being dropped from. This is different than running `git annex
+drop --copies=2`, which will drop files that current have 2 copies.
+
+## difference: "present"
+
+There's a special "present" keyword you can use in a preferred content
+expression. This means that content is preferred if it's present,
+and not otherwise. This leaves it up to you to use git-annex manually
+to move content around. You can use this to avoid preferred content
+settings from affecting a subdirectory. For example:
+
+	auto/* or (include=ad-hoc/* and present)
+
+Note that `not present` is a very bad thing to put in a preferred content 
+expression. It'll make it prefer to get content that's not present, and
+drop content that is present! Don't go there..
+
+## standard expressions
+
+git-annex comes with some standard preferred content expressions, that can
+be used with repositories that are in some pre-defined groups. To make a
+repository use one of these, just set its preferred content expression
+to "standard", and put it in one of these groups:
+
+### client
+
+All content is preferred, unless it's in a "archive" directory.
+
+`exclude=*/archive/* and exclude=archive/*`
+
+### transfer
+
+Use for repositories that are used to transfer data between other
+repositories, but do not need to retain data themselves. For
+example, a repository on a server, or in the cloud, or a small
+USB drive used in a sneakernet.
+
+The preferred content expression for these causes them to get and retain
+data until all clients have a copy.
+
+`not (inallgroup=client and copies=client:2) and exclude=*/archive/* and exclude=archive/*`
+
+The "copies=client:2" part of the above handles the case where
+there is only one client repository. It makes a transfer repository
+speculatively  prefer content in this case, even though it as of yet
+has nowhere to transfer it to. Presumably, another client repository
+will be added later.
+
+### backup
+
+All content is preferred.
+
+`include=*`
+
+### small archive
+
+Only prefers content that's located in an "archive" directory, and
+only if it's not already been archived somewhere else.
+
+`(include=*/archive/* or include=archive/*) and not (copies=archive:1 or copies=smallarchive:1)`
+
+### full archive
+
+All content is preferred, unless it's already been archived somewhere else.
+
+`not (copies=archive:1 or copies=smallarchive:1)`
+
+Note that if you want to archive multiple copies (not a bad idea!),
+you should instead configure all your archive repositories with a
+version of the above preferred content expression with a larger
+number of copies.

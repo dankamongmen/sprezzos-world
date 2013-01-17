@@ -1,0 +1,85 @@
+#!/usr/bin/make -f
+export DH_VERBOSE=1
+
+MAKEFILE = $(firstword $(MAKEFILE_LIST))
+DEBIAN_DIR = $(dir $(MAKEFILE))
+SOURCE_DIR = $(DEBIAN_DIR)/..
+
+DEB_VERSION = $(shell dpkg-parsechangelog | grep ^Vers | cut -d\  -f2)
+DEB_SOURCE_NAME = $(shell dpkg-parsechangelog -l$(DEBIAN_DIR)/changelog | grep ^Source | cut -d" " -f2)
+VERSION = $(shell echo $(DEB_VERSION) | sed 's,-.*,,' | sed 's,+dfsg.*,,')
+DEB_CLI_ABI_VERSION = 2.6
+DEB_CLI_API_VERSION = 2.6.0
+DEB_C_API_VERSION = 2.6.0
+
+# only invoke dh --with=cli if cli-common-dev is present
+WITH_CLI = --with=cli
+CONFIGURE_FLAGS = CSC=/usr/bin/mono-csc
+ifeq (,$(wildcard /usr/share/perl5/Debian/Debhelper/Sequence/cli.pm))
+WITH_CLI = 
+CONFIGURE_FLAGS = --enable-mono=no
+endif
+
+autoreconf: autoreconf-stamp
+autoreconf-stamp:
+	autoreconf -f -i -s
+	touch $@
+
+override_dh_auto_configure: autoreconf-stamp
+	dh_auto_configure $(WITH_CLI) -- \
+		$(shell dpkg-buildflags --export=configure) \
+		--enable-gtk-doc \
+		--disable-rpath \
+		--enable-largefile \
+		--enable-smime \
+		$(CONFIGURE_FLAGS)
+
+override_dh_auto_build: 
+	dh_auto_build $(WITH_CLI) 
+
+	if [ -f $(CURDIR)/mono/gmime-sharp.dll ]; then \
+	  # create API docs \
+	  mdoc update \
+	    -o $(CURDIR)/mono/monodocer \
+	    $(CURDIR)/mono/gmime-sharp.dll; \
+	  mdoc assemble \
+	    -o $(CURDIR)/mono/gmime-sharp-2.6 \
+	    $(CURDIR)/mono/monodocer; \
+	fi
+
+override_dh_makeclilibs:
+	dh_makeclilibs $(WITH_CLI) -m $(DEB_CLI_API_VERSION)
+
+override_dh_makeshlibs:
+	dh_makeshlibs $(WITH_CLI) -p libgmime-2.6-0 \
+		-V 'libgmime-2.6-0 (>= $(DEB_C_API_VERSION))' -- -c4
+
+override_dh_clean:
+	dh_clean $(WITH_CLI)
+
+	# clean up our API docs
+	rm -rf	$(CURDIR)/mono/monodocer \
+		$(CURDIR)/mono/gmime-sharp-2.6.tree \
+		$(CURDIR)/mono/gmime-sharp-2.6.zip
+
+override_dh_auto_install:
+	dh_auto_install
+	install -D examples/.libs/uuencode debian/tmp/usr/bin/gmime-uuencode
+	install -D examples/.libs/uudecode debian/tmp/usr/bin/gmime-uudecode
+
+override_dh_strip:
+	dh_strip --dbg-package=libgmime-2.6-0-dbg
+
+get-orig-source:
+	uscan \
+		--package $(DEB_SOURCE_NAME) \
+		--watchfile $(DEBIAN_DIR)/watch \
+		--upstream-version $(VERSION) \
+		--download-version $(VERSION) \
+		--force-download \
+		--rename
+
+%:
+	dh $(WITH_CLI) $@
+
+.PHONY: autoreconf configure get-orig-source

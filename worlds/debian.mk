@@ -34,6 +34,15 @@ $(DPKG): $(SPREZZ)/dpkg/debian/changelog
 	tar cJvf dpkg_$(dpkg_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: git-annex
+git-annex:$(GITANNEX)_$(ARCH).deb
+$(GITANNEX): $(SPREZZ)/git-annex/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf git-annex_$(git-annex_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: libept
 libept:$(LIBEPT)_$(ARCH).deb
 $(LIBEPT): $(SPREZZ)/libept/debian/changelog

@@ -1,0 +1,51 @@
+#!/usr/bin/make -f
+
+LDFLAGS += -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+
+MAKEFILE = $(firstword $(MAKEFILE_LIST))
+DEBIAN_DIR = $(dir $(MAKEFILE))
+DEB_SOURCE_NAME = $(shell dpkg-parsechangelog -l$(DEBIAN_DIR)/changelog | grep ^Source | cut -d" " -f2)
+DEB_VERSION = $(shell dpkg-parsechangelog -l$(DEBIAN_DIR)/changelog | grep ^Version | cut -d" " -f2)   
+VERSION = $(shell echo $(DEB_VERSION) | cut -d"-" -f1 | sed 's/+dfsg.*//')
+
+override_dh_autoreconf:
+	NOCONFIGURE=1 dh_autoreconf /usr/bin/gnome-autogen.sh
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--disable-scrollkeeper \
+		--disable-update-mimedb \
+		--disable-panel-applet \
+		--disable-schemas-install \
+		--disable-tests \
+		LDFLAGS="$(LDFLAGS)" \
+		GMCS=/usr/bin/mono-csc
+
+override_dh_auto_install:
+	dh_auto_install -- GCONF_DISABLE_MAKEFILE_SCHEMA_INSTALL=1
+	convert $(CURDIR)/data/icons/hicolor_apps_16x16_tomboy.png $(CURDIR)/debian/tomboy/usr/share/pixmaps/tomboy-16.xpm
+	convert $(CURDIR)/data/icons/hicolor_apps_32x32_tomboy.png $(CURDIR)/debian/tomboy/usr/share/pixmaps/tomboy-32.xpm
+	rm -rf debian/tomboy/usr/lib/tomboy/*.la
+	# crush it good
+	find $(CURDIR)/debian/tomboy/usr/share/gnome/help/tomboy -type f -name "*.png" -exec sh -c 'pngquant 256 < {} > {}.crushed; mv {}.crushed {}' \;
+
+# disable tests
+override_dh_auto_test:
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
+
+get-orig-source:
+	uscan \
+		--package $(DEB_SOURCE_NAME) \
+		--watchfile $(DEBIAN_DIR)/watch \
+		--upstream-version $(VERSION) \
+		--download-version $(VERSION) \
+		--destdir . \
+		--force-download \
+		--rename
+
+%:
+	dh $@ --with autoreconf,cli
+
+.PHONY: get-orig-source

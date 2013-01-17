@@ -1176,6 +1176,14 @@ $(CICAP): $(SPREZZ)/c-icap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf c_icap-$(c-icap_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: airport-utils
+airport-utils:$(AIRPORTUTILS)_$(ARCH).deb
+$(AIRPORTUTILS): $(SPREZZ)/airport-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf airport-utils-$(airport-utils_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: cairo
 cairo:$(CAIRO)_$(ARCH).deb
 $(CAIRO): $(SPREZZ)/cairo/debian/changelog
@@ -7001,6 +7009,14 @@ $(GTKMM3): $(SPREZZ)/gtkmm3/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gtkmm-$(gtkmm3_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: pngquant
+pngquant:$(PNGQUANT)_$(ARCH).deb
+$(PNGQUANT): $(SPREZZ)/pngquant/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pngquant-$(pngquant_UPVER)-src.tgz $(TARARGS) $@
 
 .PHONY: poppler
 poppler:$(POPPLER)_$(ARCH).deb

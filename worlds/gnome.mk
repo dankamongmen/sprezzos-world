@@ -62,6 +62,14 @@ $(GCONF): $(SPREZZ)/gconf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf GConf-$(gconf_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gconf-cleaner
+gconf-cleaner:$(GCONFCLEANER)_$(ARCH).deb
+$(GCONFCLEANER): $(SPREZZ)/gconf-cleaner/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gconf-cleaner-$(gconf-cleaner_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gconf-editor
 gconf-editor:$(GCONFEDITOR)_$(ARCH).deb
 $(GCONFEDITOR): $(SPREZZ)/gconf-editor/debian/changelog
@@ -85,6 +93,14 @@ $(GLABELS): $(SPREZZ)/glabels/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf glabels-$(glabels_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gmime
+gmime:$(GMIME)_$(ARCH).deb
+$(GMIME): $(SPREZZ)/gmime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gmime-$(gmime_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gnome-applets
 gnome-applets:$(GNOMEAPPLETS)_$(ARCH).deb
@@ -494,6 +510,14 @@ $(TANGOICONTHEME): $(SPREZZ)/tango-icon-theme/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tango-icon-theme-$(tango-icon-theme_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: tomboy
+tomboy:$(TOMBOY)_$(ARCH).deb
+$(TOMBOY): $(SPREZZ)/tomboy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf tomboy-$(tomboy_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: vte3
 vte3:$(VTE3)_$(ARCH).deb
 $(VTE3): $(SPREZZ)/vte3/debian/changelog
