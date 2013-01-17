@@ -26,6 +26,7 @@ include worlds/xfce.mk
 include worlds/gnome.mk
 include worlds/debian.mk
 include worlds/ubuntu.mk
+include worlds/haskell.mk
 include worlds/obsolete.mk
 include worlds/sprezzatech.mk
 
@@ -2029,6 +2030,14 @@ $(UNIONFSFUSE): $(SPREZZ)/unionfs-fuse/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf unionfs-fuse-$(unionfs-fuse_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: unison
+unison:$(UNISON)_$(ARCH).deb
+$(UNISON): $(SPREZZ)/unison/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unison_$(unison_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: fuseiso
 fuseiso:$(FUSEISO)_$(ARCH).deb

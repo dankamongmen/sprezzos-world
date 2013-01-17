@@ -1,0 +1,237 @@
+#!/usr/bin/make -f
+# debian/rules for unison package
+# Copyright (C) 2006-2009 Sylvain Le Gall <gildor@debian.org>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+include /usr/share/cdbs/1/rules/ocaml.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+VERSION=$(DEB_UPSTREAM_VERSION)
+# version used with addversionno in unison
+VERSIONNO=$(shell echo $(VERSION) | cut -f 1-2 -d .)
+
+ifeq ($(DEB_SOURCE_PACKAGE),unison)
+# latest package
+PACKAGE_VERSION=
+PRIORITY=20
+# unison-gtk can replaced unison
+PRIORITY_GTK=15
+else
+# compatibility package
+PACKAGE_VERSION=$(VERSION)
+PRIORITY=10
+PRIORITY_GTK=5
+endif
+
+TR=$(subst .,_,$(subst -,_,$1))
+
+UNISON=unison-$(VERSION)
+UNISON_MAJ=UNISON-$(VERSION)
+UNISON_PACKAGE=unison$(PACKAGE_VERSION)
+UNISON_ALTERNATIVE=$(if $(PACKAGE_VERSION),$(UNISON),unison-latest-stable)
+UNISON_VERSIONNO=unison-$(VERSIONNO)
+UNISON_VAR=$(call TR,$(UNISON))
+
+UNISON_GTK=unison-$(VERSION)-gtk
+UNISON_GTK_PACKAGE=$(UNISON_PACKAGE)-gtk
+UNISON_GTK_ALTERNATIVE=$(if $(PACKAGE_VERSION),$(UNISON_GTK),unison-latest-stable-gtk)
+UNISON_GTK_VERSIONNO=unison-$(VERSIONNO)-gtk
+UNISON_GTK_VAR=$(call TR,$(UNISON_GTK))
+
+RENAME := debian/unison.1.in
+RENAME += debian/unison.doc-base.in
+RENAME += debian/unison-gtk.menu.in
+RENAME += debian/unison-gtk.svg.in
+RENAME += debian/unison-gtk.install.in
+RENAME += debian/unison.install.in
+RENAME += debian/unison-gtk.desktop.in
+
+ifeq ($(DEB_SOURCE_PACKAGE),unison)
+OTHER_UNISON_PACKAGE=unison$(VERSION)
+OTHER_UNISON_GTK_PACKAGE=unison$(VERSION)-gtk
+else
+OTHER_UNISON_PACKAGE=unison (<< $(VERSION)-999)
+OTHER_UNISON_GTK_PACKAGE=unison-gtk (<< $(VERSION)-999)
+endif
+DEB_DH_GENCONTROL_ARGS += -- "-VF:OtherUnisonGtk=$(OTHER_UNISON_GTK_PACKAGE)" "-VF:OtherUnison=$(OTHER_UNISON_PACKAGE)"
+
+
+MY_MAKE_FLAGS += $(shell if test -x /usr/bin/ocamlopt.opt; then echo "OCAMLOPT=ocamlopt.opt"; fi )
+
+ifeq ($(OCAML_HAVE_OCAMLOPT),yes)
+  NATIVE := true
+else
+  NATIVE := false
+  DEB_STRIP_EXCLUDE := $(UNISON) $(UNISON_GTK)
+endif
+
+UISTYLE := $(shell dpkg --compare-versions 2.10 ge $(VERSION) && echo gtk || echo gtk2)
+
+DEB_INSTALL_DOCS_ALL := BUGS.txt TODO.txt unison-manual.txt -X unison.doc-base.in
+
+DEB_INSTALL_CHANGELOGS_ALL := NEWS
+
+#
+# Build unison
+#
+
+configure::
+	cp config/Makefile.unix config/Makefile
+
+build/$(UNISON_PACKAGE)::
+	$(MAKE) UISTYLE=text NATIVE=$(NATIVE) $(MY_MAKE_FLAGS) CFLAGS=
+	mv '$(CURDIR)/unison' '$(CURDIR)/$(UNISON)'
+
+build/$(UNISON_GTK_PACKAGE):: debian/$(UNISON_GTK_PACKAGE).xpm
+	$(MAKE) UISTYLE=$(UISTYLE) NATIVE=$(NATIVE) $(MY_MAKE_FLAGS) CFLAGS=
+	mv '$(CURDIR)/unison' '$(CURDIR)/$(UNISON_GTK)'
+	if test 'x$(OCAML_HAVE_OCAMLOPT)' = 'xyes'; then /usr/bin/chrpath -d '$(CURDIR)/$(UNISON_GTK)'; fi
+
+clean::
+	-$(RM) '$(CURDIR)/$(UNISON_GTK)'
+	-$(RM) '$(CURDIR)/$(UNISON)'
+	$(MAKE) clean
+	rm lwt/depend ubase/depend
+
+debian/unison-manual.txt: build/$(UNISON_PACKAGE)
+	env HOME='$(CURDIR)' '$(CURDIR)/$(UNISON)' -doc all > '$(CURDIR)/unison-manual.txt'
+
+debian/unison.1.in: build/$(UNISON_PACKAGE)
+	cp debian/unison-intro.1.in debian/unison.1.in
+	env HOME='$(CURDIR)' ocaml debian/generate-manpage.ml '$(CURDIR)/$(UNISON)' >> debian/unison.1.in
+	cat debian/unison-outro.1.in >> debian/unison.1.in
+
+clean::
+	-$(RM) unison-manual.txt
+	-$(RM) debian/unison.1.in
+
+common-binary-arch:: debian/unison-manual.txt debian/unison.1.in
+
+#
+# Unison icons
+#
+
+debian/$(UNISON_GTK_PACKAGE).png: debian/unison-gtk.svg.in
+	 rsvg-convert -f png -w 32 -h 32 -o $@ $^
+
+debian/$(UNISON_GTK_PACKAGE).xpm: debian/$(UNISON_GTK_PACKAGE).png
+	convert $^ $@
+
+clean::
+	-$(RM) '$(CURDIR)/debian/$(UNISON_GTK_PACKAGE).png'
+	-$(RM) '$(CURDIR)/debian/$(UNISON_GTK_PACKAGE).xpm'
+
+#
+# Generate debhelper files using templates
+#
+
+SED_REPLACE += -e "s/@VERSION@/$(VERSION)/g"
+SED_REPLACE += -e "s/@PACKAGE_VERSION@/$(PACKAGE_VERSION)/g"
+
+SED_REPLACE += -e "s/@PRIORITY@/$(PRIORITY)/g"
+SED_REPLACE += -e "s/@UNISON@/$(UNISON)/g"
+SED_REPLACE += -e "s/@UNISON_PACKAGE@/$(UNISON_PACKAGE)/g"
+SED_REPLACE += -e "s/@UNISON_ALTERNATIVE@/$(UNISON_ALTERNATIVE)/g"
+SED_REPLACE += -e "s/@UNISON_VERSIONNO@/$(UNISON_VERSIONNO)/g"
+SED_REPLACE += -e "s/@UNISON_VAR@/$(UNISON_VAR)/g"
+SED_REPLACE += -e "s/@UNISON_MAJ@/$(UNISON_MAJ)/g"
+
+SED_REPLACE += -e "s/@PRIORITY_GTK@/$(PRIORITY_GTK)/g"
+SED_REPLACE += -e "s/@UNISON_GTK@/$(UNISON_GTK)/g"
+SED_REPLACE += -e "s/@UNISON_GTK_PACKAGE@/$(UNISON_GTK_PACKAGE)/g"
+SED_REPLACE += -e "s/@UNISON_GTK_ALTERNATIVE@/$(UNISON_GTK_ALTERNATIVE)/g"
+SED_REPLACE += -e "s/@UNISON_GTK_VERSIONNO@/$(UNISON_GTK_VERSIONNO)/g"
+SED_REPLACE += -e "s/@UNISON_GTK_VAR@/$(UNISON_GTK_VAR)/g"
+
+SED_REPLACE += -e "s/@PRIORITY_SELF@/$(PRIORITY_SELF)/g"
+SED_REPLACE += -e "s/@UNISON_SELF@/$(UNISON_SELF)/g"
+SED_REPLACE += -e "s/@UNISON_SELF_PACKAGE@/$(UNISON_SELF_PACKAGE)/g"
+SED_REPLACE += -e "s/@UNISON_SELF_ALTERNATIVE@/$(UNISON_SELF_ALTERNATIVE)/g"
+SED_REPLACE += -e "s/@UNISON_SELF_VERSIONNO@/$(UNISON_SELF_VERSIONNO)/g"
+SED_REPLACE += -e "s/@UNISON_SELF_VAR@/$(UNISON_SELF_VAR)/g"
+SED_REPLACE += -e "s/@IS_GTK@/$(IS_GTK)/g"
+
+%-template-stamp: $(wildcard debian/templates/*)
+	for i in $^ ; do   \
+	   sed $(SED_REPLACE) $$i > debian/$(UNISON_SELF_PACKAGE).$$(basename $$i); \
+	done;
+	touch $@
+
+clean::
+	for i in $(wildcard debian/templates/*); do \
+	   $(RM) -f debian/$(UNISON_GTK_PACKAGE).$$(basename $$i); \
+	   $(RM) -f debian/$(UNISON_PACKAGE).$$(basename $$i); \
+	done
+	-$(RM) unison-gtk-template-stamp unison-template-stamp
+
+unison-gtk-template-stamp: PRIORITY_SELF = $(PRIORITY_GTK)
+unison-gtk-template-stamp: UNISON_SELF = $(UNISON_GTK)
+unison-gtk-template-stamp: UNISON_SELF_PACKAGE = $(UNISON_GTK_PACKAGE)
+unison-gtk-template-stamp: UNISON_SELF_ALTERNATIVE = $(UNISON_GTK_ALTERNATIVE)
+unison-gtk-template-stamp: UNISON_SELF_VERSIONNO = $(UNISON_GTK_VERSIONNO)
+unison-gtk-template-stamp: UNISON_SELF_VAR = $(UNISON_GTK_VAR)
+unison-gtk-template-stamp: IS_GTK=true
+
+unison-template-stamp: PRIORITY_SELF = $(PRIORITY)
+unison-template-stamp: UNISON_SELF = $(UNISON)
+unison-template-stamp: UNISON_SELF_PACKAGE = $(UNISON_PACKAGE)
+unison-template-stamp: UNISON_SELF_ALTERNATIVE = $(UNISON_ALTERNATIVE)
+unison-template-stamp: UNISON_SELF_VERSIONNO = $(UNISON_VERSIONNO)
+unison-template-stamp: UNISON_SELF_VAR = $(UNISON_VAR)
+unison-template-stamp: IS_GTK=false
+
+template: unison-template-stamp unison-gtk-template-stamp
+
+.PHONY: template
+
+common-binary-indep:: template
+common-binary-arch:: template
+
+#
+# Rename and substitute files
+#
+
+unison-rename: unison-rename-stamp
+unison-rename-stamp: $(RENAME)
+	# Rename all the debhelper files needed and substitue the @XXX@
+	# string
+	for i in $^ ; do \
+	  DST=`echo $$i | sed -e "s/unison/${UNISON_PACKAGE}/" -e "s/\\.in\\$$//"`; \
+	  sed $(SED_REPLACE) $$i > "$(CURDIR)/$$DST"; \
+	done
+	
+	# We always need to rename the manual
+	cp '$(CURDIR)/debian/$(UNISON_PACKAGE).1' '$(CURDIR)/debian/$(UNISON).1'
+	# We copy unison.1 to unison-gtk.1
+	cp '$(CURDIR)/debian/$(UNISON).1' '$(CURDIR)/debian/$(UNISON_GTK).1'
+	
+	touch $@
+
+clean::
+	# Remove the renamed files
+	-for i in $(RENAME); do \
+	  DST=`echo $$i | sed -e "s/unison/${UNISON_PACKAGE}/" -e "s/\\.in\\$$//"`; \
+	  $(RM) "$(CURDIR)/$$DST"; \
+	done
+	-$(RM) '$(CURDIR)/debian/$(UNISON).1'
+	-$(RM) '$(CURDIR)/debian/$(UNISON_GTK).1'
+	-$(RM) '$(CURDIR)/unison-rename-stamp'
+
+.PHONY: unison-rename
+
+common-binary-indep:: unison-rename template
+common-binary-arch:: unison-rename template

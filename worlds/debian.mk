@@ -43,6 +43,15 @@ $(GITANNEX): $(SPREZZ)/git-annex/debian/changelog
 	tar cJvf git-annex_$(git-annex_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: haskell-devscripts
+haskell-devscripts:$(HASKELLDEVSCRIPTS)_$(ARCH).deb
+$(HASKELLDEVSCRIPTS): $(SPREZZ)/haskell-devscripts/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf haskell-devscripts_$(haskell-devscripts_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: libept
 libept:$(LIBEPT)_$(ARCH).deb
 $(LIBEPT): $(SPREZZ)/libept/debian/changelog
