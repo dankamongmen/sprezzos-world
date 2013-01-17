@@ -1065,6 +1065,14 @@ $(BINUTILS): $(SPREZZ)/binutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf binutils-$(binutils_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: binwalk
+binwalk:$(BINWALK)_$(ARCH).deb
+$(BINWALK): $(SPREZZ)/binwalk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf binwalk-$(binwalk_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: biosdevname
 biosdevname:$(BIOSDEVNAME)_$(ARCH).deb
 $(BIOSDEVNAME): $(SPREZZ)/biosdevname/debian/changelog
@@ -1450,8 +1458,8 @@ $(COGL): $(SPREZZ)/cogl/debian/changelog
 	tar xJvf cogl-$(cogl_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: colord
-colord:$(colord)_$(ARCH).deb
-$(colord): $(SPREZZ)/colord/debian/changelog
+colord:$(COLORD)_$(ARCH).deb
+$(COLORD): $(SPREZZ)/colord/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
