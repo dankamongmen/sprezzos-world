@@ -4727,6 +4727,14 @@ $(NETSNIFFNG): $(SPREZZ)/netsniff-ng/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf netsniff-ng-$(netsniff-ng_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: nettle
+nettle:$(NETTLE)_$(ARCH).deb
+$(NETTLE): $(SPREZZ)/nettle/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nettle-$(nettle_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: net-snmp
 net-snmp:$(NETSNMP)_$(ARCH).deb
 $(NETSNMP): $(SPREZZ)/net-snmp/debian/changelog
