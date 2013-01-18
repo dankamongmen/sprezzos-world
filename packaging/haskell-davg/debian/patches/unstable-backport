@@ -1,0 +1,152 @@
+Description: 
+ Adjust code and build deps for packages in unstable.
+ This mostly consisted of reverting 3 commits in upstream git:
+  f49d16fd6a0d15b68b3b8587f952535c8d027103
+  34b30b4917097d067ef8f69666266e65742d6095
+  d3ca5d99fc5d6f62987f27f5a446fa5dd3897092
+Author: Joey Hess <joeyh@debian.org>
+
+--- haskell-dav-0.2.orig/DAV.cabal
++++ haskell-dav-0.2/DAV.cabal
+@@ -25,38 +25,35 @@ library
+   exposed-modules:  Network.Protocol.HTTP.DAV
+   other-modules:    Network.Protocol.HTTP.DAV.TH
+   ghc-options:       -Wall
+-  build-depends:       base >= 4.5                 && <= 5
++  build-depends:       base ==4.5.*
+                      , bytestring
+                      , case-insensitive >= 0.4
+-                     , containers
+                      , http-conduit >= 1.4
+-                     , http-types >= 0.7
+-                     , lens >= 3.0
++                     , http-types >= 0.6
++                     , lens >= 2.4
+                      , lifted-base >= 0.1
+                      , mtl >= 2.1
+                      , resourcet >= 0.3
+                      , transformers >= 0.3
+-                     , xml-conduit >= 1.0          && <= 1.1
+-                     , xml-hamlet >= 0.4           && <= 0.5
++                     , xml-conduit >= 0.7          && <= 0.7.0.3
++                     , xml-hamlet >= 0.3           && <= 0.3.0.1
+ executable hdav
+   main-is:           hdav.hs
+   ghc-options:       -Wall
+-  build-depends:       base >= 4.5                 && <= 5
+-                     , bytestring
++  build-depends:       base ==4.5.*
+                      , bytestring
+                      , case-insensitive >= 0.4
+                      , cmdargs >= 0.9
+-                     , containers
+                      , http-conduit >= 1.4
+-                     , http-types >= 0.7
+-                     , lens >= 3.0
++                     , http-types >= 0.6
++                     , lens >= 2.4
+                      , lifted-base >= 0.1
+                      , mtl >= 2.1
+                      , network >= 2.3
+                      , resourcet >= 0.3
+                      , transformers >= 0.3
+-                     , xml-conduit >= 1.0          && <= 1.1
+-                     , xml-hamlet >= 0.4           && <= 0.5
++                     , xml-conduit >= 0.7          && <= 0.7.0.3
++                     , xml-hamlet >= 0.3           && <= 0.3.0.1
+ 
+ source-repository head
+   type:     git
+--- haskell-dav-0.2.orig/Network/Protocol/HTTP/DAV.hs
++++ haskell-dav-0.2/Network/Protocol/HTTP/DAV.hs
+@@ -42,12 +42,11 @@ import Control.Monad.Trans.State.Lazy (e
+ 
+ import qualified Data.ByteString as B
+ import qualified Data.ByteString.Lazy as BL
+-import qualified Data.Map as Map
+ 
+ import Data.Maybe (fromMaybe)
+ 
+ import Network.HTTP.Conduit (httpLbs, parseUrl, applyBasicAuth, Request(..), RequestBody(..), Response(..), newManager, closeManager, ManagerSettings(..), def, HttpException(..))
+-import Network.HTTP.Types (hContentType, Method, Status, RequestHeaders, unauthorized401, conflict409)
++import Network.HTTP.Types (headerContentType, Method, Status, RequestHeaders, unauthorized401, conflict409)
+ 
+ import qualified Text.XML as XML
+ import Text.XML.Cursor (($/), (&/), element, node, fromDocument, checkName)
+@@ -103,7 +102,7 @@ getOptions = do
+ 
+ lockResource :: MonadResourceBase m => Bool -> DAVState m ()
+ lockResource nocreate = do
+-    let ahs' = [(hContentType, "application/xml; charset=\"utf-8\""), (mk "Depth", "0"), (mk "Timeout", "Second-300")]
++    let ahs' = [headerContentType "application/xml; charset=\"utf-8\"", (mk "Depth", "0"), (mk "Timeout", "Second-300")]
+     let ahs = if nocreate then (mk "If-Match", "*"):ahs' else ahs'
+     lockresp <- davRequest "LOCK" ahs (xmlBody locky)
+     let hdrtoken = (lookup "Lock-Token" . responseHeaders) lockresp
+@@ -123,21 +122,21 @@ supportsLocking = liftA2 (&&) ("LOCK" `e
+ 
+ getPropsM :: MonadResourceBase m => DAVState m XML.Document
+ getPropsM = do
+-    let ahs = [(hContentType, "application/xml; charset=\"utf-8\"")]
++    let ahs = [headerContentType "application/xml; charset=\"utf-8\""]
+     propresp <- davRequest "PROPFIND" ahs (xmlBody propname)
+     return $ (XML.parseLBS_ def . responseBody) propresp
+ 
+ getContentM :: MonadResourceBase m => DAVState m (Maybe B.ByteString, BL.ByteString)
+ getContentM = do
+     resp <- davRequest "GET" [] emptyBody
+-    let ct = lookup (hContentType) (responseHeaders resp)
++    let ct = lookup (mk "Content-Type") (responseHeaders resp)
+     return $ (ct, responseBody resp)
+ 
+ putContentM :: MonadResourceBase m => (Maybe B.ByteString, BL.ByteString) -> DAVState m ()
+ putContentM (ct, body) = do
+     d <- get
+     let ahs' = fromMaybe [] (fmap (return . (,) (mk "If") . parenthesize) (d ^. lockToken))
+-    let ahs = ahs' ++ fromMaybe [] (fmap (return . (,) (hContentType)) ct)
++    let ahs = ahs' ++ fromMaybe [] (fmap (return . (,) (mk "Content-Type")) ct)
+     _ <- davRequest "PUT" ahs (RequestBodyLBS body)
+     return ()
+ 
+@@ -163,7 +162,7 @@ parenthesize x = B.concat ["(", x, ")"]
+ putPropsM :: MonadResourceBase m => XML.Document -> DAVState m ()
+ putPropsM props = do
+     d <- get
+-    let ah' = (hContentType, "application/xml; charset=\"utf-8\"")
++    let ah' = headerContentType "application/xml; charset=\"utf-8\""
+     let ahs = ah':fromMaybe [] (fmap (return . (,) (mk "If") . parenthesize) (_lockToken d))
+     _ <- davRequest "PROPPATCH" ahs ((RequestBodyLBS . props2patch) props) -- FIXME: should diff and remove props from target
+     return ()
+@@ -173,12 +172,11 @@ props2patch = XML.renderLBS XML.def . pa
+    where
+        props cursor = map node (cursor $/ element "{DAV:}response" &/ element "{DAV:}propstat" &/ element "{DAV:}prop" &/ checkName (not . flip elem blacklist))
+        patch prop = XML.Document (XML.Prologue [] Nothing []) (root prop) []
+-       root [] = propertyupdate []
+-       root prop = propertyupdate
+-           [ XML.NodeElement $ XML.Element "D:set" Map.empty
+-	     [ XML.NodeElement $ XML.Element "D:prop" Map.empty prop ]
++       root [] = XML.Element "D:propertyupdate" [("xmlns:D", "DAV:")] []
++       root prop = XML.Element "D:propertyupdate" [("xmlns:D", "DAV:")]
++           [ XML.NodeElement $ XML.Element "D:set" []
++	     [ XML.NodeElement $ XML.Element "D:prop" [] prop ]
+ 	   ]
+-       propertyupdate = XML.Element "D:propertyupdate" (Map.fromList [("xmlns:D", "DAV:")])
+        blacklist = [ "{DAV:}creationdate"
+                    , "{DAV:}displayname"
+                    , "{DAV:}getcontentlength"
+@@ -238,14 +236,14 @@ makeCollection url username password = w
+ propname :: XML.Document
+ propname = XML.Document (XML.Prologue [] Nothing []) root []
+     where
+-        root = XML.Element "D:propfind" (Map.fromList [("xmlns:D", "DAV:")]) [xml|
++        root = XML.Element "D:propfind" [("xmlns:D", "DAV:")] [xml|
+ <D:allprop>
+ |]
+ 
+ locky :: XML.Document
+ locky = XML.Document (XML.Prologue [] Nothing []) root []
+     where
+-        root = XML.Element "D:lockinfo" (Map.fromList [("xmlns:D", "DAV:")]) [xml|
++        root = XML.Element "D:lockinfo" [("xmlns:D", "DAV:")] [xml|
+ <D:lockscope>
+   <D:exclusive>
+ <D:locktype>
