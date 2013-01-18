@@ -86,6 +86,14 @@ $(metakde): $(SPREZZ)/meta-kde/debian/changelog
 	tar cJvf meta-kde_$(meta-kde_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: mime-support
+mime-support:$(MIMESUPPORT)_$(ARCH).deb
+$(MIMESUPPORT): $(SPREZZ)/mime-support/debian/changelog
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf mime-support_$(mime-support_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: python-apt
 python-apt:$(PYTHONAPT)_$(ARCH).deb
 $(PYTHONAPT): $(SPREZZ)/python-apt/debian/changelog
