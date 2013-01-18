@@ -39,7 +39,6 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
 
-GROWLIGHTORIG:=growlight_$(shell echo $(growlight_UPVER) | cut -d- -f1).orig.tar.xz
 OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_UPVER) | cut -d- -f1).orig.tar.xz
 SICKBEARDORIG:=sick-beard_$(shell echo $(Sick-Beard_UPVER) | cut -d- -f1).orig.tar.xz
 
@@ -75,7 +74,7 @@ PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -j8 -k$(DEBKEY)
+	cd $< && debuild -k$(DEBKEY)
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -282,13 +281,22 @@ $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
 	ln -sf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz gnome-xcf-thumbnailer_$(gnome-xcf-thumbnailer_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+#.PHONY: growlight
+#growlight: $(GROWLIGHT)_$(ARCH).deb
+#$(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
+#	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+#	git clone git://github.com/dankamongmen/growlight.git $@
+#	tar cJf growlight-$(growlight_UPVER) $@ --exclude-vcs
+#	ln -sf growlight-$(growlight_UPVER).tar.xz growlight_$(growlight_UPVER).orig.tar.xz
+#	cp -r $(<D) $@/
+
 .PHONY: growlight
-growlight: $(GROWLIGHT)_$(ARCH).deb
+growlight:$(GROWLIGHT)_$(ARCH).deb
 $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
-	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
-	git clone git://github.com/dankamongmen/growlight.git $@
-	tar cJf $(GROWLIGHTORIG) $@ --exclude-vcs
+	mkdir $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf growlight-$(growlight_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: reportbug
 reportbug: $(REPORTBUG)_$(ARCH).deb
