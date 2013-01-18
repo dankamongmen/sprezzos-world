@@ -4399,6 +4399,14 @@ $(M4): $(SPREZZ)/m4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf m4-$(m4_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: manpages
+manpages:$(MANPAGES)_$(ARCH).deb
+$(MANPAGES): $(SPREZZ)/manpages/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf manpages-$(manpages_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: mash
 mash:$(MASH)_$(ARCH).deb
 $(MASH): $(SPREZZ)/mash/debian/changelog
