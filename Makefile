@@ -10,7 +10,7 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-TARARGS:=--strip-components=1 --exclude=$@/debian -C
+TARARGS=--strip-components=1 --exclude=$(shell echo $@ | tr _ -)/debian -C
 
 SPREZZ:=packaging/
 
