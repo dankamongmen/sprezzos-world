@@ -4405,7 +4405,7 @@ $(MANPAGES): $(SPREZZ)/manpages/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf manpages-$(manpages_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf man-pages-$(manpages_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: mash
 mash:$(MASH)_$(ARCH).deb
