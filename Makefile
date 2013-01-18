@@ -1383,7 +1383,7 @@ $(TCPDUMP): $(SPREZZ)/tcpdump/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf tcpdump-$(tcpdump_UPVER).tar.gz $(TCPDUMPARGS) $@
+	tar xzvf tcpdump-$(tcpdump_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cpufrequtils
 cpufrequtils:$(CPUFREQUTILS)_$(ARCH).deb
