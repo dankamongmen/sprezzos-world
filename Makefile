@@ -39,39 +39,6 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
 
-OMPHALOSORIG:=omphalos_$(shell echo $(omphalos_UPVER) | cut -d- -f1).orig.tar.xz
-SICKBEARDORIG:=sick-beard_$(shell echo $(Sick-Beard_UPVER) | cut -d- -f1).orig.tar.xz
-
-APTITUDEORIG:=aptitude_$(shell echo $(aptitude_UPVER) | cut -d- -f1).orig.tar.bz2
-ATKUP:=atk-$(shell echo $(atk_UPVER) | cut -d- -f1)
-ATKORIG:=atk1.0_$(shell echo $(atk_UPVER) | cut -d- -f1).orig.tar.xz
-BRASEROUP:=brasero-$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1)
-BRASEROORIG:=brasero_$(shell echo $(brasero_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.xz
-FBIUP:=fbida-$(shell echo $(fbi_UPVER) | cut -d= -f2- | cut -d- -f1)
-FBTERMUP:=nfbterm-$(shell echo $(fbterm_UPVER) | cut -d= -f2 | cut -d- -f1)
-FBTERMORIG:=fbterm_$(shell echo $(fbterm_UPVER) | cut -d- -f1).orig.tar.gz
-GSETSCHEMASUP:=gsettings-desktop-schemas-$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1)
-GSETSCHEMASORIG:=gsettings-desktop-schemas_$(shell echo $(gsettings-desktop-schemas_UPVER) | cut -d- -f1).orig.tar.xz
-SPLORIG:=spl_$(shell echo $(spl_UPVER) | cut -d- -f1).orig.tar.xz
-ZFSORIG:=zfs_$(shell echo $(zfs_UPVER) | cut -d- -f1).orig.tar.xz
-HFSUTILSUP:=hfsutils-$(shell echo $(hfsutils_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-HFSUTILSORIG:=hfsutils_$(shell echo $(hfsutils_UPVER) | cut -d- -f1).orig.tar.gz
-IBUSUP:=ibus-$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1)
-IBUSORIG:=ibus_$(shell echo $(ibus_UPVER) | cut -d: -f2- | cut -d- -f1).orig.tar.gz
-LESSUP:=less-$(shell echo $(less_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-LESSORIG:=$(shell echo $(LESSUP) | tr - _).orig.tar.gz
-LIBPNGUP:=libpng-$(shell echo $(libpng_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-LIBPNGORIG:=$(shell echo $(LIBPNGUP) | tr - _).orig.tar.bz2
-LIBRSVGUP:=librsvg-$(shell echo $(librsvg_UPVER) | cut -d- -f1 | cut -d= -f2- | cut -d: -f2)
-LIBRSVGORIG:=$(shell echo $(LIBRSVGUP) | tr - _).orig.tar.xz
-LINUXTOOLSORIG:=linux-tools_$(shell echo $(linux-tools_UPVER) | cut -d- -f1).orig.tar.bz2
-MCELOGORIG:=mcelog_$(shell echo $(mcelog_UPVER) | cut -d- -f1).orig.tar.xz
-MPLAYER:=mplayer_$(shell echo $(mplayer_UPVER) | tr : .)
-NETHOROLOGISTORIG:=nethorologist_$(shell echo $(nethorologist_UPVER) | cut -d- -f1).orig.tar.xz
-FREI0RORIG:=frei0r_$(shell echo $(frei0r_UPVER) | cut -d- -f1).orig.tar.xz
-PULSEAUDIOUP:=pulseaudio-$(shell echo $(pulseaudio_UPVER) | cut -d- -f1)
-PULSEAUDIOORIG:=$(shell echo $(PULSEAUDIOUP) | tr - _).orig.tar.xz
-
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
 	cd $< && debuild -k$(DEBKEY)
