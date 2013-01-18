@@ -5500,6 +5500,14 @@ $(POPT): $(SPREZZ)/popt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf popt-$(popt_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: postfix
+postfix:$(POSTFIX)_$(ARCH).deb
+$(POSTFIX): $(SPREZZ)/postfix/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf postfix-$(postfix_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: postgresql
 postgresql:$(POSTGRESQL)_$(ARCH).deb
 $(POSTGRESQL): $(SPREZZ)/postgresql/debian/changelog
@@ -6219,6 +6227,14 @@ $(TIME): $(SPREZZ)/time/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf time-$(time_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: tinycdb
+tinycdb:$(TINYCDB)_$(ARCH).deb
+$(TINYCDB): $(SPREZZ)/tinycdb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tinycdb-$(tinycdb_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: totem-pl-parser
 totem-pl-parser:$(TOTEMPLPARSER)_$(ARCH).deb
