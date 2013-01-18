@@ -3714,6 +3714,14 @@ $(VLC): $(SPREZZ)/vlc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vlc-$(vlc_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libdatrie
+libdatrie:$(LIBDATRIE)_$(ARCH).deb
+$(LIBDATRIE): $(SPREZZ)/libdatrie/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdatrie-$(libdatrie_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libdca
 libdca:$(LIBDCA)_$(ARCH).deb
 $(LIBDCA): $(SPREZZ)/libdca/debian/changelog
