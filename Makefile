@@ -524,6 +524,14 @@ $(AALIB): $(SPREZZ)/aalib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf $(AALIB).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ace
+ace:$(ACE)_$(ARCH).deb
+$(ACE): $(SPREZZ)/ace/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf ACE+TAO-src-$(ace_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: acetoneiso
 acetoneiso:$(ACETONEISO)_$(ARCH).deb
 $(ACETONEISO): $(SPREZZ)/acetoneiso/debian/changelog
