@@ -531,6 +531,8 @@ $(ACE): $(SPREZZ)/ace/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf ACE+TAO-src-$(ace_UPVER).tar.bz2 $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: acetoneiso
 acetoneiso:$(ACETONEISO)_$(ARCH).deb
