@@ -5180,6 +5180,14 @@ $(OPENMPI): $(SPREZZ)/openmpi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openmpi-$(openmpi_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: openresolv
+openresolv:$(OPENRESOLV)_$(ARCH).deb
+$(OPENRESOLV): $(SPREZZ)/openresolv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf openresolv-$(openresolv_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: openshot
 openshot:$(OPENSHOT)_$(ARCH).deb
 $(OPENSHOT): $(SPREZZ)/openshot/debian/changelog
