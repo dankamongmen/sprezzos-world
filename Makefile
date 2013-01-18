@@ -10,7 +10,7 @@ DEBKEY:=9978711C
 DEBFULLNAME:='nick black'
 DEBEMAIL:=nick.black@sprezzatech.com
 
-TARARGS:=--strip-components=1 --exclude=debian -C
+TARARGS:=--strip-components=1 --exclude=$@/debian -C
 
 SPREZZ:=packaging/
 
@@ -114,11 +114,6 @@ $(EVERPAD): $(SPREZZ)/everpad/debian/changelog
 	tar cJf everpad-$(everpad_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf everpad-$(everpad_UPVER).tar.xz everpad_$(everpad_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
-
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf compiz-$(compiz9_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: mawk
 mawk:$(MAWK)_$(ARCH).deb
@@ -3182,6 +3177,14 @@ $(LIBPAMSSH): $(SPREZZ)/libpam-ssh/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pam_ssh-$(libpam-ssh_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: plymouth
+plymouth:$(PLYMOUTH)_$(ARCH).deb
+$(PLYMOUTH): $(SPREZZ)/plymouth/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf plymouth-$(plymouth_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libproxy
 libproxy:$(LIBPROXY)_$(ARCH).deb
