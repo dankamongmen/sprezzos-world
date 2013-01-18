@@ -1,0 +1,73 @@
+#!/usr/bin/make -f
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+%:
+	dh ${@}
+
+override_dh_auto_clean:
+	dh_auto_clean
+
+	rm -f build-tools/config.guess build-tools/config.sub
+
+override_dh_auto_configure:
+	cp -f /usr/share/misc/config.guess build-tools
+	cp -f /usr/share/misc/config.sub build-tools
+
+	dh_auto_configure -- \
+		--prefix=/usr --localstatedir=/var \
+		--enable-libkms --enable-pango \
+		--enable-systemd-integration --enable-tracing \
+		--disable-gdm-transition --disable-tests \
+		--with-background-color=0x005a8a \
+		--with-gdm-autostart-file \
+		--with-log-viewer \
+		--with-logo=/usr/share/plymouth/debian-logo.png \
+		--with-release-file=/etc/os-release \
+		--with-system-root-install \
+		--without-rhgb-compat-link \
+		--with-boot-tty=/dev/tty7 \
+		--with-shutdown-tty=/dev/tty7
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz -z9
+
+override_dh_install:
+	# Removing useless files
+	rm -f debian/tmp/lib/$(DEB_HOST_MULTIARCH)/*.la
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.la
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/plymouth/*.la
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/plymouth/*/*.la
+
+	# Moving /usr/lib to /lib
+	mv debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.so.* debian/tmp/lib/$(DEB_HOST_MULTIARCH)
+
+	dh_install --fail-missing
+
+	# Adding initramfs-tools integration
+	install -D -m 0755 debian/local/plymouth.hook debian/plymouth/usr/share/initramfs-tools/hooks/plymouth
+	sed -i -e 's|@DEB_HOST_MULTIARCH@|$(DEB_HOST_MULTIARCH)|g' debian/plymouth/usr/share/initramfs-tools/hooks/plymouth
+	install -D -m 0755 debian/local/plymouth.init-premount debian/plymouth/usr/share/initramfs-tools/scripts/init-premount/plymouth
+	install -D -m 0755 debian/local/plymouth.init-bottom debian/plymouth/usr/share/initramfs-tools/scripts/init-bottom/plymouth
+
+	# Adding other debian specific files
+	install -D -m 0644 debian/local/debian-logo.png debian/plymouth/usr/share/plymouth/debian-logo.png
+	install -D -m 0755 debian/local/plymouth-update-initrd debian/plymouth/usr/lib/$(DEB_HOST_MULTIARCH)/plymouth/plymouth-update-initrd
+	install -D -m 0644 debian/local/plymouth.lsb debian/plymouth/lib/lsb/init-functions.d/99-plymouth
+
+override_dh_installinit:
+	dh_installinit --no-start -- start 21 2 3 4 5 . stop 02 0 6 .
+	dh_installinit --no-start --name=plymouth-log -- start 37 S .
+
+override_dh_link:
+	# correcting symlink targets
+	for LIB in debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.so; \
+	do \
+		dh_link -pplymouth-dev lib/$(DEB_HOST_MULTIARCH)/$$(basename $$(readlink $${LIB})) usr/lib/$(DEB_HOST_MULTIARCH)/$$(basename $${LIB}); \
+	done
+
+	dh_link --remaining-packages
+
+override_dh_makeshlibs:
+	dh_makeshlibs -p plymouth
+	dh_makeshlibs -p plymouth-drm
