@@ -1041,6 +1041,14 @@ $(BASH): $(SPREZZ)/bash/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bash-$(bash_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: bash-completion
+bash-completion:$(BASHCOMPLETION)_$(ARCH).deb
+$(BASHCOMPLETION): $(SPREZZ)/bash-completion/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf bash-completion-$(bash-completion_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: bc
 bc:$(BC)_$(ARCH).deb
 $(BC): $(SPREZZ)/bc/debian/changelog
