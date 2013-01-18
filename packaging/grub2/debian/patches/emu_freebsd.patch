@@ -1,0 +1,88 @@
+Description: Fix grub-emu build on FreeBSD
+Author: Colin Watson <cjwatson@ubuntu.com>
+Origin: upstream, http://bazaar.launchpad.net/~vcs-imports/grub/grub2-bzr/revision/4587
+Forwarded: not-needed
+Applied-Upstream: http://bazaar.launchpad.net/~vcs-imports/grub/grub2-bzr/revision/4587
+Last-Update: 2012-09-22
+
+Index: b/Makefile.util.def
+===================================================================
+--- a/Makefile.util.def
++++ b/Makefile.util.def
+@@ -266,7 +266,7 @@
+   ldadd = libgrubgcry.a;
+   ldadd = libgrubkern.a;
+   ldadd = grub-core/gnulib/libgnu.a;
+-  ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) -lfuse';
++  ldadd = '$(LIBINTL) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM) -lfuse';
+   condition = COND_GRUB_MOUNT;
+ };
+ 
+Index: b/grub-core/net/drivers/emu/emunet.c
+===================================================================
+--- a/grub-core/net/drivers/emu/emunet.c
++++ b/grub-core/net/drivers/emu/emunet.c
+@@ -21,8 +21,10 @@
+ #include <sys/socket.h>
+ #include <grub/net.h>
+ #include <sys/types.h>
+-#include <linux/if.h>
+-#include <linux/if_tun.h>
++#ifdef __linux__
++# include <linux/if.h>
++# include <linux/if_tun.h>
++#endif /* __linux__ */
+ #include <sys/ioctl.h>
+ #include <fcntl.h>
+ #include <unistd.h>
+@@ -97,6 +99,7 @@
+ 
+ GRUB_MOD_INIT(emunet)
+ {
++#ifdef __linux__
+   struct ifreq ifr;
+   fd = open ("/dev/net/tun", O_RDWR | O_NONBLOCK);
+   if (fd < 0)
+@@ -110,6 +113,10 @@
+       return;
+     }
+   grub_net_card_register (&emucard);
++#else /* !__linux__ */
++  fd = -1;
++  return;
++#endif /* __linux__ */
+ }
+ 
+ GRUB_MOD_FINI(emunet)
+Index: b/util/getroot.c
+===================================================================
+--- a/util/getroot.c
++++ b/util/getroot.c
+@@ -220,6 +220,9 @@
+ 
+ #if !defined (__MINGW32__) && !defined (__CYGWIN__) && !defined (__GNU__)
+ 
++#if (defined (__linux__) || \
++     !defined (HAVE_LIBZFS) || !defined (HAVE_LIBNVPAIR))
++
+ static pid_t
+ exec_pipe (char **argv, int *fd)
+ {
+@@ -258,6 +261,8 @@
+     }
+ }
+ 
++#endif
++
+ static char **
+ find_root_devices_from_poolname (char *poolname)
+ {
+@@ -269,7 +274,7 @@
+   zpool_handle_t *zpool;
+   libzfs_handle_t *libzfs;
+   nvlist_t *config, *vdev_tree;
+-  nvlist_t **children, **path;
++  nvlist_t **children;
+   unsigned int nvlist_count;
+   unsigned int i;
+   char *device = 0;

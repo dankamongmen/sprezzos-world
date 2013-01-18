@@ -56,10 +56,9 @@ jump_start:
 	movw	$0x820, %ax
 	movw	%ax, %es
 	xorl	%eax, %eax
-	movb	%dh, %al
-	movl	%eax, GRUB_KERNEL_MACHINE_INSTALL_DOS_PART
-	movl	GRUB_KERNEL_MACHINE_COMPRESSED_SIZE, %eax
-	addl	$GRUB_KERNEL_MACHINE_RAW_SIZE, %eax
+	movb	%dh, (GRUB_DECOMPRESSOR_I386_PC_BOOT_DEVICE + 2)
+	movl	GRUB_DECOMPRESSOR_MACHINE_COMPRESSED_SIZE, %eax
+	addl	$GRUB_DECOMPRESSOR_I386_PC_MAX_DECOMPRESSOR_SIZE, %eax
 	xorl	%ecx, %ecx
 
 1:

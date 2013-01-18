@@ -113,7 +113,7 @@ typedef enum {
     CT_946GZ, CT_G965, CT_Q965, CT_965GM, CT_G33, CT_Q33, CT_Q35, CT_500GMA
 } chipset_type;
 
-char * chipset_type_names[] = {
+const char *const chipset_type_names[] = {
     "UNKNOWN", "830",  "845G", "855GM", "865G", "915G", "915GM", "945G", "945GM", "945GME",
     "946GZ",   "G965", "Q965", "965GM", "G33", "Q33", "Q35", "500GMA"
 };
@@ -122,7 +122,7 @@ typedef enum {
     BT_UNKWN, BT_1, BT_2, BT_3
 } bios_type;
 
-char * bios_type_names[] = {"UNKNOWN", "TYPE 1", "TYPE 2", "TYPE 3"};
+const char *const bios_type_names[] = {"UNKNOWN", "TYPE 1", "TYPE 2", "TYPE 3"};
 
 int freqs[] = { 60, 75, 85 };
 
@@ -912,7 +912,7 @@ static void usage(void) {
     printf("    -r display the modes found in the video BIOS in raw mode (THIS IS USED FOR DEBUG PURPOSES)\n");
 }
 
-static int main (int argc, char *argv[])
+static int main_915 (int argc, char *argv[])
 {
     vbios_map * map;
     cardinal list, mode, x, y, bp, raw, htotal, vtotal;
@@ -961,7 +961,7 @@ static grub_err_t
 grub_cmd_915resolution (grub_command_t cmd __attribute__ ((unused)), 
 			int argc, char *argv[])
 {
-  return main (argc, argv);
+  return main_915 (argc, argv);
 }
 
 static grub_command_t cmd;

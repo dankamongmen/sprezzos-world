@@ -1,0 +1,241 @@
+Description: Add efifwsetup module to reboot into firmware setup menu
+Author: Peter Jones <pjones@redhat.com>
+Origin: upstream, http://bazaar.launchpad.net/~vcs-imports/grub/grub2-bzr/revision/4575
+Origin: upstream, http://bazaar.launchpad.net/~vcs-imports/grub/grub2-bzr/revision/4579
+Forwarded: not-needed
+Applied-Upstream: http://bazaar.launchpad.net/~vcs-imports/grub/grub2-bzr/revision/4575
+Last-Update: 2012-09-19
+
+Index: b/grub-core/Makefile.core.def
+===================================================================
+--- a/grub-core/Makefile.core.def
++++ b/grub-core/Makefile.core.def
+@@ -573,6 +573,12 @@
+ };
+ 
+ module = {
++  name = efifwsetup;
++  efi = commands/efi/efifwsetup.c;
++  enable = efi;
++};
++
++module = {
+   name = blocklist;
+   common = commands/blocklist.c;
+ };
+Index: b/grub-core/commands/efi/efifwsetup.c
+===================================================================
+--- /dev/null
++++ b/grub-core/commands/efi/efifwsetup.c
+@@ -0,0 +1,90 @@
++/* fwsetup.c - Reboot into firmware setup menu. */
++/*
++ *  GRUB  --  GRand Unified Bootloader
++ *  Copyright (C) 2012  Free Software Foundation, Inc.
++ *
++ *  GRUB is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  GRUB is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with GRUB.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <grub/types.h>
++#include <grub/mm.h>
++#include <grub/misc.h>
++#include <grub/efi/api.h>
++#include <grub/efi/efi.h>
++#include <grub/command.h>
++#include <grub/i18n.h>
++
++GRUB_MOD_LICENSE ("GPLv3+");
++
++static grub_err_t
++grub_cmd_fwsetup (grub_command_t cmd __attribute__ ((unused)),
++		  int argc __attribute__ ((unused)),
++		  char **args __attribute__ ((unused)))
++{
++  grub_efi_uint64_t *old_os_indications;
++  grub_efi_uint64_t os_indications = GRUB_EFI_OS_INDICATIONS_BOOT_TO_FW_UI;
++  grub_err_t status;
++  grub_size_t oi_size;
++  grub_efi_guid_t global = GRUB_EFI_GLOBAL_VARIABLE_GUID;
++
++  old_os_indications = grub_efi_get_variable ("OsIndications", &global,
++					      &oi_size);
++
++  if (old_os_indications != NULL && oi_size == sizeof (os_indications))
++    os_indications |= *old_os_indications;
++
++  status = grub_efi_set_variable ("OsIndications", &global, &os_indications,
++				  sizeof (os_indications));
++  if (status != GRUB_ERR_NONE)
++    return status;
++
++  grub_reboot ();
++
++  return GRUB_ERR_BUG;
++}
++
++static grub_command_t cmd = NULL;
++
++static grub_efi_boolean_t
++efifwsetup_is_supported (void)
++{
++  grub_efi_uint64_t *os_indications_supported = NULL;
++  grub_size_t oi_size = 0;
++  grub_efi_guid_t global = GRUB_EFI_GLOBAL_VARIABLE_GUID;
++
++  os_indications_supported = grub_efi_get_variable ("OsIndicationsSupported",
++						    &global, &oi_size);
++
++  if (!os_indications_supported)
++    return 0;
++
++  if (*os_indications_supported & GRUB_EFI_OS_INDICATIONS_BOOT_TO_FW_UI)
++    return 1;
++
++  return 0;
++}
++
++GRUB_MOD_INIT (efifwsetup)
++{
++  if (efifwsetup_is_supported ())
++    cmd = grub_register_command ("fwsetup", grub_cmd_fwsetup, NULL,
++				 N_("Reboot into firmware setup menu."));
++
++}
++
++GRUB_MOD_FINI (efifwsetup)
++{
++  if (cmd)
++    grub_unregister_command (cmd);
++}
+Index: b/grub-core/efiemu/runtime/efiemu.c
+===================================================================
+--- a/grub-core/efiemu/runtime/efiemu.c
++++ b/grub-core/efiemu/runtime/efiemu.c
+@@ -78,7 +78,7 @@
+ 
+ grub_efi_status_t
+ efiemu_set_variable (grub_efi_char16_t *variable_name,
+-		     grub_efi_guid_t *vendor_guid,
++		     const grub_efi_guid_t *vendor_guid,
+ 		     grub_efi_uint32_t attributes,
+ 		     grub_efi_uintn_t data_size,
+ 		     void *data);
+@@ -131,11 +131,11 @@
+ 
+ /* Some standard functions because we need to be standalone */
+ static void
+-efiemu_memcpy (void *to, void *from, int count)
++efiemu_memcpy (void *to, const void *from, int count)
+ {
+   int i;
+   for (i = 0; i < count; i++)
+-    ((grub_uint8_t *) to)[i] = ((grub_uint8_t *) from)[i];
++    ((grub_uint8_t *) to)[i] = ((const grub_uint8_t *) from)[i];
+ }
+ 
+ static int
+@@ -503,10 +503,10 @@
+ 
+ grub_efi_status_t
+ EFI_FUNC (efiemu_set_variable) (grub_efi_char16_t *variable_name,
+-				   grub_efi_guid_t *vendor_guid,
+-				   grub_efi_uint32_t attributes,
+-				   grub_efi_uintn_t data_size,
+-				   void *data)
++				const grub_efi_guid_t *vendor_guid,
++				grub_efi_uint32_t attributes,
++				grub_efi_uintn_t data_size,
++				void *data)
+ {
+   struct efi_variable *efivar;
+   grub_uint8_t *ptr;
+Index: b/grub-core/kern/efi/efi.c
+===================================================================
+--- a/grub-core/kern/efi/efi.c
++++ b/grub-core/kern/efi/efi.c
+@@ -181,6 +181,36 @@
+   return grub_error (GRUB_ERR_IO, "set_virtual_address_map failed");
+ }
+ 
++grub_err_t
++grub_efi_set_variable(const char *var, const grub_efi_guid_t *guid,
++		      void *data, grub_size_t datasize)
++{
++  grub_efi_status_t status;
++  grub_efi_runtime_services_t *r;
++  grub_efi_char16_t *var16;
++  grub_size_t len, len16;
++
++  len = grub_strlen (var);
++  len16 = len * GRUB_MAX_UTF16_PER_UTF8;
++  var16 = grub_malloc ((len16 + 1) * sizeof (var16[0]));
++  if (!var16)
++    return grub_errno;
++  len16 = grub_utf8_to_utf16 (var16, len16, (grub_uint8_t *) var, len, NULL);
++  var16[len16] = 0;
++
++  r = grub_efi_system_table->runtime_services;
++
++  status = efi_call_5 (r->set_variable, var16, guid, 
++		       (GRUB_EFI_VARIABLE_NON_VOLATILE
++			| GRUB_EFI_VARIABLE_BOOTSERVICE_ACCESS
++			| GRUB_EFI_VARIABLE_RUNTIME_ACCESS),
++		       datasize, data);
++  if (status == GRUB_EFI_SUCCESS)
++    return GRUB_ERR_NONE;
++
++  return grub_error (GRUB_ERR_IO, "could not set EFI variable `%s'", var);
++}
++
+ void *
+ grub_efi_get_variable (const char *var, const grub_efi_guid_t *guid,
+ 		       grub_size_t *datasize_out)
+Index: b/include/grub/efi/api.h
+===================================================================
+--- a/include/grub/efi/api.h
++++ b/include/grub/efi/api.h
+@@ -58,6 +58,8 @@
+ #define GRUB_EFI_OPEN_PROTOCOL_BY_DRIVER		0x00000010
+ #define GRUB_EFI_OPEN_PROTOCOL_BY_EXCLUSIVE		0x00000020
+ 
++#define GRUB_EFI_OS_INDICATIONS_BOOT_TO_FW_UI	0x0000000000000001ULL
++
+ #define GRUB_EFI_VARIABLE_NON_VOLATILE		0x0000000000000001
+ #define GRUB_EFI_VARIABLE_BOOTSERVICE_ACCESS	0x0000000000000002
+ #define GRUB_EFI_VARIABLE_RUNTIME_ACCESS	0x0000000000000004
+@@ -1066,7 +1068,7 @@
+ 
+   grub_efi_status_t
+   (*set_variable) (grub_efi_char16_t *variable_name,
+-		   grub_efi_guid_t *vendor_guid,
++		   const grub_efi_guid_t *vendor_guid,
+ 		   grub_efi_uint32_t attributes,
+ 		   grub_efi_uintn_t data_size,
+ 		   void *data);
+Index: b/include/grub/efi/efi.h
+===================================================================
+--- a/include/grub/efi/efi.h
++++ b/include/grub/efi/efi.h
+@@ -64,6 +64,11 @@
+ void *EXPORT_FUNC (grub_efi_get_variable) (const char *variable,
+ 					   const grub_efi_guid_t *guid,
+ 					   grub_size_t *datasize_out);
++grub_err_t
++EXPORT_FUNC (grub_efi_set_variable) (const char *var,
++				     const grub_efi_guid_t *guid,
++				     void *data,
++				     grub_size_t datasize);
+ int
+ EXPORT_FUNC (grub_efi_compare_device_paths) (const grub_efi_device_path_t *dp1,
+ 					     const grub_efi_device_path_t *dp2);

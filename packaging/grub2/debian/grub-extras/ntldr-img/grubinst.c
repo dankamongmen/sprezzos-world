@@ -343,7 +343,7 @@ int install(char* fn)
       r2=valueat(grub_mbr[0x1FFA],0,unsigned short);
       if (r1!=r2)
         {
-          char buf[30];
+          char buf[80];
 
           sprintf(buf,"Version number mismatched (old=%d new=%d)",r2,r1);
           print_apperr(buf);

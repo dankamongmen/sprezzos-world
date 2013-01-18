@@ -1,3 +1,4 @@
+# vim: set fileencoding=UTF-8 :
 '''apport package hook for grub2
 
 Author: Jean-Baptiste Lallement <jeanbaptiste.lallement@gmail.com>
@@ -19,8 +20,8 @@ import re
 def check_shell_syntax(path):
     ''' Check the syntax of a shell script '''
     try:
-        subprocess.check_call(['/bin/sh', '-n', path],
-                              stderr=open(os.devnull,'w'))
+        with open(os.devnull, 'w') as devnull:
+            subprocess.check_call(['/bin/sh', '-n', path], stderr=devnull)
     except subprocess.CalledProcessError:
         return False
     return True
@@ -43,8 +44,9 @@ def check_shell_syntax_harder(path):
         # Unfortunately this test may involve executing code.  However, this
         # file is already sourced as root when running update-grub, so it
         # seems unlikely that this could do any further harm.
-        subprocess.check_call(['/bin/sh', '-ec', '. %s' % re.escape(path)],
-                              stderr=open(os.devnull,'w'))
+        with open(os.devnull, 'w') as devnull:
+            subprocess.check_call(
+                ['/bin/sh', '-ec', '. %s' % re.escape(path)], stderr=devnull)
     except subprocess.CalledProcessError:
         return False
     return True
@@ -67,6 +69,15 @@ def add_info(report):
         attach_file(report, '/proc/cmdline','ProcCmdLine')
         _attach_file_filtered(report, '/etc/default/grub','EtcDefaultGrub')
         attach_file_if_exists(report, '/boot/grub/device.map', 'DeviceMap')
+        try:
+            grub_d = '/etc/default/grub.d'
+            for name in sorted(os.listdir(grub_d)):
+                if name.endswith('.cfg'):
+                    key = 'EtcDefaultGrubD.' + path_to_key(name)
+                    attach_file_if_exists(
+                        report, os.path.join(grub_d, name), key)
+        except OSError:
+            pass
 
         invalid_grub_script = []
         if not check_shell_syntax_harder('/etc/default/grub'):
