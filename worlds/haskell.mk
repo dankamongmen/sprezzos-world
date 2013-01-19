@@ -1,3 +1,11 @@
+.PHONY: cpphs
+cpphs:$(CPPHS)_$(ARCH).deb
+$(CPPHS): $(SPREZZ)/cpphs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cpphs-$(cpphs_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ghc
 ghc:$(GHC)_$(ARCH).deb
 $(GHC): $(SPREZZ)/ghc/debian/changelog
@@ -125,6 +133,14 @@ $(HASKELLRANDOM): $(SPREZZ)/haskell-random/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf random-$(haskell-random_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-regex-base
+haskell-regex-base:$(HASKELLREGEXBASE)_$(ARCH).deb
+$(HASKELLREGEXBASE): $(SPREZZ)/haskell-regex-base/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf regex-base-$(haskell-regex-base_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-regex-posix
 haskell-regex-posix:$(HASKELLREGEXPOSIX)_$(ARCH).deb
