@@ -54,6 +54,14 @@ $(HASKELLJSON): $(SPREZZ)/haskell-json/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf json-$(haskell-json_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-lifted-base
+haskell-lifted-base:$(HASKELLLIFTEDBASE)_$(ARCH).deb
+$(HASKELLLIFTEDBASE): $(SPREZZ)/haskell-lifted-base/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lifted-base-$(haskell-lifted-base_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-monad-control
 haskell-monad-control:$(HASKELLMONADCONTROL)_$(ARCH).deb
 $(HASKELLMONADCONTROL): $(SPREZZ)/haskell-monad-control/debian/changelog
@@ -93,6 +101,14 @@ $(HASKELLRANDOM): $(SPREZZ)/haskell-random/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf random-$(haskell-random_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-resourcet
+haskell-resourcet:$(HASKELLRESOURCET)_$(ARCH).deb
+$(HASKELLRESOURCET): $(SPREZZ)/haskell-resourcet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf resourcet-$(haskell-resourcet_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-semigroups
 haskell-semigroups:$(HASKELLSEMIGROUPS)_$(ARCH).deb
