@@ -46,6 +46,22 @@ $(HASKELLBASEUNICODESYMBOLS): $(SPREZZ)/haskell-base-unicode-symbols/debian/chan
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf base-unicode-symbols-$(haskell-base-unicode-symbols_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-blaze-builder
+haskell-blaze-builder:$(HASKELLBLAZEBUILDER)_$(ARCH).deb
+$(HASKELLBLAZEBUILDER): $(SPREZZ)/haskell-blaze-builder/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blaze-builder-$(haskell-blaze-builder_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-blaze-html
+haskell-blaze-html:$(HASKELLBLAZEHTML)_$(ARCH).deb
+$(HASKELLBLAZEHTML): $(SPREZZ)/haskell-blaze-html/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blaze-html-$(haskell-blaze-html_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-conduit
 haskell-conduit:$(HASKELLCONDUIT)_$(ARCH).deb
 $(HASKELLCONDUIT): $(SPREZZ)/haskell-conduit/debian/changelog
