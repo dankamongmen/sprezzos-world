@@ -1109,6 +1109,14 @@ $(FTGL): $(SPREZZ)/ftgl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ftgl-$(ftgl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: fwknop
+fwknop:$(FWKNOP)_$(ARCH).deb
+$(FWKNOP): $(SPREZZ)/fwknop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fwknop-$(fwknop_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: blas
 blas:$(BLAS)_$(ARCH).deb
 $(BLAS): $(SPREZZ)/blas/debian/changelog
