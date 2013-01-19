@@ -6,6 +6,14 @@ $(GHC): $(SPREZZ)/ghc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ghc-$(ghc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-ansi-terminal
+haskell-ansi-terminal:$(HASKELLANSITERMINAL)_$(ARCH).deb
+$(HASKELLANSITERMINAL): $(SPREZZ)/haskell-ansi-terminal/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ansi-terminal-$(haskell-ansi-terminal_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-base-unicode-symbols
 haskell-base-unicode-symbols:$(HASKELLBASEUNICODESYMBOLS)_$(ARCH).deb
 $(HASKELLBASEUNICODESYMBOLS): $(SPREZZ)/haskell-base-unicode-symbols/debian/changelog
@@ -133,6 +141,14 @@ $(HASKELLSYB): $(SPREZZ)/haskell-syb/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf syb-$(haskell-syb_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-test-framework
+haskell-test-framework:$(HASKELLTESTFRAMEWORK)_$(ARCH).deb
+$(HASKELLTESTFRAMEWORK): $(SPREZZ)/haskell-test-framework/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf test-framework-$(haskell-test-framework_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-testpack
 haskell-testpack:$(HASKELLTESTPACK)_$(ARCH).deb
