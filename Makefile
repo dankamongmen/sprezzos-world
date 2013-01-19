@@ -4467,6 +4467,14 @@ $(MINGETTY): $(SPREZZ)/mingetty/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mingetty-$(mingetty_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: miniupnpc
+miniupnpc:$(MINIUPNPC)_$(ARCH).deb
+$(MINIUPNPC): $(SPREZZ)/miniupnpc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf miniupnpc-$(miniupnpc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: mm-common
 mm-common:$(MMCOMMON)_$(ARCH).deb
 $(MMCOMMON): $(SPREZZ)/mm-common/debian/changelog
