@@ -1091,7 +1091,7 @@ $(BITCOIN): $(SPREZZ)/bitcoin/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf bitcoin-$(bitcoin_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf bitcoin_$(bitcoin_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: flex
 flex:$(FLEX)_$(ARCH).deb
