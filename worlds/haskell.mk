@@ -142,6 +142,14 @@ $(HASKELLTRANSFORMERS): $(SPREZZ)/haskell-transformers/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf transformers-$(haskell-transformers_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-transformers-base
+haskell-transformers-base:$(HASKELLTRANSFORMERSBASE)_$(ARCH).deb
+$(HASKELLTRANSFORMERSBASE): $(SPREZZ)/haskell-transformers-base/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf transformers-base-$(haskell-transformers-base_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-void
 haskell-void:$(HASKELLVOID)_$(ARCH).deb
 $(HASKELLVOID): $(SPREZZ)/haskell-void/debian/changelog
