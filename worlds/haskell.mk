@@ -62,6 +62,14 @@ $(HASKELLBLAZEHTML): $(SPREZZ)/haskell-blaze-html/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf blaze-html-$(haskell-blaze-html_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-blaze-markup
+haskell-blaze-markup:$(HASKELLBLAZEMARKUP)_$(ARCH).deb
+$(HASKELLBLAZEMARKUP): $(SPREZZ)/haskell-blaze-markup/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blaze-markup-$(haskell-blaze-markup_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-conduit
 haskell-conduit:$(HASKELLCONDUIT)_$(ARCH).deb
 $(HASKELLCONDUIT): $(SPREZZ)/haskell-conduit/debian/changelog
