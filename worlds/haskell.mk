@@ -126,6 +126,14 @@ $(HASKELLRANDOM): $(SPREZZ)/haskell-random/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf random-$(haskell-random_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-regex-posix
+haskell-regex-posix:$(HASKELLREGEXPOSIX)_$(ARCH).deb
+$(HASKELLREGEXPOSIX): $(SPREZZ)/haskell-regex-posix/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf regex-posix-$(haskell-regex-posix_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-resourcet
 haskell-resourcet:$(HASKELLRESOURCET)_$(ARCH).deb
 $(HASKELLRESOURCET): $(SPREZZ)/haskell-resourcet/debian/changelog
@@ -205,6 +213,14 @@ $(HASKELLVOID): $(SPREZZ)/haskell-void/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf void-$(haskell-void_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-xml
+haskell-xml:$(HASKELLXML)_$(ARCH).deb
+$(HASKELLXML): $(SPREZZ)/haskell-xml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xml-$(haskell-xml_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-xml-conduit
 haskell-xml-conduit:$(HASKELLXMLCONDUIT)_$(ARCH).deb
