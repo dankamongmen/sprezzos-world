@@ -1,0 +1,101 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+DEB_HOST_ARCH  := $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_BUILD_ARCH := $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+
+SOURCE := $(shell dpkg-parsechangelog | sed -ne 's,^Source: *\(.*\)$$,\1,p')
+VERSION := $(shell dpkg-parsechangelog | sed -ne 's,^Version: *\(.*\)$$,\1,p')
+VERSION_UPSTREAM := $(shell echo "$(VERSION)" | sed -e 's,-[^-]*$$,,')
+VERSION_BINNMU := $(shell echo "$(VERSION)" | sed -ne 's,.*\+b\(.*\)$$,\1,p')
+
+stamp = [ -d $(dir $@) ] || mkdir $(dir $@); touch $@
+
+include debian/rules.defs
+
+setup: debian/control
+	dh_testdir
+	$(MAKE) -f debian/rules.gen setup_$(DEB_HOST_ARCH)
+	@$(stamp)
+
+build: build-arch build-indep
+
+build-arch: setup
+	dh_testdir
+	$(MAKE) -f debian/rules.gen build-arch_$(DEB_HOST_ARCH)
+	@$(stamp)
+
+build-indep: setup
+	dh_testdir
+	$(MAKE) -f debian/rules.gen build-indep
+	@$(stamp)
+
+maintainerclean:
+	rm -f debian/control* debian/rules.gen debian/xen-hypervisor-* debian/xen-utils-[0-9]*
+	rm -rf $(filter-out .svn debian, $(wildcard * .[^.]*))
+
+clean: debian/control
+	dh_testdir
+	rm -rf $(BUILD_DIR) $(STAMPS_DIR) debian/lib/python/debian_xen/*.pyc
+	dh_clean
+
+binary-indep:
+	dh_testdir
+	$(MAKE) -f debian/rules.gen binary-indep
+
+binary-arch:
+	dh_testdir
+	$(MAKE) -f debian/rules.gen binary-arch_$(DEB_HOST_ARCH)
+
+binary:	binary-indep binary-arch
+
+DIR_ORIG = ../orig/$(SOURCE)-$(VERSION_UPSTREAM)
+TAR_ORIG_MAIN_NAME = $(SOURCE)_$(VERSION_UPSTREAM).orig.tar.gz
+TAR_ORIG_MAIN = $(firstword $(wildcard ../$(TAR_ORIG_MAIN_NAME)) $(wildcard ../orig/$(TAR_ORIG_MAIN_NAME)))
+TAR_ORIG_QEMU_NAME = $(SOURCE)_$(VERSION_UPSTREAM).orig-qemu.tar.gz
+TAR_ORIG_QEMU = $(firstword $(wildcard ../$(TAR_ORIG_QEMU_NAME)) $(wildcard ../orig/$(TAR_ORIG_QEMU_NAME)))
+
+orig: $(DIR_ORIG)
+	rsync --delete --exclude debian --exclude .svk --exclude .svn -a $(DIR_ORIG)/ .
+
+$(DIR_ORIG):
+ifeq ($(TAR_ORIG_MAIN),)
+	$(error Cannot find main orig tarball $(TAR_ORIG_MAIN_NAME))
+else
+	mkdir -p ../orig
+	tar -C ../orig -xzf $(TAR_ORIG_MAIN)
+endif
+ifeq ($(TAR_ORIG_QEMU),)
+	$(warning Cannot find qemu orig tarball $(TAR_ORIG_QEMU_NAME))
+else
+	tar -C $@ -xzf $(TAR_ORIG_QEMU)
+endif
+
+CONTROL_FILES += debian/changelog debian/bin/gencontrol.py $(wildcard debian/templates/*.in) 
+CONTROL_FILES += $(wildcard debian/arch/defines) $(wildcard debian/arch/*/defines)
+GENCONTROL = $(__MODULES_DIR)gencontrol.py
+debian/control debian/rules.gen: $(CONTROL_FILES)
+ifeq ($(wildcard debian/control.md5sum),)
+	$(MAKE) -f debian/rules debian/control-real
+else ifeq ($(VERSION_BINNMU),)
+	md5sum --check debian/control.md5sum --status || \
+		$(MAKE) -f debian/rules debian/control-real
+else
+	grep -v debian/changelog debian/control.md5sum | md5sum --check - --status || \
+		$(MAKE) -f debian/rules debian/control-real
+endif
+
+debian/control-real: $(CONTROL_FILES)
+	debian/bin/gencontrol.py
+	md5sum $^ > debian/control.md5sum
+	@echo
+	@echo This target is made to fail intentionally, to make sure
+	@echo that it is NEVER run during the automated build. Please
+	@echo ignore the following error, the debian/control file has
+	@echo been generated SUCCESSFULLY.
+	@echo
+	exit 1
+
+.PHONY: clean build binary-indep binary-arch binary

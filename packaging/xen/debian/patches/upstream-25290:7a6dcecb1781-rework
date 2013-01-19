@@ -1,0 +1,78 @@
+--- a/tools/hotplug/Linux/vif-common.sh
++++ b/tools/hotplug/Linux/vif-common.sh
+@@ -85,12 +85,23 @@
+     : ${INTERFACE:?}
+ 
+     # Get xenbus_path from device name.
+-    # The name is built like that: "tap${domid}.${devid}".
+-    dev_=${dev#tap}
++    # The name is built like that: "vif${domid}.${devid}-emu".
++    dev_=${dev#vif}
++    dev_=${dev_%-emu}
+     domid=${dev_%.*}
+     devid=${dev_#*.}
+ 
+     XENBUS_PATH="/local/domain/0/backend/vif/$domid/$devid"
++    vifname=$(xenstore_read_default "$XENBUS_PATH/vifname" "")
++    if [ "$vifname" ]
++    then
++        vifname="${vifname}-emu"
++        if [ "$command" == "add" ] && ! ip link show "$vifname" >&/dev/null
++        then
++            do_or_die ip link set "$dev" name "$vifname"
++        fi
++        dev="$vifname"
++    fi
+ fi
+ 
+ ip=${ip:-}
+--- a/tools/hotplug/Linux/xen-backend.rules
++++ b/tools/hotplug/Linux/xen-backend.rules
+@@ -13,4 +13,4 @@
+ KERNEL=="gntdev", NAME="xen/%k", MODE="0600"
+ KERNEL=="pci_iomul", NAME="xen/%k", MODE="0600"
+ KERNEL=="tapdev[a-z]*", NAME="xen/blktap-2/tapdev%m", MODE="0600"
+-SUBSYSTEM=="net", KERNEL=="tap*", ACTION=="add", RUN+="/etc/xen/scripts/vif-setup $env{ACTION} type_if=tap"
++SUBSYSTEM=="net", KERNEL=="vif*-emu", ACTION=="add", RUN+="/etc/xen/scripts/vif-setup $env{ACTION} type_if=tap"
+--- a/tools/python/xen/xend/image.py
++++ b/tools/python/xen/xend/image.py
+@@ -917,11 +917,7 @@
+             ret.append("-net")
+             ret.append("nic,vlan=%d,macaddr=%s,model=%s" %
+                        (nics, mac, model))
+-            vifname = devinfo.get('vifname')
+-            if vifname:
+-                vifname = "tap-" + vifname
+-            else:
+-                vifname = "tap%d.%d" % (self.vm.getDomid(), nics-1)
++            vifname = "vif%d.%d-emu" % (self.vm.getDomid(), nics-1)
+             ret.append("-net")
+             ret.append("tap,vlan=%d,ifname=%s,bridge=%s" %
+                        (nics, vifname, bridge))
+--- a/tools/libxl/libxl_dm.c
++++ b/tools/libxl/libxl_dm.c
+@@ -135,10 +135,7 @@
+                                            vifs[i].mac[0], vifs[i].mac[1], vifs[i].mac[2],
+                                            vifs[i].mac[3], vifs[i].mac[4], vifs[i].mac[5]);
+                 char *ifname;
+-                if (!vifs[i].ifname)
+-                    ifname = libxl__sprintf(gc, "tap%d.%d", info->domid, vifs[i].devid);
+-                else
+-                    ifname = vifs[i].ifname;
++                ifname = libxl__sprintf(gc, "vif%d.%d-emu", info->domid, vifs[i].devid);
+                 flexarray_vappend(dm_args,
+                                 "-net", libxl__sprintf(gc, "nic,vlan=%d,macaddr=%s,model=%s",
+                                                        vifs[i].devid, smac, vifs[i].model),
+@@ -272,11 +269,7 @@
+                                            vifs[i].mac[0], vifs[i].mac[1], vifs[i].mac[2],
+                                            vifs[i].mac[3], vifs[i].mac[4], vifs[i].mac[5]);
+                 char *ifname;
+-                if (!vifs[i].ifname) {
+-                    ifname = libxl__sprintf(gc, "tap%d.%d", info->domid, vifs[i].devid);
+-                } else {
+-                    ifname = vifs[i].ifname;
+-                }
++                ifname = libxl__sprintf(gc, "vif%d.%d-emu", info->domid, vifs[i].devid);
+                 flexarray_append(dm_args, "-net");
+                 flexarray_append(dm_args, libxl__sprintf(gc, "nic,vlan=%d,macaddr=%s,model=%s",
+                             vifs[i].devid, smac, vifs[i].model));

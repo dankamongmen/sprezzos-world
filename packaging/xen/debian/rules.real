@@ -1,0 +1,271 @@
+include /usr/share/ocaml/ocamlvars.mk
+
+DEB_HOST_ARCH     := $(shell dpkg-architecture -a$(ARCH) -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE := $(shell dpkg-architecture -a$(ARCH) -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_ARCH    := $(shell dpkg-architecture -a$(ARCH) -qDEB_BUILD_ARCH)
+
+export DH_OPTIONS
+
+setup_env := env -u ARCH -u FLAVOUR -u VERSION -u MAKEFLAGS
+
+MAKE_CLEAN = $(setup_env) $(MAKE)
+MAKE_SELF = $(MAKE) -f debian/rules.real
+
+include debian/rules.defs
+
+stamp = [ -d $(dir $@) ] || mkdir $(dir $@); touch $@
+
+binary-arch-arch: install-libxen_$(ARCH)
+binary-arch-arch: install-libxen-dev_$(ARCH)
+binary-arch-arch: install-libxenstore_$(ARCH)
+binary-arch-arch: install-utils_$(ARCH)
+binary-arch-arch: install-xenstore-utils_$(ARCH)
+binary-arch-arch: install-lib-ocaml-dev_$(ARCH)
+binary-arch-arch: install-lib-ocaml_$(ARCH)
+binary-arch-flavour: install-hypervisor_$(ARCH)_$(FLAVOUR)
+
+binary-indep: install-docs
+binary-indep: install-utils-common
+
+build-arch-arch: $(STAMPS_DIR)/build-utils_$(ARCH)
+build-arch-flavour: $(STAMPS_DIR)/build-hypervisor_$(ARCH)_$(FLAVOUR)
+
+build-indep: $(STAMPS_DIR)/build-docs
+
+setup-arch: $(STAMPS_DIR)/setup-utils_$(ARCH)
+setup-flavour: $(STAMPS_DIR)/setup-hypervisor_$(ARCH)_$(FLAVOUR)
+
+$(STAMPS_DIR)/setup-docs: SOURCE_FILES = $(filter-out debian, $(wildcard *))
+$(STAMPS_DIR)/setup-docs: DIR=$(BUILD_DIR)/build-docs
+$(STAMPS_DIR)/setup-docs:
+	@rm -rf $(DIR)
+	mkdir -p $(DIR)
+	cp -al $(SOURCE_FILES) $(DIR)
+	cd $(DIR); ./configure
+	@$(stamp)
+
+$(STAMPS_DIR)/setup-hypervisor_$(ARCH)_$(FLAVOUR): SOURCE_FILES = $(filter-out debian, $(wildcard *))
+$(STAMPS_DIR)/setup-hypervisor_$(ARCH)_$(FLAVOUR): DIR=$(BUILD_DIR)/build-hypervisor_$(ARCH)_$(FLAVOUR)
+$(STAMPS_DIR)/setup-hypervisor_$(ARCH)_$(FLAVOUR):
+	@rm -rf $(DIR)
+	mkdir -p $(DIR)
+	cp -al $(SOURCE_FILES) $(DIR)
+	echo "XEN_VENDORVERSION := $(EXTRAVERSION)" > $(DIR)/xen/xen-version
+	@$(stamp)
+
+$(STAMPS_DIR)/setup-utils_$(ARCH): SOURCE_FILES = $(filter-out debian, $(wildcard *))
+$(STAMPS_DIR)/setup-utils_$(ARCH): DIR=$(BUILD_DIR)/build-utils_$(ARCH)
+$(STAMPS_DIR)/setup-utils_$(ARCH):
+	@rm -rf $(DIR)
+	mkdir -p $(DIR)
+	cp -al $(SOURCE_FILES) $(DIR)
+	cd $(DIR); ./configure \
+		--disable-seabios
+	@$(stamp)
+
+$(STAMPS_DIR)/build-docs: DIR=$(BUILD_DIR)/build-docs
+$(STAMPS_DIR)/build-docs: $(STAMPS_DIR)/setup-docs
+	+$(MAKE_CLEAN) -C $(DIR)/docs
+	touch $@
+
+$(STAMPS_DIR)/build-hypervisor_$(ARCH)_$(FLAVOUR): DIR=$(BUILD_DIR)/build-hypervisor_$(ARCH)_$(FLAVOUR)
+$(STAMPS_DIR)/build-hypervisor_$(ARCH)_$(FLAVOUR): $(STAMPS_DIR)/setup-hypervisor_$(ARCH)_$(FLAVOUR)
+	+$(MAKE_CLEAN) -C $(DIR)/xen \
+		XEN_COMPILE_ARCH=$(XEN_ARCH) \
+		XEN_TARGET_ARCH=$(XEN_ARCH)
+	touch $@
+
+$(STAMPS_DIR)/build-utils_$(ARCH) \
+$(STAMPS_DIR)/install-utils_$(ARCH): CONFIG = \
+		debug=n \
+		XEN_COMPILE_ARCH=$(XEN_ARCH) \
+		XEN_TARGET_ARCH=$(XEN_ARCH) \
+		XEN_VERSION=$(VERSION) \
+		OCAMLDESTDIR=$(CURDIR)/$(BUILD_DIR)/install-utils_$(ARCH)/$(OCAML_STDLIB_DIR) \
+		PYTHON=$(shell pyversions -r)
+
+$(STAMPS_DIR)/build-utils_$(ARCH): DIR=$(BUILD_DIR)/build-utils_$(ARCH)
+$(STAMPS_DIR)/build-utils_$(ARCH): $(STAMPS_DIR)/setup-utils_$(ARCH)
+	+$(MAKE_CLEAN) -C $(DIR)/tools $(CONFIG)
+	touch $@
+
+$(STAMPS_DIR)/install-utils_$(ARCH): DIR = $(BUILD_DIR)/build-utils_$(ARCH)
+$(STAMPS_DIR)/install-utils_$(ARCH): INSTALL_DIR = $(BUILD_DIR)/install-utils_$(ARCH)
+$(STAMPS_DIR)/install-utils_$(ARCH): $(STAMPS_DIR)/build-utils_$(ARCH)
+	@rm -rf $(INSTALL_DIR)
+	mkdir -p $(INSTALL_DIR)/$(OCAML_DLL_DIR)
+	+$(MAKE_CLEAN) -C $(DIR)/tools install DESTDIR=$(CURDIR)/$(INSTALL_DIR) $(CONFIG)
+	# hvmloader
+	strip --remove-section=.comment --remove-section=.note $(INSTALL_DIR)/usr/lib/xen*/boot/*
+	touch $@
+
+$(STAMPS_DIR)/install-utils-common: DIR = $(BUILD_DIR)/build-docs
+$(STAMPS_DIR)/install-utils-common: INSTALL_DIR = $(BUILD_DIR)/install-utils-common
+$(STAMPS_DIR)/install-utils-common: export DESTDIR = $(CURDIR)/$(INSTALL_DIR)
+$(STAMPS_DIR)/install-utils-common: $(STAMPS_DIR)/build-docs
+	@rm -rf $(INSTALL_DIR)
+	+$(MAKE_CLEAN) -C $(SOURCE_DIR)/tools/examples install-configs
+	+$(MAKE_CLEAN) -C $(SOURCE_DIR)/tools/hotplug/common install-scripts
+	+$(MAKE_CLEAN) -C $(SOURCE_DIR)/tools/hotplug/Linux install-udev install-scripts UDEV_RULES_DIR=/lib/udev
+	+$(MAKE_CLEAN) -C debian/scripts install
+	touch $@
+
+install-base:
+	dh_installchangelogs -XChangelog
+	dh_installdirs
+	dh_installdocs
+	dh_installexamples
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol -- $(GENCONTROL_ARGS)
+	dh_md5sums
+	dh_builddeb
+
+install-dummy:
+	dh_testdir
+	dh_testroot
+	dh_prep
+	+$(MAKE_SELF) install-base
+
+install-docs: SOURCE_DIR = $(BUILD_DIR)/build-docs
+install-docs: DIR = $(BUILD_DIR)/install-docs
+install-docs: PACKAGE_NAME = xen-docs-$(VERSION)
+install-docs: DH_OPTIONS = -p$(PACKAGE_NAME)
+install-docs: $(STAMPS_DIR)/build-docs
+	dh_testdir
+	dh_testroot
+	dh_prep
+	+$(MAKE_CLEAN) -C $(SOURCE_DIR)/docs install DESTDIR=$(CURDIR)/$(DIR)
+	dh_install --sourcedir=$(DIR) usr/share/doc/xen/\*.pdf usr/share/doc/$(PACKAGE_NAME)
+	+$(MAKE_SELF) install-base
+
+install-hypervisor_$(ARCH)_$(FLAVOUR): DIR=$(BUILD_DIR)/build-hypervisor_$(ARCH)_$(FLAVOUR)
+install-hypervisor_$(ARCH)_$(FLAVOUR): PACKAGE_NAME = xen-hypervisor-$(VERSION)-$(FLAVOUR)
+install-hypervisor_$(ARCH)_$(FLAVOUR): DH_OPTIONS = -p$(PACKAGE_NAME)
+install-hypervisor_$(ARCH)_$(FLAVOUR): $(STAMPS_DIR)/build-hypervisor_$(ARCH)_$(FLAVOUR)
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs boot
+	cp $(DIR)/xen/xen.gz debian/$(PACKAGE_NAME)/boot/xen-$(VERSION)-$(FLAVOUR).gz
+	+$(MAKE_SELF) install-base
+
+install-libxen_$(ARCH): DIR = $(BUILD_DIR)/install-utils_$(ARCH)
+install-libxen_$(ARCH): DH_OPTIONS = -plibxen-$(VERSION)
+install-libxen_$(ARCH): $(STAMPS_DIR)/install-utils_$(ARCH)
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_install --sourcedir=$(DIR) usr/lib/libxen*-$(VERSION).so
+	dh_strip
+	dh_makeshlibs -V
+	dh_shlibdeps
+	+$(MAKE_SELF) install-base
+
+install-libxen-dev_$(ARCH): DIR = $(BUILD_DIR)/install-utils_$(ARCH)
+install-libxen-dev_$(ARCH): PACKAGE_NAME = libxen-dev
+install-libxen-dev_$(ARCH): DH_OPTIONS = -p$(PACKAGE_NAME)
+install-libxen-dev_$(ARCH): $(STAMPS_DIR)/install-utils_$(ARCH)
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_install --sourcedir=$(DIR)
+	dh_strip
+	dh_shlibdeps
+	+$(MAKE_SELF) install-base
+
+install-lib-ocaml_$(ARCH): DIR = $(BUILD_DIR)/install-utils_$(ARCH)
+install-lib-ocaml_$(ARCH): PACKAGE_NAME = libxen-ocaml
+install-lib-ocaml_$(ARCH): DH_OPTIONS = -p$(PACKAGE_NAME)
+install-lib-ocaml_$(ARCH): $(STAMPS_DIR)/install-utils_$(ARCH)
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_install --sourcedir=$(DIR) ./$(OCAML_STDLIB_DIR)/*/META
+	dh_install --sourcedir=$(DIR) ./$(OCAML_STDLIB_DIR)/*/*.cma
+	dh_install --sourcedir=$(DIR) -X.so.owner ./$(OCAML_DLL_DIR)/*
+	dh_strip
+	dh_shlibdeps
+	dh_ocaml
+	+$(MAKE_SELF) install-base
+
+install-lib-ocaml-dev_$(ARCH): DIR = $(BUILD_DIR)/install-utils_$(ARCH)
+install-lib-ocaml-dev_$(ARCH): PACKAGE_NAME = libxen-ocaml-dev
+install-lib-ocaml-dev_$(ARCH): DH_OPTIONS = -p$(PACKAGE_NAME)
+install-lib-ocaml-dev_$(ARCH): $(STAMPS_DIR)/install-utils_$(ARCH)
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_install --sourcedir=$(DIR) ./$(OCAML_STDLIB_DIR)/*/*.cmx
+	dh_install --sourcedir=$(DIR) ./$(OCAML_STDLIB_DIR)/*/*.cmxa
+	dh_install --sourcedir=$(DIR) ./$(OCAML_STDLIB_DIR)/*/*.cmi
+	dh_install --sourcedir=$(DIR) ./$(OCAML_STDLIB_DIR)/*/*.a
+	dh_strip
+	dh_shlibdeps
+	dh_ocaml
+	+$(MAKE_SELF) install-base
+
+install-libxenstore_$(ARCH): DIR = $(BUILD_DIR)/install-utils_$(ARCH)
+install-libxenstore_$(ARCH): PACKAGE_NAME = libxenstore3.0
+install-libxenstore_$(ARCH): DH_OPTIONS = -p$(PACKAGE_NAME)
+install-libxenstore_$(ARCH): $(STAMPS_DIR)/install-utils_$(ARCH)
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_install --sourcedir=$(DIR)
+	dh_strip
+	dh_makeshlibs -V
+	dh_shlibdeps
+	+$(MAKE_SELF) install-base
+
+install-utils_$(ARCH): SOURCE_DIR = $(BUILD_DIR)/build-utils_$(ARCH)
+install-utils_$(ARCH): DIR = $(BUILD_DIR)/install-utils_$(ARCH)
+install-utils_$(ARCH): PACKAGE_NAME = xen-utils-$(VERSION)
+install-utils_$(ARCH): PACKAGE_DIR = debian/$(PACKAGE_NAME)
+install-utils_$(ARCH): DH_OPTIONS = -p$(PACKAGE_NAME)
+install-utils_$(ARCH): $(STAMPS_DIR)/install-utils_$(ARCH) install-libxenstore_$(ARCH)
+	dh_testdir
+	dh_testroot
+	dh_prep
+	install -D -m644 debian/xen-utils.NEWS $(PACKAGE_DIR)/usr/share/doc/$(PACKAGE_NAME)/NEWS
+	install -D -m644 debian/xen-utils.README.Debian $(PACKAGE_DIR)/usr/share/doc/$(PACKAGE_NAME)/README.Debian
+	install -D -m644 debian/xen-utils-$(VERSION).lintian-overrides $(PACKAGE_DIR)/usr/share/lintian/overrides/$(PACKAGE_NAME)
+	dh_install --sourcedir=$(DIR) usr/lib/xen-$(VERSION)
+	( echo -n "misc:Built-Using="; dpkg-query -f='$${source:Package} (= $${source:Version}), ' -W ipxe-qemu; echo ) >> debian/$(PACKAGE_NAME).substvars
+	dh_python2 -V$(shell pyversions -rv) /usr/lib/xen-$(VERSION)
+	dh_strip
+	dh_makeshlibs -V
+	dh_shlibdeps
+	+$(MAKE_SELF) install-base
+
+install-utils-common: SOURCE_DIR = $(BUILD_DIR)/build-docs
+install-utils-common: DIR = $(BUILD_DIR)/install-utils-common
+install-utils-common: PACKAGE_NAME = xen-utils-common
+install-utils-common: DH_OPTIONS = -p$(PACKAGE_NAME)
+install-utils-common: $(STAMPS_DIR)/install-utils-common
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_install -X .svn --sourcedir=$(DIR)
+	dh_installinit --name xen -- defaults 20 21
+	dh_installinit --name xend
+	dh_installinit --name xendomains --no-start -- defaults 21 20
+	dh_installman $(SOURCE_DIR)/docs/man1/* $(SOURCE_DIR)/docs/man5/*
+	dh_link
+	dh_ucf
+	+$(MAKE_SELF) install-base
+
+install-xenstore-utils_$(ARCH): DIR = $(BUILD_DIR)/install-utils_$(ARCH)
+install-xenstore-utils_$(ARCH): PACKAGE_NAME = xenstore-utils
+install-xenstore-utils_$(ARCH): DH_OPTIONS = -p$(PACKAGE_NAME)
+install-xenstore-utils_$(ARCH): $(STAMPS_DIR)/install-utils_$(ARCH) install-libxenstore_$(ARCH)
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_install --sourcedir=$(DIR)
+	dh_strip
+	dh_shlibdeps
+	+$(MAKE_SELF) install-base
+
+# vim: filetype=make

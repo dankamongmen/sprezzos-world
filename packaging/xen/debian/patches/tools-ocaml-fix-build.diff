@@ -1,0 +1,94 @@
+From: Debian Xen Team <pkg-xen-devel@lists.alioth.debian.org>
+Date: Tue, 29 Nov 2011 11:45:27 +0000
+Subject: tools-ocaml-fix-build.diff
+
+Fix the build of the ocaml libraries
+
+Signed-off-by: Jon Ludlam <jonathan.ludlam@eu.citrix.com>
+---
+ tools/Rules.mk                     |    2 ++
+ tools/ocaml/Makefile.rules         |   10 ++--------
+ tools/ocaml/libs/eventchn/Makefile |    1 +
+ tools/ocaml/libs/xc/Makefile       |    3 ++-
+ tools/ocaml/xenstored/Makefile     |    4 +++-
+ 5 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/tools/Rules.mk b/tools/Rules.mk
+index 2ec0fe9..55d5e1f 100644
+--- a/tools/Rules.mk
++++ b/tools/Rules.mk
+@@ -21,9 +21,11 @@ CFLAGS_include = -I$(XEN_INCLUDE)
+ 
+ CFLAGS_libxenctrl = -I$(XEN_LIBXC) $(CFLAGS_include)
+ LDLIBS_libxenctrl = -L$(XEN_LIBXC) -lxenctrl $(DLOPEN_LIBS)
++LDLIBS_libxenctrl_SYSTEM = -lxenctrl-$(XEN_VERSION)
+ 
+ CFLAGS_libxenguest = -I$(XEN_LIBXC) $(CFLAGS_include)
+ LDLIBS_libxenguest = -L$(XEN_LIBXC) -lxenguest
++LDLIBS_libxenguest_SYSTEM = -lxenguest-$(XEN_VERSION)
+ 
+ CFLAGS_libxenstore = -I$(XEN_XENSTORE) $(CFLAGS_include)
+ LDLIBS_libxenstore = -L$(XEN_XENSTORE) -lxenstore
+diff --git a/tools/ocaml/Makefile.rules b/tools/ocaml/Makefile.rules
+index c630764..fe29d88 100644
+--- a/tools/ocaml/Makefile.rules
++++ b/tools/ocaml/Makefile.rules
+@@ -58,14 +58,8 @@ mk-caml-lib-stubs = \
+ 
+ # define a library target <name>.cmxa and <name>.cma
+ define OCAML_LIBRARY_template
+- $(1).cmxa: lib$(1)_stubs.a $(foreach obj,$($(1)_OBJS),$(obj).cmx)
+-	$(call mk-caml-lib-native,$$@, -cclib -l$(1)_stubs $(foreach lib,$(LIBS_$(1)),-cclib $(lib)), $(foreach obj,$($(1)_OBJS),$(obj).cmx))
+- $(1).cma: $(foreach obj,$($(1)_OBJS),$(obj).cmo)
+-	$(call mk-caml-lib-bytecode,$$@, -dllib dll$(1)_stubs.so -cclib -l$(1)_stubs, $$+)
+- $(1)_stubs.a: $(foreach obj,$$($(1)_C_OBJS),$(obj).o)
+-	$(call mk-caml-stubs,$$@, $$+)
+- lib$(1)_stubs.a: $(foreach obj,$($(1)_C_OBJS),$(obj).o)
+-	$(call mk-caml-lib-stubs,$$@, $$+, $(LIBS_$(1)))
++ $(1).cma: $(foreach obj,$($(1)_OBJS),$(obj).cmx $(obj).cmo) $(foreach obj,$($(1)_C_OBJS),$(obj).o)
++	$(OCAMLMKLIB) -o $1 -oc $(1)_stubs $(foreach obj,$($(1)_OBJS),$(obj).cmx $(obj).cmo) $(foreach obj,$($(1)_C_OBJS),$(obj).o) $(foreach lib, $(LIBS_$(1)_SYSTEM), -cclib $(lib)) $(foreach arg,$(LIBS_$(1)),-ldopt $(arg))
+ endef
+ 
+ define OCAML_NOC_LIBRARY_template
+diff --git a/tools/ocaml/libs/eventchn/Makefile b/tools/ocaml/libs/eventchn/Makefile
+index 19c88b7..65a4369 100644
+--- a/tools/ocaml/libs/eventchn/Makefile
++++ b/tools/ocaml/libs/eventchn/Makefile
+@@ -7,6 +7,7 @@ INTF = $(foreach obj, $(OBJS),$(obj).cmi)
+ LIBS = xeneventchn.cma xeneventchn.cmxa
+ 
+ LIBS_xeneventchn = $(LDLIBS_libxenctrl)
++LIBS_xeneventchn_SYSTEM = $(LDLIBS_libxenctrl_SYSTEM)
+ 
+ all: $(INTF) $(LIBS) $(PROGRAMS)
+ 
+diff --git a/tools/ocaml/libs/xc/Makefile b/tools/ocaml/libs/xc/Makefile
+index 7a12273..60301a5 100644
+--- a/tools/ocaml/libs/xc/Makefile
++++ b/tools/ocaml/libs/xc/Makefile
+@@ -9,7 +9,8 @@ OBJS = xenctrl
+ INTF = xenctrl.cmi
+ LIBS = xenctrl.cma xenctrl.cmxa
+ 
+-LIBS_xenctrl = -L$(XEN_ROOT)/tools/libxc -lxenctrl -lxenguest
++LIBS_xenctrl = $(LDLIBS_libxenctrl) $(LDLIBS_libxenguest)
++LIBS_xenctrl_SYSTEM = $(LDLIBS_libxenctrl_SYSTEM) $(LDLIBS_libxenguest_SYSTEM)
+ 
+ xenctrl_OBJS = $(OBJS)
+ xenctrl_C_OBJS = xenctrl_stubs
+diff --git a/tools/ocaml/xenstored/Makefile b/tools/ocaml/xenstored/Makefile
+index 3a25d1d..2627af3 100644
+--- a/tools/ocaml/xenstored/Makefile
++++ b/tools/ocaml/xenstored/Makefile
+@@ -36,7 +36,9 @@ XENSTOREDLIBS = \
+ 	-ccopt -L -ccopt $(OCAML_TOPLEVEL)/libs/eventchn $(OCAML_TOPLEVEL)/libs/eventchn/xeneventchn.cmxa \
+ 	-ccopt -L -ccopt $(OCAML_TOPLEVEL)/libs/xc $(OCAML_TOPLEVEL)/libs/xc/xenctrl.cmxa \
+ 	-ccopt -L -ccopt $(OCAML_TOPLEVEL)/libs/xb $(OCAML_TOPLEVEL)/libs/xb/xenbus.cmxa \
+-	-ccopt -L -ccopt $(XEN_ROOT)/tools/libxc
++	-ccopt -L -ccopt $(XEN_ROOT)/tools/libxc \
++	$(foreach obj, $(LDLIBS_libxenctrl), -ccopt $(obj)) \
++	$(foreach obj, $(LDLIBS_libxenguest), -ccopt $(obj))
+ 
+ PROGRAMS = oxenstored
+ 
+-- 

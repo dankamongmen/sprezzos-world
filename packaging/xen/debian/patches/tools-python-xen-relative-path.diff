@@ -1,0 +1,163 @@
+--- a/tools/python/xen/xm/create.py
++++ b/tools/python/xen/xm/create.py
+@@ -713,45 +713,39 @@
+         return None
+     config_image = [ vals.builder ]
+     if vals.kernel:
++        t = auxbin.path_boot(vals.kernel)
+         if vals.bootloader:
+             # If bootloader is specified, vals.kernel will be used
+             # by bootloader when boots DomU. So it is needless to
+             # check the path is existent or not.
+             config_image.append([ 'kernel', vals.kernel ])
+-        elif os.path.dirname(vals.kernel) != "" and os.path.exists(vals.kernel):
+-            config_image.append([ 'kernel', vals.kernel ])
+         elif vals.kernel == 'hvmloader':
+             # Keep hvmloader w/o a path and let xend find it.
+             # This allows guest migration to a Dom0 having different
+             # xen install pathes.
+             config_image.append([ 'kernel', vals.kernel ])
+-        elif os.path.exists(os.path.abspath(vals.kernel)):
+-            # Keep old behaviour, if path is valid.
+-            config_image.append([ 'kernel', os.path.abspath(vals.kernel) ])
++        elif t:
++            config_image.append([ 'kernel', t ])
+         else:
+             raise ValueError('Cannot find kernel "%s"' % vals.kernel)
+     if vals.ramdisk:
++        t = auxbin.path_boot(vals.ramdisk)
+         if vals.bootloader:
+             # Same with 'kernel' above
+             config_image.append([ 'ramdisk', vals.ramdisk ])
+-        elif os.path.dirname(vals.ramdisk) != "" and os.path.exists(vals.ramdisk):
+-            config_image.append([ 'ramdisk', vals.ramdisk ])
+-        elif os.path.exists(os.path.abspath(vals.ramdisk)):
+-            # Keep old behaviour, if path is valid.
+-            config_image.append([ 'ramdisk', os.path.abspath(vals.ramdisk) ])
++        elif t:
++            config_image.append([ 'ramdisk', t ])
+         else:
+             raise ValueError('Cannot find ramdisk "%s"' % vals.ramdisk)
+     if vals.loader:
+-        if os.path.dirname(vals.loader) != "" and os.path.exists(vals.loader):
+-            config_image.append([ 'loader', vals.loader ])
+-        elif vals.loader == 'hvmloader':
++        t = auxbin.path_boot(vals.loader)
++        if vals.loader == 'hvmloader':
+             # Keep hvmloader w/o a path and let xend find it.
+             # This allows guest migration to a Dom0 having different
+             # xen install pathes.
+             config_image.append([ 'loader', vals.loader ])
+-        elif os.path.exists(os.path.abspath(vals.loader)):
+-            # Keep old behaviour, if path is valid.
+-            config_image.append([ 'loader', os.path.abspath(vals.loader) ])
++        elif t:
++            config_image.append([ 'loader', t ])
+         else:
+             raise ValueError('Cannot find loader "%s"' % vals.loader)
+     if vals.cmdline_ip:
+@@ -1081,7 +1075,7 @@
+     args = [ 'acpi', 'apic',
+              'boot',
+              'cpuid', 'cpuid_check',
+-             'device_model', 'display',
++             'display',
+              'fda', 'fdb',
+              'gfx_passthru', 'guest_os_type',
+              'hap', 'hpet',
+@@ -1103,6 +1097,8 @@
+     for a in args:
+         if a in vals.__dict__ and vals.__dict__[a] is not None:
+             config_image.append([a, vals.__dict__[a]])
++    if vals.device_model:
++        config_image.append(['device_model', auxbin.path_bin(vals.device_model)])
+     if vals.vncpasswd is not None:
+         config_image.append(['vncpasswd', vals.vncpasswd])
+ 
+@@ -1171,10 +1167,9 @@
+ 
+     config_image = configure_image(vals)
+     if vals.bootloader:
+-        if vals.bootloader == "pygrub":
+-            vals.bootloader = auxbin.pathTo(vals.bootloader)
++        t = auxbin.path_boot(vals.bootloader)
+ 
+-        config.append(['bootloader', vals.bootloader])
++        config.append(['bootloader', t])
+         if vals.bootargs:
+             config.append(['bootloader_args', vals.bootargs])
+         else:
+--- a/tools/python/xen/xend/XendCheckpoint.py
++++ b/tools/python/xen/xend/XendCheckpoint.py
+@@ -118,7 +118,7 @@
+         # enabled. Passing "0" simply uses the defaults compiled into
+         # libxenguest; see the comments and/or code in xc_linux_save() for
+         # more information.
+-        cmd = [xen.util.auxbin.pathTo(XC_SAVE), str(fd),
++        cmd = [xen.util.auxbin.path_bin(XC_SAVE), str(fd),
+                str(dominfo.getDomid()), "0", "0", 
+                str(int(live) | (int(hvm) << 2)) ]
+         log.debug("[xc_save]: %s", string.join(cmd))
+@@ -299,7 +299,7 @@
+ 
+         superpages = restore_image.superpages
+ 
+-        cmd = map(str, [xen.util.auxbin.pathTo(XC_RESTORE),
++        cmd = map(str, [xen.util.auxbin.path_bin(XC_RESTORE),
+                         fd, dominfo.getDomid(),
+                         store_port, console_port, int(is_hvm), pae, apic, superpages])
+         log.debug("[xc_restore]: %s", string.join(cmd))
+--- a/tools/python/xen/xend/XendConfig.py
++++ b/tools/python/xen/xend/XendConfig.py
+@@ -494,11 +494,11 @@
+ 
+         if self.is_hvm() or self.has_rfb():
+             if 'device_model' not in self['platform']:
+-                self['platform']['device_model'] = auxbin.pathTo("qemu-dm")
++                self['platform']['device_model'] = auxbin.path_bin("qemu-dm")
+             # device_model may be set to 'qemu-dm' or 'stubdom-dm' w/o a path
+             if os.path.dirname(self['platform']['device_model']) == "":
+                 self['platform']['device_model'] = \
+-                    auxbin.pathTo(self['platform']['device_model'])
++                    auxbin.path_bin(self['platform']['device_model'])
+             # If the device_model is not set the os.path.exists() would raise
+             # an exception so we return our error message instead if applicable
+             if not self['platform']['device_model']:
+@@ -529,14 +529,14 @@
+                 # Old configs may have hvmloader set as PV_kernel param
+                 if self.has_key('PV_kernel') and self['PV_kernel'] != '':
+                     if self['PV_kernel'] == 'hvmloader':
+-                        self['PV_kernel'] = auxbin.pathTo("hvmloader")
++                        self['PV_kernel'] = auxbin.path_boot("hvmloader")
+                     self['platform']['loader'] = self['PV_kernel']
+                     self['PV_kernel'] = ''
+                 else:
+-                    self['platform']['loader'] = auxbin.pathTo("hvmloader")
++                    self['platform']['loader'] = auxbin.path_boot("hvmloader")
+                 log.debug("Loader is %s" % str(self['platform']['loader']))
+             elif self['platform']['loader'] == 'hvmloader':
+-                self['platform']['loader'] = auxbin.pathTo("hvmloader")
++                self['platform']['loader'] = auxbin.path_boot("hvmloader")
+             if not os.path.exists(self['platform']['loader']):
+                 raise VmError("kernel '%s' not found" % str(self['platform']['loader']))
+ 
+@@ -1663,7 +1663,7 @@
+                     # is invoked for pvfb services
+                     if 'device_model' not in target['platform']:
+                         target['platform']['device_model'] = \
+-                            auxbin.pathTo("qemu-dm")
++                            auxbin.path_bin("qemu-dm")
+ 
+                     # Finally, if we are a pvfb, we need to make a vkbd
+                     # as well that is not really exposed to Xen API
+--- a/tools/python/xen/xend/XendDomainInfo.py
++++ b/tools/python/xen/xend/XendDomainInfo.py
+@@ -3239,7 +3239,7 @@
+         else:
+             # Boot using bootloader
+             if not blexec or blexec == 'pygrub':
+-                blexec = auxbin.pathTo('pygrub')
++                blexec = auxbin.path_bin('pygrub')
+ 
+             blcfg = None
+             disks = [x for x in self.info['vbd_refs']
