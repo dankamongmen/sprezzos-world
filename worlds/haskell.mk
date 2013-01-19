@@ -14,6 +14,14 @@ $(HASKELLANSITERMINAL): $(SPREZZ)/haskell-ansi-terminal/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ansi-terminal-$(haskell-ansi-terminal_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-ansi-wl-pprint
+haskell-ansi-wl-pprint:$(HASKELLANSIWLPPRINT)_$(ARCH).deb
+$(HASKELLANSIWLPPRINT): $(SPREZZ)/haskell-ansi-wl-pprint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ansi-wl-pprint-$(haskell-ansi-wl-pprint_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-base-unicode-symbols
 haskell-base-unicode-symbols:$(HASKELLBASEUNICODESYMBOLS)_$(ARCH).deb
 $(HASKELLBASEUNICODESYMBOLS): $(SPREZZ)/haskell-base-unicode-symbols/debian/changelog
@@ -45,6 +53,14 @@ $(HASKELLHAMLET): $(SPREZZ)/haskell-hamlet/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hamlet-$(haskell-hamlet_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-hostname
+haskell-hostname:$(HASKELLHOSTNAME)_$(ARCH).deb
+$(HASKELLHOSTNAME): $(SPREZZ)/haskell-hostname/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hostname-$(haskell-hostname_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: haskell-hunit
 haskell-hunit:$(HASKELLHUNIT)_$(ARCH).deb

@@ -3819,6 +3819,14 @@ $(XAWTV): $(SPREZZ)/xawtv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xawtv-$(xawtv_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: xen
+xen:$(XEN)_$(ARCH).deb
+$(XEN): $(SPREZZ)/xen/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xen-$(xen_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xft
 xft:$(XFT)_$(ARCH).deb
 $(XFT): $(SPREZZ)/xft/debian/changelog
