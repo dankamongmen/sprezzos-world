@@ -1,0 +1,81 @@
+#!/bin/sh
+
+set -e
+
+# Source debconf library
+. /usr/share/debconf/confmodule
+
+#
+# Update_conf
+#
+# This function searchs a key entry in a file and updates its value with the new
+# one.
+#
+# Syntax:
+#
+#    update_conf new_val key conffile
+#      -> new_val ... : Value to set for the key value
+#      -> key ....... : Name of the key to be updated
+#      -> conffile .. : File to search
+#
+update_conf ()
+{
+	local new_val
+	local key
+	local conffile
+
+	new_val=$1
+	key=$2
+	conffile=$3
+
+	cp $conffile $conffile.old
+
+	old_val=`awk '$1 == "'$key'" { print $2 }' $conffile`
+	awk '$1 == "'$key'" { gsub("'$old_val'","'$new_val';",$0); \
+			   print $0 } \
+		 $1 != "'$key'" { print $0 }' \
+		 $conffile.old > $conffile
+
+	rm $conffile.old
+}
+
+if [ "$1" = "configure" ]; then
+
+    # Set configuration files
+    CONF_FILE="/etc/fwknop/fwknopd.conf"
+    ACCESS_FILE="/etc/fwknop/access.conf"
+    DEFAULT_FILE="/etc/default/fwknop-server"
+
+    START_DAEMON="no"
+
+    # Check for the easy setup
+    #db_get fwknop-server/easy_setup || true
+    #EASY_SETUP=$RET
+    EASY_SETUP="false"
+
+    # Update configuration file for easy setup according to the user choices
+    if [ "$EASY_SETUP" = "true" ]; then 
+
+        # Get the sniffing interface
+        db_get fwknop-server/pcap_iface
+        update_conf "$RET" "PCAP_INTF" "$CONF_FILE"
+
+        # Get the encryption key
+        db_get fwknop-server/key
+        update_conf "$RET" "KEY:" "$ACCESS_FILE"
+
+        # Set whether the daemon should be run at boot time or not
+        # and update $DEFAULT_FILE
+        cp $DEFAULT_FILE $DEFAULT_FILE.old
+        sed "s/START_DAEMON=.*/START_DAEMON=\"yes\"/" < $DEFAULT_FILE.old > $DEFAULT_FILE
+        rm -f $DEFAULT_FILE.old
+    fi
+
+    # Stop po-debconf
+    db_stop
+
+fi
+
+#DEBHELPER#
+
+exit 0;

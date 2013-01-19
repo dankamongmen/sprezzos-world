@@ -1,3 +1,19 @@
+.PHONY: anjuta
+anjuta:$(ANJUTA)_$(ARCH).deb
+$(ANJUTA): $(SPREZZ)/anjuta/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf anjuta-$(anjuta_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: anjuta-extras
+anjuta-extras:$(ANJUTAEXTRAS)_$(ARCH).deb
+$(ANJUTAEXTRAS): $(SPREZZ)/anjuta-extras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf anjuta-extras-$(anjuta-extras_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: caribou
 caribou:$(CARIBOU)_$(ARCH).deb
 $(CARIBOU): $(SPREZZ)/caribou/debian/changelog

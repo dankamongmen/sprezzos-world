@@ -789,14 +789,6 @@ $(ALSAUTILS): $(SPREZZ)/alsa-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf alsa-utils-$(alsa-utils_UPVER).tar.bz2 $(TARARGS) $@
 
-.PHONY: anjuta
-anjuta:$(ANJUTA)_$(ARCH).deb
-$(ANJUTA): $(SPREZZ)/anjuta/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf anjuta-$(anjuta_UPVER).tar.xz $(TARARGS) $@
-
 .PHONY: antlr
 antlr:$(ANTLR)_$(ARCH).deb
 $(ANTLR): $(SPREZZ)/antlr/debian/changelog
