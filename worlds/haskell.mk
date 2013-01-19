@@ -30,6 +30,14 @@ $(HASKELLANSIWLPPRINT): $(SPREZZ)/haskell-ansi-wl-pprint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ansi-wl-pprint-$(haskell-ansi-wl-pprint_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-attoparsec
+haskell-attoparsec:$(HASKELLATTOPARSEC)_$(ARCH).deb
+$(HASKELLATTOPARSEC): $(SPREZZ)/haskell-attoparsec/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf attoparsec-$(haskell-attoparsec_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-base-unicode-symbols
 haskell-base-unicode-symbols:$(HASKELLBASEUNICODESYMBOLS)_$(ARCH).deb
 $(HASKELLBASEUNICODESYMBOLS): $(SPREZZ)/haskell-base-unicode-symbols/debian/changelog
