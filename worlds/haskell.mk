@@ -238,6 +238,14 @@ $(HASKELLTESTFRAMEWORK): $(SPREZZ)/haskell-test-framework/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf test-framework-$(haskell-test-framework_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-test-framework-hunit
+haskell-test-framework-hunit:$(HASKELLTESTFRAMEWORKHUNIT)_$(ARCH).deb
+$(HASKELLTESTFRAMEWORKHUNIT): $(SPREZZ)/haskell-test-framework-hunit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf test-framework-hunit-$(haskell-test-framework-hunit_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-testpack
 haskell-testpack:$(HASKELLTESTPACK)_$(ARCH).deb
 $(HASKELLTESTPACK): $(SPREZZ)/haskell-testpack/debian/changelog
