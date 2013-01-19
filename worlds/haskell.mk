@@ -86,6 +86,14 @@ $(HASKELLEDITDISTANCE): $(SPREZZ)/haskell-edit-distance/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf edit-distance-$(haskell-edit-distance_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-extensible-exceptions
+haskell-extensible-exceptions:$(HASKELLEXTENSIBLEEXCEPTIONS)_$(ARCH).deb
+$(HASKELLEXTENSIBLEEXCEPTIONS): $(SPREZZ)/haskell-extensible-exceptions/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf extensible-exceptions-$(haskell-extensible-exceptions_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-failure
 haskell-failure:$(HASKELLFAILURE)_$(ARCH).deb
 $(HASKELLFAILURE): $(SPREZZ)/haskell-failure/debian/changelog
