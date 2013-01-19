@@ -38,6 +38,14 @@ $(HASKELLHAMLET): $(SPREZZ)/haskell-hamlet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hamlet-$(haskell-hamlet_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-hunit
+haskell-hunit:$(HASKELLHUNIT)_$(ARCH).deb
+$(HASKELLHUNIT): $(SPREZZ)/haskell-hunit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf HUnit-$(haskell-hunit_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-json
 haskell-json:$(HASKELLJSON)_$(ARCH).deb
 $(HASKELLJSON): $(SPREZZ)/haskell-json/debian/changelog
@@ -70,6 +78,22 @@ $(HASKELLPARSEC): $(SPREZZ)/haskell-parsec/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf parsec-$(haskell-parsec_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-quickcheck
+haskell-quickcheck:$(HASKELLQUICKCHECK)_$(ARCH).deb
+$(HASKELLQUICKCHECK): $(SPREZZ)/haskell-quickcheck/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf QuickCheck-$(haskell-quickcheck_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-random
+haskell-random:$(HASKELLRANDOM)_$(ARCH).deb
+$(HASKELLRANDOM): $(SPREZZ)/haskell-random/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf random-$(haskell-random_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-semigroups
 haskell-semigroups:$(HASKELLSEMIGROUPS)_$(ARCH).deb
 $(HASKELLSEMIGROUPS): $(SPREZZ)/haskell-semigroups/debian/changelog
@@ -93,6 +117,14 @@ $(HASKELLSYB): $(SPREZZ)/haskell-syb/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf syb-$(haskell-syb_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-testpack
+haskell-testpack:$(HASKELLTESTPACK)_$(ARCH).deb
+$(HASKELLTESTPACK): $(SPREZZ)/haskell-testpack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf testpack-$(haskell-testpack_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-text
 haskell-text:$(HASKELLTEXT)_$(ARCH).deb
