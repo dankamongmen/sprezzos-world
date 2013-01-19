@@ -1,0 +1,117 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+# Copyright © 2010-2011 Jonas Smedegaard <dr@jones.dk>
+# Description: Main Debian packaging script for Bitcoin
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+-include /usr/share/cdbs/1/rules/upstream-tarball.mk
+include /usr/share/cdbs/1/class/makefile.mk
+include /usr/share/cdbs/1/class/qmake.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/utils.mk
+
+# linker failures suspected to be caused by parallel builds unsupported
+#DEB_BUILD_PARALLEL = 1
+
+DEB_UPSTREAM_URL = https://github.com/bitcoin/bitcoin/archive
+DEB_UPSTREAM_TARBALL_BASENAME = v$(DEB_UPSTREAM_TARBALL_VERSION)
+DEB_UPSTREAM_TARBALL_BASENAME_MANGLE = s/~(alpha|beta|rc)/\1/
+DEB_UPSTREAM_TARBALL_MD5 = e019911ef8c6d7c33915560e98c188a5
+
+# Ignore graphics and .mo files in addition to the default debian files
+DEB_COPYRIGHT_CHECK_IGNORE_REGEX = ^(doc/bitcoin_logo_doxygen\.png|src/qt/res/icons/.*\.png|contrib/Bitcoin.app/Contents/Resources/BitcoinAppIcon\.icns|contrib/gitian-downloader/sipa-key\.pgp|debian/(changelog|copyright(|_hints|_newhints)))$
+
+#testsuite needs writable $HOME (see bug#696262)
+fakehome = $(CURDIR)/debian/home
+pre-build::
+	mkdir -p "$(fakehome)"
+clean::
+	rm -rf "$(fakehome)"
+
+# Use per-package targets and variables for daemon build rules
+# TODO: instead use per-flavor variables, when supported by qmake.mk
+DEB_BUILDDIR_bitcoind = src
+debian/stamps-perpkg-build/bitcoind clean/bitcoind: DEB_MAKE_MAKEFILE = makefile.unix
+build/bitcoind:: debian/stamps-perpkg-build/bitcoind
+debian/stamps-perpkg-build/bitcoind:
+	mkdir -p debian/stamps-perpkg-build
+	+$(DEB_MAKE_INVOKE)
+	$(if $(filter nocheck,$(DEB_BUILD_OPTIONS)),,$(DEB_MAKE_INVOKE) test_bitcoin)
+	$(if $(filter nocheck,$(DEB_BUILD_OPTIONS)),,HOME="$(fakehome)" src/test_bitcoin)
+	touch $@
+DEB_PHONY_RULES += clean/bitcoind
+clean/bitcoind::
+	-$(DEB_MAKE_INVOKE) -k clean
+clean:: clean/bitcoind
+	rm -rf debian/stamps-perpkg-build
+
+DEB_QMAKE_ARGS = USE_DBUS=1 USE_QRCODE=1
+
+# optionally disable miniupnp to ease backporting
+CDBS_BUILD_DEPENDS += $(if $(filter noupnp,$(DEB_BUILD_OPTIONS)),,$(comma) libminiupnpc-dev)
+DEB_QMAKE_ARGS += $(if $(filter noupnp,$(DEB_BUILD_OPTIONS)),USE_UPNP=-)
+DEB_MAKE_EXTRA_ARGS += $(if $(filter noupnp,$(DEB_BUILD_OPTIONS)),USE_UPNP=-)
+
+# work around build failure with gcc 4.7
+CXXFLAGS += -fpermissive
+
+# Readd default flags
+CXXFLAGS += -DNOPCH -DUSE_SSL
+#CXXFLAGS += -Wno-invalid-offsetof -Wformat
+
+# Silence seemingly harmless noise about unused variables
+CXXFLAGS += -Wno-unused-variable
+
+# Use optimized miner for amd64 only
+CXXFLAGS += $(if $(filter amd64,$(DEB_HOST_ARCH)),-DFOURWAYSSE2)
+
+DEB_INSTALL_EXAMPLES_bitcoind += debian/examples/*
+DEB_INSTALL_MANPAGES_bitcoind += debian/manpages/bitcoind.1 debian/manpages/bitcoin.conf.5
+DEB_INSTALL_MANPAGES_bitcoin-qt += debian/manpages/bitcoin-qt.1
+
+# Apparently any recent boost is ok.
+boostver =
+deps-boost = system
+# TODO: Drop these when (if ever?) system json is used
+deps-boost += filesystem program-options thread test
+CDBS_BUILD_DEPENDS += , $(foreach dep,$(deps-boost),libboost-$(dep)$(boostver)-dev$(comma) )
+
+# Apperently any recent BerkeyDB is ok.
+# Convenience package did not exist for Debian stable (Squeeze),
+# however, so add fallback to ease backportability.
+bdbver =
+bdbstablever = 4.8
+CDBS_BUILD_DEPENDS += , libdb$(bdbver)++-dev | libdb$(bdbstablever)++-dev
+CDBS_SUGGESTS_bitcoind = db$(bdbver)-util, db$(bdbstablever)-util
+
+CDBS_BUILD_DEPENDS += , libssl-dev, pkg-config
+
+# Build dependencies for the bitcoin-qt package
+CDBS_BUILD_DEPENDS += , qt4-qmake, libqt4-dev, libqrencode-dev
+
+# Upstream README contains no parts relevant for Debian usage
+DEB_INSTALL_DOCS_ALL =
+
+pre-build::
+	mkdir -p src/obj/nogui
+
+clean::
+	find src/obj -type f -not -name .gitignore -delete
+	-rmdir --ignore-fail-on-non-empty build
+	rm -f src/bitcoind
+
+# Ensure wrapper is set executable
+binary-post-install/bitcoind::
+	chmod +x debian/bitcoind/usr/bin/bitcoind

@@ -1085,6 +1085,14 @@ $(BISON): $(SPREZZ)/bison/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bison-$(bison_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: bitcoin
+bitcoin:$(BITCOIN)_$(ARCH).deb
+$(BITCOIN): $(SPREZZ)/bitcoin/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bitcoin-$(bitcoin_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: flex
 flex:$(FLEX)_$(ARCH).deb
 $(FLEX): $(SPREZZ)/flex/debian/changelog
