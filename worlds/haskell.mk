@@ -54,6 +54,14 @@ $(HASKELLEDITDISTANCE): $(SPREZZ)/haskell-edit-distance/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf edit-distance-$(haskell-edit-distance_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-failure
+haskell-failure:$(HASKELLFAILURE)_$(ARCH).deb
+$(HASKELLFAILURE): $(SPREZZ)/haskell-failure/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf failure-$(haskell-failure_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-hamlet
 haskell-hamlet:$(HASKELLHAMLET)_$(ARCH).deb
 $(HASKELLHAMLET): $(SPREZZ)/haskell-hamlet/debian/changelog
