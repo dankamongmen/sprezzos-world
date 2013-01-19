@@ -541,6 +541,14 @@ $(LENSFUN): $(SPREZZ)/lensfun/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf lensfun-$(lensfun_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: less
+less:$(LESS)_$(ARCH).deb
+$(LESS): $(SPREZZ)/less/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf less-$(less_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: luminance-hdr
 luminance-hdr:$(LUMINANCEHDR)_$(ARCH).deb
 $(LUMINANCEHDR): $(SPREZZ)/luminance-hdr/debian/changelog
@@ -1148,6 +1156,14 @@ $(BOOST1.52): $(SPREZZ)/boost1.52/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf boost1.52_$(boost1.52_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: brasero
+brasero:$(BRASERO)_$(ARCH).deb
+$(BRASERO): $(SPREZZ)/brasero/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf brasero-$(brasero_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: bustle
 bustle:$(BUSTLE)_$(ARCH).deb
@@ -1892,6 +1908,14 @@ $(FBSET): $(SPREZZ)/fbset/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fbset-$(fbset_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: fbterm
+fbterm:$(FBTERM)_$(ARCH).deb
+$(FBTERM): $(SPREZZ)/fbterm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fbterm-$(fbterm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: festival
 festival:$(FESTIVAL)_$(ARCH).deb
@@ -2747,6 +2771,14 @@ $(GRUB2): $(SPREZZ)/grub2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf grub-$(grub2_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gsettings-desktop-schemas
+gsettings-desktop-schemas:$(GSETTINGSDESKTOPSCHEMAS)_$(ARCH).deb
+$(GSETTINGSDESKTOPSCHEMAS): $(SPREZZ)/gsettings-desktop-schemas/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gsettings-desktop-schemas-$(gsettings-desktop-schemas_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: gsoap
 gsoap:$(GSOAP)_$(ARCH).deb
 $(GSOAP): $(SPREZZ)/gsoap/debian/changelog
@@ -2915,6 +2947,14 @@ $(HDPARM): $(SPREZZ)/hdparm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hdparm-$(hdparm_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: hfsutils
+hfsutils:$(HFSUTILS)_$(ARCH).deb
+$(HFSUTILS): $(SPREZZ)/hfsutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hfsutils-$(hfsutils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: hicolor-icon-theme
 hicolor-icon-theme:$(HICOLORICONTHEME)_$(ARCH).deb
 $(HICOLORICONTHEME): $(SPREZZ)/hicolor-icon-theme/debian/changelog
@@ -2938,6 +2978,14 @@ $(HWLOC): $(SPREZZ)/hwloc/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf hwloc-$(hwloc_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: ibus
+ibus:$(IBUS)_$(ARCH).deb
+$(IBUS): $(SPREZZ)/ibus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ibus-$(ibus_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: icedove
 icedove:$(ICEDOVE)_$(ARCH).deb
@@ -3170,6 +3218,14 @@ $(PLYMOUTH): $(SPREZZ)/plymouth/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf plymouth-$(plymouth_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: pulseaudio
+pulseaudio:$(PULSEAUDIO)_$(ARCH).deb
+$(PULSEAUDIO): $(SPREZZ)/pulseaudio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf pulseaudio-$(pulseaudio_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libproxy
 libproxy:$(LIBPROXY)_$(ARCH).deb
@@ -3722,6 +3778,14 @@ $(LIBDRM): $(SPREZZ)/libdrm/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libdrm-$(libdrm_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libxml
+libxml:$(LIBXML)_$(ARCH).deb
+$(LIBXML): $(SPREZZ)/libxml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxml-$(libxml_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxtst
 libxtst:$(LIBXTST)_$(ARCH).deb
@@ -7013,48 +7077,6 @@ $(LIBJPEG8TURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.t
 	tar xzvf libjpeg-turbo-1.2.1.tar.gz $(TARARGS) $@
 	cp -r $(<D) $@/
 
-FETCHED:=$(FETCHED) $(FBTERMUP).tar.gz
-$(FBTERMUP).tar.gz:
-	wget -nc -O$@ http://nick-black.com/pub/$@
-
-$(FBTERMORIG): $(FBTERMUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: fbterm
-fbterm:$(FBTERM)_$(ARCH).deb
-$(FBTERM): $(SPREZZ)/fbterm/debian/changelog $(FBTERMORIG)
-	mkdir $@
-	tar xzvf $(FBTERMORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(HFSUTILSUP).tar.gz
-$(HFSUTILSUP).tar.gz:
-	wget -nc -O$@ ftp://ftp.mars.org/pub/hfs/$@
-
-$(HFSUTILSORIG): $(HFSUTILSUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: hfsutils
-hfsutils:$(HFSUTILS)_$(ARCH).deb
-$(HFSUTILS): $(SPREZZ)/hfsutils/debian/changelog $(HFSUTILSORIG)
-	mkdir $@
-	tar xzvf $(HFSUTILSORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(LESSUP).tar.gz
-$(LESSUP).tar.gz:
-	wget -nc -O$@ http://www.greenwoodsoftware.com/less/$@
-
-$(LESSORIG): $(LESSUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: less
-less:$(LESS)_$(ARCH).deb
-$(LESS): $(SPREZZ)/less/debian/changelog $(LESSORIG)
-	mkdir $@
-	tar xzvf $(LESSORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
 FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
 $(LIBPNGUP).tar.bz2:
 	wget -nc -O$@ ftp://ftp.simplesystems.org/pub/libpng/png/src/$(LIBPNGUP).tar.bz2
@@ -7127,20 +7149,6 @@ $(POPPLER): $(SPREZZ)/poppler/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf $(POPPLERORIG) $(TARARGS) $@
 
-FETCHED:=$(FETCHED) $(PULSEAUDIOUP).tar.xz
-$(PULSEAUDIOUP).tar.xz:
-	wget -nc -O$@ http://freedesktop.org/software/pulseaudio/releases/$(@F)
-
-$(PULSEAUDIOORIG): $(PULSEAUDIOUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: pulseaudio
-pulseaudio:$(PULSEAUDIO)_$(ARCH).deb
-$(PULSEAUDIO): $(SPREZZ)/pulseaudio/debian/changelog $(PULSEAUDIOORIG)
-	mkdir $@
-	tar xJvf $(PULSEAUDIOORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
 .PHONY: slrn
 slrn:$(SLRN)_$(ARCH).deb
 $(SLRN): $(SPREZZ)/slrn/debian/changelog
@@ -7179,62 +7187,6 @@ $(SUPERTUXKART): $(SPREZZ)/supertuxkart/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf supertuxkart-$(supertuxkart_UPVER)-src.tar.bz2 $(TARARGS) $@
-
-FETCHED:=$(FETCHED) $(IBUSUP).tar.gz
-$(IBUSUP).tar.gz:
-	wget -nc -O$@ http://ibus.googlecode.com/files/$@
-
-$(IBUSORIG): $(IBUSUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: ibus
-ibus:$(IBUS)_$(ARCH).deb
-$(IBUS): $(SPREZZ)/ibus/debian/changelog $(IBUSORIG)
-	mkdir -p $@
-	tar xzvf $(IBUSORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(LIBXMLUP).tar.gz
-$(LIBXMLUP).tar.gz:
-	wget -nc -O$@ ftp://xmlsoft.org/libxml/$@
-
-$(LIBXMLORIG): $(LIBXMLUP).tar.gz
-	ln -sf $< $@
-
-.PHONY: libxml
-libxml:$(LIBXML)_$(ARCH).deb
-$(LIBXML): $(SPREZZ)/libxml/debian/changelog $(LIBXMLORIG)
-	mkdir -p $@
-	tar xzvf $(LIBXMLORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(BRASEROUP).tar.xz
-$(BRASEROUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/brasero/3.6/$@
-
-$(BRASEROORIG): $(BRASEROUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: brasero
-brasero:$(BRASERO)_$(ARCH).deb
-$(BRASERO): $(SPREZZ)/brasero/debian/changelog $(BRASEROORIG)
-	mkdir -p $@
-	tar xJvf $(BRASEROORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(GSETSCHEMASUP).tar.xz
-$(GSETSCHEMASUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/gnome/sources/gsettings-desktop-schemas/3.6/$@
-
-$(GSETSCHEMASORIG): $(GSETSCHEMASUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: gsettings-desktop-schemas
-gsettings-desktop-schemas:$(GSETTINGSDESKTOPSCHEMAS)_$(ARCH).deb
-$(GSETTINGSDESKTOPSCHEMAS): $(SPREZZ)/gsettings-desktop-schemas/debian/changelog $(GSETSCHEMASORIG)
-	mkdir -p $@
-	tar xJvf $(GSETSCHEMASORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
 
 .PHONY: sprezzos-keyring
 sprezzos-keyring:$(SPREZZOSKEYRING)_$(ARCH).deb
