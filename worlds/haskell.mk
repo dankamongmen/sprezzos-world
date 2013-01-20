@@ -325,3 +325,11 @@ $(HASKELLXMLTYPES): $(SPREZZ)/haskell-xml-types/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xml-types-$(haskell-xml-types_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-zlib-bindings
+haskell-zlib-bindings:$(HASKELLZLIBBINDINGS)_$(ARCH).deb
+$(HASKELLZLIBBINDINGS): $(SPREZZ)/haskell-zlib-bindings/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf zlib-bindings-$(haskell-zlib-bindings_UPVER).tar.gz $(TARARGS) $@
