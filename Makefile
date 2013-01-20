@@ -1397,6 +1397,14 @@ $(TCPDUMP): $(SPREZZ)/tcpdump/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tcpdump-$(tcpdump_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: tslib
+tslib:$(TSLIB)_$(ARCH).deb
+$(TSLIB): $(SPREZZ)/tslib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf tslib-$(tslib_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: cpufrequtils
 cpufrequtils:$(CPUFREQUTILS)_$(ARCH).deb
 $(CPUFREQUTILS): $(SPREZZ)/cpufrequtils/debian/changelog
@@ -4659,6 +4667,14 @@ $(MPEG2DEC): $(SPREZZ)/mpeg2dec/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmpeg2-$(mpeg2dec_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libmpeg3
+libmpeg3:$(LIBMPEG3)_$(ARCH).deb
+$(LIBMPEG3): $(SPREZZ)/libmpeg3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmpeg3-$(libmpeg3_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: mpd
 mpd:$(MPD)_$(ARCH).deb
 $(MPD): $(SPREZZ)/mpd/debian/changelog
@@ -6196,6 +6212,14 @@ $(STARTUPNOTIFICATION): $(SPREZZ)/startup-notification/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf startup-notification-$(startup-notification_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: sysfsutils
+sysfsutils:$(SYSFSUTILS)_$(ARCH).deb
+$(SYSFSUTILS): $(SPREZZ)/sysfsutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sysfsutils-$(sysfsutils_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: systemd
 systemd:$(SYSTEMD)_$(ARCH).deb
