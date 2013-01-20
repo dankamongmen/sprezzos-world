@@ -126,6 +126,14 @@ $(HASKELLHSPEC): $(SPREZZ)/haskell-hspec/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hspec-$(haskell-hspec_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-hspec-expectations
+haskell-hspec-expectations:$(HASKELLHSPECEXPECTATIONS)_$(ARCH).deb
+$(HASKELLHSPECEXPECTATIONS): $(SPREZZ)/haskell-hspec-expectations/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hspec-expectations-$(haskell-hspec-expectations_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-hunit
 haskell-hunit:$(HASKELLHUNIT)_$(ARCH).deb
 $(HASKELLHUNIT): $(SPREZZ)/haskell-hunit/debian/changelog
