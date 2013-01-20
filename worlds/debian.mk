@@ -10,6 +10,13 @@ $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf base-files_$(base-files_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
+.PHONY: base-passwd
+base-passwd:$(BASEPASSWD)_$(ARCH).deb
+$(BASEPASSWD): $(SPREZZ)/base-passwd/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	tar cJvf base-passwd_$(base-passwd_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
+
 .PHONY: cdebconf
 cdebconf:$(CDEBCONF)_$(ARCH).deb
 $(CDEBCONF): $(SPREZZ)/cdebconf/debian/changelog

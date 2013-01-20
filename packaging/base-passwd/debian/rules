@@ -1,0 +1,131 @@
+#! /usr/bin/make -f
+
+# Debian package information
+package		= base-passwd
+docdir		= /usr/share/doc/$(package)
+tmpdir		= $(shell pwd)/debian/tmp
+
+# Other stuff
+SHELL		= /bin/bash
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+  confflags += --build=$(DEB_HOST_GNU_TYPE)
+  STRIP = strip
+else
+  confflags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+  STRIP = $(DEB_HOST_GNU_TYPE)-strip
+endif
+
+.PHONY: all build build-arch
+all build build-arch: Makefile
+	$(MAKE) 
+	$(MAKE) -C doc
+	$(MAKE) -C man
+
+.PHONY: build-indep
+build-indep:
+	@echo Nothing to do
+
+.PHONY: clean
+clean:
+	# make sure the POT and POs are up to date
+	$(MAKE) -C man update
+
+	-$(MAKE) mrproper
+	$(MAKE) -C doc clean
+	$(MAKE) -C man clean
+	rm -rf debian/tmp debian/files debian/substvars
+
+CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
+CFLAGS += $(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS += -Wall
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+
+Makefile: Makefile.in configure.ac
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure $(confflags)
+
+.PHONY: binary
+binary: binary-arch binary-indep
+
+.PHONY: binary-indep
+binary-indep:
+	@echo Nothing to do
+
+.PHONY: binary-arch
+binary-arch: build
+	test "`id -u`" -eq 0
+	-rm -rf debian/tmp debian/files debian/substvars
+
+	install -d -m 755 -o root -g root debian/tmp/usr/sbin
+	install -p -m 755 -o root -g root update-passwd debian/tmp/usr/sbin/
+
+ifeq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
+	$(STRIP) --strip-unneeded --remove-section=.comment \
+		--remove-section=.note debian/tmp/usr/sbin/update-passwd
+endif
+
+	install -d -m 755 -o root -g root \
+		debian/tmp/usr/share/man/man8 \
+		debian/tmp/usr/share/man/de/man8 \
+		debian/tmp/usr/share/man/es/man8 \
+		debian/tmp/usr/share/man/fr/man8 \
+		debian/tmp/usr/share/man/ja/man8 \
+		debian/tmp/usr/share/man/pl/man8 \
+		debian/tmp/usr/share/man/ru/man8
+	install -p -m 644 -o root -g root man/update-passwd.8 \
+		debian/tmp/usr/share/man/man8/
+	install -p -m 644 -o root -g root man/update-passwd.de.8 \
+		debian/tmp/usr/share/man/de/man8/update-passwd.8
+	install -p -m 644 -o root -g root man/update-passwd.es.8 \
+		debian/tmp/usr/share/man/es/man8/update-passwd.8
+	install -p -m 644 -o root -g root man/update-passwd.fr.8 \
+		debian/tmp/usr/share/man/fr/man8/update-passwd.8
+	install -p -m 644 -o root -g root man/update-passwd.ja.8 \
+		debian/tmp/usr/share/man/ja/man8/update-passwd.8
+	install -p -m 644 -o root -g root man/update-passwd.pl.8 \
+		debian/tmp/usr/share/man/pl/man8/update-passwd.8
+	install -p -m 644 -o root -g root man/update-passwd.ru.8 \
+		debian/tmp/usr/share/man/ru/man8/update-passwd.8
+	gzip -9n debian/tmp/usr/share/man/man8/* \
+		debian/tmp/usr/share/man/de/man8/* \
+		debian/tmp/usr/share/man/es/man8/* \
+		debian/tmp/usr/share/man/fr/man8/* \
+		debian/tmp/usr/share/man/ja/man8/* \
+		debian/tmp/usr/share/man/pl/man8/* \
+		debian/tmp/usr/share/man/ru/man8/*
+
+	install -d -m 755 -o root -g root debian/tmp/usr/share/base-passwd
+	install -p -m 644 -o root -g root passwd.master \
+		debian/tmp/usr/share/base-passwd/
+	install -p -m 644 -o root -g root group.master \
+		debian/tmp/usr/share/base-passwd/
+
+	install -d -m 755 -o root -g root debian/tmp$(docdir)
+	install -p -m 644 -o root -g root debian/changelog debian/tmp$(docdir)/
+	gzip -9n debian/tmp$(docdir)/*
+	install -p -m 644 -o root -g root README debian/tmp$(docdir)/
+	install -p -m 644 -o root -g root debian/copyright debian/tmp$(docdir)/
+	install -p -m 644 -o root -g root \
+		doc/users-and-groups.html doc/users-and-groups.txt \
+		debian/tmp$(docdir)/
+	gzip -9n debian/tmp$(docdir)/users-and-groups.txt
+
+	install -d -m 755 -o root -g root debian/tmp/usr/share/doc-base
+	install -p -m 644 -o root -g root debian/doc-base \
+		debian/tmp/usr/share/doc-base/users-and-groups
+
+	install -d -m 755 -o root -g root debian/tmp/DEBIAN
+	install -p -m 755 -o root -g root debian/postinst debian/tmp/DEBIAN/
+
+	dpkg-shlibdeps -dPre-Depends debian/tmp/usr/sbin/update-passwd
+	dpkg-gencontrol -isp
+	(cd debian/tmp && \
+		find . -name DEBIAN -prune -o -type f -printf '%P\0' | \
+		xargs -r0 md5sum) > debian/tmp/DEBIAN/md5sums
+	chown root:root debian/tmp/DEBIAN/md5sums
+	chmod 644 debian/tmp/DEBIAN/md5sums
+	dpkg --build debian/tmp ..
+
