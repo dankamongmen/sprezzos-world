@@ -230,6 +230,14 @@ $(HASKELLSHAKESPEARE): $(SPREZZ)/haskell-shakespeare/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf shakespeare-$(haskell-shakespeare_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-silently
+haskell-silently:$(HASKELLSILENTLY)_$(ARCH).deb
+$(HASKELLSILENTLY): $(SPREZZ)/haskell-silently/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf silently-$(haskell-silently_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-syb
 haskell-syb:$(HASKELLSYB)_$(ARCH).deb
 $(HASKELLSYB): $(SPREZZ)/haskell-syb/debian/changelog
