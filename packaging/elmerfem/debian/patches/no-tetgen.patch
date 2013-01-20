@@ -1,0 +1,210 @@
+Description: Fix build without tetgen plugin
+Author: Boris Pek <tehnick-8@mail.ru>
+Last-Update: 2012-09-20
+
+--- elmerfem.orig/ElmerGUI/Application/Application.pro
++++ elmerfem/ElmerGUI/Application/Application.pro
+@@ -154,8 +154,6 @@ HEADERS += src/bodypropertyeditor.h \
+            plugins/egutils.h \
+            plugins/elmergrid_api.h \
+            plugins/nglib_api.h \
+-           plugins/tetgen.h \
+-           plugins/tetlib_api.h \
+            twod/renderarea.h \
+            twod/twodview.h \
+            twod/curveeditor.h
+@@ -204,7 +202,6 @@ SOURCES += src/bodypropertyeditor.cpp \
+            plugins/egutils.cpp \
+            plugins/elmergrid_api.cpp \
+            plugins/nglib_api.cpp \
+-           plugins/tetlib_api.cpp \
+            twod/renderarea.cpp \
+            twod/twodview.cpp \
+            twod/curveeditor.cpp
+--- elmerfem.orig/ElmerGUI/Application/src/mainwindow.cpp
++++ elmerfem/ElmerGUI/Application/src/mainwindow.cpp
+@@ -96,10 +96,7 @@ MainWindow::MainWindow()
+   
+   // load tetlib:
+   updateSplash("Loading tetlib...");
+-  tetlibAPI = new TetlibAPI;
+-  tetlibPresent = tetlibAPI->loadTetlib();
+-  this->in = tetlibAPI->in;
+-  this->out = tetlibAPI->out;
++  tetlibPresent = false;
+   
+   // load nglib:
+   updateSplash("Loading nglib...");
+@@ -1180,10 +1177,6 @@ void MainWindow::readInputFile(QString fileName)
+     activeGenerator = GEN_TETLIB;
+     cout << "Selected tetlib for smesh/poly-format" << endl;
+ 
+-    in->deinitialize();
+-    in->initialize();
+-    in->load_poly(cs);
+-
+     tetlibInputOk = true;
+ 
+   } else if(fileSuffix == "off") {
+@@ -1196,10 +1189,6 @@ void MainWindow::readInputFile(QString fileName)
+     activeGenerator = GEN_TETLIB;
+     cout << "Selected tetlib for off-format" << endl;
+ 
+-    in->deinitialize();
+-    in->initialize();
+-    in->load_off(cs);
+-
+     tetlibInputOk = true;
+ 
+   } else if(fileSuffix == "ply") {
+@@ -1212,10 +1201,6 @@ void MainWindow::readInputFile(QString fileName)
+     activeGenerator = GEN_TETLIB;
+     cout << "Selected tetlib for ply-format" << endl;
+ 
+-    in->deinitialize();
+-    in->initialize();
+-    in->load_ply(cs);
+-
+     tetlibInputOk = true;
+ 
+   } else if(fileSuffix == "mesh") {
+@@ -1228,10 +1213,6 @@ void MainWindow::readInputFile(QString fileName)
+     activeGenerator = GEN_TETLIB;
+     cout << "Selected tetlib for mesh-format" << endl;
+ 
+-    in->deinitialize();
+-    in->initialize();
+-    in->load_medit(cs);
+-    
+     tetlibInputOk = true;
+     
+   } else if(fileSuffix == "stl") {
+@@ -1261,10 +1242,6 @@ void MainWindow::readInputFile(QString fileName)
+       activeGenerator = GEN_TETLIB;
+       cout << "Selected tetlib for stl-format" << endl;
+       
+-      in->deinitialize();
+-      in->initialize();
+-      in->load_stl(cs);
+-      
+       tetlibInputOk = true;
+       
+     }
+@@ -1349,8 +1326,6 @@ void MainWindow::makeElmerMeshFromTetlib()
+ {
+   meshutils->clearMesh(glWidget->getMesh());
+ 
+-  glWidget->setMesh(tetlibAPI->createElmerMeshStructure());
+-
+   glWidget->rebuildLists();
+ 
+   logMessage("Input file processed");
+@@ -4914,7 +4889,7 @@ void MainWindow::remeshSlot()
+     stopMeshingAct->setEnabled(false);
+ 
+   meshingThread->generate(activeGenerator, tetlibControlString,
+-			  tetlibAPI, ngmesh, nggeom, nggeom2d,
++			  ngmesh, nggeom, nggeom2d,
+ 			  ngDim, &mp);
+ }
+ 
+@@ -4975,7 +4950,6 @@ void MainWindow::meshingTerminatedSlot()
+   // clean up:
+   if(activeGenerator == GEN_TETLIB) {
+     cout << "Cleaning up...";
+-    out->deinitialize();
+     cout << "done" << endl;
+     cout.flush();
+   }
+--- elmerfem.orig/ElmerGUI/Application/src/mainwindow.h
++++ elmerfem/ElmerGUI/Application/src/mainwindow.h
+@@ -46,7 +46,6 @@
+ #include <QDomDocument>
+ 
+ #include "maxlimits.h"
+-#include "plugins/tetlib_api.h"
+ #include "plugins/nglib_api.h"
+ #include "plugins/elmergrid_api.h"
+ #include "glwidget.h"
+@@ -392,9 +391,6 @@ private:
+ 
+   // tetlib:
+   bool tetlibPresent;
+-  TetlibAPI *tetlibAPI;
+-  tetgenio *in;
+-  tetgenio *out;
+   QString tetlibControlString;
+   bool tetlibInputOk;
+   
+--- elmerfem.orig/ElmerGUI/Application/src/meshingthread.cpp
++++ elmerfem/ElmerGUI/Application/src/meshingthread.cpp
+@@ -63,7 +63,6 @@ nglib::Ng_Mesh* MeshingThread::getNgMesh()
+ 
+ void MeshingThread::generate(int generatorType,
+ 			     QString cs,
+-			     TetlibAPI *tetlibAPI,
+ 			     nglib::Ng_Mesh *ngmesh,
+ 			     nglib::Ng_STL_Geometry *nggeom,
+ 			     nglib::Ng_Geometry_2D *nggeom2d,
+@@ -73,11 +72,6 @@ void MeshingThread::generate(int generatorType,
+   this->generatorType = generatorType;
+   
+   this->tetgenControlString = cs;
+-  this->tetlibAPI = tetlibAPI;
+-  this->in = tetlibAPI->in;
+-  this->out = tetlibAPI->out;
+-
+-  this->delegate_tetrahedralize = tetlibAPI->delegate_tetrahedralize;
+ 
+   this->ngmesh = ngmesh;
+   this->nggeom = nggeom;
+@@ -117,20 +111,6 @@ void MeshingThread::run()
+     
+     cout << "tetlib: control string: " 
+ 	 << string(tetgenControlString.toAscii()) << endl;
+-    cout << "tetlib: input points: " << in->numberofpoints << endl;
+-    cout.flush();
+-    
+-    out->deinitialize();
+-    out->initialize();
+-    
+-    sprintf(ss, "%s", (const char*)(tetgenControlString.toAscii()));
+-    
+-    if(delegate_tetrahedralize) 
+-      delegate_tetrahedralize(1, NULL, ss, in, out, NULL, NULL);      
+-    
+-    cout << "tetlib: nodes: " << out->numberofpoints << endl;
+-    cout << "tetlib: elements: " << out->numberoftetrahedra << endl;
+-    cout << "tetlib: boundary elements: " << out->numberoftrifaces << endl;
+     cout.flush();
+     
+   } else if(generatorType == GEN_NGLIB) {
+--- elmerfem.orig/ElmerGUI/Application/src/meshingthread.h
++++ elmerfem/ElmerGUI/Application/src/meshingthread.h
+@@ -49,7 +49,6 @@
+ #include <dlfcn.h>
+ #endif
+ 
+-#include "plugins/tetlib_api.h"
+ #include "plugins/nglib_api.h"
+ 
+ namespace nglib {
+@@ -65,7 +64,6 @@ public:
+   ~MeshingThread();
+ 
+   void generate(int generatorType, QString cs,
+-		TetlibAPI *tetlibAPI, 
+ 		nglib::Ng_Mesh *ngmesh,
+ 		nglib::Ng_STL_Geometry *nggeom, 
+ 		nglib::Ng_Geometry_2D *nggeom2d,
+@@ -83,10 +81,6 @@ private:
+ 
+   // tetlib:
+   QString tetgenControlString;
+-  TetlibAPI *tetlibAPI;
+-  tetgenio *in;
+-  tetgenio *out;
+-  delegate_tetrahedralize_t delegate_tetrahedralize;
+ 
+   // nglib:
+   NglibAPI *nglibAPI;

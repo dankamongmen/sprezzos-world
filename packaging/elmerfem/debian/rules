@@ -1,0 +1,229 @@
+#!/usr/bin/make -f
+# Made with the aid of debmake, by Christoph Lameter,
+# based on the sample debian/rules file for GNU hello by Ian Jackson.
+
+DEB_VER = $(shell dpkg-parsechangelog | sed -ne 's/^Version: \(\([0-9]\+\):\)\?\(.*\)-[0-9]*/\3/p')
+
+package=elmer
+
+# Support multiple makes at once
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+NJOBS := $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+else
+NJOBS := 1
+endif
+
+ELMER_MODULES = eio matc elmerparam hutiter meshgen2d fem front elmergrid post
+
+# The build process modifies these files, so we need to move them aside in
+# order for the clean process to restore the tree to its original state
+BACKUP_FILES = eio/Makefile.in eio/configure eio/include/Makefile.in \
+  eio/src/Makefile.in elmergrid/Makefile.in elmergrid/aclocal.m4 \
+  elmergrid/configure elmergrid/src/Makefile.in elmerparam/Makefile.in \
+  elmerparam/aclocal.m4 elmerparam/config.h.in elmerparam/configure \
+  elmerparam/src/Makefile.in elmerparam/src/R/Makefile \
+  elmerparam/src/R/elmerparam/src/Makevars elmerparam/src/matlab/Makefile \
+  elmerparam/test/Makefile.in fem/Makefile.in fem/aclocal.m4 fem/config.h \
+  fem/configure fem/stamp-h1 fem/src/Makefile.in fem/src/binio/Makefile.in \
+  fem/src/binio/test/Makefile.in fem/src/view3d/Makefile.in \
+  fem/src/viewaxis/Makefile.in fem/tests/Makefile.in fem/tests/runtests \
+  front/Makefile.in front/aclocal.m4 front/configure front/include/Makefile.in\
+  front/src/Makefile.in front/src/tcl/ecif_tcl_mainScript.tcl \
+  hutiter/Makefile.in hutiter/configure hutiter/examples/Makefile.in \
+  hutiter/examples/ex1/Makefile.in hutiter/include/Makefile.in \
+  hutiter/src/Makefile.in matc/Makefile.in matc/aclocal.m4 matc/configure \
+  matc/src/Makefile.in meshgen2d/Makefile.in meshgen2d/aclocal.m4 \
+  meshgen2d/configure meshgen2d/src/Makefile.in \
+  meshgen2d/src/include/Makefile.in post/Makefile.in post/aclocal.m4 \
+  post/configure post/src/Makefile.in post/src/camera/Makefile.in \
+  post/src/elements/Makefile.in post/src/glaux/Makefile.in \
+  post/src/graphics/Makefile.in post/src/modules/Makefile.in \
+  post/src/objects/Makefile.in post/src/sico2elmer/Makefile.in \
+  post/src/tcl/Makefile.in post/src/tk/Makefile.in \
+  post/src/visuals/Makefile.in ElmerGUIlogger/ElmerGUIlogger.pro
+
+MISSING_FILES = eio/NEWS eio/README eio/AUTHORS eio/ChangeLog \
+  matc/NEWS matc/README matc/AUTHORS matc/ChangeLog matc/COPYING \
+  meshgen2d/NEWS meshgen2d/README meshgen2d/AUTHORS meshgen2d/ChangeLog \
+  meshgen2d/COPYING meshgen2d/INSTALL \
+  fem/NEWS fem/AUTHORS fem/ChangeLog fem/COPYING fem/INSTALL \
+  front/NEWS front/README front/AUTHORS front/COPYING front/INSTALL \
+  elmergrid/NEWS elmergrid/README elmergrid/AUTHORS elmergrid/ChangeLog \
+  elmergrid/COPYING elmergrid/INSTALL elmergrid/src/metis/Makefile.am \
+  post/NEWS post/AUTHORS post/ChangeLog post/COPYING post/INSTALL
+
+# This needs patch because otherwise ElmerGUI clean won't work
+clean: patch
+	dh_testdir
+	for elmermodule in $(ELMER_MODULES); do \
+	  if [ -e $$elmermodule/Makefile ]; then \
+	    echo; echo CLEANING ELMER MODULE $$elmermodule; echo; \
+	    make -C $$elmermodule maintainer-clean; \
+	  fi; \
+	done
+	if [ -e ElmerGUI/Makefile ]; then \
+	  export DEB_PY_VERSION=$(shell pyversions -d); \
+	  make -C ElmerGUI distclean; \
+	fi
+	if [ -e ElmerGUIlogger/Makefile ]; then \
+	  make -C ElmerGUIlogger distclean; \
+	fi
+	if [ -e utils/ElmerClips/Makefile ]; then \
+	  make -C utils/ElmerClips distclean; \
+	fi 
+	for missingfile in $(MISSING_FILES); do rm -f $$missingfile; done
+	for backupfile in $(BACKUP_FILES); do \
+	  if [ -e $$backupfile.bak ]; then \
+	    mv -f $$backupfile.bak $$backupfile; \
+	  fi; \
+	done
+	rm -rf elmergrid/src/metis post/src/fonts/TrueType
+	rm -rf ElmerGUI/PythonQt/lib ElmerGUI/matc/lib ElmerGUI/netgen/ngcore
+	rm -f stamp-*
+	if [ -d .pc ]; then \
+	  QUILT_PATCHES=debian/patches quilt pop -a && rm -rf .pc; \
+	fi
+	dh_clean
+
+patch:
+	if [ ! -d .pc ]; then \
+	  QUILT_PATCHES=debian/patches quilt push -a; \
+	fi
+
+# In a bit of a hack, the "build" target configures, builds and installs, so
+# modules can depend on each other
+build: stamp-build
+build-arch: stamp-build
+build-indep: stamp-build
+stamp-build: patch
+	dh_testdir
+	for backupfile in $(BACKUP_FILES); do \
+	  cp -a $$backupfile $$backupfile.bak; \
+	done
+	mkdir elmergrid/src/metis
+	install -d post/src/fonts/TrueType
+	for missingfile in $(MISSING_FILES); do touch $$missingfile; done
+	for aclocaldir in eio matc elmerparam hutiter meshgen2d fem front elmergrid post; do \
+	  echo Running aclocal/automake in module $$aclocaldir; \
+	  (cd $$aclocaldir && aclocal && automake); \
+	done
+	set -e; for elmermodule in $(ELMER_MODULES); do \
+	  echo; echo CONFIGURING ELMER MODULE $$elmermodule; echo; \
+	  (cd $$elmermodule && \
+	   autoconf && \
+	   LIBS="-L$(CURDIR)/debian/tmp/usr/lib" \
+	     CPPFLAGS="$(CPPFLAGS) -I$(CURDIR)/debian/tmp/usr/include -I/usr/include/freetype2" \
+	     FCPPFLAGS="$(FCPPFLAGS) -I$(CURDIR)/debian/tmp/usr/include" \
+	     CFLAGS="$(CFLAGS) -I$(CURDIR)/debian/tmp/usr/include -fPIC" \
+	     CXXFLAGS="$(CXXFLAGS) -I$(CURDIR)/debian/tmp/usr/include -I/usr/include/freetype2 -fPIC" \
+	     FCFLAGS="$(FCFLAGS) -I$(CURDIR)/debian/tmp/usr/include -fPIC" \
+	     ./configure --prefix=/usr --with-metis=/usr \
+	       --with-mpi-dir=/usr --with-mpi-inc-dir=/usr/include/mpi \
+	       --with-blas=-lblas --with-lapack=-llapack \
+	       --with-mumps=dmumps_scotch); \
+	  echo; echo BUILDING ELMER MODULE $$elmermodule; echo; \
+	  make -C $$elmermodule; \
+	  echo; echo INSTALLING ELMER MODULE $$elmermodule; echo; \
+	  make -C $$elmermodule install DESTDIR=$(CURDIR)/debian/tmp; \
+	done
+	echo; echo BUILDING ELMER MODULE ElmerGUI; echo
+	(set -e; cd ElmerGUI; \
+	  export DEB_PY_VERSION=$(shell pyversions -d); \
+	  export ELMER_HOME=/usr; \
+	  export ELMERGUI_HOME=/usr/share/ElmerGUI; \
+	  qmake; \
+	  make)
+	(cd ElmerGUIlogger && ELMER_HOME=/usr ELMERGUI_HOME=/usr/share/ElmerGUI qmake -project && ELMER_HOME=/usr ELMERGUI_HOME=/usr/share/ElmerGUI qmake && ELMER_HOME=/usr ELMERGUI_HOME=/usr/share/ElmerGUI make)
+	echo; echo INSTALLING ELMER MODULE ElmerGUI; echo
+	make -C ElmerGUI install ELMER_HOME=/usr ELMERGUI_HOME=/usr/share/ElmerGUI INSTALL_ROOT=$(CURDIR)/debian/tmp
+	mv debian/tmp/usr/share/ElmerGUI/ElmerGUI debian/tmp/usr/bin/
+	for edf_file in helmholtz navier-stokes resultoutput heatequation \
+	    linearelasticity k-epsilon meshdeform; do \
+	  mv debian/tmp/usr/share/ElmerGUI/edf/$$edf_file.xml \
+	    debian/tmp/usr/share/ElmerGUI/edf-extra/; \
+	done
+	cp ElmerGUIlogger/ElmerGUIlogger debian/tmp/usr/bin/
+	(cd utils/ElmerClips/ && qmake && make)
+	install utils/ElmerClips/ElmerClips debian/tmp/usr/bin/ElmerClips
+# Last shifts and cleanups
+	mv debian/tmp/usr/share/elmerpost/modules debian/tmp/usr/lib/elmerpost
+	ln -s ../../lib/elmerpost debian/tmp/usr/share/elmerpost/modules
+	rm -rf debian/tmp/usr/share/elmerpost/fonts/TrueType
+	(cd debian/tmp/usr/share/elmerpost/fonts && \
+	 ln -s ../../fonts/truetype/freefont TrueType)
+	rm -f debian/tmp/usr/share/elmerpost/help/html_library-0.3/license.terms
+	mv debian/tmp/usr/share/elmersolver/lib debian/tmp/usr/lib/elmersolver
+	ln -s ../../lib/elmersolver debian/tmp/usr/share/elmersolver/lib
+	rm -f debian/tmp/usr/lib/elmersolver/libelmersolver*
+	install -d debian/tmp/usr/share/ElmerGUI/icons
+	cp -a ElmerGUI/Application/icons/Mesh3D.png debian/tmp/usr/share/ElmerGUI/icons
+	chmod -x debian/tmp/usr/lib/elmersolver/*
+	chmod -x debian/tmp/usr/share/elmersolver/include/*
+	chmod -x debian/tmp/usr/share/elmerpost/help/*.html
+	chmod -x debian/tmp/usr/share/elmerpost/help/*.tcl
+	chmod -x debian/tmp/usr/share/elmerpost/help/figs/*
+	chmod -x debian/tmp/usr/share/elmerpost/help/html_library-0.3/*
+	chmod -x debian/tmp/usr/share/elmerpost/help/matc/*.gif
+	chmod -x debian/tmp/usr/share/elmerpost/help/matc/*.html
+	chmod -x debian/tmp/usr/share/elmerpost/help/matc/lh-figs/*
+	chmod -x debian/tmp/usr/share/elmerfront/lib/*
+	chmod -x debian/tmp/usr/share/elmerfront/tcl/*.tcl*
+	chmod -x debian/tmp/usr/share/elmerfront/tcl/*.edf
+	chmod -x debian/tmp/usr/share/elmerfront/tcl/images/*
+	chmod -x debian/tmp/usr/share/ElmerGUI/icons/*
+	chmod -x debian/tmp/usr/share/elmerpost/lib/rgb.txt
+	chmod -x debian/tmp/usr/share/elmerpost/lib/cameras/*
+	chmod -x debian/tmp/usr/share/elmerpost/lib/colormaps/*
+	chmod -x debian/tmp/usr/share/elmerpost/lib/images/*
+	chmod -x debian/tmp/usr/share/elmerpost/tcl/*
+	chmod -x debian/tmp/usr/lib/R/elmerparam/DESCRIPTION
+	mv debian/tmp/usr/lib/elmersolver debian/tmp/usr/lib/elmersolver-6.1
+	install -d debian/tmp/usr/share/applications
+	cp -a debian/*.desktop debian/tmp/usr/share/applications/
+	mv debian/tmp/usr/bin/ElmerGUI debian/tmp/usr/bin/ElmerGUI.real
+	cp -a debian/ElmerGUI debian/tmp/usr/bin/ElmerGUI
+	chmod gou+x debian/tmp/usr/bin/ElmerGUI
+# Install elmergui-samples files
+	install -d debian/elmergui-samples/usr/share/ElmerGUI
+	cp -a ElmerGUI/samples debian/elmergui-samples/usr/share/ElmerGUI/
+	touch $@
+
+binary-indep: patch
+	dh_testdir -i
+	dh_testroot -i
+	dh_movefiles -i
+	dh_installdocs -i
+	dh_installchangelogs -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch:
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdirs -a
+	install -d debian/elmer/usr/share/ElmerGUI/edf
+	dh_movefiles -a
+	dh_installdebconf -a
+	dh_installdocs -a
+	dh_installchangelogs -a
+	dh_strip -pelmer --dbg-package=elmer-dbg
+	dh_strip -plibelmersolver-6.1 --dbg-package=libelmersolver-dbg
+	dh_makeshlibs -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-arch binary-indep
+
+.PHONY: build binary-indep binary-arch binary
+
+get-orig-source:
+	$(CURDIR)/debian/elmerfem_get-orig-source.sh $(DEB_VER)
