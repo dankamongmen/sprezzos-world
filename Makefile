@@ -1931,7 +1931,7 @@ $(FBTERM): $(SPREZZ)/fbterm/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf fbterm-$(fbterm_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf nfbterm-$(fbterm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: festival
 festival:$(FESTIVAL)_$(ARCH).deb
