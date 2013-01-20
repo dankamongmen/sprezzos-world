@@ -5885,6 +5885,14 @@ $(LIBRDMACM): $(SPREZZ)/librdmacm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf librdmacm-$(librdmacm_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: librelp
+librelp:$(LIBRELP)_$(ARCH).deb
+$(LIBRELP): $(SPREZZ)/librelp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf librelp-$(librelp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: librsvg
 librsvg:$(LIBRSVG)_$(ARCH).deb
 $(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog
