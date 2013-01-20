@@ -254,6 +254,14 @@ $(HASKELLSYB): $(SPREZZ)/haskell-syb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf syb-$(haskell-syb_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-system-filepath
+haskell-system-filepath:$(HASKELLSYSTEMFILEPATH)_$(ARCH).deb
+$(HASKELLSYSTEMFILEPATH): $(SPREZZ)/haskell-system-filepath/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf system-filepath-$(haskell-system-filepath_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-test-framework
 haskell-test-framework:$(HASKELLTESTFRAMEWORK)_$(ARCH).deb
 $(HASKELLTESTFRAMEWORK): $(SPREZZ)/haskell-test-framework/debian/changelog
