@@ -94,6 +94,14 @@ $(GCONFEDITOR): $(SPREZZ)/gconf-editor/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gconf-editor-$(gconf-editor_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: genius
+genius:$(GENIUS)_$(ARCH).deb
+$(GENIUS): $(SPREZZ)/genius/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf genius-$(genius_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: ghemical
 ghemical:$(GHEMICAL)_$(ARCH).deb
 $(GHEMICAL): $(SPREZZ)/ghemical/debian/changelog
