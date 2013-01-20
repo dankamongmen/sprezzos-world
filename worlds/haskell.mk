@@ -118,6 +118,14 @@ $(HASKELLHOSTNAME): $(SPREZZ)/haskell-hostname/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hostname-$(haskell-hostname_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-hspec
+haskell-hspec:$(HASKELLHSPEC)_$(ARCH).deb
+$(HASKELLHSPEC): $(SPREZZ)/haskell-hspec/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hspec-$(haskell-hspec_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-hunit
 haskell-hunit:$(HASKELLHUNIT)_$(ARCH).deb
 $(HASKELLHUNIT): $(SPREZZ)/haskell-hunit/debian/changelog
