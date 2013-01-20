@@ -1,0 +1,276 @@
+#! /usr/bin/perl
+# config - Debconf configuration for tvtime
+# Copyright (C) 2003  Billy Biggs
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+use strict;
+use warnings;
+use English;
+use Fcntl ':mode';
+use File::Copy;
+
+# Source debconf library
+use Debconf::Client::ConfModule ':all';
+# Declare the version, and the ability to back up.
+version(2.0);
+capb('backup');
+
+		    ### CONFIG FILE ARGUMENTS ###
+
+# Get the name of the XML config file
+my $pkgsysconfdir = '/etc/tvtime';
+my $tvtime_xml = "$pkgsysconfdir/tvtime.xml";
+my $tvtime_configure = '/usr/bin/tvtime-configure';
+
+		       ### DATA STRUCTURES ###
+
+# Each $options{} consists of a key with the name of the <option>.
+# and the value is a reference to another hash.
+my %options;
+
+# We want to be able to add to %options.
+sub add_to_options ($) {
+    my $option_name = shift;
+}
+
+### OPTIONS ###
+
+# These are the options to look for.
+# High priority Debconf questions.
+add_to_options("norm");
+add_to_options("frequencies");
+# Low priority Debconf questions.
+add_to_options("device");
+add_to_options("vbidevice");
+add_to_options("priority");
+
+### PARSE FILES ###
+
+sub parse_conf_line ($) {
+    $_[0] =~ m/([^:]*):(.*)/;
+    if ($1 eq 'V4LDevice') {
+	$options{'device'} = $2;
+    }
+    else {
+	$options{lc($1)} = $2;
+    }
+}
+
+# Ask tvtime-configure to give us the values of certain things.
+sub parse_conf () {
+    if (-e $tvtime_xml and -x $tvtime_configure) {
+	# Here we set $options{$name}
+	open(CONFIG,
+	     "$tvtime_configure --configfile=\"$tvtime_xml\" " .
+	     "--norm --frequencies --device --vbidevice --priority " .
+	     "2>/dev/null |");
+	
+	# Watch out!  tvtime-configure --vbidevice is broken in 0.9.10-7 and
+	# previous.  We must check for a functional version!
+	if (not $_ = <CONFIG>) {
+	    open(CONFIG,
+		 "$tvtime_configure --configfile=\"$tvtime_xml\" " .
+		 "--norm --frequencies --device --priority 2>/dev/null |");
+	    $options{'vbidevice'} = '/dev/vbi0';
+	} else {
+	    parse_conf_line($_);
+	}
+
+	# Parse the input from the program
+	while (<CONFIG>) {
+	    parse_conf_line($_);
+	}
+    }
+}
+
+# Detect setuid on the binary
+my $tvtime_setuid;
+sub detect_setuid () {
+    my $tvtime_bin = '/usr/bin/tvtime';
+    my $tvtime_mode;
+    if (-x $tvtime_bin) {
+	$tvtime_mode = (stat($tvtime_bin))[2];
+	$tvtime_setuid = $tvtime_mode & S_ISUID;
+    }
+}
+
+### DEBCONF STUFF ###
+
+# Set defaults for "Type: Select"
+sub set_select ($$$@) {
+    my $name = shift;
+    my $template = 'tvtime/' . shift;
+    my $priority = shift;
+    my @select_values = @_;
+
+    if (defined $options{$name}
+	and lc(get($template)) ne lc($options{$name})) {
+	for my $k (@select_values) {
+	    if (lc($options{$name}) eq $k) {
+		set($template, $options{$name});
+		last;
+	    }
+	}
+    }
+    input($priority, $template);
+}
+
+# Set defaults for "Type: String"
+sub set_string ($$$) {
+    my $name = shift;
+    my $template = 'tvtime/' . shift;
+    my $priority = shift;
+
+    if (defined $options{$name}
+	and (get($template)
+	     ne $options{$name})) {
+	set($template, $options{$name});
+    }
+    input($priority, $template);
+}
+
+# Set defaults for "Type: Boolean"
+sub set_boolean ($$$) {
+    my $name = shift;
+    my $template = 'tvtime/' . shift;
+    my $priority = shift;
+
+    if (defined $options{$name}) {
+	my $boolean;
+	if ($options{$name} eq '0') {
+	    $boolean = 'false';
+	}
+	elsif ($options{$name} eq '1') {
+	    $boolean = 'true';
+	}
+
+	if (get($template) ne $boolean) {
+	    set($template, $boolean);
+	}
+    }
+    input($priority, $template);
+}
+
+# Setup the state machine for Q&A
+sub ask_questions ($) {
+    my $debconf_state = shift;
+    while (($debconf_state != 0) and ($debconf_state != 7)) {
+	if ($debconf_state == 1) {
+	    # Select the Norm
+	    set_select('norm', 'norm', 'high',
+		       ('NTSC','NTSC-JP','PAL','PAL-60','PAL-M','PAL-N',
+			'PAL-Nc','SECAM'));
+	}
+	elsif ($debconf_state == 2) {
+	    my $norm = get('tvtime/norm');
+	    if ($norm eq "NTSC" || $norm eq "PAL-M" || $norm eq "PAL-Nc") {
+		# Select the frequency table for NTSC.
+		set_select('frequencies', 'frequencies-ntsc', 'high',
+			   ('Cable' => 'us-cable',
+			    'Broadcast' => 'us-broadcast',
+			    'Cable including channels 100+' => 'us-cable100'));
+	    }
+	    elsif ($norm eq "NTSC-JP") {
+		# Select the frequency table for Japan.
+		set_select('frequencies', 'frequencies-jp', 'high',
+			   ('Cable','Broadcast'));
+	    }
+	    elsif ($norm eq "PAL" || $norm eq "PAL-60" || $norm eq "PAL-N"
+		   || $norm eq "SECAM") {
+		# Select the frequency table for PAL and SECAM
+		set_select('frequencies', 'frequencies-pal', 'high',
+			   ('Australia' => 'australia',
+			    'Australia Optus' => 'australia-optus',
+			    'China Broadcast' => 'china-broadcast',
+			    'Europe' => 'europe',
+			    'France' => 'france',
+			    'New Zealand' => 'newzealand',
+			    'Russia' => 'russia',
+			    'Custom' => 'custom'));
+	    }
+	}
+	elsif ($debconf_state == 3) {
+	    # Specify the television capture device.
+	    set_string('device', 'v4ldevice', 'low');
+	}
+	elsif ($debconf_state == 4) {
+	    # Specify the VBI device
+	    set_string('vbidevice', 'vbidevice', 'low');
+	}
+	elsif ($debconf_state == 5) {
+	    # Specify whether to setuid root /usr/bin/tvtime.
+	    if (defined $tvtime_setuid) {
+		my $setuid;
+		if ($tvtime_setuid) {
+		    $setuid = 'true';
+		}
+		else {
+		    $setuid = 'false';
+		}
+
+		if (get('tvtime/setuid') ne $setuid) {
+		    set('tvtime/setuid', $setuid);
+		}
+	    }
+	    input('medium', 'tvtime/setuid');
+	}
+	elsif ($debconf_state == 6) {
+	    # Specify the process priority if tvtime is setuid.
+	    if (defined $options{'priority'}
+		and (get('tvtime/processpriority')
+		     ne $options{'priority'})) {
+		set('tvtime/processpriority',
+		    $options{'priority'});
+	    }
+	    if (get('tvtime/setuid') eq 'true') {
+		input('low', 'tvtime/processpriority');
+	    }
+	}
+
+	# Code to handle the query, and then going backwards and forwards in
+	# the state machine.
+	my @return;
+	if (@return = go()) {
+	    if ($return[0] == 30) {
+		# Back button was pushed.
+		$debconf_state--;
+	    }
+	    else {
+		$debconf_state++;
+	    }
+	}
+	else {
+	    $debconf_state--;
+	}
+    }
+}
+
+# We will only parse /etc/tvtime/tvtime.xml if tvtime-configure
+# exists.  In the event that tvtime.xml exists, but tvtime-configure
+# doesn't, we assume that the sysadmin put tvtime.xml there on
+# purpose, and it is correct.
+my $first_question = 1;
+detect_setuid();
+if (-x $tvtime_configure) {
+    parse_conf();
+}
+elsif (-e $tvtime_xml) {
+    # touch /etc/tvtime/debconf.tvtime.xml
+    open(OUT, ">$pkgsysconfdir/debconf.tvtime.xml");
+    close(OUT);
+    $first_question = 5;		# Only ask setuid questions
+}
+ask_questions($first_question);

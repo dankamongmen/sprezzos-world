@@ -1,0 +1,174 @@
+--- ../orig/tvtime-1.0.2/./src/tvtimeconf.c	2005-09-08 04:07:56.000000000 +0000
++++ ./src/tvtimeconf.c	2012-12-07 11:05:25.000000000 +0000
+@@ -34,6 +34,7 @@
+ #include <errno.h>
+ #include <libxml/parser.h>
+ #include <math.h>
++#include <libgen.h>
+ #ifdef HAVE_CONFIG_H
+ # include "config.h"
+ #endif
+@@ -565,7 +566,30 @@
+     }
+ 
+     xmlKeepBlanksDefault( 0 );
+-    xmlSaveFormatFile( config_filename, doc, 1 );
++
++    if( create_file )
++    {
++        char *temp_config_filename = strdup( config_filename );
++
++        if( ! temp_config_filename )
++        {
++            fprintf( stderr, "strdup failed for config_filename %s\n", config_filename );
++            xmlFreeDoc( doc );
++            return 0;
++        }
++
++        mkdir_and_force_owner( dirname( temp_config_filename ), getuid(), getgid() );
++
++        free( temp_config_filename );
++    }
++
++    if( xmlSaveFormatFile( config_filename, doc, 1 ) == -1 )
++    {
++        fprintf( stderr, "xmlSaveFormatFile returned -1 for config_filename %s\n", config_filename );
++        xmlFreeDoc( doc );
++        return 0;
++    }
++
+     if( create_file ) {
+         if( chown( config_filename, getuid(), getgid() ) < 0 ) {
+             lfprintf( stderr, _("Cannot change owner of %s: %s.\n"),
+@@ -844,14 +868,6 @@
+     ct->buttonmapmenu[ 4 ] = TVTIME_MENU_UP;
+     ct->buttonmapmenu[ 5 ] = TVTIME_MENU_DOWN;
+ 
+-    /* Make the ~/.tvtime directory every time on startup, to be safe. */
+-    if( asprintf( &temp_dirname, "%s/.tvtime", getenv( "HOME" ) ) < 0 ) {
+-        /* FIXME: Clean up ?? */
+-        return 0;
+-    }
+-    mkdir_and_force_owner( temp_dirname, ct->uid, getgid() );
+-    free( temp_dirname );
+-
+     /* First read in global settings. */
+     asprintf( &base, "%s/tvtime.xml", CONFDIR );
+     if( file_is_openable_for_read( base ) ) {
+@@ -1043,6 +1059,7 @@
+     int option_index = 0;
+     int filename_specified = 0;
+     int c;
++    int config_needs_saving = 0;
+ 
+     if( argc == 1 ) {
+         print_config_usage( argv );
+@@ -1052,10 +1069,10 @@
+     while( (c = getopt_long( argc, argv, "aAhmMF:g:I:d:b:i:c:n:D:f:x:t:l:R:",
+             long_options, &option_index )) != -1 ) {
+         switch( c ) {
+-        case 'a': ct->aspect = 1; break;
+-        case 'A': ct->aspect = 0; break;
+-        case 'm': ct->fullscreen = 1; break;
+-        case 'M': ct->fullscreen = 0; break;
++        case 'a': ct->aspect = 1; config_needs_saving = 1; break;
++        case 'A': ct->aspect = 0; config_needs_saving = 1; break;
++        case 'm': ct->fullscreen = 1; config_needs_saving = 1; break;
++        case 'M': ct->fullscreen = 0; config_needs_saving = 1; break;
+         case 'F': if( ct->config_filename ) free( ct->config_filename );
+                   filename_specified = 1;
+                   ct->config_filename = expand_user_path( optarg );
+@@ -1065,18 +1082,20 @@
+                                 ct->config_filename );
+                       conf_xml_parse( ct, ct->config_filename );
+                   }
++                  // intentionally not : config_needs_saving = 1;
+                   break;
+         case 'x': if( ct->mixerdev ) { free( ct->mixerdev ); }
+-                  ct->mixerdev = strdup( optarg ); break;
++                  ct->mixerdev = strdup( optarg ); config_needs_saving = 1; break;
+         case 'g': if( ct->geometry ) { free( ct->geometry ); }
+-                  ct->geometry = strdup( optarg ); break;
+-        case 'I': ct->inputwidth = atoi( optarg ); break;
++                  ct->geometry = strdup( optarg ); config_needs_saving = 1; break;
++        case 'I': ct->inputwidth = atoi( optarg ); config_needs_saving = 1; break;
+         case 'd': if( !optarg ) {
+                       fprintf( stdout, "V4LDevice:%s\n",
+                                config_get_v4l_device( ct ) );
+                   } else {
+                       free( ct->v4ldev );
+                       ct->v4ldev = strdup( optarg );
++                      config_needs_saving = 1;
+                   }
+                   break;
+         case 'b': if( !optarg ) {
+@@ -1085,6 +1104,7 @@
+                   } else {
+                       free( ct->vbidev );
+                       ct->vbidev = strdup( optarg );
++                      config_needs_saving = 1;
+                   }
+                   break;
+         case 'i': if( !optarg ) {
+@@ -1092,16 +1112,18 @@
+                                config_get_inputnum( ct ) );
+                   } else {
+                       ct->inputnum = atoi( optarg );
++                      config_needs_saving = 1;
+                   }
+                   break;
+         case 'c': ct->prev_channel = ct->start_channel;
+-                  ct->start_channel = atoi( optarg ); break;
++                  ct->start_channel = atoi( optarg ); config_needs_saving = 1; break;
+         case 't': if( !optarg ) {
+                       fprintf( stdout, "XMLTVFile:%s\n",
+                                config_get_xmltv_file( ct ) );
+                   } else {
+                       if( ct->xmltvfile ) free( ct->xmltvfile );
+                       ct->xmltvfile = expand_user_path( optarg );
++                      config_needs_saving = 1;
+                   }
+                   break;
+         case 'l': if( !optarg ) {
+@@ -1110,6 +1132,7 @@
+                   } else {
+                       if( ct->xmltvlanguage ) free( ct->xmltvlanguage );
+                       ct->xmltvlanguage = strdup( optarg );
++                      config_needs_saving = 1;
+                   }
+                   break;
+         case 'n': if( !optarg ) {
+@@ -1117,6 +1140,7 @@
+                   } else {
+                       free( ct->norm );
+                       ct->norm = strdup( optarg );
++                      config_needs_saving = 1;
+                   }
+                   break;
+         case 'f': if( !optarg ) {
+@@ -1125,6 +1149,7 @@
+                   } else {
+                       free( ct->freq );
+                       ct->freq = strdup( optarg );
++                      config_needs_saving = 1;
+                   }
+                   break;
+         case 'R': if( !optarg ) {
+@@ -1132,6 +1157,7 @@
+                                config_get_priority( ct ) );
+                   } else {
+                       ct->priority = atoi( optarg );
++                      config_needs_saving = 1;
+                   }
+                   break;
+         default:
+@@ -1140,6 +1166,9 @@
+         }
+     }
+ 
++    if( ! config_needs_saving )
++        return 1;
++
+     if( !filename_specified ) {
+         char *fifofile = get_tvtime_fifo_filename( config_get_uid( ct ) );
+         int fifofd;
