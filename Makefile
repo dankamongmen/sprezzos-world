@@ -2739,6 +2739,14 @@ $(GOCR): $(SPREZZ)/gocr/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gocr-$(gocr_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: google-gadgets
+google-gadgets:$(GOOGLEGADGETS)_$(ARCH).deb
+$(GOOGLEGADGETS): $(SPREZZ)/google-gadgets/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf google-gadgets-for-linux-$(google-gadgets_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: gource
 gource:$(GOURCE)_$(ARCH).deb
 $(GOURCE): $(SPREZZ)/gource/debian/changelog
