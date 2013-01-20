@@ -4673,7 +4673,7 @@ $(LIBMPEG3): $(SPREZZ)/libmpeg3/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libmpeg3-$(libmpeg3_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf libmpeg3-$(libmpeg3_UPVER)-src.tar.bz2 $(TARARGS) $@
 
 .PHONY: mpd
 mpd:$(MPD)_$(ARCH).deb
