@@ -30,6 +30,14 @@ $(FILELIGHT): $(SPREZZ)/filelight/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf filelight_$(filelight_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: fotowall
+fotowall:$(FOTOWALL)_$(ARCH).deb
+$(FOTOWALL): $(SPREZZ)/fotowall/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf Fotowall_$(fotowall_UPVER).orig.tar.bz2 $(TARARGS) $@
+
 .PHONY: grantlee
 grantlee:$(GRANTLEE)_$(ARCH).deb
 $(GRANTLEE): $(SPREZZ)/grantlee/debian/changelog
