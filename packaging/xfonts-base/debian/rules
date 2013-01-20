@@ -1,0 +1,118 @@
+#!/usr/bin/make -f
+# Debian xfonts-base package building rules
+# Copyright © 2004 Scott James Remnant <scott@netsplit.com>
+# Copyright © 2005 Daniel Stone <daniel@fooishbar.org>
+# Copyright © 2005 David Nusinow <dnusinow@debian.org>
+# Copyright © 2007 Branden Robinson <branden@debian.org>
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE = 1
+
+# If this is a library package, set this to name of the package containing the
+# shared library.
+PACKAGE = xfonts-base
+
+include debian/xsfbs/xsfbs.mk
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+# This package contains multiple modules as shipped by upstream.  Each module is
+# contained in a subdirectory in the root dir of the package.  You must list
+# each subdirectory explicitly so that the build system knows what to build.
+SUBDIRS= \
+	font-arabic-misc \
+	font-cursor-misc \
+	font-daewoo-misc \
+	font-dec-misc \
+	font-isas-misc \
+	font-jis-misc \
+	font-micro-misc \
+	font-misc-misc \
+	font-mutt-misc \
+	font-schumacher-misc \
+	font-sony-misc \
+	font-sun-misc
+
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build=$(DEB_HOST_GNU_TYPE)
+else
+	confflags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+$(STAMP_DIR)/build-%:
+	mkdir -p $*-build
+	cd $*-build && \
+	../$*/configure \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		$(confflags)
+	$(MAKE) -C $*-build
+	>$@
+		
+
+
+build: build-stamp
+build-stamp: $(STAMP_DIR)/prepare $(addprefix $(STAMP_DIR)/build-,$(SUBDIRS))
+	>$@
+
+clean: xsfclean
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	rm -f config.cache config.log config.status
+	rm -f */config.cache */config.log */config.status
+	rm -f conftest* */conftest*
+	rm -rf autom4te.cache */autom4te.cache
+	rm -rf *-build
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	for FILE in $(SUBDIRS); do \
+		cd "$$FILE"-build \
+			&& $(MAKE) DESTDIR=$(CURDIR)/debian/tmp install; \
+		cd ..; \
+	done
+	install -D -m644 debian/fonts.alias \
+		debian/tmp/etc/X11/fonts/misc/xfonts-base.alias
+
+# Build architecture-dependent files here.
+binary-arch: build install
+# Nothing to do.
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_install --sourcedir=debian/tmp --fail-missing --exclude fonts.dir \
+		--exclude fonts.scale
+	dh_installxfonts
+	dh_installchangelogs
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
+
+get-tarballs: $(addprefix get-tarball-,$(SUBDIRS))
+
+get-tarball-%:
+	uscan --no-conf --download --no-symlink --destdir . --package $* --upstream-version $(shell awk -F = '/^PACKAGE_VERSION=/ { print $$2 }' < $*/configure || echo 0) --watchfile debian/watch.$* || test $$? = 1
+
+# vim:set ai noet sw=8 ts=8 tw=80:
