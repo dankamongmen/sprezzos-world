@@ -5837,6 +5837,14 @@ $(RRDTOOL): $(SPREZZ)/rrdtool/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf rrdtool-$(rrdtool_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: rsyslog
+rsyslog:$(RSYSLOG)_$(ARCH).deb
+$(RSYSLOG): $(SPREZZ)/rsyslog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rsyslog-$(rsyslog_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rubberband
 rubberband:$(RUBBERBAND)_$(ARCH).deb
 $(RUBBERBAND): $(SPREZZ)/rubberband/debian/changelog
