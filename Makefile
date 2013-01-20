@@ -3587,6 +3587,14 @@ $(LIBCAP2): $(SPREZZ)/libcap2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libcap-$(libcap2_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libestr
+libestr:$(LIBESTR)_$(ARCH).deb
+$(LIBESTR): $(SPREZZ)/libestr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libestr-$(libestr_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libetpan
 libetpan:$(LIBETPAN)_$(ARCH).deb
 $(LIBETPAN): $(SPREZZ)/libetpan/debian/changelog
