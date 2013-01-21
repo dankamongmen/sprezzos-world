@@ -1405,6 +1405,14 @@ $(CPPTEST): $(SPREZZ)/cpptest/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cpptest-$(cpptest_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cwidget
+cwidget:$(CWIDGET)_$(ARCH).deb
+$(CWIDGET): $(SPREZZ)/cwidget/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cwidget-$(cwidget_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: taglib
 taglib:$(TAGLIB)_$(ARCH).deb
 $(TAGLIB): $(SPREZZ)/taglib/debian/changelog
@@ -4138,6 +4146,14 @@ $(LIBCURSESUIPERL): $(SPREZZ)/libcurses-ui-perl/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Curses-UI-$(libcurses-ui-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libuuid-perl
+libuuid-perl:$(LIBUUIDPERL)_$(ARCH).deb
+$(LIBUUIDPERL): $(SPREZZ)/libuuid-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libuuid-perl-$(libuuid-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libwww-perl
 libwww-perl:$(LIBWWWPERL)_$(ARCH).deb
