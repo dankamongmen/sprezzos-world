@@ -5533,6 +5533,14 @@ $(PCIUTILS): $(SPREZZ)/pciutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf pciutils-$(pciutils_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pcmciautils
+pcmciautils:$(PCMCIAUTILS)_$(ARCH).deb
+$(PCMCIAUTILS): $(SPREZZ)/pcmciautils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf pcmciautils-$(pcmciautils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: pcre
 pcre:$(PCRE)_$(ARCH).deb
 $(PCRE): $(SPREZZ)/pcre/debian/changelog
