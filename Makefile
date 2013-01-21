@@ -6333,6 +6333,14 @@ $(SYSFSUTILS): $(SPREZZ)/sysfsutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf sysfsutils-$(sysfsutils_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: syslinux
+syslinux:$(SYSLINUX)_$(ARCH).deb
+$(SYSLINUX): $(SPREZZ)/syslinux/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf syslinux-$(syslinux_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: systemd
 systemd:$(SYSTEMD)_$(ARCH).deb
 $(SYSTEMD): $(SPREZZ)/systemd/debian/changelog
