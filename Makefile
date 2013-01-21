@@ -4195,6 +4195,14 @@ $(LIBXFONT): $(SPREZZ)/libxfont/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxfont_$(libxfont_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xfonts-encodings
+xfonts-encodings:$(XFONTSENCODINGS)_$(ARCH).deb
+$(XFONTSENCODINGS): $(SPREZZ)/xfonts-encodings/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf encodings-$(xfonts-encodings_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libfcgi
 libfcgi:$(LIBFCGI)_$(ARCH).deb
 $(LIBFCGI): $(SPREZZ)/libfcgi/debian/changelog
@@ -4218,6 +4226,14 @@ $(LIBFONTTTFPERL): $(SPREZZ)/libfont-ttf-perl/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Font-TTF-$(libfont-ttf-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: liblocale-gettext-perl
+liblocale-gettext-perl:$(LIBLOCALEGETTEXTPERL)_$(ARCH).deb
+$(LIBLOCALEGETTEXTPERL): $(SPREZZ)/liblocale-gettext-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf locale-gettext-$(liblocale-gettext-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxi
 libxi:$(LIBXI)_$(ARCH).deb
