@@ -1301,6 +1301,14 @@ $(LIBCANBERRA): $(SPREZZ)/libcanberra/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libcanberra-$(libcanberra_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libcdio
+libcdio:$(LIBCDIO)_$(ARCH).deb
+$(LIBCDIO): $(SPREZZ)/libcdio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libcdio-$(libcdio_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libcec
 libcec:$(LIBCEC)_$(ARCH).deb
 $(LIBCEC): $(SPREZZ)/libcec/debian/changelog
