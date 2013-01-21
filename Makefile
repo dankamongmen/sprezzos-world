@@ -5067,6 +5067,14 @@ $(LIBNFNETLINK): $(SPREZZ)/libnfnetlink/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libnfnetlink-$(libnfnetlink_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libnfs
+libnfs:$(LIBNFS)_$(ARCH).deb
+$(LIBNFS): $(SPREZZ)/libnfs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnfs-$(libnfs_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnfsidmap
 libnfsidmap:$(LIBNFSIDMAP)_$(ARCH).deb
 $(LIBNFSIDMAP): $(SPREZZ)/libnfsidmap/debian/changelog
