@@ -30,6 +30,14 @@ $(HASKELLANSIWLPPRINT): $(SPREZZ)/haskell-ansi-wl-pprint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ansi-wl-pprint-$(haskell-ansi-wl-pprint_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-asn1-data
+haskell-asn1-data:$(HASKELLASN1DATA)_$(ARCH).deb
+$(HASKELLASN1DATA): $(SPREZZ)/haskell-asn1-data/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf asn1-data-$(haskell-asn1-data_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-attoparsec
 haskell-attoparsec:$(HASKELLATTOPARSEC)_$(ARCH).deb
 $(HASKELLATTOPARSEC): $(SPREZZ)/haskell-attoparsec/debian/changelog
@@ -45,6 +53,14 @@ $(HASKELLBASEUNICODESYMBOLS): $(SPREZZ)/haskell-base-unicode-symbols/debian/chan
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf base-unicode-symbols-$(haskell-base-unicode-symbols_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-base64-bytestring
+haskell-base64-bytestring:$(HASKELLBASE64BYTESTRING)_$(ARCH).deb
+$(HASKELLBASE64BYTESTRING): $(SPREZZ)/haskell-base64-bytestring/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf base64-bytestring-$(haskell-base64-bytestring_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: haskell-blaze-builder
 haskell-blaze-builder:$(HASKELLBLAZEBUILDER)_$(ARCH).deb
@@ -70,6 +86,22 @@ $(HASKELLBLAZEMARKUP): $(SPREZZ)/haskell-blaze-markup/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf blaze-markup-$(haskell-blaze-markup_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-cereal
+haskell-cereal:$(HASKELLCEREAL)_$(ARCH).deb
+$(HASKELLCEREAL): $(SPREZZ)/haskell-cereal/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cereal-$(haskell-cereal_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-certificate
+haskell-certificate:$(HASKELLCERTIFICATE)_$(ARCH).deb
+$(HASKELLCERTIFICATE): $(SPREZZ)/haskell-certificate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf certificate-$(haskell-certificate_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-conduit
 haskell-conduit:$(HASKELLCONDUIT)_$(ARCH).deb
 $(HASKELLCONDUIT): $(SPREZZ)/haskell-conduit/debian/changelog
@@ -78,6 +110,14 @@ $(HASKELLCONDUIT): $(SPREZZ)/haskell-conduit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf conduit-$(haskell-conduit_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-crypto
+haskell-crypto:$(HASKELLCRYPTO)_$(ARCH).deb
+$(HASKELLCRYPTO): $(SPREZZ)/haskell-crypto/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Crypto-$(haskell-crypto_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-edit-distance
 haskell-edit-distance:$(HASKELLEDITDISTANCE)_$(ARCH).deb
 $(HASKELLEDITDISTANCE): $(SPREZZ)/haskell-edit-distance/debian/changelog
@@ -85,6 +125,14 @@ $(HASKELLEDITDISTANCE): $(SPREZZ)/haskell-edit-distance/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf edit-distance-$(haskell-edit-distance_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-enumerator
+haskell-enumerator:$(HASKELLENUMERATOR)_$(ARCH).deb
+$(HASKELLENUMERATOR): $(SPREZZ)/haskell-enumerator/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf enumerator-$(haskell-enumerator_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: haskell-extensible-exceptions
 haskell-extensible-exceptions:$(HASKELLEXTENSIBLEEXCEPTIONS)_$(ARCH).deb
@@ -118,7 +166,15 @@ $(HASKELLHOSTNAME): $(SPREZZ)/haskell-hostname/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hostname-$(haskell-hostname_UPVER).tar.gz $(TARARGS) $@
 	
-.PHONY: haskell-hspec
+.PHONY: haskell-hslogger
+haskell-hslogger:$(HASKELLHSLOGGER)_$(ARCH).deb
+$(HASKELLHSLOGGER): $(SPREZZ)/haskell-hslogger/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hslogger-$(haskell-hslogger_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-hslogger
 haskell-hspec:$(HASKELLHSPEC)_$(ARCH).deb
 $(HASKELLHSPEC): $(SPREZZ)/haskell-hspec/debian/changelog
 	mkdir $@
@@ -158,6 +214,14 @@ $(HASKELLLIFTEDBASE): $(SPREZZ)/haskell-lifted-base/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lifted-base-$(haskell-lifted-base_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-missingh
+haskell-missingh:$(HASKELLMISSINGH)_$(ARCH).deb
+$(HASKELLMISSINGH): $(SPREZZ)/haskell-missingh/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf MissingH-$(haskell-missingh_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-monad-control
 haskell-monad-control:$(HASKELLMONADCONTROL)_$(ARCH).deb
 $(HASKELLMONADCONTROL): $(SPREZZ)/haskell-monad-control/debian/changelog
@@ -174,6 +238,22 @@ $(HASKELLMTL): $(SPREZZ)/haskell-mtl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mtl-$(haskell-mtl_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-network
+haskell-network:$(HASKELLNETWORK)_$(ARCH).deb
+$(HASKELLNETWORK): $(SPREZZ)/haskell-network/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf network-$(haskell-network_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-network-protocol-xmpp
+haskell-network-protocol-xmpp:$(HASKELLNETWORKPROTOCOLXMPP)_$(ARCH).deb
+$(HASKELLNETWORKPROTOCOLXMPP): $(SPREZZ)/haskell-network-protocol-xmpp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf network-protocol-xmpp-$(haskell-network-protocol-xmpp_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-parsec
 haskell-parsec:$(HASKELLPARSEC)_$(ARCH).deb
 $(HASKELLPARSEC): $(SPREZZ)/haskell-parsec/debian/changelog
@@ -181,6 +261,14 @@ $(HASKELLPARSEC): $(SPREZZ)/haskell-parsec/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf parsec-$(haskell-parsec_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-pem
+haskell-pem:$(HASKELLPEM)_$(ARCH).deb
+$(HASKELLPEM): $(SPREZZ)/haskell-pem/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pem-$(haskell-pem_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-quickcheck
 haskell-quickcheck:$(HASKELLQUICKCHECK)_$(ARCH).deb
@@ -205,6 +293,14 @@ $(HASKELLREGEXBASE): $(SPREZZ)/haskell-regex-base/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf regex-base-$(haskell-regex-base_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-regex-compat
+haskell-regex-compat:$(HASKELLREGEXCOMPAT)_$(ARCH).deb
+$(HASKELLREGEXCOMPAT): $(SPREZZ)/haskell-regex-compat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf regex-compat-$(haskell-regex-compat_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-regex-posix
 haskell-regex-posix:$(HASKELLREGEXPOSIX)_$(ARCH).deb
@@ -301,6 +397,22 @@ $(HASKELLTEXT): $(SPREZZ)/haskell-text/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf text-$(haskell-text_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-tls
+haskell-tls:$(HASKELLTLS)_$(ARCH).deb
+$(HASKELLTLS): $(SPREZZ)/haskell-tls/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tls-$(haskell-tls_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-tls-extra
+haskell-tls-extra:$(HASKELLTLSEXTRA)_$(ARCH).deb
+$(HASKELLTLSEXTRA): $(SPREZZ)/haskell-tls-extra/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tls-extra-$(haskell-tls-extra_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-transformers
 haskell-transformers:$(HASKELLTRANSFORMERS)_$(ARCH).deb
