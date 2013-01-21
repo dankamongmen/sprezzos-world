@@ -4233,7 +4233,7 @@ $(LIBLOCALEGETTEXTPERL): $(SPREZZ)/liblocale-gettext-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf locale-gettext-$(liblocale-gettext-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf gettext-$(liblocale-gettext-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxi
 libxi:$(LIBXI)_$(ARCH).deb
