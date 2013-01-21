@@ -4153,7 +4153,7 @@ $(LIBUUIDPERL): $(SPREZZ)/libuuid-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libuuid-perl-$(libuuid-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf UUID-$(libuuid-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libwww-perl
 libwww-perl:$(LIBWWWPERL)_$(ARCH).deb
