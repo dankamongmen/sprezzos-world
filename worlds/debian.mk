@@ -1,4 +1,13 @@
 # Native packages (those containing their own source)
+.PHONY: adduser
+adduser:$(ADDUSER)_$(ARCH).deb
+$(ADDUSER): $(SPREZZ)/adduser/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf adduser_$(adduser_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: anna
 anna:$(ANNA)_$(ARCH).udeb
 $(ANNA): $(SPREZZ)/anna/debian/changelog
