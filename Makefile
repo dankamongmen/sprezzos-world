@@ -5990,6 +5990,14 @@ $(RATPOISON): $(SPREZZ)/ratpoison/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ratpoison-$(ratpoison_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: remotecontrol
+remotecontrol:$(REMOTECONTROL)_$(ARCH).deb
+$(REMOTECONTROL): $(SPREZZ)/remotecontrol/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf remotecontrol-$(remotecontrol_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rrdtool
 rrdtool:$(RRDTOOL)_$(ARCH).deb
 $(RRDTOOL): $(SPREZZ)/rrdtool/debian/changelog
