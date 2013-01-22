@@ -1134,6 +1134,14 @@ $(FLICKCURL): $(SPREZZ)/flickcurl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf flickcurl-$(flickcurl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: flickrbackup
+flickrbackup:$(FLICKRBACKUP)_$(ARCH).deb
+$(FLICKRBACKUP): $(SPREZZ)/flickrbackup/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf FlickrBackup-$(flickrbackup_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ftgl
 ftgl:$(FTGL)_$(ARCH).deb
 $(FTGL): $(SPREZZ)/ftgl/debian/changelog
