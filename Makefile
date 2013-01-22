@@ -1829,6 +1829,14 @@ $(DOSFSTOOLS): $(SPREZZ)/dosfstools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf dosfstools-$(dosfstools_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: dracut
+dracut:$(DRACUT)_$(ARCH).deb
+$(DRACUT): $(SPREZZ)/dracut/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf dracut-$(dracut_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: dri2proto
 dri2proto:$(DRI2PROTO)_$(ARCH).deb
 $(DRI2PROTO): $(SPREZZ)/dri2proto/debian/changelog

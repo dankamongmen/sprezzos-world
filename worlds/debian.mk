@@ -76,6 +76,15 @@ $(HASKELLDEVSCRIPTS): $(SPREZZ)/haskell-devscripts/debian/changelog
 	tar cJvf haskell-devscripts_$(haskell-devscripts_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: initramfs-tools
+initramfs-tools:$(INITRAMFSTOOLS)_$(ARCH).deb
+$(INITRAMFSTOOLS): $(SPREZZ)/initramfs-tools/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf initramfs-tools_$(initramfs-tools_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: libept
 libept:$(LIBEPT)_$(ARCH).deb
 $(LIBEPT): $(SPREZZ)/libept/debian/changelog
