@@ -1214,6 +1214,14 @@ $(BUSTLE): $(SPREZZ)/bustle/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bustle-$(bustle_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: busybox
+busybox:$(BUSYBOX)_$(ARCH).deb
+$(BUSYBOX): $(SPREZZ)/busybox/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf busybox-$(busybox_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: bzip2
 bzip2:$(BZIP2)_$(ARCH).deb
 $(BZIP2): $(SPREZZ)/bzip2/debian/changelog
