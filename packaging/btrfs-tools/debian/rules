@@ -1,0 +1,47 @@
+#!/usr/bin/make -f
+
+SHELL := sh -e
+
+CFLAGS := $(shell dpkg-buildflags --get CFLAGS)
+CFLAGS := $(patsubst -O2,-Os,$(CFLAGS))
+
+%:
+	dh ${@}
+
+override_dh_auto_build:
+	dh_auto_build -- all btrfs-select-super calc-size CFLAGS="$(CFLAGS)"
+
+override_dh_auto_clean:
+	dh_auto_clean
+
+	rm -f btrfs-select-super calc-size
+
+override_dh_auto_install:
+	dh_auto_install -- DESTDIR=$(CURDIR)/debian/btrfs-tools prefix=/ bindir=/sbin mandir=/usr/share/man
+
+	# Fixing 'manpage-not-compressed-with-max-compression'
+	for _MANPAGE in $(CURDIR)/debian/btrfs-tools/usr/share/man/*/*.gz; \
+	do \
+		cd $$(dirname $${_MANPAGE}); \
+		gunzip $$(basename $${_MANPAGE}); \
+	done
+
+	# Adding udev integration
+	install -D -m 0644 debian/local/btrfs.udev debian/btrfs-tools/lib/udev/rules.d/60-btrfs.rules
+	install -D -m 0644 debian/local/btrfs-lvm.udev debian/btrfs-tools/lib/udev/rules.d/80-btrfs-lvm.rules
+
+	# Adding initramfs-tools integration
+	install -D -m 0755 debian/local/btrfs.hook debian/btrfs-tools/usr/share/initramfs-tools/hooks/btrfs
+	install -D -m 0755 debian/local/btrfs.local-premount debian/btrfs-tools/usr/share/initramfs-tools/scripts/local-premount/btrfs
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz -z9
+
+override_dh_install:
+	dh_install
+
+	# Avoid polluting namespace
+	mv debian/btrfs-tools/sbin/calc-size debian/btrfs-tools/sbin/btrfs-calc-size
+
+override_dh_strip:
+	dh_strip --dbg-package=btrfs-tools-dbg
