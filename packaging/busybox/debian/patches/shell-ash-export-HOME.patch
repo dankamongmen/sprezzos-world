@@ -1,0 +1,87 @@
+From: Joey Hess <joeyh@debian.org>
+Subject: busybox sh sets but does not export PATH
+Bug: http://bugs.debian.org/329406
+Bug: http://bugs.debian.org/679377
+Forwarded: no
+Date: Sun, 07 May 2006 14:47:16 -0700
+
+This patch exports $PATH variable from busybox ash by default,
+even if no "export PATH" statement has been processed.  No
+other shell (dash, bash, ...) does this:
+
+  $ env - /bin/bash -c /usr/bin/env
+  PWD=/tmp
+  SHLVL=1
+  _=/usr/bin/env
+
+But after #329406, busybox ash started exporting this variable
+by default.  This change hasn't been sent upstream.
+
+However, this turned out to be problematic, after many upstream
+changes, busybox started segfaulting in interesting and difficult
+to debug environments - like, when running as pid=1 in initramfs.
+This is recorded in #679377.
+
+The problem was that PATH was the only variable marked to be
+exported by default, and this is done by this very patch.  Other
+exported variables were always malloc'ed, but this one was not.
+But when ash executes applets marked as NOEXEC, it does not
+really execute anything, it forks and runs the applet's main()
+function, clearing and setting up the environment as it'd do
+for any other command.  There, it is assumed that all exported
+variables were malloc'ed, and the function (tryexec() in ash.c)
+writes to the place in exported variable where the equal sign
+is.  So, if ash inherited no PATH variable and the default is
+used, the code will try to write \0 into a constant location,
+and we'll get a segfault.
+
+The whole patch is probably not needed (because other shells
+don't export PATH by default), but at this stage (during wheezy
+freeze) we can't just drop it, since it may lead to some random
+breakage in some other random place (and that'll be another
+very difficult to debug issue).  So instead of dropping the
+patch, we modify the PATH variable to be stored in non-const
+location, ie, to be writable.  It is safe, since the only
+place which actually modifies this variable (after the first
+half of this patch) is the awk main function, during setup,
+it restores the overridden byte after touching it, and it
+is a "terminal" applet, ie, it exits after doing its work.
+
+For wheezy+1, we should drop this patch completely.  For
+now, we will live with this simple and ugly forkaround.
+
+/mjt
+
+--- a/shell/ash.c
++++ b/shell/ash.c
+@@ -1904,7 +1904,7 @@ static const struct {
+ 	{ VSTRFIXED|VTEXTFIXED|VUNSET, "MAIL"      , changemail      },
+ 	{ VSTRFIXED|VTEXTFIXED|VUNSET, "MAILPATH"  , changemail      },
+ #endif
+-	{ VSTRFIXED|VTEXTFIXED       , bb_PATH_root_path, changepath },
++	{ VSTRFIXED|VTEXTFIXED|VEXPORT, bb_PATH_root_path, changepath },
+ 	{ VSTRFIXED|VTEXTFIXED       , "PS1=$ "    , NULL            },
+ 	{ VSTRFIXED|VTEXTFIXED       , "PS2=> "    , NULL            },
+ 	{ VSTRFIXED|VTEXTFIXED       , "PS4=+ "    , NULL            },
+--- a/include/libbb.h
++++ b/include/libbb.h
+@@ -1727,7 +1727,7 @@ extern const char bb_path_wtmp_file[];
+ extern const char bb_busybox_exec_path[];
+ /* util-linux manpage says /sbin:/bin:/usr/sbin:/usr/bin,
+  * but I want to save a few bytes here */
+-extern const char bb_PATH_root_path[]; /* "PATH=/sbin:/usr/sbin:/bin:/usr/bin" */
++extern char bb_PATH_root_path[]; /* "PATH=/sbin:/usr/sbin:/bin:/usr/bin" */
+ #define bb_default_root_path (bb_PATH_root_path + sizeof("PATH"))
+ #define bb_default_path      (bb_PATH_root_path + sizeof("PATH=/sbin:/usr/sbin"))
+ 
+--- a/libbb/messages.c
++++ b/libbb/messages.c
+@@ -39,7 +39,7 @@ const char bb_busybox_exec_path[] ALIGN1
+ const char bb_default_login_shell[] ALIGN1 = LIBBB_DEFAULT_LOGIN_SHELL;
+ /* util-linux manpage says /sbin:/bin:/usr/sbin:/usr/bin,
+  * but I want to save a few bytes here. Check libbb.h before changing! */
+-const char bb_PATH_root_path[] ALIGN1 =
++char bb_PATH_root_path[] ALIGN1 =
+ 	"PATH=/sbin:/usr/sbin:/bin:/usr/bin" BB_ADDITIONAL_PATH;
+ 
+ 

@@ -1,0 +1,339 @@
+Based on patch described below, refreshed by mjt for 1.18.3
+and again for 1.19.3.
+
+Date: Thu, 29 Jul 2010 21:16:09 +0200
+Subject: [PATCH 18/19] (u)mount: FreeBSD support
+
+Signed-off-by: Jeremie Koenig <jk@jk.fr.eu.org>
+---
+ util-linux/Config.src |    3 -
+ util-linux/Kbuild.src |    4 -
+ util-linux/mount.c    |   41 +-------------------
+ util-linux/umount.c   |    8 +--
+ util-linux/xmount.c   |   70 ++++++++++++++++++++++++++++++++++
+ util-linux/xmount.h   |  101 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 181 insertions(+), 46 deletions(-)
+ create mode 100644 util-linux/xmount.c
+ create mode 100644 util-linux/xmount.h
+
+--- a/util-linux/Kbuild.src
++++ b/util-linux/Kbuild.src
+@@ -32,7 +32,7 @@ lib-$(CONFIG_MKFS_REISER)       += mkfs_
+ lib-$(CONFIG_MKFS_VFAT)         += mkfs_vfat.o
+ lib-$(CONFIG_MKSWAP)            += mkswap.o
+ lib-$(CONFIG_MORE)              += more.o
+-lib-$(CONFIG_MOUNT)             += mount.o
++lib-$(CONFIG_MOUNT)             += mount.o xmount.o
+ lib-$(CONFIG_PIVOT_ROOT)        += pivot_root.o
+ lib-$(CONFIG_RDATE)             += rdate.o
+ lib-$(CONFIG_RDEV)              += rdev.o
+@@ -43,4 +43,4 @@ lib-$(CONFIG_SCRIPTREPLAY)      += scrip
+ lib-$(CONFIG_SETARCH)           += setarch.o
+ lib-$(CONFIG_SWAPONOFF)         += swaponoff.o
+ lib-$(CONFIG_SWITCH_ROOT)       += switch_root.o
+-lib-$(CONFIG_UMOUNT)            += umount.o
++lib-$(CONFIG_UMOUNT)            += umount.o xmount.o
+--- a/util-linux/mount.c
++++ b/util-linux/mount.c
+@@ -77,44 +77,9 @@
+ 
+ #include <mntent.h>
+ #include <syslog.h>
+-#include <sys/mount.h>
+-// Grab more as needed from util-linux's mount/mount_constants.h
+-#ifndef MS_DIRSYNC
+-# define MS_DIRSYNC     (1 << 7) // Directory modifications are synchronous
+-#endif
+-#ifndef MS_UNION
+-# define MS_UNION       (1 << 8)
+-#endif
+-#ifndef MS_BIND
+-# define MS_BIND        (1 << 12)
+-#endif
+-#ifndef MS_MOVE
+-# define MS_MOVE        (1 << 13)
+-#endif
+-#ifndef MS_RECURSIVE
+-# define MS_RECURSIVE   (1 << 14)
+-#endif
+-#ifndef MS_SILENT
+-# define MS_SILENT      (1 << 15)
+-#endif
+-// The shared subtree stuff, which went in around 2.6.15
+-#ifndef MS_UNBINDABLE
+-# define MS_UNBINDABLE  (1 << 17)
+-#endif
+-#ifndef MS_PRIVATE
+-# define MS_PRIVATE     (1 << 18)
+-#endif
+-#ifndef MS_SLAVE
+-# define MS_SLAVE       (1 << 19)
+-#endif
+-#ifndef MS_SHARED
+-# define MS_SHARED      (1 << 20)
+-#endif
+-#ifndef MS_RELATIME
+-# define MS_RELATIME    (1 << 21)
+-#endif
+ 
+ #include "libbb.h"
++#include "xmount.h"
+ #if ENABLE_FEATURE_MOUNT_LABEL
+ # include "volume_id.h"
+ #else
+@@ -405,7 +370,7 @@ static int verbose_mount(const char *sou
+ 	int rc;
+ 
+ 	errno = 0;
+-	rc = mount(source, target, filesystemtype, mountflags, data);
++	rc = xmount(source, target, filesystemtype, mountflags, data);
+ 	if (verbose >= 2)
+ 		bb_perror_msg("mount('%s','%s','%s',0x%08lx,'%s'):%d",
+ 			source, target, filesystemtype,
+@@ -413,7 +378,7 @@ static int verbose_mount(const char *sou
+ 	return rc;
+ }
+ #else
+-#define verbose_mount(...) mount(__VA_ARGS__)
++#define verbose_mount(...) xmount(__VA_ARGS__)
+ #endif
+ 
+ // Append mount options to string
+--- a/util-linux/umount.c
++++ b/util-linux/umount.c
+@@ -29,8 +29,8 @@
+ //usage:       "$ umount /dev/hdc1\n"
+ 
+ #include <mntent.h>
+-#include <sys/mount.h>
+ #include "libbb.h"
++# include "xmount.h"
+ 
+ #if defined(__dietlibc__)
+ // TODO: This does not belong here.
+@@ -148,11 +148,11 @@ int umount_main(int argc UNUSED_PARAM, c
+ 		if (m) zapit = m->dir;
+ 
+ 		// Let's ask the thing nicely to unmount.
+-		curstat = umount(zapit);
++		curstat = xumount(zapit, 0);
+ 
+ 		// Force the unmount, if necessary.
+ 		if (curstat && doForce)
+-			curstat = umount2(zapit, doForce);
++			curstat = xumount(zapit, doForce);
+ 
+ 		// If still can't umount, maybe remount read-only?
+ 		if (curstat) {
+@@ -160,7 +160,7 @@ int umount_main(int argc UNUSED_PARAM, c
+ 				// Note! Even if we succeed here, later we should not
+ 				// free loop device or erase mtab entry!
+ 				const char *msg = "%s busy - remounted read-only";
+-				curstat = mount(m->device, zapit, NULL, MS_REMOUNT|MS_RDONLY, NULL);
++				curstat = xmount(m->device, zapit, NULL, MS_REMOUNT|MS_RDONLY, NULL);
+ 				if (curstat) {
+ 					msg = "can't remount %s read-only";
+ 					status = EXIT_FAILURE;
+--- /dev/null
++++ b/util-linux/xmount.c
+@@ -0,0 +1,70 @@
++#include "libbb.h"
++#include "xmount.h"
++
++#ifdef __linux__
++
++/* xmount and xumount short-circuited to mount and umount2 in xmount.h */
++
++#elif defined(__FreeBSD_kernel__)
++
++static void build_iovec(struct iovec **iov, int *iovlen, const char *name,
++		void *val, size_t len)
++{
++	int i;
++
++	if (*iovlen < 0)
++		return;
++	i = *iovlen;
++	*iov = realloc(*iov, sizeof **iov * (i + 2));
++	if (*iov == NULL) {
++		*iovlen = -1;
++		return;
++	}
++	(*iov)[i].iov_base = strdup(name);
++	(*iov)[i].iov_len = strlen(name) + 1;
++	i++;
++	(*iov)[i].iov_base = val;
++	if (len == (size_t)-1) {
++		if (val != NULL)
++			len = strlen(val) + 1;
++		else
++			len = 0;
++	}
++	(*iov)[i].iov_len = (int)len;
++	*iovlen = ++i;
++}
++
++int FAST_FUNC xmount(const char *source, const char *target,
++		const char *filesystemtype, unsigned long mountflags,
++		const void *data UNUSED_PARAM)
++{
++	struct iovec *iov = NULL;
++	int iovlen = 0;
++	char *fspath /*, *from*/;
++	int ret;
++
++	fspath = realpath(target, NULL);
++	/* from = realpath(source, NULL); -- think `nodev' here */
++
++	build_iovec(&iov, &iovlen, "fstype", (void*)filesystemtype, (size_t)-1);
++	build_iovec(&iov, &iovlen, "fspath", fspath, (size_t)-1);
++	if (!strcmp(filesystemtype, "nullfs"))
++		/* nullfs uses a "target" instead of "from" */
++		build_iovec(&iov, &iovlen, "target", source, (size_t)-1);
++	else
++		build_iovec(&iov, &iovlen, "from", source, (size_t)-1);
++
++	ret = nmount(iov, iovlen, mountflags);
++
++	/*free(from);*/
++	free(fspath);
++
++	return ret;
++}
++
++int FAST_FUNC xumount(const char *target, int flags)
++{
++	return unmount(target, flags);
++}
++
++#endif
+--- /dev/null
++++ b/util-linux/xmount.h
+@@ -0,0 +1,101 @@
++/* vi: set sw=4 ts=4: */
++/*
++ * System-specific definitions for mount.
++ *
++ * Copyright (C) 2010 by Jeremie Koenig <jk@jk.fr.eu.org>
++ * Copyright (C) 2010 by Luca Favatella <slackydeb@gmail.com>
++ *
++ * The Linux prototypes for mount() and umount2() are used as a reference for
++ * our xmount() and xumount(), which should be implemented as a compatibility
++ * wrappers for non-Linux systems (see xmount.c).
++ */
++
++/*
++ * Definitions for mount flags. Non-Linux systems are free to use whatever
++ * their version of xmount() will work with.
++ */
++
++#ifdef __linux__
++# include <sys/mount.h>
++/* Make sure we have all the new mount flags we actually try to use
++ * (grab more as needed from util-linux's mount/mount_constants.h). */
++# ifndef MS_DIRSYNC
++#  define MS_DIRSYNC     (1 << 7) // Directory modifications are synchronous
++# endif
++# ifndef MS_UNION
++#  define MS_UNION       (1 << 8)
++# endif
++# ifndef MS_BIND
++#  define MS_BIND        (1 << 12)
++# endif
++# ifndef MS_MOVE
++#  define MS_MOVE        (1 << 13)
++# endif
++# ifndef MS_RECURSIVE
++#  define MS_RECURSIVE   (1 << 14)
++# endif
++# ifndef MS_SILENT
++#  define MS_SILENT      (1 << 15)
++# endif
++/* The shared subtree stuff, which went in around 2.6.15. */
++# ifndef MS_UNBINDABLE
++#  define MS_UNBINDABLE  (1 << 17)
++# endif
++# ifndef MS_PRIVATE
++#  define MS_PRIVATE     (1 << 18)
++# endif
++# ifndef MS_SLAVE
++#  define MS_SLAVE       (1 << 19)
++# endif
++# ifndef MS_SHARED
++#  define MS_SHARED      (1 << 20)
++# endif
++# ifndef MS_RELATIME
++#  define MS_RELATIME    (1 << 21)
++# endif
++
++#elif defined(__FreeBSD_kernel__)
++# include <sys/mount.h>
++# define MS_NOSUID      MNT_NOSUID
++# ifdef MNT_NODEV
++#  define MS_NODEV	MNT_NODEV
++# else
++#  define MS_NODEV	0
++# endif
++# define MS_NOEXEC      MNT_NOEXEC
++# define MS_SYNCHRONOUS MNT_SYNCHRONOUS
++# define MS_DIRSYNC     0
++# define MS_NOATIME     MNT_NOATIME
++# define MS_NODIRATIME  0
++# define MS_MANDLOCK    0
++# define MS_RELATIME    0
++# define MS_SILENT      0
++# define MS_UNION       MNT_UNION
++# define MS_BIND        0
++# define MS_MOVE        0
++# define MS_SHARED      0
++# define MS_SLAVE       0
++# define MS_PRIVATE     0
++# define MS_UNBINDABLE  0
++# define MS_RECURSIVE   0
++# define MS_RDONLY      MNT_RDONLY
++# define MS_REMOUNT     MNT_UPDATE
++
++#else
++# error There is no xmount() implementation for your system.
++#endif
++
++/*
++ * Prototypes for xmount() and xumount(): on Linux we use the system calls
++ * directly, otherwise xmount() and xumount() should be implemented as
++ * compatibility wrappers (see xmount.c).
++ */
++
++#ifdef __linux__
++# define xmount mount
++# define xumount umount2
++#else
++int xmount(const char *source, const char *target, const char *filesystemtype,
++		unsigned long mountflags, const void *data) FAST_FUNC;
++int xumount(const char *target, int flags) FAST_FUNC;
++#endif
+--- a/util-linux/Config.src
++++ b/util-linux/Config.src
+@@ -437,7 +437,6 @@ config MORE
+ config MOUNT
+ 	bool "mount"
+ 	default y
+-	select PLATFORM_LINUX
+ 	help
+ 	  All files and filesystems in Unix are arranged into one big directory
+ 	  tree. The 'mount' utility is used to graft a filesystem onto a
+@@ -629,7 +628,6 @@ config SWITCH_ROOT
+ config UMOUNT
+ 	bool "umount"
+ 	default y
+-	select PLATFORM_LINUX
+ 	help
+ 	  When you want to remove a mounted filesystem from its current mount
+ 	  point, for example when you are shutting down the system, the
+@@ -650,6 +648,7 @@ config FEATURE_MOUNT_LOOP
+ 	bool "Support loopback mounts"
+ 	default y
+ 	depends on MOUNT || UMOUNT
++	select PLATFORM_LINUX
+ 	help
+ 	  Enabling this feature allows automatic mounting of files (containing
+ 	  filesystem images) via the linux kernel's loopback devices.

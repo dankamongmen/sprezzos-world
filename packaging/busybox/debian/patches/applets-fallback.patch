@@ -1,0 +1,210 @@
+--- a/shell/ash.c
++++ b/shell/ash.c
+@@ -7394,23 +7394,8 @@ static int builtinloc = -1;     /* index
+ 
+ 
+ static void
+-tryexec(IF_FEATURE_SH_STANDALONE(int applet_no,) char *cmd, char **argv, char **envp)
++tryexec(char *cmd, char **argv, char **envp)
+ {
+-#if ENABLE_FEATURE_SH_STANDALONE
+-	if (applet_no >= 0) {
+-		if (APPLET_IS_NOEXEC(applet_no)) {
+-			clearenv();
+-			while (*envp)
+-				putenv(*envp++);
+-			run_applet_no_and_exit(applet_no, argv);
+-		}
+-		/* re-exec ourselves with the new arguments */
+-		execve(bb_busybox_exec_path, argv, envp);
+-		/* If they called chroot or otherwise made the binary no longer
+-		 * executable, fall through */
+-	}
+-#endif
+-
+  repeat:
+ #ifdef SYSV
+ 	do {
+@@ -7465,24 +7450,21 @@ shellexec(char **argv, const char *path,
+ 	int e;
+ 	char **envp;
+ 	int exerrno;
+-#if ENABLE_FEATURE_SH_STANDALONE
+-	int applet_no = -1;
+-#endif
+ 
+ 	clearredir(/*drop:*/ 1);
+ 	envp = listvars(VEXPORT, VUNSET, /*end:*/ NULL);
+-	if (strchr(argv[0], '/') != NULL
+-#if ENABLE_FEATURE_SH_STANDALONE
+-	 || (applet_no = find_applet_by_name(argv[0])) >= 0
+-#endif
+-	) {
+-		tryexec(IF_FEATURE_SH_STANDALONE(applet_no,) argv[0], argv, envp);
++	if (strchr(argv[0], '/') != NULL) {
++		tryexec(argv[0], argv, envp);
+ 		e = errno;
+ 	} else {
++#if ENABLE_FEATURE_SH_STANDALONE
++		bb_execv_applet(argv[0], argv, envp);
++#endif
++
+ 		e = ENOENT;
+ 		while ((cmdname = path_advance(&path, argv[0])) != NULL) {
+ 			if (--idx < 0 && pathopt == NULL) {
+-				tryexec(IF_FEATURE_SH_STANDALONE(-1,) cmdname, argv, envp);
++				tryexec(cmdname, argv, envp);
+ 				if (errno != ENOENT && errno != ENOTDIR)
+ 					e = errno;
+ 			}
+--- a/libbb/execable.c
++++ b/libbb/execable.c
+@@ -9,6 +9,9 @@
+ 
+ #include "libbb.h"
+ 
++#include <alloca.h>
++#include <stdarg.h>
++
+ /* check if path points to an executable file;
+  * return 1 if found;
+  * return 0 otherwise;
+@@ -68,13 +71,60 @@ int FAST_FUNC exists_execable(const char
+ }
+ 
+ #if ENABLE_FEATURE_PREFER_APPLETS
++int FAST_FUNC bb_execv_applet(const char *name, char *const argv[], char *const envp[])
++{
++	const char **path = bb_busybox_exec_paths;
++
++	errno = ENOENT;
++
++	if (find_applet_by_name(name) < 0)
++		return -1;
++
++	for (; *path; ++path)
++		execve(*path, argv, envp);
++
++	return -1;
++}
++
+ /* just like the real execvp, but try to launch an applet named 'file' first */
+ int FAST_FUNC BB_EXECVP(const char *file, char *const argv[])
+ {
+-	if (find_applet_by_name(file) >= 0)
+-		execvp(bb_busybox_exec_path, argv);
++	int ret = bb_execv_applet(file, argv, environ);
++	if (errno != ENOENT)
++		return ret;
++
+ 	return execvp(file, argv);
+ }
++
++int FAST_FUNC bb_execlp(const char *file, const char *arg, ...)
++{
++#define INITIAL_ARGV_MAX 16
++	size_t argv_max = INITIAL_ARGV_MAX;
++	const char **argv = malloc(argv_max * sizeof (const char *));
++	va_list args;
++	unsigned int i = 0;
++	int ret;
++
++	va_start (args, arg);
++	while (argv[i++] != NULL) {
++		if (i == argv_max) {
++			const char **nptr;
++			argv_max *= 2;
++			nptr = realloc (argv, argv_max * sizeof (const char *));
++			if (nptr == NULL)
++				return -1;
++			argv = nptr;
++		}
++
++		argv[i] = va_arg (args, const char *);
++	}
++	va_end (args);
++
++	ret = bb_execvp(file, (char *const *)argv);
++	free(argv);
++
++	return ret;
++}
+ #endif
+ 
+ int FAST_FUNC BB_EXECVP_or_die(char **argv)
+--- a/libbb/messages.c
++++ b/libbb/messages.c
+@@ -36,6 +36,15 @@ const char bb_msg_standard_output[] ALIG
+ const char bb_hexdigits_upcase[] ALIGN1 = "0123456789ABCDEF";
+ 
+ const char bb_busybox_exec_path[] ALIGN1 = CONFIG_BUSYBOX_EXEC_PATH;
++const char *bb_busybox_exec_paths[] ALIGN1 = {
++#ifdef __linux__
++	"/proc/self/exe",
++#endif
++#ifdef CONFIG_BUSYBOX_EXEC_PATH
++	CONFIG_BUSYBOX_EXEC_PATH,
++#endif
++	NULL
++};
+ const char bb_default_login_shell[] ALIGN1 = LIBBB_DEFAULT_LOGIN_SHELL;
+ /* util-linux manpage says /sbin:/bin:/usr/sbin:/usr/bin,
+  * but I want to save a few bytes here. Check libbb.h before changing! */
+--- a/include/libbb.h
++++ b/include/libbb.h
+@@ -896,13 +896,11 @@ int exists_execable(const char *filename
+  * but it may exec busybox and call applet instead of searching PATH.
+  */
+ #if ENABLE_FEATURE_PREFER_APPLETS
+-int BB_EXECVP(const char *file, char *const argv[]) FAST_FUNC;
+-#define BB_EXECLP(prog,cmd,...) \
+-	do { \
+-		if (find_applet_by_name(prog) >= 0) \
+-			execlp(bb_busybox_exec_path, cmd, __VA_ARGS__); \
+-		execlp(prog, cmd, __VA_ARGS__); \
+-	} while (0)
++int bb_execv_applet(const char *name, char *const argv[], char *const envp[]) FAST_FUNC;
++int bb_execvp(const char *file, char *const argv[]) FAST_FUNC;
++int bb_execlp(const char *file, const char *arg, ...) FAST_FUNC;
++#define BB_EXECVP(prog,cmd)     bb_execvp(prog,cmd)
++#define BB_EXECLP(prog,cmd,...) bb_execlp(prog,cmd, __VA_ARGS__)
+ #else
+ #define BB_EXECVP(prog,cmd)     execvp(prog,cmd)
+ #define BB_EXECLP(prog,cmd,...) execlp(prog,cmd,__VA_ARGS__)
+@@ -1683,6 +1681,7 @@ extern const char bb_path_wtmp_file[];
+ 
+ #define bb_dev_null "/dev/null"
+ extern const char bb_busybox_exec_path[];
++extern const char *bb_busybox_exec_paths[];
+ /* util-linux manpage says /sbin:/bin:/usr/sbin:/usr/bin,
+  * but I want to save a few bytes here */
+ extern const char bb_PATH_root_path[]; /* "PATH=/sbin:/usr/sbin:/bin:/usr/bin" */
+--- a/Config.in
++++ b/Config.in
+@@ -431,13 +431,10 @@ config FEATURE_PREFER_APPLETS
+ 
+ config BUSYBOX_EXEC_PATH
+ 	string "Path to BusyBox executable"
+-	default "/proc/self/exe"
++	default "/bin/busybox"
+ 	help
+ 	  When Busybox applets need to run other busybox applets, BusyBox
+-	  sometimes needs to exec() itself. When the /proc filesystem is
+-	  mounted, /proc/self/exe always points to the currently running
+-	  executable. If you haven't got /proc, set this to wherever you
+-	  want to run BusyBox from.
++	  sometimes needs to exec() itself.
+ 
+ # These are auto-selected by other options
+ 
+--- a/coreutils/chroot.c
++++ b/coreutils/chroot.c
+@@ -41,5 +41,7 @@ int chroot_main(int argc UNUSED_PARAM, c
+ 		/*argv[2] = NULL; - already is */
+ 	}
+ 
+-	BB_EXECVP_or_die(argv);
++	execvp(argv[0], argv);
++	xfunc_error_retval = (errno == ENOENT) ? 127 : 126;
++	bb_perror_msg_and_die("can't execute '%s'", argv[0]);
+ }
