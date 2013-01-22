@@ -1,0 +1,45 @@
+#!/bin/sh
+
+version="$1"
+bootopt=""
+
+[ -x /usr/bin/dracut ] || exit 0
+
+# passing the kernel version is required
+[ -z "${version}" ] && exit 0
+
+# kernel-package passes an extra arg
+if [ -n "$2" ]; then
+	if [ -n "${KERNEL_PACKAGE_VERSION}" ]; then
+		# exit if custom kernel does not need an initramfs
+		[ "$INITRD" = 'No' ] && exit 0
+		bootdir=$(dirname "$2")
+	fi
+fi
+
+# avoid running multiple times
+if [ -n "$DEB_MAINT_PARAMS" ]; then
+	eval set -- "$DEB_MAINT_PARAMS"
+	if [ -z "$1" ] || [ "$1" != "configure" ]; then
+		exit 0
+	fi
+fi
+
+if [ -z "$bootdir" ]; then
+    bootdir=/boot
+fi
+
+# check if modules.dep already exists. If not create it
+# maybe this problem could also be solved via Debian triggers
+if [ ! -f $bootdir/../lib/modules/$version/modules.dep ]; then
+    depmod -a -F $bootdir/System.map-$version $version
+fi
+
+multiarchlibs="/lib /usr/lib"
+
+# add multicarch lib pathes
+multiarchlibs="$multiarchlibs $(sed 's/#.*//' /etc/ld.so.conf.d/*-linux-gnu.conf 2>/dev/null| tr '\n' ' ')"
+
+# we're good - create initramfs
+echo "dracut: Generating $bootdir/initrd.img-${version}"
+dracut -q --libdirs="$multiarchlibs" --force $bootdir/initrd.img-${version} "${version}" >&2
