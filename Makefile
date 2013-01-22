@@ -81,6 +81,15 @@ $(EVERPAD): $(SPREZZ)/everpad/debian/changelog
 	ln -sf everpad-$(everpad_UPVER).tar.xz everpad_$(everpad_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: gtkparasite
+gtkparasite:$(GTKPARASITE)_$(ARCH).deb
+$(GTKPARASITE): $(SPREZZ)/gtkparasite/debian/changelog
+	git clone git://github.com/chipx86/gtkparasite $@
+	rm -rf $@/debian
+	tar cJf gtkparasite-$(gtkparasite_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf gtkparasite-$(gtkparasite_UPVER).tar.xz gtkparasite_$(gtkparasite_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: mawk
 mawk:$(MAWK)_$(ARCH).deb
 $(MAWK): $(SPREZZ)/mawk/debian/changelog
