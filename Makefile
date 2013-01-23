@@ -257,6 +257,15 @@ $(GNOMEXCFTHUMBNAILER): $(SPREZZ)/gnome-xcf-thumbnailer/debian/changelog
 	ln -sf gnome-xcf-thumbnailer-$(gnome-xcf-thumbnailer_UPVER).tar.xz gnome-xcf-thumbnailer_$(gnome-xcf-thumbnailer_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: libclc
+libclc: $(LIBCLC)_$(ARCH).deb
+$(LIBCLC): $(SPREZZ)/libclc/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	git clone http://llvm.org/git/libclc.git $@
+	tar cJf libclc-$(libclc_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf libclc-$(libclc_UPVER).tar.xz $(LIBCLC).orig.tar.xz
+	cp -r $(<D) $@/
+
 #.PHONY: growlight
 #growlight: $(GROWLIGHT)_$(ARCH).deb
 #$(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog

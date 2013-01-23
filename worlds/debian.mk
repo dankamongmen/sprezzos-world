@@ -19,7 +19,7 @@ $(APTLISTCHANGES): $(SPREZZ)/apt-listchanges/debian/changelog
 	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	cp -r $(<D)/.. $@
 	rm -rf $@/debian
-	tar cJvf apt-listchanges_$(apt-listchanges_UPVER).orig.tar.xz $@ --exclude-vcs
+	tar cJvf $(APTLISTCHANGES).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
 .PHONY: base-files
