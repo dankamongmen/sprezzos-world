@@ -1,0 +1,448 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+vafilt = $(subst $(2)=,,$(filter $(2)=%,$(1)))
+
+DPKG_VARS		:= $(shell dpkg-architecture)
+DEB_HOST_GNU_TYPE	?= $(call vafilt,$(DPKG_VARS),DEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE	?= $(call vafilt,$(DPKG_VARS),DEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH		?= $(call vafilt,$(DPKG_VARS),DEB_HOST_ARCH)
+DEB_HOST_MULTIARCH	?= $(call vafilt,$(DPKG_VARS),DEB_HOST_MULTIARCH)
+
+CHANGELOG_VARS := $(shell dpkg-parsechangelog | sed -n 's/ /_/g;/^[^_]/s/^\([^:]*\):_\(.*\)/\1=\2/p')
+PKGSOURCE := $(call vafilt,$(CHANGELOG_VARS),Source)
+PKGVERSION := $(call vafilt,$(CHANGELOG_VARS),Version)
+
+distribution := $(shell lsb_release --id --short)
+distrel := $(shell lsb_release --codename --short)
+ifeq ($(distrel),n/a)
+  distrel := sid
+endif
+
+multiarch_dir = /$(DEB_HOST_MULTIARCH)
+ifneq (,$(DEB_HOST_MULTIARCH))
+  ifneq (,$(filter $(distrel),natty oneiric))
+    DEB_HOST_MULTIARCH =
+    multiarch_dir =
+  endif
+endif
+jre_versions = 6
+# for simplicity build the plugin for 7 for multiarch setup only,
+# anything else requires backports.
+ifneq (,$(DEB_HOST_MULTIARCH))
+  jre_versions += 7
+endif
+
+ifneq (,$(wildcard /usr/bin/dpkg-buildflags))
+  buildflags := \
+	CXXFLAGS='$(shell dpkg-buildflags --get CPPFLAGS; dpkg-buildflags --get CFLAGS)' \
+	LDFLAGS='$(shell dpkg-buildflags --get LDFLAGS)'
+endif
+
+arch_map	 := alpha=alpha arm=arm armel=arm amd64=amd64 hppa=parisc i386=i586 lpia=i586 m68k=m68k mips=mips mipsel=mipsel powerpc=ppc powerpcspe=ppc ppc64=ppc64 sparc=sparc sparc64=sparc64 sh4=sh s390=s390 s390x=s390x ia64=ia64
+archdir_map     := alpha=alpha arm=arm armel=arm amd64=amd64 hppa=parisc i386=i386 lpia=i386 m68k=m68k mips=mips mipsel=mipsel powerpc=ppc powerpcspe=ppc ppc64=ppc64 sparc=sparc sparc64=sparcv9 sh4=sh s390=s390 s390x=s390x ia64=ia64
+
+jvmarch	  := $(strip $(patsubst $(DEB_HOST_ARCH)=%, %, \
+			   $(filter $(DEB_HOST_ARCH)=%, $(arch_map))))
+archdir	  := $(strip $(patsubst $(DEB_HOST_ARCH)=%, %, \
+			   $(filter $(DEB_HOST_ARCH)=%, $(archdir_map))))
+
+ifneq (,$(filter $(distrel),hardy intrepid jaunty karmic lucid maverick natty oneiric precise lenny etch squeeze))
+  is7_default = no
+  default_version = 6
+  default_plugin_version = 6
+else
+  is7_default = yes
+  default_version = 7
+  ifneq (,$(filter $(distrel), wheezy sid))
+    default_plugin_version = 6
+  else
+    default_plugin_version = 7
+  endif
+endif
+
+TOP = usr/lib/jvm
+jdirname = java-$(shortver)-$(origin)
+origin = openjdk
+basename = openjdk-$(shortver)
+ifneq (,$(DEB_HOST_MULTIARCH))
+  jdk_home = $(TOP)/java-6-openjdk-$(DEB_HOST_ARCH)
+  jdk7_home = $(TOP)/java-7-openjdk-$(DEB_HOST_ARCH)
+else
+  jdk_home = $(TOP)/java-6-openjdk
+  jdk7_home = $(TOP)/java-7-openjdk
+endif
+basedir = $(jdk_home)
+base7dir = $(jdk7_home)
+vendor = IcedTea
+shortver = 6
+last_npp_version = 6b18~pre2-2
+priority = 1061
+# not yet higher than for 6
+priority7 = $(if $(filter yes, $(is7_default)),1071,1060)
+plugin_name = IcedTeaPlugin.so
+
+ifneq (,$(filter $(DEB_HOST_ARCH), alpha hppa sparc64)$(filter $(distrel), dapper))
+  with_plugin_pkg = no
+else ifneq (,$(filter $(DEB_HOST_ARCH)-$(distrel), sparc-hardy sparc-jaunty))
+  with_plugin_pkg = no
+else
+  with_plugin_pkg = yes
+endif
+
+ifeq ($(distribution),Debian)
+  ifneq (,$(filter $(distrel),lenny))
+    bd_plugin = xulrunner-dev (>= 1.9.0),
+  else
+    bd_plugin = xulrunner-dev (>= 1.9.1.3-3) [!alpha !sparc64],
+    #xulrunner_depends = xulrunner-1.9.1
+  endif
+else
+  ifneq (,$(filter $(distrel),gutsy feisty edgy dapper))
+    bd_plugin = firefox-dev,
+  else ifneq (,$(filter $(distrel),intrepid))
+    bd_plugin = xulrunner-1.9-dev,
+  else ifneq (,$(filter $(distrel),hardy jaunty))
+    # all these use the xulrunner-1.9.2 backports in *-security
+    bd_plugin = xulrunner-1.9.2-dev [!sparc],
+    xulrunner_depends = xulrunner-1.9.2
+  else ifneq (,$(filter $(distrel),karmic lucid maverick))
+    # all these use the xulrunner-1.9.2 backports in *-security
+    bd_plugin = xulrunner-1.9.2-dev,
+    xulrunner_depends = xulrunner-1.9.2
+  else
+    bd_plugin = firefox-dev,
+    xulrunner_depends = firefox (>= 4.0~b7) | chromium-browser | epiphany-browser | midori
+  endif
+endif
+
+
+ifeq ($(is7_default),yes)
+  bd_openjdk = openjdk-7-jdk,
+  jdk_default_home = $(jdk7_home)
+else
+  bd_openjdk = openjdk-6-jdk (>= 6b23~pre10~),
+  jdk_default_home = $(jdk_home)
+endif
+
+ifeq ($(default_plugin_version),7)
+  netx_depends = openjdk-7-jre | openjdk-6-jre (>= 6b23~pre10~)
+else
+  netx_depends = openjdk-6-jre (>= 6b23~pre10~) | openjdk-7-jre
+endif
+
+ifneq (,$(DEB_HOST_MULTIARCH))
+  netx_depends := $(netx_depends), icedtea-netx-common (>= $${binary:Version})
+endif
+
+ifeq ($(distribution),Ubuntu)
+  ifneq (,$(filter $(distrel),jaunty intrepid hardy gutsy feisty edgy dapper))
+    # FIXME: check for every release ...
+    browser_plugin_dirs = xulrunner-addons firefox iceape iceweasel mozilla midbrowser xulrunner
+  else
+    browser_plugin_dirs = mozilla
+  endif
+else
+  browser_plugin_dirs = mozilla
+endif
+
+java_launcher = /$(basedir)/bin/java
+java7_launcher = /$(base7dir)/bin/java
+ifeq ($(distribution),Ubuntu)
+  ifeq (,$(filter $(distrel),karmic jaunty intrepid hardy gutsy feisty edgy dapper))
+    java_launcher = cautious-launcher %f /$(basedir)/bin/java
+  endif
+endif
+
+control_vars = \
+	'-Vxulrunner:Depends=$(xulrunner_depends)' \
+	'-Vnetx:Depends=$(netx_depends)'
+
+#	--prefix=/$(jdk_home) \
+
+CONFIGURE_ARGS = \
+	--prefix=/usr \
+	--with-pkgversion="$(PKGVERSION)" \
+	--disable-docs
+
+ifneq ($(with_plugin_pkg),yes)
+  CONFIGURE_ARGS += --disable-plugin
+endif
+
+p_netx = icedtea-netx
+p_comm = icedtea-netx-common
+p_plug = icedtea-6-plugin
+p_plug7 = icedtea-7-plugin
+d_netx = debian/$(p_netx)
+d_comm = debian/$(p_comm)
+d_plug = debian/$(p_plug)
+d_plug7 = debian/$(p_plug7)
+
+debian/control: debian/control.in debian/rules
+	@cp -p debian/control debian/control.old
+	sed \
+		-e 's/@bd_plugin@/$(bd_plugin)/g' \
+		-e 's/@bd_openjdk@/$(bd_openjdk)/g' \
+		-e 's/@default_version@/$(default_version)/g' \
+		-e 's/@default_plugin_version@/$(default_plugin_version)/g' \
+	     debian/control.in \
+	     $(if $(DEB_HOST_MULTIARCH),debian/control.common) \
+	     $(if $(filter 6, $(jre_versions)),debian/control.6) \
+	     $(if $(filter 7, $(jre_versions)),debian/control.7) \
+	     $(if $(DEB_HOST_MULTIARCH),,| grep -v '^Multi-Arch:') \
+		  > debian/control
+	@if cmp -s debian/control debian/control.old; then \
+	  rm -f debian/control.old; \
+	else \
+	  diff -u debian/control.old debian/control; \
+	  echo "debian/control did change, please restart the build"; \
+	  rm -f debian/control.old; \
+	  exit 1; \
+	fi
+
+packaging-files:
+	for f in debian/*.in; do \
+	  case "$$f" in debian/control.in) continue; esac; \
+	  case "$$f" in \
+	    debian/PLUGIN.*.in) f2=$$(echo $$f | sed 's/PLUGIN/$(p_plug)/;s/\.in$$//');; \
+	    debian/PLUGIN7.*.in) f2=$$(echo $$f | sed 's/PLUGIN7/$(p_plug7)/;s/\.in$$//');; \
+	    *) f2=$$(echo $$f | sed 's/JB/$(basename)/;s/\.in$$//'); \
+	  esac; \
+	  sed \
+	      -e 's/@basename@/$(basename)/g' \
+	      -e 's/@vendor@/$(vendor)/g' \
+	      -e 's/@RELEASE@/$(shortver)/g' \
+	      -e 's,@TOP@,$(TOP),g' \
+	      -e 's,@basedir@,$(basedir),g' \
+	      -e 's,@base7dir@,$(base7dir),g' \
+	      -e 's,@jdirname@,$(jdirname),g' \
+	      -e 's/@srcname@/$(srcname)/g' \
+	      -e 's/@jvmarch@/$(jvmarch)/g' \
+	      -e 's/@archdir@/$(archdir)/g' \
+	      -e 's/@tag@/$(tag)/g' \
+	      -e 's/@priority@/$(priority)/g' \
+	      -e 's/@priority7@/$(priority7)/g' \
+	      -e 's/@mantag@/$(mantag)/g' \
+	      -e 's/@multiarch@/$(DEB_HOST_MULTIARCH)/g' \
+	      -e 's,@plugin_name@,$(plugin_name),g' \
+	      -e 's/@pkg_plugin7@/$(p_plug7)/g' \
+	      -e 's,@browser_dirs@,$(browser_plugin_dirs),g' \
+	      -e 's,@last_npp_version@,$(last_npp_version),g' \
+	      -e 's,@java_launcher@,$(java_launcher),g' \
+	      -e 's,@java7_launcher@,$(java7_launcher),g' \
+	    $$f > $$f2; \
+	done
+
+configure: configure-stamp $(if $(filter 7,$(jre_versions)),configure7-stamp)
+configure-stamp:
+	dh_testdir
+	rm -rf build
+	mkdir -p build
+	cd build \
+	  && $(buildflags) ../configure $(CONFIGURE_ARGS) --with-jdk-home=/$(jdk_default_home)
+	touch $@
+configure7-stamp:
+	dh_testdir
+	rm -rf build7
+	mkdir -p build7
+	cd build7 \
+	  && $(buildflags) ../configure $(CONFIGURE_ARGS) --with-jdk-home=/$(jdk_default_home)
+	touch $@
+
+build-arch: build-stamp
+build-indep: build-stamp
+build: build-stamp  $(if $(filter 7,$(jre_versions)),build7-stamp)
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE) -C build VERSION_DEFS='-DICEDTEA_WEB_JRE="\"/$(jdk_home)\""'
+	touch $@
+build7-stamp: configure7-stamp
+	dh_testdir
+	$(MAKE) -C build7 VERSION_DEFS='-DHAVE_JAVA7 -DICEDTEA_WEB_JRE="\"/$(jdk7_home)\""'
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f *-stamp
+	rm -rf build build7
+	for f in debian/*.in; do \
+	  case "$$f" in \
+	    debian/PLUGIN.*.in) f2=$$(echo $$f | sed 's/PLUGIN/$(p_plug)/;s/\.in$$//');; \
+	    debian/PLUGIN7.*.in) f2=$$(echo $$f | sed 's/PLUGIN7/$(p_plug7)/;s/\.in$$//');; \
+	    *) f2=$$(echo $$f | sed 's/JB/$(basename)/;s/\.in$$//'); \
+	  esac; \
+	  case "$$f2" in debian/control) continue; esac; \
+	  rm -f $$f2; \
+	done
+	rm -rf debian/tmp7
+	dh_clean
+
+install: build packaging-files
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs -p$(p_netx) \
+		$(jdk_home)/bin \
+		$(jdk_home)/man/man1 \
+		$(jdk_home)/jre/bin \
+		$(jdk_home)/jre/man/man1
+ifneq (,$(filter 7, $(jre_versions)))
+	dh_installdirs -p$(p_netx) \
+		$(jdk7_home)/bin \
+		$(jdk7_home)/man/man1 \
+		$(jdk7_home)/jre/bin \
+		$(jdk7_home)/jre/man/man1
+endif
+ifneq (,$(DEB_HOST_MULTIARCH))
+	dh_installdirs -p$(p_comm) \
+		usr/share/applications \
+		usr/share/application-registry \
+		usr/share/mime-info \
+		etc/icedtea-web
+else
+	dh_installdirs -p$(p_netx) \
+		usr/share/applications \
+		usr/share/application-registry \
+		usr/share/mime-info \
+		etc/icedtea-web
+endif
+	dh_installdirs -p$(p_plug) \
+		$(jdk_home)/jre/lib/$(archdir) \
+		usr/share/icedtea-web \
+		$(foreach d, $(browser_plugin_dirs), usr/lib/$(d)/plugins)
+	$(MAKE) -C build install DESTDIR=$(CURDIR)/$(d_netx)
+	sed -i 's/java-7-openjdk/java-6-openjdk/g' $(d_netx)/usr/bin/*
+
+ifneq (,$(filter 7, $(jre_versions)))
+	dh_installdirs -p$(p_plug7) \
+		$(jdk7_home)/jre/lib/$(archdir) \
+		usr/share/icedtea-web \
+		$(foreach d, $(browser_plugin_dirs), usr/lib/$(d)/plugins)
+	$(MAKE) -C build7 install DESTDIR=$(CURDIR)/debian/tmp7
+	sed -i 's/java-6-openjdk/java-7-openjdk/g' debian/tmp7/usr/bin/*
+endif
+
+	# FIXME: split out an icedtea-netx-doc package?
+	rm -rf $(d_netx)/usr/share/doc/icedtea-web
+	rm -rf debian/tmp7/usr/share/doc/icedtea-web
+
+	mv $(d_netx)/usr/bin/javaws $(d_netx)/$(jdk_home)/jre/bin/
+	mv $(d_netx)/usr/share/man/man1/javaws.1 $(d_netx)/$(jdk_home)/jre/man/man1/
+	mv $(d_netx)/usr/bin/itweb-settings $(d_netx)/$(jdk_home)/jre/bin/
+	cp debian/itweb-settings.1 $(d_netx)/$(jdk_home)/jre/man/man1/
+	mv $(d_netx)/usr/lib/IcedTeaPlugin.so \
+		$(d_plug)/$(jdk_home)/jre/lib/$(archdir)/
+
+ifneq (,$(filter 7, $(jre_versions)))
+	mv debian/tmp7/usr/bin/javaws $(d_netx)/$(jdk7_home)/jre/bin/
+	mv debian/tmp7/usr/share/man/man1/javaws.1 $(d_netx)/$(jdk7_home)/jre/man/man1/
+	mv debian/tmp7/usr/bin/itweb-settings $(d_netx)/$(jdk7_home)/jre/bin/
+	cp debian/itweb-settings.1 $(d_netx)/$(jdk7_home)/jre/man/man1/
+	mv debian/tmp7/usr/lib/IcedTeaPlugin.so \
+		$(d_plug7)/$(jdk7_home)/jre/lib/$(archdir)/
+endif
+
+	# compress manpages
+	find $(d_netx)/$(jdk_home)/jre/man/man1/ -type f ! -type l | xargs gzip -9v -n
+
+	dh_link -p$(p_netx) \
+	  /$(jdk_home)/jre/bin/javaws /$(jdk_home)/bin/javaws \
+	  /$(jdk_home)/jre/man/man1/javaws.1.gz /$(jdk_home)/man/man1/javaws.1.gz \
+          /$(jdk_home)/jre/man/man1/itweb-settings.1.gz /$(jdk_home)/man/man1/itweb-settings.gz
+
+ifneq (,$(filter 7, $(jre_versions)))
+	find $(d_netx)/$(jdk7_home)/jre/man/man1/ -type f ! -type l | xargs gzip -9v -n
+	dh_link -p$(p_netx) \
+	  /$(jdk7_home)/jre/bin/javaws /$(jdk7_home)/bin/javaws \
+	  /$(jdk7_home)/jre/man/man1/javaws.1.gz /$(jdk7_home)/man/man1/javaws.1.gz \
+          /$(jdk7_home)/jre/man/man1/itweb-settings.1.gz /$(jdk7_home)/man/man1/itweb-settings.gz
+endif
+
+ifneq (,$(DEB_HOST_MULTIARCH))
+	mv $(d_netx)/usr/share/icedtea-web $(d_comm)/usr/share/
+	cp debian/javaws.policy $(d_comm)/etc/icedtea-web
+	cp -p debian/icedtea-netx-javaws.desktop \
+		$(d_comm)/usr/share/applications/
+	cp -p debian/itweb-settings.desktop \
+		$(d_comm)/usr/share/applications/
+	for i in /usr/share/icons/hicolor/*/apps/openjdk-$(default_version).png; do \
+	  d=$$(dirname $$i); \
+	  mkdir -p $(d_comm)/$$d; \
+	  cp -p $$i $(d_comm)/$$d/javaws.png; \
+	done
+
+	 for i in web-start; do \
+	   cp debian/icedtea-netx-$$i.applications \
+	     $(d_comm)/usr/share/application-registry/; \
+	   cp debian/icedtea-netx-$$i.keys $(d_comm)/usr/share/mime-info/; \
+	   cp debian/icedtea-netx-$$i.mime $(d_comm)/usr/share/mime-info/; \
+	 done
+else
+  ifeq ($(with_plugin_pkg),yes)
+	mv $(d_netx)/usr/share/icedtea-web/plugin.jar \
+		$(d_plug)/usr/share/icedtea-web/plugin.jar
+  endif
+	cp debian/javaws.policy $(d_netx)/etc/icedtea-web
+	cp -p debian/icedtea-netx-javaws.desktop \
+		$(d_netx)/usr/share/applications/
+	cp -p debian/itweb-settings.desktop \
+		$(d_netx)/usr/share/applications/
+	for i in /usr/share/icons/hicolor/*/apps/openjdk-$(default_version).png; do \
+	  d=$$(dirname $$i); \
+	  mkdir -p $(d_netx)/$$d; \
+	  cp -p $$i $(d_netx)/$$d/javaws.png; \
+	done
+
+	 for i in web-start; do \
+	   cp debian/icedtea-netx-$$i.applications \
+	     $(d_netx)/usr/share/application-registry/; \
+	   cp debian/icedtea-netx-$$i.keys $(d_netx)/usr/share/mime-info/; \
+	   cp debian/icedtea-netx-$$i.mime $(d_netx)/usr/share/mime-info/; \
+	 done
+endif
+	for FILE in debian/icedtea-netx-common.overrides; do \
+	  PKG=`basename $$FILE .overrides`; \
+	  install -D -m644 $$FILE debian/$$PKG/usr/share/lintian/overrides/$$PKG; \
+	done
+
+
+binary-indep: install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installdocs -i
+	dh_installchangelogs  -i
+	rm -rf $(d_plug)/usr/share/doc/$(p_plug)
+	ln -s $(p_netx) $(d_plug)/usr/share/doc/$(p_plug)
+	rm -rf debian/icedtea6-plugin/usr/share/doc/icedtea6-plugin
+	ln -s $(p_plug) debian/icedtea6-plugin/usr/share/doc/icedtea6-plugin
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+ifneq (,$(DEB_HOST_MULTIARCH))
+	dh_gencontrol -p icedtea-netx-common -p icedtea-plugin -- $(control_vars)
+endif
+	dh_gencontrol -p icedtea6-plugin -- -v6b2$(PKGVERSION) $(control_vars)
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary: binary-arch binary-indep
+
+binary-arch: install
+	dh_testdir -s
+	dh_testroot -s
+	dh_installdocs -s README NEWS AUTHORS
+	dh_installchangelogs  -s
+	dh_strip -s
+	dh_link -s
+	dh_installmenu -s
+	dh_compress -s
+	dh_fixperms -s
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s -N icedtea6-plugin -- $(control_vars)
+	dh_gencontrol -p icedtea6-plugin -- -v6b2$(PKGVERSION) $(control_vars)
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-arch binary-indep
