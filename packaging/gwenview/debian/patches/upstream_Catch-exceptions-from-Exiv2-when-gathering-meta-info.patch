@@ -1,0 +1,84 @@
+From 05511b41913904c36bfd2cccc888ac4c466784f1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Aur=C3=A9lien=20G=C3=A2teau?= <agateau@kde.org>
+Date: Tue, 26 Jun 2012 14:36:17 +0200
+Subject: [PATCH] Catch exceptions from Exiv2 when gathering meta info
+
+Since Exiv2 0.23, ExifDatum::tagLabel() can throw
+
+BUG: 302350
+---
+ lib/CMakeLists.txt                        |    1 +
+ lib/exiv2imageloader.h                    |    4 +-
+ lib/imagemetainfomodel.cpp                |   33 ++++++++--------
+ tests/auto/CMakeLists.txt                 |    1 +
+ tests/auto/imagemetainfomodeltest.cpp     |   58 +++++++++++++++++++++++++++++
+ tests/auto/imagemetainfomodeltest.h       |   38 +++++++++++++++++++
+ tests/data/302350_exiv_0.23_exception.jpg |  Bin 0 -> 122659 bytes
+ 7 files changed, 119 insertions(+), 16 deletions(-)
+ create mode 100644 tests/auto/imagemetainfomodeltest.cpp
+ create mode 100644 tests/auto/imagemetainfomodeltest.h
+ create mode 100644 tests/data/302350_exiv_0.23_exception.jpg
+
+diff --git a/lib/CMakeLists.txt b/lib/CMakeLists.txt
+index fad758a..88234be 100644
+--- a/lib/CMakeLists.txt
++++ b/lib/CMakeLists.txt
+@@ -163,6 +163,7 @@ endif (GWENVIEW_SEMANTICINFO_BACKEND_NEPOMUK)
+ 
+ set_source_files_properties(
+     exiv2imageloader.cpp
++    imagemetainfomodel.cpp
+     PROPERTIES
+     COMPILE_FLAGS "${KDE4_ENABLE_EXCEPTIONS}"
+     )
+diff --git a/lib/imagemetainfomodel.cpp b/lib/imagemetainfomodel.cpp
+index 85b602c..fd86055 100644
+--- a/lib/imagemetainfomodel.cpp
++++ b/lib/imagemetainfomodel.cpp
+@@ -262,25 +262,28 @@ struct ImageMetaInfoModelPrivate
+         it = container.begin(),
+         end = container.end();
+ 
+-        if (it == end) {
+-            return;
+-        }
+-
+         for (; it != end; ++it) {
+-            QString key = QString::fromUtf8(it->key().c_str());
+-            QString label = QString::fromLocal8Bit(it->tagLabel().c_str());
+-            std::ostringstream stream;
+-            stream << *it;
+-            QString value = QString::fromLocal8Bit(stream.str().c_str());
+-
+-            EntryHash::iterator hashIt = hash.find(key);
+-            if (hashIt != hash.end()) {
+-                hashIt.value()->appendValue(value);
+-            } else {
+-                hash.insert(key, new MetaInfoGroup::Entry(key, label, value));
++            try {
++                QString key = QString::fromUtf8(it->key().c_str());
++                QString label = QString::fromLocal8Bit(it->tagLabel().c_str());
++                std::ostringstream stream;
++                stream << *it;
++                QString value = QString::fromLocal8Bit(stream.str().c_str());
++
++                EntryHash::iterator hashIt = hash.find(key);
++                if (hashIt != hash.end()) {
++                    hashIt.value()->appendValue(value);
++                } else {
++                    hash.insert(key, new MetaInfoGroup::Entry(key, label, value));
++                }
++            } catch (const Exiv2::Error& error) {
++                kWarning() << "Failed to read some meta info:" << error.what();
+             }
+         }
+ 
++        if (hash.isEmpty()) {
++            return;
++        }
+         q->beginInsertRows(parent, 0, hash.size() - 1);
+         Q_FOREACH(MetaInfoGroup::Entry * entry, hash) {
+             group->addEntry(entry);
+-- 
+1.7.10
+
