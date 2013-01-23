@@ -1534,6 +1534,14 @@ $(CLANG): $(SPREZZ)/clang/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf clang-$(clang_UPVER).src.tar.gz $(TARARGS) $@
 
+.PHONY: cliquer
+cliquer:$(CLIQUER)_$(ARCH).deb
+$(CLIQUER): $(SPREZZ)/cliquer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cliquer-$(cliquer_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: clutter
 clutter:$(CLUTTER)_$(ARCH).deb
 $(CLUTTER): $(SPREZZ)/clutter/debian/changelog
