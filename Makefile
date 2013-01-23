@@ -2788,6 +2788,14 @@ $(GNUPG2): $(SPREZZ)/gnupg2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gnupg-$(gnupg2_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: gnuplot
+gnuplot:$(GNUPLOT)_$(ARCH).deb
+$(GNUPLOT): $(SPREZZ)/gnuplot/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnuplot-$(gnuplot_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnuradio
 gnuradio:$(GNURADIO)_$(ARCH).deb
 $(GNURADIO): $(SPREZZ)/gnuradio/debian/changelog
