@@ -334,6 +334,14 @@ $(MITMPROXY): $(SPREZZ)/mitmproxy/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mitmproxy_$(mitmproxy_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: spikeproxy
+spikeproxy:$(SPIKEPROXY)_$(ARCH).deb
+$(SPIKEPROXY): $(SPREZZ)/spikeproxy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf spkproxy_$(spikeproxy_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: omphalos
 omphalos:$(OMPHALOS)_$(ARCH).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
