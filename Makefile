@@ -4901,6 +4901,14 @@ $(MPEG2DEC): $(SPREZZ)/mpeg2dec/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmpeg2-$(mpeg2dec_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libmediainfo
+libmediainfo:$(LIBMEDIAINFO)_$(ARCH).deb
+$(LIBMEDIAINFO): $(SPREZZ)/libmediainfo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmediainfo_$(libmediainfo_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libmpeg3
 libmpeg3:$(LIBMPEG3)_$(ARCH).deb
 $(LIBMPEG3): $(SPREZZ)/libmpeg3/debian/changelog
