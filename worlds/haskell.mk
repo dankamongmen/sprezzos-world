@@ -236,7 +236,7 @@ $(HASKELLHSH): $(SPREZZ)/haskell-hsh/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hsh-$(haskell-hsh_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf HSH-$(haskell-hsh_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: haskell-hslogger
 haskell-hslogger:$(HASKELLHSLOGGER)_$(ARCH).deb
