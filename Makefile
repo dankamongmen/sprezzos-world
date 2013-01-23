@@ -326,6 +326,14 @@ $(MIRO): $(SPREZZ)/miro/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf miro-$(miro_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: mitmproxy
+mitmproxy:$(MITMPROXY)_$(ARCH).deb
+$(MITMPROXY): $(SPREZZ)/mitmproxy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mitmproxy_$(mitmproxy_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: omphalos
 omphalos:$(OMPHALOS)_$(ARCH).deb
 $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
