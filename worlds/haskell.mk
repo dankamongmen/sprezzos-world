@@ -262,6 +262,14 @@ $(HASKELLLARGEWORD): $(SPREZZ)/haskell-largeword/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf largeword-$(haskell-largeword_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-lens
+haskell-lens:$(HASKELLLENS)_$(ARCH).deb
+$(HASKELLLENS): $(SPREZZ)/haskell-lens/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lens-$(haskell-lens_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-lifted-base
 haskell-lifted-base:$(HASKELLLIFTEDBASE)_$(ARCH).deb
 $(HASKELLLIFTEDBASE): $(SPREZZ)/haskell-lifted-base/debian/changelog
