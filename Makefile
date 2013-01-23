@@ -5414,6 +5414,14 @@ $(OPENAIS): $(SPREZZ)/openais/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openais-$(openais_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: openchange
+openchange:$(OPENCHANGE)_$(ARCH).deb
+$(OPENCHANGE): $(SPREZZ)/openchange/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openchange-$(openchange_UPVER)-BORG.tar.gz $(TARARGS) $@
+
 .PHONY: opencv
 opencv:$(OPENCV)_$(ARCH).deb
 $(OPENCV): $(SPREZZ)/opencv/debian/changelog
