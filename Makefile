@@ -2220,6 +2220,14 @@ $(GAMEMUSICEMU): $(SPREZZ)/game-music-emu/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf game-music-emu-$(game-music-emu_UPVER).tbz2 $(TARARGS) $@
 
+.PHONY: gamin
+gamin:$(GAMIN)_$(ARCH).deb
+$(GAMIN): $(SPREZZ)/gamin/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gamin-$(gamin_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gawk
 gawk:$(GAWK)_$(ARCH).deb
 $(GAWK): $(SPREZZ)/gawk/debian/changelog
