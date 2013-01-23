@@ -3332,6 +3332,14 @@ $(LIBPAMSSH): $(SPREZZ)/libpam-ssh/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pam_ssh-$(libpam-ssh_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libpst
+libpst:$(LIBPST)_$(ARCH).deb
+$(LIBPST): $(SPREZZ)/libpst/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libpst-$(libpst_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: plymouth
 plymouth:$(PLYMOUTH)_$(ARCH).deb
 $(PLYMOUTH): $(SPREZZ)/plymouth/debian/changelog
