@@ -206,6 +206,22 @@ $(HASKELLHAMLET): $(SPREZZ)/haskell-hamlet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hamlet-$(haskell-hamlet_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-hashable
+haskell-hashable:$(HASKELLHASHABLE)_$(ARCH).deb
+$(HASKELLHASHABLE): $(SPREZZ)/haskell-hashable/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hashable-$(haskell-hashable_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-hinotify
+haskell-hinotify:$(HASKELLHINOTIFY)_$(ARCH).deb
+$(HASKELLHINOTIFY): $(SPREZZ)/haskell-hinotify/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hinotify-$(haskell-hinotify_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-hostname
 haskell-hostname:$(HASKELLHOSTNAME)_$(ARCH).deb
 $(HASKELLHOSTNAME): $(SPREZZ)/haskell-hostname/debian/changelog
@@ -525,6 +541,14 @@ $(HASKELLTRANSFORMERSBASE): $(SPREZZ)/haskell-transformers-base/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf transformers-base-$(haskell-transformers-base_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-unordered-containers
+haskell-unordered-containers:$(HASKELLUNORDEREDCONTAINERS)_$(ARCH).deb
+$(HASKELLUNORDEREDCONTAINERS): $(SPREZZ)/haskell-unordered-containers/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unordered-containers-$(haskell-unordered-containers_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-vector
 haskell-vector:$(HASKELLVECTOR)_$(ARCH).deb
