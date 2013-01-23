@@ -1,0 +1,112 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --parallel
+
+export DEB_BUILD_MAINT_OPTIONS := hardening=+all
+export DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+CFLAGS := -Wall $(shell dpkg-buildflags --get CFLAGS)
+CXXFLAGS := -Wall $(shell dpkg-buildflags --get CXXFLAGS)
+CPPFLAGS := $(shell dpkg-buildflags --get CPPFLAGS)
+LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS)
+
+# Build structure may link against unneeded libs.
+# Make sure this does not happen.
+LDFLAGS            += -Wl,--as-needed
+
+# Tell compiler where should find lua headers
+CFLAGS += -I/usr/include/lua5.1
+
+BUILDDIR_NOX = $(CURDIR)/debian/build-nox
+BUILDDIR_X11 = $(CURDIR)/debian/build-x11
+BUILDDIR_QT = $(CURDIR)/debian/build-qt
+
+conf_opts += \
+	CFLAGS="$(CFLAGS)" \
+	CXXFLAGS="$(CXXFLAGS)" \
+	CPPFLAGS="$(CPPFLAGS)" \
+	LDFLAGS="$(LDFLAGS)" \
+	--host=$(DEB_HOST_GNU_TYPE) \
+	--build=$(DEB_BUILD_GNU_TYPE) \
+	--prefix=/usr \
+	--mandir=\$${prefix}/share/man \
+	--infodir=\$${prefix}/share/info \
+	--libexecdir=\$${prefix}/lib/gnuplot \
+	--datadir=\$${prefix}/share/gnuplot \
+	--with-gihdir=\$${prefix}/share/gnuplot \
+	--without-lasergnu \
+	--with-png \
+	--with-gd \
+	--without-lisp-files \
+	--without-linux-vga \
+	--with-readline=bsd
+
+override_dh_auto_configure:
+	echo $(conf_opts)
+	autoreconf
+	mkdir -p $(BUILDDIR_NOX)
+	cd $(BUILDDIR_NOX);  ./../../configure $(conf_opts) --without-x --disable-wxwidgets
+	mkdir -p $(BUILDDIR_X11)
+	cd $(BUILDDIR_X11); ../../configure $(conf_opts) --without-qt
+	mkdir -p $(BUILDDIR_QT)
+	cd $(BUILDDIR_QT); ../../configure $(conf_opts)  --enable-qt
+
+override_dh_auto_build-arch:
+	dh_auto_build -a -- -C $(BUILDDIR_NOX)/src
+	dh_auto_build -a -- -C $(BUILDDIR_X11) pkglibexecdir='$$(libexecdir)'
+	dh_auto_build -a -- -C $(BUILDDIR_QT) pkglibexecdir='$$(libexecdir)'
+
+override_dh_auto_build-indep:
+	cp -f term/PostScript/prologue.ps docs/psdoc/
+	dh_auto_build -i -- -C $(BUILDDIR_X11)/docs ps info gpcard.ps
+	dh_auto_build -i -- -C $(BUILDDIR_X11)/tutorial tutorial.dvi tutorial.ps
+	dh_auto_build -i -- -C $(BUILDDIR_X11)/demo
+	dh_auto_build -i -- -C docs/psdoc ps_fontfile_doc.ps
+	mkdir -p docs/htmldocs
+	$(MAKEINFO) --html --output=docs/htmldocs/ docs/gnuplot.texi
+
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf $(BUILDDIR_NOX) $(BUILDDIR_X11) $(BUILDDIR_QT) \
+		config.log \
+		config.hin \
+		configure \
+		src/Makefile.in \
+		docs/psdoc/ps_symbols.ps \
+		docs/psdoc/ps_fontfile_doc.aux \
+		docs/psdoc/ps_fontfile_doc.dvi \
+		docs/psdoc/ps_fontfile_doc.log \
+		docs/psdoc/ps_fontfile_doc.pdf \
+		docs/psdoc/ps_fontfile_doc.ps \
+		docs/psdoc/ps_fontfile_doc.log \
+		docs/psdoc/ps_fontfile_doc.aux \
+		docs/psdoc/ps_fontfile_doc.ps \
+		docs/psdoc/prologue.ps \
+		docs/psdoc/missfont.log \
+		docs/htmldocs
+
+override_dh_auto_install:
+	$(MAKE) -C $(BUILDDIR_NOX) install DESTDIR=$(CURDIR)/debian/tmp/NOX/ \
+		pkglibexecdir='$$(libexecdir)'
+	$(MAKE) -C $(BUILDDIR_X11) install DESTDIR=$(CURDIR)/debian/tmp/X11/ \
+		pkglibexecdir='$$(libexecdir)'
+	$(MAKE) -C $(BUILDDIR_QT) install DESTDIR=$(CURDIR)/debian/tmp/QT/ \
+		pkglibexecdir='$$(libexecdir)'
+
+override_dh_auto_test:
+	cp -f $(BUILDDIR_X11)/demo/binary* ./demo/
+	cd demo; $(BUILDDIR_NOX)/src/gnuplot all.dem </dev/null
+
+override_dh_installinfo:
+	dh_installinfo -pgnuplot-doc $(BUILDDIR_X11)/docs/gnuplot.info*
+
+override_installchangelogs:
+	dh_installchangelogs -pgnuplot-doc ChangeLog
+
+override_dh_compress-indep:
+	dh_compress -Xall.dem
+	cd debian/gnuplot-doc/usr/share/doc/gnuplot-doc/examples/; patch -p1 < $(CURDIR)/debian/fix_examples/fix_examples.diff
+

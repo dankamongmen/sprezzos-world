@@ -1062,6 +1062,14 @@ $(BC): $(SPREZZ)/bc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf bc-$(bc_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: beets
+beets:$(BEETS)_$(ARCH).deb
+$(BEETS): $(SPREZZ)/beets/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf $(BEETS).orig.tar.gz $(TARARGS) $@
+
 .PHONY: bind9
 bind9:$(BIND9)_$(ARCH).deb
 $(BIND9): $(SPREZZ)/bind9/debian/changelog
@@ -1261,6 +1269,14 @@ $(AIRPORTUTILS): $(SPREZZ)/airport-utils/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf airport-utils-$(airport-utils_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: arpack
+arpack:$(ARPACK)_$(ARCH).deb
+$(ARPACK): $(SPREZZ)/arpack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf arpack-$(arpack_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: cairo
 cairo:$(CAIRO)_$(ARCH).deb
