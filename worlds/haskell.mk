@@ -198,6 +198,14 @@ $(HASKELLFAILURE): $(SPREZZ)/haskell-failure/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf failure-$(haskell-failure_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-gsasl
+haskell-gsasl:$(HASKELLGSASL)_$(ARCH).deb
+$(HASKELLGSASL): $(SPREZZ)/haskell-gsasl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gsasl-$(haskell-gsasl_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-hamlet
 haskell-hamlet:$(HASKELLHAMLET)_$(ARCH).deb
 $(HASKELLHAMLET): $(SPREZZ)/haskell-hamlet/debian/changelog

@@ -13,6 +13,15 @@ anna:$(ANNA)_$(ARCH).udeb
 $(ANNA): $(SPREZZ)/anna/debian/changelog
 	cp -r $(<D)/.. $@
 
+.PHONY: apt-listchanges
+apt-listchanges:$(APTLISTCHANGES)_$(ARCH).deb
+$(APTLISTCHANGES): $(SPREZZ)/apt-listchanges/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf apt-listchanges_$(apt-listchanges_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: base-files
 base-files:$(BASEFILES)_$(ARCH).deb
 $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
