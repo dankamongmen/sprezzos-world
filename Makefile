@@ -1142,6 +1142,14 @@ $(FLICKRBACKUP): $(SPREZZ)/flickrbackup/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf FlickrBackup-$(flickrbackup_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: fstransform
+fstransform:$(FSTRANSFORM)_$(ARCH).deb
+$(FSTRANSFORM): $(SPREZZ)/fstransform/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf fstransform-$(fstransform_UPVER)-src.tar.bz2 $(TARARGS) $@
+
 .PHONY: ftgl
 ftgl:$(FTGL)_$(ARCH).deb
 $(FTGL): $(SPREZZ)/ftgl/debian/changelog
