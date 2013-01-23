@@ -230,6 +230,14 @@ $(HASKELLHOSTNAME): $(SPREZZ)/haskell-hostname/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hostname-$(haskell-hostname_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-hsh
+haskell-hsh:$(HASKELLHSH)_$(ARCH).deb
+$(HASKELLHSH): $(SPREZZ)/haskell-hsh/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hsh-$(haskell-hsh_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-hslogger
 haskell-hslogger:$(HASKELLHSLOGGER)_$(ARCH).deb
 $(HASKELLHSLOGGER): $(SPREZZ)/haskell-hslogger/debian/changelog
@@ -565,6 +573,22 @@ $(HASKELLVOID): $(SPREZZ)/haskell-void/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf void-$(haskell-void_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-wai
+haskell-wai:$(HASKELLWAI)_$(ARCH).deb
+$(HASKELLWAI): $(SPREZZ)/haskell-wai/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf wai-$(haskell-wai_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-wai-logger
+haskell-wai-logger:$(HASKELLWAILOGGER)_$(ARCH).deb
+$(HASKELLWAILOGGER): $(SPREZZ)/haskell-wai-logger/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf wai-logger-$(haskell-wai-logger_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-xml
 haskell-xml:$(HASKELLXML)_$(ARCH).deb
