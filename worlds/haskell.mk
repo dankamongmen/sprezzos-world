@@ -502,6 +502,14 @@ $(HASKELLRANDOM): $(SPREZZ)/haskell-random/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf random-$(haskell-random_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-rc4
+haskell-rc4:$(HASKELLRC4)_$(ARCH).deb
+$(HASKELLRC4): $(SPREZZ)/haskell-rc4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cipher-rc4-$(haskell-rc4_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-regex-base
 haskell-regex-base:$(HASKELLREGEXBASE)_$(ARCH).deb
 $(HASKELLREGEXBASE): $(SPREZZ)/haskell-regex-base/debian/changelog
