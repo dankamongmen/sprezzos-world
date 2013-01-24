@@ -262,6 +262,14 @@ $(HASKELLFAILURE): $(SPREZZ)/haskell-failure/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf failure-$(haskell-failure_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-fast-logger
+haskell-fast-logger:$(HASKELLFASTLOGGER)_$(ARCH).deb
+$(HASKELLFASTLOGGER): $(SPREZZ)/haskell-fast-logger/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fast-logger-$(haskell-fast-logger_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-gsasl
 haskell-gsasl:$(HASKELLGSASL)_$(ARCH).deb
 $(HASKELLGSASL): $(SPREZZ)/haskell-gsasl/debian/changelog
@@ -373,6 +381,14 @@ $(HASKELLLENS): $(SPREZZ)/haskell-lens/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lens-$(haskell-lens_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-libxml-sax
+haskell-libxml-sax:$(HASKELLLIBXMLSAX)_$(ARCH).deb
+$(HASKELLLIBXMLSAX): $(SPREZZ)/haskell-libxml-sax/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxml-sax-$(haskell-libxml-sax_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: haskell-lifted-base
 haskell-lifted-base:$(HASKELLLIFTEDBASE)_$(ARCH).deb
@@ -549,6 +565,14 @@ $(HASKELLSKEIN): $(SPREZZ)/haskell-skein/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf skein-$(haskell-skein_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-socks
+haskell-socks:$(HASKELLSOCKS)_$(ARCH).deb
+$(HASKELLSOCKS): $(SPREZZ)/haskell-socks/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf socks-$(haskell-socks_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-stm
 haskell-stm:$(HASKELLSTM)_$(ARCH).deb
