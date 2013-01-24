@@ -198,6 +198,22 @@ $(HASKELLCRYPTOAPI): $(SPREZZ)/haskell-crypto-api/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf crypto-api-$(haskell-crypto-api_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-crypto-numbers
+haskell-crypto-numbers:$(HASKELLCRYPTONUMBERS)_$(ARCH).deb
+$(HASKELLCRYPTONUMBERS): $(SPREZZ)/haskell-crypto-numbers/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf crypto-numbers-$(haskell-crypto-numbers_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-crypto-pubkey
+haskell-crypto-pubkey:$(HASKELLCRYPTOPUBKEY)_$(ARCH).deb
+$(HASKELLCRYPTOPUBKEY): $(SPREZZ)/haskell-crypto-pubkey/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf crypto-pubkey-$(haskell-crypto-pubkey_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-crypto-pubkey-types
 haskell-crypto-pubkey-types:$(HASKELLCRYPTOPUBKEYTYPES)_$(ARCH).deb
 $(HASKELLCRYPTOPUBKEYTYPES): $(SPREZZ)/haskell-crypto-pubkey-types/debian/changelog
