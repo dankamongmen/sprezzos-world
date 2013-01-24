@@ -6095,6 +6095,14 @@ $(RATPOISON): $(SPREZZ)/ratpoison/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ratpoison-$(ratpoison_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: reiserfsprogs
+reiserfsprogs:$(REISERFSPROGS)_$(ARCH).deb
+$(REISERFSPROGS): $(SPREZZ)/reiserfsprogs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf reiserfsprogs-$(reiserfsprogs_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: remotecontrol
 remotecontrol:$(REMOTECONTROL)_$(ARCH).deb
 $(REMOTECONTROL): $(SPREZZ)/remotecontrol/debian/changelog
