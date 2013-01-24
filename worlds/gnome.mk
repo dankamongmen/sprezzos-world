@@ -542,6 +542,14 @@ $(TOMBOY): $(SPREZZ)/tomboy/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf tomboy-$(tomboy_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: vino
+vino:$(VINO)_$(ARCH).deb
+$(VINO): $(SPREZZ)/vino/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf vino-$(vino_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: vte3
 vte3:$(VTE3)_$(ARCH).deb
 $(VTE3): $(SPREZZ)/vte3/debian/changelog
