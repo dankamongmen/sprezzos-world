@@ -1,0 +1,1359 @@
+\documentclass[letterpaper]{article}
+
+\usepackage{fancyhdr}
+\usepackage{url}
+\usepackage{pgf}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{semantic}
+\usepackage{mathpartir}
+\usepackage{varioref}
+
+\usepackage{algorithm}
+% From algorithmicx
+\usepackage{algpseudocode}
+
+\pagestyle{fancy}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+
+\theoremstyle{remark}
+\newtheorem*{note}{Note}
+\newtheorem*{remark}{Remark}
+
+\lhead{Modelling and Resolving Software Dependencies}
+\rhead{Daniel Burrows}
+
+\author{Daniel Burrows \url{<dburrows@debian.org>}}
+\title{Modelling and Resolving Software Dependencies}
+
+\newcommand{\pkg}[1]{\text{\url{#1}}}
+
+\renewcommand{\P}{\mathcal{P}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\I}{\mathcal{I}}
+\newcommand{\D}{\mathcal{D}}
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\pkgof}[1]{PkgOf(#1)}
+
+\newcommand{\st}{\ |\ }
+
+\newcommand{\idist}[2]{\langle#1,#2\rangle}
+\newcommand{\len}[1]{\lvert#1\rvert}
+
+\newcommand{\nsol}[2]{\overset{#1}{\underset{#2}{\Rightarrow}}}
+\newcommand{\nsolmany}[1]{\overset{#1}{\underset{*}{\Rightarrow}}}
+
+\newcommand{\act}[2]{[#1 :: #2]}
+
+\newcommand{\installs}{\vartriangleright}
+\newcommand{\satisfies}{\vdash}
+\newcommand{\col}{\mathpunct{:}}
+
+\algrenewcommand{\algorithmicprocedure}{\textbf{function}}
+
+\mathlig{->}{\rightarrow}
+\mathlig{=>*}{\overset{*}{=>}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+  Many Linux distributions and other modern operating systems feature
+  the explicit declaration of (often complex) dependency relationships
+  between the pieces of software that may be installed on a system.
+  Resolving incompatibilities between different pieces of software is
+  an NP-complete problem, and existing solutions require the user to
+  manually resolve many ``simple'' dependency problems.
+
+  I present a simplified, abstract model of dependency relationships,
+  and a restartable technique based on best-first-search to calculate
+  resolutions.
+\end{abstract}
+
+\begin{note}
+  This is a work in progress; it sometimes lags behind or jumps ahead
+  of the current state of the software it documents, and some of the
+  details may be incomplete or unattended to.  However, I hope that it
+  provides some more insight into the direction in which
+  \pkg{aptitude}'s problem resolver is headed -- and in which I
+  believe that other installation frontends should also consider
+  heading.
+\end{note}
+
+\section{Introduction}
+
+It is common nowadays for hundreds or thousands of software packages
+to be installed on a single computer system, and for many of these
+software packages to interact with one another.  Because some
+combinations of software packages will not function properly -- for
+instance, an application program might require a particular version of
+a graphics library -- installing software manually while avoiding
+unexpected breakage is an increasingly unpleasant chore.
+
+To address this problem, programs known as \emph{package systems} were
+developed.  A package system typically manages \emph{packages} that
+consist of the files of a program or library, along with metadata such
+as the name and version of the package, a brief description of what it
+contains, and (most importantly for our purposes) a list of which
+other packages it requires or is incompatible with.  The package
+installation software warns the user upon any attempt to install or
+remove software that would violate these constraints.
+
+Unfortunately, the early versions of these tools replaced the chore of
+manual software installation with the chore of dependency resolution:
+for instance, installing a package of the popular game \pkg{wesnoth}
+might produce an error indicating that the user should find, download,
+and install a new version of the \pkg{SDL} graphics library.  A new
+version of the \pkg{kmail} mail client might require the user to
+upgrade his or her entire operating system, indicating this fact by a
+slew of cascading error messages.
+
+As a result of this so-called ``dependency hell'', new and more
+automated tools, such as \pkg{apt} and \pkg{up2date}, were developed.
+These tools maintain a database of software installed on the user's
+system, along with software available from any number of remote sites.
+
+To install or remove a piece of software, the user issues a request
+to, for instance, ``install wesnoth'' or ``upgrade kmail''.  The
+installation tool will proceed to find a set of package installations
+or removals which leads to a consistent result.  Typically, it then
+presents this list of actions to the user and prompts for
+confirmation; the user can either accept the proposed solution, or
+reject it and proceed to fix the problem in a fully manual way.  Once
+the user is satisfied with the proposed changes, the tool will
+download any new software packages and install them.
+
+This approach has two major drawbacks:
+
+\begin{enumerate}
+\item The user interface for resolving dependencies is a ``take it or
+  leave it'' proposition: there is no way for the user to ask the
+  algorithm to find another solution.  This means that if the
+  algorithm makes a poor or undesired choice (which, as I will argue
+  below, will inevitably occur from time to time) the user is forced
+  to fall back to fully manual operation.
+
+\item In at least some cases (particularly \pkg{apt}), the algorithm used
+  in resolving dependency conflicts deals poorly -- which is a
+  euphemism for ``not at all'' -- when there are more than two
+  versions of a package to choose from\footnote{More precisely, if
+    more than one version other than the currently installed version
+    (if any) exists.}.  For instance, if versions 1, 2, and 3 of
+  package \pkg{A} are available, with 2 being the default version of
+  the package, and if package B requires version 3 of package A, when
+  the user tries to install package B, he or she will receive an error
+  message indicating that the dependency on A cannot be fulfilled.
+\end{enumerate}
+
+Another general difficulty in solving dependencies in these systems is
+that the package systems contain many features which, although they
+are arguably ``syntactic sugar'', tend to cause algorithms that
+operate on packages to become strewn with complex iteration constructs
+and unpleasant corner cases.  Although some attempts have been made to
+find general models of package dependencies (for instance, the
+internal structures of \pkg{apt} can represent either Debian or Red
+Hat packages), the models with which I am familiar work by taking a
+``greatest upper bound'' of the systems that they cover, leading to a
+generic framework that is, if anything, even more convoluted than the
+individual package systems that it covers.
+
+\begin{note}
+  I have not yet performed an extensive survey of package systems, and
+  it may be that there already exist systems that fix one, two, or all
+  of the drawbacks listed above.
+\end{note}
+
+\section{Example: the Debian Package System}
+
+The Debian package system is implemented by a low-level tool known as
+\pkg{dpkg}.  Debian packages are files with the extension \url{.deb};
+\pkg{dpkg} can install a \url{.deb} file that has already been
+retrieved, or remove a package that is currently installed on the
+system.  If dependency constraints are violated, \pkg{dpkg} will print
+errors messages and abort the installation after unpacking the
+packages.
+
+The usual user interface to the package system is through one of the
+programs in the \pkg{apt} suite.  \pkg{apt} is a high-level library
+which allows C++ programs to examine the set of installed packages,
+determine what actions are to be performed, and execute these actions
+(by, for instance, downloading package files and calling \pkg{dpkg} to
+install them).  \pkg{apt}-based installation tools typically refuse to
+even begin any actions that will result in an inconsistent system
+state, and all of them provide a basic algorithm that resolves
+inconsistencies by adjusting package states until all dependencies are
+fixed.
+
+In the Debian package system, each package may have one or more
+versions, but at most one version of each package may be installed at
+any given time.  The basic relationships between packages are
+\emph{dependencies} and \emph{conflicts}.  For instance, version
+6.14.00-1 of the \pkg{tcsh} command shell depends on version
+2.3.2.ds-4 or greater of the \pkg{libc6} package and version 5.4-1 or
+greater of the \pkg{libncurses5} package: it may not be installed
+unless an appropriate version of each of these package is installed.
+On the other hand, the same package conflicts with all versions of the
+\pkg{tcsh-kanji} and \pkg{tcsh-i18n} packages: \pkg{tcsh} may not be
+installed at the same time as either of these packages.
+
+A single dependency may name several packages, combined with and OR
+operator (indicated by a vertical bar).  For instance, version
+\pkg{1.4.48} of the \pkg{debconf} package depends upon
+\verb!debconf-i18n | debconf-english!; in order to install debconf,
+you must also install one of these two packages.
+
+Last but not least, dpkg supports what are known as ``virtual''
+packages.  Each version of each package may \emph{provide} one or more
+package names; each named package will become a virtual package.
+Virtual packages can have the same name as a normal package, in which
+case they are known as \emph{mixed} virtual, or they can exist only
+through being provided by a normal package, in which case they are
+known as \emph{pure} virtual.  An unversioned dependency on a virtual
+package will be satisfied if any provider of the name is installed,
+while an unversioned conflicts will require that all providers of the
+name are removed -- but as a special case, direct or implicit
+self-conflicts are ignored.  Versioned dependencies and conflicts do
+not, as of this writing, follow provided package names.
+
+For instance, the virtual package \pkg{mail-transport-agent} is used
+to identify packages containing mail transport agents.  Every such
+package both provides and conflicts with the virtual package, and
+packages that require a mail transport agent depend on
+it.\footnote{Due to a quirk in how \pkg{apt} resolves dependencies,
+  dependencies on a virtual package are required to include a real
+  package as an alternative: for instance, \pkg{bugzilla} depends on
+  \url{sendmail | mail-transport-agent}.}
+
+\section{An Abstract Model of Dependency Relationships}
+
+As can be seen in the previous section, real dependency systems are
+complex.  This tends to complicate the business of reasoning about how
+to find solutions to dependency problems, and to cause algorithms that
+manipulate dependencies to become horribly messy.  In situations like
+this, it is often a good idea to find a simpler, more mathematical
+model of the problem being analyzed.  Of course, it is well-known that
+package dependencies can be reduced to the satisfaction of Boolean
+equations, but such a reduction is arguably \emph{too} extreme: it
+certainly results in a mathematical model, but the model it produces
+hides the structure of the original problem.  The following section
+describes an alternate model which is sufficient to capture any
+dependency problem (at least in Debian) and retains the structure of a
+package system.
+
+\subsection{Basic Concepts}
+
+In this simplified model, the only objects in the world are packages,
+versions of packages, and dependencies.  Packages will typically be
+denoted by $p_1, \dots$; versions will typically be denoted by $v_1,
+\dots$; and dependencies are of the form $v -> \{v_1', \dots\}$,
+indicating that the version $v$ requires the versions $\{v_1',
+\dots\}$.  The package associated with a version $v$ is denoted by
+$\pkgof{v}$.
+
+To represent the state of the entire system, the following sets are
+defined:
+
+\begin{itemize}
+\item $\P$ is the set of all packages.
+\item $\V$ is the set of all package versions.
+\item $\D$ is the set of all dependencies.\footnote{Not the set of all
+    \emph{potential} dependencies, but the set of all dependencies
+    asserted in the current package system.}
+\end{itemize}
+
+Throughout this paper, I will assume that $\P$ and $\V$ (and hence
+$\D$) are finite.
+
+\subsection{Reduction of Debian Dependencies to the Model}
+
+As claimed above, it is possible to reduce a Debian dependency system
+to this abstracted model.  The reduction proceeds in approximately the
+following way:
+
+\begin{itemize}
+\item $\P$ is the set of Debian packages.
+\item $\V$ is the set of versions of those packages, plus one
+  additional version for each package.  This version represents the
+  state of the package when it is not installed.  Versions
+  corresponding to versions of the Debian package are indicated by $p
+  \col n$ where $n$ is the version number, while the ``uninstalled''
+  version is indicated by $p_u$.
+\item For each dependency of the version $v$ of a package on
+  $\pkg{A}_1\ |\ \dots$, accumulate a set $S$ containing all the
+  matching versions of each named package, combined with every package
+  version that provides a named package (if the dependency is
+  unversioned).
+
+  For instance, if $v$ declares a dependency on \verb!A (>= 3.2) | B!,
+  versions $3.1$, $3.2$, and $3.3$ of package \pkg{A} are available,
+  versions $1$, $2$, and $3$ of package \pkg{B} are available, and
+  package \pkg{C} version $3.14$ provides \pkg{B}, then
+  $S=\{\pkg{A} \col 3.2,\pkg{A} \col 3.3,\pkg{B} \col 1,\pkg{B} \col 2,B \col 3,\pkg{C} \col 3.14\}$.
+
+  $\D$ contains $v -> S$ for every such dependency.
+\item For each conflict declared by a version $v$ on the package $p$,
+  accumulate a set $S$ containing all the \emph{non}-matching versions
+  of $p$, including the ``uninstalled'' version, and insert $v -> S$
+  into $\D$.  Furthermore, if the conflict is not versioned, then for
+  each package $p'$ and version $v'$ of $p'$ such that $v'$ provides
+  $p$, let $S=\{v'' \st \pkgof{v''}=p' \land \text{$v''$ does not
+    provide $p$}\}$ and insert $v -> S$ into $\D$.
+
+  For instance, if $v$ conflicts with \pkg{A}, of which versions 3.2
+  and 3.3 are available, versions 2 and 3 of \pkg{B} provide \pkg{A},
+  and no other versions of \pkg{B} are available, then
+  $S=\{\pkg{A} \col 3.2,\pkg{A} \col 3.3,\pkg{A} \col \pkg{UNINST},\pkg{B} \col 2,\pkg{B} \col \pkg{UNINST}\}$.
+
+  \begin{note}
+    In reality, extra care must be taken to screen out self-conflicts
+    in this process, but the description above is complicated enough
+    as it stands!
+  \end{note}
+\end{itemize}
+
+\begin{remark}
+  Although the above reduction is complicated to describe, its major
+  steps must be performed whenever any program is analyzing
+  dependencies: for instance, when listing all the versions that can
+  fulfill a dependency, it is necessary to iterate over all members of
+  each OR and to search their providing packages as necessary.  Thus,
+  an ``on-the-fly'' reduction in an algorithm written for the generic
+  model is conceivably almost as efficient as an algorithm that works
+  with the Debian package structure directly.
+\end{remark}
+
+\subsection{Installations}
+
+An \emph{installation} represents a choice about which package
+versions to install; it is a function that maps each package to a
+version of that package.
+
+\begin{definition}
+  An installation $I$ installs a version $v$, written $I \installs v$,
+  if $I(\pkgof{v})=v$.
+\end{definition}
+
+\begin{definition}
+  An installation $I$ satisfies a dependency $d=v -> S$, written
+  $I \satisfies d$, if either $I \not \installs v$ or $I \installs v'$
+  for some $v' \in S$.
+\end{definition}
+
+\begin{definition}
+  An installation $I$ is \emph{consistent} if $I \satisfies d$ for all
+  $d \in \D$.
+\end{definition}
+
+\begin{definition}
+  If $I$ is an installation, then $I;p \mapsto v$ is a new
+  installation which installs the version $v$ of the package $p$ and
+  leaves all other packages unchanged:
+
+  \begin{equation}
+    (I;p \mapsto v)(p') = \begin{cases}
+      I(p'), & p' \neq p \\
+      v, & p' = p
+    \end{cases}
+  \end{equation}
+
+  As a shorthand, the following notation indicates that a particular
+  version of a package is to be installed:
+
+  \begin{equation}
+    I;v = I;\pkgof(v) \mapsto v
+  \end{equation}
+\end{definition}
+
+\section{The Dependency Resolution Problem}
+
+\subsection{Problem Definition}
+
+Let $I_0$ be an inconsistent installation.  We would like to find a
+consistent installation that is ``similar to'' $I_0$.  This is the
+dependency resolution problem.  In a real package manager, it
+corresponds to a situation in which the user's requests have resulted
+in an invalid state (with unsatisfied dependencies or conflicts); the
+goal of the package manager in this situation is to find a ``small''
+and ``good'' set of changes that result in a valid state.
+
+\begin{note}
+  This problem is poorly defined: ``small'' and ``good'' are not
+  precise terms.  The goal, from a UI point of view, is to not change
+  too many packages, but to make reasonable decisions: for instance,
+  if the user has requested that some packages be installed and these
+  installations cause dependency clashes, ``solving'' the problem by
+  cancelling the installations is probably not the desired result.
+  However, while it might have obviously wrong solutions, \emph{this
+    problem has no principled correct solution}, because it is
+  possible that if several different users view a single dependency
+  problem, each prefers a different solution from the others.  In
+  other words, some of the information necessary to find the ``best''
+  solution is inside the user's head.
+
+  Thus, the best we can do is to define some criteria for ``goodness''
+  (to prioritize solutions that are more likely to interest the user)
+  and allow the user to see alternatives to an undesired solution.
+\end{note}
+
+\subsection{Dependency Resolution is NP-complete}
+
+In order to find a ``good'' solution, we must first find \emph{any}
+solution to the existing set of dependencies.  Unfortunately, as shown
+below, this is an NP-complete problem.
+
+\begin{theorem}
+  Dependency resolution is NP-complete.
+\end{theorem}
+
+\begin{proof}
+  Proof is by reduction from CNF-SAT to the problem ``does a
+  consistent installation $I$ exist?''
+
+  Create one package for each variable and for each clause in the SAT
+  problem.  For each variable $x$, let the versions of the
+  corresponding package be $x \col 0$ and $x \col 1$; for each clause,
+  create exactly one version.  For each SAT clause let $v_c$ be the
+  package corresponding to the clause, and insert $v_c -> S$ into
+  $\D$, where for each literal of a variable $x$ appearing in the
+  clause, $S$ contains $x \col 0$ if $x$ is a negative literal and $x
+  \col 1$ if $x$ is a positive literal.  This reduction is clearly
+  polynomial-time; I claim that a solution to this set of dependencies
+  exists if and only if a solution to the corresponding SAT problem
+  exists.
+
+  Suppose that there is an assignment that solves the SAT problem.
+  Define an installation $I$ as follows: if $p$ corresponds to a
+  clause, $I(p)$ is the single version of $p$; if $p$ corresponds to a
+  variable $x$, $I(p)=x \col 0$ if $x$ is FALSE in the SAT solution
+  and $I(p)=x \col 1$ if $x$ is TRUE in the SAT solution.  Now,
+  consider any dependency $d=v -> S$.  From the construction above,
+  $S$ and $v$ correspond to a clause of the SAT instance.  At least
+  one literal in this clause must be assigned the value TRUE
+  (otherwise the clause is not satisfied); let $x$ be the
+  corresponding variable.  If the literal is positive, then (by
+  construction) $S$ contains $x \col 1$; since $x$ must be assigned
+  the value TRUE. $I \installs x \col 1$.  Hence, $I \satisfies d$.
+  On the other hand, if the literal is negative, then $S$ contains $x
+  \col 0$ and $I \installs x \col 0$, so $I \satisfies d$.  Thus, $I$
+  is a consistent installation.
+
+  On the other hand, suppose that there is a consistent installation
+  $I$.  For all variables $x$, let $p$ be the corresponding package;
+  if $I(p)=x \col 0$, assign FALSE to $x$, and if $I(p)=x \col 1$,
+  assign TRUE to $x$.  Now consider any clause in the SAT problem:
+  from the construction above, $\D$ contains a dependency $v_c -> S$
+  where $v_c$ is the single version of the package corresponding to
+  the clause.  Since we must have $I \installs v_c$ and since $I$ is
+  consistent, there must be a version $v' \in S$ such that $I
+  \installs v'$.  But from the construction, there is some $x$ such
+  that $v$ corresponds to either $x \col 1$, where $x$ appears as a
+  positive literal in the clause or $x \col 0$, where $x$ appears as a
+  negative literal in the clause.  Thus, the clause is satisfied, and
+  so the assignment described above satisfies all clauses.
+
+  Therefore, dependency resolution is NP-complete.
+\end{proof}
+
+\subsection{Don't Panic}
+
+Although the problem at hand is NP-complete in general, there is good
+reason to think that the instances that arise in practice are
+tractable.  It is well-known that many NP-complete problems have
+``easy'' and ``hard'' instances: some instances of the problem can be
+solved quickly by relatively naive algorithms, while others are
+intractable even using the most sophisticated techniques available.
+
+In the particular case of package dependencies, the traditions that
+have grown up around package tools seem to encourage the creation of
+easy instances of the dependency problem; furthermore, the user's
+desired installation is typically consistent or ``almost consistent''
+(meaning that few dependencies are violated).  It is usually
+straightforward, when solving problems in an ad hoc way, to isolate a
+small part of the dependency graph in which the problem occurs; for
+instance, by informally applying a constraint such as ``don't solve
+dependencies by removing core library packages''.  Once this is done,
+the problem can be declared either solvable or unsolvable on the basis
+of a quick analysis of that region of the graph.
+
+In fact, when even relatively basic search techniques are applied to
+many typical dependency problems, the difficulties that arise are
+related not to a paucity of solutions, but rather to an excess of
+them.  That is, finding \emph{a} solution is easy, but finding the
+\emph{right} solution is more problematic.  Indeed, in the Debian
+framework there is always at least one solution: removing every
+package on the system will satisfy all the dependencies.  However, for
+obvious reasons, this is not a solution that we want to produce!
+
+\subsection{Solving Dependencies Through Best-First Search}
+
+This problem statement suggests the use of a relatively simple
+algorithm -- best-first search -- to resolve dependencies.  To briefly
+review, best-first search works by keeping a priority queue, known as
+the ``open'' queue, of potential (or partial) solutions.  The priority
+queue is sorted according to some heuristic function that quantifies
+the ``goodness'' of each node (often in terms of nearness to a full
+solution).  In each iteration of the algorithm, the ``best'' partial
+solution is removed from the queue.  If it is a full solution, the
+algorithm terminates; otherwise, each ``successor'' node is generated
+and placed in the queue.
+
+There are two main issues to resolve:
+
+\begin{itemize}
+\item How should successors be generated?
+\item What heuristic should be used?
+\end{itemize}
+
+To generate successors, we could simply enqueue all possible changes
+to a single package.  However, this would result in a gigantic
+branching factor (over 1500 branches at each step in the current
+Debian archive), and it would cause the algorithm to consider
+adjusting packages that were utterly irrelevant to the problem at
+hand, as well as changing a package multiple times (which can lead to
+choices being made for reasons that are obscure to the user).  A more
+focussed approach is needed.
+
+Similarly, we could simply use the number of currently unsatisfied
+dependencies as our heuristic, but this does not provide any guidance
+as to how dependencies should be resolved.  If \pkg{A} depends on
+\pkg{B}, \pkg{A} is installed, and \pkg{B} is not installed, it is
+usually better to install \pkg{B} than to remove \pkg{A}; however, a
+straight count of broken dependencies would consider both solutions to
+be equally ``good''.
+
+\subsubsection{Generating Successors to a Partial Solution}
+
+An obvious way of generating the successors of a given solution is to
+do it on the basis of unsatisfied dependencies.  If the installation
+$I$ does not satisfy the dependency $v -> S$, we know that $v$ is
+installed but no member of $S$ is.  To resolve this dependency, we can
+either install a different version of $\pkgof{v}$ or install any
+element of $S$.  Applying this rule to each ``broken'' dependency in
+turn will produce a set of successors that each solve at least one
+dependency (although they may break others in the process).
+
+However, this approach still has the potential to ``run in circles''
+by installing one version of a package, encountering broken
+dependencies, and then moving to a different version (possibly after
+resolving some dependencies of the intermediate version).  The problem
+resolver of \pkg{apt}, for instance, sometimes confuses users by
+exhibiting this behavior.  To fix this, I enforce a simple rule in
+generating solutions: a solution should never modify a package twice.
+
+\begin{definition}
+  If the original installation was $I_0$, then for any $I$ and any $d
+  \in \D$ such that $I \not \satisfies d$, the installation $I'=I;v$
+  is a successor of $I$ for $d$ if $v \neq I_0(\pkgof{v})$ and
+  $I(\pkgof{v})=I_0(\pkgof{v})$.
+\end{definition}
+
+One might wonder whether this approach risks overlooking solutions:
+for instance, maybe it really is necessary to ``go in circles'' in
+order to find a particular solution.  However, as shown below, if a
+solution cannot be generated through the application of the successor
+rule defined above, then there is a ``simpler'' version of that
+solution (one which modifies the states of fewer packages) that can be
+generated.  To prove this, I first will introduce some definitions and
+notation.
+
+\begin{definition}
+  Let $I_1$, $I_2$ be installations.  The following notation is used
+  to denote the ``distance'' from $I_1$ to $I_2$ (defined as the
+  number of packages whose mappings differ between $I_1$ and $I_2$).
+
+  \begin{equation}
+    \idist{I_1}{I_2}=\len{\{p \st I_1(p) \neq I_2(p)\}}
+  \end{equation}
+\end{definition}
+
+\begin{definition}
+  Let $I_1$, $I_2$ be installations.  An installation $I'$ is a
+  \emph{hybrid} of $I_1$ and $I_2$ if for all $p$, either
+  $I'(p)=I_1(p)$ or $I'(p)=I_2(p)$.
+\end{definition}
+
+\begin{note}
+  An alternative phrasing is that if $I'$ is a hybrid of $I_1$ and
+  $I_2$, then for all $v$ such that $I' \installs v$, either $I_1
+  \installs v$ or $I_2 \installs v$.
+\end{note}
+
+\begin{definition}
+  If $I'$ is a successor of $I$ with respect to $I_0$ for the
+  dependency $d$, then $I \nsol{I_0}{d} I'$.  If there exist $I_1,
+  \dots, I_n$ and $d_1, \dots, d_n$ such that $I_1 \nsol{I_0}{d_1} I_2
+  \nsol{I_0}{d_2} \dots \nsol{I_0}{d_{n-1}} I_n$, then $I_1
+  \nsolmany{I_0} I_n$.
+\end{definition}
+
+\begin{lemma}
+  Let $I_c$ be any consistent installation (if one exists) and $I_0$
+  be any installation.  For all hybrids $I$ of $I_0$ and $I_c$ and all
+  dependencies $d \in \D$ such that $I \not \satisfies d$, there
+  exists an $I'$ such that $I \nsol{I_0}{d} I'$, $I'$ is a hybrid of
+  $I_0$ and $I_c$, and $\idist{I'}{I_c} < \idist{I}{I_c}$.
+\end{lemma}
+
+\begin{proof}
+  Consider any hybrid $I$ of $I_0$ and $I_c$ such that $I$ is not a
+  solution and any $d=v -> S \in \D$ such that $I \not \satisfies d$.
+
+  Suppose that $I_c \not \installs v$.  Since $I$ is a hybrid of $I_0$
+  and $I_c$, $I_0 \installs v$.  Thus, $I \nsol{I_0}{d} I'$, where
+
+  \begin{equation}
+    I'=I;I_c(\pkgof{v})
+  \end{equation}
+
+  On the other hand, if $I_c \installs v'$ for some $v' \in S$, then
+  $I_0 \not \installs v'$.  Therefore, $I \nsol{I_0}{d} I'$, where
+
+  \begin{equation}
+    I'=I;v'
+  \end{equation}
+
+  In either case, clearly $I'$ is a hybrid of $I_0$ and $I_c$ and
+  $\idist{I'}{I_c}<\idist{I}{I_c}$, proving the lemma.
+\end{proof}
+
+\begin{theorem}
+  For any consistent installation $I_c$ and any inconsistent
+  installation $I_0$, there exists a consistent installation $I_c'$
+  such that $I_c'$ is a hybrid of $I_0$ and $I_c$, and $I_0
+  \nsolmany{I_0} I_c'$.
+  \label{thm:succ-sufficient}
+\end{theorem}
+
+\begin{proof}
+  Proof is by repeated application of the previous lemma.  Consider
+  any inconsistent hybrid $I$ of $I_0$ and $I_c$.  Let $I^{+}$ be the
+  $I'$ shown to exist in the previous lemma for an arbitrary $d$ such
+  that $I \not \satisfies d$, and define a sequence $I_1, \dots$ as
+  follows:
+
+  \begin{equation}
+    I_k = \begin{cases}
+      I_{k-1} & \text{if $I_{k-1}$ is consistent} \\
+      I_k^{+} & \text{otherwise}
+    \end{cases}
+  \end{equation}
+
+  I claim that this sequence converges; i.e., that for some finite $n$
+  and all $m>n$, $I_n=I_m$.  Proof: let $D_k=\idist{I_k}{I_c}$ and
+  $n=\idist{I_0}{I_c}$.  By the previous lemma, $D_k \geq D_{k+1}$ for
+  all $k$, and $D_k=D_{k+1}$ if and only if $I_k$ is a solution.
+  Thus, if $I_k$ is not a solution, we have $D_k \leq n-k$.  But by
+  definition, $D_k \geq 0$ for all $k$, so clearly $I_{n+1}$ is a
+  solution (else we have $0 \leq D_{n+1} \leq -1$).
+
+  Therefore, the theorem holds with $I_c'=D_{n+1}$.
+\end{proof}
+
+\subsubsection{Scoring}
+
+The second key ingredient of a best-first search is a scheme for
+ordering search nodes, typically by assigning a numerical value to
+each prospective solution.  In doing so, we must balance two
+priorities: the desire to find a solution quickly, and the desire to
+find a \emph{good} solution.
+
+The most obvious way to guide the search towards a solution is to
+``reward'' avenues of inquiry that decrease the number of unsatisfied
+dependencies.  This is not, of course, guaranteed to produce a
+solution quickly; however, in practice, it seems to be a sufficient
+hint for the algorithm to reach a goal node in a reasonable number of
+steps\footnote{Most searches seem to converge in under 5000 steps.}.
+Finding ``good'' solutions is somewhat more difficult, not least
+because of the fact that ``good'' is an ill-defined property.  The
+experimental implementation of this algorithm in \pkg{aptitude} uses
+the following general criteria to assign scores to nodes:
+
+\begin{itemize}
+\item Each version of each package is assigned a separate score.  By
+  default, removing any package is heavily penalized, altering
+  packages which were automatically installed recieves a smaller
+  penalty, maintaining the state of an automatic package makes no
+  contribution to the score, and maintaining the state of a manually
+  installed package receives a bonus.\footnote{In actuality, all that
+    is calculated is the difference between the initial total version
+    score and the final total version score.}
+
+\item A penalty is applied to each search node based on its distance
+  from the root of the search.  This works to favor ``simpler''
+  solutions and penalize more complex ones.
+
+\item Nodes that resolve all dependencies are given an additional
+  bonus -- usually a relatively minor one.  Goal nodes are moved
+  through the priority queue in the normal manner, rather than being
+  floated directly to its head, in order to ensure that solutions that
+  are particularly ``bad'' are not produced unless it is absolutely
+  necessary to do so.
+\end{itemize}
+
+Thus, letting $B(I)$ be the set of dependencies that are ``broken''
+(not satisfied) by $I$ and letting $h(v)$ be the score of the version
+$v$, the total score of an installation is
+
+\begin{equation}
+  h(I) = \alpha_B|B(I)| + \alpha_L \idist{I}{I_0} + \alpha_G \delta(0,|B(I)|) + \sum_{p \in \P} h(I(p))
+\end{equation}
+
+where $\alpha_B$, $\alpha_L$, and $\alpha_G$ are weighting factors and
+$\delta$ is the Kronacker delta function (i.e., $\delta(i,j)$ is $1$
+if $i=j$ and $0$ otherwise).  In the current implementation,
+$\alpha_B=-100$, $\alpha_L=-10$, and $\alpha_G=50$.
+
+\section{Reducing the Branching Factor}
+
+\subsection{One Dependency at a Time}
+
+The algorithm laid out above is sufficient to solve many of the
+dependency problems that are encountered in practice.  However, some
+problems still cause the search to take an unacceptable amount of time
+to reach a solution.  The problems observed fall into two main
+categories:
+
+\begin{enumerate}
+\item Too many reverse dependencies.
+
+  In order to calculate the score of a successor of an installation
+  (and of course to analyze that solution later on) it is necessary to
+  generate the set of dependencies which are not satisfied by that
+  successor.  However, there are some one hundred thousand
+  dependencies in the Debian archive; so that it completes in a
+  reasonable amount of time, the current implementation uses the
+  obvious optimization of only testing those dependencies which either
+  were previously broken, which impinge on the package version being
+  removed, or which impinge on the package version being
+  installed.\footnote{Recall that a successor to $I$ will install
+    version $v$ of $p$, removing $I(p)$ in the process.}
+
+  Unfortunately, some packages have very many reverse dependencies.
+  For instance, if $I$ removes the system C library, over a thousand
+  dependencies will be unsatisfied -- and simply generating the
+  successors of this node will require time at least \emph{quadratic}
+  in the number of reverse dependencies of \pkg{libc}.  This can
+  impose a significant performance penalty on the process of successor
+  generation.
+
+\item Removing the bottom of a dependency chain.
+
+  When an important library such as GTK is removed, it is necessary to
+  propagate the removal ``up the dependency tree''.  However, the
+  search technique outlined above will search exponentially many
+  installations before settling on this solution.  Aside from the goal
+  node of ``keep the library on the system'', the first step of the
+  search will enqueue one node for each package depending on GTK; each
+  node will remove its corresponding package.  As these nodes are
+  processed, pairs of packages will be removed from the system; then
+  triples, and so on, until the full power set of all packages
+  depending (directly or indirectly) on GTK is generated.  Worse, at
+  each step, solutions that suggest installing GTK (and removing many
+  packages) will be generated.
+\end{enumerate}
+
+There is a simple solution to both of these problems.  Instead of
+generating successors for every dependency, it is sufficient to
+generate successors for a single, arbitrary dependency (as shown in
+Theorem~\ref{thm:succ-sufficient}).  In theory, this could lead to
+somewhat less optimal ordering of generated solutions, but this
+doesn't seem to be a major problem in practice and the decrease in the
+problem's branching factor is well worth it.
+
+\subsection{Exclude Supersets of Solutions}
+
+One simple way to trim the search tree is to drop any search node $I$
+that is a ``superset'' of a full solution $I_c$ -- meaning that $I_c$
+is a hybrid of $I$ and $I_0$.  This has the additional beneficial
+effect of preventing obviously redundant solutions from being offered
+to the user.
+
+a previously-displayed solution with some extra, redundant
+actions added to it.
+
+\subsection{Forbidden versions}
+
+If we have a choice between removing \pkg{p} and installing \pkg{q},
+and we choose to remove \pkg{p}, why should we ever install \pkg{q}?
+This question leads to yet another way of reducing the problem's
+branching factor.
+
+To each solution node $I$, attach a set $F$ of \emph{forbidden}
+versions; the successors of $I$ are restricted to those which do not
+install any version in $F$.  For all successors $I'$ of $I$, let $F'
+\subseteq F$; furthermore, if a successor $I'$ of $I$ is generated by
+removing the source version of a dependency, then all of the targets
+of that dependency are members of $I'_F$.  This new successor
+relationship is formally defined in Figure~\vref{fig:excludever}.
+
+\begin{figure}
+  \begin{gather*}
+    \inferrule{I \not \satisfies d \\ d = v -> S \\
+      I(v')=I_0(v') \\ \pkgof{v'}=\pkgof{v} \\ v' \notin F}
+    {(I,F) \nsol{I_0}{d} (I;v',F \cup S)} \\
+    \inferrule{I \not \satisfies d \\ d = v -> S \\ v' \in S \\
+      I(v')=I_0(v') \\ v' \notin F}
+    {(I,F) \nsol{I_0}{d} (I;v', F)}
+  \end{gather*}
+
+  \caption{Successor generation with forbidden versions}
+  \label{fig:excludever}
+\end{figure}
+
+This has the effect of forcing the algorithm to ``stick with'' a
+decision to forgo installing the targets of a dependency in favor of
+shifting the source.  Of course, it is important to verify that
+cutting off wide swathes of the search space in this manner does not
+impede our ability to generate solutions:
+
+\begin{theorem}
+  Let $I_c$ be any consistent installation (if one exists) and $I_0$
+  be any installation.  There exists an $I_c'$ such that $I_c'$ is a
+  hybrid of $I_0$ and $I_0 \nsolmany{I_0} I_C'$.
+\end{theorem}
+
+\begin{proof}
+  Let $F_0=\emptyset$.  I claim that there exists a sequence
+  $(I_1,F_1),\dots$ such that for all $k \geq 0$,
+
+  \begin{itemize}
+  \item For all $v \in F_k$, $I_c \not \installs v$.
+  \item $I_0 \nsolmany{I_0} I_k$
+  \item Either $k=0$, $I_{k-1}$ is consistent and $I_k=I_{k-1}$, or
+    $\idist{I_k}{I_c}<\idist{I_{k-1}}{I_c}$.
+  \end{itemize}
+
+  Proof is by induction on $k$.  Suppose that a sequence
+  $(I_1,F_1),\dots,(I_k,F_k)$ exists satisfying the above condition.
+  If $I_k$ is consistent, then let $I_{k+1}=I_k$ and $F_{k+1}=F_k$;
+  the inductive hypothesis is satisfied immediately.
+
+  Otherwise, consider any $d=v -> S \in \D$ such that $I_k \not
+  \satisfies d$ (since $I_k$ is inconsistent, at least one such $d$
+  exists).  If there is a $v' \in S$ such that $I_c \installs v'$,
+  then let $I_{k+1}=I_k;v'$ and $F_{k+1}=F_k$.  Clearly $I_c \not
+  \installs v''$ for all $v'' \in F_{k+1}$ and
+  $\idist{I_{k+1}}{I_c}<\idist{I_k}{I_c}$; since we additionally have
+  $(I_k,F_k) \nsol{I_0}{d} (I_{k+1},F_k)$, the inductive hypothesis
+  holds.
+
+  If instead $I_c \not \installs v'$ for all $v' \in S$, then since
+  $I_c$ is consistent, $I_c(\pkgof{v}) \neq v$.  Let
+  $I_{k+1}=I_k;I_c(\pkgof{v})$ and $F_{k+1}=F_k \cup S$. $I_c \not
+  \installs v''$ for all $v'' \in S$ by definition and clearly
+  $\idist{I_{k+1}}{I_c}<\idist{I_k}{I_c}$.  In addition, $I_k
+  \nsol{I_0}{d} I_{k+1}$ by Figure~\ref{fig:excludever}; therefore,
+  the inductive hypothesis holds.
+
+  Thus, the claim is established: such a sequence exists.  Following
+  the logic of Theorem~\ref{thm:succ-sufficient}, we can see that for
+  $n=\idist{I_0}{I_c}$, $I_n$ is a consistent installation.
+  Furthermore, from the construction above, $I_n$ is a hybrid of $I_0$
+  and $I_c$.  Thus, the theorem is established with $I_c'=I_n$.
+\end{proof}
+
+\subsection{Use Logical Necessity}
+
+In combination with the tracking of forbidden versions, it is also
+possible to detect \emph{forced installations} and \emph{essential
+  conflicts}.  A forced installation is one which is logically
+necessary given $I$ and $F$: for instance, if we have $d=v -> \{v'_1,
+v'_2\}$, $I$ has touched $v$ (i.e., $I(v) \neq I_0$), $v'_1 \in F$,
+and $v'_2 \notin I_F$, then the only permissible successor given $d$
+is $(I;v'_1)$.  An essential conflict is a dependency for which
+\emph{no} successors can be generated: for instance, if in the
+previous example we instead had $v'_2 \in F$, then $d$ would be an
+essential conflict.
+
+If any essential conflicts exist in an installation $I$, it is
+discarded immediately (rather than, for instance, generating
+successors for all the solvable dependencies).  If any forced
+installations exist, they are accumulated and a successor formed by
+adding these installations to $I$ is placed into the open queue.
+
+\section{Eliminating ``Stupidity''}
+
+\emph{Note: } the material in this section is somewhat speculative and
+is known to contain errors.
+
+\subsection{Overview}
+
+The technique described in the previous section will eliminate some
+obviously redundant solutions.  But can we do better?  In general, an
+obvious redundancy exists whenever we install $v_1$ to resolve $d_1$
+and $v_2$ to resolve $d_2$, where $v_1$ solves $d_2$ or $v_2$ solves
+$d_1$.  Aside from anything else, it is frustrating from a user's
+perspective to see a dependency resolver that produces ``obviously
+stupid'' answers.
+
+It turns out that there is, in fact, a polynomial-time algorithm which
+will eliminate all such pairs from a solution.  This algorithm
+represents a solution (or partial solution) as a \emph{resolution
+  sequence}:
+
+\begin{definition}
+  A resolution sequence for $I_0 \nsolmany{I_0} I_n$ is a sequence
+  $\act{v_1}{d_1},\dots,\act{v_n}{d_n}$ where for all $1 \leq k \leq
+  n$, $I_k=I_{k-1};v_k$ and $I_{k-1} \nsol{I_0}{d_k} I_k$.
+
+  A version-dependency pair $\act{v}{d}$ is called an \emph{action};
+  it indicates that the version $v$ was installed to satisfy the
+  dependency $d$.
+\end{definition}
+
+This is, of course, just a different way of looking at the problem: it
+focuses on the series of versions that will be installed, and
+eliminates the intermediate installations.  However, viewing the
+problem from this perspective immediately suggests a new way of
+approaching it.  The basic goal, as stated above, is to eliminate
+what I will henceforth refer to as \emph{stupid pairs}:
+
+\begin{definition}
+  A stupid pair is a pair of actions
+  $\left(\act{v_1}{d_1},\act{v_2}{d_2}\right)$ where $v_1$
+  solves\footnote{$v$ solves $d$ if $v$ appears on the right-hand side
+    of $d$, or if the left-hand side of $d$ is $v' \neq v$ where
+    $\pkgof{v} = \pkgof{v'}$.}  $d_2$ or $v_2$ solves $d_1$.
+\end{definition}
+
+\subsection{The Elimination Algorithm}
+
+Is there a way to manipulate the resolution sequence itself by
+interchanging and/or dropping elements from the sequence so as to
+eliminate all stupid pairs?  The answer is ``yes''!
+Algorithm~\vref{alg:eliminate-stupid} takes a starting installation
+$I_0$ and a resolution sequence $R$, and produces a new resolution
+sequence $R'$ such that $R' \subseteq R$.  To express the algorithms
+concisely, the following (ab)uses of notation are introduced:
+
+\begin{enumerate}
+\item If $I$ is an installation and $R$ is a resolution sequence,
+  $I;R$ indicates the application of $R$ to $I$: i.e., $I;R=I;\{v \st
+  \exists d . \act{v}{d} \in R\}$.
+
+\item If $I$ is an installation, then $Broken(I)$ is the set of broken
+  dependencies in $I$.
+
+\item If $R$ is a resolution sequence, I use $R$ in several places as
+  a set to indicate either the set of versions contained in $R$ or the
+  set of actions contained in $R$ (the usage will be clear from
+  context).
+
+\item ``Take any'' means that the program should arbitrarily choose a
+  single element of the specified set.
+
+\item On Line \ref{line:unpack-stupid-pair}, read the ``let'' as an
+  unpacking command: the sequence $R$ is divided into three
+  subsequences based on the first-occuring stupid pair.
+
+\item A set $S$ of versions is \emph{package-unique} if each package
+  is represented at most once in $S$: i.e., for all $v,v' \in S$, if
+  $\pkgof{v}=\pkgof{v'}$ then $v=v'$.
+\end{enumerate}
+
+\begin{algorithm}[p]
+\begin{algorithmic}[1]
+\Procedure{EliminateStupid}{$I_0$, $R$}
+  \Require{$R$ is a resolution sequence for $I_0$ and $Broken(I_0;R) = \emptyset$}
+  \If{$R$ contains no stupid pairs}
+    \State \textbf{return} $R$
+  \Else
+    \State Let $R_1',\act{v_i}{d_i},R_2',\act{v_j}{d_j},R_3' = R$
+           where $\left(\act{v_i}{d_i},\act{v_j}{d_j}\right)$ is
+           a stupid pair and where $(a_1,a_2)$ is not a stupid pair for
+           all $a_1 \in R_1'$ and $a_2 \in R$. \label{line:unpack-stupid-pair}
+
+    \State Let $I' = I_0;R_1';v_j;R_2';R_3'$
+    \If{$Broken(I') = \emptyset$}
+      \State Let $R' = R_1',\act{v_j}{d_i},\Call{ResolveFrom}{I_0;R_1';v_j,R_2' \cup R_3'}$
+      \State \textbf{return} \Call{EliminateStupid}{$I_0$, $R'$} \label{line:eliminate-stupid-recur-1}
+    \Else
+      \State Take any dependency $d_k$ such that $I' \not \satisfies d_k$ and $v_i \satisfies d_k$.
+      \State Let $R' = R_1',\act{v_i}{d_k},R_2',\act{v_j}{d_j},R_3'$.
+      \State \textbf{return} \Call{EliminateStupid}{$I_0$, $R'$} \label{line:eliminate-stupid-recur-2}
+    \EndIf
+  \EndIf
+\EndProcedure
+\end{algorithmic}
+\label{alg:eliminate-stupid}
+\caption{Algorithm to eliminate stupid pairs}
+\end{algorithm}
+
+\begin{algorithm}[p]
+\begin{algorithmic}[1]
+\Procedure{ResolveFrom}{$I$, $S$}
+  \Require{$Broken(I;S)=\emptyset$, $S$ is package-unique, and $v \notin I$ for all $v \in S$}
+  \If{$Broken(I)=\emptyset$}
+    \State \textbf{return} $()$
+  \Else
+    \State Take any $d \in Broken(I)$ \label{line:resolve-from-take-broken}
+    \State Take any $v \in S$ such that $v$ solves $d$ \label{line:resolve-from-take-solver}
+    \State \textbf{return} $\left(\act{v}{d}, \Call{ResolveFrom}{I;v, S \backslash v}\right)$ \label{line:resolve-from-recur}
+  \EndIf
+\EndProcedure
+\end{algorithmic}
+\caption{Algorithm to resolve all dependencies from $S$}
+\label{alg:resolve-from}
+\end{algorithm}
+
+Informally, \textsc{ResolveFrom} is a routine which takes an
+installation and a set from which to draw versions, and generates an
+arbitrary resolution sequence by resolving all broken dependencies
+using the supplied versions.  The \textsc{EliminateStupid} routine
+works by eliminating the first stupid pair in the resolution sequence.
+This pair must consist of $\left(\act{v_1}{d_1},\act{v_2}{d_2}\right)$
+where $v_2$ solves $d_1$; intuitively, the idea is that we could just
+as well have installed $v_2$ instead of $v_1$.  Unfortunately, it is
+possible that simply cancelling the installation of $v_1$ will break
+some packages that were never explicitly fixed.  In this case, we know
+that there are packages that are not fixed by anything in the sequence
+except $v_1$, so we can justify the installation of $v_1$ by reference
+to them.
+
+After deciding upon the content of an eventual solution,
+\textsc{EliminateStupid} invokes \textsc{ResolveFrom} to generate a
+``sensible'' ordering of the solution and to drop unneeded versions
+from the solution.
+
+\subsection{Correctness of \textsc{EliminateStupid}}
+
+\begin{lemma}[Correctness of \textsc{ResolveFrom}]
+  If $Broken(I;S)=\emptyset$, $S$ is package-unique, and $v \notin I$
+  for all $v \in S$, then \textsc{ResolveFrom}
+  (Algorithm~\vref{alg:resolve-from}) terminates and returns a
+  resolution sequence $R$ for $I \nsolmany I;R$ such that
+  $Broken(I;R)=\emptyset$ and each element of $R$ is $\act{v}{d}$ for
+  some $v \in S$.
+  \label{lem:resolve-from-correct}
+\end{lemma}
+
+\begin{proof}
+  Proof is by induction on $S$.
+
+  If $S=\emptyset$, then $I;S=S$ and hence $Broken(I)=\emptyset$.
+  Thus, the algorithm terminates immediately.
+
+  Suppose instead that $S \neq \emptyset$ and that the lemma holds for
+  all $S'$ such that $S' \subset S$.  If $Broken(I)=\emptyset$ then
+  the algorithm again terminates immediately; otherwise, at least one
+  broken dependency exists for
+  Line~\ref{line:resolve-from-take-broken} to assign to $d$.  Since
+  $Broken(I;S)=\emptyset$, there must exist a $v \in S$ such that $v
+  \satisfies d$; Line~\ref{line:resolve-from-take-solver} will take an
+  arbitrary such $v$.
+
+  Finally, note that on Line~\ref{line:resolve-from-recur},
+  \textsc{ResolveFrom} is applied to a set $S \backslash v$; since $v
+  \in S$, we have $S \backslash v \subset S$ (i.e., $S \backslash v$
+  is strictly smaller than $S$) and hence the inductive hypothesis
+  holds.  Therefore, the recursive invocation $\Call{ResolveFrom}{I;v,
+    S \backslash v}$ terminates and returns a resolution sequence $R$
+  for $I;v$ such that $Broken(I;v;R)=\emptyset$ and each element of
+  $R$ is $\act{v'}{d'}$ for some $v' \in S$.
+
+  Clearly, the sequence $R'=\act{v}{d},R$ is returned by
+  \textsc{ResolveFrom}.  I claim that this sequence satisfies the
+  lemma requirements.
+
+  \begin{itemize}
+  \item Clearly $I \nsol{I}{d} I;v$.  Let $v_0 = v$, $I_0 = I;v_0$,
+    and $\act{v_1}{d_1}, \dots, \act{v_n}{d_n} = R$.  Let
+    $I_1,\dots,I_n$ be the sequence of installations associated with
+    $R$: the sequence such that $I_{k-1}=I_k;v_k$ and $I_{k-1}
+    \nsol{I_0}{d_k} I_k$.
+
+    For $1 \leq k \leq n$, note that by the lemma statement, we have
+    $\pkgof{v_k} \neq \pkgof{v_0}$, so $I(\pkgof{v_k}) =
+    I_0(\pkgof{v_k})$.  By the inductive hypothesis, $I_0(\pkgof{v_k})
+    \neq v_k$ and hence $I(\pkgof{v_k}) \neq v_k$.  Finally, since
+    $I_{k-1} \nsol{I_0}{d_k} I_k$, we have $I_{k-1} \not \satisfies
+    d_k$.
+
+    Therefore, $I_{k-1} \nsol{I}{d_k} I_k$ for $1 \leq k \leq n$, and
+    hence $R'$ is a resolution sequence.
+
+  \item Each element of $R$ is $\act{v}{d}$ for some $v \in S$, and
+    each
+  \end{itemize}
+\end{proof}
+
+\begin{lemma}[Correctness of \textsc{EliminateStupid}]
+  If $R$ is a resolution sequence for $I_0$ and
+  $Broken(I_0;R)=\emptyset$, then $\Call{EliminateStupid}{I_0, R}$ is
+  a resolution sequence $R'$ for $I_0$ such that $Broken(I_0;R') =
+  \emptyset$ and $R'$ contains no stupid pairs.
+  \label{lem:eliminate-stupid-correct}
+\end{lemma}
+
+\begin{proof}
+  Proof is by induction on the pair $(l,n)$ where $l$ is the length of
+  $R$ and $n$ is the number of stupid pairs in $R$; these pairs are
+  ordered lexicographically, so, for instance, $(1,1) < (1,100) <
+  (2,10) < (5,20)$.
+
+  If $n = 0$, then the algorithm terminates immediately.  In this
+  case, $R$ is a resolution sequence from the lemma prerequisite, and
+  $R$ contains no stupid pairs by definition.  Thus, the lemma holds.
+  If $l < 2$, then clearly $n = 0$ and the above reasoning holds.
+
+  Suppose instead that $n > 0$ and $l \geq 2$; i.e., there is at least
+  one stupid pair in $R$; and suppose further that for all $(n',l') <
+  (n,l)$, the lemma holds.  As in the algorithm, suppose that
+  $R_1',\act{v_i}{d_i},R_2',\act{v_j}{d_j},R_3'=R$, where
+  $\left(\act{v_i}{d_i},\act{v_j}{d_j}\right)$ is a stupid pair and no
+  element of $R_1'$ is implicated in a stupid pair; i.e.,
+  $\left(\act{v_i}{d_i},\act{v_j}{d_j}\right)$ is the ``first'' stupid
+  pair in $R$.\footnote{The astute reader will note that
+    $\act{v_i}{d_i}$ may be implicated in several distinct stupid
+    pairs.  Assume for the time being that an arbitrary stupid pair
+    involving $\act{v_i}{d_i}$ is chosen.}
+
+  Let $I' = I_0;R_1';v_j;R_2';R_3'$.
+
+  If $I'$ is consistent -- i.e., $Broken(I')=\emptyset$, let $R' =
+  R_1',\act{v_j}{d_i},\Call{ResolveFrom}{I_0;R_1';v_j,R_2' \cup
+    R_3'}$. By Lemma~\ref{lem:resolve-from-correct},
+  $\Call{ResolveFrom}{I_0;R_1';v_j,R_2' \cup R_3'}$ is a resolution
+  sequence for $I_0;R_1';v_j$ such that $Broken(I_0;R')=\emptyset$.
+  In addition, since each element of
+  $\Call{ResolveFrom}{I_0;R_1';v_j,R_2' \cup R_3'}$ is a member of
+  $R_2' \cup R_3'$, the maximum length of $R'$ is
+  $\len{R_1'}+\len{\{v_j\}}+\len{R_2'}+\len{R_3'}=\len{R}-1$.  Thus,
+  by the inductive hypothesis, $\Call{EliminateStupid}{I_0,R'}$ is a
+  resolution sequence for $I_0$ containing no stupid pairs, and hence
+  so is $\Call{EliminateStupid}{I_0,R}$.
+
+  On the other hand, if $I'$ is not consistent, consider any
+  dependency $d_k$ such that $I' \not \satisfies d_k$.  Since
+  $I';v_i=I \satisfies d_k$, we must have $v_i \satisfies d_k$ and
+  hence $R'=R_1',\act{v_i}{d_k},R_2',\act{v_j}{d_j},R_3'$ is a
+  resolution sequence ($R'$ differs from $R$ only in that the
+  installation of $v_i$ is justified by reference to $d_k$ rather than
+  $d_i$); of course, since $I_0;R'=I_0;R$, $Broken(I_0;R')=\emptyset$.
+
+  I claim now that there are strictly fewer stupid pairs in $R'$ than
+  in $R$.  First, note that $\act{v_i}{d_k}$ cannot be implicated in a
+  stupid pair: if it were, that would imply the existence of some
+  $\act{v_x}{d_x} \in R'$ such that $v_x \neq v_i$ and $v_x \satisfies
+  d_k$ -- but then $\act{v_x}{d_x} \in R$ and so we would have $I'
+  \satisfies d_k$, contradicting the choice of $d_k$.  On the other
+  hand, as all other elements of $R'$ occur in $R$, the only stupid
+  pairs occuring among them also occur in $R$.  Thus, $R'$ contains
+  exactly one less stupid pair than $R$; since $\len{R'}=\len{R}$, we
+  can apply the lemma inductively to conclude that
+  $\Call{EliminateStupid}{I_0,R'}$ is a resolution sequence $R''$ such
+  that $Broken(I_0;R'')=\emptyset$ and $R''$ contains no stupid pairs.
+\end{proof}
+
+\subsection{Efficiency of \textsc{EliminateStupid}}
+
+Of course, \textsc{EliminateStupid} is a fairly complex algorithm, and
+it would be nice to know how much we're paying for it.  A full and
+careful analysis of the algorithm is beyond the scope of this paper,
+but this section gives a rough estimate of its worst case running
+time.  As hinted at below, though, this really is just an estimate:
+the efficiency of the algorithm depends heavily on the operations used
+to implement its high-level directives.
+
+In the worst case, every single element of the incoming list is
+implicated in a stupid pair and the last stupid pair decreases the
+list length by one and creates a list full of stupid pairs; thus, we
+would expect $O(\len{R}^2)$ recursions of \textsc{EliminateStupid}.
+Each call to \textsc{ResolveFrom} clearly takes $O(\len{S})$ time, so
+even if all operations mentioned in these routines are $O(1)$, the
+worst-case running time of \textsc{EliminateStupid} is about
+$O(\len{R}^3)$.  In fact, however, these operations are not $O(1)$.
+Each recursion of \textsc{ResolveFrom} invokes the following
+operations:
+
+\begin{itemize}
+\item $Broken(I)$ to test whether broken packages exist and to fetch
+  an arbitrary broken package.  This operation is $O(n)$ in the number
+  of package versions, or $O(\len{I})$.
+
+\item Finding a solution of $d$ in $S$.  A reasonable approach is to
+  iterate over the possible solutions of $d$, testing each to see if
+  it is in $S$.  If $S$ is represented by a hash table, the expected
+  efficiency of this step will be $O(\len{d})$; the current
+  implementation uses balanced trees, giving a worst-case efficiency
+  of $O(\len{d}\log \len{S})$ where $\len{d}$ is the number of possible
+  solutions $d$\footnote{This is not quite an accurate count of the
+    complexity of testing whether $d$ is satisfied, but it is
+    reasonably close to correct; in practice, $\len{d}$ is usually
+    very small.}.
+
+\item Some number of ``uninteresting'' constant-time operations.
+\end{itemize}
+
+Thus, the expected running time of $\Call{ResolveFrom}{I,S}$ is
+$O(\len{S}(\len{I}+\len{d})$ where $\len{d}$ represents the largest
+degree of any dependency.  Similarly, the following atomic operations
+are performed in \textsc{EliminateStupid}:
+
+\begin{itemize}
+\item Checking for stupid pairs.
+
+  This might appear to be an $O(n^2)$ operation.  Luckily, by using an
+  associative data structure (i.e., a hash table), the time complexity
+  of this step can be reduced to $O(n\len{d})$.  The procedure is to
+  create a structure mapping versions to sets of versions, then scan
+  through the input sequence.  For each entry $\act{v}{d}$, scan
+  through the list of versions that can ``solve'' $d$; for all such
+  $v'$ other than $v$, add $v$ to the set associated with $v'$.  When
+  this step is complete, each mapping $v'' \mapsto S$ describes a set
+  of stupid pairs $\{(v'',v''') \st v''' \in S\}$.
+
+  It is probably possible to accelerate this step further in the
+  recursive computation by re-using the computations from the previous
+  step.  I have not yet done this, as the current algorithm is simpler
+  and is fast enough in practice.
+
+\item Constructing $I'$ and $R'$, both of which require $O(\len{R})$
+  steps.
+
+\item Testing whether $I'$ has broken dependencies; as before, this
+  requires $O(\len{I'})=O(\len{I_0})$ time.
+
+\item Calls to \textsc{ResolveFrom}; as noted above, these require
+  about $O(\len{I_0}+\len{R})$ time.
+
+\item Recursive calls to \textsc{ElminateStupid}, requiring about
+  $O(\len{R}^2(\len{R}+\len{I_0}))$ time.
+\end{itemize}
+
+
+
+\section{Non-mandatory Dependencies}
+
+In addition to the standard Depends metadata, Debian also has a class
+of dependencies known as ``recommendations''.  In the words of section
+7.2 of Debian's technical policy:
+
+\begin{quote}
+  Recommends: This declares a strong, but not absolute dependency.
+
+  The Recommends field should list packages that would be found
+  together with [the recommending package] in all but unusual
+  installations.
+\end{quote}
+
+Package management frontends adopt a variety of strategies to deal
+with recommendations, ranging from completely ignoring them to
+treating them nearly as strictly as dependencies.  The current best
+practice seems to be the rule ``install recommendations when a package
+is first installed; ignore them otherwise''.
+
+In this section, I will propose one way in which the above theory and
+algorithm can be extended to accomodate these non-mandatory
+relationships.
+
+\subsection{``Hard'' and ``Soft''}
+
+The information content of a recommendation is equivalent to that of a
+dependency, and so it makes sense to represent a recommendation in our
+formal model as a special type of dependency.  I will divide
+dependencies into two classes: ``hard'' dependencies and ``soft''
+dependencies.  ``soft'' dependencies, of course, represent
+recommendations\footnote{Or, to be more precise, recommendations of
+  packages that are not presently installed, in accordance with the
+  abovementioned rule.}.
+
+Now, although ``soft'' dependencies need not be satisfied in an
+eventual solution, we would like the algorithm to at least \emph{try}
+to satisfy them, and in fact it should to make a reasonably
+significant effort to satisfy them.  In order to ensure that this is
+done, I suggest the following techniques:
+
+\begin{figure}
+  \begin{gather*}
+    \inferrule{d \notin C \\
+      I \not \satisfies d \\ d = v -> S \\
+      I(v)=I_0(v) \\ \pkgof{v'}=\pkgof{v} \\ v' \not \in F}
+    {(I,F,C) \nsol{I_0}{d} (I;v',F \cup S,C)} \\
+    \inferrule{d \notin C \\
+      I \not \satisfies d \\ d = v -> S \\ v' \in S \\
+      I(v')=I_0(v') \\ v' \not \in F}
+    {(I,F,C) \nsol{I_0}{d} (I;v', F,C)} \\
+    \inferrule{I \not \satisfies d \\ d \text{ is soft}}
+    {(I,F,C) \nsol{I_0}{d} (I,F,C \cup \{d\})}
+  \end{gather*}
+
+  \caption{Successor generation with soft dependencies}
+  \label{fig:softdep}
+\end{figure}
+
+\begin{itemize}
+\item Extend the state of search nodes with an additional set $C$,
+  representing the dependencies that have been ``closed'' by being
+  examined at least once.  As shown in Figure~\vref{fig:excludever},
+  extend successor generation to permit the algorithm to ``give up''
+  on any open soft dependency: in addition to generating successors
+  for the various way of solving that dependency, it will also
+  generate a successor in which no package states are changed, but the
+  dependency is closed anyway.
+\item Penalize broken soft dependencies, to reward solutions that
+  fulfill soft dependencies.
+\end{itemize}
+
+This has not yet been tested, but will likely require some rebalancing
+of the various weighting factors previously discussed in order to
+produce reasonable results.
+
+\section{Implementation}
+
+A prototype implementation of this resolver algorithm exists in the
+experimental branch of \pkg{aptitude}.  The implementation is composed
+of two pieces, which are assembled via C++ templates: a search
+algorithm for a generic dependency problem, and a runtime translation
+of APT dependencies to the generic form outlined above.  It does not
+implement ``soft'' dependencies, although their future inclusion is
+planned.
+
+The current implementation seems to perform reasonably well: in the
+cases that I have tested, solutions are generated quickly enough for
+interactive use.  However, the order in which solutions are offered is
+sometimes surprising: for instance, if the installation of a package
+causes problems, it is common for the first generated solution to be
+``cancel this installation''.  While, as noted above, there is no
+perfect solution even in principle and any static weighting is likely
+to occasionally produce odd results, I expect that some of these
+problems can be fixed through adjustments of the score function.
+
+\section{Future Work}
+
+As noted above, the score function needs to be adjusted and soft
+dependencies need to be supported.  In addition, some consideration of
+the following questions seems worthwhile to me:
+
+\begin{enumerate}
+\item Is it ever possible to ``divide and conquer'' a dependency
+  problem?
+
+  Rationale: as noted towards the beginning of this paper, informal
+  analyses of dependency problems often seem to adopt a ``divide and
+  conquer'' approach.  Moreover, such an approach would have several
+  important user interface benefits: for instance, it would avoid the
+  tendency of the algorithm to produce the Cartesian product of all
+  the different ways to solve each isolated group of dependency
+  problems.
+
+  I do not, however, see an obvious simple way of performing such a
+  division.
+
+\item Can and should ``overly similar'' solutions be detected and
+  dropped?
+
+  When a solution implicates a large number of packages, the current
+  algorithm tends to produce many solutions which differ only slightly
+  from one another.  From a user-interface perspective, it might be
+  desirable to drop some of these solutions.  What metric, if any,
+  should be used to perform this dropping?
+\end{enumerate}
+
+\end{document}

@@ -13,6 +13,23 @@ anna:$(ANNA)_$(ARCH).udeb
 $(ANNA): $(SPREZZ)/anna/debian/changelog
 	cp -r $(<D)/.. $@
 
+#.PHONY: aptitude
+#aptitude: $(APTITUDE)_$(ARCH).deb
+#$(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
+#	git clone git://git.debian.org/git/aptitude/aptitude.git $@
+#	rm -rfv $@/debian
+#	tar cjf $(APTITUDEORIG) $@ --exclude-vcs
+#	cp -rv $(<D) $@/
+
+.PHONY: aptitude
+aptitude:$(APTITUDE)_$(ARCH).deb
+$(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf aptitude_$(aptitude_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: apt-listchanges
 apt-listchanges:$(APTLISTCHANGES)_$(ARCH).deb
 $(APTLISTCHANGES): $(SPREZZ)/apt-listchanges/debian/changelog

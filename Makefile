@@ -365,14 +365,6 @@ $(APTDAEMON): $(SPREZZ)/aptdaemon/debian/changelog
 	ln -sf aptdaemon-$(aptdaemon_UPVER).tar.xz aptdaemon_$(aptdaemon_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
-.PHONY: aptitude
-aptitude: $(APTITUDE)_$(ARCH).deb
-$(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
-	git clone git://git.debian.org/git/aptitude/aptitude.git $@
-	rm -rfv $@/debian
-	tar cjf $(APTITUDEORIG) $@ --exclude-vcs
-	cp -rv $(<D) $@/
-
 .PHONY: Sick-Beard
 Sick-Beard: $(SICKBEARD)_$(ARCH).deb
 $(SICKBEARD): $(SPREZZ)/Sick-Beard/debian/changelog

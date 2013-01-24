@@ -1,0 +1,335 @@
+                       APTITUDE HACKERS GUIDE (for 0.2.0)
+
+  This intends to be a high-level overview of the internals of Aptitude,
+and useful as a jumping-off point for people looking to modify it.  It covers
+the overall structure and some specific stuff, and was inspired by the
+Freeciv Hackers Guide.  (I'm sure there are other documents like this out
+there, but that's the one I've read)  Previously, this covered each and every
+source file.  This is no longer the case; it doesn't `scale' ;-)  Instead, I
+just present a broad overview of the various subsystems.
+
+  Aptitude is written in C++, with extremely heavy use of some language
+features: in particular, templating and inheritence.  The 0.2.x series also
+is heavily based around the libsigc++ library and heavily uses callbacks and
+signal/slot style programming.
+
+  The source tree is divided into three parts: the "generic" routines: various
+utility routines and routines for interfacing with the apt libraries;
+the "vscreen" library, containing the UI widget library; and the toplevel
+directory, which contains aptitude itself.
+
+                                VSCREEN
+
+  The vscreen library is the core of aptitude's user interface.  It is
+a widget set based on libsigc++ using Curses.  It supports what is
+needed in aptitude; some things (like a multiline text entry widget or
+a dropdown menu) are not yet available because I haven't needed them
+yet.  However, within the feature set that it has, it should be fully
+functional.
+
+  The "testvscreen" program tests the minimal functionality of most of
+the widgets in the vscreen library.  It is also probably useful as a
+programming example, as a simple program utilizing the library.
+
+  vscreen/vscreen.h contains functions to manipulate the vscreen main
+loop and other global state.  They include:
+  vscreen_update() -- queues a request to repaint the screen.  (note
+   that vscreen takes a brute-force approach to redrawing and counts on
+   Curses to optimize things)
+     Multiple requests to paint the screen will be merged into a
+   single request.  Calling vscreen_update() is (should be) very
+   efficient; don't be afraid to do it if you aren't sure whether it's
+   necessary.
+  vscreen_tryupdate() -- handles any pending vscreen_update() requests
+  vscreen_mainloop() -- enters the main loop, in which the program
+   waits for and handles events.
+  vscreen_exitmain() -- exits the currently running main loop.  (note
+   that main loops are allowed to nest)
+  vscreen_poll()
+  vscreen_addtimeout() -- installs a new timeout which will be called
+   in no less than the given amount of time.  The timeout should be
+   provided as a libsigc++-style slot.
+
+  Other public routines exist as well; they should be described in vscreen.h.  
+
+
+  There are several low-level pieces of glue that aptitude uses.
+These are mostly inherited from previous versions of the program,
+although modifications have been made:
+
+  curses++.* contain a C++ class wrapper around Curses windows.
+Although this was initially merely a bunch of syntactic sugar, there
+are now very good reasons to use it: it turned out that the underlying
+Curses windows have to be destroyed in a "children before parents"
+fashion, or memory leaks occur.  Therefore, the wrapper class now
+refcounts each WINDOW * that it allocates.  This is done (supposedly)
+entirely transparently and with any luck you won't have to mess with
+that.
+
+  config/colors.* contian some routines to handle symbolic allocation
+of colors.  There are a few things that need to be fixed here:
+in particular, attributes like A_BOLD should be configured here as
+well.  The interface is straightforward.
+
+  config/keybindings.* contain routines to parse, store, compare, and
+print keybindings.  Again, the interface is straightforward.
+
+  vscreen/vscreen_widget.* contains the base class for all widgets in
+the vscreen widget system.  Note that it is a *relatively* heavy
+class; the expectation is that a fairly small (say, less than
+100-1000) number will be allocated.  Allocating one widget for each
+package in the package cache is a questionable idea.  (although who
+knows, it might work)
+
+  Widgets should generally not be explicitly deleted; instead, call
+their "destroy" method.  This will place the widget onto a queue to be
+deleted, generally by the main program loop.  This allows the widget
+to clean itself up gracefully, and also makes things like destroying a
+widget currently in use on the stack (relatively) safe.
+
+  Widgets have quite a bit of state.  Each widget has an "owner",
+which is the container into which the widget has been placed.  The
+cwindow assigned to the widget will be contained within the cwindow
+assigned to its owner; the location and size is determined by the
+"geom" member variable.  It stores an X location, a Y location, a
+width and a height, where X and Y are relative to the origin of the
+owner.
+  Widgets also can have a default background attribute; before
+entering a custom paint routine, the background and current colors
+will be set to this value, and the widget will be cleared (so it only
+contains blanks of that color)
+
+  The size_request() method specifies the desired minimum size of
+the widget (see README.layout).  Override it to calculate the correct
+value.
+  The focus_me() method should return true if the widget should
+receive keystrokes, and false otherwise.  Widgets which have multiple
+children, for instance, may use this to determine where to forward
+keystroke events.
+
+  To draw a widget in a non-standard way, override its paint()
+method.
+
+  To alter the behavior of a widget on keystrokes, there are two
+options.  You can override handle_char, or you can connect a "key
+signal" to the widget.
+  Overriding handle_char is pretty simple: just check whether the key
+is a key that you want to handle (see the way the stock widgets do it
+if you aren't sure).  If your widget handled the keystroke, return
+true, otherwise return false.  Be sure to call the superclass's
+handle_char() method if your class does not need the keystroke (for
+one thing, key signals may not work if you don't!)
+  Key signals are signals that are triggered when a keyboard
+event is sent.  They may be activated before or after the widget has
+finished processing keystrokes, and work pretty much like normal
+signals.  The intent behind key signals is to cut down on unneccessary
+subclassing by allowing the user of the widget to slightly modify its
+behavior.  Key signals are also, of course, more dynamic than
+inheritance (ie, you can add and delete them on the fly)  In general,
+you should override dispatch_char() when creating a new widgettype,
+and use key signals if they are fine by themselves.  See the usage of
+these two in the source for more guidance, and use your judgement.
+  The connect_key, connect_key_post, disconnect_key, and
+disconnect_key_post routines manage key signals.
+
+focussed() and unfocussed() are actually signals, but they should be
+  called when the widget gains or loses focus.  (for instance, some
+  widgets might use this to determine when to show or hide a "cursor")
+
+  The following signals are emitted by widgets:
+shown(), hidden() -- emitted when the widget is shown or hidden (it is
+  already visible or invisible at that point)
+
+destroyed() -- emitted when the widget is destroyed (it no longer has
+  a valid owner, but some signals may be connected)
+
+do_layout() -- sent when a widget's layout has been altered.  It is
+  not entirely clear to me why this is not a virtual method.
+  Presumably it made sense at the time, but it doesn't now.
+
+  The following stock vscreen widgets are available:
+vs_bin -- abstract class for a container holding a single widget
+
+vs_button -- a standard pushbutton
+
+vs_center -- a widget that centers its contents within itself; should
+            be replaced by a generic 'layout' widget
+
+vs_container -- abstract class for a widget that holds other widgets
+
+vs_editline -- a line-editing widget
+
+vs_file_pager -- displays the contents of a file.  Subclass of vs_pager.
+
+vs_frame -- a widget that draws a frame around its contents
+
+vs_label -- a widget that displays static (possibly multi-line) text
+
+vs_menubar -- a widget to generate a menubar
+
+vs_menu -- a single menu.  Currently very reliant on the menubar, and
+          not very graceful about small terminals.
+
+vs_minibuf_win -- a holdover from the old vscreen, which can display
+                   a message in a "header" line, various widgets in
+                   the "status" line, and a "main" widget in the
+                   middle.
+
+                   DEPRECATED.
+
+vs_pager -- displays long amounts of text with scrolling.
+
+vs_passthrough -- an abstract container with a notion of "the
+                 currently focusssed child".  Keyboard events are
+                 passed through to this child, as are some other
+                 things.  For instance, vs_table is one of these.
+
+vs_radiogroup -- controls a set of togglebuttons so that only a single
+                one can be selected at once.
+
+vs_scrollbar -- a vertical or horizontal scrollbar.
+
+vs_stacked -- displays several stacked (possibly overlapping)
+             widgets.
+
+vs_statuschoice -- displays a single-line question; eg: "Continue? [yn]".
+                  Useful in status lines.
+
+vs_table -- arranges several widgets in a "table".  Widgets can be
+           added and removed, and the table will dynamically update.
+           The algorithm could probably use some work; see
+           README.layout for a description of it.  (it was basically
+           lifted from GTK)
+
+vs_togglebutton -- a button that can either be on or off.  (eg, a
+                  checkbutton)
+
+  In addition, some common interface dialogs are available in vs_util.h:
+popup messages, yes/no choices, string inputs, and a popup file pager.
+
+  Generic utility code and useful APT routines are stored in generic/
+Important files in here include:
+
+ -> undo.* contains a generic undo system.
+
+ -> Getting the package changelogs from cgi.debian.org is done in
+  pkg_changelog.*  -- a pretty simple extension of the Acquire system.
+  Right now this is totally broken because the changelogs on debian.org
+  have been broken by package pools.
+
+ -> aptcache.* contains replacements for the APT pkgCacheFile and pkgDepCache
+classes.  The reason for this is that I wanted/needed to add extra persistent
+information for each class, and this seemed like the logical way to do it.
+
+  Previous versions of this file suggested that the aptitudeDepCache
+would eventually be used to handle persistent selection of a
+particular version.  With pins available, I think that that is no
+longer necessary (and in fact not especially desirable)
+
+    This file also handles the generation of undo information about
+apt actions.
+
+ -> matchers.* defines the generalized package matching system.  This is
+currently used to sort for a particular package and to limit the display.  It
+works by compiling a pattern (using an incredibly hairy and somewhat quirky
+parser which should probably be sanitized a little) into an internal tree of
+operators which can then be (relatively) efficiently applied to packages.
+
+ -> config_signal.* wraps the apt configuration class.  It allows
+slots to be connected to 'signals' which are generated when a
+configuration option changes.  Quite useful.  (IMO :) )
+
+  aptitude-specific code is stored in the top of the source tree (src/)
+
+  Important classes include:
+
+ -> apt_trees are a parent for all the various trees which display information
+about packages.  The following behaviors are handled here: handling undo
+information when the screen is quit, preventing undos from touching actions
+performed before the screen was entered, displaying APT errors in the status
+line, performing install runs, updating the package lists, and restoring the
+current display state after an install run or a package-list update occurs.
+
+ -> The most important interface element is the pkg_tree class.  This
+class displays a hierarchy of all the packages (sort of, see below)
+and allows you to mark them for installation or removal. pkg_trees
+work by creating hierarchies of pkg_subtrees and pkg_items, but are
+very flexible in how they create this hierarchy.  In fact, actually
+creating the hierarchy is the job of a 'grouping policy' -- a class
+that knows how to sort out packages into several groups and add them
+to a tree.  Grouping policies can be nested for greater
+configurability, as diagrammed (poorly :) ) below.  (this shows the
+flow of data through the system from the package cache to the final
+tree structure)
+
+PACKAGES ===> LIMIT ===> GROUP POLICY 1 ===> (GROUP POLICIES 2..N) ==> TREE
+
+  Packages come from the package cache (on the left) and are filtered through
+the tree's display limit, followed by any number of grouping policies.  Each
+grouping policy will take action on a package based on the rules for that
+policy: it may discard the package altogether, it may insert it into a tree, or
+it may pass it onto the next grouping policy.  These policies are produced by
+"grouping policy factories". Grouping policy factories are classes which, as
+the name suggests, have a method which produces a grouping policy when called.
+They are essentially closures hacked into C++.
+  Grouping policies should never be created directly.  The reason for this is
+that a grouping policy may create multiple subtrees, and each subtree will
+require a separate grouping policy (because each policy can potentially track
+state about stuff inserted into it, we can't just use a single policy for
+each link in the chain)  Policy factories are used as the exclusive interface
+for allocating policy objects; in fact, the policy classes themselves are
+generally not even included in the .h files.
+  Policies are named as pkg_grouppolicy_foo with corresponding factory
+pkg_grouppolicy_foo_factory.
+
+  One policy is particularly special: the end policy.  This terminates a policy
+chain; instead of passing its arguments on to another link, it inserts the
+item into the tree.  In the diagram above, GROUP POLICY N would be an end
+policy.
+  There are several other policies which act like the end policy, in that
+they terminate a policy chain: in particular, the dep policy and the
+ver policy.  These cause packages added to them to be directly inserted to
+the tree, but with subtrees tacked on (see pkg_item_with_subtree.h).  In
+particular, the dep policy adds a package's dependencies as subitems of the
+package itself, and the ver policy adds its available versions as subitems.
+There is no description policy (which would add the description as a subtree).
+It is left as an exercise to the reader. (hint. ;-) )
+
+  The bulk of the grouping policy stuff is in pkg_grouppolicy.*
+
+  The work of parsing group-policies is done by load_grouppolicy.
+
+ -> Information about the packages is displayed by several specialized screens:
+pkg_ver_screen, pkg_dep_screen, pkg_description_screen, and pkg_info_screen.
+
+ -> Downloading is done by download_list and download_bar.
+download_bar was written for changelogs, but can be used for other
+things.  Its major correctable deficiency is that it does not allow a
+download to be cancelled.
+
+  The code to pull all this together and actually download/install packages
+is in download.* .
+
+ -> Columnification.  This is split into two parts:
+  * Parsing, storing, and using of column configuration files.  This is mainly
+   in vscreen/config/column_definition.*, and used in pkg_columnizer.* .  Think
+   of the column_generator class and its descendents as closures and it will
+   (hopefully) be clearer.  If not, just think of it as a fancy function :)
+   Basically, column_parser_func tells what integer ID a particular column name
+   maps to, while column_generator maps from an ID (and some other information,
+   stored in an instance of the class) to a string value.  The ID is used to
+   avoid parsing too often.
+  * Generation of columns.  See vscreen/columnify.* .  The columnify function
+   returns a formatted string.
+
+  -> Sorting is handled by 'sort policies'.  These are similar to
+group policies, but in order to reduce typing they are generated by a
+macro function that adds the redundant cruft (the sort policies
+themselves are only created by factory routines, which would add some
+unnecessary typing for each class)
+
+     Note: there are way too many dynamic_casts and virtual methods in
+the sort system.  Bonus cookie points to anyone who manages to
+streamline it without making it any nastier than it is.
+
+ -- Daniel Burrows <Daniel_Burrows@brown.edu>

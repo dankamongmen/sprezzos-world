@@ -1,0 +1,134 @@
+#!/usr/bin/python
+#
+# Parse new-style logs (logs from the incremental resolver) and build
+# digraphs from them.
+
+import re
+
+examining_re = re.compile('Examining step ([0-9]*) \(([0-9]*) actions\):')
+generated_re = re.compile('Generated step ([0-9]*) \(([0-9]*) actions\) *:.*;T(\([^)]*\))S([0-9\\-]*)')
+generating_successor_re = re.compile('Generating a successor to step ([0-9]*) for the action (.*) with tier (\([^)]*\)) and outputting to step ([0-9]*)')
+forced_successor_re = re.compile('Following forced dependency resolution from step ([0-9]*) to step ([0-9]*)')
+found_solution_re = re.compile('Found solution at step ([0-9]*):')
+returned_re = re.compile('--- Returning the future solution .* from step ([0-9]*)')
+install_choice_split_at_dep_re = re.compile(r'(Install[^(]*\([^<]*<(source: *)?)[^{]*{[^}]*}[^>]*>([^)]*\))')
+
+import sys
+import optparse
+
+parser = optparse.OptionParser(usage = '%prog [OPTIONS] [INPUT ...]',
+                               epilog='Process one or more input files and write them to separate graphs in the output file; defaults to reading from standard input and writing to standard output.')
+parser.add_option('-o', '--output', metavar='FILE',
+                  default='-',
+                  help='Write output to FILE instead of to standard output ("-" for standard output).')
+
+
+
+(opts, args) = parser.parse_args()
+
+if opts.output == '-':
+    outfile = sys.stdout
+else:
+    outfile = open(opts.output, 'w')
+
+
+if len(args) == 0:
+    args = ['-']
+
+def collapse_choice(choice):
+    return install_choice_split_at_dep_re.sub('\\1..>\\3', choice)
+
+def flush_pending_edges(pending, pending_forced, outfile):
+    for (start, finish, choice) in pending:
+        attrs = { 'step1num' : start, 'step2num' : finish, 'choice' : collapse_choice(choice) }
+        if pending_forced.get((start, finish), False):
+            outfile.write('  "step%(step1num)s" -> "step%(step2num)s" [label="%(choice)s",color="black:black"];\n'
+                          % attrs)
+        else:
+            outfile.write('  "step%(step1num)s" -> "step%(step2num)s" [label="%(choice)s"];\n'
+                          % attrs)
+
+try:
+    for infilename in args:
+        if infilename == '-':
+            infile = sys.stdin
+        else:
+            infile = file(infilename)
+
+        outfile.write('digraph {\n')
+
+        try:
+            # Lame-o hardcoded render of the root.
+            outfile.write('  "step0" [shape=box, label="Root (0 actions)"];\n')
+
+            pending_edges = []
+            pending_forced = {}
+            last_examined = None
+            for line in infile:
+                examining_match = examining_re.search(line)
+                if examining_match:
+                    flush_pending_edges(pending_edges, pending_forced, outfile)
+                    pending_edges = []
+                    pending_forced = {}
+
+                    stepnum = examining_match.group(1)
+                    if last_examined is not None:
+                        outfile.write('  "step%(prevstepnum)s" -> "step%(stepnum)s" [style=dotted, color=blue, constraint=false];\n'
+                                      % { "stepnum" : stepnum,
+                                          "prevstepnum" : last_examined })
+
+                    last_examined = stepnum
+
+                generated_match = generated_re.search(line)
+                if generated_match:
+                    stepnum = generated_match.group(1)
+                    actionnum = generated_match.group(2)
+                    tier = generated_match.group(3)
+                    score = generated_match.group(4)
+
+                    outfile.write('  "step%(stepnum)s" [ shape=box, label="Step %(stepnum)s (%(actionnum)s actions)\\nScore: %(score)s; Tier: %(tier)s" ];\n'
+                                  % { 'stepnum' : stepnum,
+                                      'actionnum' : actionnum,
+                                      'score' : score,
+                                      'tier' : tier })
+
+                generating_successor_match = generating_successor_re.search(line)
+                if generating_successor_match:
+                    parent = int(generating_successor_match.group(1))
+                    child = int(generating_successor_match.group(4))
+                    choice = generating_successor_match.group(2)
+                    tier = generating_successor_match.group(3)
+                    pending_edges.append((parent, child, choice))
+
+                forced_successor_match = forced_successor_re.search(line)
+                if forced_successor_match:
+                    pending_forced[(int(forced_successor_match.group(1)),
+                                    int(forced_successor_match.group(2)))] = True
+
+                found_solution_match = found_solution_re.search(line)
+                if found_solution_match:
+                    outfile.write('  "step%(stepnum)s" [ style=filled, fillColor=lightgrey ];\n'
+                                  % { 'stepnum' : found_solution_match.group(1) })
+
+                returned_match = returned_re.search(line)
+                if returned_match:
+                    stepnum = returned_match.group(1)
+                    outfile.write('  "step%s" [ peripheries=2 ];\n' % stepnum)
+                    # Hack: draw a green line showing which step this
+                    # was returned at.  Note that these always go *up*
+                    # the tree, so a backwards arrow is used to avoid
+                    # cycles.
+                    if last_examined is not None:
+                        outfile.write('  "step%(stepnum)s" -> "step%(prevstepnum)s" [style=dashed, color=green, dir=back, constraint=false];\n'
+                                      % { "stepnum" : stepnum,
+                                          "prevstepnum" : last_examined })
+
+            flush_pending_edges(pending_edges, pending_forced, outfile)
+            pending_edges = []
+            pending_forced = {}
+        finally:
+            infile.close()
+
+        outfile.write('}\n')
+finally:
+    outfile.close()

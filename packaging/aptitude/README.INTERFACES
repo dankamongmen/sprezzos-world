@@ -1,0 +1,246 @@
+0) Summary
+
+  New code in aptitude should be written, wherever practical, with
+fully abstract interfaces in .h files and hidden implementations in
+.cc files.
+
+1) Details
+
+  A standard abstract interface in aptitude looks like this:
+
+class foo
+{
+public:
+  foo();
+  virtual ~foo();
+
+  virtual void method1(args...) = 0;
+  virtual void method2(args...) = 0;
+  // More methods ...
+
+  // Static constructor?  (see below)
+};
+
+  Note that both foo() and ~foo() are implemented in the .cc file.
+foo() should be public so that any module can implement the foo
+interface; this allows alternate implementations to be substituted
+during testing.
+
+  Interfaces should contain only virtual methods, to aid multiple
+inheritance, and they should generally derive only from other pure
+virtual classes.
+
+  It might be tempting to derive from sigc::trackable, so signals can
+be connected directly to interface methods.  However, it is generally
+better to either have the object connect itself (so the implementation
+inherits trackable directly), or to connect the signal to a concrete
+object that holds a strong reference to the interface.  If you do
+derive from trackable, please use virtual inheritance to avoid
+unnecesary extra copies of "trackable" if an object implements several
+interfaces.
+
+1.1) Constructors
+
+  An abstract interface obviously can't be constructed.
+Implementation classes should be hidden in .cc files and constructed
+via either static methods on the interface, or free functions.  Which
+one is used depends on the relationship of the interface to the
+implementation, as described below.
+
+1.1.1) Single-implementation interfaces
+
+  Some interfaces in aptitude are only meant to have a single
+implementation (except possibly for an implementation used just for
+testing).  These interfaces will expose their own creation via a
+::create() static member.  If there are several overloads of the
+object's constructor, you should use different names for each static
+creation routine: create_empty(), create_full(), etc.
+
+  The create() routine will construct an instance of a class that is
+only declared in the corresponding .cc file.
+
+  For instance:
+
+  // In foo.h:
+
+  class foo
+  {
+    // ... as above ...
+
+    static boost::shared_ptr<foo> create();
+  };
+
+  // In foo.cc:
+
+  class foo_impl : public foo
+  {
+  public:
+    // Declare implementations of private methods in foo:
+    void method1(args...);
+    // ...
+  };
+
+  void foo_impl::method1(args...) { /* ... */ }
+
+  boost::shared_ptr<foo> create()
+  {
+    return make_shared<foo>();
+  }
+
+1.1.2) Multi-implementation interfaces
+
+  Interfaces which are meant to have several implementations are
+defined in their own .h files, but without any constructor methods.
+Instead, they are constructed via free functions.  For instance:
+
+  // In foo.h:
+
+  class foo
+  {
+    // ... as above ...
+  };
+
+  // In bar.h:
+
+  boost::shared_ptr<foo> create_bar();
+
+  // In bar.cc:
+
+  class bar : public foo
+  {
+    // Declare implementations of methods in foo.
+  };
+
+  // Define implementations of methods in foo.
+
+  boost::shared_ptr<foo> create_bar()
+  {
+    return make_shared<bar>();
+  }
+
+1.2) Signals and slots
+
+  Instead of directly exposing signal members, signals should be
+exposed via appropriately-named routines.  This provides better
+encapsulation (directly exposing sigc signals allows external code to
+invoke them) and makes it easier to test code that uses the
+interfaces.
+
+  class foo
+  {
+    /** \brief Register a callback to be invoked when the hidden
+     *  signal is invoked.
+     */
+    virtual sigc::connection connect_hidden(const sigc::slot<void> &slot) = 0;
+  };
+
+  Code in the src/qt tree can use the corresponding Qt idioms instead.
+
+1.3) Mocks
+
+  By convention, mock implementations of interfaces should be placed
+in a subdirectory mocks/ under the directory containing the .h of the
+interface.  The mock class has the same name as the interface, but
+exists in a "mocks" namespace.
+
+  // In foo.h:
+
+  namespace aptitude
+  {
+    class foo
+    {
+      // Declarations of interface methods on foo.
+    };
+  }
+
+  // In mocks/foo.h:
+
+  namespace aptitude
+  {
+    namespace mocks
+    {
+      class foo : public aptitude::foo
+      {
+        // Mock out the methods of foo.
+      };
+    }
+  }
+
+1.5) Global variables vs singleton classes vs static methods
+
+  Some functionality is truly global, and could be exposed via global
+variables of class type, singleton classes with a hidden instance
+variable, or static methods on a class.
+
+  Between these three approaches, singleton classes are preferred.
+Using a singleton class behind an interface means that the
+functionality can be swapped out, in test code if nowhere else.  To
+support this, it should be possible to pass in the interface as a
+constructor parameter (although a convenience constructor that uses
+the most common implementation of that interface is a good idea).
+
+  This is important because these modules represent access to system
+functionality that might be awkward to use in test code.  Existing
+aptitude code violates this principle, with the result that it is
+difficult to verify modules that use, for instance, the global
+download cache or file queue.
+
+1.6) Dependencies: constructor parameters vs created.
+
+  If an object accesses another object through an interface, it can
+either take it as a constructor parameter or create it itself.  Where
+practical, it is preferred to pass it as a constructor parameter, to
+make it possible to swap in different implementations of the
+interface.  However, it might be a good idea to provide a convenience
+constructor that instantiates the most common implementations of the
+interfaces that the class uses.
+
+2) Motivation
+
+  Obviously, it is not necessary to use this many virtual interfaces.
+There are a number of reasons that this approach is preferred:
+
+2.1) Increasing testability
+
+     Unit tests are good.  They let you verify your code up-front, and
+     they let you catch stealth changes to behavior early, before they
+     turn into bug reports.  It's also difficult to write good unit
+     tests for complex pieces of code with many dependencies; you end
+     up testing the dependencies instead of the code you care about.
+
+     Breaking code into logically separated modules and dropping
+     abstraction layers between them makes it possible to separate
+     modules from the other code that they interact with.  It also
+     makes it easy to test corner cases, particularly error
+     conditions, without having to generate synthetic system states
+     (for instance, what happens if the disk is full?), and it
+     provides a way of testing interactive code without requiring user
+     interaction (real or simulated).
+
+2.2) Clear statements of internal interfaces
+
+     In a header file full of class definitions, with instance
+     variables, private methods, private member classes, and so on, it
+     can be tough to spot the actual interface methods.  The coding
+     style described above places the public interface and (almost)
+     nothing else into the header file of a class.
+
+     I believe that this also leads to simpler interfaces, as it's
+     harder to hide poorly designed interface methods when they aren't
+     mixed with implementation concerns.
+
+2.3) Fewer inter-header dependencies
+
+     Removing implementations from header files means that you don't
+     need to include the headers that are used by the implementation
+     from the header file.  This can speed up compile times of client
+     code, in some cases significantly (for instance, when the
+     implementation requires some templates to be instantiated).
+     Furthermore, it means that modules using the interface don't have
+     to be recompiled just because the implementation changed, which
+     can speed up compiles significantly (old aptitude code was very
+     incestuous this way).
+
+     In extreme cases, this can break circular dependencies between
+     headers, although those tend to be signs that something e,se is
+     wrong anyway.

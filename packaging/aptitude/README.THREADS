@@ -1,0 +1,177 @@
+  Summary:
+
+    1. Don't use threads.
+    2. If you still want to use threads, only communicate with the UI
+       thread by injecting events into its main loop.
+    3. Handle slots you receive from the main thread via safe_slot.
+    4. Watch out for what happens when the cache is closed underneath
+       you; use the appropriate signals to avoid disaster.
+    5. Use job_background_queue to implement your background thread if
+       at all possible.
+
+  The basic threading philosophy followed in aptitude can be
+summarized thus: "if you aren't sure it's safe, do it in the main
+thread; if it's going to take a long time, run it in the background
+and only communicate with the main thread via event injection".
+aptitude does *not* perform any concurrent computation in the normal
+sense; it uses threads only to keep the UI responsive while a
+background computation or I/O operation is going on.
+
+  The general pattern is this:
+
++-- UI thread -------+-------------------------+--- handle event ---
+                      \                       / post_event
++---- background job ------------------------+----------------------
+
+  The UI thread is assumed to be running an event-handling loop where
+it waits for a new event to appear; when an event appears, it invokes
+a callback contained in the event.  Even the command-line UI can do
+this, although when it needs to interact with a background thread, it
+usually just uses a "dummy" main loop.
+
+  Note that the background thread continues running.  In general,
+background threads have their own input queue (containing "work to be
+done") and are automatically started and stopped as work appears or
+disappears.  The class job_queue_thread provides this behavior and
+should be used for new code if possible.  This architecture should
+eventually evolve into something like Java's system of thread pools
+and executors, but it's not there yet.
+
+  Background threads are given a safe mechanism for passing slot
+objects to the main thread, in the form of a callback function.
+
+void post_thunk(const sigc::slot<void> &);
+
+  You can assume that the slot object will be wrapped in a safe_slot.
+It's probably not necesary, but I've had enough bad experiences with
+slots and threads (see below) that I prefer handling them at arm's
+length.
+
+  When the main thread has time, the slot will be invoked, then
+destroyed.  Normally, the slot will in turn invoke some callback slot
+provided by the main thread.
+
+  Using this idiom allows the main thread code to be insulated from
+the details of the threading model.  As far as it's concerned, it
+invokes a frontend routine, passing a callback, and some time later
+receives an event indicating that the background process completed.
+
+  *** THIS IS FAR SUPERIOR TO THE THREADING MODELS APTITUDE WAS
+PREVIOUSLY USING AND SHOULD BE USED FOR ALL NEW CODE UNLESS YOU HAVE A
+VERY, VERY, VERY GOOD REASON ***.  You can probably find some vestiges
+of the old threading model in various places (especially the
+resolver).  Don't imitate them.
+
+
+
+  Even with this mechanism, you have to watch out for a few gotchas.
+A particularly nasty one involves object lifetimes.  If you want to
+invoke a method on an object that was created in a background thread,
+but you want to invoke it in the main thread, it's tempting to do
+this:
+
+    post_thunk(sigc::mem_fun(*obj, &obj_type::method));
+
+  The problem is that unless obj is a bare pointer and obj_type::method
+ends with "delete this", one of two things will happen:
+
+   1) No-one is managing obj's lifetime, and it will leak.
+
+   2) The background thread holds strong references to obj, and the
+      thunk might try to invoke a method on a destroyed obj (or,
+      worse, encounter sigc++ type-safety issues when the implicit
+      weak reference is being invalidated).
+
+  The safest way to pass objects between threads in this way is to
+manage the object's lifetime with shared_ptr, and use a *keepalive
+slot*:
+
+    post_thunk(keepalive(sigc::mem_fun(*obj, &obj_type::method), obj));
+
+  This will take a temporary shared reference to obj, ensuring that it
+is not deleted until the thunk fires.  Note that this idiom cannot
+create cycles, since the only new reference to obj is stored in the
+posted thunk, which will eventually be destroyed by the main loop.
+
+  An alternative is to use bare pointers and manage the object
+lifetime by hand.  This is error-prone and I recommend against it.
+
+
+
+  Very little global or shared state should be accessed by background
+threads.  The one large exception is the currently loaded apt cache;
+any background thread that needs to perform computations on packages
+will obviously need access to the cache (even if it was not a global
+variable, it would still be widely shared).
+
+  The apt module provides sigc signals that are invoked in the main
+thread prior to destroying the cache object and after a new one is
+created.  If you create a background thread that accesses the cache,
+you should hook into these signals, stopping your thread on the first
+one and resuming it on the second one.  The job_queue_thread class
+provides methods that you can hook into to achieve this effect.
+
+
+
+  The actual threading constructs used are the pthread wrappers in
+cwidget/generic/threads.h (and also cwidget/generic/event_queue.h).
+
+
+WARNINGS ABOUT THINGS THAT ARE DANGEROUS:
+
+  Things that you might thank are threadsafe but aren't include:
+
+  * sigc++ objects.  Not only do you have to watch out for manual
+    additions and deletions to connection lists during invocation, you
+    also have to watch out for automatic invalidation of slots at any
+    time.  In particular, COPYING SIGC++ SLOTS IS NOT THREADSAFE.  If
+    you write a background thread that accepts a slot from the main
+    thread (for instance, as a callback), you should wrap that slot in
+    a safe_slot to ensure that it is only copied in the main thread.
+    Read safe_slot's header for more details.
+
+  * Smart pointers other than boost::shared_ptr.  Most smart pointers
+    that aptitude uses are NOT threadsafe.  This means that *EVEN
+    READ-ONLY ACCESS* from another thread will cause horrible ghastly
+    problems that you don't even want to think about.  At the moment
+    it's almost never necessary to pass these between threads, so it's
+    not a big deal; the exception is the problem resolver's solution
+    objects (and the shared trees contained inside them), which are
+    dealt with by doing a deep copy of the object. (see
+    resolver_manager::do_get_solution)
+
+    The reason this is the case is basically that the pthread
+    abstraction doesn't give you a fast lock for low-contention
+    situations -- adding locking around the reference counts of set
+    tree nodes made the overall resolver take 50% longer to run in
+    single-threaded mode!  I'm not eager to add nonportable threading
+    constructs, so I decided to see whether it was possible to just be
+    very careful about handling reference-counted objects.
+
+Some existing background threads:
+
+  * The cwidget library creates threads to handle keyboard input,
+    certain asynchronous signals, and timed events.  You generally
+    don't need to worry about these.
+
+  * Downloads are performed by a background thread.  This predates
+    job_queue_thread and doesn't use it.  Only the actual download is
+    handled in the background thread -- the setup of the download and
+    any actions taken once it completes are handled by the main
+    thread.  The gatekeeper for downloads is in download_thread.cc; it
+    provides the basic thread harness, as well as a convenience class
+    that forwards the various download messages to a foreground
+    progress meter.  (these are basically inter-thread RPC calls, and
+    they block the download thread until the progress meter's method
+    call returns a value)
+
+  * The problem resolver runs in a background thread.  This thread
+    always exists, even when there is no resolver (in which case it
+    will just sleep); the foreground thread can post jobs to it, and
+    will also stop the resolver whenever its state needs to be
+    modified (for instance, if the rejected set is changed).  The
+    interface for this is in src/generic/resolver_manager.cc.
+
+  * From the GTK+ interface, changelog parsing and checking for
+    changelogs in the download cache both happen in a background
+    thread, using job_queue_thread.
