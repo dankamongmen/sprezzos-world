@@ -104,6 +104,15 @@ $(HASKELLDEVSCRIPTS): $(SPREZZ)/haskell-devscripts/debian/changelog
 	tar cJvf haskell-devscripts_$(haskell-devscripts_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: hostname
+hostname:$(HOSTNAME)_$(ARCH).deb
+$(HOSTNAME): $(SPREZZ)/hostname/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf hostname_$(hostname_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: initramfs-tools
 initramfs-tools:$(INITRAMFSTOOLS)_$(ARCH).deb
 $(INITRAMFSTOOLS): $(SPREZZ)/initramfs-tools/debian/changelog
