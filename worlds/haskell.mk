@@ -118,6 +118,14 @@ $(HASKELLCONDUIT): $(SPREZZ)/haskell-conduit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf conduit-$(haskell-conduit_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-cookie
+haskell-cookie:$(HASKELLCOOKIE)_$(ARCH).deb
+$(HASKELLCOOKIE): $(SPREZZ)/haskell-cookie/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cookie-$(haskell-cookie_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-crypto
 haskell-crypto:$(HASKELLCRYPTO)_$(ARCH).deb
 $(HASKELLCRYPTO): $(SPREZZ)/haskell-crypto/debian/changelog
@@ -157,6 +165,30 @@ $(HASKELLCRYPTOPUBKEYTYPES): $(SPREZZ)/haskell-crypto-pubkey-types/debian/change
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf crypto-pubkey-types-$(haskell-crypto-pubkey-types_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-data-default
+haskell-data-default:$(HASKELLDATADEFAULT)_$(ARCH).deb
+$(HASKELLDATADEFAULT): $(SPREZZ)/haskell-data-default/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf data-default-$(haskell-data-default_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-dataenc
+haskell-dataenc:$(HASKELLDATAENC)_$(ARCH).deb
+$(HASKELLDATAENC): $(SPREZZ)/haskell-dataenc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dataenc-$(haskell-dataenc_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-dlist
+haskell-dlist:$(HASKELLDLIST)_$(ARCH).deb
+$(HASKELLDLIST): $(SPREZZ)/haskell-dlist/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dlist-$(haskell-dlist_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: haskell-edit-distance
 haskell-edit-distance:$(HASKELLEDITDISTANCE)_$(ARCH).deb
