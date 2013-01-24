@@ -158,6 +158,14 @@ $(HASKELLCRYPTO): $(SPREZZ)/haskell-crypto/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Crypto-$(haskell-crypto_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-cpu
+haskell-cpu:$(HASKELLCPU)_$(ARCH).deb
+$(HASKELLCPU): $(SPREZZ)/haskell-cpu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cpu-$(haskell-cpu_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-cryptocipher
 haskell-cryptocipher:$(HASKELLCRYPTOCIPHER)_$(ARCH).deb
 $(HASKELLCRYPTOCIPHER): $(SPREZZ)/haskell-cryptocipher/debian/changelog
@@ -533,6 +541,22 @@ $(HASKELLSILENTLY): $(SPREZZ)/haskell-silently/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf silently-$(haskell-silently_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-skein
+haskell-skein:$(HASKELLSKEIN)_$(ARCH).deb
+$(HASKELLSKEIN): $(SPREZZ)/haskell-skein/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf skein-$(haskell-skein_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-stm
+haskell-stm:$(HASKELLSTM)_$(ARCH).deb
+$(HASKELLSTM): $(SPREZZ)/haskell-stm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf stm-$(haskell-stm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-syb
 haskell-syb:$(HASKELLSYB)_$(ARCH).deb
