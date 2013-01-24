@@ -41,7 +41,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -j8 -k$(DEBKEY)
+	cd $< && debuild -k$(DEBKEY)
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -6101,7 +6101,7 @@ $(REISERFSPROGS): $(SPREZZ)/reiserfsprogs/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xzvf reiserfsprogs-$(reiserfsprogs_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf reiserfsprogs-$(reiserfsprogs_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: remotecontrol
 remotecontrol:$(REMOTECONTROL)_$(ARCH).deb
