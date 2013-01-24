@@ -3405,6 +3405,14 @@ $(LIBPAMSSH): $(SPREZZ)/libpam-ssh/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pam_ssh-$(libpam-ssh_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libpng
+libpng:$(LIBPNG)_$(ARCH).deb
+$(LIBPNG): $(SPREZZ)/libpng/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libpng-$(libpng_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libpst
 libpst:$(LIBPST)_$(ARCH).deb
 $(LIBPST): $(SPREZZ)/libpst/debian/changelog
@@ -7429,20 +7437,6 @@ libjpeg-turbo:$(LIBJPEG8TURBO)_$(ARCH).deb
 $(LIBJPEG8TURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.tar.gz
 	mkdir $@
 	tar xzvf libjpeg-turbo-1.2.1.tar.gz $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) $(LIBPNGUP).tar.bz2
-$(LIBPNGUP).tar.bz2:
-	wget -nc -O$@ ftp://ftp.simplesystems.org/pub/libpng/png/src/$(LIBPNGUP).tar.bz2
-
-$(LIBPNGORIG): $(LIBPNGUP).tar.bz2
-	ln -sf $< $@
-
-.PHONY: libpng
-libpng:$(LIBPNG)_$(ARCH).deb
-$(LIBPNG): $(SPREZZ)/libpng/debian/changelog $(LIBPNGORIG)
-	mkdir $@
-	tar xjvf $(LIBPNGORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
