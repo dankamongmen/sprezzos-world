@@ -54,6 +54,14 @@ $(HASKELLATTOPARSEC): $(SPREZZ)/haskell-attoparsec/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf attoparsec-$(haskell-attoparsec_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-attoparsec-conduit
+haskell-attoparsec-conduit:$(HASKELLATTOPARSECCONDUIT)_$(ARCH).deb
+$(HASKELLATTOPARSECCONDUIT): $(SPREZZ)/haskell-attoparsec-conduit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf attoparsec-conduit-$(haskell-attoparsec-conduit_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-attoparsec-enumerator
 haskell-attoparsec-enumerator:$(HASKELLATTOPARSECENUMERATOR)_$(ARCH).deb
 $(HASKELLATTOPARSECENUMERATOR): $(SPREZZ)/haskell-attoparsec-enumerator/debian/changelog

@@ -1,0 +1,136 @@
+#!/usr/bin/make -f
+
+# Modified from /usr/share/doc/debhelper/examples/rules.multi2,
+# incorporating various Hugs bits by
+#	Antti-Juhani Kaijanaho <ajk@debian.org>
+#	William Irwin <wli@debian.org>
+#	Isaac Jones <ijones@syntaxpolice.org>
+
+# Sample debian/rules that uses debhelper.
+# This file is public domain software, originally written by Joey Hess.
+#
+# This version is for a multibinary package. It also allows you to build any
+# of the binary packages independantly, via binary-<package> targets.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+CONFIG_DIRS := . packages/network/ packages/Cabal/tests/HSQL/ \
+	packages/ALUT/ packages/GLUT/ packages/OpenAL/ \
+	packages/OpenGL/ src/unix/ 
+
+CONFIG_OPTS := --prefix=/usr
+
+# These are used for cross-compiling and for saving the configure
+# script from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+# Autoconf 2.52 and higher goes into crosscompiling mode when --host
+# is specified, so only pass --host when it is necessary.
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  CONFIG_OPTS += --build=$(DEB_HOST_GNU_TYPE)
+else
+  CONFIG_OPTS += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+ifeq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  CONFIG_OPTS += --enable-debug
+endif
+
+build_stamp	= debian/build.stamp
+install_stamp	= debian/install.stamp
+
+# A file that should be present in a Hugs source tree
+src_file	= src/hugs.c
+
+build: $(build_stamp)
+$(build_stamp):
+	dh_testdir $(src_file)
+	# get updated config.sub and config.guess
+	for d in $(CONFIG_DIRS) ; do \
+	    cp -f /usr/share/misc/config.sub /usr/share/misc/config.guess $(CURDIR)/$$d ;\
+	done
+	# touch so that patched configure does not trigger autoreconf
+	touch configure.ac aclocal.m4 && touch configure
+	CFLAGS='-Wall -fPIC' $(MAKE) EXTRA_CONFIGURE_OPTS="$(CONFIG_OPTS)"
+	touch $@
+
+clean:
+	dh_testdir $(src_file)
+	dh_testroot
+	$(RM) $(build_stamp) $(install_stamp)
+	# remove updated config.sub and config.guess to keep diff.gz small
+	for d in $(CONFIG_DIRS) ; do \
+	    rm -f $(CURDIR)/$$d/config.sub $(CURDIR)/$$d/config.guess ;\
+	done
+	dh_clean 
+	$(MAKE) distclean
+
+install: $(install_stamp)
+$(install_stamp): DH_OPTIONS=
+$(install_stamp): $(build_stamp)
+	dh_testdir $(src_file)
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) DESTDIR="$(CURDIR)/debian/tmp" install_all_but_docs
+	$(RM) debian/tmp/usr/lib/hugs/packages/*/LICENSE*
+	$(RM) debian/tmp/usr/lib/hugs/packages/*/LICENCE*
+	for d in $(filter packages/%,$(CONFIG_DIRS)) ; do \
+	    if [ ! -d $(CURDIR)/debian/tmp/usr/lib/hugs/$$d ] && \
+	       [ -f $(CURDIR)/$$d/config.log ] ; then \
+		echo "*** begin $$d/config.log ***" ; \
+		cat $(CURDIR)/$$d/config.log ; \
+		echo "**** end $$d/config.log ****" ; \
+	    fi ; \
+	done
+	dh_install --sourcedir=debian/tmp
+	install -m 644 -D cpphs/docs/cpphs.1 debian/hugs/usr/share/man/man1/cpphs-hugs.1
+	install -m 644 -D debian/libhugs-cabal-bundled.linda-overrides \
+		debian/libhugs-cabal-bundled/usr/share/linda/overrides/libhugs-cabal-bundled
+	install -m 644 -D debian/libhugs-cabal-bundled.lintian-overrides \
+		debian/libhugs-cabal-bundled/usr/share/lintian/overrides/libhugs-cabal-bundled
+	touch $@
+
+# This single target is used to build all the packages, all at once, or
+# one at a time. So keep in mind: any options passed to commands here will
+# affect _all_ packages. Anything you want to only affect one package
+# should be put in another target, such as the install target.
+binary-common:
+	dh_testdir $(src_file)
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_installexamples
+	dh_installmenu
+	dh_installman
+	dh_strip
+	dh_link
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: $(install_stamp)
+# (Uncomment this next line if you have such packages.)
+#	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: $(install_stamp)
+	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
+
+# Any other binary targets build just one binary package at a time.
+binary-%: $(install_stamp)
+	$(MAKE) -f debian/rules DH_OPTIONS='-p$*' binary-common
+
+binary: binary-indep binary-arch
+
+.PHONY: build clean install binary binary-indep binary-arch binary-common update-config
