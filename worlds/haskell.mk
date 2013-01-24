@@ -222,6 +222,14 @@ $(HASKELLCRYPTOPUBKEYTYPES): $(SPREZZ)/haskell-crypto-pubkey-types/debian/change
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf crypto-pubkey-types-$(haskell-crypto-pubkey-types_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-crypto-random-api
+haskell-crypto-random-api:$(HASKELLCRYPTORANDOMAPI)_$(ARCH).deb
+$(HASKELLCRYPTORANDOMAPI): $(SPREZZ)/haskell-crypto-random-api/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf crypto-random-api-$(haskell-crypto-random-api_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-data-default
 haskell-data-default:$(HASKELLDATADEFAULT)_$(ARCH).deb
 $(HASKELLDATADEFAULT): $(SPREZZ)/haskell-data-default/debian/changelog
