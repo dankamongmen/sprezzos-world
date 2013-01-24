@@ -14,6 +14,14 @@ $(GHC): $(SPREZZ)/ghc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ghc-$(ghc_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-aes
+haskell-aes:$(HASKELLAES)_$(ARCH).deb
+$(HASKELLAES): $(SPREZZ)/haskell-aes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cipher-aes-$(haskell-aes_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-ansi-terminal
 haskell-ansi-terminal:$(HASKELLANSITERMINAL)_$(ARCH).deb
 $(HASKELLANSITERMINAL): $(SPREZZ)/haskell-ansi-terminal/debian/changelog
