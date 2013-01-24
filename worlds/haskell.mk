@@ -94,6 +94,14 @@ $(HASKELLBLAZEMARKUP): $(SPREZZ)/haskell-blaze-markup/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf blaze-markup-$(haskell-blaze-markup_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-case-insensitive
+haskell-case-insensitive:$(HASKELLCASEINSENSITIVE)_$(ARCH).deb
+$(HASKELLCASEINSENSITIVE): $(SPREZZ)/haskell-case-insensitive/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf case-insensitive-$(haskell-case-insensitive_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-cereal
 haskell-cereal:$(HASKELLCEREAL)_$(ARCH).deb
 $(HASKELLCEREAL): $(SPREZZ)/haskell-cereal/debian/changelog
@@ -110,6 +118,14 @@ $(HASKELLCERTIFICATE): $(SPREZZ)/haskell-certificate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf certificate-$(haskell-certificate_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-clientsession
+haskell-clientsession:$(HASKELLCLIENTSESSION)_$(ARCH).deb
+$(HASKELLCLIENTSESSION): $(SPREZZ)/haskell-clientsession/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf clientsession-$(haskell-clientsession_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-conduit
 haskell-conduit:$(HASKELLCONDUIT)_$(ARCH).deb
 $(HASKELLCONDUIT): $(SPREZZ)/haskell-conduit/debian/changelog
@@ -125,6 +141,14 @@ $(HASKELLCOOKIE): $(SPREZZ)/haskell-cookie/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cookie-$(haskell-cookie_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-cprng-aes
+haskell-cprng-aes:$(HASKELLCPRNGAES)_$(ARCH).deb
+$(HASKELLCPRNGAES): $(SPREZZ)/haskell-cprng-aes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cprng-aes-$(haskell-cprng-aes_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: haskell-crypto
 haskell-crypto:$(HASKELLCRYPTO)_$(ARCH).deb
@@ -310,6 +334,14 @@ $(HASKELLHUNIT): $(SPREZZ)/haskell-hunit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf HUnit-$(haskell-hunit_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-hxt
+haskell-hxt:$(HASKELLHXT)_$(ARCH).deb
+$(HASKELLHXT): $(SPREZZ)/haskell-hxt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hxt-$(haskell-hxt_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-json
 haskell-json:$(HASKELLJSON)_$(ARCH).deb
 $(HASKELLJSON): $(SPREZZ)/haskell-json/debian/changelog
@@ -478,6 +510,14 @@ $(HASKELLSEMIGROUPS): $(SPREZZ)/haskell-semigroups/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf semigroups-$(haskell-semigroups_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-sha
+haskell-sha:$(HASKELLSHA)_$(ARCH).deb
+$(HASKELLSHA): $(SPREZZ)/haskell-sha/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf SHA-$(haskell-sha_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-shakespeare
 haskell-shakespeare:$(HASKELLSHAKESPEARE)_$(ARCH).deb
 $(HASKELLSHAKESPEARE): $(SPREZZ)/haskell-shakespeare/debian/changelog
@@ -597,6 +637,14 @@ $(HASKELLUNORDEREDCONTAINERS): $(SPREZZ)/haskell-unordered-containers/debian/cha
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf unordered-containers-$(haskell-unordered-containers_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-vault
+haskell-vault:$(HASKELLVAULT)_$(ARCH).deb
+$(HASKELLVAULT): $(SPREZZ)/haskell-vault/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vault-$(haskell-vault_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-vector
 haskell-vector:$(HASKELLVECTOR)_$(ARCH).deb
