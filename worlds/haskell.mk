@@ -470,6 +470,14 @@ $(HASKELLMTL): $(SPREZZ)/haskell-mtl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mtl-$(haskell-mtl_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-nats
+haskell-nats:$(HASKELLNATS)_$(ARCH).deb
+$(HASKELLNATS): $(SPREZZ)/haskell-nats/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nats-$(haskell-nats_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-network
 haskell-network:$(HASKELLNETWORK)_$(ARCH).deb
 $(HASKELLNETWORK): $(SPREZZ)/haskell-network/debian/changelog
