@@ -4301,6 +4301,14 @@ $(LIBCURSESUIPERL): $(SPREZZ)/libcurses-ui-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Curses-UI-$(libcurses-ui-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libev-perl
+libev-perl:$(LIBUUIDPERL)_$(ARCH).deb
+$(LIBUUIDPERL): $(SPREZZ)/libev-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ev-$(libev-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libuuid-perl
 libuuid-perl:$(LIBUUIDPERL)_$(ARCH).deb
 $(LIBUUIDPERL): $(SPREZZ)/libuuid-perl/debian/changelog
