@@ -3229,6 +3229,14 @@ $(IJS): $(SPREZZ)/ijs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ijs_$(ijs_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libiksemel
+libiksemel:$(LIBIKSEMEL)_$(ARCH).deb
+$(LIBIKSEMEL): $(SPREZZ)/libiksemel/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf iksemel-$(libiksemel_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: iproute
 iproute:$(IPROUTE)_$(ARCH).deb
 $(IPROUTE): $(SPREZZ)/iproute/debian/changelog
