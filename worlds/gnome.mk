@@ -62,6 +62,14 @@ $(EVOLUTIONDATASERVER): $(SPREZZ)/evolution-data-server/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf evolution-data-server-$(evolution-data-server_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: evolution-exchange
+evolution-exchange:$(EVOLUTIONEXCHANGE)_$(ARCH).deb
+$(EVOLUTIONEXCHANGE): $(SPREZZ)/evolution-exchange/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf evolution-exchange-$(evolution-exchange_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: evolution-mapi
 evolution-mapi:$(EVOLUTIONMAPI)_$(ARCH).deb
 $(EVOLUTIONMAPI): $(SPREZZ)/evolution-mapi/debian/changelog
@@ -93,6 +101,14 @@ $(GCONFEDITOR): $(SPREZZ)/gconf-editor/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gconf-editor-$(gconf-editor_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: gdesklets
+gdesklets:$(GDESKLETS)_$(ARCH).deb
+$(GDESKLETS): $(SPREZZ)/gdesklets/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gDesklets-$(gdesklets_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: genius
 genius:$(GENIUS)_$(ARCH).deb
