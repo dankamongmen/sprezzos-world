@@ -382,6 +382,22 @@ $(HASKELLHSPECEXPECTATIONS): $(SPREZZ)/haskell-hspec-expectations/debian/changel
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hspec-expectations-$(haskell-hspec-expectations_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-http
+haskell-http:$(HASKELLHTTP)_$(ARCH).deb
+$(HASKELLHTTP): $(SPREZZ)/haskell-http/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf HTTP-$(haskell-http_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-http-conduit
+haskell-http-conduit:$(HASKELLHTTPCONDUIT)_$(ARCH).deb
+$(HASKELLHTTPCONDUIT): $(SPREZZ)/haskell-http-conduit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf http-conduit-$(haskell-http-conduit_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-hunit
 haskell-hunit:$(HASKELLHUNIT)_$(ARCH).deb
 $(HASKELLHUNIT): $(SPREZZ)/haskell-hunit/debian/changelog
