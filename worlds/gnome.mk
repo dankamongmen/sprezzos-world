@@ -350,6 +350,14 @@ $(GNOMEMIMEDATA): $(SPREZZ)/gnome-mime-data/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-mime-data-$(gnome-mime-data_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gnome-screensaver
+gnome-screensaver:$(GNOMESCREENSAVER)_$(ARCH).deb
+$(GNOMESCREENSAVER): $(SPREZZ)/gnome-screensaver/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-screensaver-$(gnome-screensaver_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: goffice
 goffice:$(GOFFICE)_$(ARCH).deb
 $(GOFFICE): $(SPREZZ)/goffice/debian/changelog

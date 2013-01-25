@@ -1,0 +1,270 @@
+#!/usr/bin/make -f
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+# We copy around a number of things in case we're linux:
+BUILD_OS=$(shell dpkg-architecture -qDEB_BUILD_ARCH_OS)
+
+export PROC := $(shell dpkg-architecture -qDEB_BUILD_GNU_CPU)
+
+CFLAGS = `dpkg-buildflags --get CFLAGS`
+LDFLAGS = `dpkg-buildflags --get LDFLAGS`
+CFLAGS += `dpkg-buildflags --get CPPFLAGS`
+
+# For CFLAGS/LDFLAGS of menuselect:
+BUILD_CFLAGS = $(CFLAGS)
+BUILD_LDFLAGS = $(LDFLAGS)
+
+# Necessary to pass hardening flags to menuselect.
+export CFLAGS LDFLAGS BUILD_CFLAGS BUILD_LDFLAGS
+
+
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	BUILDFLAGS += OPTIMIZE=-O0
+else
+	BUILDFLAGS += OPTIMIZE=-O2
+endif
+BUILDFLAGS += MAKECMDGOALS=dont-optimize
+
+# show full gcc arguments instead of [CC] and [LD]
+BUILDFLAGS += NOISY_BUILD=yes
+
+BUILDFLAGS += ASTDATADIR=/usr/share/asterisk ASTVARRUNDIR=/var/run/asterisk
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	ENABLE_DEBUG += --enable-dev-mode
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+DEBVERSION:=$(shell dpkg-parsechangelog | sed -n -e 's/Version: //p')
+DEB_NOEPOCH_VERSION:=$(shell echo $(DEBVERSION) | cut -d':' -f 2)
+DEB_SRC_VERSION:=$(shell echo $(DEB_NOEPOCH_VERSION) | sed -e 's/-[^-]\+$$//')
+UPVERSION:=$(shell echo $(DEB_SRC_VERSION) | sed -e 's/[.~]dfsg//' -e 's/~\(\(rc\|beta\)[0-9]\)/-\1/')
+
+FILENAME := asterisk_$(DEB_SRC_VERSION).orig.tar.gz
+UPFILENAME := asterisk_$(UPVERSION).orig.tar.gz
+URL := http://downloads.asterisk.org/pub/telephony/asterisk/releases/asterisk-$(UPVERSION).tar.gz
+
+# make sure we have 'fetch' . We need to have either wget or fetch
+# on the system. However it is generally not a good idea to actually
+# get remote tarballs at build time. So if neither wget nor fetch 
+# happen to be installed, the configure script will find a dummy
+# fetch script that always returns an error.
+FETCH_ENV = PATH=$$PATH:$(CURDIR)/debian/dummyprogs
+
+configure: configure.ac
+	if [ ! -f configure_deborig ]; then mv configure configure_deborig; fi
+	./bootstrap.sh
+
+# Make sure the configure script gets an CFLAGS parameter. Otherwise
+# it will build with -march=native
+config.status: configure
+	dh_testdir
+
+	[ -f .version.debian_sav ] || cp -a .version .version.debian_sav
+	echo $(DEB_NOEPOCH_VERSION) > .version
+
+	if [ ! -r configure.debian_sav ]; then cp -a configure configure.debian_sav; fi
+
+	chmod 755 $(CURDIR)/debian/dummyprogs/fetch
+	
+	$(FETCH_ENV) ./configure			\
+		CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" \
+		--host=$(DEB_HOST_GNU_TYPE)		\
+		--build=$(DEB_BUILD_GNU_TYPE)		\
+		--prefix=/usr				\
+		--mandir=\$${prefix}/share/man		\
+		--infodir=\$${prefix}/share/info	\
+		--with-gsm				\
+		--with-imap=system			\
+		--without-pwlib				\
+		${ENABLE_DEBUG}
+
+#		--with-cap \
+
+build: build-arch build-indep
+
+build-arch: build-arch-stamp
+build-arch-stamp: config.status
+	dh_testdir
+	$(MAKE) menuselect.makeopts
+	@if [ "x${ENABLE_DEBUG}" != "x" ] ; then \
+		menuselect/menuselect --enable DONT_OPTIMIZE menuselect.makeopts ; \
+		menuselect/menuselect --enable DEBUG_THREADS menuselect.makeopts ; \
+	fi
+	$(FETCH_ENV) $(MAKE) $(BUILDFLAGS)
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp: config.status
+	dh_testdir
+	touch $@
+
+SND_FILE=asterisk-core-sounds-en-gsm-1.4.20.tar.gz
+clean:
+	dh_testdir
+	dh_testroot
+	
+	# The clean target seems to be run before patches are applied.
+	# A brute-force fix to keep the tarball from getting deleted:
+	# (if it has not been stripped from upstream tarball)
+	if [ -r sounds/$(SND_FILE) ]; then mv sounds/$($SND_FILE) debian/; fi
+	GREP=grep AWK=awk $(MAKE) distclean
+	if [ -r debian/$(SND_FILE) ]; then mv debian/$(SND_FILE) sounds/; fi
+	-$(RM) -rf debian/build
+
+	if [ -r configure.debian_sav ]; then mv configure.debian_sav configure; fi
+	-test -d configs && chmod -x configs/*.sample
+	-$(RM) -f build-arch-stamp build-indep-stamp install-arch install-indep
+	-$(RM) -f config.status menuselect.makeopts
+
+	[ ! -f .version.debian_sav ] || mv .version.debian_sav .version
+	if [ -f configure_deborig ]; then mv configure_deborig configure; fi
+
+	# these were generated while building
+	-$(RM) -f doc/core-en_US.xml utils/poll.c
+
+	dh_clean
+
+SUBPACKS_EXTRA = \
+		 voicemail voicemail-odbcstorage voicemail-imapstorage \
+		 ooh323 mysql mp3
+ifeq (linux,$(BUILD_OS))
+SUBPACKS_EXTRA += dahdi mobile
+endif
+SUBPACKS_EXTRA_DIRS = $(SUBPACKS_EXTRA:%=$(CURDIR)/debian/asterisk-%)
+SUBPACKS_EXTRA_DIRS_MOD = $(SUBPACKS_EXTRA_DIRS:%=%/usr/lib/asterisk/modules)
+
+install: install-arch install-indep
+install-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_prep -s
+	dh_installdirs -s
+	
+	$(FETCH_ENV) $(MAKE) $(BUILDFLAGS) DESTDIR=$(CURDIR)/debian/tmp install
+	cp -a configs $(CURDIR)/debian/tmp/usr/share/asterisk/conf
+
+	dh_install -s --sourcedir=debian/tmp
+	dh_lintian -s
+
+	$(RM) -f $(CURDIR)/debian/asterisk/usr/sbin/aelparse
+	$(RM) -f $(CURDIR)/debian/asterisk/usr/sbin/conf2ael
+	$(RM) -f $(CURDIR)/debian/asterisk/usr/sbin/muted
+	$(RM) -f $(CURDIR)/debian/asterisk/usr/sbin/streamplayer
+	$(RM) -f $(CURDIR)/debian/asterisk/usr/sbin/stereorize
+	$(RM) -f $(CURDIR)/debian/asterisk/usr/sbin/hashtest*
+	$(RM) -f $(CURDIR)/debian/asterisk/usr/sbin/refcounter
+
+	extra_packs=`find $(SUBPACKS_EXTRA_DIRS_MOD) -name '*.so' -printf '%f\n'`\
+		    ; cd $(CURDIR)/debian/asterisk-modules/usr/lib/asterisk/modules \
+		    && rm -f $$extra_packs
+
+	# Rename dh_install file for -imapstorage and -odbcstorage.
+	mv $(CURDIR)/debian/asterisk-voicemail-imapstorage/usr/lib/asterisk/modules/app_voicemail_imapstorage.so \
+		$(CURDIR)/debian/asterisk-voicemail-imapstorage/usr/lib/asterisk/modules/app_voicemail.so
+	mv $(CURDIR)/debian/asterisk-voicemail-odbcstorage/usr/lib/asterisk/modules/app_voicemail_odbcstorage.so \
+		$(CURDIR)/debian/asterisk-voicemail-odbcstorage/usr/lib/asterisk/modules/app_voicemail.so
+
+	touch $@
+
+install-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_prep -i
+	dh_installdirs -i
+
+	$(FETCH_ENV) $(MAKE) $(BUILDFLAGS) DESTDIR=$(CURDIR)/debian/tmp install samples
+	dh_install -i --sourcedir=debian/tmp
+	dh_lintian -i
+
+	# create a simple config
+	echo "; please read the documentation regarding the Manager Interface (asterisk-doc package)" > \
+		$(CURDIR)/debian/asterisk-config/etc/asterisk/manager.d/README.conf
+	touch $@
+
+binary: binary-indep binary-arch
+binary-indep: install-indep
+	dh_testdir -i
+	dh_testroot -i
+	dh_installlogrotate -i 
+	dh_installdocs -i -XREADME.cygwin
+	dh_installexamples -i
+	dh_installcron -i
+	dh_installchangelogs ChangeLog -i
+	dh_link -i 
+	dh_compress -i
+	dh_fixperms -i
+	# should follow dh_fixperms; asterisk configurations may contain
+	# sensitive information, such as passwords
+	chmod o-rwx $(CURDIR)/debian/asterisk-config/etc/asterisk/*
+	chmod o+rx  $(CURDIR)/debian/asterisk-config/etc/asterisk/manager.d
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: install-arch
+	dh_testdir -a
+	dh_testroot -a
+	dh_installlogrotate -a
+	dh_installdocs -a
+	dh_installman utils/*.1 doc/*.8 contrib/scripts/*.8
+	dh_installexamples -a
+	dh_installchangelogs ChangeLog -a
+	dh_installinit -a -- defaults 21
+	dh_strip -a --dbg-package=asterisk-dbg
+	dh_link -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+print-version:
+	@@echo "Debian version:          $(DEBVERSION)"
+	@@echo "Upstream version:        $(UPVERSION)"
+
+TMP_TARBALL_TOP=../tarballs/asterisk-$(UPVERSION).tmp/asterisk-$(UPVERSION)
+get-orig-source:
+	@@dh_testdir
+	#@@[ -d ../tarballs/. ]||mkdir -p ../tarballs
+	#@@echo Downloading $(FILENAME) from $(URL) ...
+	#@@wget -nv -T10 -t3 -O ../tarballs/$(FILENAME) $(URL)
+	@echo Downloading $(UPFILENAME) from $(URL) ...
+	@wget -nv -T10 -t3 -O ../tarballs/$(UPFILENAME) $(URL)
+	@echo Repacking as DFSG-free...
+	@mkdir -p ../tarballs/asterisk-$(UPVERSION).tmp/
+	@cd ../tarballs/asterisk-$(UPVERSION).tmp ; \
+		tar xfz ../$(UPFILENAME)
+	# in case the tarball is not clean:
+	@rm -rf $(TMP_TARBALL_TOP)/AST.txt
+	@rm -rf $(TMP_TARBALL_TOP)/AST.pdf
+	@rm -rf $(TMP_TARBALL_TOP)/codecs/ilbc
+	# While we're at it: remove some generated files that will become
+	# invalid:
+	@rm -rf $(TMP_TARBALL_TOP)/*/.makeopts
+	@rm -rf $(TMP_TARBALL_TOP)/*/.*.makeopts
+	@rm -rf $(TMP_TARBALL_TOP)/*/.moduleinfo
+	@rm -rf $(TMP_TARBALL_TOP)/*/.*.moduleinfo
+	# And some large sound files we already ship in a different package:
+	@rm -rf $(TMP_TARBALL_TOP)/sounds/*.tar.gz
+	@cd ../tarballs/asterisk-$(UPVERSION).tmp ; \
+	 	tar cf - * | gzip -9 >../$(FILENAME)
+	@echo Cleaning up...
+	@$(RM) -rf ../tarballs/asterisk-$(UPVERSION).tmp/
+
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install clean

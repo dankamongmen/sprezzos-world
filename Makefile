@@ -551,6 +551,14 @@ $(ACCOUNTSSERVICE): $(SPREZZ)/accountsservice/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf accountsservice-$(accountsservice_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: asterisk
+asterisk:$(ASTERISK)_$(ARCH).deb
+$(ASTERISK): $(SPREZZ)/asterisk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf asterisk-$(asterisk_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gimplensfun
 gimplensfun:$(GIMPLENSFUN)_$(ARCH).deb
 $(GIMPLENSFUN): $(SPREZZ)/gimplensfun/debian/changelog

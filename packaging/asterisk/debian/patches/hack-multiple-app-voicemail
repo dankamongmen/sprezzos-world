@@ -1,0 +1,66 @@
+Subject: build multiple versions of app_voicemail.so
+Author: Faidon Liambotis <paravoid@debian.org>
+Bug: http://issues.asterisk.org/view.php?id=13822
+Last-Update: 2010-12-24
+
+This is a very ugly hack on upstream's Makefiles to allow building multiple
+variants of app_voicemail. Three variants are created:
+  * app_voicemail.so: plain old filesystem storage that doesn't break existing
+    setups
+  * app_voicemail_imapstorage.so: IMAP storage
+  * app_voicemail_odbcstorage.so: ODBC storage
+All these conflict with each other and Asterisk will refuse to load them
+concurrently. They are thus included in three separate and complicting
+packages.
+
+Patch suggested to upstream but rejected for being "hackish". Though
+upstream RPM packages include packages that are only somewhat cleaner.
+
+--- a/apps/Makefile
++++ b/apps/Makefile
+@@ -15,6 +15,8 @@ MODULE_PREFIX=app
+ MENUSELECT_CATEGORY=APPS
+ MENUSELECT_DESCRIPTION=Applications
+ 
++MODS_C_ADDITIONAL=app_voicemail_imapstorage app_voicemail_odbcstorage
++
+ MENUSELECT_OPTS_app_directory:=$(MENUSELECT_OPTS_app_voicemail)
+ ifneq ($(findstring ODBC_STORAGE,$(MENUSELECT_OPTS_app_voicemail)),)
+   MENUSELECT_DEPENDS_app_voicemail+=$(MENUSELECT_DEPENDS_ODBC_STORAGE)
+@@ -25,6 +27,25 @@ endif
+ 
+ all: _all
+ 
++add_depends_cmd = sed -i -e '/^\/\*\*\* MODULEINFO/a\\t<depend>$(1)<\/depend>'
++app_voicemail_imapstorage.c: app_voicemail.c
++	cp $< $@
++	$(call add_depends_cmd,imap_tk) $@
++	$(call add_depends_cmd,openssl) $@
++	cp app_voicemail.exports.in app_voicemail_imapstorage.exports.in
++app_voicemail_odbcstorage.c: app_voicemail.c
++	cp $< $@
++	$(call add_depends_cmd,unixodbc) $@
++	$(call add_depends_cmd,ltdl) $@
++	cp app_voicemail.exports.in app_voicemail_odbcstorage.exports.in
++
++dist-clean::
++	rm -f app_voicemail_*.c
++	rm -f app_voicemail_*.exports.in
++
++app_voicemail_imapstorage.o: _ASTCFLAGS+=-DIMAP_STORAGE
++app_voicemail_odbcstorage.o: _ASTCFLAGS+=-DODBC_STORAGE
++
+ include $(ASTTOPDIR)/Makefile.moddir_rules
+ 
+ ifneq ($(findstring $(OSARCH), mingw32 cygwin ),)
+--- a/Makefile.moddir_rules
++++ b/Makefile.moddir_rules
+@@ -37,7 +37,7 @@ include $(ASTTOPDIR)/Makefile.rules
+ # Use MODULE_EXCLUDE to specify additional modules to exclude.
+ 
+ ifneq ($(MODULE_PREFIX),)
+-    ALL_C_MODS:=
++    ALL_C_MODS:=$(MODS_C_ADDITIONAL)
+     ALL_CC_MODS:=
+     ALL_C_MODS+=$(foreach p,$(MODULE_PREFIX),$(patsubst %.c,%,$(wildcard $(p)_*.c)))
+     ALL_CC_MODS+=$(foreach p,$(MODULE_PREFIX),$(patsubst %.cc,%,$(wildcard $(p)_*.cc)))

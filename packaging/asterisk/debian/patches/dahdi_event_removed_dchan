@@ -1,0 +1,136 @@
+From: Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+Subject: DAHDI_EVENT_REMOVED on a D-Channel - Disconnect PRI/BRI Astribank
+Bug: https://issues.asterisk.org/view.php?id=17525
+Applied-Upsteam: no
+
+When a DAHDI device is removed at run-time it sends the event
+DAHDI_EVENT_REMOVED on each channel. This is intended to signal the
+userspace program to close the respective file handle, as the driver of
+the device will need all of them closed to properly clean-up.
+
+This event has long since been handled in chan_dahdi (chan_zap at the
+time). However the event that is sent on a D-Channel of a "PRI" (ISDN)
+span simply gets ignored.
+
+This code adds handling for closing the file descriptor (and shutting down
+the span, while we're at it). It also adds a CLI command to help test it.
+
+This patch is included in the package to help test it. It is not yet
+included in upstream trunk.
+
+NOTE: At the moment this patch should not be considered safe for inclusion
+in squeeze, till further testing. Make sure it is disabled before uploading
+the package. This patch should not have any effect on system without such
+Astribanks, though.
+
+---
+ channels/chan_dahdi.c |   72 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 72 insertions(+), 0 deletions(-)
+
+diff --git a/channels/chan_dahdi.c b/channels/chan_dahdi.c
+index 2a256f2..b2af9dd 100644
+--- a/channels/chan_dahdi.c
++++ b/channels/chan_dahdi.c
+@@ -1430,6 +1430,7 @@ static const struct ast_channel_tech dahdi_tech = {
+ struct dahdi_pvt *round_robin[32];
+ 
+ #if defined(HAVE_PRI)
++static int pri_destroy_dchan(struct dahdi_pri *pri);
+ static inline int pri_grab(struct dahdi_pvt *pvt, struct dahdi_pri *pri)
+ {
+ 	int res;
+@@ -12706,6 +12707,8 @@ static void *pri_dchannel(void *vpri)
+ 					} else if (x == DAHDI_EVENT_NOALARM) {
+ 						pri->dchanavail[which] |= DCHAN_NOTINALARM;
+ 						pri_restart(pri->dchans[which]);
++					} else if (x == DAHDI_EVENT_REMOVED) {
++						pri_destroy_dchan(pri);
+ 					}
+ 
+ 					ast_debug(1, "Got event %s (%d) on D-channel for span %d\n", event2str(x), x, pri->span);
+@@ -13934,6 +13937,74 @@ static char *handle_pri_show_spans(struct ast_cli_entry *e, int cmd, struct ast_
+ #endif	/* defined(HAVE_PRI) */
+ 
+ #if defined(HAVE_PRI)
++/*!
++ * \internal
++ * \brief Destroy a D-Channel of a PRI span
++ * \since 1.8
++ *
++ * \param pri the pri span
++ *
++ * \return TRUE if the span was valid and we attempted destroying.
++ *
++ * Shuts down a span and destroys its D-Channel. Further destruction
++ * of the B-channels using dahdi_destroy_channel() would probably be required
++ * for the B-Channels.
++ */
++static int pri_destroy_dchan(struct dahdi_pri *pri) {
++	int i;
++	
++	if (!pri->master || (pri->master == AST_PTHREADT_NULL)) {
++		return 0;
++	}
++	ast_debug(1, "Stopping PRI span [FIXME: num/name]\n");
++	pthread_cancel(pri->master);
++
++	for (i = 0; i < NUM_DCHANS; i++) {
++		ast_debug(4, "closing pri_fd %d\n", i);
++		dahdi_close_pri_fd(pri, i);
++	}
++	return 1;
++}
++
++static char *handle_pri_destroy_span(struct ast_cli_entry *e, int cmd,
++		struct ast_cli_args *a)
++{
++	int span;
++
++	switch (cmd) {
++	case CLI_INIT:
++		e->command = "pri destroy span";
++		e->usage =
++			"Usage: pri destroy span <span>\n"
++			"       Destorys D-channel of span.\n"
++			"       B-Channels will need to be destroyed separately\n"
++			"       (with: dahdi destroy channel).\n"
++			"	DON'T USE THIS UNLESS YOU KNOW WHAT YOU ARE DOING.\n";
++		return NULL;
++	case CLI_GENERATE:
++		return complete_span_4(a->line, a->word, a->pos, a->n);
++	}
++
++	if (a->argc < 4)
++		return CLI_SHOWUSAGE;
++	span = atoi(a->argv[3]);
++	if ((span < 1) || (span > NUM_SPANS)) {
++		ast_cli(a->fd, "Invalid span '%s'.  Should be a number from %d to %d\n", a->argv[3], 1, NUM_SPANS);
++		return CLI_SUCCESS;
++	}
++	if (!pris[span-1].pri) {
++		ast_cli(a->fd, "No PRI running on span %d\n", span);
++		return CLI_SUCCESS;
++	}
++
++	pri_destroy_dchan(&(pris[span-1].pri));
++
++	return CLI_SUCCESS;
++}
++
++#endif	/* defined(HAVE_PRI) */
++
++#if defined(HAVE_PRI)
+ static char *handle_pri_show_span(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
+ {
+ 	int span;
+@@ -14053,6 +14124,7 @@ static struct ast_cli_entry dahdi_pri_cli[] = {
+ 	AST_CLI_DEFINE(handle_pri_debug, "Enables PRI debugging on a span"),
+ 	AST_CLI_DEFINE(handle_pri_show_spans, "Displays PRI Information"),
+ 	AST_CLI_DEFINE(handle_pri_show_span, "Displays PRI Information"),
++	AST_CLI_DEFINE(handle_pri_destroy_span, "Destroy a PRI span"),
+ 	AST_CLI_DEFINE(handle_pri_show_debug, "Displays current PRI debug settings"),
+ 	AST_CLI_DEFINE(handle_pri_set_debug_file, "Sends PRI debug output to the specified file"),
+ 	AST_CLI_DEFINE(handle_pri_version, "Displays libpri version"),
+-- 
+1.5.6.5
+
