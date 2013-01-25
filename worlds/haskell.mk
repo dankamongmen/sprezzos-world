@@ -829,3 +829,11 @@ $(HASKELLZLIBCONDUIT): $(SPREZZ)/haskell-zlib-conduit/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf zlib-conduit-$(haskell-zlib-conduit_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: hugs98
+hugs98:$(HUGS98)_$(ARCH).deb
+$(HUGS98): $(SPREZZ)/hugs98/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hugs98-$(hugs98_UPVER).tar.gz $(TARARGS) $@
