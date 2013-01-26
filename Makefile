@@ -6551,6 +6551,14 @@ $(STARTUPNOTIFICATION): $(SPREZZ)/startup-notification/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf startup-notification-$(startup-notification_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: stk
+stk:$(STK)_$(ARCH).deb
+$(STK): $(SPREZZ)/stk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf stk-$(stk_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: sysfsutils
 sysfsutils:$(SYSFSUTILS)_$(ARCH).deb
 $(SYSFSUTILS): $(SPREZZ)/sysfsutils/debian/changelog
