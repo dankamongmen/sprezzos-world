@@ -4877,6 +4877,14 @@ $(photofilmstrip): $(SPREZZ)/photofilmstrip/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf photofilmstrip-$(photofilmstrip_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: php5
+php5:$(PHP5)_$(ARCH).deb
+$(PHP5): $(SPREZZ)/php5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf php-$(php5_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ldb
 ldb:$(LDB)_$(ARCH).deb
 $(LDB): $(SPREZZ)/ldb/debian/changelog
