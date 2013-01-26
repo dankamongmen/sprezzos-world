@@ -1,0 +1,255 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include /usr/share/python/python.mk
+
+# Get build platform info
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_ARCH_OS   ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+ifeq ($(DEB_HOST_ARCH_OS),hurd)
+CONFIGURE_LIBS    = LIBS="-Wl,--no-as-needed -Wl,-lpthread -Wl,--as-needed"
+endif
+
+UPSTREAM_VERSION  = $(shell dpkg-parsechangelog | perl -ne 'print $$1 if /^Version: (.*?)-(.*)$$/')
+# SONAME version for libgvc and libcgraph 
+SONAME            = 5
+# SONAME version for libgraph, libcdt and libpathplan
+OTHER_SONAME      = 4
+
+PHP_EXTENSION_DIR = $(shell php-config5 --extension-dir)
+PHP_PACKAGE       = $(CURDIR)/debian/libgv-php5
+
+LUA_VERSION       = 5.1
+LUA_PACKAGE       = $(CURDIR)/debian/libgv-lua
+
+DEV_PACKAGE       = $(CURDIR)/debian/libgraphviz-dev
+
+PYTHON_VERSIONS   = $(shell pyversions -r)
+PYTHON_PACKAGE    = $(CURDIR)/debian/libgv-python
+
+RUBY_VERSION      = 1.8
+RUBY_PACKAGE      = $(CURDIR)/debian/libgv-ruby
+
+CONFIG_SCRIPTS=config/config.guess lib/gd/config/config.guess libltdl/config.guess \
+	       config/config.sub   lib/gd/config/config.sub   libltdl/config.sub
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+
+	# Update the config scripts
+	for i in $(CONFIG_SCRIPTS); do \
+		cp /usr/share/misc/`basename $$i` $$i ; \
+	done
+
+	# Configure the package
+	dh_autoreconf autoreconf --
+	./configure --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE) \
+	--prefix=/usr \
+	--datadir=\$${prefix}/share \
+	--infodir=\$${prefix}/share/info \
+	--mandir=\$${prefix}/share/man \
+	--disable-static \
+	--with-pangocairo \
+	--with-x \
+	--with-gdk-pixbuf \
+	--with-gnomeui \
+	--with-gtk \
+	--without-gts \
+	--without-ipsepcola \
+	--without-rsvg \
+	--enable-guile \
+	--enable-lua \
+	--enable-php \
+	--enable-ruby \
+	--enable-tcl \
+	--disable-java \
+	--disable-r \
+	--disable-sharp \
+	$(shell echo $(PYTHON_VERSIONS) | sed -e's,python,--enable-python,g' -e 's,\.,,g') \
+	$(CONFIGURE_LIBS) \
+	LDFLAGS="-Wl,--as-needed"
+	touch configure-stamp
+
+build-arch: build
+build-indep: build
+build: configure build-stamp
+build-stamp:
+	dh_testdir
+
+	# Install missing script mksvgfonts.pl to lib/common
+	cp debian/mksvgfonts.pl lib/common
+	chmod 744 lib/common/mksvgfonts.pl
+
+	# Build
+	$(MAKE)
+	touch build-stamp
+
+	# Build the manpage from SONAME-independent perlpod
+	sed -e 's/##SONAME##/$(SONAME)/g' \
+		debian/libgvc-config-update.pod.in > \
+		debian/libgvc$(SONAME)-config-update.pod
+	pod2man --center "GRAPHVIZ CONFIGURATION MANAGEMENT" \
+		--release $(UPSTREAM_VERSION) \
+	  --section 8 \
+		debian/libgvc$(SONAME)-config-update.pod \
+		debian/libgvc$(SONAME)-config-update.8
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+
+	# Clean up if a build already happened
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	# Clean up intermediate and generated manpages
+	rm -f debian/libgvc$(SONAME)-config-update.pod
+	rm -f debian/libgvc$(SONAME)-config-update.8
+
+	dh_clean $(CONFIG_SCRIPTS) \
+		tclpkg/gv/gv.R tclpkg/gv/php_gv.h
+	dh_autoreconf_clean
+	dh_clean
+
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	# Install the package into debian/tmp
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+
+	# Remove .la files
+	find -name '*.la' -delete
+
+	# Strip the rpath on /usr/lib (at least on amd64), but not
+	# on /usr/lib/graphviz (needed for the plugins), and bail
+	# out if it is another case, while ignoring if there's no
+	# RPATH at all (there are shell scripts under /usr/bin).
+	for i in `find debian/tmp/usr/bin debian/tmp/usr/lib -type f` ; do \
+		case `chrpath -l -k $$i` in \
+			*RPATH=/usr/lib/graphviz) ;; \
+			*RPATH=/usr/lib) chrpath -d $$i ;; \
+			*RPATH=/usr/lib:/usr/lib/graphviz) chrpath -r /usr/lib/graphviz $$i ;; \
+			*RPATH=*) echo "Unknown RPATH: $$i" ; exit 1 ;; \
+			*) ;; \
+		esac ; \
+	done
+
+	# Compute the dependencies of the -dev package
+	# NOTE: It is important to do that before splitting the files into
+	# their respective packages, otherwise the symlinks are broken
+	d-devlibdeps \
+		--override s/libpathplan$(OTHER_SONAME)-dev// \
+		--override s/libgraph$(OTHER_SONAME)-dev//    \
+		--override s/libcdt$(OTHER_SONAME)-dev//      \
+		--override s/libcgraph$(SONAME)-dev//   \
+		--override s/libgvpr$(OTHER_SONAME)-dev//   \
+		--override s/libxdot$(OTHER_SONAME)-dev//   \
+		$(CURDIR)/debian/libgraphviz-dev.substvars \
+		$(CURDIR)/debian/tmp/usr/lib/*.so
+
+	# Move from debian/tmp to the appropriate packages, rename one binary
+	dh_install --sourcedir=debian/tmp --list-missing
+	mv $(CURDIR)/debian/libgvc$(SONAME)/usr/sbin/dot \
+		$(CURDIR)/debian/libgvc$(SONAME)/usr/sbin/libgvc$(SONAME)-config-update
+
+	# Some additional work for libgv-php5
+	install -d $(PHP_PACKAGE)/$(PHP_EXTENSION_DIR)
+	mv $(PHP_PACKAGE)/usr/lib/graphviz/php/libgv_php.so \
+		$(PHP_PACKAGE)/$(PHP_EXTENSION_DIR)/gv.so
+	install -d $(PHP_PACKAGE)/usr/share/php/libgv-php5
+	mv $(PHP_PACKAGE)/usr/lib/graphviz/php/gv.php \
+		$(PHP_PACKAGE)/usr/share/php/libgv-php5
+	rm -rf $(PHP_PACKAGE)/usr/lib/graphviz
+	echo "php:Depends=phpapi-`php-config5 --phpapi`" >> $(PHP_PACKAGE).substvars
+
+	# Some additional work for libgv-lua
+	# 1. Rename using the LUA_VERSION
+	mv $(LUA_PACKAGE)/usr/lib/graphviz/lua/libgv_lua.so \
+		$(LUA_PACKAGE)/usr/lib/graphviz/lua/liblua$(LUA_VERSION)-libgv.so
+	# 2. Add a symlink
+	install -d $(LUA_PACKAGE)/usr/lib/lua/$(LUA_VERSION)
+	ln -s /usr/lib/graphviz/lua/liblua$(LUA_VERSION)-libgv.so \
+		$(LUA_PACKAGE)/usr/lib/lua/$(LUA_VERSION)/gv.so
+
+	# Some additional work for libgv-python
+	# Note the sed call because of python{24,25} instead of python{2.4,2.5}
+	# Note gv.py isn't really duplicated, it's just installed in a location
+	# where python-support will find it. Both being identical, python-support
+	# will just do the right thing.
+	for i in $(PYTHON_VERSIONS); do \
+		install -d $(PYTHON_PACKAGE)/usr/lib/$$i/$(call py_sitename_sh, $$i) ; \
+		cp $(PYTHON_PACKAGE)/usr/lib/graphviz/python/gv.py \
+			$(PYTHON_PACKAGE)/usr/lib/$$i/$(call py_sitename_sh, $$i) ; \
+		mv $(PYTHON_PACKAGE)/usr/lib/graphviz/$$(echo $$i|sed -e 's/\.//')/*.so \
+			$(PYTHON_PACKAGE)/usr/lib/$$i/$(call py_sitename_sh, $$i) ; \
+	done
+	rm -rf $(PYTHON_PACKAGE)/usr/lib/graphviz
+
+	# Debian-specific manpage
+	dh_installman -plibgvc$(SONAME)      \
+		$(CURDIR)/debian/libgvc$(SONAME)-config-update.8
+
+	# Some additional work for libgv-ruby
+	install -d $(RUBY_PACKAGE)/usr/lib/ruby/$(RUBY_VERSION)
+	mv $(RUBY_PACKAGE)/usr/lib/graphviz/ruby/libgv_ruby.so \
+		$(RUBY_PACKAGE)/usr/lib/ruby/$(RUBY_VERSION)/gv.so
+	rm -rf $(RUBY_PACKAGE)/usr/lib/graphviz
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installdocs -i
+	dh_installman
+	dh_installmenu -i
+	dh_installchangelogs ChangeLog -i
+	dh_perl -i
+	dh_link -i
+	dh_strip -i
+	dh_compress -i -X.pdf
+	dh_fixperms -i
+	dh_makeshlibs -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+# Pass -a to all debhelper commands in this target to reduce clutter.
+binary-arch: build install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdocs -a -XMakefile
+	dh_installexamples -a
+	dh_installmenu -a
+	dh_installman -a
+	dh_installchangelogs ChangeLog -a
+	dh_perl -a
+	dh_pysupport -a
+	dh_link -a usr/share/man/man1/gxl2gv.1 usr/share/man/man1/gxl2dot.1 usr/share/man/man1/gxl2gv.1 usr/share/man/man1/dot2gxl.1
+	dh_strip -a
+	dh_lintian -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -plibgvc$(SONAME) -plibgraph$(OTHER_SONAME) -plibcgraph$(SONAME) -plibcdt$(OTHER_SONAME) \
+		-plibpathplan$(OTHER_SONAME) -plibxdot$(OTHER_SONAME) -plibgvpr1 
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure
