@@ -3269,6 +3269,14 @@ $(LIBIKSEMEL): $(SPREZZ)/libiksemel/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf iksemel-$(libiksemel_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: liquidsoap
+liquidsoap:$(LIQUIDSOAP)_$(ARCH).deb
+$(LIQUIDSOAP): $(SPREZZ)/liquidsoap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf liquidsoap-$(liquidsoap_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: iproute
 iproute:$(IPROUTE)_$(ARCH).deb
 $(IPROUTE): $(SPREZZ)/iproute/debian/changelog
