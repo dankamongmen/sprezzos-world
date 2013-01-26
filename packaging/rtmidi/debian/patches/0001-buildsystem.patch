@@ -1,0 +1,168 @@
+---
+ Makefile.in  |   14 ++++++--------
+ RtMidi.cpp   |    4 ++--
+ RtMidi.h     |   14 ++++++++++++--
+ configure.ac |   15 +++++++++++----
+ rtmidi.pc.in |   14 ++++++++++++++
+ 5 files changed, 45 insertions(+), 16 deletions(-)
+
+--- /dev/null
++++ rtmidi/rtmidi.pc.in
+@@ -0,0 +1,14 @@
++prefix=@prefix@
++exec_prefix=@exec_prefix@
++libdir=@libdir@
++includedir=@includedir@
++
++Name: rtmidi
++Description: Library for realtime MIDI input/output
++Version: @VERSION@
++URL: http://www.music.mcgill.ca/~gary/rtmidi/index.html
++Requires: @pc_requires@
++Conflicts:
++Libs: -L${libdir} -l@SONAME@
++Libs.private:
++Cflags: @api@
+--- rtmidi.orig/RtMidi.cpp
++++ rtmidi/RtMidi.cpp
+@@ -123,7 +123,7 @@ void RtMidiIn :: openMidiApi( RtMidi::Ap
+ #endif
+ }
+ 
+-RtMidiIn :: RtMidiIn( RtMidi::Api api, const std::string clientName, unsigned int queueSizeLimit )
++extern RTMIDI_DLL_PUBLIC RtMidiIn :: RtMidiIn( RtMidi::Api api, const std::string clientName, unsigned int queueSizeLimit )
+ {
+   rtapi_ = 0;
+ 
+@@ -197,7 +197,7 @@ void RtMidiOut :: openMidiApi( RtMidi::A
+ #endif
+ }
+ 
+-RtMidiOut :: RtMidiOut( RtMidi::Api api, const std::string clientName )
++extern RTMIDI_DLL_PUBLIC RtMidiOut :: RtMidiOut( RtMidi::Api api, const std::string clientName )
+ {
+   rtapi_ = 0;
+ 
+--- rtmidi.orig/RtMidi.h
++++ rtmidi/RtMidi.h
+@@ -45,6 +45,16 @@
+ #ifndef RTMIDI_H
+ #define RTMIDI_H
+ 
++#if defined _WIN32 || defined __CYGWIN__
++  #define RTMIDI_DLL_PUBLIC
++#else
++  #if __GNUC__ >= 4
++    #define RTMIDI_DLL_PUBLIC __attribute__( (visibility( "default" )) )
++  #else
++    #define RTMIDI_DLL_PUBLIC
++  #endif
++#endif
++
+ #include "RtError.h"
+ #include <string>
+ #include <vector>
+@@ -131,7 +141,7 @@ class RtMidi
+ class MidiInApi;
+ class MidiOutApi;
+ 
+-class RtMidiIn : public RtMidi
++class RTMIDI_DLL_PUBLIC RtMidiIn : public RtMidi
+ {
+  public:
+ 
+@@ -246,7 +256,7 @@ class RtMidiIn : public RtMidi
+ */
+ /**********************************************************************/
+ 
+-class RtMidiOut : public RtMidi
++class RTMIDI_DLL_PUBLIC RtMidiOut : public RtMidi
+ {
+  public:
+ 
+--- rtmidi.orig/Makefile.in
++++ rtmidi/Makefile.in
+@@ -6,29 +6,27 @@ LN = /bin/ln
+ 
+ OBJECTS	= RtMidi.o
+ 
+-STATIC = librtmidi.a
+ SHARED = @sharedlib@
+-RELEASE = 2.0.0
++RELEASE = 2.0.1
+ MAJOR = 1
+-LIBRARIES = $(STATIC) $(SHARED)
++LIBRARIES = $(SHARED)
+ 
+ CC       = @CXX@
+ AR       = @AR@
+ RANLIB   = @RANLIB@
+ 
+ DEFS     = @CPPFLAGS@
+-CFLAGS   = @CXXFLAGS@ -Iinclude -fPIC
++CFLAGS   += @CXXFLAGS@ -Iinclude -fPIC
+ 
+ all : $(LIBRARIES)
+ 
+-tests:
++check:
+ 	cd tests && $(MAKE) all
+ 
+ $(LIBRARIES): $(OBJECTS)
+-	$(AR) ruv $(STATIC) $(OBJECTS)
+-	ranlib $(STATIC)
+ 	$(CC) -fPIC @libflags@ $(OBJECTS) @LIBS@
+-	$(LN) -sf @sharedname@ $(SHARED)
++	$(LN) -s @sharedname@.$(RELEASE) $(SHARED)
++	$(LN) -s @sharedname@.$(RELEASE) $(SHARED).$(MAJOR)
+ 
+ #	$(CC) -shared $(OBJECTS) -o $(SHARED) @LIBS@
+ 
+--- rtmidi.orig/configure.ac
++++ rtmidi/configure.ac
+@@ -1,5 +1,6 @@
+ # Process this file with autoconf to produce a configure script.
+ AC_INIT(RtMidi, 2.0, gary@music.mcgill.ca, rtmidi)
++AC_SUBST(VERSION, [2.0.1])
+ AC_CONFIG_AUX_DIR(config)
+ AC_CONFIG_SRCDIR(RtMidi.cpp)
+ AC_CONFIG_FILES(rtmidi-config Makefile tests/Makefile)
+@@ -44,8 +45,8 @@ CXXFLAGS="$CXXFLAGS $cxxflag"
+ AC_CANONICAL_HOST
+ 
+ AC_SUBST( sharedlib, ["librtmidi.so"] )
+-AC_SUBST( sharedname, ["librtmidi.so.\$(RELEASE)"] )
+-AC_SUBST( libflags, ["-shared -Wl,-soname,\$(SHARED).\$(MAJOR) -o \$(SHARED).\$(RELEASE)"] )
++AC_SUBST( sharedname, ["librtmidi.so.\$(MAJOR)"] )
++AC_SUBST( libflags, ["-shared -Wl,-soname,\$(SHARED).\$(MAJOR) -o \$(SHARED).\$(MAJOR).\$(RELEASE)"] )
+ case $host in
+   *-apple*)
+   AC_SUBST( sharedlib, ["librtmidi.dylib"] )
+@@ -54,13 +55,19 @@ case $host in
+ esac
+ 
+ AC_SUBST( api, [""] )
++AC_SUBST( pc_requires, [""] )
+ AC_MSG_CHECKING(for MIDI API)
+ case $host in
+   *-*-linux*)
+   AC_ARG_WITH(jack, [  --with-jack = choose JACK server support (mac and linux only)], [
+   api="$api -D__UNIX_JACK__"
++  pc_requires="$pc_requires"
+   AC_MSG_RESULT(using JACK)
+-  AC_CHECK_LIB(jack, jack_client_open, , AC_MSG_ERROR(JACK support requires the jack library!))], )
++  AC_CHECK_LIB(jack, jack_client_open, , AC_MSG_ERROR(JACK support requires the jack library!))
++  AC_SUBST(PC_FILE, [rtmidi.pc])
++  AC_SUBST(pc_requires, [jack])
++  AC_SUBST(SONAME, [rtmidi])
++  AC_CONFIG_FILES($PC_FILE:rtmidi.pc.in)] , )
+ 
+   # Look for ALSA flag
+   AC_ARG_WITH(alsa, [  --with-alsa = choose native ALSA sequencer API support (linux only)], [
+@@ -136,4 +143,4 @@ CPPFLAGS="$CPPFLAGS $api"
+ 
+ AC_OUTPUT
+ 
+-chmod oug+x rtmidi-config
+\ No newline at end of file
++chmod oug+x rtmidi-config
