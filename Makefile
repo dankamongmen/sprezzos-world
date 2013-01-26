@@ -1663,6 +1663,14 @@ $(COMPIZBOXMENU): $(SPREZZ)/compiz-boxmenu/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf compiz-boxmenu_-_$(compiz-boxmenu_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: conky
+conky:$(CONKY)_$(ARCH).deb
+$(CONKY): $(SPREZZ)/conky/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf conky-$(conky_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: conntrack
 conntrack:$(CONNTRACK)_$(ARCH).deb
 $(CONNTRACK): $(SPREZZ)/conntrack/debian/changelog
