@@ -189,6 +189,16 @@ $(LIBUNITYMISC): $(SPREZZ)/libunity-misc/debian/changelog
 		libunity_misc-$(libunity-misc_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: libunity-webapps
+libunity-webapps:$(LIBUNITYWEBAPPS)_$(ARCH).deb
+$(LIBUNITYWEBAPPS): $(SPREZZ)/libunity-webapps/debian/changelog
+	bzr branch lp:libunity-webapps $@
+	rm -rf $@/debian
+	tar cJf unity_webapps-$(libunity-webapps_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf unity_webapps-$(libunity-webapps_UPVER).tar.xz \
+		libunity_webapps-$(libunity-webapps_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: libzeitgeist
 libzeitgeist:$(LIBZEITGEIST)_$(ARCH).deb
 $(LIBZEITGEIST): $(SPREZZ)/libzeitgeist/debian/changelog
