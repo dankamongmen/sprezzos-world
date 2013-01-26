@@ -1,0 +1,74 @@
+#!/usr/bin/make -f
+# debian/rules file for the Debian/GNU Linux gnupod-tools package
+# Copyright 2003 by Quôc Peyrot <chojin@debian.org>
+# Copyright 2005 by Brian Nelson <pyro@debian.org>
+# Copyright 2008 by Raphael Bossek <bossekr@debian.org>
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ARCHIVE=$(shell ls -1 gnupod-*.tgz)
+SRCDIR=$(shell ls -1 gnupod-*.tgz | sed -e 's,\.tgz,,g')
+VERSION:=$(shell dpkg-parsechangelog | grep '^Version:' | sed -e 's/^Version: //g;s/-.*//g')
+
+$(SRCDIR)/configure:	$(ARCHIVE)
+	tar -xzf $(ARCHIVE)
+	test -d $(SRCDIR)
+	sh $(CURDIR)/debian/maintenance/01patch_rename.sh $(SRCDIR) $(VERSION)
+	sh $(CURDIR)/debian/maintenance/02install_incdir.sh $(SRCDIR) $(VERSION)
+	sh $(CURDIR)/debian/maintenance/03_use-Digest-SHA.sh $(SRCDIR)
+
+$(SRCDIR)/config.status:	$(SRCDIR)/configure
+	dh_testdir
+	cd $(SRCDIR) && ./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info
+
+build: build-indep
+
+build-indep: build-indep-stamp
+build-indep-stamp:  $(SRCDIR)/config.status
+	dh_testdir
+
+clean:
+	dh_testdir
+	rm -rf $(SRCDIR)
+	rm -f build-indep-stamp config-stamp
+	dh_clean
+
+install: install-indep 
+install-indep:
+	dh_testdir
+	dh_testroot
+	dh_clean -k -i
+	dh_installdirs -i
+	$(MAKE) -C $(SRCDIR) install DESTDIR=$(CURDIR)/debian/gnupod-tools
+
+	: # Drop the .pl from each manpage and executable name
+	rename 's/\.pl//' $(CURDIR)/debian/gnupod-tools/usr/bin/*.pl
+	rename 's/\.pl//' $(CURDIR)/debian/gnupod-tools/usr/share/man/man1/*.gz
+
+	rm -f debian/gnupod-tools/usr/share/info/dir*
+
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installdocs $(SRCDIR)/TODO $(SRCDIR)/doc/fdl.texi $(SRCDIR)/doc/version.texi $(SRCDIR)/doc/gnupod.texi $(SRCDIR)/doc/gnupod.html $(SRCDIR)/doc/gnupodrc.example
+	dh_installexamples $(SRCDIR)/doc/gnutunesdb.example
+	dh_installinfo $(SRCDIR)/doc/gnupod.info
+	dh_installman
+	dh_installchangelogs $(SRCDIR)/CHANGES
+	dh_link
+	dh_compress 
+	dh_fixperms
+	dh_installdeb
+	dh_perl
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-arch: build
+
+binary-indep: build-indep install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary install install-indep 

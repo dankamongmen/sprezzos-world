@@ -1669,7 +1669,7 @@ $(CONKY): $(SPREZZ)/conky/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf conky-$(conky_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf conky-$(conky_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: conntrack
 conntrack:$(CONNTRACK)_$(ARCH).deb
@@ -1709,7 +1709,15 @@ $(CRAMFS): $(SPREZZ)/cramfs/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf cramfs-$(cramfs_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf cramfs-$(cramfs_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: csstidy
+csstidy:$(CSSTIDY)_$(ARCH).deb
+$(CSSTIDY): $(SPREZZ)/csstidy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf csstidy-$(csstidy_UPVER)-source.tar.gz $(TARARGS) $@
 
 .PHONY: cups
 cups:$(CUPS)_$(ARCH).deb
