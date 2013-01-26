@@ -116,7 +116,7 @@ $(NUX): $(SPREZZ)/nux/debian/changelog
 	bzr branch lp:nux $@
 	rm -rf $@/debian
 	tar cJf nux-$(nux_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf nux-$(nux_UPVER).tar.xz nux_$(nux_UPVER).orig.tar.xz
+	ln -sf nux-$(nux_UPVER).tar.xz $(NUX).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: software-properties
@@ -125,7 +125,7 @@ $(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
 	bzr branch lp:~juliank/software-properties/debian $@
 	rm -rf $@/debian
 	tar cJf software-properties-$(software-properties_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf software-properties-$(software-properties_UPVER).tar.xz software-properties_$(software-properties_UPVER).orig.tar.xz
+	ln -sf software-properties-$(software-properties_UPVER).tar.xz $(SOFTWAREPROPERTIES).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: avant-window-navigator
@@ -4302,12 +4302,12 @@ $(LIBCURSESUIPERL): $(SPREZZ)/libcurses-ui-perl/debian/changelog
 	tar xzvf Curses-UI-$(libcurses-ui-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libev-perl
-libev-perl:$(LIBUUIDPERL)_$(ARCH).deb
-$(LIBUUIDPERL): $(SPREZZ)/libev-perl/debian/changelog
+libev-perl:$(LIBEVPERL)_$(ARCH).deb
+$(LIBEVPERL): $(SPREZZ)/libev-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ev-$(libev-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf EV-$(libev-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libuuid-perl
 libuuid-perl:$(LIBUUIDPERL)_$(ARCH).deb
