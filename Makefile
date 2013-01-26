@@ -6319,6 +6319,22 @@ $(RPM): $(SPREZZ)/rpm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf rpm-$(rpm_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: rtaudio
+rtaudio:$(RTAUDIO)_$(ARCH).deb
+$(RTAUDIO): $(SPREZZ)/rtaudio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rtaudio-$(rtaudio_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: rtmidi
+rtmidi:$(RTMIDI)_$(ARCH).deb
+$(RTMIDI): $(SPREZZ)/rtmidi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rtmidi-$(rtmidi_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rtmpdump
 rtmpdump:$(RTMPDUMP)_$(ARCH).deb
 $(RTMPDUMP): $(SPREZZ)/rtmpdump/debian/changelog
