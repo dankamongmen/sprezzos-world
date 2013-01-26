@@ -196,7 +196,7 @@ $(LIBUNITYWEBAPPS): $(SPREZZ)/libunity-webapps/debian/changelog
 	rm -rf $@/debian
 	tar cJf unity_webapps-$(libunity-webapps_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf unity_webapps-$(libunity-webapps_UPVER).tar.xz \
-		libunity_webapps-$(libunity-webapps_UPVER).orig.tar.xz
+		$(LIBUNITYWEBAPPS).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: libzeitgeist
