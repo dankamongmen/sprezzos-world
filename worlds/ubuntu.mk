@@ -9,10 +9,20 @@ $(APPMENUQT): $(SPREZZ)/appmenu-qt/debian/changelog
 .PHONY: bamf
 bamf:$(BAMF)_$(ARCH).deb
 $(BAMF): $(SPREZZ)/bamf/debian/changelog
-	mkdir $@
+	bzr branch lp:bamf $@
+	rm -rf $@/debian
+	tar cJf bamf-$(bamf_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf bamf-$(bamf_UPVER).tar.xz \
+		$(BAMF).orig.tar.xz
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf bamf-$(bamf_UPVER).tar.gz $(TARARGS) $@
+
+#.PHONY: bamf
+#bamf:$(BAMF)_$(ARCH).deb
+#$(BAMF): $(SPREZZ)/bamf/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@/
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xzvf bamf-$(bamf_UPVER).tar.gz $(TARARGS) $@
 
 # There's a recipe for the tip-of-bzr-trunk in Makefile
 #.PHONY: compiz9
