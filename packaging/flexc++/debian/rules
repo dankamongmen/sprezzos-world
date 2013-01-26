@@ -1,0 +1,141 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+
+export CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS)
+export LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+export CXXFLAGS = $(shell dpkg-buildflags --get CXXFLAGS)
+CXXFLAGS += --std=c++0x -Wall 
+CXX = g++-4.7
+
+SKEL = /usr/share/flexc++
+
+build: build-indep build-arch
+build-indep:
+build-arch: build-stamp
+build-stamp:
+	dh_testdir
+	# compile the package.
+	./build program
+	./build man
+	./build manual
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	./build distclean
+	dh_clean
+
+install: build-arch
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	# Add here commands to install the package into debian/flexc++.
+	./build install program debian/flexc++/usr/bin/flexc++
+	./build install skel    debian/flexc++/usr/share/flexc++
+	./build install std     debian/flexc++/usr/share/doc/flexc++
+	./build install man     debian/flexc++/usr/share/man/man1
+	./build install manual  debian/flexc++/usr/share/doc/flexc++/manual
+
+binary-indep:
+
+binary-arch: build-arch install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs README.class-setup
+#       dh_installexamples
+	dh_installman
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# The following is for internal development usage only
+# Update that sum when new _upstream_ releases occur, this
+# catches silent file content forges at the upstream server side
+# Archive downloaded from https://www.icce.rug.nl/debian/flexc++
+#                               file: flexc++_x.y.z.tar.gz
+
+MD5TRUSTED := 7ce5a5289f54ccd7baf0e66297555993
+
+DEBVERSION:=$(shell head -n 1 debian/changelog | sed -e 's/^[^(]*(\([^)]*\)).*/\1/')
+UPVERSION:=$(shell echo $(DEBVERSION) | sed -e 's/^.*://' -e 's/-[0-9.]*$$//' -e 's/.dfsg$$//')
+UPNAME := flexc++
+UPFILE := $(UPNAME)_$(UPVERSION).tar.gz
+DEFILE := $(UPNAME)_$(UPVERSION).orig.tar.gz
+URL                := https://www.icce.rug.nl/debian/flexc++
+MD5CURRENT := `md5sum ../tarballs/$(DEFILE) | sed -e 's/ .*//'`
+
+get-orig-source:
+	@@[ -d ../tarballs/. ]||mkdir -p ../tarballs
+
+	-@if [ ! -f ../tarballs/$(DEFILE) ] ; then \
+	        echo -e "Downloading $(URL)/$(UPFILE)\nSaving into ../tarballs/$(DEFILE) ..." ; \
+	wget --no-check-certificate --quiet -N -nv -T10 -t3 -O \
+	         ../tarballs/$(DEFILE) $(URL)/$(UPFILE) ; \
+	else \
+	        echo "Upstream source tarball have been already downloaded" ; \
+	fi
+
+	-@if [ "$(MD5CURRENT)" != "$(MD5TRUSTED)" ] ; then \
+	        echo "Expecting upstream filename md5sum $(MD5TRUSTED), but $(MD5CURRENT) found" ; \
+	        echo "Upstream filename md5sum is NOT trusted! Possible upstream filename forge!" ; \
+	        false ; \
+	else \
+	        echo "Upstream filename md5sum is trusted!" ; \
+	fi
+
+# call git-build from the project's base directory as `fakeroot debian/rules git-build'
+# it creates  ../${UPNAME}-build and runs dpkg-buildpackage in ../${UPNAME}-build/$(UPNAME)-$(UPVERSION)
+# which, if successful, creates the debian files in ${UPNAME}-build
+# Probably easier to use is `git-bl'
+
+debian-area = $(shell pwd)
+build-base  = ../$(UPNAME)-build
+build-area  = $(UPNAME)-$(UPVERSION)
+tarball     = ../tarballs/$(DEFILE) 
+garbage     = ../$(UPNAME)-build/$(UPNAME)-$(UPVERSION) ../$(UPNAME)-build/run.lintian
+
+git-build:
+	@@[ -d $(build-base)/. ] || mkdir -p $(build-base)
+
+	-@if [ ! -f $(tarball) ] ; then \
+	    echo "Upstream source tarball $(tarball) not found" ; \
+	else \
+	    rm -rf $(garbage) ; \
+	    cp $(tarball) $(build-base) ; \
+	    chdir $(build-base) ; \
+	    tar xzf $(DEFILE) ; \
+	    chdir $(build-area) ; \
+	    cp -r $(debian-area)/debian ./ ; \
+	    dpkg-buildpackage $(DPKG_BUILDPACKAGE) ; \
+	    if [ "$$?" -eq 0 ] ; then \
+	        chdir .. ; \
+	        touch run.lintian ; \
+	        rm -rf $(build-area) ; \
+	    else \
+	        chdir .. ; \
+	        mv $(build-area) $(build-area)-obsolete-`date +%s` ; \
+	    fi \
+	fi
+
+print-version:
+	@@echo "Debian version:          $(DEBVERSION)"
+	@@echo "Upstream version:        $(UPVERSION)"
+
+binary: binary-indep binary-arch
+.PHONY: build build-indep build-arch clean binary-indep binary-arch binary install
