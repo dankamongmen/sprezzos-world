@@ -283,6 +283,14 @@ $(GROWLIGHT): $(SPREZZ)/growlight/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf growlight-$(growlight_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: graphviz
+graphviz:$(GRAPHVIZ)_$(ARCH).deb
+$(GRAPHVIZ): $(SPREZZ)/graphviz/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf graphviz-$(graphviz_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: reportbug
 reportbug: $(REPORTBUG)_$(ARCH).deb
 $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
