@@ -1,0 +1,69 @@
+#!/usr/bin/make -f
+
+export DEB_LDFLAGS_MAINT_APPEND=-Wl,--as-needed
+
+DEB_CFLAGS          ?= $(shell dpkg-buildflags --get CFLAGS)
+DEB_LDFLAGS         ?= $(shell dpkg-buildflags --get LDFLAGS)
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH_OS    ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+	LINUX_CONF_ARGS_STD=--enable-wlan
+endif
+
+COMMON_CONFIGURE_FLAGS = --host=$(DEB_HOST_GNU_TYPE) \
+                         --build=$(DEB_BUILD_GNU_TYPE) \
+                         --prefix=/usr --sysconfdir=/etc \
+                         --mandir=\$${prefix}/share/man \
+                         --infodir=\$${prefix}/share/info \
+                         --srcdir=.. \
+                         --disable-static 
+
+%:
+	dh $@ --with autotools_dev
+
+override_dh_clean:
+	rm -rf build-std build-cli
+	dh_clean
+
+override_dh_auto_configure:
+	mkdir -p build-std build-cli
+	
+	cd build-std && CFLAGS="$(DEB_CFLAGS)" LDFLAGS="$(DEB_LDFLAGS)" \
+	../configure $(COMMON_CONFIGURE_FLAGS) \
+	--enable-imlib2 --enable-rss --enable-weather-xoap \
+	--enable-lua-cairo --enable-lua-imlib2 \
+	--enable-xmms2 --enable-audacious \
+	$(LINUX_CONF_ARGS_STD)
+	
+	cd build-cli &&	CFLAGS="$(DEB_CFLAGS)" LDFLAGS="$(DEB_LDFLAGS)" \
+	../configure $(COMMON_CONFIGURE_FLAGS) \
+	--disable-lua --disable-double-buffer --disable-x11 \
+	--disable-xdamage --disable-own-window --disable-xft \
+	--disable-hddtemp --disable-alsa --disable-portmon
+
+override_dh_auto_build:
+	cd build-std && $(MAKE)
+	cd build-cli && $(MAKE)
+
+override_dh_auto_install:
+	cd build-std && $(MAKE) install DESTDIR=$(CURDIR)/debian/conky-std
+	cd build-cli && $(MAKE) install DESTDIR=$(CURDIR)/debian/conky-cli
+	
+	# Clean up cruft left upstream
+	rm -rf debian/conky-cli/usr/lib \
+	       debian/conky-std/usr/lib/conky/*.la \
+	       debian/conky-std/usr/lib/conky/*.so.?
+	
+	# Install conky_no_x11.conf instead of the regular conky.conf config file
+	# for use with conky-cli. See Debian BTS #639314.
+	rm -f debian/conky-cli/etc/conky/conky.conf
+	mv -f debian/conky-cli/etc/conky/conky_no_x11.conf \
+	      debian/conky-cli/etc/conky/conky.conf
+
+override_dh_makeshlibs:
+	# Do not run ldconfig on private shared libraries in /usr/lib/conky
+	# This fixes lintian warning "postinst-has-useless-call-to-ldconfig"
+	dh_makeshlibs -X/usr/lib/conky
