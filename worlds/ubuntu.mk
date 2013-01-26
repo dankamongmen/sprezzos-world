@@ -73,6 +73,14 @@ $(GRAIL): $(SPREZZ)/grail/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf grail-$(grail_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: humanity-icon-theme
+humanity-icon-theme:$(HUMANITYICONTHEME)_$(ARCH).deb
+$(HUMANITYICONTHEME): $(SPREZZ)/humanity-icon-theme/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf humanity-icon-theme-$(humanity-icon-theme_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ido
 ido:$(IDO)_$(ARCH).deb
 $(IDO): $(SPREZZ)/ido/debian/changelog
