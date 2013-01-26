@@ -1167,6 +1167,14 @@ $(FLEX): $(SPREZZ)/flex/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf flex-$(flex_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: flexc
+flexc:$(FLEXC)_$(ARCH).deb
+$(FLEXC): $(SPREZZ)/flexc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf flexc++-$(flexc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: flickcurl
 flickcurl:$(FLICKCURL)_$(ARCH).deb
 $(FLICKCURL): $(SPREZZ)/flickcurl/debian/changelog
