@@ -1703,6 +1703,14 @@ $(COREUTILS): $(SPREZZ)/coreutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf coreutils-$(coreutils_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: cramfs
+cramfs:$(CRAMFS)_$(ARCH).deb
+$(CRAMFS): $(SPREZZ)/cramfs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf cramfs-$(cramfs_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: cups
 cups:$(CUPS)_$(ARCH).deb
 $(CUPS): $(SPREZZ)/cups/debian/changelog
