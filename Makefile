@@ -1831,6 +1831,14 @@ $(DBUSPYTHON): $(SPREZZ)/dbus-python/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dbus-python-$(dbus-python_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: dcmtk
+dcmtk:$(DCMTK)_$(ARCH).deb
+$(DCMTK): $(SPREZZ)/dcmtk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dcmtk-$(dcmtk_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: dcraw
 dcraw:$(DCRAW)_$(ARCH).deb
 $(DCRAW): $(SPREZZ)/dcraw/debian/changelog
