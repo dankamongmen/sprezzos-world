@@ -139,6 +139,15 @@ $(INITRAMFSTOOLS): $(SPREZZ)/initramfs-tools/debian/changelog
 	tar cJvf initramfs-tools_$(initramfs-tools_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: libapt-pkg-perl
+libapt-pkg-perl:$(LIBAPTPKGPERL)_$(ARCH).deb
+$(LIBAPTPKGPERL): $(SPREZZ)/libapt-pkg-perl/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf libapt-pkg-perl_$(libapt-pkg-perl_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: libept
 libept:$(LIBEPT)_$(ARCH).deb
 $(LIBEPT): $(SPREZZ)/libept/debian/changelog
