@@ -6801,7 +6801,7 @@ $(SYSLINUX): $(SPREZZ)/syslinux/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf syslinux-$(syslinux_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf syslinux-$(syslinux_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: systemd
 systemd:$(SYSTEMD)_$(ARCH).deb
