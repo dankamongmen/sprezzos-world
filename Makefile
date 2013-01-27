@@ -720,6 +720,14 @@ $(LIBHTTPCOOKIESPERL): $(SPREZZ)/libhttp-cookies-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf HTTP-Cookies-$(libhttp-cookies-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libhttp-message-perl
+libhttp-message-perl:$(LIBHTTPMESSAGEPERL)_$(ARCH).deb
+$(LIBHTTPMESSAGEPERL): $(SPREZZ)/libhttp-message-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf HTTP-Message-$(libhttp-message-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libswitch-perl
 libswitch-perl:$(LIBSWITCHPERL)_$(ARCH).deb
 $(LIBSWITCHPERL): $(SPREZZ)/libswitch-perl/debian/changelog
