@@ -1,0 +1,164 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g -O0
+else
+	CFLAGS += -O2
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+# For autoconf 2.13 only
+CONFFLAGS=
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	CONFFLAGS += $(DEB_HOST_GNU_TYPE)
+else
+	CONFFLAGS += --host $(DEB_BUILD_GNU_TYPE) --build $(DEB_HOST_GNU_TYPE)
+endif
+
+package := tmp
+destdir := $(CURDIR)/debian/$(package)
+prefix  := /usr
+share   := $(prefix)/share
+
+version := $(shell dpkg-parsechangelog | \
+		sed -ne 's/^Version: *\([0-9]\+:\)*//p')
+
+PERL=perl
+export PERL
+RUBY=ruby1.8
+export RUBY
+PHP=php5
+export PHP
+PHP_CONFIG=php-config5
+export PHP_CONFIG
+
+# Python versions from constraints in X-Python-Version in debian/control
+PYVERS= $(shell pyversions -r)
+# Default python
+PYDEF= $(shell pyversions -d)
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+
+	./configure $(CONFFLAGS) \
+		--prefix=$(prefix) \
+		--mandir=$(share)/man \
+		--infodir=$(share)/info \
+		--enable-release \
+		--with-perl-makemaker-args="PREFIX=$(CURDIR)/debian/librdf-perl/usr INSTALLDIRS=vendor" \
+		$(shell dpkg-buildflags --export=configure)
+
+	touch $@
+
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+
+	cd perl && $(MAKE)
+
+# NOTE: do not make python here, since we build multiple versions later from
+# the same source dir, so have to make+install for each
+
+	cd ruby && $(MAKE)
+
+	cd php && $(MAKE)
+
+	touch build-stamp
+
+clean: clean1
+clean1:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp libtool
+
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	-cd perl && $(MAKE) clean
+	-cd perl && rm -f MYMETA.yml CORE_wrap.c lib/RDF/Redland/CORE.pm
+
+	-cd php && rm -f php_redland.h redland_wrap.c
+
+	-cd python && $(MAKE) clean
+	-cd python && rm -f Redland_wrap.c
+
+	-cd ruby && $(MAKE) clean
+	-cd ruby && rm -f redland_wrap.c
+
+	-rm -f config.h config.cache config.status config.log
+
+	dh_clean
+
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	cd perl && $(MAKE) install
+# Move the pure perl into the right dir
+	mkdir -p $(CURDIR)/debian/librdf-perl/usr/share/perl5
+	mv $(CURDIR)/debian/librdf-perl/usr/lib/perl5/RDF $(CURDIR)/debian/librdf-perl/usr/share/perl5/RDF
+
+	cd python; \
+	for python in $(PYVERS); do \
+	  pylib=$$($$python -c 'from distutils import sysconfig; print sysconfig.get_python_lib()'); \
+          PYTHON=$$(echo $$python | sed "s/$(PYDEF)/python/"); \
+	  PYTHON=$$PYTHON make install DESTDIR=$(CURDIR)/debian/python-librdf pythondir=$$pylib PYTHON_INCLUDES=-I/usr/include/$$python; \
+	  $(MAKE) clean >/dev/null 2>&1; \
+	done
+	find $(CURDIR)/debian/python-librdf/usr -name "*.py[co]" -exec rm -f {} \;
+
+	cd ruby ; \
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/librdf-ruby
+
+	cd php; \
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/php5-librdf
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+
+	dh_install
+	dh_installdocs -A README NOTICE NEWS AUTHORS
+	dh_installdocs
+	dh_installchangelogs ChangeLog
+	dh_installman
+	dh_installexamples
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_perl
+	dh_python2 -ppython-librdf
+	dh_installdeb
+	dh_shlibdeps
+	echo "php:Depends=phpapi-$(shell $(PHP_CONFIG) --phpapi)" >> \
+	    $(CURDIR)/debian/$(PHP)-librdf.substvars
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure \
+	clean1

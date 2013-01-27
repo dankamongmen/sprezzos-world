@@ -27,6 +27,7 @@ include worlds/gnome.mk
 include worlds/debian.mk
 include worlds/ubuntu.mk
 include worlds/haskell.mk
+include worlds/mozilla.mk
 include worlds/obsolete.mk
 include worlds/sprezzatech.mk
 
