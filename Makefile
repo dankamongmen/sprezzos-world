@@ -2998,6 +2998,14 @@ $(GPODDER): $(SPREZZ)/gpodder/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gpodder-$(gpodder_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gpsd
+gpsd:$(GPSD)_$(ARCH).deb
+$(GPSD): $(SPREZZ)/gpsd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpsd-$(gpsd_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xgridfit
 xgridfit:$(XGRIDFIT)_$(ARCH).deb
 $(XGRIDFIT): $(SPREZZ)/xgridfit/debian/changelog
