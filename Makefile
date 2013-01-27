@@ -292,6 +292,14 @@ $(GRAPHVIZ): $(SPREZZ)/graphviz/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf graphviz-$(graphviz_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: grcompiler
+grcompiler:$(GRCOMPILER)_$(ARCH).deb
+$(GRCOMPILER): $(SPREZZ)/grcompiler/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf grcompiler-$(grcompiler_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: reportbug
 reportbug: $(REPORTBUG)_$(ARCH).deb
 $(REPORTBUG): $(SPREZZ)/reportbug/debian/changelog
