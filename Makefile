@@ -6360,6 +6360,14 @@ $(REDLAND): $(SPREZZ)/redland/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf redland-$(redland_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: redland-bindings
+redland-bindings:$(REDLANDBINDINGS)_$(ARCH).deb
+$(REDLANDBINDINGS): $(SPREZZ)/redland-bindings/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf redland-bindings-$(redland-bindings_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rpcbind
 rpcbind:$(rpcbind)_$(ARCH).deb
 $(rpcbind): $(SPREZZ)/rpcbind/debian/changelog
