@@ -960,6 +960,14 @@ $(ARPWATCH): $(SPREZZ)/arpwatch/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf arpwatch-$(arpwatch_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libautobox-perl
+libautobox-perl:$(LIBAUTOBOXPERL)_$(ARCH).deb
+$(LIBAUTOBOXPERL): $(SPREZZ)/libautobox-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf autobox-$(libautobox-perl_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: libass
 libass:$(LIBASS)_$(ARCH).deb
 $(LIBASS): $(SPREZZ)/libass/debian/changelog
