@@ -4334,6 +4334,14 @@ $(LIBTAR): $(SPREZZ)/libtar/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtar-$(libtar_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libtext-charwidth-perl
+libtext-charwidth-perl:$(LIBTEXTCHARWIDTHPERL)_$(ARCH).deb
+$(LIBTEXTCHARWIDTHPERL): $(SPREZZ)/libtext-charwidth-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Text-CharWidth-$(libtext-charwidth-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libtextwrap
 libtextwrap:$(LIBTEXTWRAP)_$(ARCH).deb
 $(LIBTEXTWRAP): $(SPREZZ)/libtextwrap/debian/changelog
