@@ -713,6 +713,14 @@ $(libsndfile): $(SPREZZ)/libsndfile/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsndfile-$(libsndfile_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: liblist-moreutils-perl
+liblist-moreutils-perl:$(LIBLISTMOREUTILSPERL)_$(ARCH).deb
+$(LIBLISTMOREUTILSPERL): $(SPREZZ)/liblist-moreutils-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf list-moreutils-$(liblist-moreutils-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnet-ssleay-perl
 libnet-ssleay-perl:$(LIBNETSSLEAYPERL)_$(ARCH).deb
 $(LIBNETSSLEAYPERL): $(SPREZZ)/libnet-ssleay-perl/debian/changelog
