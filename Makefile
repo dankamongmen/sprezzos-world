@@ -435,6 +435,15 @@ $(FBV): $(SPREZZ)/fbv/debian/changelog
 	ln -sf nfbv-$(fbv_UPVER).tar.xz nfbv_$(fbv_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: slicer
+slicer:$(SLICER)_$(ARCH).deb
+$(SLICER): $(SPREZZ)/slicer/debian/changelog
+	svn co http://svn.slicer.org/Slicer3/trunk $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
+	tar cJf slicer-$(slicer_UPVER).tar.xz $@ --exclude-vcs --exclude=debian
+	ln -sf slicer-$(slicer_UPVER).tar.xz slicer_$(slicer_UPVER).orig.tar.xz
+
 .PHONY: gyp
 gyp:$(GYP)_$(ARCH).deb
 $(GYP): $(SPREZZ)/gyp/debian/changelog
