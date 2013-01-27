@@ -244,7 +244,7 @@ $(KVIRC): $(SPREZZ)/kvirc/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf kvirc-$(kvirc_UPVER).tar.xz $(TARARGS) $@
+	tar xjvf kvirc-$(kvirc_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libdbusmenu-qt
 libdbusmenu-qt:$(LIBDBUSMENUQT)_$(ARCH).deb
