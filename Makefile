@@ -966,7 +966,7 @@ $(LIBAUTOBOXPERL): $(SPREZZ)/libautobox-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf autobox-$(libautobox-perl_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf autobox-$(libautobox-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libass
 libass:$(LIBASS)_$(ARCH).deb
