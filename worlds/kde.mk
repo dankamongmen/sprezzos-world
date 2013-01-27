@@ -238,6 +238,14 @@ $(KONSOLE): $(SPREZZ)/konsole/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf konsole-$(konsole_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: kvirc
+kvirc:$(KVIRC)_$(ARCH).deb
+$(KVIRC): $(SPREZZ)/kvirc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kvirc-$(kvirc_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: libdbusmenu-qt
 libdbusmenu-qt:$(LIBDBUSMENUQT)_$(ARCH).deb
 $(LIBDBUSMENUQT): $(SPREZZ)/libdbusmenu-qt/debian/changelog
