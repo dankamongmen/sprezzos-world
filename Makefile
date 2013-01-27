@@ -5038,6 +5038,14 @@ $(LIBMEDIAINFO): $(SPREZZ)/libmediainfo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmediainfo_$(libmediainfo_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libmicrohttpd
+libmicrohttpd:$(LIBMICROHTTPD)_$(ARCH).deb
+$(LIBMICROHTTPD): $(SPREZZ)/libmicrohttpd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmicrohttpd_$(libmicrohttpd_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libmpeg3
 libmpeg3:$(LIBMPEG3)_$(ARCH).deb
 $(LIBMPEG3): $(SPREZZ)/libmpeg3/debian/changelog
