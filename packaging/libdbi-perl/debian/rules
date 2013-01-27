@@ -1,0 +1,41 @@
+#!/usr/bin/make -f
+
+# this number comes from DBISTATE_VERSION in DBIXS.h 
+# it is used for the Provides: perl-dbdabi-XX relationship
+# it needs to be updated manually because of the implications on the archive
+#  (rebuilds of all libdbd-*-perl packages), see #577209
+
+DBDABI_VERSION = 94
+DBDABI_DETECTED_VERSION = $(shell cpp `perl -MExtUtils::Embed -e ccopts` debian/get-dbdabi-version.cpp | sh)
+
+PACKAGE = $(shell dh_listpackages)
+TMP     = $(CURDIR)/debian/$(PACKAGE)
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+ifeq ($(DBDABI_VERSION),$(DBDABI_DETECTED_VERSION))
+	dh_auto_configure
+else
+	echo Aborting due to DBD ABI version mismatch - configured $(DBDABI_VERSION), detected $(DBDABI_DETECTED_VERSION)
+	exit 1
+endif
+
+override_dh_auto_build:
+	dh_auto_build
+	printf "%s\n%s\n%s\n" \
+	  "# this variable is the preferred interface for generating a perl-dbdabi-* dependency." \
+	  "# See #577209." \
+	  "PERL_DBDABI_DEPENDS=perl-dbdabi-$(DBDABI_VERSION)" \
+	 > debian/perl-dbdabi.make
+	sed "s,@DBDABI_VERSION@,$(DBDABI_VERSION)," debian/dh_perl_dbi.in >debian/dh_perl_dbi
+	chmod +x debian/dh_perl_dbi
+	pod2man debian/dh_perl_dbi debian/dh_perl_dbi.1
+
+override_dh_gencontrol:
+	dh_gencontrol -- -Vperl-dbdabi-version=$(DBDABI_VERSION)
+
+override_dh_installexamples:
+	dh_installexamples
+	sed -i '1s|^#!perl|#!/usr/bin/perl|' $(TMP)/usr/share/doc/$(PACKAGE)/examples/*

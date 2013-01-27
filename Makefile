@@ -745,6 +745,14 @@ $(LIBSOCKET6PERL): $(SPREZZ)/libsocket6-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Socket6-$(libsocket6-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libdbd-mysql-perl
+libdbd-mysql-perl:$(LIBDBDMYSQLPERL)_$(ARCH).deb
+$(LIBDBDMYSQLPERL): $(SPREZZ)/libdbd-mysql-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf DBD-mysql-$(libdbd-mysql-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnet-dns-perl
 libnet-dns-perl:$(LIBNETDNSPERL)_$(ARCH).deb
 $(LIBNETDNSPERL): $(SPREZZ)/libnet-dns-perl/debian/changelog
