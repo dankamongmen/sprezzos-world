@@ -737,6 +737,14 @@ $(LIBLISTMOREUTILSPERL): $(SPREZZ)/liblist-moreutils-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf List-MoreUtils-$(liblist-moreutils-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libsocket6-perl
+libsocket6-perl:$(LIBSOCKET6PERL)_$(ARCH).deb
+$(LIBSOCKET6PERL): $(SPREZZ)/libsocket6-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Socket6-$(libsocket6-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnet-dns-perl
 libnet-dns-perl:$(LIBNETDNSPERL)_$(ARCH).deb
 $(LIBNETDNSPERL): $(SPREZZ)/libnet-dns-perl/debian/changelog
