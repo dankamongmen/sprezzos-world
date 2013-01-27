@@ -1,0 +1,225 @@
+#!/usr/bin/make -f
+
+#uncomment if debhelper should be verbose
+#export DH_VERBOSE=1
+
+SONAME := 20
+
+
+include /usr/share/quilt/quilt.make
+
+#python versions
+PYTHONS := $(shell pyversions -vr)
+PYTHON_DEFAULT := $(strip $(shell pyversions -vd))
+
+#debhelper version and settings needed for udev
+DH_VERSION := $(shell dpkg -s debhelper | grep '^Version' | awk '{print $$2}')
+LSB_RELEASE := $(shell lsb_release -si)
+UDEV_BREAKS =
+
+ifeq (Debian,$(strip $(LSB_RELEASE))) ## debian ##
+ifeq (0, $(strip $(shell dpkg --compare-versions $(DH_VERSION) ge 7.3.15; echo $$?)))
+UDEV_BREAKS = 125
+endif
+else ## not debian ##
+ifeq (Ubuntu,$(strip $(LSB_RELEASE))) ## ubuntu ##
+ifeq (0, $(strip $(shell dpkg --compare-versions $(DH_VERSION) ge 7.0.17ubuntu2; echo $$?)))
+UDEV_BREAKS = 136-1
+endif
+endif ## ubuntu ##
+endif ## debian ##
+
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+SCONSOPTS = \
+	prefix=/usr \
+	systemd=yes \
+	strip=no \
+	dbus_export=yes \
+	docdir=/usr/share/doc/gpsd \
+	libdir=/usr/lib/$(DEB_HOST_MULTIARCH)
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	SCONSOPTS += debug=yes
+else
+	SCONSOPTS += debug=no
+endif
+
+SCONSSTATICOPTS = python=no shared=no
+
+
+#package names
+PACKAGE_GPSD := gpsd
+PACKAGE_CLIENTS := gpsd-clients
+PACKAGE_LIB := libgps$(LIB_soname)
+PACKAGE_QTLIB := libqgpsmm$(LIB_soname)
+PACKAGE_LIB_DEV := libgps-dev
+PACKAGE_QTLIB_DEV := libqgpsmm-dev
+PACKAGE_PY := python-gps
+PACKAGE_GPSDDBG := gpsd-dbg
+
+
+cflags := $(shell dpkg-buildflags --get CFLAGS)
+cppflags := $(shell dpkg-buildflags --get CPPFLAGS)
+cxxflags := $(shell dpkg-buildflags --get CXXFLAGS)
+ldflags := $(shell dpkg-buildflags --get LDFLAGS)
+include /usr/share/hardening-includes/hardening.make
+cflags += $(HARDENING_CFLAGS)
+ldflags += $(HARDENING_LDFLAGS)
+cxxflags += $(HARDENING_CFLAGS)
+
+SCONS_ENV := set -e ;\
+		export LDFLAGS="$(ldflags)" ;\
+		export CFLAGS="$(cflags)" ;\
+		export CXXFLAGS="$(cxxflags)" ;\
+		export CPPFLAGS="$(cppflags)";
+
+
+build-indep: build
+build-arch: build
+
+build: build-stamp build-static-stamp
+build-stamp: $(QUILT_STAMPFN)
+	set -e; \
+	    for py in $(PYTHONS); do \
+	    	$(SCONS_ENV) python$${py} /usr/bin/scons $(SCONSOPTS); \
+		$(SCONS_ENV) python$${py}-dbg /usr/bin/scons $(SCONSOPTS); \
+	    done
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	# disable tests on hurd due to weird ipv6 errors
+	# http://deb.li/4C46AEAC.7040906@bzed.de
+ifeq (,$(findstring hurd,$(DEB_HOST_ARCH_OS)))
+	-$(SCONS_ENV) /usr/bin/scons check
+endif
+endif
+	touch $@
+
+build-static-stamp: $(QUILT_STAMPFN)
+	mkdir static_lib
+	find . \
+	    -mindepth 1 -maxdepth 1 \
+	    -name static_lib \
+	    -prune \
+	    -o -name debian -prune \
+	    -o -exec cp -pr {} static_lib \;
+	$(SCONS_ENV) scons -C static_lib $(SCONSOPTS) -c ;\
+	$(SCONS_ENV) scons -C static_lib $(SCONSOPTS) $(SCONSSTATICOPTS) libgps.a
+	touch $@
+
+clean: clean-patched unpatch
+clean-patched:
+	dh_testdir
+	dh_testroot
+	set -e; \
+	    for py in $(PYTHONS); do \
+	    	$(SCONS_ENV) python$${py} /usr/bin/scons $(SCONSOPTS) -c ; \
+	    	$(SCONS_ENV) python$${py}-dbg /usr/bin/scons $(SCONSOPTS) -c ; \
+	    done
+	rm -rf \
+	    .sconf_temp \
+	    .scons-option-cache \
+	    .sconsign.dblite \
+	    gps/*.pyc \
+	    TROUBLESHOOTING \
+	    debian/buildinfo.gz \
+	    config.log \
+	    static_lib \
+	    debian/shlibs.local \
+	    leapsecond.pyc
+	dh_clean
+
+install: install-stamp
+install-stamp: build-stamp build-static-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	set -e ;\
+	    for py in $(PYTHONS); do \
+	    	$(SCONS_ENV) DESTDIR=`pwd`/debian/tmp python$${py} /usr/bin/scons install $(SCONSOPTS) ;\
+	    	$(SCONS_ENV) DESTDIR=`pwd`/debian/tmp python$${py}-dbg /usr/bin/scons install $(SCONSOPTS) ;\
+	    done
+	# install static lib
+	cp static_lib/libgps.a debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+	# install hotplug wrapper
+	mkdir -p debian/tmp/lib/udev
+	cp gpsd.hotplug debian/tmp/lib/udev
+	chmod 755 debian/tmp/lib/udev/gpsd.hotplug
+	# remove rpaths
+	find debian/tmp -type f -exec file {} \; |\
+	    grep ELF |\
+	    grep 'dynamically linked' |\
+	    sed 's,:.*,,' |\
+	    xargs chrpath -d
+	cp INSTALL TROUBLESHOOTING
+	# install systemd files
+	mkdir -p debian/tmp/lib/systemd/system
+	cp systemd/* debian/tmp/lib/systemd/system
+	# fix various manpages
+	for i in cgps.1 gegps.1 lcdgps.1 xgps.1 xgpsspeed.1 gpxlogger.1; do \
+	    rm -f debian/tmp/usr/share/man/man1/$$i ;\
+	    ln -s gps.1 debian/tmp/usr/share/man/man1/$$i ;\
+	done
+	rm -f debian/tmp/usr/share/man/man3/libQgpsmm.3
+	ln -s libgpsmm.3.gz debian/tmp/usr/share/man/man3/libQgpsmm.3.gz
+	# remove libgpsd development files - we don't want people to use the internal library
+	for i in 	usr/share/man/man3/libgpsd.3 \
+	    		usr/lib/$(DEB_HOST_MULTIARCH)/libgpsd.so \
+			usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig/libgpsd.pc ;\
+	do \
+	    rm debian/tmp/$$i ;\
+	done
+	# install everything
+	dh_install --fail-missing
+	touch $@
+
+
+install-indep: install
+install-arch: install
+
+binary: install-stamp
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs  NEWS
+	dh_installdocs 
+	dh_installman 
+	dh_installmenu 
+	dh_installdebconf 
+	dh_installinit  -- start 26 2 3 4 5 . stop 73 0 1 6 .
+	dh_installexamples 
+	chmod 755 debian/$(PACKAGE_PY)/usr/lib/python*/*-packages/gps/gps.py
+	dh_python2  -Ngpsd
+	dh_python2 -pgpsd /lib/udev/
+	cp $(CURDIR)/gpsd.rules $(CURDIR)/debian/gpsd.udev
+	dh_installudev 
+	dh_link 
+	dh_strip  --dbg-package=$(PACKAGE_GPSDDBG)
+	dh_buildinfo -p$(PACKAGE_GPSDDBG)
+	dh_compress 
+	dh_fixperms  -Xgpsd.hotplug
+	dh_lintian
+ifeq (,$(DEB_BUILD_OPTIONS))
+	dh_makeshlibs -Nlibqgpsmm$(SONAME)  -Xlibgpsd -- -c4
+	dh_makeshlibs -plibqgpsmm$(SONAME) -- -c1
+else
+	dh_makeshlibs -Nlibqgpsmm$(SONAME) -Xlibgpsd
+	dh_makeshlibs -plibqgpsmm$(SONAME)
+endif
+	echo 'libgpsd $(SONAME) libgps$(SONAME)' > debian/shlibs.local
+	dh_shlibdeps 
+ifneq (,$(UDEV_BREAKS))
+	echo "gpsd:Breaks=udev (<< $(UDEV_BREAKS))" >> $(CURDIR)/debian/gpsd.substvars
+endif
+	dh_gencontrol 
+	dh_installdeb 
+	dh_md5sums 
+	dh_builddeb 
+
+
+binary-indep: binary
+binary-arch: binary
+
+.PHONY: binary binary-indep binary-arch \
+	install install-arch install-indep \
+	clean clean-patched \
+	build
