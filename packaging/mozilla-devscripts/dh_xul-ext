@@ -1,0 +1,414 @@
+#!/usr/bin/python
+
+# Copyright (c) 2009-2012, Benjamin Drung <bdrung@debian.org>
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+import csv
+import glob
+import optparse
+import os
+import subprocess
+import sys
+
+from moz_version import (compare_versions, convert_moz_to_debian_version,
+                         moz_to_next_debian_version)
+
+import RDF
+
+_VENDOR_ENV = "DH_XUL_EXT_VENDOR"
+# error codes
+COMMAND_LINE_SYNTAX_ERROR = 1
+MULTIPLE_INSTALL_RDFS = 2
+INVALID_VERSION_RANGE = 3
+
+FIREFOX_ID = "{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
+THUNDERBIRD_ID = "{3550f703-e582-4d05-9a08-453d09bdfdc6}"
+
+class XulApp(object):
+    def __init__(self, xul_id, package, sol, eol):
+        self.xul_id = xul_id
+        self.package = package
+        self.sol = sol
+        self.eol = eol
+        self.min_version = None
+        self.max_version = None
+
+    def __str__(self):
+        return self.xul_id + ": " + self.package + " (" + self.sol + " to " + \
+               self.eol + ")"
+
+    def defaults_to_compatible(self):
+        """Returns true if the maximum and all later versions of the XUL
+        application defaults add-ons to compatible. The XUL extension will be
+        enabled even if the version of the XUL application is higher than the
+        specified maximum version in this case.
+
+        Firefox/Iceweasel 10 and Thunderbird/Icedove 10 defaults add-ons to
+        compatible."""
+
+        if self.xul_id in (FIREFOX_ID, THUNDERBIRD_ID) and \
+            compare_versions(self.max_version, "10") >= 0:
+            return True
+        return False
+
+    def get_breaks(self):
+        """Return a string for ${xpi:Breaks} for the XUL application."""
+        breaks = []
+        if self.min_version:
+            deb_min_version = convert_moz_to_debian_version(self.min_version)
+            breaks.append(self.package + " (<< " + deb_min_version + ")")
+        if self.max_version and not self.defaults_to_compatible():
+            deb_max_version = moz_to_next_debian_version(self.max_version)
+            breaks.append(self.package + " (>> " + deb_max_version + ")")
+        return ", ".join(breaks)
+
+    def get_eol(self):
+        return self.eol
+
+    def get_id(self):
+        return self.xul_id
+
+    def get_package(self):
+        return self.package
+
+    def get_sol(self):
+        return self.sol
+
+    def get_versioned_package(self):
+        versioned_package = self.package
+        if self.min_version:
+            deb_min_version = convert_moz_to_debian_version(self.min_version)
+            versioned_package += " (>= " + deb_min_version + ")"
+        return versioned_package
+
+    def is_same_package(self, xul_app):
+        return self.xul_id == xul_app.xul_id and self.package == xul_app.package
+
+    def set_max_version(self, max_version):
+        if compare_versions(self.eol, max_version) > 0:
+            self.max_version = max_version
+
+    def set_min_version(self, min_version):
+        if compare_versions(self.sol, min_version) < 0:
+            self.min_version = min_version
+
+    def update_version(self, sol, eol):
+        if compare_versions(self.sol, sol) > 0:
+            self.sol = sol
+        if compare_versions(self.eol, eol) < 0:
+            self.eol = eol
+
+
+def _get_data_dir():
+    """Get the data directory based on the module location."""
+    if __file__.startswith("/usr/bin"):
+        data_dir = "/usr/share/mozilla-devscripts"
+    else:
+        data_dir = os.path.join(os.path.dirname(__file__), "data")
+    return data_dir
+
+def get_vendor():
+    """This function returns the vendor (e.g. Debian, Ubuntu) that should be
+       used for calculating the dependencies. DH_XUL_EXT_VENDOR will be used
+       if set. Otherwise dpkg-vendor will be used for determining the vendor."""
+    if _VENDOR_ENV in os.environ:
+        vendor = os.environ[_VENDOR_ENV]
+    else:
+        cmd = ["dpkg-vendor", "--query", "Vendor"]
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        vendor = process.communicate()[0].strip()
+    return vendor
+
+def get_xul_apps(script_name, all_distros):
+    vendor = get_vendor()
+    data_dir = _get_data_dir()
+    if all_distros or vendor == "all":
+        csv_filenames = sorted(glob.glob(os.path.join(data_dir,
+                                                      "xul-app-data.csv.*")))
+    else:
+        csv_filename = os.path.join(data_dir, "xul-app-data.csv." + vendor)
+        if not os.path.isfile(csv_filename):
+            print >> sys.stderr, ('%s: Unknown vendor "%s" specified.' %
+                                  (script_name, vendor))
+            sys.exit(1)
+        csv_filenames = [csv_filename]
+
+    xul_apps = []
+    for csv_filename in csv_filenames:
+        csvfile = open(csv_filename)
+        csv_reader = csv.DictReader(csvfile)
+        for row in csv_reader:
+            xul_app = XulApp(row["id"], row["package"], row["sol"], row["eol"])
+            existing = [x for x in xul_apps if x.is_same_package(xul_app)]
+            if existing:
+                xul_app = existing[0]
+                xul_app.update_version(row["sol"], row["eol"])
+            else:
+                xul_apps.append(xul_app)
+
+    return xul_apps
+
+def _get_id_max_min_triple(script_name, package, install_rdf):
+    """create array of id_max_min triples"""
+    id_max_min = []
+    model = RDF.Model()
+    parser = RDF.Parser(name="rdfxml")
+    parser.parse_into_model(model, "file:" + install_rdf)
+    query = RDF.Query(
+      """
+        PREFIX em: <http://www.mozilla.org/2004/em-rdf#>
+        SELECT ?id ?max ?min
+        WHERE {
+            [] em:targetApplication ?x .
+            ?x em:id ?id .
+            OPTIONAL {
+                ?x em:maxVersion ?max .
+                ?x em:minVersion ?min .
+            } .
+        }
+      """, query_language="sparql")
+    results = query.execute(model)
+    # append to id_max_min tripe to array
+    failures = 0
+    for target in results:
+        appid = target["id"].literal_value["string"]
+        max_version = target["max"].literal_value["string"]
+        min_version = target["min"].literal_value["string"]
+        id_max_min.append ((appid, max_version, min_version))
+        # Sanity check version range
+        if compare_versions(min_version, max_version) > 0:
+            msg = ("%s: %s contains an invalid version range for %s:\n"
+                   "%s: minVersion <= maxVersion is required, but %s > %s.\n"
+                   "%s: Please either fix the versions or remove the entry "
+                   "from install.xpi.") % \
+                   (script_name, package, appid, script_name, min_version,
+                    max_version, script_name)
+            print >> sys.stderr, msg
+            failures += 1
+    if failures > 0:
+        sys.exit(INVALID_VERSION_RANGE)
+
+    return id_max_min
+
+def get_supported_apps(script_name, xul_apps, install_rdf, package,
+                       verbose=False):
+    id_max_min = _get_id_max_min_triple(script_name, package, install_rdf)
+    if verbose:
+        print "%s: %s supports %i XUL application(s):" % (script_name, package,
+                                                          len(id_max_min))
+        for (appid, max_version, min_version) in id_max_min:
+            print "%s %s to %s" % (appid, min_version, max_version)
+
+    # find supported apps/packages
+    supported_apps = list()
+    for xul_app in xul_apps:
+        supported_app = [x for x in id_max_min if x[0] == xul_app.get_id()]
+        if len(supported_app) == 1:
+            # package is supported by extension
+            (appid, max_version, min_version) = supported_app.pop()
+            if compare_versions(xul_app.get_sol(), max_version) <= 0:
+                if compare_versions(xul_app.get_eol(), min_version) >= 0:
+                    xul_app.set_min_version(min_version)
+                    xul_app.set_max_version(max_version)
+                    supported_apps.append(xul_app)
+                    if verbose:
+                        print "%s: %s supports %s." % (script_name, package,
+                                                       xul_app.get_package())
+                elif verbose:
+                    print "%s: %s does not support %s (any more)." % \
+                          (script_name, package, xul_app.get_package())
+            elif verbose:
+                print "%s: %s does not support %s (yet)." % \
+                      (script_name, package, xul_app.get_package())
+        elif len(supported_app) > 1:
+            print ("%s: Found error in %s. There are multiple entries for "
+                   "application ID %s.") % (script_name, install_rdf,
+                                            xul_app.get_id())
+
+    return supported_apps
+
+def get_all_packages():
+    lines = open("debian/control").readlines()
+    package_lines = [x for x in lines if x.find("Package:") >= 0]
+    packages = [p[p.find(":")+1:].strip() for p in package_lines]
+    return packages
+
+def get_source_package_name():
+    source = None
+    control_file = open("debian/control")
+    for line in control_file:
+        if line.startswith("Source:"):
+            source = line[line.find(":")+1:].strip()
+            break
+    return source
+
+def has_no_xpi_depends():
+    lines = open("debian/control").readlines()
+    xpi_depends_lines = [l for l in lines if l.find("${xpi:Depends}") >= 0]
+    return len(xpi_depends_lines) == 0
+
+def get_provided_package_names(package, supported_apps):
+    ext_name = package
+    for prefix in ("firefox-", "iceweasel-", "mozilla-", "xul-ext-"):
+        if ext_name.startswith(prefix):
+            ext_name = ext_name[len(prefix):]
+
+    # check if MOZ_XPI_EXT_NAME is defined in debian/rules
+    lines = open("debian/rules").readlines()
+    lines = [l for l in lines if l.find("MOZ_XPI_EXT_NAME") != -1]
+    if len(lines) > 0:
+        line = lines[-1]
+        ext_name = line[line.find("=")+1:].strip()
+
+    provides = set()
+    provides.add("xul-ext-" + ext_name)
+    if ext_name == get_source_package_name():
+        provides.add(ext_name)
+
+    for xul_app in supported_apps:
+        app = xul_app.get_package()
+        for i in xrange(len(app) - 1, -1, -1):
+            if app[i] == '-':
+                app = app[:i]
+            elif not app[i].isdigit() and not app[i] == '.':
+                break
+        provides.add(app + "-" + ext_name)
+
+    # remove package name from provide list
+    provides.discard(package)
+
+    return list(provides)
+
+def find_install_rdfs(path):
+    install_rdfs = set()
+
+    if os.path.isfile(path) and os.path.basename(path) == "install.rdf":
+        install_rdfs.add(os.path.realpath(path))
+
+    if os.path.isdir(path):
+        # recursive walk
+        content = [os.path.join(path, d) for d in os.listdir(path)]
+        install_rdfs = reduce(lambda x, d: x.union(find_install_rdfs(d)),
+                              content, install_rdfs)
+
+    return install_rdfs
+
+def generate_substvars(script_name, xul_apps, package, verbose=False):
+    install_rdfs = find_install_rdfs("debian/" + package)
+    if len(install_rdfs) == 0:
+        if verbose:
+            print script_name + ": " + package + \
+                  " does not contain a XUL extension (no install.rdf found)."
+        return
+    elif len(install_rdfs) > 1:
+        print >> sys.stderr, ("%s: %s contains multiple install.rdf files. "
+                              "That's not supported.") % (script_name, package)
+        basepath_len = len(os.path.realpath("debian/" + package))
+        rdfs = [x[basepath_len:] for x in install_rdfs]
+        print >> sys.stderr, "\n".join(rdfs)
+        sys.exit(MULTIPLE_INSTALL_RDFS)
+    install_rdf = install_rdfs.pop()
+
+    filename = "debian/" + package + ".substvars"
+    if os.path.exists(filename):
+        substvars_file = open(filename)
+        lines = substvars_file.readlines()
+        substvars_file.close()
+    else:
+        lines = list()
+
+    # remove existing varibles
+    lines = [s for s in lines if not s.startswith("xpi:")]
+
+    supported_apps = get_supported_apps(script_name, xul_apps, install_rdf,
+                                        package, verbose)
+    packages = [a.get_versioned_package() for a in supported_apps]
+    if has_no_xpi_depends():
+        # Use xpi:Recommends instead of xpi:Depends for backwards compatibility
+        print ("%s: Warning: Please add ${xpi:Depends} to Depends. Using only "
+               "${xpi:Recommends} is deprecated.") % (script_name)
+        lines.append("xpi:Recommends=" + " | ".join(packages) + "\n")
+    else:
+        lines.append("xpi:Depends=" + " | ".join(packages) + "\n")
+        lines.append("xpi:Recommends=\n")
+    packages = [a.get_breaks() for a in supported_apps]
+    lines.append("xpi:Breaks=" + ", ".join(sorted(packages)) + "\n")
+    packages = [a.get_package() for a in supported_apps]
+    lines.append("xpi:Enhances=" + ", ".join(sorted(packages)) + "\n")
+    packages = get_provided_package_names(package, supported_apps)
+    lines.append("xpi:Provides=" + ", ".join(sorted(packages)) + "\n")
+
+    # write new variables
+    substvars_file = open(filename, "w")
+    substvars_file.writelines(lines)
+    substvars_file.close()
+
+
+class UnknownOptionIgnoringOptionParser(optparse.OptionParser):
+    def __init__ (self, **options):
+        optparse.OptionParser.__init__(self, **options)
+        self.unknown_options = []
+
+    def _process_long_opt(self, rargs, values):
+        option = rargs[0].split("=")[0]
+        if not option in self._long_opt:
+            self.unknown_options.append(option)
+            del rargs[0]
+        else:
+            optparse.OptionParser._process_long_opt(self, rargs, values)
+
+    def _process_short_opts(self, rargs, values):
+        option = rargs[0][0:2]
+        if not self._short_opt.get(option):
+            self.unknown_options.append(option)
+            del rargs[0]
+        else:
+            optparse.OptionParser._process_short_opts(self, rargs, values)
+
+
+def main():
+    script_name = os.path.basename(sys.argv[0])
+    epilog = "See %s(1) for more info." % (script_name)
+    parser = UnknownOptionIgnoringOptionParser(epilog=epilog)
+    parser.add_option("--all", action="store_true", dest="all",
+                      help="expand substvars to all known XUL applications "
+                           "(not only of your distribution)", default=False)
+    parser.add_option("-p", "--package", dest="packages", metavar="PACKAGE",
+                      action="append", default=[],
+                      help="calculate substvars only for the specified PACKAGE")
+    parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
+                      default=False, help="print more information")
+
+    options = parser.parse_args()[0]
+
+    if len(options.packages) == 0:
+        options.packages = get_all_packages()
+
+    if options.verbose:
+        for unknown_option in parser.unknown_options:
+            sys.stderr.write("%s: warning: no such option: %s\n" % \
+                             (script_name, unknown_option))
+        print script_name + ": packages:", ", ".join(options.packages)
+
+    xul_apps = get_xul_apps(script_name, options.all)
+    if options.verbose and len(xul_apps) > 0:
+        print script_name + ": found %i Xul applications:" % (len(xul_apps))
+        for xul_app in xul_apps:
+            print xul_app
+
+    for package in options.packages:
+        generate_substvars(script_name, xul_apps, package, options.verbose)
+
+if __name__ == "__main__":
+    main()

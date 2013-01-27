@@ -1,0 +1,289 @@
+#!/usr/bin/python
+
+# Copyright (c) 2009-2013, Benjamin Drung <bdrung@debian.org>
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+import csv
+import optparse
+import os
+import stat
+import subprocess
+import sys
+import zipfile
+
+import RDF
+
+LICENSE_PATTERN_LIST = (
+    "copying",
+    "gpl.txt",
+    "licence",
+    "license",
+    "licence.txt",
+    "license.txt"
+)
+
+# error codes
+COMMAND_LINE_SYNTAX_ERROR = 1
+XPI_FILE_DOES_NOT_EXISTS = 2
+
+def get_debian_directory(script_name):
+    """Return the path to the debian/ directory.
+
+    Search for a debian/ directory in the current working directory and crawling
+    up the parent directories until one is found. The script will fail if no
+    debian/ directory is found or the debian/ directory does not contain a
+    control file."""
+    base_directory = os.getcwd()
+    while not os.path.isdir(os.path.join(base_directory, "debian")):
+        parent_directory = os.path.split(base_directory)[0]
+        if base_directory == parent_directory:
+            sys.stderr.write(script_name + ": Error: Failed to find a debian/ "
+                             "directory. Please execute this script inside a "
+                             "Debian source package.\n")
+            sys.exit(1)
+        else:
+            base_directory = parent_directory
+    package_directory = os.path.join(base_directory, "debian")
+    # Check if debian/control exists.
+    if not os.path.isfile(os.path.join(package_directory, "control")):
+        sys.stderr.write(script_name + ": Error: debian/control file is "
+                         "missing.\n")
+        sys.exit(1)
+    return package_directory
+
+def get_query_field_id_as_list(rdf_path, query_string):
+    ret = []
+    model = RDF.Model()
+    parser = RDF.Parser(name="rdfxml")
+    parser.parse_into_model(model, "file:" + rdf_path)
+    query = RDF.Query("PREFIX em: <http://www.mozilla.org/2004/em-rdf#> " + \
+                      query_string, query_language="sparql")
+    results = query.execute(model)
+    for result in results:
+        ret.append(result["id"].literal_value["string"])
+    return ret
+
+def get_target_applications(install_rdf):
+    target_applications = get_query_field_id_as_list(install_rdf, 
+        "SELECT ?id WHERE { [] em:targetApplication ?x . ?x em:id ?id }")
+    return target_applications
+
+def get_extension_id(install_rdf):
+    extension_ids = set(get_query_field_id_as_list(install_rdf,
+        "SELECT ?id WHERE {?x em:targetApplication [] . ?x em:id ?id }"))
+    return extension_ids.pop()
+
+def get_arch(package, debian_directory):
+    lines = open(os.path.join(debian_directory, "control")).readlines()
+    package_lines = filter(lambda x: x.find("Package:") >= 0, lines)
+    packages = map(lambda x: x[x.find(":")+1:].strip(), package_lines)
+    architecture_lines = filter(lambda x: x.find("Architecture:") >= 0, lines)
+    architectures = map(lambda x: x[x.find(":")+1:].strip(), architecture_lines)
+    (_, arch) = filter(lambda (x, y): x == package,
+                       zip(packages, architectures))[0]
+    return arch
+
+def get_mode(filename):
+    statinfo = os.stat(filename)
+    mode = statinfo[stat.ST_MODE]
+    return mode & 0777
+
+def get_xul_apps():
+    csvfile = open("/usr/share/mozilla-devscripts/xul-app-data.csv")
+    csv_reader = csv.DictReader(csvfile)
+    rows = []
+    for row in csv_reader:
+        rows.append(row)
+    return rows
+
+def install_xpi(script_name, package, xpi_file, exclude, install_dir, links,
+        correct_permissions, remove_licenses, system_prefs, debian_directory,
+        verbose=False):
+    # get xpi file content list
+    if not os.path.isfile(xpi_file):
+        print >> sys.stderr, "%s: Error: xpi file %s does not exist." % \
+                             (script_name, xpi_file)
+        sys.exit(XPI_FILE_DOES_NOT_EXISTS)
+    zfobj = zipfile.ZipFile(xpi_file)
+    xpi_content = zfobj.namelist()
+
+    # determine installation directory
+    if get_arch(package, debian_directory) == "all":
+        lib_share_dir = "share"
+    else:
+        lib_share_dir = "lib"
+    if install_dir is None:
+        install_dir = os.path.join("usr", lib_share_dir, "xul-ext",
+                package.replace("xul-ext-", ""))
+    copy_dir = os.path.join(debian_directory, package, install_dir.strip("/"))
+    if verbose:
+        print "%s: install directory: %s" % (script_name, install_dir)
+
+    # remove documented license files
+    if remove_licenses:
+        for name in filter(lambda x: not x.endswith('/'), xpi_content):
+            basename = os.path.basename(name).lower()
+            if basename in LICENSE_PATTERN_LIST:
+                exclude.append(name)
+                print "%s: exclude license file %s" % (script_name, name)
+
+    # create directory and extract xpi file
+    if not os.path.isdir(copy_dir):
+        os.makedirs(copy_dir)
+    command = ["unzip", "-o", "-d", copy_dir, xpi_file]
+    if len(exclude) > 0:
+        command.append("-x")
+        command.extend(exclude)
+    print " ".join(command)
+    subprocess.call(command)
+
+    # correct permissons of files to 644 and directories to 755
+    if correct_permissions:
+        for name in xpi_content:
+            filename = os.path.join(copy_dir, name)
+            if os.path.exists(filename):
+                mode = get_mode(filename)
+                if os.path.isdir(filename) and mode != 0755:
+                    print "%s: correct permission from %s to %s of %s" % \
+                          (script_name, oct(mode), oct(0755), name)
+                    os.chmod(filename, 0755)
+                elif os.path.isfile(filename):
+                    header = open(filename, "r").read(2)
+                    if header != "#!" and mode != 0644:
+                        # file without shebang
+                        print "%s: correct permission from %s to %s of %s" % \
+                              (script_name, oct(mode), oct(0644), name)
+                        os.chmod(filename, 0644)
+                    elif header == "#!" and mode != 0755:
+                        # file with shebang
+                        print "%s: correct permission from %s to %s of %s" % \
+                              (script_name, oct(mode), oct(0755), name)
+                        os.chmod(filename, 0755)
+
+    # create a system preference file in /etc
+    if system_prefs:
+        # search for preference .js files in defaults/preferences/
+        pref_dir = os.path.join("defaults", "preferences")
+        preferences = filter(lambda f: os.path.dirname(f) == pref_dir and \
+                                       f.endswith(".js"), xpi_content)
+        if len(preferences) > 0:
+            prefdir = os.path.join("etc", "xul-ext")
+            full_prefdir = os.path.join(debian_directory, package, prefdir)
+            if not os.path.exists(full_prefdir):
+                os.makedirs(full_prefdir)
+            prefname = package.replace("xul-ext-", "") + ".js"
+            # create system preference file
+            f = open(os.path.join(full_prefdir, prefname), "w")
+            config_file = os.path.join(debian_directory, package + ".js")
+            if os.path.isfile(config_file):
+                # use debian/package.js as configuration file if it exists
+                content = open(config_file).read()
+                # replace @INSTALLDIR@ by the actual installation directory
+                content = content.replace("@INSTALLDIR@",
+                                          os.path.join("/", install_dir))
+                f.write(content)
+            else:
+                f.write("// Place your preferences for " + package +
+                        " in this file.\n")
+                f.write("// You can override here the preferences specified "
+                        "in\n")
+                map(lambda x: f.write("// " +
+                                      os.path.join("/", install_dir, x) +
+                                      "\n"), preferences)
+            f.close()
+            link_source = os.path.join(prefdir, prefname)
+            link_target = os.path.join(install_dir, "defaults", "preferences",
+                                       "000system.js")
+            command = ["dh_link", "-p" + package, link_source, link_target]
+            if verbose:
+                print " ".join(command)
+            subprocess.call(command)
+
+    # get symlinks list
+    extension_id = get_extension_id(os.path.join(copy_dir, "install.rdf"))
+    filename = os.path.join(copy_dir, "install.rdf")
+    target_applications = get_target_applications(filename)
+    for target_application in target_applications:
+        destination = os.path.join("/usr", lib_share_dir, "mozilla/extensions",
+                target_application, extension_id)
+        links.add(destination)
+
+    # create symlinks
+    for link in links:
+        command = ["dh_link", "-p" + package, install_dir, link]
+        print " ".join(command)
+        subprocess.call(command)
+
+def get_first_package(debian_directory):
+    lines = open(os.path.join(debian_directory, "control")).readlines()
+    package_lines = filter(lambda x: x.find("Package:") >= 0, lines)
+    packages = map(lambda x: x[x.find(":")+1:].strip(), package_lines)
+    return packages[0]
+
+def main():
+    script_name = os.path.basename(sys.argv[0])
+    usage = "%s [options] <xpi-file>" % (script_name)
+    epilog = "See %s(1) for more info." % (script_name)
+    parser = optparse.OptionParser(usage=usage, epilog=epilog)
+
+    parser.add_option("--disable-system-prefs",
+            help="do not create a system preference file in /etc",
+            dest="system_prefs", action="store_false", default=True)
+    parser.add_option("-x", "--exclude", metavar="FILE",
+            help="do not install specified FILE",
+            dest="exclude", action="append", default=list())
+    parser.add_option("-i", "--install-dir", metavar="DIRECTORY",
+            help="install extension into the specified DIRECTORY",
+            dest="install_dir")
+    parser.add_option("-l", "--link", metavar="DIRECTORY",
+            help="link from DIRECTORY to extension directory",
+            dest="links", action="append", default=list())
+    parser.add_option("-p", "--package",  metavar="PACKAGE",
+            help="install the extension into specified PACKAGE",
+            dest="package", default=None)
+    parser.add_option("--preserve-permissions",
+            help="do not adjust the file permissions",
+            dest="correct_permissions", action="store_false", default=True)
+    parser.add_option("-r", "--remove-license-files",
+            help="do not install license files",
+            dest="remove_licenses", action="store_true", default=False)
+    parser.add_option("-v", "--verbose", help="print more information",
+            dest="verbose", action="store_true", default=False)
+
+    (options, args) = parser.parse_args()
+
+    if len(args) == 0:
+        print >> sys.stderr, "%s: Error: No xpi file specified." % (script_name)
+        sys.exit(COMMAND_LINE_SYNTAX_ERROR)
+    elif len(args) > 1:
+        print >> sys.stderr, "%s: Error: Multiple xpi files specified: %s" % \
+                             (script_name, ", ".join(args))
+        sys.exit(COMMAND_LINE_SYNTAX_ERROR)
+
+    debian_directory = get_debian_directory(script_name)
+
+    if options.package is None:
+        options.package = get_first_package(debian_directory)
+
+    if options.verbose:
+        print script_name + ": Install %s into package %s." % \
+              (args[0], options.package)
+
+    install_xpi(script_name, options.package, args[0], options.exclude,
+                options.install_dir, set(options.links),
+                options.correct_permissions, options.remove_licenses,
+                options.system_prefs, debian_directory, options.verbose)
+
+if __name__ == "__main__":
+    main()
