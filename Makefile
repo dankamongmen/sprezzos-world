@@ -712,6 +712,14 @@ $(LIBNETSSLEAYPERL): $(SPREZZ)/libnet-ssleay-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Net-SSLeay-$(libnet-ssleay-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libxml-parser-perl
+libxml-parser-perl:$(LIBXMLPARSERPERL)_$(ARCH).deb
+$(LIBXMLPARSERPERL): $(SPREZZ)/libxml-parser-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf XML-Parser-$(libxml-parser-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libhtml-parser-perl
 libhtml-parser-perl:$(LIBHTMLPARSERPERL)_$(ARCH).deb
 $(LIBHTMLPARSERPERL): $(SPREZZ)/libhtml-parser-perl/debian/changelog
