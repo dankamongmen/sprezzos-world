@@ -710,7 +710,7 @@ $(LIBNETSSLEAYPERL): $(SPREZZ)/libnet-ssleay-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf net-ssleay-$(libnet-ssleay-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Net-SSLeay-$(libnet-ssleay-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libhtml-parser-perl
 libhtml-parser-perl:$(LIBHTMLPARSERPERL)_$(ARCH).deb
