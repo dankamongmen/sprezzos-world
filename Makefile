@@ -720,6 +720,14 @@ $(LIBXMLPARSERPERL): $(SPREZZ)/libxml-parser-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf XML-Parser-$(libxml-parser-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libtext-iconv-perl
+libtext-iconv-perl:$(LIBTEXTICONVPERL)_$(ARCH).deb
+$(LIBTEXTICONVPERL): $(SPREZZ)/libtext-iconv-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Text-Iconv-$(libtext-iconv-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libhtml-parser-perl
 libhtml-parser-perl:$(LIBHTMLPARSERPERL)_$(ARCH).deb
 $(LIBHTMLPARSERPERL): $(SPREZZ)/libhtml-parser-perl/debian/changelog
