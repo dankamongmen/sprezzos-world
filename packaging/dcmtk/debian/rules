@@ -1,0 +1,207 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+# See: http://forum.dcmtk.org/viewtopic.php?t=1237
+ARCH=""
+
+# Package installation directories
+pkg=dcmtk
+PKGDIR_DCMTK=$(CURDIR)/debian/$(pkg)
+PKGDIR_DCMTK_LIB=$(CURDIR)/debian/libdcmtk2
+PKGDIR_DCMTK_DEV=$(CURDIR)/debian/libdcmtk2-dev
+PKGDIR_DCMTK_DOC=$(CURDIR)/debian/$(pkg)-doc
+PKGDIR_DCMTK_WWW=$(CURDIR)/debian/$(pkg)-www
+
+# Library version
+LIB_VERSION=2.0.0
+
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed -Wl,--no-undefined
+# build system is too complex to modify for support -fPIE to exe and -fPIC to
+# shared libs we would need to use libtool or equivalent to filter shared libs
+# from exe
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+config/config.status: configure
+	dh_testdir
+
+	# keep ap copy of the original config files to be able to move
+	# them back right into place in the clean target
+	cd config && mkdir backup && cp -a config* confmod include backup
+
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	cp -f /usr/share/misc/config.sub config/config.sub
+endif
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	cp -f /usr/share/misc/config.guess config/config.guess
+endif
+
+	cd config && ./autoall && cd .. && 			\
+	./configure 	--host=$(DEB_HOST_GNU_TYPE)		\
+			--build=$(DEB_BUILD_GNU_TYPE)		\
+			--prefix=/usr				\
+			--exec-prefix=/usr			\
+			--mandir=\$${prefix}/share/man 		\
+			--infodir=\$${prefix}/share/info 	\
+			--includedir=\$${prefix}/include	\
+			--libdir=\$${prefix}/lib		\
+			--datadir=\$${prefix}/share/dcmtk		\
+			--sysconfdir=/etc/$(pkg)		\
+			--with-private-tags 			\
+			--with-libxml                  	\
+			--with-libtiff                  	\
+			--with-zlib                     	\
+			--with-libpng                   	\
+			--with-libwrap 				\
+			--with-openssl
+
+
+build-arch: config/config.status build-arch-stamp
+build-arch-stamp:
+	dh_testdir
+
+	# Add here commands to compile the package.
+
+	# We have to perfom some magic here to have the dcmtk utilies
+	# linked against shared dcmtk libs without forcing the utilities
+	# themselves to be compiled with -fPIC as well.
+	# In a first step we adjust config/Makefile.def to
+	# build shared libraries. In a second step we build
+	# the shared libs only (i.e. without utilities). In a third step we
+	# restore the original state of config/Makefile.def. In a forth
+	# step we run `make clean' on the source tree. (This leaves the
+	# *.so libs untouched but forces recompilation in the next step.)
+	# In the last step we run `make all'. This will build both the
+	# utilities and the static libraries without -fPIC but links the
+	# utilities dynamically against the shared library versions.
+
+	mv config/Makefile.def config/Makefile.def.static && \
+	sed -e '/^CFLAGS =/s/-O -/-fPIC -/' -e '/^CXXFLAGS =/s/-O -/-fPIC -/' \
+	-e '/^AR =/s/ar/g++/' -e '/^ARFLAGS =/s/cruv/$(LDFLAGS) -shared	-Wl,-soname,\$$\@.2 -o/' \
+	-e '/^LIBEXT =/s/a/so/' -e '/^RANLIB =/s/ranlib/:/' \
+	<config/Makefile.def.static >config/Makefile.def && \
+	$(MAKE) libsrc-all && \
+	mv config/Makefile.def.static config/Makefile.def && \
+	$(MAKE) clean && \
+	$(MAKE)
+
+	touch build-arch-stamp
+
+build-indep: config/config.status  build-indep-stamp
+build-indep-stamp:
+	dh_testdir
+
+	$(MAKE) html
+
+	touch build-indep-stamp
+
+
+build: build-arch
+
+clean:
+	dh_testdir
+	dh_testroot
+	if [ -d config/backup ] ; then cd config; mv backup/* . ; rm -rf backup ; fi
+	rm -f build-arch-stamp build-indep-stamp config/config.status
+
+	[ ! -f config/Makefile.def ] || $(MAKE) distclean
+
+	# Do not forget to remove shared libs as well
+	find $(CURDIR) -name '*.so' -exec rm -f \{\} \;
+
+	-test -r config/lzwtest.tif && \
+		rm -f config/lzwtest.tif
+
+	rm -f config/config.sub
+	rm -f config/config.guess
+
+	dh_clean
+
+install: install-indep install-arch
+install-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_prep -i
+	dh_installdirs -i
+
+	$(MAKE) install-html DESTDIR=$(PKGDIR_DCMTK_DOC)
+
+install-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs -a
+
+	$(MAKE) install DESTDIR=$(PKGDIR_DCMTK) && \
+	$(MAKE) install-lib DESTDIR=$(PKGDIR_DCMTK_DEV)
+
+	# Do not forget to install the shared libs as well
+	# TODO: make use of d-shlibs (andreas tille)
+	find $(CURDIR) -path $(CURDIR)/debian -prune -o \
+		-name 'lib*.so' -exec install -s -m 644 \{\} $(PKGDIR_DCMTK_LIB)/usr/lib \;
+
+	# Fix filenames / add symlinks for shared libs
+	for i in $(PKGDIR_DCMTK_LIB)/usr/lib/*.so; do \
+		mv $$i $$i.2.0.0 && \
+		ln -sf `basename \$$i.2.0.0` \
+			$(PKGDIR_DCMTK_DEV)/usr/lib/`basename $$i` && \
+		ln -sf `basename \$$i.2.0.0` $$i.2; \
+	done
+	# cp -a debian/apache.conf $(PKGDIR_DCMTK_WWW)/etc/apache2/conf.d/$(pkg)
+
+# Build architecture-independent files here.
+binary-indep: build-indep install-indep
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs -i CHANGES.360
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_installman -i
+	dh_install -i
+	dh_link -i
+	dh_lintian -i
+	dh_strip -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build-arch install-arch
+	dh_testdir -a
+	dh_testroot -a
+	dh_installchangelogs -a CHANGES.360
+	dh_installdocs -a
+	dh_installexamples -a
+	dh_installinit -a --name=dcmqrscp
+	dh_installinit -a --name=storescp
+	dh_installman -a
+	dh_install -a
+	chmod 755 $(PKGDIR_DCMTK_WWW)/usr/lib/dcmtk/cgi-bin/*.p[lh]
+	mv $(PKGDIR_DCMTK)/usr/share/dcmtk/*.dic $(PKGDIR_DCMTK_LIB)/usr/share/dcmtk/
+	dh_link -a
+	dh_lintian -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_perl -a
+	dh_makeshlibs -a -V
+	dh_installdeb -a
+	dh_shlibdeps -a -l debian/libdcmtk2/usr/lib
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+get-orig-source:
+	uscan --force-download --verbose
+
+binary: binary-indep binary-arch
+.PHONY: build-indep build-arch build clean binary-indep binary-arch binary install-indep install-arch install 
