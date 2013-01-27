@@ -1944,6 +1944,14 @@ $(DOCBOOK): $(SPREZZ)/docbook/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf docbook-$(docbook_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: docbook2x
+docbook2x:$(DOCBOOK2X)_$(ARCH).deb
+$(DOCBOOK2X): $(SPREZZ)/docbook2x/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf docbook2X-$(docbook2x_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: docbook-xml
 docbook-xml:$(DOCBOOKXML)_$(ARCH).deb
 $(DOCBOOKXML): $(SPREZZ)/docbook-xml/debian/changelog
