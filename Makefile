@@ -737,6 +737,14 @@ $(LIBLISTMOREUTILSPERL): $(SPREZZ)/liblist-moreutils-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf List-MoreUtils-$(liblist-moreutils-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libnet-dns-perl
+libnet-dns-perl:$(LIBNETDNSPERL)_$(ARCH).deb
+$(LIBNETDNSPERL): $(SPREZZ)/libnet-dns-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Net-DNS-$(libnet-dns-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnet-ssleay-perl
 libnet-ssleay-perl:$(LIBNETSSLEAYPERL)_$(ARCH).deb
 $(LIBNETSSLEAYPERL): $(SPREZZ)/libnet-ssleay-perl/debian/changelog
@@ -6498,6 +6506,14 @@ $(RAWSTUDIO): $(SPREZZ)/rawstudio/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rawstudio-$(rawstudio_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: razor
+razor:$(RAZOR)_$(ARCH).deb
+$(RAZOR): $(SPREZZ)/razor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf razor-agents-$(razor_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: razorqt
 razorqt:$(RAZORQT)_$(ARCH).deb
