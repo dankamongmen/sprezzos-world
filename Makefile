@@ -4862,6 +4862,14 @@ $(M4): $(SPREZZ)/m4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf m4-$(m4_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: man-db
+man-db:$(MANDB)_$(ARCH).deb
+$(MANDB): $(SPREZZ)/man-db/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf man-db-$(man-db_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: manpages
 manpages:$(MANPAGES)_$(ARCH).deb
 $(MANPAGES): $(SPREZZ)/manpages/debian/changelog
@@ -5044,7 +5052,7 @@ $(LIBMICROHTTPD): $(SPREZZ)/libmicrohttpd/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libmicrohttpd_$(libmicrohttpd_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libmicrohttpd-$(libmicrohttpd_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libmpeg3
 libmpeg3:$(LIBMPEG3)_$(ARCH).deb
