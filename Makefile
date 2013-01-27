@@ -713,13 +713,29 @@ $(libsndfile): $(SPREZZ)/libsndfile/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsndfile-$(libsndfile_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libalgorithm-permute-perl
+libalgorithm-permute-perl:$(LIBALGORITHMPERMUTEPERL)_$(ARCH).deb
+$(LIBALGORITHMPERMUTEPERL): $(SPREZZ)/libalgorithm-permute-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libalgorithm-permute-$(libalgorithm-permute-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libalgorithm-diff-xs-perl
+libalgorithm-diff-xs-perl:$(LIBALGORITHMDIFFXSPERL)_$(ARCH).deb
+$(LIBALGORITHMDIFFXSPERL): $(SPREZZ)/libalgorithm-diff-xs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libalgorithm-diff-xs-$(libalgorithm-diff-xs-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: liblist-moreutils-perl
 liblist-moreutils-perl:$(LIBLISTMOREUTILSPERL)_$(ARCH).deb
 $(LIBLISTMOREUTILSPERL): $(SPREZZ)/liblist-moreutils-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf list-moreutils-$(liblist-moreutils-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf List-MoreUtils-$(liblist-moreutils-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libnet-ssleay-perl
 libnet-ssleay-perl:$(LIBNETSSLEAYPERL)_$(ARCH).deb

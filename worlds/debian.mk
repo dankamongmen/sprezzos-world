@@ -252,3 +252,11 @@ $(SIMPLECDD): $(SPREZZ)/simple-cdd/debian/changelog
 	tar cJvf simple-cdd_$(simple-cdd_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: tasksel
+tasksel:$(TASKSEL)_$(ARCH).deb
+$(TASKSEL): $(SPREZZ)/tasksel/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf tasksel_$(tasksel_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
