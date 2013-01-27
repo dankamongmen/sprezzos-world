@@ -719,6 +719,8 @@ $(LIBXMLLIBXMLPERL): $(SPREZZ)/libxml-libxml-perl/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf XML-LibXML-$(libxml-libxml-perl_UPVER).tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: libxml-parser-perl
 libxml-parser-perl:$(LIBXMLPARSERPERL)_$(ARCH).deb
