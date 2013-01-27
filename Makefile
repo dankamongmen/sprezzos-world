@@ -704,6 +704,14 @@ $(libsndfile): $(SPREZZ)/libsndfile/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsndfile-$(libsndfile_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libnet-ssleay-perl
+libnet-ssleay-perl:$(LIBNETSSLEAYPERL)_$(ARCH).deb
+$(LIBNETSSLEAYPERL): $(SPREZZ)/libnet-ssleay-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf net-ssleay-$(libnet-ssleay-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libhtml-parser-perl
 libhtml-parser-perl:$(LIBHTMLPARSERPERL)_$(ARCH).deb
 $(LIBHTMLPARSERPERL): $(SPREZZ)/libhtml-parser-perl/debian/changelog
@@ -711,6 +719,14 @@ $(LIBHTMLPARSERPERL): $(SPREZZ)/libhtml-parser-perl/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf HTML-Parser-$(libhtml-parser-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libhtml-tree-perl
+libhtml-tree-perl:$(LIBHTMLTREEPERL)_$(ARCH).deb
+$(LIBHTMLTREEPERL): $(SPREZZ)/libhtml-tree-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf HTML-Tree-$(libhtml-tree-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libhttp-cookies-perl
 libhttp-cookies-perl:$(LIBHTTPCOOKIESPERL)_$(ARCH).deb
