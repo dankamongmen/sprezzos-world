@@ -110,7 +110,7 @@ class VersionLinux(Version):
 (?P<version>
     \d+\.\d+
 )
-(?P<update>
+(?:
     \.\d+
 )?
 (?:
@@ -126,7 +126,7 @@ class VersionLinux(Version):
     )
 )?
 -
-\d+
+SprezzOS\d+
 (\.\d+)?
 (?:
     (?P<revision_experimental>
@@ -145,16 +145,14 @@ $
         super(VersionLinux, self).__init__(version)
         match = self._version_linux_re.match(version)
         if match is None:
-            raise RuntimeError(u"Invalid debian linux version")
+            raise RuntimeError(u"Invalid SprezzOS linux version")
         d = match.groupdict()
         self.linux_modifier = d['modifier']
         self.linux_version = d['version']
         if d['modifier'] is not None:
-            assert not d['update']
             self.linux_upstream = u'-'.join((d['version'], d['modifier']))
         else:
             self.linux_upstream = d['version']
-        self.linux_upstream_full = self.linux_upstream + (d['update'] or u'')
         self.linux_dfsg = d['dfsg']
         self.linux_revision_experimental = match.group('revision_experimental') and True
         self.linux_revision_other = match.group('revision_other') and True
