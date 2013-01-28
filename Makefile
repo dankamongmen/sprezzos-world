@@ -754,6 +754,14 @@ $(LIBDBIPERL): $(SPREZZ)/libdbi-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf DBI-$(libdbi-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libcurses-perl
+libcurses-perl:$(LIBCURSESPERL)_$(ARCH).deb
+$(LIBCURSESPERL): $(SPREZZ)/libcurses-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Curses-$(libcurses-perl_UPVER).tgz $(TARARGS) $@
+
 .PHONY: libsocket6-perl
 libsocket6-perl:$(LIBSOCKET6PERL)_$(ARCH).deb
 $(LIBSOCKET6PERL): $(SPREZZ)/libsocket6-perl/debian/changelog
