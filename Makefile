@@ -6836,6 +6836,14 @@ $(SPACEFM): $(SPREZZ)/spacefm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf spacefm-$(spacefm_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: spamassassin
+spamassassin:$(SPAMASSASSIN)_$(ARCH).deb
+$(SPAMASSASSIN): $(SPREZZ)/spamassassin/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf Mail-SpamAssassin-$(spamassassin_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: speech-tools
 speech-tools:$(SPEECHTOOLS)_$(ARCH).deb
 $(SPEECHTOOLS): $(SPREZZ)/speech-tools/debian/changelog
