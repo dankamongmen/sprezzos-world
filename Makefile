@@ -754,6 +754,14 @@ $(LIBDBIPERL): $(SPREZZ)/libdbi-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf DBI-$(libdbi-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libterm-readkey-perl
+libterm-readkey-perl:$(LIBTERMREADKEYPERL)_$(ARCH).deb
+$(LIBTERMREADKEYPERL): $(SPREZZ)/libterm-readkey-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf TermReadKey-$(libterm-readkey-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libcurses-perl
 libcurses-perl:$(LIBCURSESPERL)_$(ARCH).deb
 $(LIBCURSESPERL): $(SPREZZ)/libcurses-perl/debian/changelog
