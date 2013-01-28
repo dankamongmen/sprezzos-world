@@ -3207,8 +3207,8 @@ gsoap:$(GSOAP)_$(ARCH).deb
 $(GSOAP): $(SPREZZ)/gsoap/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gsoap-$(gsoap_UPVER).tar.gz $(TARARGS) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf gsoap_$(gsoap_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gssdp
 gssdp:$(GSSDP)_$(ARCH).deb
