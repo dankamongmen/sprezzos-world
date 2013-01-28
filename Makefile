@@ -714,6 +714,14 @@ $(LIBSIGSEGV): $(SPREZZ)/libsigsegv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsigsegv-$(libsigsegv_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libsub-name-perl
+libsub-name-perl:$(LIBSUBNAMEPERL)_$(ARCH).deb
+$(LIBSUBNAMEPERL): $(SPREZZ)/libsub-name-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Sub-Name-$(libsub-name-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libsndfile
 libsndfile:$(libsndfile)_$(ARCH).deb
 $(libsndfile): $(SPREZZ)/libsndfile/debian/changelog
