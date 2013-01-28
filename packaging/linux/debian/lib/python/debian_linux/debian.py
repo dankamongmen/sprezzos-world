@@ -126,7 +126,7 @@ class VersionLinux(Version):
     )
 )?
 -
-\d+
+SprezzOS\d+
 (\.\d+)?
 (?:
     (?P<revision_experimental>
@@ -145,7 +145,7 @@ $
         super(VersionLinux, self).__init__(version)
         match = self._version_linux_re.match(version)
         if match is None:
-            raise RuntimeError(u"Invalid debian linux version")
+            raise RuntimeError(u"Invalid SprezzOS linux version")
         d = match.groupdict()
         self.linux_modifier = d['modifier']
         self.linux_version = d['version']
