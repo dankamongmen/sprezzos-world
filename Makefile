@@ -322,10 +322,19 @@ gtkpod:$(GTKPOD)_$(ARCH).deb
 $(GTKPOD): $(SPREZZ)/gtkpod/debian/changelog
 	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	git clone git@github.com:Sprezzatech/gtkpod.git $@
+	echo $(gtkpod_UPVER) > $@/version
 	tar cJf gtkpod-$(gtkpod_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf gtkpod-$(gtkpod_UPVER).tar.xz gtkpod_$(gtkpod_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+#.PHONY: gtkpod
+#gtkpod:$(GTKPOD)_$(ARCH).deb
+#$(GTKPOD): $(SPREZZ)/gtkpod/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@/
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xzvf gtkpod-$(gtkpod_UPVER).tar.gz $(TARARGS) $@
+#
 #.PHONY: miro
 #miro:$(MIRO)_$(ARCH).deb
 #$(MIRO): $(SPREZZ)/miro/debian/changelog
