@@ -5258,13 +5258,13 @@ $(LIBMPEG3): $(SPREZZ)/libmpeg3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libmpeg3-$(libmpeg3_UPVER)-src.tar.bz2 $(TARARGS) $@
 
-.PHONY: libmuiscbrainz-discid-perl
-libmuiscbrainz-discid-perl:$(LIBMUSICBRAINZDISCIDPERL)_$(ARCH).deb
-$(LIBMUSICBRAINZDISCIDPERL): $(SPREZZ)/libmuiscbrainz-discid-perl/debian/changelog
+.PHONY: libmusicbrainz-discid-perl
+libmusicbrainz-discid-perl:$(LIBMUSICBRAINZDISCIDPERL)_$(ARCH).deb
+$(LIBMUSICBRAINZDISCIDPERL): $(SPREZZ)/libmusicbrainz-discid-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libmuiscbrainz-discid-perl-$(libmuiscbrainz-discid-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf MusicBrainz-DiscID-$(libmusicbrainz-discid-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: mpd
 mpd:$(MPD)_$(ARCH).deb
