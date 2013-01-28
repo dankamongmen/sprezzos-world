@@ -8005,11 +8005,6 @@ $(UDPKG): $(SPREZZ)/udpkg/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf udpkg_$(udpkg_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
-.PHONY: firmware-all
-firmware-all:$(FIRMWAREALL)_$(ARCH).deb
-$(FIRMWAREALL): $(SPREZZ)/firmware-all/debian/changelog
-	cp -r $(<D)/.. $@
-
 clean:
 	rm -rf -- sprezzos-world $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
 

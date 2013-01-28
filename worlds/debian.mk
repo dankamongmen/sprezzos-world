@@ -103,6 +103,15 @@ $(DPKG): $(SPREZZ)/dpkg/debian/changelog
 	tar cJvf dpkg_$(dpkg_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: firmware-all
+firmware-all:$(FIRMWAREALL)_$(ARCH).deb
+$(FIRMWAREALL): $(SPREZZ)/firmware-all/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf firmware-all_$(firmware-all_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: git-annex
 git-annex:$(GITANNEX)_$(ARCH).deb
 $(GITANNEX): $(SPREZZ)/git-annex/debian/changelog
