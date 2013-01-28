@@ -4122,6 +4122,14 @@ $(LIBEVENT): $(SPREZZ)/libevent/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libevent-$(libevent_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libextutils-parsexs-perl
+libextutils-parsexs-perl:$(LIBEXTUTILSPARSEXSPERL)_$(ARCH).deb
+$(LIBEXTUTILSPARSEXSPERL): $(SPREZZ)/libextutils-parsexs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ExtUtils-ParseXS-$(shell echo $(libextutils-parsexs-perl_UPVER) | sed -e 's/0*$$//').tar.gz $(TARARGS) $@
+
 .PHONY: libedit
 libedit:$(LIBEDIT)_$(ARCH).deb
 $(LIBEDIT): $(SPREZZ)/libedit/debian/changelog
