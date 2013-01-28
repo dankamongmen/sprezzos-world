@@ -5793,7 +5793,7 @@ $(OPENCHANGE): $(SPREZZ)/openchange/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf openchange-$(openchange_UPVER)-BORG.tar.gz $(TARARGS) $@
+	tar xzvf openchange-$(openchange_UPVER)-QUADRANT.tar.gz $(TARARGS) $@
 
 .PHONY: opencv
 opencv:$(OPENCV)_$(ARCH).deb
