@@ -7201,8 +7201,9 @@ vim:$(VIM)_$(ARCH).deb
 $(VIM): $(SPREZZ)/vim/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	{ cd $@ && TARBALL=`uscan --force-download --download-current-version --dehs | xmlstarlet sel -t -v //target` && \
-	  cd - && tar xjvf $$TARBALL $(TARARGS) $@ ; }
+	{ cd $@ && TARBALL=`uscan --force-download --download-current-version --dehs | xmlstarlet sel -t -v //upstream-version` && \
+		cd - && tar xjvf vim-$$TARBALL.tar.bz2 $(TARARGS) $@ ; }
+
 
 .PHONY: vinagre
 vinagre:$(VINAGRE)_$(ARCH).deb
