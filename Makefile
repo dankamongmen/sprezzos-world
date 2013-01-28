@@ -3410,6 +3410,14 @@ $(HICOLORICONTHEME): $(SPREZZ)/hicolor-icon-theme/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hicolor-icon-theme-$(hicolor-icon-theme_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: hplip
+hplip:$(HPLIP)_$(ARCH).deb
+$(HPLIP): $(SPREZZ)/hplip/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hplip-$(hplip_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: htop
 htop:$(HTOP)_$(ARCH).deb
 $(HTOP): $(SPREZZ)/htop/debian/changelog
