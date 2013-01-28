@@ -1797,6 +1797,14 @@ $(CLIQUER): $(SPREZZ)/cliquer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cliquer-$(cliquer_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cloud-init
+cloud-init:$(CLOUDINIT)_$(ARCH).deb
+$(CLOUDINIT): $(SPREZZ)/cloud-init/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cloud-init-$(cloud-init_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: clutter
 clutter:$(CLUTTER)_$(ARCH).deb
 $(CLUTTER): $(SPREZZ)/clutter/debian/changelog
