@@ -44,7 +44,7 @@ $(FOTOWALL): $(SPREZZ)/fotowall/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf Fotowall_$(fotowall_UPVER).orig.tar.bz2 $(TARARGS) $@
+	tar xjvf Fotowall-$(fotowall_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: grantlee
 grantlee:$(GRANTLEE)_$(ARCH).deb
