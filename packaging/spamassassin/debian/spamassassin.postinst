@@ -1,0 +1,41 @@
+#!/bin/sh
+
+set -e
+
+sa_compile() {
+    # Compile, if rules have previously been compiled, and it's possible
+    if [ -x /usr/bin/re2c -a -x /usr/bin/sa-compile -a -d /var/lib/spamassassin/compiled ]; then
+        echo "Running sa-compile (may take a long time)"
+        su debian-spamd -c "sa-compile --quiet"
+    fi
+}
+
+if [ "$1" = "configure" ]; then
+    # If a new install, or an upgrade from 3.3.2-2 or earlier...
+    if dpkg --compare-versions "$2" "le" "3.3.2-2"; then
+        if ! getent passwd debian-spamd > /dev/null ; then
+            adduser --system --group --shell /bin/sh --disabled-password \
+                --home /var/lib/spamassassin debian-spamd
+        else
+            mkdir -p /var/lib/spamassassin
+        fi
+        # Fix permissions of spamassassin; A no-op on new installs, lets 
+        # debian-spamd claim ownership of spamassassin updates on upgrades.
+        chown -R debian-spamd:debian-spamd /var/lib/spamassassin
+    fi
+
+    test -d /var/lib/spamassassin/sa-update-keys ||
+        install -d -o debian-spamd -g debian-spamd -m 700 /var/lib/spamassassin/sa-update-keys
+
+    su debian-spamd -c "sa-update --gpghomedir /var/lib/spamassassin/sa-update-keys \
+        --import /usr/share/spamassassin/GPG.KEY"
+
+    sa_compile
+fi
+
+if [ "$1" = "triggered" ] && [ "$2" = "perl-major-upgrade" ]; then
+    sa_compile
+    invoke-rc.d spamassassin restart
+fi
+
+#DEBHELPER#
