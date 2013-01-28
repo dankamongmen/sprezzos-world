@@ -794,6 +794,14 @@ $(LIBNETDNSPERL): $(SPREZZ)/libnet-dns-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Net-DNS-$(libnet-dns-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libnetaddr-ip-perl
+libnetaddr-ip-perl:$(LIBNETADDRIPPERL)_$(ARCH).deb
+$(LIBNETADDRIPPERL): $(SPREZZ)/libnetaddr-ip-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf NetAddr-IP-$(libnetaddr-ip-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnet-ssleay-perl
 libnet-ssleay-perl:$(LIBNETSSLEAYPERL)_$(ARCH).deb
 $(LIBNETSSLEAYPERL): $(SPREZZ)/libnet-ssleay-perl/debian/changelog

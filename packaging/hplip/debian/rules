@@ -1,0 +1,426 @@
+#!/usr/bin/make -f
+# debian/rules for hplip
+# GNU copyright 1997 to 1999 by Joey Hess.
+# Copyright (c) 2003 Torsten Landschoff <torsten@debian.org>
+# Copyright (c) 2004-2006 Henrique de Moraes Holschuh <hmh@debian.org>
+
+PACKAGE=hplip
+BASEPKG=hplip
+
+# DebHelper control
+export DH_ALWAYS_EXCLUDE=CVS:.cvsignore
+#export DH_VERBOSE=1
+
+-include /usr/share/python/python.mk
+ ifeq (,$(py_sitename))
+   py_sitename = site-packages
+   py_libdir = /usr/lib/python$(subst python,,$(1))/site-packages
+   py_sitename_sh = $(py_sitename)
+   py_libdir_sh = $(py_libdir)
+endif
+PYTHON_DEFAULT_VERSION:=$(shell pyversions -dv)
+PYTHON_SITENAME:=$(call py_sitename, $(PYTHON_DEFAULT_VERSION))
+
+
+DBGPKG:=$(BASEPKG)-dbg
+PKGTMP:=$(CURDIR)/debian/tmp
+PPDDIR:=$(PKGTMP)/usr/share/ppd
+
+SF_MIRRORS:= ovh puzzle superb-east
+-include /usr/share/gnome-pkg-tools/1/rules/sf-get-source.mk
+
+# Version information
+# We cannot get the hpijs version like this because we could be generating
+# it at runtime when we run autogen.sh
+HPLIP_BINARY_VERSION?=$(shell dpkg-parsechangelog | grep -E "^Version:" | \
+	tr -d ' \t' | cut -d ':' -f 2-)
+ifeq	(,$(HPLIP_BINARY_VERSION))
+	$(error Could not get debian package version from debian/changelog)
+endif
+
+HPLIP_VERSION:=$(shell echo "$(HPLIP_BINARY_VERSION)" | \
+			sed -e 's/+b[0-9]\+$$//')
+HPLIP_UPSTREAM_VERSION:=$(shell echo "$(HPLIP_VERSION)" | \
+			  sed -e 's/-[^-]\+$$//')
+
+# Autoconf
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_ARCH_OS   ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+CONFFLAGS =
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  CONFFLAGS += --build $(DEB_HOST_GNU_TYPE)
+else
+  CONFFLAGS += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+ifeq ($(DEB_HOST_ARCH_OS), linux)
+  CONFFLAGS += --enable-pp-build
+else
+  CONFFLAGS += --disable-pp-build --enable-libusb01_build
+endif
+
+CFLAGS:=-Wall -pipe -D_IPP_PRIVATE_STRUCTURES=1
+CFLAGS += `dpkg-buildflags --get CFLAGS`
+CXXFLAGS:=$(CFLAGS)
+LDFLAGS = `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS = `dpkg-buildflags --get CPPFLAGS`
+
+##
+##  Build-tree preparation
+##
+
+configure: Makefile.am configure.in
+	dh_testdir
+	touch NEWS README AUTHORS ChangeLog INSTALL
+	chmod +x debian/autogen.sh
+	dh_autoreconf debian/autogen.sh
+
+# Clean everything up, including everything auto-generated
+# at build time that needs not to be kept around in the Debian diff
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	rm -f install-stamp install-arch-stamp install-indep-stamp
+	rm -f *.1
+
+	[ ! -f Makefile ] || $(MAKE) clean
+	[ ! -f Makefile ] || $(MAKE) distclean
+	find -type d -name autom4te.cache -print0 | xargs -0 -r rm -rf \;
+	-rm -f prnt/hpijs/platform.h prnt/hpijs/auto-include.h
+	find -type d -name build -print0 | xargs -0 -r rm -rf \;
+	find \( -name config.sub -o -name config.guess \
+			-o -name config.cache -o -name config.log \) -print0 \
+		| xargs -0 -r rm -f \;
+
+	# We prefer to regenerate these using pyuic
+	(cd ui && for i in *.ui ; do rm -f $${i%.ui}.py ; done)
+
+	rm -f NEWS README AUTHORS ChangeLog INSTALL
+
+	dh_clean
+
+##
+##  Package build
+##
+
+configure-stamp: configure
+	dh_testdir
+
+	ln -sf /usr/share/misc/config.sub .
+	ln -sf /usr/share/misc/config.guess .
+	rm -f config.cache
+
+	./configure CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)"\
+		HPLIP_PPD_PATH=/usr/share/ppd \
+		$(CONFFLAGS) \
+	 	--config-cache \
+		--disable-dependency-tracking \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--docdir=\$${prefix}/share/doc/hplip \
+		--with-docdir=\$${prefix}/share/doc/hplip \
+		--enable-foomatic-drv-install \
+		--disable-foomatic-rip-hplip-install \
+		--with-drvdir=\$${prefix}/share/cups/drv \
+		--with-hpppddir=\$${prefix}/share/ppd/hplip/HP \
+		--datadir=\$${prefix}/share \
+		--libexecdir=\$${prefix}/lib \
+		--localstatedir=/var \
+		--sysconfdir=/etc \
+		--without-icondir \
+		--disable-foomatic-ppd-install \
+		--enable-hpcups-install \
+		--enable-cups-drv-install \
+		--enable-hpijs-install \
+		--enable-foomatic-drv-install \
+		--enable-foomatic-ppd-install \
+		--enable-network-build \
+		--enable-scan-build \
+		--enable-gui-build \
+		--enable-fax-build \
+		--disable-qt3 \
+		--enable-qt4 \
+		--enable-policykit \
+		--enable-udev-acl-rules
+
+	touch configure-stamp
+
+build: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+
+	$(MAKE) docdir=\$${prefix}/share/doc/hplip dist_firm_DATA= am__dist_firm_DATA_DIST=
+
+	touch build-stamp
+
+##
+## Debian packaging
+##
+
+# common part of the install: Upstream makefiles, general stuff
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean
+	dh_installdirs
+
+	$(MAKE) install "DESTDIR=$(PKGTMP)" docdir=/usr/share/doc/hplip dist_firm_DATA= am__dist_firm_DATA_DIST=
+
+	# Modify PPD generator of hpcups (hpcups.drv) so that standard paper
+	# sizes support duplex printing. The former standard paper sizes with
+	# narrower borders get optional choices now (Ubuntu/upstream bug
+	# 487695)
+	sh debian/local/make-duplex-page-sizes-default.sh $(PKGTMP)/usr/share/cups/drv/hpcups.drv
+
+	# Modify all Ghostscript command lines to have the "-dNOINTERPOLATE"
+	# coomand line option. This makes rendering the pages much faster
+	perl -p -i -e "s/(\-sDEVICE=)/-dNOINTERPOLATE \1/" $(PKGTMP)/usr/share/cups/drv/hpijs.drv $(PKGTMP)/usr/lib/cups/filter/pstotiff
+
+	# Install wrapper script for hp-plugin, to be called by update-notifier
+	# on udev signal (Ubuntu only)
+	if [ "`lsb_release -is 2>/dev/null`" = "Ubuntu" ]; then \
+		install -d $(CURDIR)/debian/hplip/usr/bin/; \
+		install -m 755 debian/local/scripts/hp-plugin-ubuntu $(CURDIR)/debian/hplip/usr/bin/; \
+	fi
+
+	# Install the ppd updater data files so that CUPS can update the
+	# PPDs of the already existing queue after each update of HPLIP's
+	# printer driver/PPD packages
+	install -D -m 644 debian/printer-driver-postscript-hp.ppd-updater $(PKGTMP)/usr/share/cups/ppd-updaters/printer-driver-postscript-hp.ppd-updater
+	install -D -m 644 debian/printer-driver-hpcups.ppd-updater $(PKGTMP)/usr/share/cups/ppd-updaters/printer-driver-hpcups.ppd-updater
+	install -D -m 644 debian/printer-driver-hpijs.ppd-updater $(PKGTMP)/usr/share/cups/ppd-updaters/printer-driver-hpijs.ppd-updater
+	install -D -m 644 debian/hpijs-ppds.ppd-updater $(PKGTMP)/usr/share/cups/ppd-updaters/hpijs-ppds.ppd-updater
+
+	# Install Apport hook
+	install -D -m 644 debian/local/apport-hook.py $(PKGTMP)/usr/share/apport/package-hooks/source_hplip.py
+
+	# Remove files we are not to ship from the install tree
+	@echo Removing non-shipped files, see debian/non-shipped-files.txt
+	@cat debian/non-shipped-files.txt | \
+		( cd "$(PKGTMP)" && xargs -d '\n' -t -r rm -fv )
+
+	# Uncompress PPDs, this makes the package smaller for distribution
+	-find $(PPDDIR) -name '*.ppd.gz' | xargs gunzip -f
+
+	# Remove identical PPD files shipped under different names
+	( cd "$(PKGTMP)" && fdupes -r1q usr/share/ppd | while read s; do \
+	      set -- $$(echo $$s | tr ' ' '\n' | sort); \
+	      f=$$1; shift; \
+	      for d; do \
+		  echo "Removing duplicate PPD file $$d, original is $$f"; \
+		  rm $$d; \
+	      done; \
+	  done )
+
+	# Edit the generated hplip.conf
+	( cd "$(PKGTMP)/etc/hp" && \
+	  cat hplip.conf | \
+	  sed -e 's#^doc=.*#doc=/usr/share/doc/hplip-doc/HTML#' | \
+	  sed -e 's#^ui-toolkit=.*#ui-toolkit=qt4#' \
+	    > hplip.conf.1 && \
+	    mv -f hplip.conf.1 hplip.conf )
+
+	# Lintian and linda overrides
+	cd debian ; \
+	for i in *.linda ; do \
+	    [ -r "$$i" ] && { \
+		mkdir -p "$${i%%.linda}/usr/share/linda/overrides" ;\
+		install  -m 644 "$$i" "$${i%%.linda}/usr/share/linda/overrides/$${i%%.linda}" ;\
+	    } ;\
+	done ;\
+	for i in *.lintian ; do \
+	    [ -r "$$i" ] && { \
+		mkdir -p "$${i%%.lintian}/usr/share/lintian/overrides" ;\
+		install  -m 644 "$$i" "$${i%%.lintian}/usr/share/lintian/overrides/$${i%%.lintian}" ;\
+	    } ;\
+	done
+
+	# Link all executables to /usr/bin and generate the corresponding
+	# man pages
+	export HPLIP_BUILD=1; \
+	( cd ./debian/tmp/usr/share/hplip/; \
+	    for file in *.py; do \
+		if [ -x $$file ] && [ $$file != install.py ] && \
+		   [ $$file != hpssd.py ] && [ $$file != dat2drv.py ] && \
+		   [ $$file != __init__.py ]; then \
+		    dest=hp-$${file%.py}; \
+		    ln -s ../../usr/share/hplip/$$file \
+			../../bin/$$dest 2>/dev/null || :; \
+		    PYTHONPATH=../../lib/python$(PYTHON_DEFAULT_VERSION)/$(PYTHON_SITENAME)/ \
+			LD_LIBRARY_PATH=../../lib/ ../../bin/$$dest --help-man > $(CURDIR)/$$dest.1 ; \
+		fi; \
+	    done \
+	)
+	install -d ./debian/tmp/usr/sbin/
+	ln -s /usr/share/hplip/hpssd.py ./debian/tmp/usr/sbin/hpssd
+
+	# Correct Python interpreter path in all executables
+	for file in ./debian/tmp/usr/bin/* ./debian/tmp/usr/sbin/* ./debian/tmp/usr/lib/cups/*/*; do \
+	    perl -p -i -e 's:^\s*\#\!/usr/bin/env\s+python.*:#!/usr/bin/python:' `readlink -f $$file`; \
+	done
+
+	# Remove all *.pyc files, they do not need to be shipped with the
+	# package
+	find ./debian/tmp/ -name '*.pyc' -print0 | xargs -0 rm -f
+
+	touch install-stamp
+
+# install arch-dependent packages specific files
+install-arch: install-arch-stamp
+install-arch-stamp: install-stamp
+	# Remove stray #! lines on python libraries, and fix permissions
+	find "$(PKGTMP)/usr/share/hplip" -maxdepth 1 -mindepth 1 -type d -print0 | \
+		xargs -0 -r -i@ find @ -type f -name '*.py' | \
+		while read -r i ; do \
+			chmod a-x "$$i" && \
+			sed < "$$i" > "$$i.tmp" -e '/^#!/ {1 d}' && \
+			mv -f "$$i.tmp" "$$i" ; \
+		done
+	# executable-not-elf-or-script
+	chmod -x $(PKGTMP)/usr/share/hplip/installer/distros.dat
+
+	mkdir -p "$(PKGTMP)/usr/share/pixmaps"
+	install -m 644 debian/*.xpm "$(PKGTMP)/usr/share/pixmaps"
+	mkdir -p "$(PKGTMP)/usr/share/applications"
+	install -m 644 debian/*.desktop "$(PKGTMP)/usr/share/applications"
+
+	mkdir -p "$(PKGTMP)/etc/sane.d/dll.d"
+	install -m 644 debian/$(BASEPKG).sane "$(PKGTMP)/etc/sane.d/dll.d/$(PACKAGE)"
+
+	mkdir -p "$(PKGTMP)/usr/lib/cups/filter/"
+	install -m 755 hplipjs "$(PKGTMP)/usr/lib/cups/filter/"
+
+	# Fax PPDs, install to destdir directly
+	mkdir -p "$(CURDIR)/debian/printer-driver-hpijs/usr/share/ppd/hplip/HP"
+	mkdir -p "$(CURDIR)/debian/printer-driver-hpcups/usr/share/ppd/hplip/HP"
+	cp fax/ppd/HP-Fax*-hpijs.ppd.gz \
+	   "$(CURDIR)/debian/printer-driver-hpijs/usr/share/ppd/hplip/HP/"
+	cp fax/ppd/HP-Fax*-hpcups.ppd.gz \
+	   "$(CURDIR)/debian/printer-driver-hpcups/usr/share/ppd/hplip/HP/"
+
+	# Uncompress PPDs, this makes the package smaller for distribution
+	-find "$(CURDIR)/debian/printer-driver-hpijs/usr/share/ppd/" -name '*.ppd.gz' | xargs gunzip -f
+	-find "$(CURDIR)/debian/printer-driver-hpcups/usr/share/ppd/" -name '*.ppd.gz' | xargs gunzip -f
+
+	# Modify all Ghostscript command lines to have the "-dNOINTERPOLATE"
+	# coomand line option. This makes rendering the pages much faster
+	perl -p -i -e "s/(\-sDEVICE=)/-dNOINTERPOLATE \1/" $(CURDIR)/debian/*/usr/share/ppd/hplip/HP/HP-Fax*.ppd
+
+	# Generate .fdi file for HAL setting "scanner" capability to all
+	# HPLIP-supported devices (also without scanner), so that permissions
+	# get automatically set so that always the user logged in on the
+	# system's desktop has full access to the device.
+	install -d -m 755 $(PKGTMP)/usr/share/hal/fdi/preprobe/10osvendor/
+	sh debian/local/scripts/create_hal_global_fdi_from_hpmud_rules.sh \
+	> $(PKGTMP)/usr/share/hal/fdi/preprobe/10osvendor/20-hplip-devices.fdi
+
+	dh_install -a "--sourcedir=$(PKGTMP)" --list-missing >install-arch-stamp 2>&1 || \
+		( echo "Last five lines of error log:" ; tail -n 5 install-arch-stamp ; exit 1 )
+
+# install arch-independent packages specific files
+install-indep: install-indep-stamp
+install-indep-stamp: install-stamp install-arch-stamp
+	# Remove the Fax PPDs, we have handled them in the arch-dependent part
+	-find $(PPDDIR) -name '*Fax*.ppd*' | xargs rm
+
+	dh_install -i "--sourcedir=$(PKGTMP)" --list-missing >install-indep-stamp 2>&1 || \
+		( echo "Last five lines of error log:" ; tail -n 5 install-indep-stamp ; exit 1 )
+
+	# Patch the PPDs for the hpijs-ppds package to use foomatic-rip
+	# as CUPS filter and not foomatic-rip-hplip. Also add
+	# "-dNOINTERPOLATE" to the Ghostscript command lines to make rendering
+	# by Ghostscript faster.
+	(cd $(CURDIR)/debian/hpijs-ppds/usr/share/ppd/hplip/HP/ && \
+	  for ppd in *.ppd; do \
+	    perl -p -i -e 's/foomatic-rip-hplip/foomatic-rip/g' $$ppd; \
+	    perl -p -i -e "s/(\-sDEVICE=)/-dNOINTERPOLATE \1/" $$ppd; \
+	  done \
+	)
+
+	# Compress the PPD files with pyppd
+	dh_pyppd -pprinter-driver-postscript-hp
+
+	# Remove models.dat from hplip-data - we ship with libsane-hpaio
+	rm $(CURDIR)/debian/hplip-data/usr/share/hplip/data/models/models.dat
+
+# Build architecture-independent packages
+binary-indep: install-indep
+	dh_testdir -i
+	dh_testroot
+#	dh_installdebconf -i
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_installmenu -i
+#	dh_installlogrotate -i
+#	dh_installemacsen -i
+#	dh_installpam -i
+#	dh_installmime -i
+#	dh_installinit -i
+#	dh_installcron -i
+	dh_installman -i
+#	dh_installinfo -i
+	dh_installchangelogs -i $(CHANGELOG)
+	dh_link -i
+	dh_strip -i --dbg-package=$(DBGPKG)
+	dh_compress -i
+	dh_fixperms -i
+#	dh_perl -i
+	dh_python2 -i /usr/share/hplip
+#	dh_makeshlibs -i
+	dh_installdeb -i
+	dh_shlibdeps -i --dpkg-shlibdeps-params=--ignore-missing-info
+	dh_gencontrol -i -- \
+		-V"hplip:source:Version=$(HPLIP_VERSION)" \
+		-V"hpijs:source:Version=$(HPLIP_VERSION)" \
+		-V"hplip:Upstream-Version=$(HPLIP_UPSTREAM_VERSION)" \
+		-V"hpijs:Upstream-Version=$(HPLIP_UPSTREAM_VERSION)" \
+		-V"hplip:binary:Version=$(HPLIP_BINARY_VERSION)" \
+		-V"hpijs:binary:Version=$(HPLIP_BINARY_VERSION)"
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent packages
+binary-arch: install-arch
+	dh_testdir -a
+	dh_testroot
+	dh_bugfiles
+#	dh_installdebconf -a
+	dh_installdocs -a
+	dh_installexamples -a
+	dh_installmenu -a
+#	dh_installlogrotate -a
+#	dh_installemacsen -a
+#	dh_installpam -a
+#	dh_installmime -a
+#	dh_installcron -a
+	dh_installman -a
+#	dh_installinfo -a
+	dh_installchangelogs -a $(CHANGELOG)
+	# must come after dh_pysupport and dh_python, or the postinst
+	# ordering will be screwed up and break.
+	#dh_installinit -phplip --init-script=hplip -- multiuser 19
+	dh_installudev
+	dh_link -a
+	dh_strip -a --dbg-package=$(DBGPKG)
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a
+	dh_python2 -a --no-guessing-versions
+	dh_installdeb -a
+	dh_shlibdeps -a --dpkg-shlibdeps-params=--ignore-missing-info
+	dh_gencontrol -a -- \
+		-V"hplip:source:Version=$(HPLIP_VERSION)" \
+		-V"hpijs:source:Version=$(HPLIP_VERSION)" \
+		-V"hplip:Upstream-Version=$(HPLIP_UPSTREAM_VERSION)" \
+		-V"hpijs:Upstream-Version=$(HPLIP_UPSTREAM_VERSION)" \
+		-V"hplip:binary:Version=$(HPLIP_BINARY_VERSION)" \
+		-V"hpijs:binary:Version=$(HPLIP_BINARY_VERSION)"
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install install-arch install-indep
