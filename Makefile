@@ -24,6 +24,7 @@ include worlds/kde.mk
 include worlds/lxde.mk
 include worlds/xfce.mk
 include worlds/gnome.mk
+include worlds/kernel.mk
 include worlds/debian.mk
 include worlds/ubuntu.mk
 include worlds/haskell.mk
