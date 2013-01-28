@@ -6436,6 +6436,14 @@ $(REMOTECONTROL): $(SPREZZ)/remotecontrol/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf remotecontrol-$(remotecontrol_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ripit
+ripit:$(RIPIT)_$(ARCH).deb
+$(RIPIT): $(SPREZZ)/ripit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ripit-$(ripit_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rrdtool
 rrdtool:$(RRDTOOL)_$(ARCH).deb
 $(RRDTOOL): $(SPREZZ)/rrdtool/debian/changelog

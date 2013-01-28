@@ -190,6 +190,14 @@ $(MIMESUPPORT): $(SPREZZ)/mime-support/debian/changelog
 	tar cJvf mime-support_$(mime-support_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: moreutils
+moreutils:$(MOREUTILS)_$(ARCH).deb
+$(MOREUTILS): $(SPREZZ)/moreutils/debian/changelog
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf moreutils_$(moreutils_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: mozilla-devscripts
 mozilla-devscripts:$(MOZILLADEVSCRIPTS)_$(ARCH).deb
 $(MOZILLADEVSCRIPTS): $(SPREZZ)/mozilla-devscripts/debian/changelog
