@@ -795,6 +795,14 @@ $(LIBDBDMYSQLPERL): $(SPREZZ)/libdbd-mysql-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf DBD-mysql-$(libdbd-mysql-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libdbd-sqlite3-perl
+libdbd-sqlite3-perl:$(LIBDBDSQLITE3PERL)_$(ARCH).deb
+$(LIBDBDSQLITE3PERL): $(SPREZZ)/libdbd-sqlite3-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf DBD-SQLite-$(libdbd-sqlite3-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnet-dns-perl
 libnet-dns-perl:$(LIBNETDNSPERL)_$(ARCH).deb
 $(LIBNETDNSPERL): $(SPREZZ)/libnet-dns-perl/debian/changelog
