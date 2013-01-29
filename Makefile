@@ -4979,6 +4979,14 @@ $(LIBX86): $(SPREZZ)/libx86/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libx86_$(libx86_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libx86emu
+libx86emu:$(LIBX86EMU)_$(ARCH).deb
+$(LIBX86EMU): $(SPREZZ)/libx86emu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libx86emu-$(libx86emu_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xfonts-scalable
 xfonts-scalable:$(XFONTSSCALABLE)_$(ARCH).deb
 $(XFONTSSCALABLE): $(SPREZZ)/xfonts-scalable/debian/changelog
