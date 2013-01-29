@@ -1,0 +1,226 @@
+#!/usr/bin/make -f
+
+CFLAGS := $(shell dpkg-buildflags --get CFLAGS; dpkg-buildflags --get CPPFLAGS)
+CXXFLAGS := $(shell dpkg-buildflags --get CXXFLAGS)
+LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
+
+# These don't need to be exported and if they are we'll get the flags
+# duplicated in the command line.
+unexport CFLAGS
+unexport CXXFLAGS
+unexport LDFLAGS
+
+ifeq ($(DEB_HOST_ARCH_CPU),i386)
+  CFLAGS += -ffloat-store
+  CXXFLAGS += -ffloat-store
+endif
+
+space = $() $()
+here = $(dir $(firstword $(MAKEFILE_LIST)))/..
+current_version = $(shell cd $(here) && dpkg-parsechangelog | sed -n -r -e "/Version: (.*)/ { s//\1/p; q; }")
+upstream_version = $(firstword $(subst -,$(space),$(current_version)))
+
+cmake_options = \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_VERBOSE_MAKEFILE=ON \
+    -DCMAKE_C_FLAGS_RELEASE="$(CFLAGS)" \
+    -DCMAKE_CXX_FLAGS_RELEASE="$(CXXFLAGS)" \
+    -DCMAKE_SHARED_LINKER_FLAGS_RELEASE="$(LDFLAGS)"
+cmake_python_options = \
+    -DPYTHON_EXECUTABLE=/usr/bin/python$(1) \
+    -DPYTHON_INCLUDE_DIR=/usr/include/python$(1)/ \
+    -DPYTHON_LIBRARY=/usr/lib/libpython$(1).so \
+    -DBoost_PYTHON_LIBRARY_RELEASE=/usr/lib/libboost_python-py$$(echo $(1) | tr -d .).so
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	njobs_requested := $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+ifeq ($(wildcard /build/buildd-*/),)
+	njobs := $(njobs_requested)
+else
+	# On buildds, artificially limit paralellism in order not to run out of RAM.
+	mem_total := $(shell grep MemTotal /proc/meminfo | tr -s ' ' | cut -d' ' -f2)
+	njobs_max := $(patsubst 0,1,$(shell echo $$(( $(mem_total) / 500000 ))))
+	njobs := $(shell echo $$(( $(njobs_requested) > $(njobs_max) ? $(njobs_max) : $(njobs_requested) )))
+endif
+	parallel := -j$(or $(njobs),1)
+endif
+
+# build and build-* targets
+# =========================
+
+.PHONY: build build-arch build-indep
+
+build: build-arch build-indep
+
+build-indep:
+	# Nothing to do in build-indep, "thanks" to bug #374029.
+
+build-arch:
+	dh_testdir
+	$(info INFO: number of parallel processes:)
+	$(info - requested: $(or $(njobs_requested),none))
+	$(info - maximum: $(or $(njobs_max),none))
+	$(info - actual: $(or $(njobs),1))
+	$(MAKE) -f debian/rules \
+		obj/CMakeCache.txt \
+		$(patsubst %,obj.%/CMakeCache.txt,$(shell pyversions -r))
+	$(MAKE) -f debian/rules \
+		doc/changelog \
+		obj/build-stamp \
+		$(patsubst %,obj.%/build-stamp,$(shell pyversions -r))
+ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
+  ifneq (,$(filter $(DEB_HOST_ARCH_CPU),powerpc))
+	: # run the tests, but ignore test results
+	-$(MAKE) -k -f debian/rules \
+		obj/test-stamp \
+		$(patsubst %,obj.%/test-stamp,$(shell pyversions -r))
+  else
+	$(MAKE) -k -f debian/rules \
+		obj/test-stamp \
+		$(patsubst %,obj.%/test-stamp,$(shell pyversions -r))
+  endif
+endif
+
+obj/CMakeCache.txt:
+	mkdir -p $(dir $(@))
+	cd $(dir $(@)) && cmake .. $(cmake_options) \
+		-DPYTHON_EXECUTABLE=/usr/bin/python \
+		-DWITH_VIGRANUMPY=0
+
+obj.python%/CMakeCache.txt:
+	mkdir -p $(dir $(@))
+	cd $(dir $(@)) && \
+		CXXFLAGS=-fno-strict-aliasing cmake .. $(cmake_options) $(call cmake_python_options,$(*))
+	if ! grep VIGRANUMPY_DEPENDENCIES $(@) > /dev/null; then \
+		echo "Error: Numpy for Python $* not found" >&2; \
+		rm -f $(@); \
+		exit 1; \
+	fi
+	# We don't want to link with libpythonX.Y.
+	# We don't want SONAMES (except vigranumpycore.so)
+	find $(dir $(@))/vigranumpy/ -name 'link.txt' -exec sed -i \
+		-e 's/ -lpython[0-9.]\+ / /g' \
+		-e '/-Wl,-soname,vigranumpycore/b' \
+		-e 's/ -Wl,-soname,[^ ]\+ / /' \
+		{} +
+
+obj/build-stamp: obj/CMakeCache.txt
+	$(MAKE) $(parallel) -C $(dir $(@))
+	chmod a-x vigranumpy/test/*.py # nosetest would skip executable *.py
+	touch $(@)
+
+obj.python%/build-stamp: obj.python%/CMakeCache.txt obj/build-stamp
+	cd obj && find . -name '*.o' -o -name '*.so' -o -name '*.so.*' | xargs cp -v --preserve=links --parents -t ../$(dir $(@))
+	$(MAKE) $(parallel) -C $(dir $(@))
+	touch $(@)
+
+obj/test-stamp: obj/build-stamp
+	$(MAKE) check -C $(dir $(@))
+	touch $(@)
+
+obj.python%/test-stamp:: obj.python%/build-stamp
+	$(MAKE) vigranumpytest -C $(dir $(@))
+	touch $(@)
+
+doc/changelog: docsrc/credits_changelog.dxx
+	sh debian/convert-changelog.sh < $(<) > $(@)
+
+# binary and binary-* targets
+# ===========================
+
+.PHONY: binary binary-arch binary-indep
+
+binary: binary-arch binary-indep
+
+binary-arch: build-arch
+	dh_testdir
+	dh_testroot
+	$(MAKE) -f debian/rules \
+		obj/install-stamp \
+		$(patsubst %,obj.%/install-stamp,$(shell pyversions -r))
+	dh_install -a
+	dh_installdocs -a
+	dh_installchangelogs -a doc/changelog
+	dh_installexamples -a
+	find -path './debian/*/usr/share/doc/*/examples/*' -exec chmod a-x '{}' +
+	dh_installman -a
+	dh_python2 -a
+	dh_link -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_strip -a
+	dh_makeshlibs -V 'libvigraimpex4 (>>1.8.0+dfsg-1)'
+	dh_shlibdeps
+	# See <http://lists.debian.org/debian-python/2010/07/msg00042.html>:
+	$(or $(wildcard /usr/bin/dh_numpy),debian/dh_numpy) -p python-vigra
+	dh_installdeb -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+.PHONY: binary-indep
+binary-indep: build-indep
+	dh_testdir
+	dh_testroot
+	$(MAKE) -f debian/rules \
+		doc/vigra/build-stamp \
+		doc/vigranumpy/build-stamp
+	dh_installdocs -i -XLICENSE.txt -Xobjects.inv -Xdoctrees -X.buildinfo -Xbuild-stamp
+	cd debian/libvigraimpex-doc/usr/share/doc/libvigraimpex-doc/ && \
+		rm -rf html && \
+		mv vigra html && \
+		rm -f html/jquery.js && \
+		sed -r -i \
+			-e 's!(<a href=")LICENSE.txt(">)!\1/usr/share/doc/libvigraimpex-doc/copyright\2!g' \
+			html/index.html
+	cd debian/python-vigra-doc/usr/share/doc/python-vigra-doc/ && \
+		rm -rf html && \
+		mv vigranumpy html
+	dh_installchangelogs -i
+	dh_link -i
+ifeq "$(wildcard /usr/bin/dh_sphinxdoc)" ""
+	echo "sphinxdoc:Depends=libjs-jquery" >> debian/python-vigra-doc.substvars
+else
+	dh_sphinxdoc -p python-vigra-doc /usr/share/doc/python-vigra-doc/html/
+endif
+	dh_compress -i -X.js -X_sources
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+%/install-stamp: %/build-stamp
+	$(MAKE) -C $(dir $(@)) install DESTDIR=$(CURDIR)/debian/tmp/
+	touch $(@)
+
+doc/vigra/build-stamp: obj/build-stamp
+	$(MAKE) doc_cpp -C obj/
+	touch $(@)
+
+doc/vigranumpy/build-stamp: obj.$(shell pyversions -d)/build-stamp doc/vigra/build-stamp
+	ln -sf $(CURDIR)/vigranumpy/docsrc/c_api_replaces.txt obj.$(shell pyversions -d)/vigranumpy/docsrc/
+	$(MAKE) doc_python -C obj.$(shell pyversions -d)/
+	touch $(@)
+
+# clean target
+# ============
+
+.PHONY: clean
+clean:
+	dh_testdir
+	dh_clean
+	rm -rf obj*/
+	find doc/ -type f -delete
+
+# get-orig-source target
+# ======================
+
+.PHONY: get-orig-source
+get-orig-source:
+	sh $(here)/debian/get-orig-source.sh 1.8.0
+	#sh $(here)/debian/get-orig-source.sh $(upstream_version)
+
+.NOTPARALLEL:
+
+# vim:ts=4 sw=4 noet
