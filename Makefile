@@ -1557,6 +1557,14 @@ $(CAIRODOCKPLUGINS): $(SPREZZ)/cairo-dock-plug-ins/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cairo-dock-plugins-$(cairo-dock-plug-ins_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cccc
+cccc:$(CCCC)_$(ARCH).deb
+$(CCCC): $(SPREZZ)/cccc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cccc-$(cccc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: cclive
 cclive:$(CCLIVE)_$(ARCH).deb
 $(CCLIVE): $(SPREZZ)/cclive/debian/changelog
