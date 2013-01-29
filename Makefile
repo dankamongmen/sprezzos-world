@@ -5169,7 +5169,7 @@ $(MDDS): $(SPREZZ)/mdds/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf mdds-$(mdds_UPVER).tar.bz2 $(TARARGS) $@
+	tar xjvf mdds_$(mdds_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: meanwhile
 meanwhile:$(MEANWHILE)_$(ARCH).deb
