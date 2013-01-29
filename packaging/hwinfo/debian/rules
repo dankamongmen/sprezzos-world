@@ -1,0 +1,129 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+#
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+#
+# Modified to make a template file for a multi-binary package with separated
+# build-arch and build-indep targets  by Bill Allombert 2001
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+include /usr/share/quilt/quilt.make
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+export QUILT_PATCHES=debian/patches
+export QUILT_DIFF_ARGS="--no-timestamps -p 0"
+export QUILT_REFRESH_ARGS="--no-timestamps -p 0"
+
+CFLAGS = -Wall -g
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+UPURL=ftp://mirrors.kernel.org/pub/opensuse/distribution/SL-OSS-factory/inst-source/suse/src/
+UPVERSION=$(shell dpkg-parsechangelog | grep '^Version' | sed -e 's/^[^ ]* //' -e 's/-[^-]*$$//')
+
+get-orig-source:
+	@dh_testdir
+	@if [ ! -d ../tarballs ]; then \
+	  mkdir ../tarballs; \
+	fi
+	@if [ ! -e ../tarballs/hwinfo_$(UPVERSION).orig.tar.gz ]; then \
+	  echo "Fetching hwinfo $(UPVERSION)..."; \
+	  for f in $$(w3m -dump $(UPURL) | grep -o 'hwinfo-$(UPVERSION)-[[:digit:]]\+.src.rpm' | tail -n 1); do \
+	    cd ../tarballs && wget -q -O $$f $(UPURL)$$f; \
+	    echo "Repacking RPM as a tarball..."; \
+	    alien -d --nopatch -s $$f >/dev/null 2>&1; \
+	    bzcat hwinfo-$(UPVERSION)/hwinfo-$(UPVERSION).tar.bz2 | gzip -c - > hwinfo_$(UPVERSION).orig.tar.gz; \
+	    rm -rf hwinfo-$(UPVERSION) $$f; \
+	  done; \
+	fi
+
+patch: patch-stamp
+patch-stamp:
+	dh_testdir
+	quilt push -a || test $$? = 2
+	touch $@
+
+
+#Architecture 
+build: build-arch build-indep
+
+build-arch: build-arch-stamp
+build-arch-stamp: patch-stamp 
+	$(MAKE)
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp: patch-stamp 
+	$(MAKE) doc
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-arch-stamp build-indep-stamp patch-stamp
+	
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	-quilt pop -a
+	rm -rf .pc
+	
+	dh_clean 
+
+install: install-indep install-arch
+install-indep:
+	dh_testdir
+	dh_testroot
+	dh_clean -k -i 
+	dh_installdirs -i
+	
+	dh_install -i doc/libhd/html usr/share/doc/libhd-doc
+
+install-arch:
+	dh_testdir
+	dh_testroot
+	dh_clean -k -s 
+	dh_installdirs -s
+	
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	install -D -m 644 src/libhd.a debian/tmp/usr/lib/libhd.a
+	
+	dh_install -s
+# Must not depend on anything. This is to be called by
+# binary-arch/binary-indep
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs Changelog
+	dh_installdocs
+	dh_installman
+	dh_link
+	dh_strip
+	dh_compress 
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+# Build architecture independant packages using the common target.
+binary-indep: build-indep install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build-arch install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install install-indep install-arch patch get-orig-source
