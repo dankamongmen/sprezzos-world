@@ -4379,6 +4379,14 @@ $(USBVIEW): $(SPREZZ)/usbview/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf usbview-$(usbview_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: vgabios
+vgabios:$(VGABIOS)_$(ARCH).deb
+$(VGABIOS): $(SPREZZ)/vgabios/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vgabios-$(vgabios_UPVER).tgz $(TARARGS) $@
+
 .PHONY: vlc
 vlc:$(VLC)_$(ARCH).deb
 $(VLC): $(SPREZZ)/vlc/debian/changelog
