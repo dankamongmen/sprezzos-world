@@ -59,6 +59,15 @@ $(CDEBCONF): $(SPREZZ)/cdebconf/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf cdebconf_$(cdebconf_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
+.PHONY: choose-mirror
+choose-mirror:$(CHOOSEMIRROR)_$(ARCH).deb
+$(CHOOSEMIRROR): $(SPREZZ)/choose-mirror/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf choose-mirror_$(choose-mirror_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: console-setup
 console-setup:$(CONSOLESETUP)_$(ARCH).deb
 $(CONSOLESETUP): $(SPREZZ)/console-setup/debian/changelog
