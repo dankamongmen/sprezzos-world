@@ -4787,6 +4787,14 @@ $(LIBXEXT): $(SPREZZ)/libxext/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXext-$(libxext_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libzrtpcpp
+libzrtpcpp:$(LIBZRTPCPP)_$(ARCH).deb
+$(LIBZRTPCPP): $(SPREZZ)/libzrtpcpp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libzrtpcpp-$(libzrtpcpp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libxau
 libxau:$(LIBXAU)_$(ARCH).deb
 $(LIBXAU): $(SPREZZ)/libxau/debian/changelog
