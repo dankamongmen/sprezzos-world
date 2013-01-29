@@ -8185,18 +8185,6 @@ $(MKLIBS): $(SPREZZ)/mklibs/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf mklibs_$(mklibs_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
-.PHONY: netbase
-netbase:$(NETBASE)_$(ARCH).deb
-$(NETBASE): $(SPREZZ)/netbase/debian/changelog
-	cp -r $(<D)/.. $@
-
-.PHONY: udpkg
-udpkg:$(UDPKG)_$(ARCH).deb
-$(UDPKG): $(SPREZZ)/udpkg/debian/changelog
-	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
-	cp -r $(<D)/.. $@
-	tar cJvf udpkg_$(udpkg_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
-
 clean:
 	rm -rf -- sprezzos-world $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
 

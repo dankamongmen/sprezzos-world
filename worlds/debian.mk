@@ -232,6 +232,14 @@ $(MOZILLADEVSCRIPTS): $(SPREZZ)/mozilla-devscripts/debian/changelog
 	tar cJvf mozilla-devscripts_$(mozilla-devscripts_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: netbase
+netbase:$(NETBASE)_$(ARCH).deb
+$(NETBASE): $(SPREZZ)/netbase/debian/changelog
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf netbase_$(netbase_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: python-apt
 python-apt:$(PYTHONAPT)_$(ARCH).deb
 $(PYTHONAPT): $(SPREZZ)/python-apt/debian/changelog
@@ -294,3 +302,10 @@ $(TASKSEL): $(SPREZZ)/tasksel/debian/changelog
 	rm -rf $@/debian
 	tar cJvf tasksel_$(tasksel_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
+
+.PHONY: udpkg
+udpkg:$(UDPKG)_$(ARCH).deb
+$(UDPKG): $(SPREZZ)/udpkg/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	tar cJvf udpkg_$(udpkg_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
