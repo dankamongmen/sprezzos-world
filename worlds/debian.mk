@@ -175,6 +175,14 @@ $(LSB): $(SPREZZ)/lsb/debian/changelog
 	tar cJvf lsb_$(lsb_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: mediawiki-extensions
+mediawiki-extensions:$(MEDIAWIKIEXTENSIONS)_$(ARCH).deb
+$(MEDIAWIKIEXTENSIONS): $(SPREZZ)/mediawiki-extensions/debian/changelog
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf mediawiki-extensions_$(mediawiki-extensions_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: meta-gnome
 meta-gnome:$(METAGNOME)_$(ARCH).deb
 $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
