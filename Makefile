@@ -1610,8 +1610,8 @@ libcdr:$(LIBCDR)_$(ARCH).deb
 $(LIBCDR): $(SPREZZ)/libcdr/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-versrn
-	tar xzvf libcdr-$(libcdr_UPVER).tar.gz $(TARARGS) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libcdr-$(libcdr_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libcec
 libcec:$(LIBCEC)_$(ARCH).deb
@@ -5812,6 +5812,14 @@ $(LIBOGGZ): $(SPREZZ)/liboggz/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf liboggz-$(liboggz_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libvisio
+libvisio:$(LIBVISIO)_$(ARCH).deb
+$(LIBVISIO): $(SPREZZ)/libvisio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libvisio-$(libvisio_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libvisual
 libvisual:$(LIBVISUAL)_$(ARCH).deb
