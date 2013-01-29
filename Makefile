@@ -1357,6 +1357,14 @@ $(BITCOIN): $(SPREZZ)/bitcoin/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bitcoin_$(bitcoin_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: linux86
+linux86:$(LINUX86)_$(ARCH).deb
+$(LINUX86): $(SPREZZ)/linux86/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bin86-$(linux86_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: bsnes
 bsnes:$(BSNES)_$(ARCH).deb
 $(BSNES): $(SPREZZ)/bsnes/debian/changelog
