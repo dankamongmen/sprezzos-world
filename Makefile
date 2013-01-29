@@ -6605,6 +6605,14 @@ $(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf librsvg-$(librsvg_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgssapi-perl
+libgssapi-perl:$(LIBGSSAPIPERL)_$(ARCH).deb
+$(LIBGSSAPIPERL): $(SPREZZ)/libgssapi-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf GSSAPI-$(libgssapi-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libgssglue
 libgssglue:$(LIBGSSGLUE)_$(ARCH).deb
 $(LIBGSSGLUE): $(SPREZZ)/libgssglue/debian/changelog
