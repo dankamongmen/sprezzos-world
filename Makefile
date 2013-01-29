@@ -1365,6 +1365,14 @@ $(BSNES): $(SPREZZ)/bsnes/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bsnes-$(bsnes_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: bwm-ng
+bwm-ng:$(BWMNG)_$(ARCH).deb
+$(BWMNG): $(SPREZZ)/bwm-ng/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bwm-ng-$(bwm-ng_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: flex
 flex:$(FLEX)_$(ARCH).deb
 $(FLEX): $(SPREZZ)/flex/debian/changelog
