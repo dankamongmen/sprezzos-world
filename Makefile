@@ -5123,6 +5123,14 @@ $(MEANWHILE): $(SPREZZ)/meanwhile/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf meanwhile-$(meanwhile_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: memcached
+memcached:$(MEMCACHED)_$(ARCH).deb
+$(MEMCACHED): $(SPREZZ)/memcached/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf memcached-$(memcached_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: metacity
 metacity:$(METACITY)_$(ARCH).deb
 $(METACITY): $(SPREZZ)/metacity/debian/changelog

@@ -1,0 +1,64 @@
+$Id: bz29635.patch 390 2012-10-09 12:24:58Z tg $
+
+Fix upgrade issue discussed on:
+https://bugzilla.wikimedia.org/show_bug.cgi?id=29635
+
+--- a/includes/installer/PostgresUpdater.php
++++ b/includes/installer/PostgresUpdater.php
+@@ -32,8 +32,8 @@ class PostgresUpdater extends DatabaseUp
+ 			array( 'renameTable', 'text', 'pagecontent'),
+ 
+ 			# new sequences
+-			array( 'addSequence', 'logging_log_id_seq'          ),
+-			array( 'addSequence', 'page_restrictions_pr_id_seq' ),
++			array( 'addOrRenameSequence', 'log_log_id_seq',      'logging_log_id_seq'          ),
++			array( 'addOrRenameSequence', 'pr_id_val',           'page_restrictions_pr_id_seq' ),
+ 
+ 			# renamed sequences
+ 			array( 'renameSequence', 'ipblocks_ipb_id_val', 'ipblocks_ipb_id_seq'         ),
+@@ -41,8 +41,6 @@ class PostgresUpdater extends DatabaseUp
+ 			array( 'renameSequence', 'text_old_id_val',     'text_old_id_seq'             ),
+ 			array( 'renameSequence', 'category_id_seq',     'category_cat_id_seq'         ),
+ 			array( 'renameSequence', 'rc_rc_id_seq',        'recentchanges_rc_id_seq'     ),
+-			array( 'renameSequence', 'log_log_id_seq',      'logging_log_id_seq'          ),
+-			array( 'renameSequence', 'pr_id_val',           'page_restrictions_pr_id_seq' ),
+ 			array( 'renameSequence', 'us_id_seq',           'uploadstash_us_id_seq' ),
+ 
+ 			# new tables
+@@ -412,6 +410,36 @@ END;
+ 		}
+ 	}
+ 
++	protected function addOrRenameSequence( $old, $new ) {
++		/*
++		 * Prior to the existence of this method, both
++		 * addSequence and renameSequence were called,
++		 * but possibly in wrong order, leading to is-
++		 * sues like bugzilla #29635.
++		 * This means we must first detect whether the
++		 * sequences both already exist and have quite
++		 * a problem then. Normally, we'd need to keep
++		 * the higher of them by some complicated code
++		 * in PL/PGSQL (this has already been done for
++		 * a sequence in Evolvis), but since this only
++		 * affects two sequences, and only for a short
++		 * period of time, we can just assume that the
++		 * old sequence is to be kept and the newer to
++		 * be deleted.
++		 * If only old exists, rename that, otherwise,
++		 * create new.
++		 */
++		if ( $this->db->sequenceExists( $old ) ) {
++			if ( $this->db->sequenceExists( $new ) ) {
++				$this->output( "Removing sequence $new\n" );
++				$this->db->query( "DROP SEQUENCE $new" );
++			}
++			$this->renameSequence( $old, $new );
++		} else {
++			$this->addSequence( $new );
++		}
++	}
++
+ 	protected function renameTable( $old, $new ) {
+ 		if ( $this->db->tableExists( $old ) ) {
+ 			$this->output( "Renaming table $old to $new\n" );
