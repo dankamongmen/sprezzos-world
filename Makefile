@@ -3067,54 +3067,6 @@ $(GNOMESETTINGSDAEMON): $(SPREZZ)/gnome-settings-daemon/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-settings-daemon_$(gnome-settings-daemon_UPVER).orig.tar.xz $(TARARGS) $@
 
-.PHONY: gnome-shell
-gnome-shell:$(GNOMESHELL)_$(ARCH).deb
-$(GNOMESHELL): $(SPREZZ)/gnome-shell/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-shell-$(gnome-shell_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: gnome-shell-extensions
-gnome-shell-extensions:$(GNOMESHELLEXTENSIONS)_$(ARCH).deb
-$(GNOMESHELLEXTENSIONS): $(SPREZZ)/gnome-shell-extensions/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-shell-extensions-$(gnome-shell-extensions_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: gnome-sushi
-gnome-sushi:$(GNOMESUSHI)_$(ARCH).deb
-$(GNOMESUSHI): $(SPREZZ)/gnome-sushi/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-sushi_$(gnome-sushi_UPVER).orig.tar.xz $(TARARGS) $@
-
-.PHONY: gnome-terminal
-gnome-terminal:$(GNOMETERMINAL)_$(ARCH).deb
-$(GNOMETERMINAL): $(SPREZZ)/gnome-terminal/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-terminal_$(gnome-terminal_UPVER).orig.tar.xz $(TARARGS) $@
-
-.PHONY: gnome-themes
-gnome-themes:$(GNOMETHEMES)_$(ARCH).deb
-$(GNOMETHEMES): $(SPREZZ)/gnome-themes/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf gnome-themes_$(gnome-themes_UPVER).orig.tar.bz2 $(TARARGS) $@
-
-.PHONY: gnome-themes-standard
-gnome-themes-standard:$(GNOMETHEMESSTANDARD)_$(ARCH).deb
-$(GNOMETHEMESSTANDARD): $(SPREZZ)/gnome-themes-standard/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-themes-standard_$(gnome-themes-standard_UPVER).orig.tar.xz $(TARARGS) $@
-
 .PHONY: gnome-user-docs
 gnome-user-docs:$(GNOMEUSERDOCS)_$(ARCH).deb
 $(GNOMEUSERDOCS): $(SPREZZ)/gnome-user-docs/debian/changelog
