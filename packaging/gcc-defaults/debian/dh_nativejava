@@ -1,0 +1,102 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+dh_nativejava - compile jar files to native code and register them
+
+=cut
+
+use strict;
+use Debian::Debhelper::Dh_Lib;
+use IO::File;
+use POSIX qw(tmpnam);
+use Cwd;
+
+=head1 SYNOPSIS
+
+B<dh_nativejava> [S<I<debhelper options>>] [B<-n>] [B<-o>] [B<--sourcedir=>I<dir>]
+
+=head1 DESCRIPTION
+
+dh_nativejava is a debhelper program that is responsible for compiling
+jars to native code and to make them known to the system.
+
+It also automatically generates the postinst and postrm commands needed
+to updated the global classmap database and adds a dependency on
+libgcj-common in the misc:Depends substitution variable.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-n>, B<--noscripts>
+
+Do not modify postinst/postrm scripts.
+
+=item B<-o>, B<--onlyscripts>
+
+Only modify postinst/postrm scripts, do not actually compile any files
+or register them. May be useful if the files are already built and
+registered.
+
+=item B<--destdir=>I<directory>
+
+Use this if you want the compiled files to be put in a directory
+other than the default of "/usr/lib/gcj"
+
+=back
+
+=head1 NOTES
+
+Note that this command is not idempotent. "dh_clean -k" should be called
+between invocations of this command. Otherwise, it may cause multiple
+instances of the same text to be added to maintainer scripts.
+
+=cut
+
+init();
+
+my $destdir = $dh{DESTDIR};
+if (! $dh{DESTDIR}) {
+	$destdir = "/usr/lib/gcj";
+}
+
+my $pwd = getcwd;
+my $sourcelist;
+do {
+  $sourcelist = tmpnam();
+} until my $fh = IO::File->new($sourcelist, O_RDWR|O_CREAT|O_EXCL);
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+	my $tmp=tmpdir($package);
+
+	# Figure out if this is a GCJ package.
+	if ($tmp =~ '-gcj$') {
+		my $jardir =$tmp;
+		$jardir =~ s/-gcj$//;
+		if (! $dh{ONLYSCRIPTS}) {
+			complex_doit("find $pwd -type f ! -type l > $sourcelist");
+			doit("aot-compile", "-L", $destdir, "-c", "-fsource-filename=$sourcelist", "$jardir", "$tmp/usr/lib/gcj");
+			doit("mkdir", "-p", "$tmp/usr/share/gcj/classmap.d");
+			complex_doit("mv $tmp/usr/lib/gcj/*.db $tmp/usr/share/gcj/classmap.d");
+		}
+		# Install scripts to rebuild global classmap.db.
+		if (! $dh{NOSCRIPTS}) {
+			autoscript($package,"postinst", "postinst-rebuild-gcj-db", "");
+			autoscript($package,"postrm", "postrm-rebuild-gcj-db", "");
+		}
+		addsubstvar($package, "misc:Depends", "libgcj-common (>> 1:4.1.1-13)");
+	}
+}
+
+END { unlink($sourcelist) or die "Couldn't unlink $sourcelist : $!" }
+
+=head1 SEE ALSO
+
+L<debhelper(7)>
+
+=head1 AUTHOR
+
+Michael Koch <mkoch@debian.org>, Matthias Klose <doko@ubuntu.com>
+
+=cut

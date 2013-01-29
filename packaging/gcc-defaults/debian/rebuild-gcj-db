@@ -1,0 +1,98 @@
+#! /bin/bash
+
+set -e
+
+if [ $# -gt 1 ]; then
+    cat 1>&2 <<-EOF
+	rebuild-gcj-db: re-build the gcj classmap database
+	
+	usage: $0 [install|remove]
+	EOF
+    exit 1
+fi
+
+mode=install
+case "$1" in
+    install|remove)
+	mode=$1;;
+esac
+
+uname=$(uname -m)
+
+rebuild_db()
+{
+    dbtool=$1; shift
+    dbLocation=$1; shift
+    dirs=
+
+    for dir; do [ -d $dir ] && dirs="$dirs $dir"; done
+    if [ -z "$dirs" ]; then
+	# no more dirs with .db files on the system
+	return 0
+    fi
+    mkdir -p $(dirname $dbLocation)
+    if $dbtool -n $dbLocation.tmp 64; then
+	:
+	#case "$uname" in parisc*)
+	#    echo >&2 "$dbtool succeeded unexpectedly"
+	#esac
+    else
+	case "$uname" in
+	    m68k)
+	        echo >&2 "ERROR: $dbtool did fail; known problem on $uname"
+		return 0;;
+	    *)
+		exit 2
+	esac
+    fi
+    find $dirs -follow -name '*.db' -print0 | \
+	xargs -r -0 $dbtool -m $dbLocation.tmp $dbLocation.tmp || exit 1
+    mv $dbLocation.tmp $dbLocation
+}
+
+
+rebuild_databases()
+{
+    v=$1
+    dbtool=gcj-dbtool-$1
+    dbLocation=`$dbtool -p || true`
+
+    if [ -n "$dbLocation" ]; then
+	case "$uname" in m68k)
+	    echo >&2 "$dbtool succeeded unexpectedly"
+	esac
+    else
+	case "$uname" in
+	    m68k)
+	        echo >&2 "ERROR: $dbtool did fail; known problem on $uname"
+		return 0;;
+	    *)
+		exit 2
+	esac
+    fi
+
+    if [ "$mode" = remove ] && [ ! -f "$dbLocation" ]; then
+	# libgcj7-0 or libgcj8 are already removed; no need
+	# to rebuild anything
+	return 0
+    fi
+    rebuild_db \
+	$dbtool \
+	$dbLocation \
+	/usr/share/gcj/classmap.d \
+	/usr/share/gcj-$v/classmap.d
+}
+
+# still different databases for each gcj-4.x
+
+if which gcj-dbtool-4.7 >/dev/null 2>&1; then
+    rebuild_databases 4.7
+fi
+
+if which gcj-dbtool-4.6 >/dev/null 2>&1; then
+    rebuild_databases 4.6
+fi
+
+if which gcj-dbtool-4.4 >/dev/null 2>&1; then
+    rebuild_databases 4.4
+fi
