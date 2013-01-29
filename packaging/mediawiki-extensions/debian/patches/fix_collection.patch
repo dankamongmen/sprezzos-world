@@ -1,0 +1,105 @@
+$Id: fix_collection.patch 383 2012-10-02 10:03:58Z tg $
+
+Fix Collection extension:
+• Invalid XHTML nesting
+• Empty ul element
+• Fix downloading generated PDFs
+
+--- a/dist/mediawiki-extensions-collection/usr/share/mediawiki-extensions/collection/Collection.templates.php
++++ b/dist/mediawiki-extensions-collection/usr/share/mediawiki-extensions/collection/Collection.templates.php
+@@ -101,7 +101,7 @@ echo $GLOBALS['wgOut']->parse( '{{:' . $
+ 			$buttonLabel = wfMsgHtml( 'coll-download' );
+ 		} ?>
+ 		<form id="downloadForm" action="<?php echo htmlspecialchars( SkinTemplate::makeSpecialUrl( 'Book' ) ) ?>" method="post">
+-			<table style="width:100%; background-color: transparent;"><tr><td><tbody><tr><td>
++			<table style="width:100%; background-color: transparent;"><tbody><tr><td>
+ 			<?php if ( count( $this->data['formats'] ) == 1 ) { ?>
+ 				<input type="hidden" name="writer" value="<?php echo htmlspecialchars( $writer ) ?>" />
+ 			<?php } else { ?>
+@@ -165,7 +165,7 @@ echo $GLOBALS['wgOut']->parse( '{{:' . $
+ 				<?php } // if ($canSaveCommunityPage) ?>
+ 				<tr><td>&#160;</td><td id="collection-save-button">
+ 				<input id="saveButton" type="submit" value="<?php $this->msg( 'coll-save_collection' ) ?>"<?php if ( count( $this->data['collection']['items'] ) == 0 ) { ?> disabled="disabled"<?php } ?> />
+-				</tr></tbody></table>
++				</td></tr></tbody></table>
+ 				<input name="token" type="hidden" value="<?php echo htmlspecialchars( $GLOBALS['wgUser']->editToken() ) ?>" />
+ 				<input name="bookcmd" type="hidden" value="save_collection" />
+ 			</form>
+@@ -215,13 +215,17 @@ if ( count( $this->data['collection']['i
+ </div>
+ <?php } ?>
+ 
+-<ul id="collectionList">
+-
+ <?php
++$ul_shown = false;
+ foreach ( $this->data['collection']['items'] as $index => $item ) {
+-	if ( $item['type'] == 'article' ) { ?>
++	if ( $item['type'] == 'article' ) {
++		if (!$ul_shown) {
++			echo '<ul id="collectionList">' . "\n";
++			$ul_shown = true;
++		}
++?>
+ 	<li id="item-<?php echo intval( $index ) ?>" class="article">
+-		<a onclick="return coll_remove_item(<?php echo intval( $index ) ?>)" href="<?php echo htmlspecialchars( SkinTemplate::makeSpecialUrl( 'Book', array( 'bookcmd' => 'remove_item', 'index' => $index ) ) ) ?>" title="<?php $this->msg( 'coll-remove' ) ?>"><img src="<?php echo htmlspecialchars( $mediapath . "remove.png" ) ?>" width="10" height="10" alt="<?php $this->msg( 'coll-remove' ) ?>" /></a><a>
++		<a onclick="return coll_remove_item(<?php echo intval( $index ) ?>)" href="<?php echo htmlspecialchars( SkinTemplate::makeSpecialUrl( 'Book', array( 'bookcmd' => 'remove_item', 'index' => $index ) ) ) ?>" title="<?php $this->msg( 'coll-remove' ) ?>"><img src="<?php echo htmlspecialchars( $mediapath . "remove.png" ) ?>" width="10" height="10" alt="<?php $this->msg( 'coll-remove' ) ?>" /></a>
+ 		<noscript>
+ 		<?php if ( $index == 0 ) { ?>
+ 			<img src="<?php echo htmlspecialchars( $mediapath . "trans.png" ) ?>" width="10" height="10" alt="" />
+@@ -269,8 +273,11 @@ foreach ( $this->data['collection']['ite
+ 		<a class="makeVisible" <?php if ( !isset( $this->data['is_ajax'] ) ) { echo 'style="display:none"'; } ?> onclick="<?php echo htmlspecialchars( 'return coll_rename_chapter(' . intval( $index ) . ', ' . Xml::encodeJsVar( $item['title'] ) . ')' ) ?>" href="javascript:void(0)">[<?php $this->msg( 'coll-rename' ) ?>]</a>
+ 	</li>
+ 	<?php }
+-} ?>
+-</ul>
++}
++if ($ul_shown) {
++	echo "</ul>\n";
++}
++?>
+ 
+ </div>
+ 
+--- a/dist/mediawiki-extensions-collection/usr/share/mediawiki-extensions/collection/Collection.body.php
++++ b/dist/mediawiki-extensions-collection/usr/share/mediawiki-extensions/collection/Collection.body.php
+@@ -1092,13 +1092,34 @@ class SpecialCollection extends SpecialP
+ 			$content_length = $r['content_length'];
+ 			$content_disposition = $r['content_disposition'];
+ 		} else {
+-			$info = self::mwServeCommand( 'download', array(
++			global $wgCollectionMWServeURL, $wgCollectionFormatToServeURL, $wgCollectionMWServeCredentials;
++
++			$args = array(
++				'command' => 'download',
+ 				'collection_id' => $wgRequest->getVal( 'collection_id' ),
+ 				'writer' => $wgRequest->getVal( 'writer' ),
+-			) );
+-			$content_type = $info['content_type'];
+-			$content_length = $info['download_content_length'];
+-			$content_disposition = null;
++			    );
++			$serveURL = $wgCollectionMWServeURL;
++			if ( array_key_exists( $args['writer'], $wgCollectionFormatToServeURL ) )
++				$serveURL = $wgCollectionFormatToServeURL[ $args['writer'] ];
++			if ( $wgCollectionMWServeCredentials ) {
++				$args['login_credentials'] = $wgCollectionMWServeCredentials;
++			}
++			$options = array(
++				'postData' => $args,
++				'method' => 'POST',
++				'timeout' => 'default',
++			    );
++			$req = MWHttpRequest::factory($serveURL, $options);
++			$status = $req->execute();
++			$result = $status->isOK() ? $req->getContent() : false;
++			if ($result) {
++				fwrite($tempfile, $result);
++				$info = true;
++			}
++			$content_type = $req->getResponseHeader('content-type');
++			$content_length = $req->getResponseHeader('content-length');
++			$content_disposition = $req->getResponseHeader('content-disposition');
+ 		}
+ 		if ( !$info ) {
+ 			$wgOut->showErrorPage( 'coll-download_notfound_title', 'coll-download_notfound_text' );
