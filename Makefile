@@ -1605,6 +1605,14 @@ $(LIBCDK5): $(SPREZZ)/libcdk5/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cdk.tar.gz $(TARARGS) $@
 
+.PHONY: libcdr
+libcdr:$(LIBCDR)_$(ARCH).deb
+$(LIBCDR): $(SPREZZ)/libcdr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-versrn
+	tar xzvf libcdr-$(libcdr_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libcec
 libcec:$(LIBCEC)_$(ARCH).deb
 $(LIBCEC): $(SPREZZ)/libcec/debian/changelog
