@@ -1685,6 +1685,14 @@ $(LIBCHAMPLAIN): $(SPREZZ)/libchamplain/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libchamplain-$(libchamplain_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libcroco
+libcroco:$(LIBCROCO)_$(ARCH).deb
+$(LIBCROCO): $(SPREZZ)/libcroco/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libcroco-$(libcroco_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: libcrypt-ssleay-perl
 libcrypt-ssleay-perl:$(LIBCRYPTSSLEAYPERL)_$(ARCH).deb
 $(LIBCRYPTSSLEAYPERL): $(SPREZZ)/libcrypt-ssleay-perl/debian/changelog
