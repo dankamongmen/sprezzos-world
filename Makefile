@@ -5163,6 +5163,14 @@ $(MDADM): $(SPREZZ)/mdadm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mdadm_$(mdadm_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mdds
+mdds:$(MDDS)_$(ARCH).deb
+$(MDDS): $(SPREZZ)/mdds/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf mdds-$(mdds_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: meanwhile
 meanwhile:$(MEANWHILE)_$(ARCH).deb
 $(MEANWHILE): $(SPREZZ)/meanwhile/debian/changelog
