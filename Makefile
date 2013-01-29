@@ -6597,6 +6597,14 @@ $(LIBRELP): $(SPREZZ)/librelp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf librelp-$(librelp_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libreoffice
+libreoffice:$(LIBREOFFICE)_$(ARCH).deb
+$(LIBREOFFICE): $(SPREZZ)/libreoffice/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libreoffice-$(libreoffice_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: librsvg
 librsvg:$(LIBRSVG)_$(ARCH).deb
 $(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog

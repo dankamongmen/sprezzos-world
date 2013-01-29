@@ -1,0 +1,307 @@
+Description: Fix FTBFS on ARM based architectures
+Origin: http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=commitdiff;h=0eba2169fb19ef0707a2c96201e33769001b5f11
+
+Index: libunwind/include/libunwind-arm.h
+===================================================================
+--- libunwind.orig/include/libunwind-arm.h	2012-07-04 11:28:50.790950000 +0100
++++ libunwind/include/libunwind-arm.h	2012-07-04 11:35:00.514253939 +0100
+@@ -30,7 +30,7 @@
+ #endif
+ 
+ #include <inttypes.h>
+-#include <ucontext.h>
++#include <stddef.h>
+ 
+ #define UNW_TARGET	arm
+ #define UNW_TARGET_ARM	1
+@@ -250,8 +250,14 @@
+   }
+ unw_tdep_save_loc_t;
+ 
+-/* On ARM, we can directly use ucontext_t as the unwind context.  */
+-typedef ucontext_t unw_tdep_context_t;
++/* On ARM, we define our own unw_tdep_context instead of using ucontext_t.
++   This allows us to support systems that don't support getcontext and
++   therefore do not define ucontext_t.  */
++typedef struct unw_tdep_context
++  {
++    unsigned long regs[16];
++  }
++unw_tdep_context_t;
+ 
+ /* There is no getcontext() on ARM.  Use a stub version which only saves GP
+    registers.  FIXME: Not ideal, may not be sufficient for all libunwind
+@@ -259,8 +265,7 @@
+ #ifndef __thumb__
+ #define unw_tdep_getcontext(uc) (({					\
+   unw_tdep_context_t *unw_ctx = (uc);					\
+-  register int unw_base asm ("r0")					\
+-    = (int) (&unw_ctx->uc_mcontext.arm_r0);				\
++  register unsigned long *unw_base asm ("r0") = unw_ctx->regs;		\
+   __asm__ __volatile__ (						\
+     "stmia %[base], {r0-r15}"						\
+     : : [base] "r" (unw_base) : "memory");				\
+@@ -268,8 +273,7 @@
+ #else /* __thumb__ */
+ #define unw_tdep_getcontext(uc) (({					\
+   unw_tdep_context_t *unw_ctx = (uc);					\
+-  register int unw_base asm ("r0")					\
+-    = (int) (&unw_ctx->uc_mcontext.arm_r0);				\
++  register unsigned long *unw_base asm ("r0") = unw_ctx->regs;		\
+   __asm__ __volatile__ (						\
+     ".align 2\nbx pc\nnop\n.code 32\n"					\
+     "stmia %[base], {r0-r15}\n"						\
+Index: libunwind/include/tdep-arm/libunwind_i.h
+===================================================================
+--- libunwind.orig/include/tdep-arm/libunwind_i.h	2012-07-04 11:28:50.790950000 +0100
++++ libunwind/include/tdep-arm/libunwind_i.h	2012-07-04 11:35:00.514253939 +0100
+@@ -274,7 +274,7 @@
+ extern int tdep_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+ 				     unw_dyn_info_t *di, unw_proc_info_t *pi,
+ 				     int need_unwind_info, void *arg);
+-extern void *tdep_uc_addr (ucontext_t *uc, int reg);
++extern void *tdep_uc_addr (unw_tdep_context_t *uc, int reg);
+ extern int tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
+ 			       unsigned long *segbase, unsigned long *mapoff,
+ 			       char *path, size_t pathlen);
+Index: libunwind/src/arm/Gglobal.c
+===================================================================
+--- libunwind.orig/src/arm/Gglobal.c	2012-07-04 11:28:50.790950000 +0100
++++ libunwind/src/arm/Gglobal.c	2012-07-04 11:35:00.514253939 +0100
+@@ -22,7 +22,6 @@
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+-#include <ucontext.h>
+ #include "unwind_i.h"
+ #include "dwarf_i.h"
+ 
+@@ -37,7 +36,10 @@
+ 
+ HIDDEN uint8_t dwarf_to_unw_regnum_map[16] =
+   {
+-    R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15
++    /* 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 */
++    UNW_ARM_R0, UNW_ARM_R1, UNW_ARM_R2, UNW_ARM_R3, UNW_ARM_R4, UNW_ARM_R5,
++    UNW_ARM_R6, UNW_ARM_R7, UNW_ARM_R8, UNW_ARM_R9, UNW_ARM_R10, UNW_ARM_R11,
++    UNW_ARM_R12, UNW_ARM_R13, UNW_ARM_R14, UNW_ARM_R15
+   };
+ 
+ HIDDEN void
+Index: libunwind/src/arm/Ginit.c
+===================================================================
+--- libunwind.orig/src/arm/Ginit.c	2012-07-04 11:28:50.790950000 +0100
++++ libunwind/src/arm/Ginit.c	2012-07-04 11:35:00.514253939 +0100
+@@ -39,39 +39,18 @@
+ PROTECTED unw_addr_space_t unw_local_addr_space = &local_addr_space;
+ 
+ static inline void *
+-uc_addr (ucontext_t *uc, int reg)
++uc_addr (unw_tdep_context_t *uc, int reg)
+ {
+-  void *addr;
+-
+-  switch (reg)
+-    {
+-    case UNW_ARM_R0:  addr = &uc->uc_mcontext.arm_r0; break;
+-    case UNW_ARM_R1:  addr = &uc->uc_mcontext.arm_r1; break;
+-    case UNW_ARM_R2:  addr = &uc->uc_mcontext.arm_r2; break;
+-    case UNW_ARM_R3:  addr = &uc->uc_mcontext.arm_r3; break;
+-    case UNW_ARM_R4:  addr = &uc->uc_mcontext.arm_r4; break;
+-    case UNW_ARM_R5:  addr = &uc->uc_mcontext.arm_r5; break;
+-    case UNW_ARM_R6:  addr = &uc->uc_mcontext.arm_r6; break;
+-    case UNW_ARM_R7:  addr = &uc->uc_mcontext.arm_r7; break;
+-    case UNW_ARM_R8:  addr = &uc->uc_mcontext.arm_r8; break;
+-    case UNW_ARM_R9:  addr = &uc->uc_mcontext.arm_r9; break;
+-    case UNW_ARM_R10: addr = &uc->uc_mcontext.arm_r10; break;
+-    case UNW_ARM_R11: addr = &uc->uc_mcontext.arm_fp; break;
+-    case UNW_ARM_R12: addr = &uc->uc_mcontext.arm_ip; break;
+-    case UNW_ARM_R13: addr = &uc->uc_mcontext.arm_sp; break;
+-    case UNW_ARM_R14: addr = &uc->uc_mcontext.arm_lr; break;
+-    case UNW_ARM_R15: addr = &uc->uc_mcontext.arm_pc; break;
+-
+-    default:
+-      addr = NULL;
+-    }
+-  return addr;
++  if (reg >= UNW_ARM_R0 && reg < UNW_ARM_R0 + 16)
++    return &uc->regs[reg - UNW_ARM_R0];
++  else
++    return NULL;
+ }
+ 
+ # ifdef UNW_LOCAL_ONLY
+ 
+ HIDDEN void *
+-tdep_uc_addr (ucontext_t *uc, int reg)
++tdep_uc_addr (unw_tdep_context_t *uc, int reg)
+ {
+   return uc_addr (uc, reg);
+ }
+@@ -115,7 +94,7 @@
+ 	    void *arg)
+ {
+   unw_word_t *addr;
+-  ucontext_t *uc = arg;
++  unw_tdep_context_t *uc = arg;
+ 
+   if (unw_is_fpreg (reg))
+     goto badreg;
+@@ -145,7 +124,7 @@
+ access_fpreg (unw_addr_space_t as, unw_regnum_t reg, unw_fpreg_t *val,
+ 	      int write, void *arg)
+ {
+-  ucontext_t *uc = arg;
++  unw_tdep_context_t *uc = arg;
+   unw_fpreg_t *addr;
+ 
+   if (!unw_is_fpreg (reg))
+Index: libunwind/src/arm/Ginit_local.c
+===================================================================
+--- libunwind.orig/src/arm/Ginit_local.c	2012-07-04 11:28:50.790950000 +0100
++++ libunwind/src/arm/Ginit_local.c	2012-07-04 11:35:00.514253939 +0100
+@@ -29,7 +29,7 @@
+ #ifdef UNW_REMOTE_ONLY
+ 
+ PROTECTED int
+-unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
++unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   return -UNW_EINVAL;
+ }
+@@ -37,7 +37,7 @@
+ #else /* !UNW_REMOTE_ONLY */
+ 
+ PROTECTED int
+-unw_init_local (unw_cursor_t *cursor, ucontext_t *uc)
++unw_init_local (unw_cursor_t *cursor, unw_context_t *uc)
+ {
+   struct cursor *c = (struct cursor *) cursor;
+ 
+Index: libunwind/src/arm/Gresume.c
+===================================================================
+--- libunwind.orig/src/arm/Gresume.c	2012-07-04 11:28:50.790950000 +0100
++++ libunwind/src/arm/Gresume.c	2012-07-04 11:35:00.518253964 +0100
+@@ -33,23 +33,23 @@
+ {
+ #ifdef __linux__
+   struct cursor *c = (struct cursor *) cursor;
+-  ucontext_t *uc = c->dwarf.as_arg;
++  unw_tdep_context_t *uc = c->dwarf.as_arg;
+ 
+   if (c->sigcontext_format == ARM_SCF_NONE)
+     {
+       /* Since there are no signals involved here we restore the non scratch
+ 	 registers only.  */
+       unsigned long regs[10];
+-      regs[0] = uc->uc_mcontext.arm_r4;
+-      regs[1] = uc->uc_mcontext.arm_r5;
+-      regs[2] = uc->uc_mcontext.arm_r6;
+-      regs[3] = uc->uc_mcontext.arm_r7;
+-      regs[4] = uc->uc_mcontext.arm_r8;
+-      regs[5] = uc->uc_mcontext.arm_r9;
+-      regs[6] = uc->uc_mcontext.arm_r10;
+-      regs[7] = uc->uc_mcontext.arm_fp;
+-      regs[8] = uc->uc_mcontext.arm_sp;
+-      regs[9] = uc->uc_mcontext.arm_lr;
++      regs[0] = uc->regs[4];
++      regs[1] = uc->regs[5];
++      regs[2] = uc->regs[6];
++      regs[3] = uc->regs[7];
++      regs[4] = uc->regs[8];
++      regs[5] = uc->regs[9];
++      regs[6] = uc->regs[10];
++      regs[7] = uc->regs[11]; /* FP */
++      regs[8] = uc->regs[13]; /* SP */
++      regs[9] = uc->regs[14]; /* LR */
+ 
+       asm __volatile__ (
+ 	"ldmia %0, {r4-r12, lr}\n"
+@@ -63,22 +63,22 @@
+       /* In case a signal frame is involved, we're using its trampoline which
+ 	 calls sigreturn.  */
+       struct sigcontext *sc = (struct sigcontext *) c->sigcontext_addr;
+-      sc->arm_r0 = uc->uc_mcontext.arm_r0;
+-      sc->arm_r1 = uc->uc_mcontext.arm_r1;
+-      sc->arm_r2 = uc->uc_mcontext.arm_r2;
+-      sc->arm_r3 = uc->uc_mcontext.arm_r3;
+-      sc->arm_r4 = uc->uc_mcontext.arm_r4;
+-      sc->arm_r5 = uc->uc_mcontext.arm_r5;
+-      sc->arm_r6 = uc->uc_mcontext.arm_r6;
+-      sc->arm_r7 = uc->uc_mcontext.arm_r7;
+-      sc->arm_r8 = uc->uc_mcontext.arm_r8;
+-      sc->arm_r9 = uc->uc_mcontext.arm_r9;
+-      sc->arm_r10 = uc->uc_mcontext.arm_r10;
+-      sc->arm_fp = uc->uc_mcontext.arm_fp;
+-      sc->arm_ip = uc->uc_mcontext.arm_ip;
+-      sc->arm_sp = uc->uc_mcontext.arm_sp;
+-      sc->arm_lr = uc->uc_mcontext.arm_lr;
+-      sc->arm_pc = uc->uc_mcontext.arm_pc;
++      sc->arm_r0 = uc->regs[0];
++      sc->arm_r1 = uc->regs[1];
++      sc->arm_r2 = uc->regs[2];
++      sc->arm_r3 = uc->regs[3];
++      sc->arm_r4 = uc->regs[4];
++      sc->arm_r5 = uc->regs[5];
++      sc->arm_r6 = uc->regs[6];
++      sc->arm_r7 = uc->regs[7];
++      sc->arm_r8 = uc->regs[8];
++      sc->arm_r9 = uc->regs[9];
++      sc->arm_r10 = uc->regs[10];
++      sc->arm_fp = uc->regs[11]; /* FP */
++      sc->arm_ip = uc->regs[12]; /* IP */
++      sc->arm_sp = uc->regs[13]; /* SP */
++      sc->arm_lr = uc->regs[14]; /* LR */
++      sc->arm_pc = uc->regs[15]; /* PC */
+       /* clear the ITSTATE bits.  */
+       sc->arm_cpsr &= 0xf9ff03ffUL;
+ 
+Index: libunwind/src/arm/init.h
+===================================================================
+--- libunwind.orig/src/arm/init.h	2012-07-04 11:28:50.790950000 +0100
++++ libunwind/src/arm/init.h	2012-07-04 11:35:00.518253964 +0100
+@@ -29,26 +29,26 @@
+ {
+   int ret, i;
+ 
+-  c->dwarf.loc[R0] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R0);
+-  c->dwarf.loc[R1] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R1);
+-  c->dwarf.loc[R2] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R2);
+-  c->dwarf.loc[R3] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R3);
+-  c->dwarf.loc[R4] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R4);
+-  c->dwarf.loc[R5] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R5);
+-  c->dwarf.loc[R6] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R6);
+-  c->dwarf.loc[R7] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R7);
+-  c->dwarf.loc[R8] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R8);
+-  c->dwarf.loc[R9] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R9);
+-  c->dwarf.loc[R10] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R10);
+-  c->dwarf.loc[R11] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R11);
+-  c->dwarf.loc[R12] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R12);
+-  c->dwarf.loc[R13] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R13);
+-  c->dwarf.loc[R14] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R14);
+-  c->dwarf.loc[R15] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R15);
+-  for (i = R15 + 1; i < DWARF_NUM_PRESERVED_REGS; ++i)
++  c->dwarf.loc[UNW_ARM_R0] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R0);
++  c->dwarf.loc[UNW_ARM_R1] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R1);
++  c->dwarf.loc[UNW_ARM_R2] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R2);
++  c->dwarf.loc[UNW_ARM_R3] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R3);
++  c->dwarf.loc[UNW_ARM_R4] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R4);
++  c->dwarf.loc[UNW_ARM_R5] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R5);
++  c->dwarf.loc[UNW_ARM_R6] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R6);
++  c->dwarf.loc[UNW_ARM_R7] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R7);
++  c->dwarf.loc[UNW_ARM_R8] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R8);
++  c->dwarf.loc[UNW_ARM_R9] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R9);
++  c->dwarf.loc[UNW_ARM_R10] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R10);
++  c->dwarf.loc[UNW_ARM_R11] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R11);
++  c->dwarf.loc[UNW_ARM_R12] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R12);
++  c->dwarf.loc[UNW_ARM_R13] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R13);
++  c->dwarf.loc[UNW_ARM_R14] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R14);
++  c->dwarf.loc[UNW_ARM_R15] = DWARF_REG_LOC (&c->dwarf, UNW_ARM_R15);
++  for (i = UNW_ARM_R15 + 1; i < DWARF_NUM_PRESERVED_REGS; ++i)
+     c->dwarf.loc[i] = DWARF_NULL_LOC;
+ 
+-  ret = dwarf_get (&c->dwarf, c->dwarf.loc[R15], &c->dwarf.ip);
++  ret = dwarf_get (&c->dwarf, c->dwarf.loc[UNW_ARM_R15], &c->dwarf.ip);
+   if (ret < 0)
+     return ret;
+ 
