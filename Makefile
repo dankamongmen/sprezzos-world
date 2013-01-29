@@ -1501,6 +1501,14 @@ $(BOOST1.52): $(SPREZZ)/boost1.52/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf boost1.52_$(boost1.52_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: bowtie2
+bowtie2:$(BOWTIE2)_$(ARCH).deb
+$(BOWTIE2): $(SPREZZ)/bowtie2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf bowtie2-$(bowtie2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: brasero
 brasero:$(BRASERO)_$(ARCH).deb
 $(BRASERO): $(SPREZZ)/brasero/debian/changelog
