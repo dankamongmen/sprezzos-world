@@ -3507,13 +3507,13 @@ $(IJS): $(SPREZZ)/ijs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ijs_$(ijs_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: liblibio-pty-perl
-liblibio-pty-perl:$(LIBIOPTYPERL)_$(ARCH).deb
-$(LIBIOPTYPERL): $(SPREZZ)/liblibio-pty-perl/debian/changelog
+.PHONY: libio-pty-perl
+libio-pty-perl:$(LIBIOPTYPERL)_$(ARCH).deb
+$(LIBIOPTYPERL): $(SPREZZ)/libio-pty-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf IO-Pty-$(liblibio-pty-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf IO-Tty-$(libio-pty-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libiksemel
 libiksemel:$(LIBIKSEMEL)_$(ARCH).deb
