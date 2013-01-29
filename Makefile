@@ -1749,6 +1749,14 @@ $(TCPDUMP): $(SPREZZ)/tcpdump/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tcpdump-$(tcpdump_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: tmux
+tmux:$(TMUX)_$(ARCH).deb
+$(TMUX): $(SPREZZ)/tmux/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tmux-$(tmux_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: tslib
 tslib:$(TSLIB)_$(ARCH).deb
 $(TSLIB): $(SPREZZ)/tslib/debian/changelog

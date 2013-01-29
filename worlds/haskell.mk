@@ -398,6 +398,14 @@ $(HASKELLHTTPCONDUIT): $(SPREZZ)/haskell-http-conduit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf http-conduit-$(haskell-http-conduit_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-http-types
+haskell-http-types:$(HASKELLHTTPTYPES)_$(ARCH).deb
+$(HASKELLHTTPTYPES): $(SPREZZ)/haskell-http-types/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf http-types-$(haskell-http-types_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-hunit
 haskell-hunit:$(HASKELLHUNIT)_$(ARCH).deb
 $(HASKELLHUNIT): $(SPREZZ)/haskell-hunit/debian/changelog
@@ -613,6 +621,14 @@ $(HASKELLSHA): $(SPREZZ)/haskell-sha/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf SHA-$(haskell-sha_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-setenv
+haskell-setenv:$(HASKELLSETENV)_$(ARCH).deb
+$(HASKELLSETENV): $(SPREZZ)/haskell-setenv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf setenv-$(haskell-setenv_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-shakespeare
 haskell-shakespeare:$(HASKELLSHAKESPEARE)_$(ARCH).deb
