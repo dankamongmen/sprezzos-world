@@ -595,6 +595,14 @@ $(ASTERISK): $(SPREZZ)/asterisk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf asterisk-$(asterisk_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gimp-help
+gimp-help:$(GIMPHELP)_$(ARCH).deb
+$(GIMPHELP): $(SPREZZ)/gimp-help/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gimp-help-$(gimp-help_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: gimplensfun
 gimplensfun:$(GIMPLENSFUN)_$(ARCH).deb
 $(GIMPLENSFUN): $(SPREZZ)/gimplensfun/debian/changelog
@@ -1907,7 +1915,7 @@ $(CLUTTER): $(SPREZZ)/clutter/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf clutter-$(clutter_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf clutter-1.0-$(clutter_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: clutter-gst
 clutter-gst:$(CLUTTERGST)_$(ARCH).deb
