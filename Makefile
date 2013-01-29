@@ -1821,6 +1821,14 @@ $(CLOUDINIT): $(SPREZZ)/cloud-init/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cloud-init-$(cloud-init_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: clucene-core
+clucene-core:$(CLUCENECORE)_$(ARCH).deb
+$(CLUCENECORE): $(SPREZZ)/clucene-core/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf clucene-core-$(clucene-core_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: clutter
 clutter:$(CLUTTER)_$(ARCH).deb
 $(CLUTTER): $(SPREZZ)/clutter/debian/changelog
@@ -4642,6 +4650,14 @@ $(LIBEVPERL): $(SPREZZ)/libev-perl/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf EV-$(libev-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libunwind
+libunwind:$(LIBUNWIND)_$(ARCH).deb
+$(LIBUNWIND): $(SPREZZ)/libunwind/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libunwind-$(libunwind_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libuuid-perl
 libuuid-perl:$(LIBUUIDPERL)_$(ARCH).deb
