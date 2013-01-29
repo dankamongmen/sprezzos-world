@@ -651,6 +651,14 @@ $(LLVM3.2): $(SPREZZ)/llvm-3.2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf llvm-3.2-$(llvm-3.2_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: linphone
+linphone:$(LINPHONE)_$(ARCH).deb
+$(LINPHONE): $(SPREZZ)/linphone/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf linphone-$(linphone_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libaacplus
 libaacplus:$(LIBAACPLUS)_$(ARCH).deb
 $(LIBAACPLUS): $(SPREZZ)/libaacplus/debian/changelog
