@@ -5123,6 +5123,14 @@ $(MEANWHILE): $(SPREZZ)/meanwhile/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf meanwhile-$(meanwhile_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: mediawiki
+mediawiki:$(MEDIAWIKI)_$(ARCH).deb
+$(MEDIAWIKI): $(SPREZZ)/mediawiki/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mediawiki-$(mediawiki_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: memcached
 memcached:$(MEMCACHED)_$(ARCH).deb
 $(MEMCACHED): $(SPREZZ)/memcached/debian/changelog
