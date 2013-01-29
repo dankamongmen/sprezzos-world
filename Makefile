@@ -4539,6 +4539,14 @@ $(LIBSM): $(SPREZZ)/libsm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libSM-$(libsm_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libsmbios
+libsmbios:$(LIBSMBIOS)_$(ARCH).deb
+$(LIBSMBIOS): $(SPREZZ)/libsmbios/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libsmbios-$(libsmbios_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libsoup
 libsoup:$(LIBSOUP)_$(ARCH).deb
 $(LIBSOUP): $(SPREZZ)/libsoup/debian/changelog

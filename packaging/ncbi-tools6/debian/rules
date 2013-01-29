@@ -1,0 +1,252 @@
+#!/usr/bin/make -f
+DEB_VERSION=$(shell dpkg-parsechangelog | awk '/^Version:/ { print $$2 }')
+export NCBI_VERSION_FULL=$(DEB_VERSION)
+export NCBI_VERSION=$(word 1, $(subst -, ,$(NCBI_VERSION_FULL)))
+export NCBI_VERSION_MAJOR=$(word 1, $(subst ., ,$(NCBI_VERSION)))
+export NCBI_VERSION_MINOR=$(NCBI_VERSION:$(NCBI_VERSION_MAJOR).%=%)
+export NCBI_VERSION_DATE =$(word 3, $(subst ., ,$(NCBI_VERSION)))
+export NCBI_VERSION_DEBREL=$(word 2, $(subst -, ,$(NCBI_VERSION_FULL)))
+
+#export BLAST_VERSION=1:$(shell awk -F\" '/\#define BLAST_ENGINE_VERSION/ {print $$2}' tools/blastdef.h)
+export BLAST_VERSION=1:$(shell cat demo/.BLAST_VERSION)
+export BLAST_VERSION_DATED=$(BLAST_VERSION).$(NCBI_VERSION_DATE)
+export BLAST_VERSION_FULL=$(BLAST_VERSION_DATED)-$(NCBI_VERSION_DEBREL)
+
+testversions:
+	env | fgrep NCBI_VERSION
+	env | fgrep BLAST_VERSION
+
+# Set these here, rather than using the csh hackage that passes for an
+# upstream build system.  Mostly taken from ../platform/{ppc,}linux.ncbi.mk.
+CC = gcc # -pipe
+VIBFLAG = -DWIN_MOTIF
+VIBLIBS = -lXm -lXmu -lXt -lX11 # -lXext # -lXp
+OTHERLIBS = -lm
+RANLIB = ranlib
+MT_OTHERLIBS = -lpthread
+THREAD_OBJ = ncbithr.o
+NETENTREZVERSION = 2.02c2ASN1SPEC6
+
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+
+CFLAGS := $(shell dpkg-buildflags --get CFLAGS) -Wall \
+          $(shell dpkg-buildflags --get CPPFLAGS)
+ifeq ($(DEB_HOST_ARCH),alpha)
+CFLAGS += -mieee
+endif
+CFLAGS_PIC = $(filter-out -fPIE,$(CFLAGS)) -fPIC
+LDFLAGS  := $(shell dpkg-buildflags --get LDFLAGS)
+LDFLAGS1 := $(CFLAGS) $(LDFLAGS)
+
+OGL_TARGETS = Cn3D
+OGL_LIBVARS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
+OGLLIBS = -lGLU -lGL
+
+PNG_INCLUDE = -D_PNG
+PNG_LIBS = -lpng # -lz
+
+USESHLIB = NCBI_LINKINGLIBDIR="../shlib"
+MAKESHLIB = $(USESHLIB) NCBI_SHLIBS=shlib
+# Controls how shared libraries are built; appropriate for ELF w/GNU tools.
+
+export NCBI_LBSM_SRC=ncbi_lbsmd_stub.c
+export NCBI_LBSM_OBJ=ncbi_lbsmd_stub.o
+
+ifeq ($(LD_LIBRARY_PATH),)
+export LD_LIBRARY_PATH:=$(CURDIR)/shlib
+else
+export LD_LIBRARY_PATH:=$(CURDIR)/shlib:$(LD_LIBRARY_PATH)
+endif
+
+# Apps which should be multithreaded if possible.
+MTAPPS = blast blastall blastall_old blastpgp seedtop megablast rpsblast \
+         blastclust
+
+VIB = Psequin sbtedit udv ddv blastcl3 taxblast idfetch bl2seq asn2gb tbl2asn \
+      gene2xml entrez2 gbseqget asn2all asn2asn asn2fsa asn2xml asndisc \
+      asnmacro asnval cleanasn insdseqget nps2gps spidey trna2sap trna2tbl \
+      $(OGL_TARGETS)
+
+#OTHERS = others
+OTHERS = libncbimla.a libnetblast.a libncbitxc2.a libncbiid1.a shlib
+
+COMMON_FLAGS = LCL=lnx CC="$(CC)" LDFLAGS1="$(LDFLAGS1)" RAN="$(RANLIB)"
+COMMON_FLAGS += OTHERLIBS="$(OTHERLIBS)" VIBLIBS="$(VIBLIBS)"
+COMMON_FLAGS += VIBFLAG="$(VIBFLAG)"
+
+ICONS = debian/asntool.xpm debian/ncbilogo.xpm
+
+MAKE_IN_BUILD = $(MAKE) -C build
+
+%:
+	dh $@
+
+# Explicit rule to avoid an infinite loop
+build:
+	dh $@
+
+override_dh_auto_build:
+	cd build && ln -s ../make/*.unx .
+	ln -s ../make/ln-if-absent build
+	mv build/makeall.unx build/makefile
+	chmod +x debian/makemenu debian/installman
+	$(MAKE_IN_BUILD) all $(COMMON_FLAGS) $(USESHLIB) \
+	    CFLAGS1="-c $(CFLAGS_PIC) $(PNG_INCLUDE)" \
+	    LIB4=libvibrant.a LIB20=libncbidesk.a LIB28=libvibgif.a \
+	    LIB30=libncbicn3d.a LIB45=libddvlib.a $(OGL_LIBVARS)
+	$(MAKE_IN_BUILD) -f makenet.unx $(COMMON_FLAGS) $(USESHLIB) \
+	    CFLAGS1="-c $(CFLAGS_PIC)" \
+	    LDFLAGS="$(filter-out -fPIE -pie,$(LDFLAGS))" \
+	    NETENTREZVERSION="$(NETENTREZVERSION)" \
+	    BLIB31=libvibnet.a OGLLIBS="$(OGLLIBS) $(PNG_LIBS)" all $(OTHERS)
+# Clear out the PIC objects
+	$(MAKE_IN_BUILD) clean
+
+	$(MAKE_IN_BUILD) all $(COMMON_FLAGS) $(USESHLIB) \
+	    CFLAGS1="-c $(CFLAGS) $(PNG_INCLUDE)" \
+	    LIB4=libvibrant.a LIB20=libncbidesk.a LIB28=libvibgif.a \
+	    LIB30=libncbicn3d.a LIB45=libddvlib.a $(OGL_LIBVARS)
+# Build demos without vibrant to avoid unnecessary dependencies;
+# users who want the Vibrant UI can use vibrate(1).
+	$(MAKE_IN_BUILD) -f makedemo.unx $(COMMON_FLAGS) $(USESHLIB) \
+	    CFLAGS1="-c $(CFLAGS)" VIBLIBS= VIBFLAG= LIB50=-lpcre
+	-cd build && rm -f $(MTAPPS)
+	$(MAKE_IN_BUILD) -f makedemo.unx $(COMMON_FLAGS) $(USESHLIB) \
+	    CFLAGS1="-c $(CFLAGS)" VIBLIBS= VIBFLAG= THREAD_OBJ="$(THREAD_OBJ)" \
+	    THREAD_OTHERLIBS="$(MT_OTHERLIBS)" $(MTAPPS)
+# Don't bother passing OGLLIBS or VIBLIBS, which apps don't use directly.
+	$(MAKE_IN_BUILD) -f makenet.unx $(COMMON_FLAGS) $(USESHLIB) \
+	    CFLAGS1="-c $(CFLAGS)" THREAD_OBJ="$(THREAD_OBJ)" \
+	    THREAD_OTHERLIBS="$(MT_OTHERLIBS)" \
+	    NETENTREZVERSION="$(NETENTREZVERSION)" BLIB31=libvibnet.a \
+	    OGLLIBS= VIBLIBS= VIB="$(VIB)"
+#	date > VERSION
+
+override_dh_auto_clean:
+	-rm -rf build/* bin/* include/* lib/* shlib
+	mkdir -p build bin include lib
+	-rm -f debian/*.menu $(ICONS)
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+destlibdir=debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+icon_in = link/mswin/ncbilogo.ico
+hi = debian/ncbi-data/usr/share/icons/hicolor
+
+override_dh_auto_install:
+	install -d $(destlibdir)
+	install -m 644 lib/* shlib/*.so.$(NCBI_VERSION) $(destlibdir)
+	for x in ncbiacc ncbiCacc netentr; do \
+	    rm -f $(destlibdir)/lib$$x.so.$(NCBI_VERSION) && \
+	    ln -s libncbiNacc.so.$(NCBI_VERSION_MAJOR) \
+	        $(destlibdir)/lib$$x.so.$(NCBI_VERSION_MAJOR) && \
+	    ln -s libncbiNacc.so $(destlibdir)/lib$$x.so; \
+	done
+	for x in ncbicn3d vibrant; do \
+	    rm -f $(destlibdir)/lib$$x.so.$(NCBI_VERSION) && \
+	    ln -s lib$${x}OGL.so.$(NCBI_VERSION_MAJOR) \
+	        $(destlibdir)/lib$$x.so.$(NCBI_VERSION_MAJOR) && \
+	    ln -s lib$${x}OGL.so $(destlibdir)/lib$$x.so; \
+	done
+	rm -f $(destlibdir)/libregexp.*
+	cd $(destlibdir) && \
+	for f in *.so.$(NCBI_VERSION); do \
+	    base=`basename $$f .so.$(NCBI_VERSION)` && \
+	    ln -s $$f $$base.so.$(NCBI_VERSION_MAJOR) && \
+	    ln -s $$f $$base.so; \
+	done
+
+	install -d debian/tmp/usr/include/ncbi
+	cp -LRp include/* debian/tmp/usr/include/ncbi
+	cd debian/tmp/usr/include/ncbi && \
+            rm -f FSpCompat.h FullPath.h More*.h Optimization*.h pcre*.h
+	find debian/tmp/usr/include -type f | xargs chmod 644
+
+	install -d debian/tmp/usr/bin
+	install `find build -type f -perm +111 -print` debian/tmp/usr/bin
+	rm -f debian/tmp/usr/bin/*test*
+	rm -f debian/tmp/usr/bin/*demo*
+# Useless as a binary, and seems to be broken anyway
+	rm -f debian/tmp/usr/bin/dosimple
+# Seems to be a functional version of sort(1) with no special features
+# (but lacking some features of GNU sort)
+	rm -f debian/tmp/usr/bin/ncbisort
+# Obsolete
+	rm -f debian/tmp/usr/bin/cdscan
+	rm -f debian/tmp/usr/bin/entrcmd
+#	install -d debian/tmp/usr/lib/cgi-bin
+#	mv debian/tmp/usr/bin/blast.REAL debian/tmp/usr/lib/cgi-bin
+	rm -f debian/tmp/usr/bin/blast.REAL
+	mv debian/tmp/usr/bin/Cn3D debian/tmp/usr/bin/Cn3D-3.0
+#	mv debian/tmp/usr/bin/fmerge debian/tmp/usr/bin/fastamerge
+	mv debian/tmp/usr/bin/blast debian/tmp/usr/bin/blast2
+ifneq "" "$(filter ncbi-data, $(shell dh_listpackages))"
+	convert link/mswin/asntool.ico debian/asntool.xpm
+	icotool -x -w 32 -b 32 -o - $(icon_in) | \
+	    convert png:- debian/ncbilogo.xpm
+	install -d debian/ncbi-data/etc/ncbi
+	install -m 644 debian/.*rc debian/ncbi-data/etc/ncbi
+	install -d debian/ncbi-data/usr/bin
+	install debian/vibrate debian/ncbi-data/usr/bin
+	install -d debian/ncbi-data/usr/share/ncbi/data
+	install -m 644 data/* debian/ncbi-data/usr/share/ncbi/data
+	install -d debian/ncbi-rrna-data/usr/share/ncbi/data
+	mv debian/ncbi-data/usr/share/ncbi/data/*_[b29]*.n?? \
+	    debian/ncbi-rrna-data/usr/share/ncbi/data/
+	install -d debian/ncbi-data/usr/share/pixmaps
+	install -m 644 $(ICONS) debian/ncbi-data/usr/share/pixmaps
+	for w in 16 32 48 256; do \
+	    d=$${w}x$${w} && \
+	    install -d $(hi)/$$d && \
+	    icotool -x -w $$w -b 32 -o $(hi)/$$d/ncbilogo.png $(icon_in) \
+	    || exit 1 ; \
+	done
+endif
+
+override_dh_installchangelogs:
+	dh_installchangelogs -k README
+
+override_dh_installmenu:
+	debian/makemenu debian/ncbi-tools-x11.install
+	debian/makemenu -v debian/ncbi-tools-bin.install
+	debian/makemenu -v debian/blast2.install
+	dh_installmenu
+
+override_dh_installdocs:
+	dh_installdocs
+	install -m 644 config/README \
+	    debian/libncbi6/usr/share/doc/libncbi6/README.config
+	install -m 644 network/nsclilib/readme \
+	    debian/libncbi6/usr/share/doc/libncbi6/README.net-cfg
+	install -m 644 doc/fa2htgs/README \
+	    debian/ncbi-tools-bin/usr/share/doc/ncbi-tools-bin/README.fa2htgs
+	install -m 644 sequin/README \
+	    debian/ncbi-tools-x11/usr/share/doc/ncbi-tools-x11/README.sequin
+
+override_dh_installman:
+	dh_link # otherwise runs too late to influence debian/installman
+	debian/installman blast2
+	debian/installman blast2 blast
+	debian/installman ncbi-tools-bin
+	debian/installman ncbi-tools-x11
+ifneq "" "$(filter ncbi-data, $(shell dh_listpackages))"
+	debian/installman ncbi-data
+endif
+	dh_installman
+
+override_dhmakeshlibs:
+	dh_makeshlibs -V
+
+override_dh_strip:
+	dh_strip       -plibncbi6     --dbg-package=libncbi6-dbg
+	dh_strip       -plibvibrant6a --dbg-package=libvibrant6a-dbg
+	dh_strip       -Nlibncbi6 -Nlibvibrant6a
+
+override_dh_gencontrol:
+	dh_gencontrol  -pblast2 -- -v$(BLAST_VERSION_FULL)
+	dh_gencontrol  -Nblast2
+
+override_dh_builddeb:
+	dh_builddeb -pncbi-rrna-data -- -Zxz -z7 -Sextreme
+	dh_builddeb -Nncbi-rrna-data
+
+.PHONY: build

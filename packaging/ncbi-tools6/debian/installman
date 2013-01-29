@@ -1,0 +1,56 @@
+#!/usr/bin/perl -w
+use strict;
+use IO::File;
+
+my $pkg    = shift;
+my $outdir = "debian/$pkg/usr/share/man/man1";
+my $USD    = "/usr/share/doc";
+system("mkdir", "-p", $outdir) && die "Couldn't create $outdir";
+
+foreach my $x (@ARGV ? @ARGV : <debian/$pkg/usr/bin/*>) {
+    my $full_x = $x;
+    $x =~ s:.*/::;
+    my $xin = $x;
+# gone as of 6.1.20040616
+#     if ($x eq 'fastamerge') {
+# 	$xin = 'fmerge'; # renamed in Debian per #155791
+#     }
+    if (-l $full_x) {
+	symlink readlink($full_x) . ".1", "$outdir/$x.1";
+	next;
+    }
+    foreach my $dir qw(doc/man debian/man) {
+	if (-f "$dir/$xin.1") {
+	    my $in  = new IO::File("<$dir/$xin.1")
+		or die "Couldn't open $dir/$xin.1: $!";
+	    my $out = new IO::File(">$outdir/$x.1")
+		or die "Couldn't open $outdir/$x.1: $!";
+	    while (<$in>) {
+		# s/fmerge/fastamerge/g;
+		# s/FMERGE/FASTAMERGE/g;
+	        s:(\w+)/README:README.$1:g;
+		while (/^(.*)(?<!\S)(README\.\w+|\w+\.txt|\w+\.html?)(.*)$/) {
+		    my ($pre, $main, $post) = ($1, $2, $3);
+		    my @matches = <debian/*$USD/*/$main>;
+		    if (!@matches) {
+			warn "[$x] $USD/*/$main not found in any package";
+		    } elsif (@matches > 1) {
+			warn "[$x] $USD/*/$main found in multiple packages";
+		    } else {
+			my $m = $matches[0];
+			$m .= '.gz' if ((-s $m) > 4096  &&  $m !~ /\.html?$/);
+			$m =~ s:^debian/[^/]*::;
+			print $out $pre . $m;
+		    }
+		    # Consider just the remaining text next time,
+		    # and make sure it ends with exactly one newline.
+		    chomp $post;
+		    $_ = "$post\n";
+		}
+		print $out $_;
+	    }
+	    last;
+	}
+    }
+    -f "$outdir/$x.1" || warn "Unable to find a man page for $x";
+}

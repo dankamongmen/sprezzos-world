@@ -1,0 +1,127 @@
+#!/usr/bin/perl -w
+use strict;
+
+use POSIX qw(strftime);
+
+my $AUTHOR = 'Aaron M. Ucko <ucko@debian.org>';
+
+# Generates initial Debian manpages based on help output ("-" flag).
+# bod's help2man won't work here, since it assumes GNU conventions.
+
+# Sigh...vibrant and non-vibrant versions only agree on T/F, Integer,
+# and String.
+my %type_map = ( 'Data In'     => 'filename',
+		 'Data Out'    => 'filename',
+		 'File In'     => 'filename',
+		 'File Out'    => 'filename',
+		 'Float'       => 'X',
+		 'Input-Data'  => 'filename',
+		 'Input-File'  => 'filename',
+		 'Integer'     => 'N',
+		 'Output-Data' => 'filename',
+		 'Output-File' => 'filename',
+		 'Real'        => 'X',
+		 'String'      => 'str',
+		 'T/F'         => undef );
+
+foreach my $prog (@ARGV) {
+    my $base = $prog;
+    $base =~ s@.*/@@;
+    open(MAN, ">doc/man/$base.1") or die;
+    print MAN '.TH ', uc($base), ' 1 ', strftime('%Y-%m-%d', localtime),
+    " NCBI \"NCBI Tools User's Manual\"\n";
+    print MAN ".SH NAME\n$base \\- ...\n";
+
+    my %options = parse_options($prog);
+    my $key;
+
+    print MAN ".SH SYNOPSIS\n.B $base\n", synopsis(\%options);
+    print MAN <<EOF;
+.SH DESCRIPTION
+\\fB$base\\fP is ...
+.SH OPTIONS
+EOF
+    if (keys %options) {
+	print MAN "A summary of options is included below.\n";
+	foreach my $key (sort keys %options) {
+	    my $desc = $options{$key};
+	    $desc =~ s/\s+\[T\/F\]//;
+	    $desc =~ s/\s+Optional//;
+	    $desc =~ s/\n(.)/\n.br\n$1/g;
+	    print MAN ".TP\n", format_arg($key, $desc), "\n", $desc;
+	}
+    } else {
+	print MAN "None.\n";
+    }
+    print MAN <<EOF;
+.SH AUTHOR
+The National Center for Biotechnology Information.
+EOF
+}
+
+sub parse_options
+{
+    my $prog = $_[0];
+    my %options;
+    my $last_option;
+    my $last_description;
+
+    open(HELP, "$prog - </dev/null |") or die;
+
+    while (<HELP>) {
+	if (/^  (-\S+)\s*(.*)/) {
+	    $options{$last_option} = $last_description if defined $last_option;
+	    $last_option = $1;
+	    $last_description = "$2\n";
+	} elsif (defined $last_option) {
+	    $last_description .= $_;
+	}
+    }
+
+    if (defined $last_option) {
+	$options{$last_option} = $last_description;
+	$options{'-'} = "Print usage message\n";
+    }
+
+    close(HELP);
+
+    foreach my $key (keys %options) {
+	if ($options{$key} =~ s@(\[T/F\](\s+Optional)?)\s+default = T@$1@) {
+	    $options{"$key\\ F"} = "NOT $options{$key}";
+	    delete $options{$key};
+	} else {
+	    $options{$key} =~ s@(\[T/F\](\s+Optional)?)(\s+default = F)?@$1@;
+	}
+    }
+
+    return %options;
+}
+
+sub synopsis
+{
+    my %options = %{$_[0]};
+    my $result = '';
+
+    foreach my $key (sort keys %options) {
+	my $desc = $options{$key};
+	my $optional = ($desc =~ /Optional/  ||  $desc =~ /default = /
+			||  $key eq '-'  ||  $desc =~ /\[T\/F\]/);
+	$result .= '[\|' if $optional;
+	$result .= format_arg($key, $desc);
+	$result .= '\|]' if $optional;
+	$result .= "\n";
+    }
+
+    return $result;
+}
+
+sub format_arg
+{
+    my ($arg, $desc) = @_;
+    my $result = "\\fB\\$arg\\fP";
+    if ($desc =~ /\[(.*?)\]/) {
+	my $contents = $type_map{$1};
+	$result .= '\ \fI' . $contents . '\fP' if defined $contents;
+    }
+    return $result;
+}
