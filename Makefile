@@ -6061,6 +6061,14 @@ $(OPENCHANGE): $(SPREZZ)/openchange/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openchange-$(openchange_UPVER)-QUADRANT.tar.gz $(TARARGS) $@
 
+.PHONY: opencore-amr
+opencore-amr:$(OPENCOREAMR)_$(ARCH).deb
+$(OPENCOREAMR): $(SPREZZ)/opencore-amr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf opencore-amr-$(opencore-amr_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: opencv
 opencv:$(OPENCV)_$(ARCH).deb
 $(OPENCV): $(SPREZZ)/opencv/debian/changelog
