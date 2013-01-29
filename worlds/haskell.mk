@@ -262,6 +262,14 @@ $(HASKELLDLIST): $(SPREZZ)/haskell-dlist/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dlist-$(haskell-dlist_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-doctest
+haskell-doctest:$(HASKELLDOCTEST)_$(ARCH).deb
+$(HASKELLDOCTEST): $(SPREZZ)/haskell-doctest/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf doctest-$(haskell-doctest_UPVER).tar.gz $(TARARGS) $@
+	
 .PHONY: haskell-edit-distance
 haskell-edit-distance:$(HASKELLEDITDISTANCE)_$(ARCH).deb
 $(HASKELLEDITDISTANCE): $(SPREZZ)/haskell-edit-distance/debian/changelog
@@ -309,6 +317,14 @@ $(HASKELLFASTLOGGER): $(SPREZZ)/haskell-fast-logger/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fast-logger-$(haskell-fast-logger_UPVER).tar.gz $(TARARGS) $@
+	
+.PHONY: haskell-ghc-paths
+haskell-ghc-paths:$(HASKELLGHCPATHS)_$(ARCH).deb
+$(HASKELLGHCPATHS): $(SPREZZ)/haskell-ghc-paths/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ghc-paths-$(haskell-ghc-paths_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: haskell-gsasl
 haskell-gsasl:$(HASKELLGSASL)_$(ARCH).deb
