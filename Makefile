@@ -5829,6 +5829,14 @@ $(LIBCMIS): $(SPREZZ)/libcmis/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libcmis_$(libcmis_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libvigraimpex
+libvigraimpex:$(LIBVIGRAIMPEX)_$(ARCH).deb
+$(LIBVIGRAIMPEX): $(SPREZZ)/libvigraimpex/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vigra-$(libvigraimpex_UPVER)-src.tar.gz $(TARARGS) $@
+
 .PHONY: libvisio
 libvisio:$(LIBVISIO)_$(ARCH).deb
 $(LIBVISIO): $(SPREZZ)/libvisio/debian/changelog
