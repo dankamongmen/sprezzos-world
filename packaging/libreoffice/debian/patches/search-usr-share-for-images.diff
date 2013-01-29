@@ -1,0 +1,137 @@
+diff --git a/vcl/inc/impimagetree.hxx b/vcl/inc/impimagetree.hxx
+index 41c4f56..93d80f1 100644
+--- a/vcl/inc/impimagetree.hxx
++++ b/vcl/inc/impimagetree.hxx
+@@ -85,6 +85,10 @@ private:
+     typedef boost::unordered_map<
+         rtl::OUString, std::pair< bool, BitmapEx >, rtl::OUStringHash > IconCache;
+ 
++    // we want to search zip files (icons) also in /usr/share/
++    ::rtl::OUString m_datadir; // /usr/share/
++    ::rtl::OUString m_libdir;   // /usr/lib or /usr/lib64
++
+     rtl::OUString m_style;
+     Zips m_zips;
+     CheckStyleCache m_checkStyleCache;
+@@ -92,6 +96,7 @@ private:
+
+     void setStyle(rtl::OUString const & style );
+
++    void addUrlToZips(const rtl::OUString &url);
+     void resetZips();
+
+     bool checkStyleCacheLookup( rtl::OUString const & style, bool &exists );
+diff --git a/vcl/source/gdi/impimagetree.cxx b/vcl/source/gdi/impimagetree.cxx
+index 03442fc..cfe6c45 100644
+--- a/vcl/source/gdi/impimagetree.cxx
++++ b/vcl/source/gdi/impimagetree.cxx
+@@ -121,7 +121,11 @@ void loadFromStream(
+ 
+ }
+ 
+-ImplImageTree::ImplImageTree() {}
++ImplImageTree::ImplImageTree()
++{
++    m_datadir = ::rtl::OUString::createFromAscii ( "/usr/share/" );
++    m_libdir = ::rtl::OUString::createFromAscii ( "/usr/lib/" ); 
++}
+ 
+ ImplImageTree::~ImplImageTree() {}
+ 
+@@ -259,6 +263,22 @@ void ImplImageTree::setStyle(rtl::OUString const & style) {
+     }
+ }
+ 
++void ImplImageTree::addUrlToZips(const rtl::OUString &url) {
++    if ( url.getLength() == 0 ) 
++        return; 
++    m_zips.push_back(
++        std::make_pair(
++        url,
++        css::uno::Reference< css::container::XNameAccess >()));
++    sal_Int32 nLibDirPos = url.indexOf( m_libdir ); 
++    if ( nLibDirPos >= 0 ) {
++    m_zips.push_back(
++            std::make_pair(
++            url.replaceAt( nLibDirPos, m_libdir.getLength(), m_datadir ),
++            css::uno::Reference< css::container::XNameAccess >()));
++    }
++} 
++
+ void ImplImageTree::resetZips() {
+     m_zips.clear();
+     {
+@@ -284,19 +304,14 @@ void ImplImageTree::resetZips() {
+         b.appendAscii(RTL_CONSTASCII_STRINGPARAM("_brand.zip"));
+         bool ok = u.Append(b.makeStringAndClear(), INetURLObject::ENCODE_ALL);
+         OSL_ASSERT(ok); (void) ok;
+-        m_zips.push_back(
+-            std::make_pair(
+-                u.GetMainURL(INetURLObject::NO_DECODE),
+-                css::uno::Reference< css::container::XNameAccess >()));
++        addUrlToZips(u.GetMainURL(INetURLObject::NO_DECODE));
+     }
+     {
+         rtl::OUString url(
+             RTL_CONSTASCII_USTRINGPARAM(
+                 "$BRAND_BASE_DIR/share/config/images_brand.zip"));
+         rtl::Bootstrap::expandMacros(url);
+-        m_zips.push_back(
+-            std::make_pair(
+-                url, css::uno::Reference< css::container::XNameAccess >()));
++        addUrlToZips(url);
+     }
+     {
+         rtl::OUString url(
+@@ -310,10 +310,7 @@
+         b.appendAscii(RTL_CONSTASCII_STRINGPARAM(".zip"));
+         bool ok = u.Append(b.makeStringAndClear(), INetURLObject::ENCODE_ALL);
+         OSL_ASSERT(ok); (void) ok;
+-        m_zips.push_back(
+-            std::make_pair(
+-                u.GetMainURL(INetURLObject::NO_DECODE),
+-                css::uno::Reference< css::container::XNameAccess >()));
++	addUrlToZips(u.GetMainURL(INetURLObject::NO_DECODE));
+     }
+     if ( m_style == "default" )
+     {
+@@ -321,9 +333,7 @@ void ImplImageTree::resetZips() {
+             RTL_CONSTASCII_USTRINGPARAM(
+                 "$BRAND_BASE_DIR/share/config/images.zip"));
+         rtl::Bootstrap::expandMacros(url);
+-        m_zips.push_back(
+-            std::make_pair(
+-                url, css::uno::Reference< css::container::XNameAccess >()));
++        addUrlToZips(url);
+     }
+ }
+ 
+diff --git a/xmlhelp/source/cxxhelp/provider/provider.cxx b/xmlhelp/source/cxxhelp/provider/provider.cxx
+index e55fe5d..848bed7 100644
+--- a/xmlhelp/source/cxxhelp/provider/provider.cxx
++++ b/xmlhelp/source/cxxhelp/provider/provider.cxx
+@@ -335,7 +335,7 @@ void ContentProvider::init()
+         rtl::OUString(RTL_CONSTASCII_USTRINGPARAM( " " )) +
+         setupextension );
+ 
+-    uno::Sequence< rtl::OUString > aImagesZipPaths( 2 );
++    uno::Sequence< rtl::OUString > aImagesZipPaths( 3 );
+     xHierAccess = getHierAccess( sProvider,  "org.openoffice.Office.Common" );
+ 
+     rtl::OUString aPath( getKey( xHierAccess, "Path/Current/UserConfig" ) );
+@@ -344,6 +344,15 @@ void ContentProvider::init()
+ 
+     aPath = rtl::OUString(RTL_CONSTASCII_USTRINGPARAM("$BRAND_BASE_DIR/share/config"));
+     rtl::Bootstrap::expandMacros(aPath);
++    aImagesZipPaths[ 2 ] = aPath;
++
++    // try also /usr/share and even before /usr/lib
++    ::rtl::OUString aDataDir = ::rtl::OUString::createFromAscii ( "/usr/share/" ); 
++    ::rtl::OUString aLibDir = ::rtl::OUString::createFromAscii ( "/usr/lib/" ); 
++    sal_Int32 nLibDirPos = aPath.indexOf( aLibDir ); 
++ 
++    if ( nLibDirPos >= 0 ) 
++        aPath = aPath.replaceAt( nLibDirPos, aLibDir.getLength(), aDataDir ); 
+     aImagesZipPaths[ 1 ] = aPath;
+ 
+     uno::Reference< uno::XComponentContext > xContext;

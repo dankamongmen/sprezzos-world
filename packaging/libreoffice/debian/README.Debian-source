@@ -1,0 +1,163 @@
+Package directory modes
+=======================
+The packages can be built directly from a set of git/bzr checkouts (vcs mode),
+or from a set of release tarballs (tarball mode).
+
+Vcs mode is useful if you want to work on libreoffice during the development
+cycle. You can check out the latest sources and track them while you make
+changes.
+
+Tarball mode is used to prepare packages of official libreoffice releases
+from the tarballs created by upstream.
+
+Package directory layout - tarball mode
+=======================================
+
+The packaging scripts work in tarball mode when debian/rules contains:
+
+  USE_SOURCE_TARBALLS=y
+
+dpkg-source unpacks the packages like this:
+ extracting libreoffice in libreoffice-3.3.0~rc1
+ unpacking libreoffice_3.3.0~rc1.orig.tar.gz
+ unpacking libreoffice_3.3.0~rc1.orig-libreoffice-build-3-3-0-1.tar.gz
+ unpacking libreoffice_3.3.0~rc1.orig-ext-sources.tar.gz
+ unpacking libreoffice_3.3.0~rc1.orig-ext-sources-libreoffice-build-3-3-0-1.tar.gz
+ unpacking libreoffice_3.3.0~rc1-1.debian.tar.gz
+ applying installer-globals-max-1-regcomp.diff
+ applying splash-progressbarcolor.diff
+ applying buildfix-patches.diff
+ applying hack-no-rm-fr-of-smoketest-userconfig.diff
+
+The top level packaging directory looks like this:
+
+ debian/
+ ext-sources/
+ ext-sources-libreoffice-build-3-3-0-1/
+ libreoffice-build-3-3-0-1/
+ sources/
+
+The sources directory contains tarballs generated from the individual libreoffice git
+repositories. These are copied by the debian packaging scripts into the src/ directory
+of the libreoffice build tree.
+
+The debian, ext-sources, ext-sources-libreoffice-build and libreoffice-build directories
+are unpacked from the source tarballs of the same names.
+
+The libreoffice build is configured to build using tarballs using the --without-git flag.
+
+Patches are unpacked into debian/patches and applied.
+
+- debian/rules configuration -
+
+USE_SOURCE_TARBALLS=y              # tarball mode
+OOO_BUILD_VERSION=3.3.0.1          # used to determine unpacked directory names, e.g. libreoffice-build-3-3-0-1
+OOO_BUILD_TARBALL_VERSION=3.3.0.1  # used to determine tarball suffix, e.g. libreoffice_3.3.0~rc1.orig-ext-sources-libreoffice-build-3-3-0-1.tar.gz
+				   # also used to determine build directory name under build/libreoffice-$(OOO_BUILD_TARBALL_VERSION)
+
+Package directory layout - vcs mode
+===================================
+
+In vcs mode we are working directly from checkouts of the libreoffice sources. We pull in
+sources to these places:
+
+ debian - git packaging repository from pkg-openoffice project on alioth
+ libreoffice-build - base libreoffice repository
+ ext-sources - various source tarballs used during the build process
+ libreoffice-build/clone - libreoffice git repositories
+
+Libreoffice is configured to work directly from git repositories using the
+--with-git flag.
+
+- debian/rules configuration -
+
+USE_SOURCE_TARBALLS=n              # vcs mode
+
+Source package checkout steps for vcs mode
+==========================================
+
+To create a package directory in vcs mode, you need to do the following:
+
+ # Create a top level directory with a name of your choice
+ mkdir libreoffice ; cd libreoffice
+
+ # Checkout the debian packaging repository
+ # 
+ # The repository can be found at
+ #  git://git.debian.org/git/pkg-openoffice/libreoffice.git
+ # or, if you have a login on alioth:
+ #  ssh://USERNAME@git.debian.org/git/pkg-openoffice/libreoffice/
+ git clone -b ${DISTRO}-${SUITE}-${VERSION} git://git.debian.org/git/pkg-openoffice/libreoffice.git debian
+
+ # Checkout the libreoffice build repository
+ # if you have a login:
+ # git clone ssh://git.freedesktop.org/git/libreoffice/build
+ # useful flags:
+ #  -b <branch> - checkout a different branch, e.g. -b libreoffice-3-3
+ #  -r <directory> - copy the repository contents from another checkout, e.g. -r ../lo-old/libreoffice-build
+ #
+ git clone git://anongit.freedesktop.org/git/libreoffice/build libreoffice-build
+
+ # Edit debian/rules and make sure you have USE_SOURCE_TARBALLS=n
+ vi debian/rules
+
+ # Regenerate debian/control from the templates
+ debian/rules control
+
+ # Check you have all build dependencies installed
+ dpkg-checkbuilddeps
+ # If you do not have them, you will need to install them
+
+ # Set the directory where download will copy the external sources tarballs
+ mkdir ext-sources
+ export TARFILE_LOCATION=`pwd`/ext-sources 
+
+ # run automake/configure and generate download script
+ cd libreoffice-build
+ ./autogen.sh --with-git
+
+ # If you already have a clone of the libreoffice repositories elsewhere on your machine,
+ # you can pass the directory name to the --with-git argument like this:
+ #  ./autogen.sh --with-git=/home/chris/libreoffice-3.3/libreoffice-build/clone
+ # Don't forget to run 'bin/g pull -r' afterwards to bring the repos up to date.
+
+ # Download sources and clone the libreoffice git repositories
+ ./download
+
+ # If you need to work on a stable release branch, switch your working directories
+
+Source package creation steps for tarball mode
+==============================================
+The .orig.tar.gz consists of the 6 seperate tarballs from
+http://ftp.gwdg.de/pub/openoffice/stable/3.2.0/ of which some non-free
+stuff has been removed:
+ * core:
+   - psprint_config/configuration/ppds/.PS (except SGEN*.PS):
+     PPDs where "all rights [are] reserved"
+ * system:
+   - dictionaries/{da_DK,en_GB,en_US,nl_NL,ru_RU}/hyph_*.dic:
+     hyphenation patterns violating licenses/having questionable license
+ * extensions:
+   - jfreereport/download/liblayout.zip: liblayout/resource/rfc1345.txt
+and put them into sources/.
+
+Then we add ooo-build (as downloaded from http://download.go-oo.org/OOO320)
+into the tree as ooo-build-MAJOR-MINOR-MICRO[-NAN and have that in a
+libreoffice_3.2.0.orig-ooo-build-MAJOR-MINOR-MICRO-NANO.tar.gz file
+in the same dir as the orig (which we use as "component" in dpkg sense and
+thefore is mentioned in debian/source/components). Also we add the extra
+stuff this ooo-build release needs into ext-sources-<ooo-build-dir>. That step
+unfortunately is manual; the same as the translation-updates-YYYMMDD
+(ftp://ftp.linux.cz/pub/localization/LibreOffice/devel/build/Files/OOO320/
+is where we get those)
+
+See the "Format: 3.0 (quilt)" section dpkg-source(1) for more details.
+
+Note thet there is discussion whether dpkg actually should honour
+debian/source/components. It is said to not yet, but the file is used fo
+uuencoding if needed so needs to be up to date anyway and also is a good
+reference of what needs to be there.
+
+
+Chris Halls <halls@debian.org>
+December 2010

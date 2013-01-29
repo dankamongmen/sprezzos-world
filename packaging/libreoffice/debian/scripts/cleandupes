@@ -1,0 +1,186 @@
+#! /usr/bin/python
+
+# read file input from stdin, which has the output of the command
+# fdupes --reverse --sameline --size <directory> ...
+
+import os, re, sys, fileinput, getopt
+
+class Duplicate:
+    def __init__(self, prefix, base, paths, size=-1):
+        self.size = size
+        self.files = {'common': [], 'l10n-en-us': []}
+        for path in paths:
+            match = re.match(prefix + '/' + base + r'-([^/]+)(.*)', path)
+            pkg, fn = match.groups()[:2]
+            self.files.setdefault(pkg, []).append(fn)
+
+        # one name to identify the duplicate
+        if len(self.files['common']):
+            self.id = self.files['common'][0]
+        elif len(self.files['l10n-en-us']):
+            self.id = self.files['l10n-en-us'][0]
+        else:
+            other_files = [files for pkg, files in self.files.items()
+                           if not pkg in ('common', 'l10n-en-us')]
+            self.id = other_files[0][0]
+
+    def is_candidate(self):
+        """do we want to replace that one ..."""
+        if len(self.files['common']) > 1 or len(self.files['l10n-en-us']) > 1:
+            # inter-package symlinks in -common or -l10n-en-us
+            if len(self.files) == 2:
+                # not references by any other package
+                return False
+        if len(self.files['common']) < 1 and len(self.files['l10n-en-us']) < 1:
+            # nothing to link to
+            return False
+        # see if we have duplicates in other packages
+        return len(self.files) > 2
+
+    def get_filenames(self, replace_only=False):
+        names = []
+        for pkg, files in self.files.items():
+            if replace_only and pkg in ('common', 'l10n-en-us'):
+                continue
+            names.extend(files)
+        return names
+
+    def get_target(self):
+        if len(self.files['common']):
+            return 'common', self.files['common'][0]
+        if len(self.files['l10n-en-us']):
+            return 'common', self.files['l10n-en-us'][0]
+        raise Exception, "no target file"
+
+    def statistics(self, verbose=False):
+        num_in_common = len(self.files['common']) + len(self.files['l10n-en-us'])
+        num_in_others = len(self.get_filenames(replace_only=True))
+        pkgs = ' '.join(self.files.keys()).replace('l10n-', '')
+        print "common: %2d, others: %2d, size: %d" % (num_in_common, num_in_others, self.size)
+        if not verbose:
+            print "    %s" % self.id
+        print "    %s" % pkgs
+        if verbose:
+            print '\t' + '\n\t'.join(self.get_filenames())
+
+def calc_savings(duplicates):
+    savings = {}
+    for dup in duplicates:
+        if not dup.is_candidate():
+            continue
+        for pkg, files in dup.files.items():
+            if pkg in ('common', 'l10n-en-us'):
+                continue
+            sizes = dup.size * len(files)
+            total = savings.get(pkg, 0) + sizes
+            savings[pkg] = total
+    return savings
+
+def calc_target_link(src_path, dst_path):
+    assert dst_path[0] == '/' and src_path[0] == '/'
+    src_dirs = src_path[1:].split('/')
+    dst_dirs = dst_path[1:].split('/')
+    common_idx = 0
+    while src_dirs[common_idx] == dst_dirs[common_idx]:
+        common_idx += 1
+    if common_idx == 0:
+        new_dirs = [''] + src_dirs
+    else:
+        updir_count = len(dst_dirs) - common_idx - 1
+        new_dirs = ['..' for i in range(updir_count)] + src_dirs[common_idx:]
+    return '/'.join(new_dirs)
+
+def remove_and_symlink(duplicates, prefix, base, dryrun=False, verbose=False):
+    for dup in duplicates:
+        if not dup.is_candidate():
+            continue
+        for pkg, files in dup.files.items():
+            if pkg in ('common', 'l10n-en-us'):
+                continue
+            target_pkg, target_name = dup.get_target()
+            for f in files:
+                target_link = calc_target_link(target_name, f)
+                pth = prefix + '/' + base + "-%s%s" % (pkg, f)
+                if verbose:
+                    print "DO: rm -f %s" % pth
+                if not dryrun:
+                    os.unlink(pth)
+                if verbose:
+                    print "DO: ln -s %s %s" % (target_link, pth)
+                if not dryrun:
+                    os.symlink(target_link, pth)
+    pass
+
+def main():
+    prog = os.path.basename(sys.argv[0])
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "b:np:v",
+                                   ["base=", "dry-run", "prefix=", "verbose"])
+    except getopt.GetoptError:
+        # print help information and exit:
+        print "usage: %s -p <prefix>|--prefix=<prefix> -b <base>|--base=<base> [-v|--verbose] [-n|--dry-run]" % prog
+        sys.exit(2)
+    verbose = False
+    dryrun = False
+    prefix = base = None
+    for o, a in opts:
+        if o in ("-v", "--verbose"):
+            verbose = True
+        if o in ("-n", "--dry-run"):
+            dryrun = True
+        if o in ("-b", "--base"):
+            base = a
+        if o in ("-p", "--prefix"):
+            prefix = a
+    if not prefix:
+        print "%s: Missing --prefix option" % prog
+        sys.exit(2)
+    if not base:
+        print "%s: Missing --base option" % prog
+        sys.exit(2)
+    if not os.path.isdir(prefix):
+        print "%s: Not a directory: %s" % (prog, prefix)
+        sys.exit(2)
+    del sys.argv[1:]
+    
+    size = -1
+    duplicates = []
+    for line in fileinput.input():
+        line = line[:-1]
+        m = re.match(r'(\d+) bytes each', line)
+        if m:
+            size = int(m.group(1))
+            continue
+        dup = Duplicate(prefix, base, line.split(), size)
+        duplicates.append(dup)
+        size = -1
+
+    if verbose:
+        print "========= Skip duplicates ========="
+        for dup in duplicates:
+            if not dup.is_candidate():
+                dup.statistics(verbose=True)
+        print
+    if verbose:
+        print "========= Replace duplicates ========="
+        for dup in duplicates:
+            if dup.is_candidate():
+                dup.statistics()
+        print
+
+    print "========= Savings per package ========="
+    saved_bytes = calc_savings(duplicates)
+    grand_total = 0
+    for pkg, total in saved_bytes.items():
+        print "%-10s: %9d" % (pkg, total)
+        grand_total = grand_total + total
+    print "===================="
+    print "%-10s: %9d" % ('TOTAL', grand_total)
+
+    if verbose:
+        print
+        print "========= Go! ========="
+    remove_and_symlink(duplicates, prefix, base, dryrun=dryrun, verbose=verbose)
+
+if __name__ == '__main__':
+    main()
