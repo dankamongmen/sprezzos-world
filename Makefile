@@ -5813,6 +5813,14 @@ $(LIBOGGZ): $(SPREZZ)/liboggz/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf liboggz-$(liboggz_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libcmis
+libcmis:$(LIBCMIS)_$(ARCH).deb
+$(LIBCMIS): $(SPREZZ)/libcmis/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libcmis_$(libcmis_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: libvisio
 libvisio:$(LIBVISIO)_$(ARCH).deb
 $(LIBVISIO): $(SPREZZ)/libvisio/debian/changelog
