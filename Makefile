@@ -5371,6 +5371,14 @@ $(MON): $(SPREZZ)/mon/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mon_$(mon_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mono
+mono:$(MONO)_$(ARCH).deb
+$(MONO): $(SPREZZ)/mono/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mono-$(mono_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: mosh
 mosh:$(MOSH)_$(ARCH).deb
 $(MOSH): $(SPREZZ)/mosh/debian/changelog
