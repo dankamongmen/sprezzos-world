@@ -3603,6 +3603,14 @@ $(IJS): $(SPREZZ)/ijs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ijs_$(ijs_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: irda-utils
+irda-utils:$(IRDAUTILS)_$(ARCH).deb
+$(IRDAUTILS): $(SPREZZ)/irda-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf irda-utils-$(irda-utils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libio-pty-perl
 libio-pty-perl:$(LIBIOPTYPERL)_$(ARCH).deb
 $(LIBIOPTYPERL): $(SPREZZ)/libio-pty-perl/debian/changelog
