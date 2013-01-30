@@ -1,0 +1,140 @@
+#!/bin/bash
+# Debconf configuration script for irda-utils
+# Copyright © 2004 Sebastian Henschel <shensche@kodeaffe.de>
+# This file is hereby placed into the public domain.
+
+PACKAGE="irda-utils"
+CONFIG="/etc/default/$PACKAGE"
+CONFIG_OLD="/etc/irda.conf"
+MODULES_24_OLD="/etc/modutils/irda"
+MODULES_26_OLD="/etc/modprobe.d/irda"
+MODULES_26_NEWER="/etc/modprobe.d/$PACKAGE"
+MODULES_26="${MODULES_26_NEWER}.conf"
+MODULES_24="/etc/modutils/$PACKAGE"
+INIT_OLD="/etc/init.d/irda"
+PREV="$2"
+
+set -e
+
+. /usr/share/debconf/confmodule || exit 0
+
+if dpkg --compare-versions "$2" lt-nl 0.9.18-8.1ubuntu2
+then
+	if [ -e $MODULES_26_NEWER ]
+	then
+		mv $MODULES_26_NEWER $MODULES_26
+	fi
+	if [ -e $MODULES_24 ]
+	then
+		rm $MODULES_24
+	fi
+fi
+
+# save data from $CONFIG_OLD to debconf
+if [ -f "$CONFIG_OLD" ]; then # package version < 0.9.16-5
+    ENABLE="true"
+    egrep '^ENABLE=no' $CONFIG_OLD > /dev/null && ENABLE="false"
+    db_set $PACKAGE/enable $ENABLE
+
+    eval `egrep '^IRDADEV' $CONFIG_OLD`
+    case "$IRDADEV" in
+        /dev/ttyS*)
+            db_set $PACKAGE/selectdevice serial
+            db_set $PACKAGE/ttydev $IRDADEV
+        ;;
+        irda0)
+            db_set $PACKAGE/selectdevice native
+            if [ -f "$MODULES_26_OLD" ]; then
+                modules="$MODULES_26_OLD";
+            elif [ -f "$MODULES_24_OLD" ]; then
+                modules="$MODULES_24_OLD";
+            fi
+
+            if [ -f "$modules" ]; then
+                if egrep "^alias irda0" $modules > /dev/null 2>&1 ; then
+                   set `egrep "^alias irda0" $modules`
+                   db_set $PACKAGE/firdev "$3"
+
+                   if dpkg --compare-versions "$PREV" gt 0.9.14-17; then
+                      set `egrep "^options $3" $modules`;
+                      shift; shift
+                   else
+                       shift; shift; shift;
+                   fi
+                   db_set $PACKAGE/firopt "$*"
+		fi
+            fi
+        ;;
+    esac
+
+    eval `egrep '^DONGLE' $CONFIG_OLD`
+    if [ -z "$DONGLE" ]; then
+        DONGLE="none"
+    fi
+    db_set $PACKAGE/dongle $DONGLE
+
+    eval `egrep '^DISCOVERY' $CONFIG_OLD`
+    if [ -z "$DISCOVERY" ]; then
+        DISCOVERY="false"
+    else
+        DISCOVERY="true"
+    fi
+    db_set $PACKAGE/discovery $DISCOVERY
+    db_go || true
+
+    # remove old debconf entries
+    db_unregister $PACKAGE/dongle24 || true
+    db_unregister $PACKAGE/dongle26 || true
+    db_unregister $PACKAGE/firdev24 || true
+    db_unregister $PACKAGE/firdev26 || true
+    db_unregister $PACKAGE/kver || true
+    db_unregister $PACKAGE/regen || true
+    db_go || true
+
+    # remove old files
+    if [ -e "$CONFIG_OLD" ]; then rm $CONFIG_OLD; fi
+    if [ -e "$MODULES_24_OLD" ]; then rm $MODULES_24_OLD; fi
+    if [ -e "$MODULES_26_OLD" ]; then rm $MODULES_26_OLD; fi
+    if [ -e "$INIT_OLD" ]; then rm $INIT_OLD; fi
+
+fi
+
+
+# load data from configuration files into debconf
+if [ -f "$CONFIG" ]; then
+    . $CONFIG || true
+
+    # store values from current config
+    db_set $PACKAGE/enable $ENABLE
+
+    case "$DEVICE" in
+        /dev/ttyS*)
+            db_set $PACKAGE/selectdevice serial
+            db_set $PACKAGE/ttydev $DEVICE
+        ;;
+        irda0)
+            db_set $PACKAGE/selectdevice native
+            kversion=`uname --kernel-release | cut --characters=1-3`
+            if [ "$kversion" = "2.4" ]; then
+                modules="/etc/modutils/$PACKAGE";
+            else
+                modules="/etc/modprobe.d/$PACKAGE";
+            fi
+            if [ -f "$modules" ]; then
+                set `egrep "^alias irda0" $modules`
+                db_set $PACKAGE/firdev "$3"
+                set `egrep "^options $3" $modules`; shift; shift
+                db_set $PACKAGE/firopt "$*"
+            fi
+        ;;
+    esac
+
+    db_set $PACKAGE/dongle $DONGLE
+    db_set $PACKAGE/discovery $DISCOVERY
+    db_set $PACKAGE/setserial $SETSERIAL
+
+    db_go || true
+fi
+
+#DEBHELPER#
+

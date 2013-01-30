@@ -1,0 +1,152 @@
+#!/bin/bash
+# Post-installation script for irda-utils
+# Copyright 2003,2004 Sebastian Henschel <shensche@debian.org>
+# This file is hereby placed into the public domain.
+
+PACKAGE="irda-utils"
+CONFIG="/etc/default/$PACKAGE"
+MODFILE_26="/etc/modprobe.d/${PACKAGE}.conf"
+
+set -e
+. /usr/share/debconf/confmodule
+
+
+write_config_modules () {
+    if [ ! -e $MODFILE_26 ]; then
+        cat <<EOF > $MODFILE_26
+# For FIR device
+
+EOF
+    fi
+
+    # get configuration data
+    db_get $PACKAGE/firdev
+    firdev="$RET"
+    firdev26="$firdev"
+    [ "$firdev" = "smc-ircc" ] && firdev26="smsc-ircc2"
+    [ "$firdev" = "toshoboe" ] && firdev26="donauboe"
+    db_get $PACKAGE/firopt
+    firopt="$RET"
+
+
+    # remove old options/aliases
+    cp -a -f $MODFILE_26 $MODFILE_26.tmp
+
+    sed -e "
+        /.*options.*/d
+        /.*alias irda0.*/d
+	/^# Other aliases are defined/d
+	/.*alias char-major-10-187 irnet/d
+    " < $MODFILE_26 > $MODFILE_26.tmp
+    cat -s $MODFILE_26.tmp > $MODFILE_26
+    rm $MODFILE_26.tmp
+
+
+    # insert new options/aliases
+    if [ "$DEVICE" = "serial" ]; then
+        echo "#options $firdev26 $firopt" >> $MODFILE_26
+        echo "#alias irda0 $firdev26" >> $MODFILE_26
+    else
+        echo "options $firdev26 $firopt" >> $MODFILE_26
+        echo "alias irda0 $firdev26" >> $MODFILE_26
+    fi
+
+}
+
+
+
+write_config_default () {
+    if [ ! -e $CONFIG ]; then # create new configuration file
+        cat <<EOF > $CONFIG
+# Set your startup settings for irattach, the IrDA-daemon, here.
+
+# Set this to 'false' if you do not need to start irattach. Otherwise set it
+# to 'true'.
+ENABLE=
+
+# Set discovery mode which usually is a good idea for finding other devices.
+# If set 'true' or 'false' irattach and sysctl are used to enable and disable
+# discovery mode. By default discover mode is disabled.
+DISCOVERY=
+
+# Set IRDA device to access (e.g. /dev/ttyS1 or irda0).
+# In case of irda0, the proper module for FIR-mode has to be set in
+# $MODFILE_26
+DEVICE=
+
+# Set dongle type, e.g. none, tekram, esi, actisys, actisys+, ep7211, girbil,
+# litelink, airport, old_belkin, mcp2120, act200l, ma600). You do not need
+# a dongle for FIR mode.
+DONGLE=
+
+# Set the serial device to quiet with setserial. This is only useful on some
+# machines in FIR-mode, so most people should leave it blank. See 
+# README.Debian for more information.
+SETSERIAL=
+
+# Some laptops (Toshiba Satellites and others with SMCS LPC47N227) require
+# running smcinit to initialize the irda device prior to use.
+# If you device is one of them, set this option to "yes"
+USE_SMCINIT="no"
+
+# Set the max baud rate for IrDA device
+# Values: 2400, 3600, 9600, 14400, 19200, 28800, 38400, 57600, 115200
+MAX_BAUD_RATE="115200"
+EOF
+    fi
+
+    # read config
+    db_get $PACKAGE/enable
+    ENABLE="$RET"
+    db_get $PACKAGE/discovery
+    DISCOVERY="$RET"
+    if [ "$DEVICE" = "serial" ]; then
+        db_get $PACKAGE/ttydev
+        DEVICE="$RET"
+    else
+        DEVICE="irda0"
+    fi
+    db_get $PACKAGE/dongle
+    DONGLE="$RET"
+    db_get $PACKAGE/setserial
+    SETSERIAL="$RET"
+
+    # backup for $CONFIG with preserved ownership and permissions
+    cp -a -f $CONFIG $CONFIG.tmp
+
+    # re-insert values deleted in $CONFIG but existant in debconf
+    test -z "$ENABLE" || grep -Eq '^ *ENABLE=' $CONFIG || echo "ENABLE=" >> $CONFIG
+    test -z "$DISCOVERY" || grep -Eq '^ *DISCOVERY=' $CONFIG || echo "DISCOVERY=" >> $CONFIG
+    test -z "$DEVICE" || grep -Eq '^ *DEVICE=' $CONFIG || echo "DEVICE=" >> $CONFIG
+    test -z "$DONGLE" || grep -Eq '^ *DONGLE=' $CONFIG || echo "DONGLE=" >> $CONFIG
+    test -z "$SETSERIAL" || grep -Eq '^ *SETSERIAL=' $CONFIG || echo "SETSERIAL=" >> $CONFIG
+
+    # replace values of configuration variables in config file, preserving
+    # all comments and other variables defined by the admin
+    sed -e "
+        s#^ *ENABLE=.*#ENABLE=\"$ENABLE\"#
+        s#^ *DISCOVERY=.*#DISCOVERY=\"$DISCOVERY\"#
+        s#^ *DEVICE=.*#DEVICE=\"$DEVICE\"#
+        s#^ *DONGLE=.*#DONGLE=\"$DONGLE\"#
+        s#^ *SETSERIAL=.*#SETSERIAL=\"$SETSERIAL\"#
+    " < $CONFIG > $CONFIG.tmp
+    mv -f $CONFIG.tmp $CONFIG
+}
+
+
+
+
+if [ "$1" = "configure" ]; then
+
+    cd /dev && /dev/MAKEDEV irda && /dev/MAKEDEV irnet
+
+    db_get $PACKAGE/selectdevice
+    DEVICE=$RET
+
+    write_config_modules
+    write_config_default
+fi
+
+#DEBHELPER#
+
+exit 0

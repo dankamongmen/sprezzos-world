@@ -1,0 +1,144 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:          irda irda-utils
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Infrared port support
+# Description:       Init script for irda-utils: manage start and stop of
+#                    irattach and setup some other items.
+### END INIT INFO
+
+# Authors:         Sebastian Henschel <shensche@debian.org>
+#                  Alberto Gonzalez Iniesta <agi@inittab.org>
+
+set -e
+
+PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
+DAEMON="/usr/sbin/irattach"
+NAME="irattach"
+PIDFILE="/var/run/$NAME.pid"
+PACKAGE="irda-utils"
+DESC="IrDA service"
+SYSCTL="/sbin/sysctl"
+SMCINIT="/usr/sbin/smcinit"
+MAX_BAUD_RATE=115200
+
+if [ -f /lib/lsb/init-functions ]; then
+    . /lib/lsb/init-functions
+else
+    log_action_begin_msg () {
+	echo "$@"
+    }
+    log_daemon_msg () {
+	echo -n "$@... "
+    }
+    log_end_msg () {
+	if [ "$1" -eq 0 ]; then 
+	    echo done.
+	else
+	    echo failed.
+	fi
+    }
+    log_action_end_msg () {
+	:;
+    }
+fi
+
+test -x $DAEMON || exit 0
+test -x $SYSCTL || exit 0
+
+# Handle configuration
+if [ -f /etc/default/$PACKAGE ]; then
+    . /etc/default/$PACKAGE
+fi
+if [ "$ENABLE" = "false" ]; then
+    log_action_begin_msg "Skipping $DESC:" "$NAME (not enabled)"
+    log_action_end_msg 0
+    exit 0
+fi
+if [ -z "$DEVICE" ]; then
+    DEVICE="/dev/ttyS1"
+fi
+if [ -z "$DONGLE" ]; then
+    DONGLE=""
+else
+    if [ "$DONGLE" != "none" ]; then
+        DONGLE="-d $DONGLE"
+    fi
+fi
+if [ "$DISCOVERY" = "true" ]; then
+    DISCOVERY="-s"
+else
+    DISCOVERY=""
+fi
+
+
+
+case "$1" in
+start)
+    log_daemon_msg "Starting $DESC" "$NAME"
+
+    # Running smcinit is needed in some laptops prior to port use
+    # You should set this variable in /etc/default/irda-utils
+    if [ "$USE_SMCINIT" = "yes" ]; then
+        $SMCINIT
+    fi
+
+    # Needed for some machines in FIR-mode
+    if [ -n "$SETSERIAL" ]; then
+        test -x /bin/setserial || exit 0
+        /bin/setserial $SETSERIAL uart none port 0x0 irq 0
+    fi
+
+    # Needed for pmac_zilog
+    case $(uname -r) in
+        2.6.*|3.*)
+            case "$DEVICE" in
+                /dev/ttyS*) modprobe irtty-sir 2> /dev/null || true
+                ;;
+            esac
+        ;;
+    esac
+
+    start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE --exec $DAEMON \
+        -- $DEVICE $DONGLE $DISCOVERY
+    log_end_msg $?
+    sleep 1
+
+    if [ -n "$DISCOVERY" ]; then
+	$SYSCTL -e -q -w net.irda.discovery=1
+    else
+	$SYSCTL -e -q -w net.irda.discovery=0
+    fi
+	
+    $SYSCTL -e -q -w net.irda.max_baud_rate=$MAX_BAUD_RATE
+    ;;
+stop)
+    log_daemon_msg "Stopping $DESC" "$NAME"
+
+    if [ -n "$DISCOVERY" ]; then
+	$SYSCTL -e -q -w net.irda.discovery=0
+    fi
+
+    start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --exec $DAEMON
+    log_end_msg $?
+    ;;
+status)
+    status_of_proc -p $PIDFILE $DAEMON $NAME && exit 0 || exit $?
+    ;;
+restart|force-reload)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+*)
+    N=/etc/init.d/$PACKAGE
+    echo "Usage: $N {start|stop|restart|force-reload}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
