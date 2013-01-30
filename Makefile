@@ -771,6 +771,14 @@ $(LIBALGORITHMDIFFXSPERL): $(SPREZZ)/libalgorithm-diff-xs-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Algorithm-Diff-XS-$(libalgorithm-diff-xs-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libpackage-stash-xs-perl
+libpackage-stash-xs-perl:$(LIBPACKAGESTASHXSPERL)_$(ARCH).deb
+$(LIBPACKAGESTASHXSPERL): $(SPREZZ)/libpackage-stash-xs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Package-Stash-XS-$(libpackage-stash-xs-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: liblist-moreutils-perl
 liblist-moreutils-perl:$(LIBLISTMOREUTILSPERL)_$(ARCH).deb
 $(LIBLISTMOREUTILSPERL): $(SPREZZ)/liblist-moreutils-perl/debian/changelog
