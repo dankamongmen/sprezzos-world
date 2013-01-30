@@ -121,6 +121,15 @@ $(FIRMWAREALL): $(SPREZZ)/firmware-all/debian/changelog
 	tar cJvf firmware-all_$(firmware-all_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: gcc-defaults
+gcc-defaults:$(GCCDEFAULTS)_$(ARCH).deb
+$(GCCDEFAULTS): $(SPREZZ)/gcc-defaults/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf gcc-defaults_$(gcc-defaults_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: git-annex
 git-annex:$(GITANNEX)_$(ARCH).deb
 $(GITANNEX): $(SPREZZ)/git-annex/debian/changelog
