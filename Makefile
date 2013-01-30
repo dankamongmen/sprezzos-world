@@ -5377,7 +5377,7 @@ $(MONO): $(SPREZZ)/mono/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf mono-$(mono_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf mono-$(mono_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: mosh
 mosh:$(MOSH)_$(ARCH).deb
