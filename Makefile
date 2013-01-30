@@ -4435,6 +4435,14 @@ $(VLC): $(SPREZZ)/vlc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vlc-$(vlc_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libdatetime-perl
+libdatetime-perl:$(LIBDATETIMEPERL)_$(ARCH).deb
+$(LIBDATETIMEPERL): $(SPREZZ)/libdatetime-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdatetime-perl_$(libdatetime-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: libdatrie
 libdatrie:$(LIBDATRIE)_$(ARCH).deb
 $(LIBDATRIE): $(SPREZZ)/libdatrie/debian/changelog
