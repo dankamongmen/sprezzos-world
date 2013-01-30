@@ -4619,6 +4619,14 @@ $(LIBTAR): $(SPREZZ)/libtar/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtar-$(libtar_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libtemplate-perl
+libtemplate-perl:$(LIBTEMPLATEPERL)_$(ARCH).deb
+$(LIBTEMPLATEPERL): $(SPREZZ)/libtemplate-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Template-Toolkit-$(libtemplate-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libtext-charwidth-perl
 libtext-charwidth-perl:$(LIBTEXTCHARWIDTHPERL)_$(ARCH).deb
 $(LIBTEXTCHARWIDTHPERL): $(SPREZZ)/libtext-charwidth-perl/debian/changelog
