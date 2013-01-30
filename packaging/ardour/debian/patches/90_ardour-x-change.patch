@@ -1,0 +1,1875 @@
+--- a/gtk2_ardour/SConscript
++++ b/gtk2_ardour/SConscript
+@@ -178,6 +178,7 @@
+ imageframe_time_axis_group.cc
+ imageframe_time_axis_view.cc
+ imageframe_view.cc
++import_helper_aaf.cc
+ io_selector.cc
+ keyboard.cc
+ keyeditor.cc
+--- /dev/null
++++ b/gtk2_ardour/import_helper_aaf.cc
+@@ -0,0 +1,1389 @@
++/*
++    Copyright (C) 2005 Paul Davis
++
++    This program is free software; you can redistribute it and/or modify
++    it under the terms of the GNU General Public License as published by
++    the Free Software Foundation; either version 2 of the License, or
++    (at your option) any later version.
++
++    This program is distributed in the hope that it will be useful,
++    but WITHOUT ANY WARRANTY; without even the implied warranty of
++    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++    GNU General Public License for more details.
++
++    You should have received a copy of the GNU General Public License
++    along with this program; if not, write to the Free Software
++    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++
++*/
++
++#include "i18n.h"
++#include "ardour_ui.h"
++#include "import_helper_aaf.h"
++#include <errno.h>
++#include <unistd.h>
++#include <sys/wait.h>
++#include <sys/stat.h>
++
++#if defined (PORT_SYS_WINDOWS) && !defined(PORT_SYS_CYGWIN)
++#include <direct.h>
++#else
++#include <glib/gstdio.h>
++#endif
++
++#include <ardour/ardour.h>
++#include <pbd/error.h>
++#include <pbd/failed_constructor.h>
++
++using namespace ARDOUR;
++
++bool AafImportHelper::already_instantiated = 0;
++
++AafImportHelper::AafImportHelper (bool use_native_importer /*= false */)
++{
++    // We don't want multiple instances all trying
++    // to import an AAF file simultaneously.
++    if (already_instantiated)
++        throw failed_constructor();
++    else
++        already_instantiated = true;
++
++    if (use_native_importer)
++    {
++        // If the importer is native,
++        // we can't be using Wine.
++        importer_uses_wine = false;
++        importer_is_native = true;
++    }
++    else
++    {
++        // Set both variables to 'true'. Since 'is_native'
++        // and 'uses_wine' are mutually exclusive, setting
++        // them both to 'true' is used to indicate that we
++        // haven't yet initialized the AAF import helper.
++        // 'initialize_for_aaf_import()' will set them
++        // appropriately when it gets called, later.
++        importer_uses_wine = true;
++        importer_is_native = true;
++    }
++
++    string spath;
++    string shome = Glib::get_home_dir();
++
++    /* * * * * * * * * * * * * * * * * * * * * * * * * * * */
++    /*                                                     */
++    /* If you write an (external) plugin for importing AAF */
++    /* files add its path to the list of possible importer */
++    /* locations. New apps should be nearer to the top of  */
++    /* the list. Each application can have more than one   */
++    /* possible location path. The least likely locations  */
++    /* should be nearer to the top of the list and moos    */
++    /* likely locations should be nearer the bottom. The   */
++    /* list should be terminated by an empty string.       */
++    /*                                                     */
++    /* * * * * * * * * * * * * * * * * * * * * * * * * * * */
++    // Push any paths that are likely to contain an importer
++    spath = shome + "/.cxoffice/default/drive_c/Program Files/ArdourXchange/ArdourXchange.exe";
++    _aryPossibleImporterLocations.push_back(new string(spath));
++    spath = shome + "/.wine/drive_c/Program Files/ArdourXchange/ArdourXchange.exe";
++    _aryPossibleImporterLocations.push_back(new string(spath));
++    spath = "/usr/lib/ardour-x-change/ArdourXchange.exe";
++    _aryPossibleImporterLocations.push_back(new string(spath));
++    spath = ""; // Terminate with an empty string
++    _aryPossibleImporterLocations.push_back(new string(spath));
++
++    // Push any paths that are likely to contain the Wine executable
++    spath = "/opt/cxoffice/bin/wine";
++    _aryPossibleWineLocations.push_back(new string(spath));
++    spath = "/usr/local/bin/wine";
++    _aryPossibleWineLocations.push_back(new string(spath));
++    spath = "/usr/bin/wine";
++    _aryPossibleWineLocations.push_back(new string(spath));
++    spath = ""; // Terminate with an empty string
++    _aryPossibleWineLocations.push_back(new string(spath));
++}
++
++AafImportHelper::~AafImportHelper ()
++{
++vector<string*>::iterator iter;
++
++    if (_aryPossibleImporterLocations.size())
++        for (iter=_aryPossibleImporterLocations.begin(); iter < _aryPossibleImporterLocations.end(); iter++)
++            if (*iter)
++                delete *iter;
++
++    if (_aryPossibleWineLocations.size())
++        for (iter=_aryPossibleWineLocations.begin(); iter < _aryPossibleWineLocations.end(); iter++)
++            if (*iter)
++                delete *iter;
++
++    already_instantiated = false;
++}
++
++
++//***************************************************************
++//
++//	is_native()
++//
++// Finds out whether a native (i.e. internal) AAF importer is in
++// use or whether we're using an external plugin. Will initialize
++// this helper if initialization isn't already completed.
++//
++//	Returns:
++//
++//    If the importer is internal: TRUE
++//    If the importer is external: FALSE
++//
++bool
++AafImportHelper::is_native (bool bSilent /*= false */)
++{
++    if (!is_initialized())
++        get_user_path("AAF Importer", bSilent); // Carries out initialization
++
++    return (importer_is_native);
++}
++
++
++//***************************************************************
++//
++//	needs_wine()
++//
++// Finds out whether the AAF importer is an external application
++// that needs Wine (or cxMac) to be present. Will initialize
++// this helper if initialization isn't already completed.
++//
++//	Returns:
++//
++//    If the importer needs Wine: TRUE
++//    Otherwise:                  FALSE
++//
++bool
++AafImportHelper::needs_wine (bool bSilent /*= false */)
++{
++    if (!is_initialized())
++        get_user_path("AAF Importer", bSilent); // Carries out initialization
++
++    return (importer_uses_wine);
++}
++
++
++//***************************************************************
++//
++//	create_symlink()
++//
++// ArdourXchange needs 3 x symbolic links to be in place at run
++// time. This master function calls the appropriate helper func
++// to create a link if it didn't exist when ArdourXchange gets
++// run for the first time. The helper functions can be called
++// explicitly if necessary (e.g. to change a given link and
++// replace its target). Call this function if you prefer the
++// helper functions to choose automatically from an appropriate
++// set of default options. Currently supported entries are:-
++//
++// 'Wine'         - creates a link to wine (or cxMac etc).
++// 'Session Base' - creates the 'base' folder for storing Ardour
++//                  sessions.
++// 'AAF Importer' - finds the AAF importer app and vreates a
++//                  links to it.
++//
++// See the c'tor for AafImportHelper for a list of appropriate
++// default path settings.
++//
++//	Returns:
++//
++//    The value returned from the called helper function or
++//    AXERR_NOT_IMPLEMENTED if there's no matching helper func.
++//
++ax_error
++AafImportHelper::create_symlink (const string& srequested_link, bool bReplaceExisting /*= false */, bool bSilent /*= false */)
++{
++ax_error axRet = AXERR_NONE;
++
++    if ("Wine" == srequested_link)
++        axRet = create_link_to_wine(bReplaceExisting, bSilent);
++    else if ("Session Base" == srequested_link)
++        axRet = create_link_to_sessions(bReplaceExisting, bSilent);
++    else if ("AAF Importer" == srequested_link)
++        axRet = create_link_to_importer(bReplaceExisting, bSilent);
++    else
++    {
++        axRet = AXERR_NOT_IMPLEMENTED;
++
++        if (!bSilent)
++            error << _("AafImportHelper::create_symlink(): unsupported option") << endmsg;
++    }
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	create_link_to_importer()
++//
++// The AAF importer needs 3 x symbolic links to be in place at
++// run time, one of which is a link to the AAF Import application
++// itself. This function can be used to create a link to that
++// application if the application exists but the link doesn't.
++// When creating a link you can choose whether to overwrite (i.e.
++// update) a previously existing link. You can also supply an
++// explicit path for the import application in 'spath_to_importer'.
++// If 'spath_to_importer' is empty, this function will try to
++// find an import application based on an array of likely paths
++// that were set up in this object's c'tor.
++//
++//
++//	Returns:
++//
++//    If the link was successfully created
++//    (or if a suitable link already existed): AXERR_NONE
++//    On Failure: An appropriate ax_error
++//
++ax_error
++AafImportHelper::create_link_to_importer (bool bReplaceExisting /*= false */, bool bSilent /*= false */, const string& spath_to_importer /*= "" */)
++{
++string spath_to_use = spath_to_importer;
++ax_error axRet      = AXERR_NONE;
++
++    if ((0 == spath_to_use.length()) && (_aryPossibleImporterLocations.size()))
++    {
++        vector<string*>::iterator iter;
++
++        // If we weren't given a specific
++        // path, try to find an importer
++        for (iter=_aryPossibleImporterLocations.begin(); iter < _aryPossibleImporterLocations.end(); iter++)
++        {
++            if (*iter)
++            {
++                spath_to_use = ((string*)*iter)->c_str();
++
++                if (spath_to_use.length())
++                    if (Glib::file_test(spath_to_use, Glib::FILE_TEST_EXISTS))
++                        break;
++            }
++        }
++    }
++
++    if (0 == spath_to_use.length())
++    {
++        axRet = AXERR_PROCESS_NOT_FOUND;
++
++        if (!bSilent)
++            warning << _("AAF Importer could not be found") << endmsg;
++    }
++    else
++    {
++        string spath_to_symbolic_link = get_user_ardour_path();
++        spath_to_symbolic_link += "AAF Importer";
++
++        // Test to see if the symbolic link already exists
++        bool bFound = Glib::file_test(spath_to_symbolic_link.c_str(), Glib::FILE_TEST_EXISTS);
++
++        if ((!bFound) || (bReplaceExisting))
++        {
++            // If the symbolic link already exists but we've
++            // been told to replace it, delete the existing link.
++            if (bFound)
++                if (0 != remove(spath_to_symbolic_link.c_str()))
++                {
++                    axRet = AXERR_INVALID_ACCESS;
++
++                    if (!bSilent)
++                        error << _("Deletion error while making a symbolic link") << endmsg;
++                }
++
++            if (AXERR_NONE == axRet)
++            {
++                // symlink() will fail if the symbolic link's path doesn't already exist.
++                if ((axRet = create_path_folders(get_user_ardour_path().c_str())) == AXERR_NONE)
++                {
++                    if (0 != symlink(spath_to_use.c_str(), spath_to_symbolic_link.c_str()))
++                    {
++                        axRet = AXERR_INVALID_ACCESS;
++
++                        if (!bSilent)
++                            error << _("Creation error while making a symbolic link") << endmsg;
++                    }
++                }
++                else if (!bSilent)
++                    error << _("Access error while making a symbolic link") << endmsg;
++            }
++        }
++        else if ((bFound) && (!bReplaceExisting))
++        {
++            int len;
++
++            // See if the link already points to the reqested destination
++            if ((len = readlink(spath_to_symbolic_link.c_str(), temp_path, PATH_MAX)) > 0)
++            {
++                // Add a NUL terminator
++                temp_path[len] = 0;
++
++                if (spath_to_use == temp_path);
++                    // Do nothing here. Assume that it's okay to have a
++                    // pre-existing link if we were told not to replace.
++                else
++                {
++                    axRet = AXERR_DESTINATION_ERROR;
++
++                    if (!bSilent)
++                        error << _("Cannot create symbolic link (an incompatible link already exists)") << endmsg;
++
++                }
++            }
++        }
++    }
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	create_link_to_sessions()
++//
++// The AAF importer needs 3 x symbolic links to be in place at
++// run time, one of which is a link to the 'base' folder that
++// will be used for storing the user's Ardour sessions. This
++// function can be used to create that folder (and create a
++// suitable link to it) if the folder or link don't already
++// exist. When creating the link you can choose whether to
++// update (i.e. overwrite) a previously existing link. You can
++// supply an explicit path for the folder in 'spath_to_sessions'.
++// If 'spath_to_sessions' is empty, this function will try to
++// create a default folder called "Ardour Sessions" inside the
++// user's home folder.
++//
++//
++//	Returns:
++//
++//    If the link was successfully created
++//    (or if a suitable link already existed): AXERR_NONE
++//    On Failure: An appropriate ax_error
++//
++ax_error
++AafImportHelper::create_link_to_sessions (bool bReplaceExisting /*= false */, bool bSilent /*= false */, const string& spath_to_sessions /*= "" */)
++{
++string spath_to_use = spath_to_sessions;
++string shome        = Glib::get_home_dir();
++ax_error axRet      = AXERR_NONE;
++
++    if (0 == spath_to_use.length())
++        spath_to_use = shome + "/Ardour Sessions";
++    else
++    {
++        // Symbolic links don't like terminating forward slashes
++        size_t ilen = spath_to_use.length();
++
++        while ((ilen) && ('/' == spath_to_use[ilen-1]))
++        {
++            spath_to_use[--ilen] = 0;
++        }
++    }
++
++    if (0 == spath_to_use.length())
++    {
++        axRet = AXERR_DESTINATION_ERROR;
++
++#if !defined(DEBUG) && !defined(_DEBUG)
++        if (!bSilent)
++#endif
++            error << _("(AafImportHelper) Invalid target supplied for Session Base folder") << endmsg;
++    }
++    else
++    {
++        string spath_to_symbolic_link = get_user_ardour_path();
++        spath_to_symbolic_link += "Ardour Sessions";
++
++        // Test to see if the symbolic link already exists
++        bool bFound = Glib::file_test(spath_to_symbolic_link.c_str(), Glib::FILE_TEST_EXISTS);
++
++        if ((!bFound) || (bReplaceExisting))
++        {
++            // Firstly, check to see if the destination target
++            // already exists. If it does, it MUST be a folder.
++            if (Glib::file_test(spath_to_use.c_str(), Glib::FILE_TEST_EXISTS))
++            {
++                if (!Glib::file_test(spath_to_use.c_str(), Glib::FILE_TEST_IS_DIR))
++                {
++                    axRet = AXERR_DESTINATION_ERROR;
++
++#if !defined(DEBUG) && !defined(_DEBUG)
++                    if (!bSilent)
++#endif
++                        error << _("(AafImportHelper) Invalid target supplied for Session Base folder") << endmsg;
++                }
++            }
++            else
++            {
++               if ((axRet = create_path_folders(spath_to_use.c_str())) != AXERR_NONE)
++#if !defined(DEBUG) && !defined(_DEBUG)
++                    if (!bSilent)
++#endif
++                        error << _("Access error while creating the Session Base folder") << endmsg;
++            }
++
++            // The target now exists and is guaranteed to be a folder. Now, if the symbolic
++            // link already exists but we've been told to replace it, delete the existing link.
++            if ((bFound) && (AXERR_NONE == axRet))
++                if (0 != remove(spath_to_symbolic_link.c_str()))
++                {
++                    axRet = AXERR_INVALID_ACCESS;
++
++                    if (!bSilent)
++                        error << _("Deletion error while making a symbolic link") << endmsg;
++                }
++
++            if (AXERR_NONE == axRet)
++            {
++                // symlink() will fail if the symbolic link's path doesn't already exist.
++                if ((axRet = create_path_folders(get_user_ardour_path().c_str())) == AXERR_NONE)
++                {
++                    if (0 != symlink(spath_to_use.c_str(), spath_to_symbolic_link.c_str()))
++                    {
++                        axRet = AXERR_INVALID_ACCESS;
++
++                        if (!bSilent)
++                            error << _("Creation error while making a symbolic link") << endmsg;
++                    }
++                }
++                else if (!bSilent)
++                    error << _("Access error while making a symbolic link") << endmsg;
++            }
++        }
++        else if ((bFound) && (!bReplaceExisting))
++        {
++            int len;
++
++            // See if the link already points to the reqested destination
++            if ((len = readlink(spath_to_symbolic_link.c_str(), temp_path, PATH_MAX)) > 0)
++            {
++                // Add a NUL terminator
++                temp_path[len] = 0;
++
++                if (spath_to_use == temp_path);
++                    // Do nothing here. Assume that it's okay to have a
++                    // pre-existing link if we were told not to replace.
++                else
++                {
++                    axRet = AXERR_DESTINATION_ERROR;
++
++                    if (!bSilent)
++                        error << _("Cannot create symbolic link (an incompatible link already exists)") << endmsg;
++
++                }
++            }
++        }
++    }
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	create_link_to_wine()
++//
++// The AAF importer needs 3 x symbolic links to be in place at
++// run time, one of which is a link to the Wine utility (or cxMac
++// or cxLinux utility). This function can be used to create a link
++// to that utility if the utility exists but the link doesn't.
++// When creating a link you can choose whether to overwrite (i.e.
++// update) a previously existing link. You can also supply an
++// explicit path for the utility you wish to use in 'spath_to_wine'.
++// If 'spath_to_wine' is empty, this function will try to find a
++// suitable utility based on an array of likely paths that were set
++// up in this object's c'tor.
++//
++//
++//	Returns:
++//
++//    If the link was successfully created
++//    (or if a suitable link already existed): AXERR_NONE
++//    On Failure: An appropriate ax_error
++//
++ax_error
++AafImportHelper::create_link_to_wine (bool bReplaceExisting /*= false */, bool bSilent /*= false */, const string& spath_to_wine /*= "" */)
++{
++string spath_to_use = spath_to_wine;
++ax_error axRet      = AXERR_NONE;
++
++    if ((0 == spath_to_use.length()) && (_aryPossibleWineLocations.size()))
++    {
++        vector<string*>::iterator iter;
++
++        // If we weren't given a specific
++        // path for Wine, try to find it.
++        for (iter=_aryPossibleWineLocations.begin(); iter < _aryPossibleWineLocations.end(); iter++)
++        {
++            if (*iter)
++            {
++                spath_to_use = ((string*)*iter)->c_str();
++
++                if (spath_to_use.length())
++                    if (Glib::file_test(spath_to_use, Glib::FILE_TEST_EXISTS))
++                        break;
++            }
++        }
++    }
++
++    if (0 == spath_to_use.length())
++    {
++        axRet = AXERR_PROCESS_NOT_FOUND;
++
++        if (!bSilent)
++            warning << _("Wine (or equivalent) could not be found") << endmsg;
++    }
++    else
++    {
++        string shome = Glib::get_home_dir();
++        string spath_to_symbolic_link = shome + "/.Wine";
++
++        // Test to see if the symbolic link already exists
++        bool bFound = Glib::file_test(spath_to_symbolic_link.c_str(), Glib::FILE_TEST_EXISTS);
++
++        if ((!bFound) || (bReplaceExisting))
++        {
++            // If the symbolic link already exists but we've
++            // been told to replace it, delete the existing link.
++            if (bFound)
++                if (0 != remove(spath_to_symbolic_link.c_str()))
++                {
++                    axRet = AXERR_INVALID_ACCESS;
++
++                    if (!bSilent)
++                        error << _("Deletion error while making a symbolic link") << endmsg;
++                }
++
++            if (AXERR_NONE == axRet)
++            {
++                // It's very unlikely that the user's home folder wouldn't exist but we need to be
++                // certain. symlink() will fail if the symbolic link's path doesn't already exist.
++                if ((axRet = create_path_folders(shome.c_str())) == AXERR_NONE)
++                {
++                    if (0 != symlink(spath_to_use.c_str(), spath_to_symbolic_link.c_str()))
++                    {
++                        axRet = AXERR_INVALID_ACCESS;
++
++                        if (!bSilent)
++                            error << _("Creation error while making a symbolic link") << endmsg;
++                    }
++                }
++                else if (!bSilent)
++                    error << _("Access error while making a symbolic link") << endmsg;
++            }
++        }
++        else if ((bFound) && (!bReplaceExisting))
++        {
++            int len;
++
++            // See if the link already points to the reqested destination
++            if ((len = readlink(spath_to_symbolic_link.c_str(), temp_path, PATH_MAX)) > 0)
++            {
++                // Add a NUL terminator
++                temp_path[len] = 0;
++
++                if (spath_to_use == temp_path);
++                    // Do nothing here. Assume that it's okay to have a
++                    // pre-existing link if we were told not to replace.
++                else
++                {
++                    axRet = AXERR_DESTINATION_ERROR;
++
++                    if (!bSilent)
++                        error << _("Cannot create symbolic link (an incompatible link already exists)") << endmsg;
++
++                }
++            }
++        }
++    }
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	get_user_path()
++//
++// Obtains (where appropriate) a path to certain components that
++// might be needed before we can carry out an AAF import. Will
++// initialize this helper if initialization isn't already
++// completed. Pass in a string which identifies the file or path
++// that you want to identify. Currently supported entries are:-
++//
++// 'AAF Importer' - returns a path to the importer app
++// 'Wine'         - returns the path to Wine, cxLinux or cxMac.
++// 'Session Base' - returns the 'base' path for storing Ardour
++//                  sessions.
++//
++// Note that if the file or path is successfully identified, this
++// doesn't necessarily mean that it actually exists !
++//
++//	Returns:
++//
++//    If there was no relevant path
++//    (e.g. the importer is native):        An empty string.
++//    If the path couldn't be identified:   An empty string.
++//    If the requested path was identified: A string containing
++//                                          the path.
++//
++string
++AafImportHelper::get_user_path (const string& srequested_path, bool bSilent /*= false */)
++{
++string   junk, sRet;
++ax_error axRet = AXERR_NONE;
++
++    if (!is_initialized())
++        axRet = initialize_for_aaf_import(importer_is_native, importer_uses_wine, &junk, NULL, NULL, NULL, bSilent);
++
++    if (AXERR_NONE == axRet)
++    {
++        if ("AAF Importer" == srequested_path)
++            axRet = get_path_to_importer(sRet, bSilent);
++        else if ("Wine" == srequested_path)
++            axRet = get_path_to_wine(sRet, bSilent);
++        else if ("Session Base" == srequested_path)
++            axRet = get_path_to_sessions(sRet, bSilent);
++        else
++        {
++            axRet = AXERR_NOT_IMPLEMENTED;
++
++            if (!bSilent)
++                error << _("AafImportHelper::get_user_path(): unsupported option") << endmsg;
++        }
++    }
++
++    if (AXERR_NONE != axRet)
++        sRet = "";
++
++    return (sRet);
++}
++
++
++//***************************************************************
++//
++//	get_path_to_importer()
++//
++// Opens the 'Paths' config file (if available) and reads in the
++// path for the AAF importer. If no 'Paths' file was found, it
++// attempts to locate a symbolic link to the importer and then
++// translates the symbolic link. The found path is returned in
++// 'sfound_path'. An empty string is returned if the path could
++// not be identified (or if an internal importer is specified).
++// If 'bSilent' is false, displays an error message to the user
++// if any error gets detected.
++//
++// This function will attempt to create a suitable symbolic link
++// if a pre-existing one couldn't be found.
++//
++//	Returns:
++//
++//    On Success: AXERR_NONE
++//    On Failure: AXERR_DESTINATION_ERROR
++//
++ax_error
++AafImportHelper::get_path_to_importer (string& sfound_path, bool bSilent /*= false */)
++{
++ax_error axRet = AXERR_NONE;
++
++    if ((importer_is_native) && (!importer_uses_wine))
++        sfound_path = "";
++    else
++    {
++        sfound_path = "";
++
++        int  len;
++        bool bPathFound = false; // TODO: Read this path from the 'Paths' file
++
++        if (!bPathFound)
++        {
++            string spath_to_symbolic_link = get_user_ardour_path();
++            spath_to_symbolic_link += "AAF Importer";
++
++            if ((len = readlink(spath_to_symbolic_link.c_str(), temp_path, PATH_MAX)) >= 0)
++            {
++                // Add a NUL terminator
++                temp_path[len] = 0;
++                sfound_path = temp_path;
++            }
++            else
++            {
++                // We couldn't find a symbolic link for the
++                // AAF Import application. Try to create one.
++                if (AXERR_NONE == create_symlink("AAF Importer", false, bSilent))
++                    axRet = get_path_to_importer(sfound_path, bSilent);
++                else
++                    axRet = AXERR_DESTINATION_ERROR;
++            }
++        }
++    }
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	get_path_to_sessions()
++//
++// Opens the 'Paths' config file (if available) and reads in the
++// user's preferred base path for saving Ardour sessions. If no
++// 'Paths' file was found, it attempts to locate a symbolic link
++// called "Ardour Sessions" and translates the symbolic link. The
++// found path is returned in 'sfound_path'. An empty string is
++// returned if the path could not be identified. If 'bSilent' is
++// false, displays an error message to the user if any error
++// gets detected.
++//
++// This function will attempt to create a suitable symbolic link
++// if a pre-existing one couldn't be found. However, it will only
++// attempt to create the link if an AAF import application is
++// already installed on the user's system.
++//
++//	Returns:
++//
++//    On Success: AXERR_NONE
++//    On Failure: AXERR_DESTINATION_ERROR
++//
++ax_error
++AafImportHelper::get_path_to_sessions (string& sfound_path, bool bSilent /*= false */)
++{
++int len;
++ax_error axRet = AXERR_NONE;
++
++    bool bPathFound = false; // TODO: Read this path from the 'Paths' file
++
++    sfound_path = "";
++
++    if (!bPathFound)
++    {
++        string spath_to_symbolic_link = get_user_ardour_path();
++        spath_to_symbolic_link += "Ardour Sessions";
++
++        if ((len = readlink(spath_to_symbolic_link.c_str(), temp_path, PATH_MAX)) >= 0)
++        {
++            // Add a NUL terminator
++            temp_path[len] = 0;
++            sfound_path = temp_path;
++        }
++        else
++        {
++           string junk;
++
++            // We couldn't find a symbolic link for the user's session path.
++            // Assuming that an AAF Import app is present, try to create one.
++            if (AXERR_NONE == get_path_to_importer(junk, true))
++            {
++                if (AXERR_NONE == create_symlink("Session Base", false, bSilent))
++                    axRet = get_path_to_sessions(sfound_path, bSilent);
++                else
++                    axRet = AXERR_DESTINATION_ERROR;
++            }
++            else
++            {
++                axRet = AXERR_DESTINATION_ERROR;
++
++                if (!bSilent)
++                    warning << _("Symbolic link failure (could not detect an AAF importer app)") << endmsg;
++            }
++        }
++    }
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	get_path_to_wine()
++//
++// Opens the 'Paths' config file (if available) and reads in the
++// location of Wine (or cxLinux or cxMac) on the user's system.
++// If no 'Paths' file was found, it attempts to locate a symbolic
++// link called "Wine" and translates the symbolic link. The found
++// path is returned in 'sfound_path' (regardless of whether or not
++// Wine is actually needed). An empty string is returned if the
++// path could not be identified. If 'bSilent' is false, displays
++// an error message to the user if any error occurred.
++//
++// This function will attempt to create a suitable symbolic link
++// if a pre-existing one couldn't be found. However, it will only
++// attempt to create the link if an AAF import application is
++// already installed on the user's system.
++//
++//	Returns:
++//
++//    On Success: AXERR_NONE
++//    On Failure: AXERR_DESTINATION_ERROR
++//
++ax_error
++AafImportHelper::get_path_to_wine (string& sfound_path, bool bSilent /*= false */)
++{
++int len;
++ax_error axRet = AXERR_NONE;
++
++    bool bPathFound = false; // TODO: Read this path from the 'Paths' file
++
++    sfound_path = "";
++
++    if (!bPathFound)
++    {
++        string shome = Glib::get_home_dir();
++        string spath_to_symbolic_link = shome + "/.Wine";
++
++        if ((len = readlink(spath_to_symbolic_link.c_str(), temp_path, PATH_MAX)) >= 0)
++        {
++            // Add a NUL terminator
++            temp_path[len] = 0;
++            sfound_path = temp_path;
++        }
++        else
++        {
++            string junk;
++
++            // We couldn't find a symbolic link for Wine. Assuming that
++            // an AAF Import app is present, try to create a link to Wine.
++            if (AXERR_NONE == get_path_to_importer(junk, true))
++            {
++                if (AXERR_NONE == create_symlink("Wine", false, bSilent))
++                    axRet = get_path_to_wine(sfound_path, bSilent);
++                else
++                    axRet = AXERR_DESTINATION_ERROR;
++            }
++            else
++            {
++                axRet = AXERR_DESTINATION_ERROR;
++
++                if (!bSilent)
++                    warning << _("Symbolic link failure (could not detect an AAF importer app)") << endmsg;
++            }
++        }
++    }
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	initialize_for_aaf_import()
++//
++// Calls the various 'get_path_to' functions to obtain any paths
++// that will be needed for importing an AAF file (e.g. the path
++// to the import plugin and the base path for converted sessions).
++// The base path is MANDATORY since no import process can take
++// place if the importer doesn't know where to dump the imported
++// sessions. AXERR_NOT_INITIALIZED will be issued if you pass a
++// NUL pointer to 'ppath_to_ardour_sessions'. The other paths
++// are optional. 'ppath_to_importer' returns an empty string if
++// the importer is internal. 'initialize_for_aaf_import()' will
++// optionally return (a) the user's preferred color scheme;
++// (b) whether or not he importer needs Wine, and (c) whether
++// the importer is native or external. If 'bSilent' is false, we
++// display an error message to the user if any error got detected.
++//
++//	Returns:
++//
++//    On Success: AXERR_NONE
++//    On Failure: An appropriate ax_error
++//
++ax_error
++AafImportHelper::initialize_for_aaf_import (bool& is_native, bool& use_wine, string* ppath_to_ardour_sessions,
++                    string* ppath_to_importer /*= NULL */, string* ppath_to_wine /*= NULL */,
++                    string* ppreferred_color_scheme /*= NULL*/, bool bSilent /*= false */)
++{
++ax_error axRet = AXERR_NOT_INITIALIZED;
++
++    if (ppath_to_importer || ppath_to_wine || ppath_to_ardour_sessions)
++    {
++        string spath_to_importer;
++        axRet = AXERR_NONE;
++
++        // Determine the current color scheme
++        if (ppreferred_color_scheme)
++        {
++            string sardour_theme = ARDOUR_UI::config()->ui_rc_file.get();
++
++            if (string::npos != sardour_theme.find("ui_dark"))
++                *ppreferred_color_scheme = "dark";
++            else // assume a light theme
++                *ppreferred_color_scheme = "light";
++        }
++
++        // Always find a path to the importer since we
++        // can't set 'is_native' or 'use_wine' without it
++        if ((axRet = get_path_to_importer(spath_to_importer, bSilent)) != AXERR_NONE)
++        {
++            is_native = importer_is_native = false;
++            axRet = AXERR_NOT_INITIALIZED;
++        }
++        else
++        {
++            if (0 == spath_to_importer.length())
++            {
++                // No external importer was found. If we're still
++                // uninitialized, assume we want an internal importer.
++                if ((importer_is_native) && (importer_uses_wine))
++                {
++                    is_native = importer_is_native = true;
++                    use_wine  = importer_uses_wine = false;
++                }
++            }
++            else
++            {
++                // The importer seems to be an external plugin. If
++                // we haven't been told explicitly to use a native
++                // importer, find out whether or not it needs Wine
++                if ((importer_is_native) && (!importer_uses_wine))
++                {
++                    // We've got a problem. An internal (native) AAF importer was
++                    // requested - but the only one we could find was external.
++                    axRet = AXERR_INTERNAL_ERROR;
++
++                    if (!bSilent)
++                        error << _("An internal error occurred while locating the AAF importer") << endmsg;
++                }
++                else
++                {
++                    is_native = importer_is_native = false;
++
++                    size_t ilen = spath_to_importer.length();
++                    size_t ipos = spath_to_importer.rfind(".exe");
++
++                    if (ipos == string::npos)
++                        ipos = spath_to_importer.rfind(".EXE");
++
++                    // Assume that Wine is needed if the importer ends in ".exe"
++                    if ((ilen > 4) && (ipos == (ilen-4)))
++                        use_wine = importer_uses_wine = true;
++                    else
++                        use_wine = importer_uses_wine = false;
++                }
++            }
++
++            if ((ppath_to_importer) && (!is_native))
++            {
++                *ppath_to_importer = spath_to_importer;
++
++                if (!axRet)
++                {
++                    if (ppath_to_importer->length())
++                    {
++                        // Find out if the import processor exists
++                        axRet = Glib::file_test(*ppath_to_importer, Glib::FILE_TEST_EXISTS) ? AXERR_NONE : AXERR_PROCESS_NOT_FOUND;
++                        if ((AXERR_PROCESS_NOT_FOUND == axRet) && (!bSilent))
++                           error << _("AAF import processor could not be found") << endmsg;
++                    }
++                    else
++                        axRet = AXERR_NOT_INITIALIZED;
++                }
++            }
++            else if (is_native)
++            {
++                if (ppath_to_importer)
++                    *ppath_to_importer = "";
++            }
++
++            if ((ppath_to_wine) && (!axRet))
++            {
++                axRet = get_path_to_wine(*ppath_to_wine, bSilent);
++
++                if (!axRet)
++                {
++                    if (ppath_to_wine->length())
++                    {
++                        // Find out if 'wine' exists
++                        axRet = Glib::file_test(*ppath_to_wine, Glib::FILE_TEST_EXISTS) ? AXERR_NONE : AXERR_WINE_NOT_FOUND;
++                        if ((AXERR_WINE_NOT_FOUND == axRet) && (!bSilent))
++                           error << _("Wine could not be found on this system") << endmsg;
++                    }
++                    else
++                        axRet = AXERR_NOT_INITIALIZED;
++                }
++                else
++                    axRet = AXERR_NOT_INITIALIZED;
++            }
++
++            if ((ppath_to_ardour_sessions) && (!axRet))
++            {
++                get_path_to_sessions(*ppath_to_ardour_sessions, bSilent);
++
++                int len = ppath_to_ardour_sessions->length();
++
++                if (len)
++                {
++                    // Now make sure that the path is
++                    // terminated by a forward slash.
++                    if ('/' != (*ppath_to_ardour_sessions)[len-1])
++                        *ppath_to_ardour_sessions += "/";
++
++                    // Simply check that the path starts with a forward slash
++                    if ('/' != (*ppath_to_ardour_sessions)[0])
++                        axRet = AXERR_DESTINATION_ERROR;
++
++                    if ((AXERR_DESTINATION_ERROR == axRet) && (!bSilent))
++                    {
++                        error << _("The target path for your imported sessions is not a valid path") << endmsg;
++                        error << _("Unable to initialize the AAF importer") << endmsg;
++                    }
++                }
++                else
++                {
++                    axRet = AXERR_DESTINATION_ERROR;
++
++                    if (!bSilent)
++                    {
++                        error << _("Could not locate the target path for your imported sessions") << endmsg;
++                        error << _("Unable to initialize the AAF importer") << endmsg;
++                    }
++                }
++            }
++            else if (!axRet)
++                axRet = AXERR_NOT_INITIALIZED;
++        }
++    }
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	import_from_aaf()
++//
++// This function identifies the AAF import process (if an import
++// process exists) and instructs it to import the file specified
++// by 'sfile_to_import'. If the import operation was successful,
++// 'spath_to_new_project' should contain the path to the imported
++// ".ardour" session.
++//
++//	Returns:
++//
++//    On Success: The (converted) exit code returned by the
++//                AAF importer
++//    On Failure: An (internally generated) ax_error
++//
++ax_error
++AafImportHelper::import_from_aaf (const string& sfile_to_import, string& spath_to_new_project)
++{
++ax_error axRet = AXERR_SOURCE_ERROR;
++
++    // Make sure that the file to
++    // be imported ends in ".aaf"
++    size_t ilen = sfile_to_import.length();
++    size_t ipos = sfile_to_import.rfind(".aaf");
++
++    if (ipos == string::npos)
++        ipos = sfile_to_import.rfind(".AAF");
++
++    if ((ilen > 4) && (ipos == (ilen-4)))
++    {
++        string  spreferred_color_scheme,
++                spath_to_importer,
++                spath_to_wine,
++                spath_for_ardour_sessions;
++        bool    importer_is_native,
++                use_wine;
++
++        axRet = initialize_for_aaf_import(importer_is_native, use_wine, &spath_for_ardour_sessions,
++                        &spath_to_importer, &spath_to_wine, &spreferred_color_scheme);
++
++        if (AXERR_NONE == axRet)
++        {
++            if (importer_is_native)
++            {
++                axRet = AXERR_NOT_IMPLEMENTED;
++            }
++            else if (use_wine)
++            {
++                char tmpBuf[1024], tmpBuf2[1024];
++
++                // Find the last forward slash in our source file
++                if (string::npos == (ipos = sfile_to_import.rfind("/")))
++                    strcpy(tmpBuf, sfile_to_import.c_str());
++                else
++                    strcpy(tmpBuf, &sfile_to_import[ipos+1]);
++
++                // By this point, 'tmpBuf' should contain at least 5 characters
++                tmpBuf[strlen(tmpBuf)-4] = 0;
++
++                // 'tmpBuf' now contains the name of the AAF file
++                std::string aaf_name = tmpBuf;
++
++                // Use 'tmpBuf2' to build a path for the ardour session
++                sprintf(tmpBuf2, "z:%s%s/%s.ardour", spath_for_ardour_sessions.c_str(), aaf_name.c_str(), aaf_name.c_str());
++
++                // and use 'tmpBuf' to build a path for the input file
++                sprintf(tmpBuf, "z:%s", sfile_to_import.c_str());
++
++                // Obtain a flag for the color scheme
++                spreferred_color_scheme = attribute_to_flag(spath_to_importer, spreferred_color_scheme);
++
++                // We now have enough information to spawn the child prpcess
++                int nRet; char cRet;
++                pid_t pidChild = fork();
++
++                if (0 == pidChild)
++                {
++                    // We're running in the child process. Use exec()
++                    // to replace the child process's excutable
++                    execl (spath_to_wine.c_str(), "wine", spath_to_importer.c_str(), tmpBuf, tmpBuf2, spreferred_color_scheme.c_str(), NULL);
++                }
++                else if (pidChild != (-1))
++                {
++                    // We're running in parent process. Just
++                    // wait for the child process to terminate
++                    waitpid(pidChild, &nRet, 0); // waitpid() returns (qualified) status information in 'nRet'
++                    cRet = (char)WEXITSTATUS(nRet);
++                    nRet = cRet; // 'nRet' now equals the ACTUAL status value returned by the AAF importer
++
++                    spath_to_new_project = &tmpBuf2[2];
++
++                    return (assign_exit_status(spath_to_importer, nRet));
++                }
++                else
++                {
++                    // fork()/exec() failed. Consider
++                    // this to be a terminal failure.
++                    axRet = AXERR_PROCESS_FAILURE;
++                }
++            }
++            else
++            {
++                axRet = AXERR_NOT_IMPLEMENTED;
++            }
++        }
++    }
++
++    if (AXERR_PROCESS_FAILURE == axRet) // fork()/exec() failed. This is terminal
++        fatal << _("A fatal error occurred while launching the AAF importer") << endmsg;
++
++    if (AXERR_SOURCE_ERROR == axRet)
++        error << _("The selected source file is not a valid AAF file") << endmsg;
++
++    if (AXERR_NOT_INITIALIZED == axRet)
++        error << _("Unable to initialize the AAF importer") << endmsg;
++
++    return (axRet);
++}
++
++
++//***************************************************************
++//
++//	create_path_folders()
++//
++// If a symbolic link needs to be created, this function ensures
++// that all folders leading to the symlink are present.
++//
++//	Returns:
++//
++//    On success: AXERR_NONE
++//    On Failure: An appropriate ax_error
++//
++ax_error
++AafImportHelper::create_path_folders(const char *pRequestedPath)
++{
++char ch, *tmpPath  = NULL;
++bool rootfound = false;
++
++#if defined (PORT_SYS_WINDOWS) && !defined(PORT_SYS_CYGWIN)
++char separator = '\\';
++#else
++char separator = '/';
++#endif
++
++   /* Note that this function shouldn't be used to create
++	* a root drive or folder. Also, don't be tempted to
++	* use 'g_mkdir_with_parents()' either because it
++	* didn't become available until Glib v2.8, which is
++	* higher than the base requirement for Ardour.
++	*/
++	if (int length = strlen(pRequestedPath))
++    {
++		tmpPath = new char[length+2];
++		strcpy(tmpPath, pRequestedPath);
++
++		// Add a trailing separator, if there isn't one
++		if (pRequestedPath[length-1] != separator)
++		{
++			strncpy(&tmpPath[length], &separator, 1);
++			strncpy(&tmpPath[length+1], "\0", 1);
++
++			// Increment 'length'
++			length += 1;
++		}
++
++		// Locate the SECOND separator
++		char* iter = tmpPath;
++		while (strlen(iter))
++		{
++			ch = *iter;
++			if ((ch == separator) && (rootfound))
++			{
++				// Replace it with a zero
++				*iter = '\0';
++
++				// and make the first directory
++				if (strlen(tmpPath))
++#if defined (PORT_SYS_WINDOWS) && !defined(PORT_SYS_CYGWIN)
++					if (0 != _mkdir(tmpPath))
++#else
++					if (0 != g_mkdir(tmpPath, (S_IRWXU | S_IRWXG | S_IRWXO)))
++#endif
++					{
++                        if (EEXIST != errno)
++                        {
++                            delete[] tmpPath;
++                            return (AXERR_PROCESS_FAILURE);
++                        }
++					}
++
++				// Now put the separator back
++				*iter = separator;
++
++				// and move to the next character
++				++iter;
++
++				break;
++			}
++			else if (ch == separator)
++				rootfound = true;
++
++			iter++;
++		}
++
++		// Now create the remaining directories
++		while (strlen(iter))
++		{
++			ch = *iter;
++			if (ch == separator)
++			{
++				// Replace it with a zero
++				*iter = '\0';
++
++				// make the directory
++				if (strlen(tmpPath))
++#if defined (PORT_SYS_WINDOWS) && !defined(PORT_SYS_CYGWIN)
++					if (0 != _mkdir(tmpPath))
++#else
++					if (0 != g_mkdir(tmpPath, (S_IRWXU | S_IRWXG | S_IRWXO)))
++#endif
++					{
++                        if (EEXIST != errno)
++                        {
++                            delete[] tmpPath;
++                            return (AXERR_PROCESS_FAILURE);
++                        }
++					}
++
++				// Now put the separator back
++				*iter = separator;
++			}
++
++			// move to the next character
++			++iter;
++		}
++	}
++
++	delete[] tmpPath;
++
++	return (AXERR_NONE);
++}
++
++
++/***************************************************************
++*                                                              *
++* These functions are useful when we need to interface with an *
++* external helper app (e.g. when we need to import audio from  *
++* an unsupported session format such as OMF or AAF).           *
++*                                                              *
++****************************************************************/
++//
++//	attribute_to_flag()
++//
++// Internally, common flags may be used for specific program
++// conditions (such as "light" or "dark" to indicate the user's
++// preferred color scheme). This function converts any such
++// internal flags to a format that might be applicable to an
++// external process. For example, the string "overwrite" could
++// be used internally as an indication that an external app
++// should overwrite older versions of a file. App X might need
++// this to be sent as "/O" whereas App Y might require "-o".
++// Use this function to convert internal flags to external ones.
++//
++//	Returns:
++//
++//    On Success: A string representing the appropriate flag
++//    On Failure: An empty string
++//
++string
++AafImportHelper::attribute_to_flag (string s_application, string s_attribute)
++{
++string sFlag;
++
++    // Are we dealing with ArdourXchange ?
++    if (string::npos != s_application.find("ArdourXchange.exe"))
++    {
++        // Attributes supported by ArdourXchange
++        if (s_attribute == "dark")
++            sFlag = "-D";
++        else if (s_attribute == "light")
++            sFlag = "-L";
++    }
++    else if (string::npos != s_application.find("put your application name here"))
++    {
++       // Attributes supported by the next app
++    }
++
++    return (sFlag);
++}
++
++//***************************************************************
++//
++//	assign_exit_status()
++//
++// If an external helper app is capable of returning a status
++// code, the returned status code can be converted to the nearest
++// equivalent ax_error. Pass in the relevant code and a string
++// identifying the application.
++//
++//	Returns:
++//
++//    On Success: An appropriate ax_error
++//    On Failure: AXERR_UNKNOWN
++//
++ax_error
++AafImportHelper::assign_exit_status (string s_application, int exit_code)
++{
++ax_error exit_status = AXERR_UNKNOWN;
++
++    // Are we dealing with ArdourXchange ?
++    if (string::npos != s_application.find("ArdourXchange.exe"))
++    {
++        // Exit codes supported by ArdourXchange
++        switch (exit_code) {
++            case -2: exit_status = AXERR_NOT_INITIALIZED;
++                break;
++            case -1: exit_status = AXERR_FATAL_EXCEPTION;
++                break;
++            case 0:  exit_status = AXERR_NONE;
++                break;
++            case 1:  exit_status = AXERR_USER_ABORTED;
++                break;
++            case 2:  exit_status = AXERR_MEDIA_NOT_FOUND;
++                break;
++        }
++    }
++    else if (string::npos != s_application.find("put your application name here"))
++    {
++       // Exit codes supported by the next app
++    }
++
++    return (exit_status);
++}
++
++
++/***************************************************************
++*                                                              *
++****************************************************************/
+--- /dev/null
++++ b/gtk2_ardour/import_helper_aaf.h
+@@ -0,0 +1,81 @@
++/*
++    Copyright (C) 2005 Paul Davis
++
++    This program is free software; you can redistribute it and/or modify
++    it under the terms of the GNU General Public License as published by
++    the Free Software Foundation; either version 2 of the License, or
++    (at your option) any later version.
++
++    This program is distributed in the hope that it will be useful,
++    but WITHOUT ANY WARRANTY; without even the implied warranty of
++    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++    GNU General Public License for more details.
++
++    You should have received a copy of the GNU General Public License
++    along with this program; if not, write to the Free Software
++    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++
++*/
++
++// -*- c++ -*-
++
++#ifndef IMPORT_HELPER_AAF_H
++#define IMPORT_HELPER_AAF_H
++
++#include <string>
++#include <ardour/ax_errors.h>
++
++using namespace std;
++
++class AafImportHelper
++{
++public:
++    AafImportHelper (bool use_native_importer = false);
++    ~AafImportHelper ();
++
++    string   get_user_path (const string& /* in */srequested_path, bool /* in */bSilent = false);
++    ax_error import_from_aaf (const string& /* in */sfile_to_import, string& /* out */spath_to_new_project);
++    ax_error create_symlink (const string& /* in */srequested_link, bool /* in */bReplaceExisting = false, bool /* in */bSilent = false);
++    ax_error create_link_to_importer (bool /* in */bReplaceExisting = false, bool /* in */bSilent = false, const string& /* in */spath_to_importer = "");
++    ax_error create_link_to_sessions (bool /* in */bReplaceExisting = false, bool /* in */bSilent = false, const string& /* in */spath_to_sessions = "");
++    ax_error create_link_to_wine  (bool /* in */bReplaceExisting = false, bool /* in */bSilent = false, const string& /* in */spath_to_wine = "");
++    bool     is_native (bool /* in */bSilent = false);
++    bool     needs_wine (bool /* in */bSilent = false);
++    bool     is_initialized() { return (importer_is_native && importer_uses_wine) ? false : true; }
++
++protected:
++    ax_error create_path_folders(const char *pRequestedPath);
++    ax_error get_path_to_importer (string& /* out */sfound_path, bool /* in */bSilent = false);
++    ax_error get_path_to_sessions (string& /* out */sfound_path, bool /* in */bSilent = false);
++    ax_error get_path_to_wine     (string& /* out */sfound_path, bool /* in */bSilent = false);
++    ax_error initialize_for_aaf_import (bool& /* out */is_native, bool& /* out */uses_wine, string* /* out */ppath_to_ardour_sessions,
++                        string* /* out */ppath_to_importer = NULL, string* /* out */ppath_to_wine = NULL,
++                        string* /* out */ppreferred_color_scheme = NULL, bool /* in */bSilent = false);
++    ax_error assign_exit_status (string s_application, int exit_code);
++    string   attribute_to_flag  (string s_application, string s_attribute);
++    char     temp_path[PATH_MAX+1];
++    vector<string*> _aryPossibleImporterLocations;
++    vector<string*> _aryPossibleWineLocations;
++
++private:
++    bool     importer_is_native;
++    bool     importer_uses_wine;
++    static bool already_instantiated;
++
++private:
++    // AafImportHelper is not meant to get copied. These things
++    // are private because they are never meant to be used.
++    AafImportHelper& operator= (AafImportHelper&); // N/A
++    AafImportHelper(AafImportHelper&); // N/A
++};
++
++inline AafImportHelper& AafImportHelper::operator= (AafImportHelper&)
++{
++    return *this;
++}
++
++inline AafImportHelper::AafImportHelper(AafImportHelper&)
++{
++}
++
++#endif // IMPORT_HELPER_AAF_H
+--- a/gtk2_ardour/new_session_dialog.cc
++++ b/gtk2_ardour/new_session_dialog.cc
+@@ -1,5 +1,5 @@
+ /*
+-    Copyright (C) 2005 Paul Davis 
++    Copyright (C) 2005 Paul Davis
+ 
+     This program is free software; you can redistribute it and/or modify
+     it under the terms of the GNU General Public License as published by
+@@ -45,6 +45,12 @@
+ #include "i18n.h"
+ #include "new_session_dialog.h"
+ 
++// Needed to launch an AAF importer
++#include "import_helper_aaf.h"
++#include "ardour_ui.h"
++#include <wait.h>
++#include <unistd.h>
++
+ NewSessionDialog::NewSessionDialog()
+ 	: ArdourDialog ("session control")
+ {
+@@ -84,17 +90,15 @@
+ 	session_template_label = new Gtk::Label(_("Template :"));
+ 	m_template = new Gtk::FileChooserButton();
+ 	m_create_control_bus = new Gtk::CheckButton(_("Create Monitor Bus"));
+-	
+ 	Gtk::Adjustment *m_control_bus_channel_count_adj = Gtk::manage(new Gtk::Adjustment(2, 0, 100, 1, 10));
+ 	m_control_bus_channel_count = new Gtk::SpinButton(*m_control_bus_channel_count_adj, 1, 0);
+-	
++
+ 	Gtk::Adjustment *m_master_bus_channel_count_adj = Gtk::manage(new Gtk::Adjustment(2, 0, 100, 1, 10));
+ 	m_master_bus_channel_count = new Gtk::SpinButton(*m_master_bus_channel_count_adj, 1, 0);
+ 	m_create_master_bus = new Gtk::CheckButton(_("Create Master Bus"));
+ 	advanced_table = new Gtk::Table(2, 2, true);
+ 	m_connect_inputs = new Gtk::CheckButton(_("Automatically Connect to Physical Inputs"));
+ 	m_limit_input_ports = new Gtk::CheckButton(_("Use only"));
+-	
+ 	Gtk::Adjustment *m_input_limit_count_adj = Gtk::manage(new Gtk::Adjustment(1, 0, 100, 1, 10));
+ 	m_input_limit_count = new Gtk::SpinButton(*m_input_limit_count_adj, 1, 0);
+ 	input_port_limit_hbox = new Gtk::HBox(false, 0);
+@@ -103,16 +107,15 @@
+ 
+ 	bus_frame = new Gtk::Frame();
+ 	bus_table = new Gtk::Table (2, 3, false);
+-	
++
+ 	input_frame = new Gtk::Frame();
+ 	m_connect_outputs = new Gtk::CheckButton(_("Automatically Connect Outputs"));
+ 	m_limit_output_ports = new Gtk::CheckButton(_("Use only"));
+-	
+ 	Gtk::Adjustment *m_output_limit_count_adj = Gtk::manage(new Gtk::Adjustment(1, 0, 100, 1, 10));
+ 	m_output_limit_count = new Gtk::SpinButton(*m_output_limit_count_adj, 1, 0);
+ 	output_port_limit_hbox = new Gtk::HBox(false, 0);
+ 	output_port_vbox = new Gtk::VBox(false, 0);
+-	
++
+ 	Gtk::RadioButton::Group _RadioBGroup_m_connect_outputs_to_master;
+ 	m_connect_outputs_to_master = new Gtk::RadioButton(_RadioBGroup_m_connect_outputs_to_master, _("... to Master Bus"));
+ 	m_connect_outputs_to_physical = new Gtk::RadioButton(_RadioBGroup_m_connect_outputs_to_master, _("... to Physical Outputs"));
+@@ -175,7 +178,7 @@
+ 	m_create_master_bus->set_border_width(0);
+ 	advanced_table->set_row_spacings(0);
+ 	advanced_table->set_col_spacings(0);
+-	
++
+ 	m_connect_inputs->set_flags(Gtk::CAN_FOCUS);
+ 	m_connect_inputs->set_relief(Gtk::RELIEF_NORMAL);
+ 	m_connect_inputs->set_mode(true);
+@@ -206,7 +209,7 @@
+ 	bus_frame->set_label_align(0,0.5);
+ 	bus_frame->add(*bus_hbox);
+ 	bus_frame->set_label_widget(*bus_label);
+-	
++
+ 	bus_table->set_row_spacings (0);
+ 	bus_table->set_col_spacings (0);
+ 	bus_table->attach (*m_create_master_bus, 0, 1, 0, 1, Gtk::EXPAND|Gtk::FILL, Gtk::EXPAND|Gtk::FILL, 0, 0);
+@@ -348,12 +351,12 @@
+ 
+ 	m_notebook->set_flags(Gtk::CAN_FOCUS);
+ 	m_notebook->set_scrollable(true);
+-	
++
+ 	get_vbox()->set_homogeneous(false);
+ 	get_vbox()->set_spacing(0);
+ 	get_vbox()->pack_start(*m_notebook, Gtk::PACK_SHRINK, 0);
+ 
+-	/* 
++	/*
+ 	   icon setting is done again in the editor (for the whole app),
+ 	   but its all chickens and eggs at this point.
+ 	*/
+@@ -393,7 +396,7 @@
+ 	m_treeview->get_selection()->set_mode (Gtk::SELECTION_SINGLE);
+ 
+ 	std::string path = ARDOUR::get_user_ardour_path();
+-	
++
+ 	if (path.empty()) {
+ 	        path = ARDOUR::get_system_data_path();
+ 	}
+@@ -426,6 +429,21 @@
+ 
+ 	m_template->set_title(_("select template"));
+ 	Gtk::FileFilter* session_filter = manage (new (Gtk::FileFilter));
++
++	// Find out if we have an AAF importer present
++	FILE *xchange = NULL;
++    AafImportHelper importer;
++    string spath_to_importer = importer.get_user_path("AAF Importer", true);
++    if (spath_to_importer.length())
++         xchange = fopen(spath_to_importer.c_str(), "r");
++    if ((xchange != NULL) || ((importer.is_native()) && (importer.is_initialized()))) {
++        printf("AAF Converter found; adding support for import of AAF files.\n");
++        session_filter->add_pattern(X_("*.aaf"));
++
++        if (xchange)
++            fclose(xchange);
++	}
++
+ 	session_filter->add_pattern(X_("*.ardour"));
+ 	session_filter->add_pattern(X_("*.ardour.bak"));
+ 	m_open_filechooser->set_filter (*session_filter);
+@@ -477,7 +495,7 @@
+ 	m_treeview->signal_row_activated().connect (mem_fun (*this, &NewSessionDialog::recent_row_activated));
+ 	m_open_filechooser->signal_selection_changed ().connect (mem_fun (*this, &NewSessionDialog::file_chosen));
+ 	m_template->signal_selection_changed ().connect (mem_fun (*this, &NewSessionDialog::template_chosen));
+-	
++
+ 	page_set = Pages (0);
+ }
+ 
+@@ -584,7 +602,7 @@
+ 	    4) canonicalize_file_name() & realpath() have entirely
+                    different semantics on OS X and Linux when given
+ 		   a non-existent path.
+-		   
++
+ 	   as result of all this, we take two distinct pathways through the code.
+ 	*/
+ 
+@@ -601,7 +619,6 @@
+ 		engine_page_session_folder = realdir;
+ 	}
+ 
+-	
+ #else 
+ 	char* res;
+ 	if (!Glib::file_test (dir, Glib::FILE_TEST_IS_DIR)) {
+@@ -613,7 +630,7 @@
+ 		engine_page_session_folder = res;
+ 		free (res);
+ 	}
+-	
++
+ #endif
+ 
+ }
+@@ -621,7 +638,7 @@
+ std::string
+ NewSessionDialog::session_name() const
+ {
+-        std::string str = Glib::filename_from_utf8 (m_open_filechooser->get_filename());
++    std::string str = m_filename;
+ 	std::string::size_type position = str.find_last_of (G_DIR_SEPARATOR);
+ 	str = str.substr (position+1);
+ 	position = str.find_last_of ('.');
+@@ -633,7 +650,7 @@
+ 
+ 	if ((position = str.rfind(".bak")) != string::npos) {
+ 	        str = str.substr (0, position);
+-	}	  
++	}
+ 	*/
+ 
+ 	switch (which_page()) {
+@@ -652,7 +669,7 @@
+ 
+ 	default:
+ 		break;
+-	} 
++	}
+ 
+ 	if (m_treeview->get_selection()->count_selected_rows() == 0) {
+ 		return Glib::filename_from_utf8(str);
+@@ -668,7 +685,6 @@
+ 	switch (which_page()) {
+ 	case NewPage:
+ 	        return Glib::filename_from_utf8(m_folder->get_filename());
+-		
+ 	case EnginePage:
+ 		if (!(page_set & (OpenPage|NewPage))) {
+ 			return Glib::filename_from_utf8(engine_page_session_folder);
+@@ -683,9 +699,9 @@
+ 	default:
+ 		break;
+ 	}
+-	       
++
+ 	if (m_treeview->get_selection()->count_selected_rows() == 0) {
+-		const string filename(Glib::filename_from_utf8(m_open_filechooser->get_filename()));
++		const string filename( m_filename );
+ 		return Glib::path_get_dirname(filename);
+ 	}
+ 
+@@ -876,7 +892,7 @@
+ {
+ 	m_name->set_text("");
+ 	set_response_sensitive (Gtk::RESPONSE_OK, false);
+-	
++
+ }
+ 
+ void
+@@ -972,11 +988,57 @@
+ 	}
+ 
+ 	if (!m_open_filechooser->get_filename().empty()) {
+-	        set_response_sensitive (Gtk::RESPONSE_OK, true);
+-		response (Gtk::RESPONSE_OK);
++        std::string selection = m_open_filechooser->get_filename();
++        if (( selection.find(".aaf") != string::npos ) ||
++            ( selection.find(".AAF") != string::npos )) {
++
++            // Let's establish that ".aaf" is actually at the end of the string
++            size_t slen = selection.length();
++            size_t spos = selection.rfind(".aaf");
++
++            if (spos == string::npos)
++                spos = selection.rfind(".AAF");
++
++            if (spos == (slen-4)) {
++                std::string spath_to_imported_session;
++
++                AafImportHelper importer;
++
++                ax_error axResult = importer.import_from_aaf (selection, spath_to_imported_session);
++
++                // Determine the error (if any) but assume that all errors
++                // (apart from NOT_IMPLEMENTED) have already been reported.
++                switch (axResult) {
++                    case AXERR_NONE:            // These are the only two cases where
++                    case AXERR_MEDIA_NOT_FOUND: // it's possible to load the session.
++                             m_open_filechooser->set_filename( Glib::filename_to_utf8(spath_to_imported_session) );
++                             m_filename = spath_to_imported_session;
++                        break;
++                    case AXERR_NOT_IMPLEMENTED:
++                             error << _("The requested feature is not yet available") << endmsg;
++                    default:
++                             m_open_filechooser->set_filename("");
++                             set_response_sensitive (Gtk::RESPONSE_OK, false);
++                             if (win) {                                              // Can't return to the previous cursor
++                                 win->set_cursor(/*Gdk::Cursor(Gdk::LAST_CURSOR)*/); // under 'X' so just select the desktop
++                             }                                                       // cursor (will usually be the same thing)
++
++                        return;
++                    }
++                 } else
++                     m_filename = selection;
++        } else
++            m_filename = selection;
++
++        set_response_sensitive (Gtk::RESPONSE_OK, true);
++        response (Gtk::RESPONSE_OK);
+ 	} else {
+ 	        set_response_sensitive (Gtk::RESPONSE_OK, false);
+ 	}
++
++    if (win) {                                              // Can't return to the previous cursor
++        win->set_cursor(/*Gdk::Cursor(Gdk::LAST_CURSOR)*/); // under 'X' so just select the desktop
++    }                                                       // cursor (will usually be the same thing)
+ }
+ 
+ void
+--- a/gtk2_ardour/new_session_dialog.h
++++ b/gtk2_ardour/new_session_dialog.h
+@@ -1,5 +1,5 @@
+ /*
+-    Copyright (C) 2005 Paul Davis 
++    Copyright (C) 2005 Paul Davis
+ 
+     This program is free software; you can redistribute it and/or modify
+     it under the terms of the GNU General Public License as published by
+@@ -53,7 +53,7 @@
+ class NewSessionDialog : public ArdourDialog
+ {
+ public:
+-		
++
+ 	enum Pages {
+ 		NewPage = 0x1,
+ 		OpenPage = 0x2,
+@@ -70,7 +70,7 @@
+ 
+ 	std::string session_name() const;
+ 	std::string session_folder() const;
+-	
++
+ 	bool use_session_template() const;
+ 	std::string session_template_name() const;
+ 
+@@ -109,7 +109,7 @@
+ 
+ 	void reset_name();
+ 	void reset_template();
+-	
++
+ 	Gtk::Label * session_name_label;
+ 	Gtk::Label * session_location_label;
+ 	Gtk::Label * session_template_label;
+@@ -155,7 +155,7 @@
+ 
+ 	Gtk::CheckButton* m_create_master_bus;
+ 	Gtk::SpinButton* m_master_bus_channel_count;
+-       	
++
+ 	Gtk::CheckButton* m_create_control_bus;
+ 	Gtk::SpinButton* m_control_bus_channel_count;
+ 
+@@ -163,7 +163,7 @@
+ 	Gtk::CheckButton* m_limit_input_ports;
+ 	Gtk::SpinButton* m_input_limit_count;
+ 
+-	Gtk::CheckButton* m_connect_outputs;	
++	Gtk::CheckButton* m_connect_outputs;
+ 	Gtk::CheckButton* m_limit_output_ports;
+ 	Gtk::SpinButton* m_output_limit_count;
+ 
+@@ -180,7 +180,7 @@
+ 	Pages page_set;
+ 
+ 	struct RecentSessionModelColumns : public Gtk::TreeModel::ColumnRecord {
+-	    RecentSessionModelColumns() { 
++	    RecentSessionModelColumns() {
+ 		    add (visible_name);
+ 		    add (fullpath);
+ 	    }
+@@ -217,6 +217,7 @@
+ 	bool have_engine;
+ 	std::string engine_page_session_folder;
+ 	std::string engine_page_session_name;
++	string m_filename;
+ 
+ 	sigc::connection ic_connection;
+ 	void engine_interface_chosen();
+--- /dev/null
++++ b/libs/ardour/ardour/ax_errors.h
+@@ -0,0 +1,40 @@
++/* ax_errors.h
++
++   A 'humanised' list of possible errors that Ardour might encounter
++   if it launches an external application. These error codes are
++   limited to the range that can be returned by the Linux API 'waitpid()'
++   Technically, it can return an int - but only the 8 least significant
++   bits are used to represent the exit status of the spawned application.
++   Therefore, although any number of error codes may be defined, their
++   values must lie in the range -128 to +127. Feel free to add to the
++   error codes already listed but please do not modify (e.g. renumber)
++   any errors that someone has already defined before you.
++*/
++
++#ifndef AXERRORS_INCLUDED
++#define AXERRORS_INCLUDED
++
++enum ax_error { AXERR_LOWER_LIMIT       = (-128),
++                AXERR_UNKNOWN           = (-127),
++                AXERR_NOT_IMPLEMENTED   = (-126),
++                AXERR_INTERNAL_ERROR    = (-125),
++                AXERR_INVALID_ACCESS    = (-11),
++                AXERR_INVALID_SWITCH    = (-10),
++                AXERR_INVALID_PARAM     = (-9),
++                AXERR_SOURCE_ERROR      = (-8),
++                AXERR_DESTINATION_ERROR = (-7),
++                AXERR_PROCESS_FAILURE   = (-6),
++                AXERR_PROCESS_NOT_FOUND = (-5),
++                AXERR_WINE_FAILURE      = (-4),
++                AXERR_WINE_NOT_FOUND    = (-3),
++                AXERR_NOT_INITIALIZED   = (-2),
++                AXERR_FATAL_EXCEPTION   = (-1),
++                AXERR_NONE              = 0,
++                AXERR_USER_ABORTED      = 1,
++                AXERR_MEDIA_NOT_FOUND   = 2,
++                AXERR_UPPER_LIMIT       = 127
++              };
++
++#endif /* AXERRORS_INCLUDED */
++
++/* EOF */

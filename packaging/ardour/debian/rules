@@ -1,0 +1,180 @@
+#!/usr/bin/make -f
+#
+# Robert Jordens <jordens@debian.org>
+#
+# This software may be used and distributed according to the terms
+# of the GNU General Public License, incorporated herein by reference.
+
+include /usr/share/cdbs/1/class/langcore.mk
+include /usr/share/cdbs/1/rules/buildcore.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+DEB_CLEAN_EXCLUDE=debian/tmp
+# temporary hack for unclean upstream codebase
+DEB_CLEAN_EXCLUDE += libs/clearlooks-newer/support.h.orig
+DEB_DESTDIR = $(CURDIR)/debian/tmp/
+
+NJOBS = $(DEB_PARALLEL_JOBS:%=-j%)
+
+ALTIVEC_OPT_FLAGS := -O3 -mcpu=7400 -maltivec -mabi=altivec -mhard-float -mpowerpc-gfxopt
+I686_OPT_FLAGS := -O3 -march=i686 -mmmx
+
+DEB_SCONS_EXTRA_FLAGS := \
+	PREFIX=/usr \
+	NLS=yes \
+	FREEDESKTOP=no \
+	$(NJOBS) \
+	SYSLIBS=yes \
+	FREESOUND=yes \
+	VST=0
+
+DEB_SCONS_NOOPT_FLAGS := DEBUG=no FPU_OPTIMIZATION=no
+ifneq (,$(findstring amd64,$(DEB_BUILD_ARCH)))
+DEB_SCONS_NOOPT_FLAGS := DEBUG=no FPU_OPTIMIZATION=yes
+endif
+
+ifneq (,$(findstring i386,$(DEB_BUILD_ARCH)))
+DEB_SCONS_NOOPT_FLAGS += DIST_TARGET=i386
+endif
+
+
+DEB_DH_STRIP_ARGS := --dbg-package=ardour
+
+
+DEB_SCONS_ENVVARS :=
+DEB_SCONS_INVOKE = $(DEB_SCONS_ENVVARS) scons 
+
+# For an out-of-tree build, we just cp -al all the needed files.
+# It seems these are enough
+BUILD_FILES = ardour.rc.in gtk2_ardour icons libs SConstruct templates tools vst
+
+common-build-arch:: debian/stamp-scons-build
+debian/stamp-scons-build:
+	mkdir -p $(DEB_DESTDIR)/generic
+	mkdir -p build-generic
+	cp -alf $(BUILD_FILES) build-generic
+	cd build-generic && $(DEB_SCONS_INVOKE) 'ARCH=$(CFLAGS)' \
+		DESTDIR=$(DEB_DESTDIR)/generic \
+		$(DEB_SCONS_EXTRA_FLAGS) $(DEB_SCONS_NOOPT_FLAGS)
+ifneq (,$(findstring i386,$(DEB_BUILD_ARCH)))
+	mkdir -p $(DEB_DESTDIR)/i686
+	mkdir -p build-i686
+	cp -alf $(BUILD_FILES) build-i686
+	cd build-i686 && $(DEB_SCONS_INVOKE) 'ARCH=$(I686_OPT_FLAGS)' \
+		DESTDIR=$(DEB_DESTDIR)/i686 \
+		DEBUG=no $(DEB_SCONS_EXTRA_FLAGS) \
+		FPU_OPTIMIZATION=yes DIST_TARGET=i686
+endif
+ifneq (,$(findstring powerpc,$(DEB_BUILD_ARCH)))
+	mkdir -p $(DEB_DESTDIR)/altivec
+	mkdir -p build-altivec
+	cp -alf $(BUILD_FILES) build-altivec
+	cd build-altivec && $(DEB_SCONS_INVOKE) 'ARCH=$(ALTIVEC_OPT_FLAGS)' \
+		DESTDIR=$(DEB_DESTDIR)/altivec \
+		DEBUG=no $(DEB_SCONS_EXTRA_FLAGS)
+endif
+	touch $@
+
+install/ardour::
+	cd build-generic && $(DEB_SCONS_INVOKE) 'ARCH=$(CFLAGS)' \
+		DESTDIR=$(DEB_DESTDIR)/generic \
+		$(DEB_SCONS_EXTRA_FLAGS) $(DEB_SCONS_NOOPT_FLAGS) \
+		install
+
+ifneq (,$(findstring i386,$(DEB_BUILD_ARCH)))
+install/ardour-i686::
+	cd build-i686 && $(DEB_SCONS_INVOKE) 'ARCH=$(I686_OPT_FLAGS)' \
+		DESTDIR=$(DEB_DESTDIR)/i686 \
+		DEBUG=no $(DEB_SCONS_EXTRA_FLAGS) \
+		FPU_OPTIMIZATION=yes DIST_TARGET=i686 \
+		install
+endif
+
+ifneq (,$(findstring powerpc,$(DEB_BUILD_ARCH)))
+install/ardour-altivec::
+	cd build-altivec && $(DEB_SCONS_INVOKE) 'ARCH=$(ALTIVEC_OPT_FLAGS)' \
+		DESTDIR=$(DEB_DESTDIR)/altivec \
+		DEBUG=no $(DEB_SCONS_EXTRA_FLAGS) install
+endif
+
+# this is bad but the only easy way to have ardour.rc generated from
+# ardour.rc.in
+common-install-indep:: debian/stamp-scons-build
+common-install-arch:: debian/stamp-scons-build
+
+clean:: scons-clean
+scons-clean::
+	$(MAKE) -f debian/rules reverse-config
+	rm -rf build-generic build-i686 build-altivec
+	rm -rf $(DEB_DESTDIR) debian/stamp-scons-build
+
+	rm -rf debian/ardour-dbg
+	rm -f gtk2_ardour/*.mo
+
+# Needed at build time
+# (separated in build tools, core, Glib/GTK and audio dependencies)
+CDBS_BUILD_DEPENDS += , gettext,\
+					  intltool,\
+					  scons
+CDBS_BUILD_DEPENDS += , libboost-dev,\
+					  libcurl4-gnutls-dev,\
+					  libfftw3-dev,\
+					  libraptor1-dev (>= 1.4.21-5),\
+					  liblrdf0-dev (>= 0.4.0-4),\
+					  libsigc++-2.0-dev,\
+					  libusb-dev,\
+					  libxml2-dev (>= 2.5.7),\
+					  librasqal3-dev | librasqal2-dev (>= 0.9.14)
+CDBS_BUILD_DEPENDS += , libcairomm-1.0-dev (>= 1.2.4),\
+					  libglade2-dev,\
+					  libglademm-2.4-dev,\
+					  libglib2.0-dev,\
+					  libgnomecanvas2-dev,\
+					  libgnomecanvasmm-2.6-dev,\
+					  libgtkmm-2.4-dev,\
+					  libpango1.0-dev
+CDBS_BUILD_DEPENDS += , ladspa-sdk (>= 1.1-2),\
+					  libasound2-dev (>= 0.9.4) [linux-any],\
+					  liboss-salsa-dev [!linux-any],\
+					  libaubio-dev,\
+					  libjack-dev,\
+					  liblo-dev,\
+					  libsuil-dev,\
+					  libsamplerate0-dev,\
+					  libslv2-dev (>= 0.6.6-7),\
+					  libsndfile1-dev,\
+					  libsoundtouch-dev (>= 1.5.0),\
+					  lv2-dev,\
+					  liblilv-dev,\
+					  vamp-plugin-sdk (>=2.1)
+
+# Needed always/often/sometimes at runtime
+CDBS_DEPENDS_ALL = python, python-twisted, python-gtk2, jackd
+CDBS_RECOMMENDS_ALL = iceweasel | www-browser
+CDBS_SUGGESTS_ALL = jamin, qjackctl
+
+# Ensure only one variant is installed at a time
+CDBS_PROVIDES_ardour-altivec = ardour
+CDBS_PROVIDES_ardour-i686 = ardour
+CDBS_CONFLICTS_ALL = ardour
+CDBS_REPLACES_ALL = ardour
+
+# Transitional quirk: ardour-gtk renamed to ardour
+# TODO: drop after Squeeze (was introduced before Lenny)
+CDBS_CONFLICTS_ardour += , ardour-gtk
+CDBS_REPLACES_ardour += , ardour-gtk
+
+# Transitional quirk: ardour-gtk-altivec renamed to ardour-altivec
+# TODO: drop after Squeeze (was introduced before Lenny)
+CDBS_CONFLICTS_ardour-altivec += , ardour-gtk-altivec
+CDBS_REPLACES_ardour-altivec += , ardour-gtk-altivec
+
+# Transitional quirk: ardour-gtk-i686 renamed to ardour-i686
+# TODO: drop after Squeeze (was introduced before Lenny)
+CDBS_CONFLICTS_ardour-i686 += , ardour-gtk-i686
+CDBS_REPLACES_ardour-i686 += , ardour-gtk-i686
+
+# Quirk for derivatives using different packaging name
+ifeq (Ubuntu,$(shell dpkg-vendor --query Vendor))
+CDBS_RECOMMENDS_ALL = firefox | www-browser
+endif
