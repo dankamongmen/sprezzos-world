@@ -1285,6 +1285,14 @@ $(AWNEXTRASAPPLETS): $(SPREZZ)/awn-extras-applets/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf awn-extras-$(awn-extras-applets_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: babeltrace
+babeltrace:$(BABELTRACE)_$(ARCH).deb
+$(BABELTRACE): $(SPREZZ)/babeltrace/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf babeltrace-$(babeltrace_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: banshee
 banshee:$(BANSHEE)_$(ARCH).deb
 $(BANSHEE): $(SPREZZ)/banshee/debian/changelog
