@@ -43,7 +43,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY)
+	cd $< && debuild -k$(DEBKEY) -j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -1028,6 +1028,14 @@ $(ACPICAUNIX): $(SPREZZ)/acpica-unix/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf acpica-unix_$(acpica-unix_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: afpfs-ng
+afpfs-ng:$(AFPFSNG)_$(ARCH).deb
+$(AFPFSNG): $(SPREZZ)/afpfs-ng/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf afpfs-ng-$(afpfs-ng_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: aften
 aften:$(AFTEN)_$(ARCH).deb
