@@ -1101,6 +1101,14 @@ $(APACHETOP): $(SPREZZ)/apachetop/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf apachetop-$(apachetop_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ardour
+ardour:$(ARDOUR)_$(ARCH).deb
+$(ARDOUR): $(SPREZZ)/ardour/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xjvf ardour-$(ardour_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: argyll
 argyll:$(ARGYLL)_$(ARCH).deb
 $(ARGYLL): $(SPREZZ)/argyll/debian/changelog
