@@ -224,14 +224,22 @@ $(EMAP): $(SPREZZ)/emap/debian/changelog
 	ln -sf emap-$(emap_UPVER).tar.xz emap_$(emap_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+#.PHONY: xbmc
+#xbmc:$(XBMC)_$(ARCH).deb
+#$(XBMC): $(SPREZZ)/xbmc/debian/changelog
+#	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+#	git clone git://github.com/xbmc/xbmc.git $@
+#	tar cJf xbmc-$(xbmc_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf xbmc-$(xbmc_UPVER).tar.xz xbmc_$(xbmc_UPVER).orig.tar.xz
+#	cp -r $(<D) $@/
+
 .PHONY: xbmc
 xbmc:$(XBMC)_$(ARCH).deb
 $(XBMC): $(SPREZZ)/xbmc/debian/changelog
-	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
-	git clone git://github.com/xbmc/xbmc.git $@
-	tar cJf xbmc-$(xbmc_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf xbmc-$(xbmc_UPVER).tar.xz xbmc_$(xbmc_UPVER).orig.tar.xz
+	mkdir $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xbmc-$(xbmc_UPVER).tar.gz $(TARARGS) $@
 
 #.PHONY: gtk-theme-config
 #gtk-theme-config:$(GTKTHEMECONFIG)_$(ARCH).deb
@@ -2738,6 +2746,14 @@ $(GDM3): $(SPREZZ)/gdm3/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gdm-$(gdm3_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: geary
+geary:$(GEARY)_$(ARCH).deb
+$(GEARY): $(SPREZZ)/geary/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf geary-$(geary_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gee
 gee:$(GEE)_$(ARCH).deb
