@@ -787,6 +787,14 @@ $(LIBPARAMSCLASSIFYPERL): $(SPREZZ)/libparams-classify-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Params-Classify-$(libparams-classify-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libparams-util-perl
+libparams-util-perl:$(LIBPARAMSUTILPERL)_$(ARCH).deb
+$(LIBPARAMSUTILPERL): $(SPREZZ)/libparams-util-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Params-Util-$(libparams-util-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: liblist-moreutils-perl
 liblist-moreutils-perl:$(LIBLISTMOREUTILSPERL)_$(ARCH).deb
 $(LIBLISTMOREUTILSPERL): $(SPREZZ)/liblist-moreutils-perl/debian/changelog
