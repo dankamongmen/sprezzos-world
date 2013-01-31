@@ -7045,6 +7045,14 @@ $(SAMBA4): $(SPREZZ)/samba4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf samba-$(samba4_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: sanlock
+sanlock:$(SANLOCK)_$(ARCH).deb
+$(SANLOCK): $(SPREZZ)/sanlock/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sanlock-$(sanlock_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: sbc
 sbc:$(SBC)_$(ARCH).deb
 $(SBC): $(SPREZZ)/sbc/debian/changelog
@@ -7108,6 +7116,14 @@ $(SCRIBUS): $(SPREZZ)/scribus/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf scribus-$(scribus_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: scrub
+scrub:$(SCRUB)_$(ARCH).deb
+$(SCRUB): $(SPREZZ)/scrub/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf scrub-$(scrub_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: seahorse
 seahorse:$(SEAHORSE)_$(ARCH).deb
