@@ -779,6 +779,14 @@ $(LIBPACKAGESTASHXSPERL): $(SPREZZ)/libpackage-stash-xs-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Package-Stash-XS-$(libpackage-stash-xs-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libparams-classify-perl
+libparams-classify-perl:$(LIBPARAMSCLASSIFYPERL)_$(ARCH).deb
+$(LIBPARAMSCLASSIFYPERL): $(SPREZZ)/libparams-classify-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Params-Classify-$(libparams-classify-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: liblist-moreutils-perl
 liblist-moreutils-perl:$(LIBLISTMOREUTILSPERL)_$(ARCH).deb
 $(LIBLISTMOREUTILSPERL): $(SPREZZ)/liblist-moreutils-perl/debian/changelog
