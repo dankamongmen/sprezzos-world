@@ -23,6 +23,7 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 include worlds/kde.mk
 include worlds/lxde.mk
 include worlds/xfce.mk
+include worlds/mint.mk
 include worlds/gnome.mk
 include worlds/debian.mk
 include worlds/ubuntu.mk

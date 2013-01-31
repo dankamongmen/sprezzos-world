@@ -21,6 +21,15 @@ $(ANNA): $(SPREZZ)/anna/debian/changelog
 #	tar cjf $(APTITUDEORIG) $@ --exclude-vcs
 #	cp -rv $(<D) $@/
 
+.PHONY: apt
+apt:$(APT)_$(ARCH).deb
+$(APT): $(SPREZZ)/apt/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf apt_$(apt_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: aptitude
 aptitude:$(APTITUDE)_$(ARCH).deb
 $(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
