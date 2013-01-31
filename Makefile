@@ -8275,8 +8275,8 @@ $(SLANG2): $(SPREZZ)/slang2/debian/changelog
 	tar xjvf slang-$(slang2_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: subversion
-subversion:$(subversion)_$(ARCH).deb
-$(subversion): $(SPREZZ)/subversion/debian/changelog
+subversion:$(SUBVERSION)_$(ARCH).deb
+$(SUBVERSION): $(SPREZZ)/subversion/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
