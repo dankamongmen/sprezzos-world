@@ -795,6 +795,14 @@ $(LIBPARAMSUTILPERL): $(SPREZZ)/libparams-util-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Params-Util-$(libparams-util-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libparams-validate-perl
+libparams-validate-perl:$(LIBPARAMSVALIDATEPERL)_$(ARCH).deb
+$(LIBPARAMSVALIDATEPERL): $(SPREZZ)/libparams-validate-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Params-Validate-$(libparams-validate-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: liblist-moreutils-perl
 liblist-moreutils-perl:$(LIBLISTMOREUTILSPERL)_$(ARCH).deb
 $(LIBLISTMOREUTILSPERL): $(SPREZZ)/liblist-moreutils-perl/debian/changelog
