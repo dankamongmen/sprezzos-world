@@ -1,0 +1,62 @@
+Patch to abort if SSL certificate isn't valid to fix #510417.
+
+Patch by Mats Erik Andersson <mats.andersson@gisladisker.se> as posted at 
+http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=510417
+
+Index: links2/https.c
+===================================================================
+--- links2.orig/https.c	2012-04-10 01:53:20.000000000 +0200
++++ links2/https.c	2012-04-18 23:28:13.000000000 +0200
+@@ -25,8 +25,40 @@
+ 
+ #ifdef HAVE_SSL
+ 
++#define VERIFY_DEPTH   10
++
+ static SSL_CTX *context = NULL;
+ 
++static int verify_cert(int code, X509_STORE_CTX *context)
++{
++       int error, depth;
++
++       error = X509_STORE_CTX_get_error(context);
++       depth = X509_STORE_CTX_get_error_depth(context);
++
++       if (depth > VERIFY_DEPTH) {
++	       error = X509_V_ERR_CERT_CHAIN_TOO_LONG;
++	       code = 0;
++       }
++
++       if (!code) {
++	       /* Judge self signed certificates as acceptable. */
++	       if (error == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN ||
++		   error == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT) {
++		       code = 1;
++	       } else {
++		       fprintf(stderr, "Verification failure: %s\n",
++					       X509_verify_cert_error_string(error));
++		       if (depth > VERIFY_DEPTH) {
++			       fprintf(stderr, "Excessive depth %d, set depth %d.\n",
++						       depth, VERIFY_DEPTH);
++		       }
++	       }
++       }
++
++       return code;
++} /* verify_cert */
++
+ SSL *getSSL(void)
+ {
+ 	if (!context) {
+@@ -44,8 +76,10 @@
+ 		if (!m) return NULL;
+ 		context = SSL_CTX_new((void *)m);
+ 		if (!context) return NULL;
+-		SSL_CTX_set_options(context, SSL_OP_ALL);
++		SSL_CTX_set_options(context, SSL_OP_NO_SSLv2 | SSL_OP_ALL);
++		SSL_CTX_set_mode(context, SSL_MODE_AUTO_RETRY);
+ 		SSL_CTX_set_default_verify_paths(context);
++		SSL_CTX_set_verify(context, SSL_VERIFY_PEER, verify_cert);
+ /* needed for systems without /dev/random, but obviously kills security. */
+ 		/*{
+ 			unsigned char pool[32768];

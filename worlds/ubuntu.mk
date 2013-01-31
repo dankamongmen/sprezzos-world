@@ -207,6 +207,15 @@ $(LIBUNITYWEBAPPS): $(SPREZZ)/libunity-webapps/debian/changelog
 		$(LIBUNITYWEBAPPS).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: libvarpa
+libvarpa:$(LIBVARPA)_$(ARCH).deb
+$(LIBVARPA): $(SPREZZ)/libvarpa/debian/changelog
+	bzr branch lp:libvarpa $@
+	rm -rf $@/debian
+	tar cJf libvarpa-$(libvarpa_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf libvarpa-$(libvarpa_UPVER).tar.xz libvarpa_$(libvarpa_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: libzeitgeist
 libzeitgeist:$(LIBZEITGEIST)_$(ARCH).deb
 $(LIBZEITGEIST): $(SPREZZ)/libzeitgeist/debian/changelog
