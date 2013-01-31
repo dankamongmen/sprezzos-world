@@ -223,6 +223,15 @@ $(ZEITGEIST): $(SPREZZ)/zeitgeist/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf zeitgeist-$(zeitgeist_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: marlin
+marlin:$(MARLIN)_$(ARCH).deb
+$(MARLIN): $(SPREZZ)/marlin/debian/changelog
+	bzr branch lp:marlin $@
+	rm -rf $@/debian
+	tar cJf marlin-$(marlin_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf marlin-$(marlin_UPVER).tar.xz marlin_$(marlin_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: ntrack
 ntrack:$(NTRACK)_$(ARCH).deb
 $(NTRACK): $(SPREZZ)/ntrack/debian/changelog
