@@ -2726,6 +2726,14 @@ $(GAMIN): $(SPREZZ)/gamin/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gamin-$(gamin_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ganglia
+ganglia:$(GANGLIA)_$(ARCH).deb
+$(GANGLIA): $(SPREZZ)/ganglia/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ganglia-$(ganglia_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gawk
 gawk:$(GAWK)_$(ARCH).deb
 $(GAWK): $(SPREZZ)/gawk/debian/changelog
