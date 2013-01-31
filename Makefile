@@ -6829,6 +6829,14 @@ $(LIBRELP): $(SPREZZ)/librelp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf librelp-$(librelp_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libreadonly-xs-perl
+libreadonly-xs-perl:$(LIBREADONLYXSPERL)_$(ARCH).deb
+$(LIBREADONLYXSPERL): $(SPREZZ)/libreadonly-xs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf Readonly-XS-$(libreadonly-xs-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libreoffice
 libreoffice:$(LIBREOFFICE)_$(ARCH).deb
 $(LIBREOFFICE): $(SPREZZ)/libreoffice/debian/changelog
