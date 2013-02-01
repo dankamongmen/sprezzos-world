@@ -3965,7 +3965,7 @@ $(LIGHTDM): $(SPREZZ)/lightdm/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf lightdm-$(lightdm_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf lightdm-$(lightdm_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: lightspeed
 lightspeed:$(LIGHTSPEED)_$(ARCH).deb
