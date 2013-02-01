@@ -1,0 +1,296 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+SHELL = /bin/bash
+
+vafilt = $(subst $(2)=,,$(filter $(2)=%,$(1)))
+DPKG_VARS := $(shell dpkg-architecture)
+DEB_HOST_ARCH		?= $(call vafilt,$(DPKG_VARS),DEB_HOST_ARCH)
+DEB_HOST_GNU_CPU	?= $(call vafilt,$(DPKG_VARS),DEB_HOST_GNU_CPU)
+DEB_HOST_GNU_TYPE	?= $(call vafilt,$(DPKG_VARS),DEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE	?= $(call vafilt,$(DPKG_VARS),DEB_BUILD_GNU_TYPE)
+DEB_HOST_MULTIARCH	?= $(call vafilt,$(DPKG_VARS),DEB_HOST_MULTIARCH)
+
+CC  = $(DEB_HOST_GNU_TYPE)-gcc
+CXX = $(DEB_HOST_GNU_TYPE)-g++
+CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+
+distribution := $(shell lsb_release -is)
+distrelease  := $(shell lsb_release -cs)
+# On non official archives, "lsb_release -cs" default to "n/a". Assume
+# sid in that case 
+ifeq ($(distrelease),n/a)
+distrelease     := sid
+endif
+
+ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
+  with_check = yes
+endif
+
+ifneq (,$(filter $(DEB_HOST_ARCH), i386 mips mipsel powerpc s390 sparc))
+  multiarch += biarch64
+  m64 = -m64
+endif
+
+ifneq (,$(filter $(DEB_HOST_ARCH), amd64 kfreebsd-amd64 ppc64))
+  multiarch += biarch32
+  m32 = -m32
+endif
+
+ifneq (,$(filter $(DEB_HOST_ARCH), mips mipsel))
+  multiarch += biarchn32
+  m64  = -mabi=64
+  mn32 = -mabi=n32
+  abin32 = -gnuabin32
+  abi64 = -gnuabi64
+endif
+
+ifeq (,$(filter $(distrelease),lenny etch squeeze sid dapper hardy jaunty karmic lucid))
+  biarch_map := i686=x86_64 powerpc=powerpc64 sparc=sparc64 s390=s390x \
+                x86_64=i686 powerpc64=powerpc mips=mips64 mipsel=mips64el
+else
+  biarch_map := i486=x86_64 powerpc=powerpc64 sparc=sparc64 s390=s390x \
+                x86_64=i486 powerpc64=powerpc mips=mips64 mipsel=mips64el
+endif
+biarch_cpu := $(patsubst $(DEB_HOST_GNU_CPU)=%,%, \
+                         $(filter $(DEB_HOST_GNU_CPU)=%,$(biarch_map)))
+biarch_gnu_type := $(subst $(DEB_HOST_GNU_CPU),$(biarch_cpu),$(DEB_HOST_GNU_TYPE))
+
+major=6
+p=libffi$(major)
+
+configure: stamp-configure $(foreach a, $(multiarch), stamp-configure-$(a))
+stamp-configure:
+	dh_testdir
+	rm -rf build
+	mkdir -p build
+	cd build && ../configure \
+		--host=$(DEB_HOST_GNU_TYPE) \
+		--build=$(DEB_BUILD_GNU_TYPE) \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+		CC="$(CC)" CXX="$(CXX)" CFLAGS="$(CFLAGS)" CCASFLAGS="$(CFLAGS) -Wa,--gdwarf2" LDFLAGS="-Wl,-z,defs $(LDFLAGS)"
+	touch $@
+
+stamp-configure-biarch32:
+	dh_testdir
+	rm -rf build32
+	mkdir -p build32
+	cd build32 && ../configure \
+		--host=$(biarch_gnu_type) \
+		--build=$(DEB_BUILD_GNU_TYPE) \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--includedir=\$${prefix}/include/$(biarch_gnu_type) \
+		--libdir=\$${prefix}/lib32 \
+		CC="$(CC) $(m32)" CXX="$(CXX) $(m32)" CFLAGS="$(CFLAGS)" CCASFLAGS="$(CFLAGS) -Wa,--gdwarf2" LDFLAGS="-Wl,-z,defs $(LDFLAGS)"
+	touch $@
+
+stamp-configure-biarch64:
+	dh_testdir
+	rm -rf build64
+	mkdir -p build64
+	cd build64 && ../configure \
+		--host=$(biarch_gnu_type) \
+		--build=$(DEB_BUILD_GNU_TYPE) \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--includedir=\$${prefix}/include/$(biarch_gnu_type)$(abi64) \
+		--libdir=\$${prefix}/lib64 \
+		CC="$(CC) $(m64)" CXX="$(CXX) $(m64)" CFLAGS="$(CFLAGS)" CCASFLAGS="$(CFLAGS) -Wa,--gdwarf2" LDFLAGS="-Wl,-z,defs $(LDFLAGS)"
+	touch $@
+
+stamp-configure-biarchn32:
+	dh_testdir
+	rm -rf buildn32
+	mkdir -p buildn32
+	cd buildn32 && ../configure \
+		--host=$(biarch_gnu_type) \
+		--build=$(DEB_BUILD_GNU_TYPE) \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--includedir=\$${prefix}/include/$(biarch_gnu_type)$(abin32) \
+		--libdir=\$${prefix}/lib32 \
+		CC="$(CC) $(mn32)" CXX="$(CXX) $(mn32)" CFLAGS="$(CFLAGS)" CCASFLAGS="$(CFLAGS) -Wa,--gdwarf2" LDFLAGS="-Wl,-z,defs $(LDFLAGS)"
+	touch $@
+
+build: stamp-build \
+    $(foreach arch, $(multiarch), stamp-build-$(arch)) \
+    $(if $(filter yes, $(with_check)), stamp-check $(foreach a, $(multiarch), stamp-check-$(a)))
+stamp-build: stamp-configure
+	dh_testdir
+	$(MAKE) -C build
+	$(MAKE) -C build html
+	touch $@
+
+stamp-build-biarch32: stamp-configure-biarch32
+	dh_testdir
+	$(MAKE) -C build32
+	touch $@
+
+stamp-build-biarch64: stamp-configure-biarch64
+	dh_testdir
+	$(MAKE) -C build64
+	touch $@
+
+stamp-build-biarchn32: stamp-configure-biarchn32
+	dh_testdir
+	$(MAKE) -C buildn32
+	touch $@
+
+check: stamp-check $(foreach a, $(multiarch), stamp-check-$(a))
+stamp-check: stamp-build
+	dh_testdir
+	-$(MAKE) -C build check 2>&1 | tee build/check.log
+	touch $@
+
+stamp-check-biarch32: stamp-build-biarch32
+	dh_testdir
+	mkdir -p build32/bin
+	echo '/usr/bin/gcc $(m32) "$$@"' > build32/bin/gcc
+	chmod 755 build32/bin/gcc
+	-PATH=$(CURDIR)/build32/bin:$$PATH $(MAKE) -C build32 check CC="gcc $(m32)" 2>&1 | tee build32/check.log
+	touch $@
+
+stamp-check-biarch64: stamp-build-biarch64
+	dh_testdir
+	mkdir -p build64/bin
+	echo '/usr/bin/gcc $(m64) "$$@"' > build64/bin/gcc
+	chmod 755 build64/bin/gcc
+ifneq (,$(filter $(DEB_HOST_ARCH), powerpc))
+# work around dejagnu configury; on 64bit powerpc -m64 must be in CFLAGS to pass the testsuite
+	-PATH=$(CURDIR)/build64/bin:$$PATH \
+	  $(MAKE) -C build64 check CC=gcc CXX=g++ CFLAGS="$(m64) $(CFLAGS)" CXXFLAGS="$(m64)" 2>&1 | tee build64/check.log
+else
+	-PATH=$(CURDIR)/build64/bin:$$PATH $(MAKE) -C build64 check CC="gcc $(m64)" 2>&1 | tee build64/check.log
+endif
+	touch $@
+
+stamp-check-biarchn32: stamp-build-biarchn32
+	dh_testdir
+	mkdir -p buildn32/bin
+	echo '/usr/bin/gcc $(mn32) "$$@"' > buildn32/bin/gcc
+	chmod 755 buildn32/bin/gcc
+	-PATH=$(CURDIR)/buildn32/bin:$$PATH $(MAKE) -C buildn32 check CC="gcc $(mn32)" 2>&1 | tee buildn32/check.log
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f stamp-*
+	rm -rf build*
+	rm -f doc/libffi.info
+	dh_clean 
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs -s
+	$(MAKE) -C build DESTDIR=$(CURDIR)/debian/tmp install
+	cp -p build/.libs/libffi_convenience.a \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libffi_pic.a
+	mkdir -p debian/libffi-dev/usr/share/doc/$(p)
+	cp -a build/doc/libffi.html debian/libffi-dev/usr/share/doc/$(p)/html
+ifneq (,$(filter biarch32, $(multiarch)))
+	$(MAKE) -C build32 DESTDIR=$(CURDIR)/debian/tmp install
+	cp -p build32/.libs/libffi_convenience.a \
+		debian/tmp/usr/lib32/libffi_pic.a
+endif
+ifneq (,$(filter biarch64, $(multiarch)))
+	$(MAKE) -C build64 DESTDIR=$(CURDIR)/debian/tmp install
+	cp -p build64/.libs/libffi_convenience.a \
+		debian/tmp/usr/lib64/libffi_pic.a
+endif
+ifneq (,$(filter biarchn32, $(multiarch)))
+	$(MAKE) -C buildn32 DESTDIR=$(CURDIR)/debian/tmp install
+	cp -p buildn32/.libs/libffi_convenience.a \
+		debian/tmp/usr/lib32/libffi_pic.a
+endif
+	dh_install -s --sourcedir=debian/tmp
+
+	mkdir -p debian/libffi-dev/usr/include/$(DEB_HOST_MULTIARCH)
+	mv debian/libffi-dev/usr/include/*.h \
+		debian/libffi-dev/usr/include/$(DEB_HOST_MULTIARCH)/
+
+ifneq (,$(filter biarch32, $(multiarch)))
+	mkdir -p debian/lib32ffi-dev/usr/include/$(biarch_gnu_type)
+	mv debian/libffi-dev/usr/include/$(biarch_gnu_type) \
+		debian/lib32ffi-dev/usr/include/
+endif
+ifneq (,$(filter biarch64, $(multiarch)))
+	mkdir -p debian/lib64ffi-dev/usr/include/$(biarch_gnu_type)$(abi64)
+	mv debian/libffi-dev/usr/include/$(biarch_gnu_type)$(abi64) \
+		debian/lib64ffi-dev/usr/include/
+endif
+ifneq (,$(filter biarchn32, $(multiarch)))
+	mkdir -p debian/libn32ffi-dev/usr/include/$(biarch_gnu_type)$(abin32)
+	mv debian/libffi-dev/usr/include/$(biarch_gnu_type)$(abin32) \
+		debian/libn32ffi-dev/usr/include/
+endif
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -s
+	dh_installdocs -s
+	dh_installinfo -plibffi-dev doc/libffi.info
+	rm -f debian/libffi-dev/usr/share/info/dir*
+	cp -p ChangeLog debian/libffi-dev/usr/share/doc/libffi$(major)/changelog
+	cp -p ChangeLog.* debian/libffi-dev/usr/share/doc/libffi$(major)/
+ifeq ($(with_check),yes)
+	cp -p build/check.log debian/libffi-dev/usr/share/doc/libffi$(major)/test_results_$(DEB_HOST_MULTIARCH).txt
+endif
+	rm -rf debian/libffi-dev/usr/share/doc/libffi-dev
+	ln -s libffi$(major) debian/libffi-dev/usr/share/doc/libffi-dev
+	rm -rf debian/libffi$(major)-dbg/usr/share/doc/libffi$(major)-dbg
+	ln -s libffi$(major) debian/libffi$(major)-dbg/usr/share/doc/libffi$(major)-dbg
+ifneq (,$(filter biarch32, $(multiarch)))
+	rm -rf debian/lib32ffi-dev/usr/share/doc/lib32ffi-dev
+	ln -s libffi-dev debian/lib32ffi-dev/usr/share/doc/lib32ffi-dev
+  ifeq ($(with_check),yes)
+	cat build32/check.log >> debian/libffi-dev/usr/share/doc/libffi$(major)/test_results_bi32_$(DEB_HOST_MULTIARCH).txt
+  endif
+endif
+ifneq (,$(filter biarch64, $(multiarch)))
+	rm -rf debian/lib64ffi-dev/usr/share/doc/lib64ffi-dev
+	ln -s libffi-dev debian/lib64ffi-dev/usr/share/doc/lib64ffi-dev
+  ifeq ($(with_check),yes)
+	cat build64/check.log >> debian/libffi-dev/usr/share/doc/libffi$(major)/test_results_bi64_$(DEB_HOST_MULTIARCH).txt
+  endif
+endif
+ifneq (,$(filter biarchn32, $(multiarch)))
+	rm -rf debian/libn32ffi-dev/usr/share/doc/libn32ffi-dev
+	ln -s libffi-dev debian/libn32ffi-dev/usr/share/doc/libn32ffi-dev
+  ifeq ($(with_check),yes)
+	cat buildn32/check.log >> debian/libffi-dev/usr/share/doc/libffi$(major)/test_results_bi32n_$(DEB_HOST_MULTIARCH).txt
+  endif
+endif
+	dh_strip -s --dbg-package=libffi$(major)-dbg
+	rm -f debian/libffi6-dbg/usr/lib/debug/usr/lib{,32,n32,64}/libffi.so.*
+	dh_compress -s
+	dh_fixperms -s
+	dh_makeshlibs -plibffi$(major) --add-udeb=libffi$(major)-udeb
+	dh_makeshlibs -s -Nlibffi$(major)
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install 

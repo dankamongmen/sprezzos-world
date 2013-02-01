@@ -4567,6 +4567,14 @@ $(LIBXTST): $(SPREZZ)/libxtst/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libXtst-$(libxtst_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xapian-core
+xapian-core:$(XAPIANCORE)_$(ARCH).deb
+$(XAPIANCORE): $(SPREZZ)/xapian-core/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xapian-core-$(xapian-core_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xauth
 xauth:$(XAUTH)_$(ARCH).deb
 $(XAUTH): $(SPREZZ)/xauth/debian/changelog
