@@ -6065,6 +6065,22 @@ $(LIBCMIS): $(SPREZZ)/libcmis/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libcmis_$(libcmis_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libconfig-inifiles-perl
+libconfig-inifiles-perl:$(LIBCONFIGINIFILESPERL)_$(ARCH).deb
+$(LIBCONFIGINIFILESPERL): $(SPREZZ)/libconfig-inifiles-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Config-IniFiles-$(libconfig-inifiles-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libconfig-inihash-perl
+libconfig-inihash-perl:$(LIBCONFIGINIHASHPERL)_$(ARCH).deb
+$(LIBCONFIGINIHASHPERL): $(SPREZZ)/libconfig-inihash-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Config-IniHash-$(libconfig-inihash-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libvigraimpex
 libvigraimpex:$(LIBVIGRAIMPEX)_$(ARCH).deb
 $(LIBVIGRAIMPEX): $(SPREZZ)/libvigraimpex/debian/changelog
