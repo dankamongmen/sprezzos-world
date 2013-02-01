@@ -6,6 +6,14 @@ $(AKONADI): $(SPREZZ)/akonadi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf akonadi-$(akonadi_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: amarok
+amarok:$(AMAROK)_$(ARCH).deb
+$(AMAROK): $(SPREZZ)/amarok/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf amarok-$(amarok_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: attica
 attica:$(ATTICA)_$(ARCH).deb
 $(ATTICA): $(SPREZZ)/attica/debian/changelog
