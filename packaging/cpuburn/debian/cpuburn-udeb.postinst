@@ -1,0 +1,155 @@
+#!/bin/sh
+
+#DEBHELPER#
+
+. /usr/share/debconf/confmodule
+
+db_capb backup progresscancel
+
+set -eu
+
+TEMPLATE_ROOT=cpuburn-udeb
+
+log() {
+	logger -t "$(basename $0)" "$@"
+}
+
+error() {
+	log "error: $*"
+}
+
+info() {
+	log "info: $*"
+}
+
+detect_burn_type() {
+	VENDOR=$(grep '^vendor_id' /proc/cpuinfo | head -n1 | cut -d: -f2)
+	FAMILY=$(grep '^cpu family' /proc/cpuinfo | head -n1 | cut -d: -f2)
+	MODEL=$(grep '^model[[:space:]]*:' /proc/cpuinfo | head -n1 | cut -d: -f2)
+
+	# Try and detect using vendor/model, etc.
+	case "$VENDOR" in
+	    " AuthenticAMD"*)
+		case "$FAMILY" in
+		    " 6"|" 15")	BURN_TYPE=K7 ;;
+		    " 5")	BURN_TYPE=K6 ;;
+		esac
+		;;
+	    " GenuineIntel")
+		case "$FAMILY" in
+		    " 6"|" 15")	BURN_TYPE=P6 ;;
+		esac
+		;;
+	    " CentaurHauls")
+		case "$FAMILY" in
+		    " 6")
+			case "$MODEL" in
+			    " 9"|" 10")	BURN_TYPE=P6 ;;
+			esac
+			;;
+		esac
+		;;
+	esac
+
+	# If we haven't succeeded so far, try a capability-based approach. Fall
+	# back to 'P5', however.
+	if [ -z "$BURN_TYPE" ]; then
+		BURN_TYPE=P5
+
+		if grep '^flags.* mmx' /proc/cpuinfo > /dev/null; then
+			BURN_TYPE=MMX
+		fi
+	fi
+
+	echo $BURN_TYPE
+}
+
+STATE=1
+
+while true; do
+	case "$STATE" in
+	    1)
+	    	db_fset cpuburn-udeb/confirm seen false
+		db_input critical cpuburn-udeb/confirm || true
+		;;
+	    2)
+		# Check confirmation before continuing
+		db_get cpuburn-udeb/confirm
+		test "$RET" = "true" || exit 0
+
+	    	db_fset cpuburn-udeb/duration seen false
+		db_input critical cpuburn-udeb/duration || true
+		;;
+	    3)
+		db_get cpuburn-udeb/duration
+		BURN_DURATION="$RET"
+
+		db_progress START 0 $BURN_DURATION cpuburn-udeb/progress/title
+
+		NUM_CPUS=$(grep -c "^processor" /proc/cpuinfo)
+		info "Detected $NUM_CPUS CPU(s)"
+
+		BURN_TYPE=$(detect_burn_type)
+		info "Using '$BURN_TYPE' burn type"
+
+		# Start a burn process for each core/processor, keeping
+		# track of their pids.
+		PID_LIST=""
+		while [ $NUM_CPUS -gt 0 ]; do
+			! burn$BURN_TYPE >&- 2>&- <&- &
+			PID=$!
+			info "Spawned burn$BURN_TYPE as pid $PID"
+
+			PID_LIST="$PID_LIST $PID"
+			NUM_CPUS=$(($NUM_CPUS - 1))
+		done
+
+		# We need to augment the progress bar with something that will
+		# stop moving when our system locks. Using the progress bar would 
+		# not be effective for this during long burns.
+		#
+		# An alternative solution would be to display the amount of time
+		# left for the burn-in, which the user can see decrementing as one
+		# clue that their machine is still alive. This may be difficult to
+		# translate, however.
+		STEP=1
+		while [ $BURN_DURATION -gt 0 ]; do
+			case $STEP in
+			    1)	PROGRESS="/" ;;
+			    2)	PROGRESS="-" ;;
+			    3)	PROGRESS="\\" ;;
+			    4)	PROGRESS="|"
+				STEP=0
+				;;
+			esac
+			STEP=$(($STEP + 1))
+
+			db_subst cpuburn-udeb/progress/step PROGRESS "$PROGRESS"
+			db_progress INFO cpuburn-udeb/progress/step || break
+			db_progress STEP 1 || break
+
+			BURN_DURATION=$(($BURN_DURATION - 1))
+			sleep 1
+		done
+
+		for PID in $PID_LIST; do
+			info "Killing burn$BURN_TYPE process (pid $PID)"
+			kill $PID || true
+		done
+
+		db_progress STOP
+		;;
+
+	    *)
+	    	break
+		;;
+	esac
+
+	if db_go; then
+		STATE=$(($STATE + 1))
+	else
+		STATE=$(($STATE - 1))
+	fi
+done
+
+exit 0

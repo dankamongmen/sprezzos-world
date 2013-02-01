@@ -3727,6 +3727,14 @@ $(IPROUTE): $(SPREZZ)/iproute/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf iproute2-$(iproute_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: iptables
+iptables:$(IPTABLES)_$(ARCH).deb
+$(IPTABLES): $(SPREZZ)/iptables/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf iptables-$(iptables_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: itstool
 itstool:$(ITSTOOL)_$(ARCH).deb
 $(ITSTOOL): $(SPREZZ)/itstool/debian/changelog
