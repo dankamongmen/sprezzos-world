@@ -8132,6 +8132,14 @@ $(UDISKS2): $(SPREZZ)/udisks2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf udisks-$(udisks2_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: ustr
+ustr:$(USTR)_$(ARCH).deb
+$(USTR): $(SPREZZ)/ustr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf ustr-$(ustr_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: yasm
 yasm:$(YASM)_$(ARCH).deb
 $(YASM): $(SPREZZ)/yasm/debian/changelog
