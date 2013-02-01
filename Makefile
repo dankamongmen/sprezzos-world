@@ -1241,6 +1241,14 @@ $(AUDIT): $(SPREZZ)/audit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf audit-$(audit_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: augeas
+augeas:$(AUGEAS)_$(ARCH).deb
+$(AUGEAS): $(SPREZZ)/augeas/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf augeas-$(augeas_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: at
 at:$(AT)_$(ARCH).deb
 $(AT): $(SPREZZ)/at/debian/changelog
