@@ -1,0 +1,76 @@
+Description: Handle lacking the interface patch, and examine the "enabled"
+ parameter for determining the state of AppArmor on the system.
+Author: Kees Cook <kees@debian.org>
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=661153
+
+Index: apparmor-debian/utils/aa-status
+===================================================================
+--- apparmor-debian.orig/utils/aa-status	2011-05-27 12:08:50.000000000 -0700
++++ apparmor-debian/utils/aa-status	2012-04-24 12:42:39.540597212 -0700
+@@ -14,8 +14,7 @@
+ 
+ def cmd_enabled():
+     '''Returns error code if AppArmor is not enabled'''
+-    if get_profiles() == {}:
+-        sys.exit(2)
++    find_apparmorfs()
+ 
+ def cmd_profiled():
+     '''Prints the number of loaded profiles'''
+@@ -72,19 +71,15 @@
+     '''Fetch loaded profiles'''
+ 
+     profiles = {}
+-
+-    if os.path.exists("/sys/module/apparmor"):
+-        stdmsg("apparmor module is loaded.")
+-    else:
+-        errormsg("apparmor module is not loaded.")
+-        sys.exit(1)
+-
+     apparmorfs = find_apparmorfs()
+-    if not apparmorfs:
+-        errormsg("apparmor filesystem is not mounted.")
+-        sys.exit(3)
+ 
++    # Kernel with the stock kernel cannot read profiles, but shouldn't
++    # be considered a fatal failure mode.
+     apparmor_profiles = os.path.join(apparmorfs, "profiles")
++    if not os.path.exists(apparmor_profiles):
++        errormsg("AppArmor running without interface patch -- cannot determine loaded profiles.")
++        return profiles
++
+     if not os.access(apparmor_profiles, os.R_OK):
+         errormsg("You do not have enough privilege to read the profile set.")
+         sys.exit(4)
+@@ -134,11 +129,29 @@
+ 
+ def find_apparmorfs():
+     '''Finds AppArmor mount point'''
++
++    apparmor_module = "/sys/module/apparmor"
++    if os.path.exists(apparmor_module):
++        stdmsg("AppArmor available in kernel.")
++    else:
++        errormsg("AppArmor not available in kernel.")
++        sys.exit(1)
++
++    apparmor_enabled = os.path.join(apparmor_module, "parameters", "enabled")
++    if not os.access(apparmor_enabled, os.R_OK):
++        errormsg("You do not have enough privilege to check AppArmor parameters.")
++        sys.exit(2)
++    if open(apparmor_enabled, "r").readline().strip() != "Y":
++        errormsg("AppArmor not enabled. (Kernel not booted with \"security=apparmor\"?)")
++        sys.exit(3)
++
+     for p in open("/proc/mounts").readlines():
+         if p.split()[2] == "securityfs" and \
+            os.path.exists(os.path.join(p.split()[1], "apparmor")):
+             return os.path.join(p.split()[1], "apparmor")
+-    return False
++
++    errormsg("AppArmor securityfs not mounted.")
++    sys.exit(3)
+ 
+ def errormsg(message):
+     '''Prints to stderr if verbose mode is on'''

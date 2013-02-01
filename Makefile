@@ -8138,7 +8138,7 @@ $(USTR): $(SPREZZ)/ustr/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf ustr-$(ustr_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf ustr-$(ustr_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: yasm
 yasm:$(YASM)_$(ARCH).deb

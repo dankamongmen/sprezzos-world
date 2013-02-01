@@ -1,0 +1,148 @@
+#!/bin/sh
+#
+# Copyright (C) 2010 Canonical, Ltd.
+# Author: Jamie Strandboge <jamie@canonical.com>
+# License: GPLv2
+#
+# Program for updating browser abstractions in Ubuntu. The program will
+# search the specified profile for an include directive for a file in
+# abstractions/ubuntu-browsers.d and update this file with the specified
+# browsers abstractions.
+
+set -e
+
+topdir="/etc/apparmor.d"
+reldir="abstractions/ubuntu-browsers.d"
+dir="$topdir/$reldir"
+
+if [ ! -d "$dir" ]; then
+    echo "'$dir' is not a directory" >&2
+    exit 1
+fi
+
+help() {
+    cat <<EOM
+`basename $0`
+
+Usage: `basename $0` [OPTIONS] <profile>
+  -u		comma separated list of abstractions for profile to use
+  -d		dry-run. Only show what would be done.
+  -l		list available abstractions
+  -h		this message
+
+Eg:
+$ aa-update-browser -l
+# aa-update-browser -u multimedia,productivity /etc/apparmor.d/usr.bin.firefox
+EOM
+}
+
+find_browser_include() {
+    fn="$1"
+    r=`egrep " *#include <$reldir/.*> *(|#.*)" "$fn" | cut -f 2 -d '<' | cut -f 1 -d '>'`
+    if [ -z "$r" ]; then
+        echo "Could not find '#include <$reldir/...>' in" >&2
+        echo "$fn" >&2
+        return
+    fi
+    basename "$r"
+}
+
+existing_abstractions=""
+for i in $dir/* ; do
+    if [ ! -s "$i" ]; then
+        continue
+    fi
+
+    if head -1 "$i" | grep -q '^# This file is updated' ; then
+        continue
+    fi
+
+    # This has a leading space, which we use below.
+    existing_abstractions="$existing_abstractions `basename $i`"
+done
+
+updated=
+dryrun=
+while getopts "dhlu:" opt
+do
+    case "$opt" in
+        d) dryrun="yes";;
+        u) updated="$OPTARG";;
+        l)
+            echo "$existing_abstractions"
+            exit 0
+            ;;
+        h)
+            help
+            exit 0
+            ;;
+        ?)
+            help
+            exit 1
+            ;;
+    esac
+done
+shift $(($OPTIND - 1))
+
+if [ -z "$1" ]; then
+    help
+    exit 1
+fi
+
+for p in $* ; do
+    if [ ! -s "$p" ]; then
+        echo "Could not find '$p'" >&2
+        exit 1
+    fi
+
+    include=`find_browser_include $p`
+    if [ -z "$include" ]; then
+        exit 1
+    fi
+
+    if echo "$existing_abstractions" | grep -q " $include" ; then
+        echo "'$reldir/$include' is an existing abstraction" >&2
+        exit 1
+    fi
+
+    tmp=`mktemp`
+    plugins_common_path="$dir/plugins-common"
+    cat > "$tmp" <<EOM
+# This file is updated by '`basename $0`' and may be overwritten on
+# upgrades.
+#
+# For site-specific adjustments, please see /etc/apparmor.d/local/<binary>
+
+EOM
+    for a in `echo "$updated" | tr [,] ' '`; do
+        echo "$existing_abstractions" | egrep -q " $a( |$)" || {
+            echo "'$a' is not an existing abstraction. Skipping." >&2
+            continue
+        }
+        if [ -f "$dir/$a" ]; then
+            # TODO: add $plugins_common_path only for those browser abstractions
+            # that actually need it.
+            if [ -n "$plugins_common_path" ] && [ -e "$plugins_common_path" ]; then
+                echo "#include <$reldir/`basename $plugins_common_path`>" >> "$tmp"
+                plugins_common_path=""
+            fi
+            echo "#include <$reldir/$a>" >> "$tmp"
+        else
+            echo "Skipping '$a' (not found in '$dir')" >&2
+            continue
+        fi
+    done
+
+    if [ "$dryrun" = "yes" ]; then
+        echo "Skipping commit to '$dir/$include' (dry run)" >&2
+        cat "$tmp"
+        rm -f "$tmp"
+        continue
+    fi
+    mv -f "$tmp" "$dir/$include" || {
+        rm -f "$tmp"
+        exit 1
+    }
+    chmod 644 "$dir/$include"
+done
+

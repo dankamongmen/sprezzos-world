@@ -1,0 +1,2005 @@
+Author: Jamie Strandboge <jamie@canonical.com>
+Description: Template-based profile generator providing both a standalone CLI
+ application and library which can also be imported into developer SDKs.
+ https://wiki.ubuntu.com/SecurityTeam/Specifications/Precise/AppArmorEasyprof
+Forwarded: yes
+Index: apparmor-debian/utils/aa-easyprof
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/aa-easyprof	2012-04-24 11:27:49.780061274 -0700
+@@ -0,0 +1,65 @@
++#! /usr/bin/env python
++# ------------------------------------------------------------------
++#
++#    Copyright (C) 2011-2012 Canonical Ltd.
++#
++#    This program is free software; you can redistribute it and/or
++#    modify it under the terms of version 2 of the GNU General Public
++#    License published by the Free Software Foundation.
++#
++# ------------------------------------------------------------------
++
++import apparmor.easyprof
++from apparmor.easyprof import AppArmorException, error
++import os
++import sys
++
++if __name__ == "__main__":
++    def usage():
++        '''Return usage information'''
++        return 'USAGE: %s [options] <path to binary>' % \
++               os.path.basename(sys.argv[0])
++
++    (opt, args) = apparmor.easyprof.parse_args()
++    binary = None
++
++    m = usage()
++    if opt.show_policy_group and not opt.policy_groups:
++        error("Must specify -p with --show-policy-group")
++    elif not opt.template and not opt.policy_groups and len(args) < 1:
++        error("Must specify full path to binary\n%s" % m)
++
++    binary = None
++    if len(args) >= 1:
++        binary = args[0]
++
++    try:
++        easyp = apparmor.easyprof.AppArmorEasyProfile(binary, opt)
++    except AppArmorException, e:
++        error(e.value)
++    except Exception:
++        raise
++
++    if opt.list_templates:
++        apparmor.easyprof.print_basefilenames(easyp.get_templates())
++        sys.exit(0)
++    elif opt.template and opt.show_template:
++        files = [os.path.join(easyp.dirs['templates'], opt.template)]
++        apparmor.easyprof.print_files(files)
++        sys.exit(0)
++    elif opt.list_policy_groups:
++        apparmor.easyprof.print_basefilenames(easyp.get_policy_groups())
++        sys.exit(0)
++    elif opt.policy_groups and opt.show_policy_group:
++        for g in opt.policy_groups.split(','):
++            files = [os.path.join(easyp.dirs['policygroups'], g)]
++            apparmor.easyprof.print_files(files)
++        sys.exit(0)
++    elif binary == None:
++        error("Must specify full path to binary\n%s" % m)
++
++    # if we made it here, generate a profile
++    params = apparmor.easyprof.gen_policy_params(binary, opt)
++    p = easyp.gen_policy(**params)
++    print p,
++
+Index: apparmor-debian/utils/aa-easyprof.pod
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/aa-easyprof.pod	2012-04-24 11:27:49.788061383 -0700
+@@ -0,0 +1,146 @@
++# This publication is intellectual property of Canonical Ltd. Its contents
++# can be duplicated, either in part or in whole, provided that a copyright
++# label is visibly located on each copy.
++#
++# All information found in this book has been compiled with utmost
++# attention to detail. However, this does not guarantee complete accuracy.
++# Neither Canonical Ltd, the authors, nor the translators shall be held
++# liable for possible errors or the consequences thereof.
++#
++# Many of the software and hardware descriptions cited in this book
++# are registered trademarks. All trade names are subject to copyright
++# restrictions and may be registered trade marks. Canonical Ltd
++# essentially adheres to the manufacturer's spelling.
++#
++# Names of products and trademarks appearing in this book (with or without
++# specific notation) are likewise subject to trademark and trade protection
++# laws and may thus fall under copyright restrictions.
++#
++
++=pod
++
++=head1 NAME
++
++aa-easyprof - AppArmor profile generation made easy.
++
++=head1 SYNOPSIS
++
++B<aa-easyprof> [option] <path to binary>
++
++=head1 DESCRIPTION
++
++B<aa-easyprof> provides an easy to use interface for AppArmor policy
++generation. B<aa-easyprof> supports the use of templates and policy groups to
++quickly profile an application. Please note that while this tool can help
++with policy generation, its utility is dependent on the quality of the
++templates, policy groups and abstractions used. Also, this tool may create
++policy which is less restricted than creating policy by hand or with
++B<aa-genprof> and B<aa-logprof>.
++
++=head1 OPTIONS
++
++B<aa-easyprof> accepts the following arguments:
++
++=over 4
++
++=item -t TEMPLATE, --template=TEMPLATE
++
++Specify which template to use. May specify either a system template from
++/usr/share/apparmor/easyprof/templates or a filename for the template to
++use. If not specified, use /usr/share/apparmor/easyprof/templates/default.
++
++=item -p POLICYGROUPS, --policy-groups=POLICYGROUPS
++
++Specify POLICY as a comma-separated list of policy groups. See --list-templates
++for supported policy groups. The available policy groups are in
++/usr/share/apparmor/easyprof/policy. Policy groups are simply groupings of
++AppArmor rules or policies. They are similar to AppArmor abstractions, but
++usually encompass more policy rules.
++
++=item -a ABSTRACTIONS, --abstractions=ABSTRACTIONS
++
++Specify ABSTRACTIONS as a comma-separated list of AppArmor abstractions. It is
++usually recommended you use policy groups instead, but this is provided as a
++convenience. AppArmor abstractions are located in /etc/apparmor.d/abstractions.
++See apparmor.d(5) for details.
++
++=item -r PATH, --read-path=PATH
++
++Specify a PATH to allow owner reads. May be specified multiple times. If the
++PATH ends in a '/', then PATH is treated as a directory and reads are allowed
++to all files under this directory. Can optionally use '/*' at the end of the
++PATH to only allow reads to files directly in PATH.
++
++=item -w PATH, --write-dir=PATH
++
++Like --read-path but also allow owner writes in additions to reads.
++
++=item -n NAME, --name=NAME
++
++Specify NAME of policy. If not specified, NAME is set to the name of the
++binary. The NAME of the policy is often used as part of the path in the
++various templates.
++
++=item --template-var="@{VAR}=VALUE"
++
++Set VAR to VALUE in the resulting policy. This typically only makes sense if
++the specified template uses this value. May be specified multiple times.
++
++=item --list-templates
++
++List available templates.
++
++=item --show-template=TEMPLATE
++
++Display template specified with --template.
++
++=item --templates-dir=PATH
++
++Use PATH instead of system templates directory.
++
++=item --list-policy-groups
++
++List available policy groups.
++
++=item --show-policy-group
++
++Display policy groups specified with --policy.
++
++=item --policy-groups-dir=PATH
++
++Use PATH instead of system policy-groups directory.
++
++=item --author
++
++Specify author of the policy.
++
++=item --copyright
++
++Specify copyright of the policy.
++
++=item --comment
++
++Specify comment for the policy.
++
++=back
++
++=head1 EXAMPLE
++
++Example usage for a program named 'foo' which is installed in /opt/foo:
++
++=over
++
++$ aa-easyprof --template=user-application --template-var="@{APPNAME}=foo" --policy-groups=opt-application,user-application /opt/foo/bin/FooApp
++
++=back
++
++=head1 BUGS
++
++If you find any additional bugs, please report them to Launchpad at
++L<https://bugs.launchpad.net/apparmor/+filebug>.
++
++=head1 SEE ALSO
++
++apparmor(7) apparmor.d(5)
++
++=cut
+Index: apparmor-debian/utils/apparmor/easyprof.py
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/apparmor/easyprof.py	2012-04-24 11:27:49.792061437 -0700
+@@ -0,0 +1,567 @@
++# ------------------------------------------------------------------
++#
++#    Copyright (C) 2011-2012 Canonical Ltd.
++#
++#    This program is free software; you can redistribute it and/or
++#    modify it under the terms of version 2 of the GNU General Public
++#    License published by the Free Software Foundation.
++#
++# ------------------------------------------------------------------
++
++import codecs
++import glob
++import optparse
++import os
++import re
++import subprocess
++import sys
++import tempfile
++
++#
++# TODO: move this out to the common library
++#
++#from apparmor import AppArmorException
++class AppArmorException(Exception):
++    '''This class represents AppArmor exceptions'''
++    def __init__(self, value):
++        self.value = value
++
++    def __str__(self):
++        return repr(self.value)
++#
++# End common
++#
++
++DEBUGGING = False
++
++#
++# TODO: move this out to a utilities library
++#
++def error(out, exit_code=1, do_exit=True):
++    '''Print error message and exit'''
++    try:
++        print >> sys.stderr, "ERROR: %s" % (out)
++    except IOError:
++        pass
++
++    if do_exit:
++        sys.exit(exit_code)
++
++
++def warn(out):
++    '''Print warning message'''
++    try:
++        print >> sys.stderr, "WARN: %s" % (out)
++    except IOError:
++        pass
++
++
++def msg(out, output=sys.stdout):
++    '''Print message'''
++    try:
++        print >> output, "%s" % (out)
++    except IOError:
++        pass
++
++
++def cmd(command):
++    '''Try to execute the given command.'''
++    debug(command)
++    try:
++        sp = subprocess.Popen(command, stdout=subprocess.PIPE,
++                              stderr=subprocess.STDOUT)
++    except OSError, ex:
++        return [127, str(ex)]
++
++    out = sp.communicate()[0]
++    return [sp.returncode, out]
++
++
++def cmd_pipe(command1, command2):
++    '''Try to pipe command1 into command2.'''
++    try:
++        sp1 = subprocess.Popen(command1, stdout=subprocess.PIPE)
++        sp2 = subprocess.Popen(command2, stdin=sp1.stdout)
++    except OSError, ex:
++        return [127, str(ex)]
++
++    out = sp2.communicate()[0]
++    return [sp2.returncode, out]
++
++
++def debug(out):
++    '''Print debug message'''
++    if DEBUGGING:
++        try:
++            print >> sys.stderr, "DEBUG: %s" % (out)
++        except IOError:
++            pass
++
++
++def valid_binary_path(path):
++    '''Validate name'''
++    try:
++        a_path = os.path.abspath(path)
++    except Exception:
++        debug("Could not find absolute path for binary")
++        return False
++
++    if path != a_path:
++        debug("Binary should use a normalized absolute path")
++        return False
++
++    if not os.path.exists(a_path):
++        return True
++
++    r_path = os.path.realpath(path)
++    if r_path != a_path:
++        debug("Binary should not be a symlink")
++        return False
++
++    return True
++
++
++def valid_variable_name(var):
++    '''Validate variable name'''
++    if re.search(r'[a-zA-Z0-9_]+$', var):
++        return True
++    return False
++
++
++def valid_path(path):
++    '''Valid path'''
++    # No relative paths
++    m = "Invalid path: %s" % (path)
++    if not path.startswith('/'):
++        debug("%s (relative)" % (m))
++        return False
++
++    try:
++        os.path.normpath(path)
++    except Exception:
++        debug("%s (could not normalize)" % (m))
++        return False
++    return True
++
++
++def get_directory_contents(path):
++    '''Find contents of the given directory'''
++    if not valid_path(path):
++        return None
++
++    files = []
++    for f in glob.glob(path + "/*"):
++        files.append(f)
++
++    files.sort()
++    return files
++
++def open_file_read(path):
++    '''Open specified file read-only'''
++    try:
++        orig = codecs.open(path, 'r', "UTF-8")
++    except Exception:
++        raise
++
++    return orig
++
++
++def verify_policy(policy):
++    '''Verify policy compiles'''
++    exe = "/sbin/apparmor_parser"
++    if not os.path.exists(exe):
++        rc, exe = cmd(['which', 'apparmor_parser'])
++        if rc != 0:
++            warn("Could not find apparmor_parser. Skipping verify")
++            return True
++
++    fn = ""
++    # if policy starts with '/' and is one line, assume it is a path
++    if len(policy.splitlines()) == 1 and valid_path(policy):
++        fn = policy
++    else:
++        f, fn = tempfile.mkstemp(prefix='aa-easyprof')
++        os.write(f, policy)
++        os.close(f)
++
++    rc, out = cmd([exe, '-p', fn])
++    os.unlink(fn)
++    if rc == 0:
++        return True
++    return False
++
++#
++# End utility functions
++#
++
++
++class AppArmorEasyProfile:
++    '''Easy profile class'''
++    def __init__(self, binary, opt):
++        self.conffile = "/etc/apparmor/easyprof.conf"
++        if opt.conffile:
++            self.conffile = os.path.abspath(opt.conffile)
++
++        self.dirs = dict()
++        if os.path.isfile(self.conffile):
++            self._get_defaults()
++
++        if opt.templates_dir and os.path.isdir(opt.templates_dir):
++            self.dirs['templates'] = os.path.abspath(opt.templates_dir)
++        elif not opt.templates_dir and \
++             opt.template and \
++             os.path.isfile(opt.template) and \
++             valid_path(opt.template):
++	    # If we specified the template and it is an absolute path, just set
++	    # the templates directory to the parent of the template so we don't
++            # have to require --template-dir with absolute paths.
++            self.dirs['templates'] = os.path.abspath(os.path.dirname(opt.template))
++        if opt.policy_groups_dir and os.path.isdir(opt.policy_groups_dir):
++            self.dirs['policygroups'] = os.path.abspath(opt.policy_groups_dir)
++
++        if not self.dirs.has_key('templates'):
++            raise AppArmorException("Could not find templates directory")
++        if not self.dirs.has_key('policygroups'):
++            raise AppArmorException("Could not find policygroups directory")
++
++        self.aa_topdir = "/etc/apparmor.d"
++
++        self.binary = binary
++        if binary != None:
++            if not valid_binary_path(binary):
++                raise AppArmorException("Invalid path for binary: '%s'" % binary)
++
++        self.set_template(opt.template)
++        self.set_policygroup(opt.policy_groups)
++        if opt.name:
++            self.set_name(opt.name)
++        elif self.binary != None:
++            self.set_name(self.binary)
++
++        self.templates = get_directory_contents(self.dirs['templates'])
++        self.policy_groups = get_directory_contents(self.dirs['policygroups'])
++
++    def _get_defaults(self):
++        '''Read in defaults from configuration'''
++        if not os.path.exists(self.conffile):
++            raise AppArmorException("Could not find '%s'" % self.conffile)
++
++        # Read in the configuration
++        f = open_file_read(self.conffile)
++
++        pat = re.compile(r'^\w+=".*"?')
++        for line in f:
++            if not pat.search(line):
++                continue
++            if line.startswith("POLICYGROUPS_DIR="):
++                d = re.split(r'=', line.strip())[1].strip('["\']')
++                self.dirs['policygroups'] = d
++            elif line.startswith("TEMPLATES_DIR="):
++                d = re.split(r'=', line.strip())[1].strip('["\']')
++                self.dirs['templates'] = d
++        f.close()
++
++        keys = self.dirs.keys()
++        if 'templates' not in keys:
++            raise AppArmorException("Could not find TEMPLATES_DIR in '%s'" % self.conffile)
++        if 'policygroups' not in keys:
++            raise AppArmorException("Could not find POLICYGROUPS_DIR in '%s'" % self.conffile)
++
++        for k in self.dirs.keys():
++            if not os.path.isdir(self.dirs[k]):
++                raise AppArmorException("Could not find '%s'" % self.dirs[k])
++
++    def set_name(self, name):
++        '''Set name of policy'''
++        self.name = name
++
++    def get_template(self):
++        '''Get contents of current template'''
++        return open(self.template).read()
++
++    def set_template(self, template):
++        '''Set current template'''
++        self.template = template
++        if not template.startswith('/'):
++            self.template = os.path.join(self.dirs['templates'], template)
++        if not os.path.exists(self.template):
++            raise AppArmorException('%s does not exist' % (self.template))
++
++    def get_templates(self):
++        '''Get list of all available templates by filename'''
++        return self.templates
++
++    def get_policygroup(self, policygroup):
++        '''Get contents of specific policygroup'''
++        p = policygroup
++        if not p.startswith('/'):
++            p = os.path.join(self.dirs['policygroups'], p)
++        if self.policy_groups == None or not p in self.policy_groups:
++            raise AppArmorException("Policy group '%s' does not exist" % p)
++        return open(p).read()
++
++    def set_policygroup(self, policygroups):
++        '''Set policygroups'''
++        self.policy_groups = []
++        if policygroups != None:
++            for p in policygroups.split(','):
++                if not p.startswith('/'):
++                    p = os.path.join(self.dirs['policygroups'], p)
++                if not os.path.exists(p):
++                    raise AppArmorException('%s does not exist' % (p))
++                self.policy_groups.append(p)
++
++    def get_policy_groups(self):
++        '''Get list of all policy groups by filename'''
++        return self.policy_groups
++
++    def gen_abstraction_rule(self, abstraction):
++        '''Generate an abstraction rule'''
++        p = os.path.join(self.aa_topdir, "abstractions", abstraction)
++        if not os.path.exists(p):
++            raise AppArmorException("%s does not exist" % p)
++        return "#include <abstractions/%s>" % abstraction
++
++    def gen_variable_declaration(self, dec):
++        '''Generate a variable declaration'''
++        if not re.search(r'^@\{[a-zA-Z_]+\}=.+', dec):
++            raise AppArmorException("Invalid variable declaration '%s'" % dec)
++        return dec
++
++    def gen_path_rule(self, path, access):
++        rule = []
++        if not path.startswith('/') and not path.startswith('@'):
++            raise AppArmorException("'%s' should not be relative path" % path)
++
++        owner = ""
++        if path.startswith('/home/') or path.startswith("@{HOME"):
++            owner = "owner "
++
++        if path.endswith('/'):
++            rule.append("%s %s," % (path, access))
++            rule.append("%s%s** %s," % (owner, path, access))
++        elif path.endswith('/**') or path.endswith('/*'):
++            rule.append("%s %s," % (os.path.dirname(path), access))
++            rule.append("%s%s %s," % (owner, path, access))
++        else:
++            rule.append("%s%s %s," % (owner, path, access))
++
++        return rule
++
++
++    def gen_policy(self, name, binary, template_var=[], abstractions=None, policy_groups=None, read_path=[], write_path=[], author=None, comment=None, copyright=None):
++        def find_prefix(t, s):
++            '''Calculate whitespace prefix based on occurrence of s in t'''
++            pat = re.compile(r'^ *%s' % s)
++            p = ""
++            for line in t.splitlines():
++                if pat.match(line):
++                    p = " " * (len(line) - len(line.lstrip()))
++                    break
++            return p
++
++        policy = self.get_template()
++        if '###ENDUSAGE###' in policy:
++            found = False
++            tmp = ""
++            for line in policy.splitlines():
++                if not found:
++                    if line.startswith('###ENDUSAGE###'):
++                        found = True
++                    continue
++                tmp += line + "\n"
++            policy = tmp
++
++        # Fill-in profile name and binary
++        policy = re.sub(r'###NAME###', name, policy)
++        policy = re.sub(r'###BINARY###', binary, policy)
++
++        # Fill-in various comment fields
++        if comment != None:
++            policy = re.sub(r'###COMMENT###', "Comment: %s" % comment, policy)
++
++        if author != None:
++            policy = re.sub(r'###AUTHOR###', "Author: %s" % author, policy)
++
++        if copyright != None:
++            policy = re.sub(r'###COPYRIGHT###', "Copyright: %s" % copyright, policy)
++
++        # Fill-in rules and variables with proper indenting
++        search = '###ABSTRACTIONS###'
++        prefix = find_prefix(policy, search)
++        s = "%s# No abstractions specified" % prefix
++        if abstractions != None:
++            s = "%s# Specified abstractions" % (prefix)
++            for i in abstractions.split(','):
++                s += "\n%s%s" % (prefix, self.gen_abstraction_rule(i))
++        policy = re.sub(r' *%s' % search, s, policy)
++
++        search = '###POLICYGROUPS###'
++        prefix = find_prefix(policy, search)
++        s = "%s# No policy groups specified" % prefix
++        if policy_groups != None:
++            s = "%s# Rules specified via policy groups" % (prefix)
++            for i in policy_groups.split(','):
++                for line in self.get_policygroup(i).splitlines():
++                    s += "\n%s%s" % (prefix, line)
++                if i != policy_groups.split(',')[-1]:
++                    s += "\n"
++        policy = re.sub(r' *%s' % search, s, policy)
++
++        search = '###VAR###'
++        prefix = find_prefix(policy, search)
++        s = "%s# No template variables specified" % prefix
++        if len(template_var) > 0:
++            s = "%s# Specified profile variables" % (prefix)
++            for i in template_var:
++                s += "\n%s%s" % (prefix, self.gen_variable_declaration(i))
++        policy = re.sub(r' *%s' % search, s, policy)
++
++        search = '###READS###'
++        prefix = find_prefix(policy, search)
++        s = "%s# No read paths specified" % prefix
++        if len(read_path) > 0:
++            s = "%s# Specified read permissions" % (prefix)
++            for i in read_path:
++                for r in self.gen_path_rule(i, 'r'):
++                    s += "\n%s%s" % (prefix, r)
++        policy = re.sub(r' *%s' % search, s, policy)
++
++        search = '###WRITES###'
++        prefix = find_prefix(policy, search)
++        s = "%s# No write paths specified" % prefix
++        if len(write_path) > 0:
++            s = "%s# Specified write permissions" % (prefix)
++            for i in write_path:
++                for r in self.gen_path_rule(i, 'rwk'):
++                    s += "\n%s%s" % (prefix, r)
++        policy = re.sub(r' *%s' % search, s, policy)
++
++        if not verify_policy(policy):
++            debug("\n" + policy)
++            raise AppArmorException("Invalid policy")
++
++        return policy
++
++def print_basefilenames(files):
++    for i in files:
++        print "%s" % (os.path.basename(i))
++
++def print_files(files):
++    for i in files:
++        print open(i).read()
++
++def parse_args(args=None):
++    '''Parse arguments'''
++    global DEBUGGING
++
++    parser = optparse.OptionParser()
++    parser.add_option("-c", "--config-file",
++                      dest="conffile",
++                      help="Use alternate configuration file",
++                      metavar="FILE")
++    parser.add_option("-d", "--debug",
++                      help="Show debugging output",
++                      action='store_true',
++                      default=False)
++    parser.add_option("-t", "--template",
++                      dest="template",
++                      help="Use non-default policy template",
++                      metavar="TEMPLATE",
++                      default='default')
++    parser.add_option("--list-templates",
++                      help="List available templates",
++                      action='store_true',
++                      default=False)
++    parser.add_option("--templates-dir",
++                      dest="templates_dir",
++                      help="Use non-default templates directory",
++                      metavar="DIR")
++    parser.add_option("--show-template",
++                      help="Show specified template",
++                      action='store_true',
++                      default=False)
++    parser.add_option("-p", "--policy-groups",
++                      help="Comma-separated list of policy groups",
++                      metavar="POLICYGROUPS")
++    parser.add_option("--list-policy-groups",
++                      help="List available policy groups",
++                      action='store_true',
++                      default=False)
++    parser.add_option("--policy-groups-dir",
++                      dest="policy_groups_dir",
++                      help="Use non-default policy-groups directory",
++                      metavar="DIR")
++    parser.add_option("--show-policy-group",
++                      help="Show specified policy groups",
++                      action='store_true',
++                      default=False)
++    parser.add_option("-a", "--abstractions",
++                      dest="abstractions",
++                      help="Comma-separated list of abstractions",
++                      metavar="ABSTRACTIONS")
++    parser.add_option("--read-path",
++                      dest="read_path",
++                      help="Path allowing owner reads",
++                      metavar="PATH",
++                      action="append")
++    parser.add_option("--write-path",
++                      dest="write_path",
++                      help="Path allowing owner writes",
++                      metavar="PATH",
++                      action="append")
++    parser.add_option("-n", "--name",
++                      dest="name",
++                      help="Name of policy",
++                      metavar="NAME")
++    parser.add_option("--comment",
++                      dest="comment",
++                      help="Comment for policy",
++                      metavar="COMMENT")
++    parser.add_option("--author",
++                      dest="author",
++                      help="Author of policy",
++                      metavar="COMMENT")
++    parser.add_option("--copyright",
++                      dest="copyright",
++                      help="Copyright for policy",
++                      metavar="COMMENT")
++    parser.add_option("--template-var",
++                      dest="template_var",
++                      help="Declare AppArmor variable",
++                      metavar="@{VARIABLE}=VALUE",
++                      action="append")
++
++    (my_opt, my_args) = parser.parse_args(args)
++    if my_opt.debug:
++        DEBUGGING = True
++    return (my_opt, my_args)
++
++def gen_policy_params(binary, opt):
++    '''Generate parameters for gen_policy'''
++    params = dict(binary=binary)
++    if opt.name:
++        params['name'] = opt.name
++    else:
++        params['name'] = os.path.basename(binary)
++    if opt.template_var: # What about specified multiple times?
++        params['template_var'] = opt.template_var
++    if opt.abstractions:
++        params['abstractions'] = opt.abstractions
++    if opt.policy_groups:
++        params['policy_groups'] = opt.policy_groups
++    if opt.read_path:
++        params['read_path'] = opt.read_path
++    if opt.write_path:
++        params['write_path'] = opt.write_path
++    if opt.abstractions:
++        params['abstractions'] = opt.abstractions
++    if opt.comment:
++        params['comment'] = opt.comment
++    if opt.author:
++        params['author'] = opt.author
++    if opt.copyright:
++        params['copyright'] = opt.copyright
++
++    return params
++
+Index: apparmor-debian/utils/easyprof/easyprof.conf
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/easyprof/easyprof.conf	2012-04-24 11:27:49.792061437 -0700
+@@ -0,0 +1,5 @@
++# Location of system policygroups
++POLICYGROUPS_DIR="/usr/share/apparmor/easyprof/policygroups"
++
++# Location of system templates
++TEMPLATES_DIR="/usr/share/apparmor/easyprof/templates"
+Index: apparmor-debian/utils/easyprof/policygroups/networking
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/easyprof/policygroups/networking	2012-04-24 11:27:49.792061437 -0700
+@@ -0,0 +1,2 @@
++# Policygroup to allow networking
++#include <abstractions/nameservice>
+Index: apparmor-debian/utils/easyprof/policygroups/opt-application
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/easyprof/policygroups/opt-application	2012-04-24 11:27:49.792061437 -0700
+@@ -0,0 +1,3 @@
++# Policy group for applications installed in /opt
++/opt/@{APPNAME}/ r,
++/opt/@{APPNAME}/** mrk,
+Index: apparmor-debian/utils/easyprof/policygroups/user-application
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/easyprof/policygroups/user-application	2012-04-24 11:27:49.792061437 -0700
+@@ -0,0 +1,8 @@
++# Policy group allowing various writes to standard directories in @{HOMEDIRS}
++#include <abstractions/xdg-desktop>
++owner @{HOMEDIRS}/.cache/@{APPNAME}/ rw,
++owner @{HOMEDIRS}/.cache/@{APPNAME}/** rwkl,
++owner @{HOMEDIRS}/.config/@{APPNAME}/ rw,
++owner @{HOMEDIRS}/.config/@{APPNAME}/** rwkl,
++owner @{HOMEDIRS}/.local/share/@{APPNAME}/ rw,
++owner @{HOMEDIRS}/.local/share/@{APPNAME}/** rwkl,
+Index: apparmor-debian/utils/easyprof/README
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/easyprof/README	2012-04-24 11:27:49.792061437 -0700
+@@ -0,0 +1,44 @@
++AppArmor Easy Profiler
++----------------------
++aa-easyprof is a standalone CLI application which can also be imported into
++developer SDKs. See test/test-aa-easyprof.py for an example of how to import
++this into your SDK.
++
++
++Templates
++---------
++Any number of templates can be used. The user may specify one on the command
++line or use a system-wide template from /usr/share/apparmor/easyprof/templates.
++
++Currently the combination of the user-application and the opt-application and
++user-application policygroups should achieve a working policy for Ubuntu's
++Application Review Board:
++- http://developer.ubuntu.com/publish/my-apps-packages/
++
++Eg:
++$ aa-easyprof --template=user-application \
++              --template-var="@{APPNAME}=foo" \
++              --policy-groups=opt-application,user-application \
++              /opt/foo/bin/foo
++
++Testing
++-------
++Unit tests:
++$ ./test/test-aa-easyprof.py
++
++In source manual testing:
++$ ./aa-easyprof --templates-dir=./easyprof/templates \
++                --policy-groups-dir=./easyprof/policygroups \
++                ... \
++                /opt/foo/bin/foo
++
++Post-install manual testing:
++$ make DESTDIR=/tmp/test PERLDIR=/tmp/test/usr/share/perl5/Immunix install
++$ cd /tmp/test
++$ PYTHONPATH=/tmp/test/usr/local/.../dist-packages ./usr/bin/aa-easyprof \
++    --templates-dir=/tmp/test/usr/share/apparmor/easyprof/templates \
++    --policy-groups-dir=/tmp/test/usr/share/apparmor/easyprof/policygroups \
++    /opt/bin/foo
++
++(you may also adjust /tmp/test/etc/apparmor/easyprof.conf to avoid specifying
++--templates-dir and --policy-groups-dir).
+Index: apparmor-debian/utils/easyprof/templates/default
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/easyprof/templates/default	2012-04-24 11:27:49.792061437 -0700
+@@ -0,0 +1,26 @@
++#
++# Example usage:
++# $ aa-easyprof --policy-groups=user-application /usr/bin/foo
++#
++###ENDUSAGE###
++# vim:syntax=apparmor
++# AppArmor policy for ###NAME###
++# ###AUTHOR###
++# ###COPYRIGHT###
++# ###COMMENT###
++
++#include <tunables/global>
++
++###VAR###
++
++###BINARY### {
++  #include <abstractions/base>
++
++  ###ABSTRACTIONS###
++
++  ###POLICYGROUPS###
++
++  ###READS###
++
++  ###WRITES###
++}
+Index: apparmor-debian/utils/easyprof/templates/user-application
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/easyprof/templates/user-application	2012-04-24 11:27:49.792061437 -0700
+@@ -0,0 +1,29 @@
++#
++# Example usage for a program named 'foo' which is installed in /opt/foo
++# $ aa-easyprof --template=user-application \
++#               --template-var="@{APPNAME}=foo" \
++#               --policy-groups=opt-application,user-application \
++#               /opt/foo/bin/foo
++#
++###ENDUSAGE###
++# vim:syntax=apparmor
++# AppArmor policy for ###NAME###
++# ###AUTHOR###
++# ###COPYRIGHT###
++# ###COMMENT###
++
++#include <tunables/global>
++
++###VAR###
++
++###BINARY### {
++  #include <abstractions/base>
++
++  ###ABSTRACTIONS###
++
++  ###POLICYGROUPS###
++
++  ###READS###
++
++  ###WRITES###
++}
+Index: apparmor-debian/utils/Makefile
+===================================================================
+--- apparmor-debian.orig/utils/Makefile	2012-04-24 11:23:59.336947032 -0700
++++ apparmor-debian/utils/Makefile	2012-04-24 11:27:49.796061491 -0700
+@@ -32,8 +32,10 @@
+ TOOLS = ${PERLTOOLS} aa-decode aa-status
+ MODULES = ${MODDIR}/AppArmor.pm ${MODDIR}/Repository.pm \
+ 	${MODDIR}/Config.pm ${MODDIR}/Severity.pm
++PYTOOLS = aa-easyprof
++PYSETUP = python-tools-setup.py
+ 
+-MANPAGES = ${TOOLS:=.8} logprof.conf.5
++MANPAGES = ${TOOLS:=.8} logprof.conf.5 ${PYTOOLS:=.8}
+ 
+ all: ${MANPAGES} ${HTMLMANPAGES}
+ 	$(MAKE) -C po all
+@@ -45,9 +47,10 @@
+ CONFDIR=${DESTDIR}/etc/apparmor
+ VENDOR_PERL=$(shell perl -e 'use Config; print $$Config{"vendorlib"};')
+ PERLDIR=${DESTDIR}${VENDOR_PERL}/${MODDIR}
++PYPREFIX=/usr
+ 
+-po/${NAME}.pot: ${TOOLS}
+-	$(MAKE) -C po ${NAME}.pot NAME=${NAME} SOURCES="${TOOLS} ${MODULES}"
++po/${NAME}.pot: ${TOOLS} ${PYTOOLS}
++	$(MAKE) -C po ${NAME}.pot NAME=${NAME} SOURCES="${TOOLS} ${MODULES} ${PYTOOLS}"
+ 
+ .PHONY: install
+ install: ${MANPAGES} ${HTMLMANPAGES}
+@@ -62,6 +65,7 @@
+ 	$(MAKE) install_manpages DESTDIR=${DESTDIR}
+ 	$(MAKE) -C vim install DESTDIR=${DESTDIR}
+ 	ln -sf aa-status.8 ${DESTDIR}/${MANDIR}/man8/apparmor_status.8
++	python ${PYSETUP} install --prefix=${PYPREFIX} --root=${DESTDIR} --version=${VERSION}
+ 
+ .PHONY: clean
+ ifndef VERBOSE
+@@ -72,6 +76,8 @@
+ 	rm -f Make.rules
+ 	$(MAKE) -C po clean
+ 	$(MAKE) -C vim clean
++	rm -rf staging/ build/
++	rm -f apparmor/*.pyc
+ 
+ # ${CAPABILITIES} is defined in common/Make.rules
+ .PHONY: check_severity_db
+@@ -92,3 +98,13 @@
+ 	for i in ${MODULES} ${PERLTOOLS} ; do \
+ 		perl -c $$i || exit 1; \
+ 	done
++	tmpfile=$$(mktemp --tmpdir aa-pyflakes-XXXXXX); \
++	for i in ${PYTOOLS} apparmor aa-status test/*.py; do \
++		echo Checking $$i; \
++		pyflakes $$i 2>&1 | grep -v "undefined name '_'" > $$tmpfile; \
++		test -s $$tmpfile && cat $$tmpfile && rm -f $$tmpfile && exit 1; \
++	done || true; \
++	rm -f $$tmpfile
++	for i in test/* ; do \
++		python $$i || exit 1; \
++	done
+Index: apparmor-debian/utils/python-tools-setup.py
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/python-tools-setup.py	2012-04-24 11:27:49.796061491 -0700
+@@ -0,0 +1,79 @@
++# ----------------------------------------------------------------------
++#    Copyright (c) 2012 Canonical Ltd.
++#
++#    This program is free software; you can redistribute it and/or
++#    modify it under the terms of version 2 of the GNU General Public
++#    License published by the Free Software Foundation.
++#
++#    This program is distributed in the hope that it will be useful,
++#    but WITHOUT ANY WARRANTY; without even the implied warranty of
++#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++#    GNU General Public License for more details.
++#
++#    You should have received a copy of the GNU General Public License
++#    along with this program; if not, contact Canonical, Ltd.
++# ----------------------------------------------------------------------
++#
++# Usage:
++# $ python ./python-tools-setup.py install --root=... --version=...
++#
++# Note: --version=... must be the last argument to this script
++#
++
++from distutils.command.install import install as _install
++from distutils.core import setup
++import os
++import shutil
++import sys
++
++class Install(_install, object):
++    '''Override distutils to install the files where we want them.'''
++    def run(self):
++        # Now byte-compile everything
++        super(Install, self).run()
++
++        prefix = self.prefix
++        if self.root != None:
++            prefix = self.root
++
++        # Install scripts, configuration files and data
++        scripts = ['/usr/bin/aa-easyprof']
++        self.mkpath(prefix + os.path.dirname(scripts[0]))
++        for s in scripts:
++            self.copy_file(os.path.basename(s), prefix + s)
++
++        configs = ['easyprof/easyprof.conf']
++        self.mkpath(prefix + "/etc/apparmor")
++        for c in configs:
++            self.copy_file(c, os.path.join(prefix + "/etc/apparmor", os.path.basename(c)))
++
++        data = ['easyprof/templates', 'easyprof/policygroups']
++        self.mkpath(prefix + "/usr/share/apparmor/easyprof")
++        for d in data:
++            self.copy_tree(d, os.path.join(prefix + "/usr/share/apparmor/easyprof", os.path.basename(d)))
++
++
++if os.path.exists('staging'):
++    shutil.rmtree('staging')
++shutil.copytree('apparmor', 'staging')
++
++# Support the --version=... since this will be part of a Makefile
++version = "unknown-version"
++if "--version=" in sys.argv[-1]:
++    version=sys.argv[-1].split('=')[1]
++    sys.argv = sys.argv[0:-1]
++
++setup (name='apparmor',
++       version=version,
++       description='Python libraries for AppArmor utilities',
++       long_description='Python libraries for AppArmor utilities',
++       author='AppArmor Developers',
++       author_email='apparmor@lists.ubuntu.com',
++       url='https://launchpad.net/apparmor',
++       license='GPL-2',
++       cmdclass={'install': Install},
++       package_dir={'apparmor': 'staging'},
++       py_modules=['apparmor.easyprof']
++)
++
++shutil.rmtree('staging')
+Index: apparmor-debian/utils/test/easyprof.conf
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/test/easyprof.conf	2012-04-24 11:27:49.796061491 -0700
+@@ -0,0 +1,5 @@
++# Location of system policygroups
++POLICYGROUPS_DIR="./policygroups"
++
++# Location of system templates
++TEMPLATES_DIR="./templates"
+Index: apparmor-debian/utils/test/test-aa-easyprof.py
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/test/test-aa-easyprof.py	2012-04-24 11:27:49.796061491 -0700
+@@ -0,0 +1,882 @@
++#! /usr/bin/env python
++# ------------------------------------------------------------------
++#
++#    Copyright (C) 2011-2012 Canonical Ltd.
++#
++#    This program is free software; you can redistribute it and/or
++#    modify it under the terms of version 2 of the GNU General Public
++#    License published by the Free Software Foundation.
++#
++# ------------------------------------------------------------------
++
++import glob
++import os
++import shutil
++import sys
++import tempfile
++import unittest
++
++topdir = None
++debugging = False
++
++def recursive_rm(dirPath, contents_only=False):
++    '''recursively remove directory'''
++    names = os.listdir(dirPath)
++    for name in names:
++        path = os.path.join(dirPath, name)
++        if os.path.islink(path) or not os.path.isdir(path):
++            os.unlink(path)
++        else:
++            recursive_rm(path)
++    if contents_only == False:
++        os.rmdir(dirPath)
++
++#
++# Our test class
++#
++class T(unittest.TestCase):
++    def setUp(self):
++        '''Setup for tests'''
++        global topdir
++
++        self.tmpdir = tempfile.mkdtemp(prefix='test-aa-easyprof')
++
++        # Copy everything into place
++        for d in ['easyprof/policygroups', 'easyprof/templates']:
++            shutil.copytree(os.path.join(topdir, d), os.path.join(self.tmpdir, os.path.basename(d)))
++
++        # Create a test template
++        self.test_template = "test-template"
++        contents = '''# vim:syntax=apparmor
++# %s
++# AppArmor policy for ###NAME###
++# ###AUTHOR###
++# ###COPYRIGHT###
++# ###COMMENT###
++
++#include <tunables/global>
++
++###VAR###
++
++###BINARY### {
++  #include <abstractions/base>
++
++  ###ABSTRACTIONS###
++
++  ###POLICYGROUPS###
++
++  ###READS###
++
++  ###WRITES###
++}
++
++''' % (self.test_template)
++        open(os.path.join(self.tmpdir, 'templates', self.test_template), 'w').write(contents)
++
++        # Create a test policygroup
++        self.test_policygroup = "test-policygroup"
++        contents = '''
++  # %s
++  #include <abstractions/gnome>
++  #include <abstractions/nameservice>
++''' % (self.test_policygroup)
++        open(os.path.join(self.tmpdir, 'policygroups', self.test_policygroup), 'w').write(contents)
++
++        # setup our conffile
++        self.conffile = os.path.join(self.tmpdir, 'easyprof.conf')
++        contents = '''
++POLICYGROUPS_DIR="%s/policygroups"
++TEMPLATES_DIR="%s/templates"
++''' % (self.tmpdir, self.tmpdir)
++        open(self.conffile, 'w').write(contents)
++
++        self.binary = "/opt/bin/foo"
++        self.full_args = ['-c', self.conffile, self.binary]
++
++        if debugging:
++            self.full_args.append('-d')
++
++        (self.options, self.args) = easyprof.parse_args(self.full_args + [self.binary])
++
++    def tearDown(self):
++        '''Teardown for tests'''
++        if os.path.exists(self.tmpdir):
++            recursive_rm(self.tmpdir)
++
++#
++# config file tests
++#
++    def test_configuration_file_p_invalid(self):
++        '''Test config parsing (invalid POLICYGROUPS_DIR)'''
++        contents = '''
++POLICYGROUPS_DIR=
++TEMPLATES_DIR="%s/templates"
++''' % (self.tmpdir)
++
++        open(self.conffile, 'w').write(contents)
++        try:
++            easyprof.AppArmorEasyProfile(self.binary, self.options)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++
++        raise Exception ("File should have been invalid")
++
++    def test_configuration_file_p_empty(self):
++        '''Test config parsing (empty POLICYGROUPS_DIR)'''
++        contents = '''
++POLICYGROUPS_DIR="%s"
++TEMPLATES_DIR="%s/templates"
++''' % ('', self.tmpdir)
++
++        open(self.conffile, 'w').write(contents)
++        try:
++            easyprof.AppArmorEasyProfile(self.binary, self.options)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++
++        raise Exception ("File should have been invalid")
++
++    def test_configuration_file_p_nonexistent(self):
++        '''Test config parsing (nonexistent POLICYGROUPS_DIR)'''
++        contents = '''
++POLICYGROUPS_DIR="%s/policygroups"
++TEMPLATES_DIR="%s/templates"
++''' % ('/nonexistent', self.tmpdir)
++
++        open(self.conffile, 'w').write(contents)
++        try:
++            easyprof.AppArmorEasyProfile(self.binary, self.options)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++
++        raise Exception ("File should have been invalid")
++
++    def test_policygroups_dir_relative(self):
++        '''Test --policy-groups-dir (relative DIR)'''
++        os.chdir(self.tmpdir)
++        rel = os.path.join(self.tmpdir, 'relative')
++        os.mkdir(rel)
++        shutil.copy(os.path.join(self.tmpdir, 'policygroups', self.test_policygroup), os.path.join(rel, self.test_policygroup))
++
++        args = self.full_args
++        args += ['--policy-groups-dir', './relative', '--show-policy-group', '--policy-groups=%s' % self.test_policygroup]
++        (self.options, self.args) = easyprof.parse_args(args)
++        easyp = easyprof.AppArmorEasyProfile(self.binary, self.options)
++
++        # no fallback
++        self.assertTrue(easyp.dirs['policygroups'] == rel, "Not using specified --policy-groups-dir")
++        self.assertFalse(easyp.get_policy_groups() == None, "Could not find policy-groups")
++
++    def test_policygroups_dir_nonexistent(self):
++        '''Test --policy-groups-dir (nonexistent DIR)'''
++        os.chdir(self.tmpdir)
++        rel = os.path.join(self.tmpdir, 'nonexistent')
++
++        args = self.full_args
++        args += ['--policy-groups-dir', rel, '--show-policy-group', '--policy-groups=%s' % self.test_policygroup]
++        (self.options, self.args) = easyprof.parse_args(args)
++        easyp = easyprof.AppArmorEasyProfile(self.binary, self.options)
++
++        # test if using fallback
++        self.assertFalse(easyp.dirs['policygroups'] == rel, "Using nonexistent --policy-groups-dir")
++
++        # test fallback
++        self.assertTrue(easyp.get_policy_groups() != None, "Found policy-groups when shouldn't have")
++
++    def test_policygroups_dir_valid(self):
++        '''Test --policy-groups-dir (valid DIR)'''
++        os.chdir(self.tmpdir)
++        valid = os.path.join(self.tmpdir, 'valid')
++        os.mkdir(valid)
++        shutil.copy(os.path.join(self.tmpdir, 'policygroups', self.test_policygroup), os.path.join(valid, self.test_policygroup))
++
++        args = self.full_args
++        args += ['--policy-groups-dir', valid, '--show-policy-group', '--policy-groups=%s' % self.test_policygroup]
++        (self.options, self.args) = easyprof.parse_args(args)
++        easyp = easyprof.AppArmorEasyProfile(self.binary, self.options)
++
++        # no fallback
++        self.assertTrue(easyp.dirs['policygroups'] == valid, "Not using specified --policy-groups-dir")
++        self.assertFalse(easyp.get_policy_groups() == None, "Could not find policy-groups")
++
++    def test_configuration_file_t_invalid(self):
++        '''Test config parsing (invalid TEMPLATES_DIR)'''
++        contents = '''
++TEMPLATES_DIR=
++POLICYGROUPS_DIR="%s/templates"
++''' % (self.tmpdir)
++
++        open(self.conffile, 'w').write(contents)
++        try:
++            easyprof.AppArmorEasyProfile(self.binary, self.options)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++
++        raise Exception ("File should have been invalid")
++
++    def test_configuration_file_t_empty(self):
++        '''Test config parsing (empty TEMPLATES_DIR)'''
++        contents = '''
++TEMPLATES_DIR="%s"
++POLICYGROUPS_DIR="%s/templates"
++''' % ('', self.tmpdir)
++
++        open(self.conffile, 'w').write(contents)
++        try:
++            easyprof.AppArmorEasyProfile(self.binary, self.options)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++
++        raise Exception ("File should have been invalid")
++
++    def test_configuration_file_t_nonexistent(self):
++        '''Test config parsing (nonexistent TEMPLATES_DIR)'''
++        contents = '''
++TEMPLATES_DIR="%s/policygroups"
++POLICYGROUPS_DIR="%s/templates"
++''' % ('/nonexistent', self.tmpdir)
++
++        open(self.conffile, 'w').write(contents)
++        try:
++            easyprof.AppArmorEasyProfile(self.binary, self.options)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++
++        raise Exception ("File should have been invalid")
++
++    def test_templates_dir_relative(self):
++        '''Test --templates-dir (relative DIR)'''
++        os.chdir(self.tmpdir)
++        rel = os.path.join(self.tmpdir, 'relative')
++        os.mkdir(rel)
++        shutil.copy(os.path.join(self.tmpdir, 'templates', self.test_template), os.path.join(rel, self.test_template))
++
++        args = self.full_args
++        args += ['--templates-dir', './relative', '--show-template', '--template=%s' % self.test_template]
++        (self.options, self.args) = easyprof.parse_args(args)
++        easyp = easyprof.AppArmorEasyProfile(self.binary, self.options)
++
++        # no fallback
++        self.assertTrue(easyp.dirs['templates'] == rel, "Not using specified --template-dir")
++        self.assertFalse(easyp.get_templates() == None, "Could not find templates")
++
++    def test_templates_dir_nonexistent(self):
++        '''Test --templates-dir (nonexistent DIR)'''
++        os.chdir(self.tmpdir)
++        rel = os.path.join(self.tmpdir, 'nonexistent')
++
++        args = self.full_args
++        args += ['--templates-dir', rel, '--show-template', '--template=%s' % self.test_template]
++        (self.options, self.args) = easyprof.parse_args(args)
++        easyp = easyprof.AppArmorEasyProfile(self.binary, self.options)
++
++        # test if using fallback
++        self.assertFalse(easyp.dirs['templates'] == rel, "Using nonexistent --template-dir")
++
++        # test fallback
++        self.assertTrue(easyp.get_templates() != None, "Found templates when shouldn't have")
++
++    def test_templates_dir_valid(self):
++        '''Test --templates-dir (valid DIR)'''
++        os.chdir(self.tmpdir)
++        valid = os.path.join(self.tmpdir, 'valid')
++        os.mkdir(valid)
++        shutil.copy(os.path.join(self.tmpdir, 'templates', self.test_template), os.path.join(valid, self.test_template))
++
++        args = self.full_args
++        args += ['--templates-dir', valid, '--show-template', '--template=%s' % self.test_template]
++        (self.options, self.args) = easyprof.parse_args(args)
++        easyp = easyprof.AppArmorEasyProfile(self.binary, self.options)
++
++        # no fallback
++        self.assertTrue(easyp.dirs['templates'] == valid, "Not using specified --template-dir")
++        self.assertFalse(easyp.get_templates() == None, "Could not find templates")
++
++#
++# Binary file tests
++#
++    def test_binary(self):
++        '''Test binary'''
++        easyprof.AppArmorEasyProfile('/bin/ls', self.options)
++
++    def test_binary_nonexistent(self):
++        '''Test binary (nonexistent)'''
++        easyprof.AppArmorEasyProfile(os.path.join(self.tmpdir, 'nonexistent'), self.options)
++
++    def test_binary_relative(self):
++        '''Test binary (relative)'''
++        try:
++            easyprof.AppArmorEasyProfile('./foo', self.options)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++        raise Exception ("Binary should have been invalid")
++
++    def test_binary_symlink(self):
++        '''Test binary (symlink)'''
++        exe = os.path.join(self.tmpdir, 'exe')
++        open(exe, 'wa').close()
++        symlink = exe + ".lnk"
++        os.symlink(exe, symlink)
++
++        try:
++            easyprof.AppArmorEasyProfile(symlink, self.options)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++        raise Exception ("Binary should have been invalid")
++
++#
++# Templates tests
++#
++    def test_templates_list(self):
++        '''Test templates (list)'''
++        args = self.full_args
++        args.append('--list-templates')
++        (self.options, self.args) = easyprof.parse_args(args)
++
++        easyp = easyprof.AppArmorEasyProfile(None, self.options)
++        for i in easyp.get_templates():
++            self.assertTrue(os.path.exists(i), "Could not find '%s'" % i)
++
++    def test_templates_show(self):
++        '''Test templates (show)'''
++        files = []
++        for f in glob.glob("%s/templates/*" % self.tmpdir):
++            files.append(f)
++
++        for f in files:
++            args = self.full_args
++            args += ['--show-template', '--template', f]
++            (self.options, self.args) = easyprof.parse_args(args)
++            easyp = easyprof.AppArmorEasyProfile(None, self.options)
++
++            path = os.path.join(easyp.dirs['templates'], f)
++            self.assertTrue(os.path.exists(path), "Could not find '%s'" % path)
++            open(path).read()
++
++#
++# Policygroups tests
++#
++    def test_policygroups_list(self):
++        '''Test policygroups (list)'''
++        args = self.full_args
++        args.append('--list-policy-groups')
++        (self.options, self.args) = easyprof.parse_args(args)
++
++        easyp = easyprof.AppArmorEasyProfile(None, self.options)
++        for i in easyp.get_templates():
++            self.assertTrue(os.path.exists(i), "Could not find '%s'" % i)
++
++    def test_policygroups_show(self):
++        '''Test policygroups (show)'''
++        files = []
++        for f in glob.glob("%s/policygroups/*" % self.tmpdir):
++            files.append(f)
++
++        for f in files:
++            args = self.full_args
++            args += ['--show-template', '--template', f]
++            (self.options, self.args) = easyprof.parse_args(args)
++            easyp = easyprof.AppArmorEasyProfile(None, self.options)
++
++            path = os.path.join(easyp.dirs['policygroups'], f)
++            self.assertTrue(os.path.exists(path), "Could not find '%s'" % path)
++            open(path).read()
++
++#
++# Test genpolicy
++#
++    def _gen_policy(self, name=None, template=None, extra_args=[]):
++        '''Generate a policy'''
++        # Build up our args
++        args = self.full_args
++
++        if template == None:
++            args.append('--template=%s' % self.test_template)
++        else:
++            args.append('--template=%s' % template)
++
++        if name != None:
++            args.append('--name=%s' % name)
++
++        if len(extra_args) > 0:
++            args += extra_args
++
++        args.append(self.binary)
++
++        # Now parse our args
++        (self.options, self.args) = easyprof.parse_args(args)
++        easyp = easyprof.AppArmorEasyProfile(self.binary, self.options)
++        params = easyprof.gen_policy_params(self.binary, self.options)
++        p = easyp.gen_policy(**params)
++
++        # We always need to check for these
++        search_terms = [self.binary]
++        if name != None:
++            search_terms.append(name)
++
++        if template == None:
++            search_terms.append(self.test_template)
++
++        for s in search_terms:
++            self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++
++        # ###NAME### should be replaced with self.binary or 'name'. Check for that
++        inv_s = '###NAME###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++        if debugging:
++            print p
++
++        return p
++
++    def test_genpolicy_templates_abspath(self):
++        '''Test genpolicy (abspath to template)'''
++        # create a new template
++        template = os.path.join(self.tmpdir, "test-abspath-template")
++        shutil.copy(os.path.join(self.tmpdir, 'templates', self.test_template), template)
++        contents = open(template).read()
++        test_string = "#teststring"
++        open(template, 'w').write(contents + "\n%s\n" % test_string)
++
++        p = self._gen_policy(template=template)
++
++        for s in [self.test_template, test_string]:
++            self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++
++    def test_genpolicy_templates_system(self):
++        '''Test genpolicy (system template)'''
++        self._gen_policy()
++
++    def test_genpolicy_templates_nonexistent(self):
++        '''Test genpolicy (nonexistent template)'''
++        try:
++            self._gen_policy(template=os.path.join(self.tmpdir, "/nonexistent"))
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++        raise Exception ("template should be invalid")
++
++    def test_genpolicy_name(self):
++        '''Test genpolicy (name)'''
++        self._gen_policy(name='test-foo')
++
++    def test_genpolicy_comment(self):
++        '''Test genpolicy (comment)'''
++        s = "test comment"
++        p = self._gen_policy(extra_args=['--comment=%s' % s])
++        self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++        inv_s = '###COMMENT###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_author(self):
++        '''Test genpolicy (author)'''
++        s = "Archibald Poindexter"
++        p = self._gen_policy(extra_args=['--author=%s' % s])
++        self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++        inv_s = '###AUTHOR###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_copyright(self):
++        '''Test genpolicy (copyright)'''
++        s = "2112/01/01"
++        p = self._gen_policy(extra_args=['--copyright=%s' % s])
++        self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++        inv_s = '###COPYRIGHT###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_abstractions(self):
++        '''Test genpolicy (single abstraction)'''
++        s = "nameservice"
++        p = self._gen_policy(extra_args=['--abstractions=%s' % s])
++        search = "#include <abstractions/%s>" % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###ABSTRACTIONS###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_abstractions_multiple(self):
++        '''Test genpolicy (multiple abstractions)'''
++        abstractions = "authentication,X,user-tmp"
++        p = self._gen_policy(extra_args=['--abstractions=%s' % abstractions])
++        for s in abstractions.split(','):
++            search = "#include <abstractions/%s>" % s
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###ABSTRACTIONS###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_policygroups(self):
++        '''Test genpolicy (single policygroup)'''
++        groups = self.test_policygroup
++        p = self._gen_policy(extra_args=['--policy-groups=%s' % groups])
++
++        for s in ['#include <abstractions/nameservice>', '#include <abstractions/gnome>']:
++            self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++        inv_s = '###POLICYGROUPS###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_policygroups_multiple(self):
++        '''Test genpolicy (multiple policygroups)'''
++        test_policygroup2 = "test-policygroup2"
++        contents = '''
++  # %s
++  #include <abstractions/kde>
++  #include <abstractions/openssl>
++''' % (self.test_policygroup)
++        open(os.path.join(self.tmpdir, 'policygroups', test_policygroup2), 'w').write(contents)
++
++        groups = "%s,%s" % (self.test_policygroup, test_policygroup2)
++        p = self._gen_policy(extra_args=['--policy-groups=%s' % groups])
++
++        for s in ['#include <abstractions/nameservice>',
++                  '#include <abstractions/gnome>',
++                  '#include <abstractions/kde>',
++                  '#include <abstractions/openssl>']:
++            self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++        inv_s = '###POLICYGROUPS###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_policygroups_nonexistent(self):
++        '''Test genpolicy (nonexistent policygroup)'''
++        try:
++            self._gen_policy(extra_args=['--policy-groups=nonexistent'])
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++        raise Exception ("policygroup should be invalid")
++
++    def test_genpolicy_readpath_file(self):
++        '''Test genpolicy (read-path file)'''
++        s = "/opt/test-foo"
++        p = self._gen_policy(extra_args=['--read-path=%s' % s])
++        search = "%s r," % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_readpath_home_file(self):
++        '''Test genpolicy (read-path file in /home)'''
++        s = "/home/*/test-foo"
++        p = self._gen_policy(extra_args=['--read-path=%s' % s])
++        search = "owner %s r," % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_readpath_homevar_file(self):
++        '''Test genpolicy (read-path file in @{HOME})'''
++        s = "@{HOME}/test-foo"
++        p = self._gen_policy(extra_args=['--read-path=%s' % s])
++        search = "owner %s r," % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_readpath_homedirs_file(self):
++        '''Test genpolicy (read-path file in @{HOMEDIRS})'''
++        s = "@{HOMEDIRS}/test-foo"
++        p = self._gen_policy(extra_args=['--read-path=%s' % s])
++        search = "owner %s r," % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_readpath_dir(self):
++        '''Test genpolicy (read-path directory/)'''
++        s = "/opt/test-foo-dir/"
++        p = self._gen_policy(extra_args=['--read-path=%s' % s])
++        search_terms = ["%s r," % s, "%s** r," % s]
++        for search in search_terms:
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_readpath_dir_glob(self):
++        '''Test genpolicy (read-path directory/*)'''
++        s = "/opt/test-foo-dir/*"
++        p = self._gen_policy(extra_args=['--read-path=%s' % s])
++        search_terms = ["%s r," % os.path.dirname(s), "%s r," % s]
++        for search in search_terms:
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_readpath_dir_glob_all(self):
++        '''Test genpolicy (read-path directory/**)'''
++        s = "/opt/test-foo-dir/**"
++        p = self._gen_policy(extra_args=['--read-path=%s' % s])
++        search_terms = ["%s r," % os.path.dirname(s), "%s r," % s]
++        for search in search_terms:
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_readpath_multiple(self):
++        '''Test genpolicy (read-path multiple)'''
++        paths = ["/opt/test-foo",
++                 "/home/*/test-foo",
++                 "@{HOME}/test-foo",
++                 "@{HOMEDIRS}/test-foo",
++                 "/opt/test-foo-dir/",
++                 "/opt/test-foo-dir/*",
++                 "/opt/test-foo-dir/**"]
++        args = []
++        search_terms = []
++        for s in paths:
++            args.append('--read-path=%s' % s)
++            # This mimics easyprof.gen_path_rule()
++            owner = ""
++            if s.startswith('/home/') or s.startswith("@{HOME"):
++                owner = "owner "
++            if s.endswith('/'):
++                search_terms.append("%s r," % (s))
++                search_terms.append("%s%s** r," % (owner, s))
++            elif s.endswith('/**') or s.endswith('/*'):
++                search_terms.append("%s r," % (os.path.dirname(s)))
++                search_terms.append("%s%s r," % (owner, s))
++            else:
++                search_terms.append("%s%s r," % (owner, s))
++
++        p = self._gen_policy(extra_args=args)
++        for search in search_terms:
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_readpath_bad(self):
++        '''Test genpolicy (read-path bad)'''
++        s = "bar"
++        try:
++            self._gen_policy(extra_args=['--read-path=%s' % s])
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++        raise Exception ("read-path should be invalid")
++
++    def test_genpolicy_writepath_file(self):
++        '''Test genpolicy (write-path file)'''
++        s = "/opt/test-foo"
++        p = self._gen_policy(extra_args=['--write-path=%s' % s])
++        search = "%s rwk," % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_writepath_home_file(self):
++        '''Test genpolicy (write-path file in /home)'''
++        s = "/home/*/test-foo"
++        p = self._gen_policy(extra_args=['--write-path=%s' % s])
++        search = "owner %s rwk," % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_writepath_homevar_file(self):
++        '''Test genpolicy (write-path file in @{HOME})'''
++        s = "@{HOME}/test-foo"
++        p = self._gen_policy(extra_args=['--write-path=%s' % s])
++        search = "owner %s rwk," % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_writepath_homedirs_file(self):
++        '''Test genpolicy (write-path file in @{HOMEDIRS})'''
++        s = "@{HOMEDIRS}/test-foo"
++        p = self._gen_policy(extra_args=['--write-path=%s' % s])
++        search = "owner %s rwk," % s
++        self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_writepath_dir(self):
++        '''Test genpolicy (write-path directory/)'''
++        s = "/opt/test-foo-dir/"
++        p = self._gen_policy(extra_args=['--write-path=%s' % s])
++        search_terms = ["%s rwk," % s, "%s** rwk," % s]
++        for search in search_terms:
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_writepath_dir_glob(self):
++        '''Test genpolicy (write-path directory/*)'''
++        s = "/opt/test-foo-dir/*"
++        p = self._gen_policy(extra_args=['--write-path=%s' % s])
++        search_terms = ["%s rwk," % os.path.dirname(s), "%s rwk," % s]
++        for search in search_terms:
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_writepath_dir_glob_all(self):
++        '''Test genpolicy (write-path directory/**)'''
++        s = "/opt/test-foo-dir/**"
++        p = self._gen_policy(extra_args=['--write-path=%s' % s])
++        search_terms = ["%s rwk," % os.path.dirname(s), "%s rwk," % s]
++        for search in search_terms:
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_writepath_multiple(self):
++        '''Test genpolicy (write-path multiple)'''
++        paths = ["/opt/test-foo",
++                 "/home/*/test-foo",
++                 "@{HOME}/test-foo",
++                 "@{HOMEDIRS}/test-foo",
++                 "/opt/test-foo-dir/",
++                 "/opt/test-foo-dir/*",
++                 "/opt/test-foo-dir/**"]
++        args = []
++        search_terms = []
++        for s in paths:
++            args.append('--write-path=%s' % s)
++            # This mimics easyprof.gen_path_rule()
++            owner = ""
++            if s.startswith('/home/') or s.startswith("@{HOME"):
++                owner = "owner "
++            if s.endswith('/'):
++                search_terms.append("%s rwk," % (s))
++                search_terms.append("%s%s** rwk," % (owner, s))
++            elif s.endswith('/**') or s.endswith('/*'):
++                search_terms.append("%s rwk," % (os.path.dirname(s)))
++                search_terms.append("%s%s rwk," % (owner, s))
++            else:
++                search_terms.append("%s%s rwk," % (owner, s))
++
++        p = self._gen_policy(extra_args=args)
++        for search in search_terms:
++            self.assertTrue(search in p, "Could not find '%s' in:\n%s" % (search, p))
++        inv_s = '###READPATH###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_writepath_bad(self):
++        '''Test genpolicy (write-path bad)'''
++        s = "bar"
++        try:
++            self._gen_policy(extra_args=['--write-path=%s' % s])
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++        raise Exception ("write-path should be invalid")
++
++    def test_genpolicy_templatevar(self):
++        '''Test genpolicy (template-var single)'''
++        s = "@{FOO}=bar"
++        p = self._gen_policy(extra_args=['--template-var=%s' % s])
++        self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++        inv_s = '###TEMPLATEVAR###'
++        self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_templatevar_multiple(self):
++        '''Test genpolicy (template-var multiple)'''
++        variables = ["@{FOO}=bar", "@{BAR}=baz"]
++        args = []
++        for s in variables:
++            args.append('--template-var=%s' % s)
++
++        p = self._gen_policy(extra_args=args)
++        for s in variables:
++            self.assertTrue(s in p, "Could not find '%s' in:\n%s" % (s, p))
++            inv_s = '###TEMPLATEVAR###'
++            self.assertFalse(inv_s in p, "Found '%s' in :\n%s" % (inv_s, p))
++
++    def test_genpolicy_templatevar_bad(self):
++        '''Test genpolicy (template-var bad)'''
++        s = "{FOO}=bar"
++        try:
++            self._gen_policy(extra_args=['--template-var=%s' % s])
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++        raise Exception ("template-var should be invalid")
++
++    def test_genpolicy_invalid_template_policy(self):
++        '''Test genpolicy (invalid template policy)'''
++        # create a new template
++        template = os.path.join(self.tmpdir, "test-invalid-template")
++        shutil.copy(os.path.join(self.tmpdir, 'templates', self.test_template), template)
++        contents = open(template).read()
++        bad_pol = ""
++        bad_string = "bzzzt"
++        for line in contents.splitlines():
++            if '}' in line:
++                bad_pol += bad_string
++            else:
++                bad_pol += line
++            bad_pol += "\n"
++        open(template, 'w').write(bad_pol)
++        try:
++            self._gen_policy(template=template)
++        except easyprof.AppArmorException:
++            return
++        except Exception:
++            raise
++        raise Exception ("policy should be invalid")
++
++
++#
++# End test class
++#
++
++#
++# Main
++#
++if __name__ == '__main__':
++    def cleanup(files):
++        for f in files:
++            if os.path.exists(f):
++                os.unlink(f)
++
++    absfn = os.path.abspath(sys.argv[0])
++    topdir = os.path.dirname(os.path.dirname(absfn))
++
++    if len(sys.argv) > 1 and (sys.argv[1] == '-d' or sys.argv[1] == '--debug'):
++        debugging = True
++
++    created = []
++
++    # Create the necessary files to import aa-easyprof
++    init = os.path.join(os.path.dirname(absfn), '__init__.py')
++    if not os.path.exists(init):
++        open(init, 'wa').close()
++        created.append(init)
++
++    symlink = os.path.join(os.path.dirname(absfn), 'easyprof.py')
++    if not os.path.exists(symlink):
++        os.symlink(os.path.join(topdir, 'apparmor', 'easyprof.py'), symlink)
++        created.append(symlink)
++        created.append(symlink + 'c')
++
++    # Now that we have everything we need, import aa-easyprof
++    import easyprof
++
++    # run the tests
++    suite = unittest.TestSuite()
++    suite.addTest(unittest.TestLoader().loadTestsFromTestCase(T))
++    rc = unittest.TextTestRunner(verbosity=2).run(suite)
++
++    cleanup(created)
++
++    if not rc.wasSuccessful():
++        sys.exit(1)
+Index: apparmor-debian/utils/apparmor/__init__.py
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ apparmor-debian/utils/apparmor/__init__.py	2012-04-24 11:27:49.796061491 -0700
+@@ -0,0 +1,9 @@
++# ------------------------------------------------------------------
++#
++#    Copyright (C) 2011-2012 Canonical Ltd.
++#
++#    This program is free software; you can redistribute it and/or
++#    modify it under the terms of version 2 of the GNU General Public
++#    License published by the Free Software Foundation.
++#
++# ------------------------------------------------------------------

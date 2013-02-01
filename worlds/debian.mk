@@ -54,6 +54,15 @@ $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf base-files_$(base-files_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
+.PHONY: base-installer
+base-installer:$(BASEINSTALLER)_$(ARCH).deb
+$(BASEINSTALLER): $(SPREZZ)/base-installer/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf base-installer_$(base-installer_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: base-passwd
 base-passwd:$(BASEPASSWD)_$(ARCH).deb
 $(BASEPASSWD): $(SPREZZ)/base-passwd/debian/changelog

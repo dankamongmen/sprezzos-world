@@ -1,0 +1,102 @@
+# /lib/apparmor/functions for Debian -*- shell-script -*-
+# ----------------------------------------------------------------------
+#    Copyright (c) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007
+#     NOVELL (All rights reserved)
+#    Copyright (c) 2008-2010 Canonical, Ltd.
+#
+#    This program is free software; you can redistribute it and/or
+#    modify it under the terms of version 2 of the GNU General Public
+#    License published by the Free Software Foundation.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, contact Novell, Inc.
+# ----------------------------------------------------------------------
+# Authors:
+#  Kees Cook <kees@ubuntu.com>
+
+PROFILES="/etc/apparmor.d"
+PARSER="/sbin/apparmor_parser"
+SECURITYFS="/sys/kernel/security"
+export AA_SFS="$SECURITYFS/apparmor"
+
+# Suppress warnings when booting in quiet mode
+quiet_arg=""
+[ "${QUIET:-no}" = yes ] && quiet_arg="-q"
+[ "${quiet:-n}" = y ] && quiet_arg="-q"
+
+foreach_configured_profile() {
+	(ls -1 "$PROFILES" | egrep -v '(\.dpkg-(new|old|dist|bak)|~)$' | \
+	while read profile; do
+		if [ -f "$PROFILES"/"$profile" ]; then
+			echo "$PROFILES"/"$profile"
+		fi
+	done) | \
+	xargs -n1 -d"\n" -P$(getconf _NPROCESSORS_ONLN) "$PARSER" "$@" --
+}
+
+load_configured_profiles() {
+	clear_cache_if_outdated
+	foreach_configured_profile $quiet_arg --write-cache --replace
+}
+
+load_configured_profiles_without_caching() {
+	foreach_configured_profile $quiet_arg --replace
+}
+
+recache_profiles() {
+	clear_cache
+	foreach_configured_profile $quiet_arg --write-cache --skip-kernel-load
+}
+
+configured_profile_names() {
+	foreach_configured_profile $quiet_arg -N 2>/dev/null | LC_COLLATE=C sort | grep -v '//'
+}
+
+running_profile_names() {
+	# Output a sorted list of loaded profiles, skipping libvirt's
+	# dynamically generated files
+	if [ -r "$AA_SFS"/profiles ]; then
+		cat "$AA_SFS"/profiles | sed -e "s/ (\(enforce\|complain\))$//" | egrep -v '^libvirt-[0-9a-f\-]+$' | LC_COLLATE=C sort | grep -v '//'
+	fi
+}
+
+unload_profile() {
+	echo -n "$1" > "$AA_SFS"/.remove
+}
+
+clear_cache() {
+	find "$PROFILES"/cache -maxdepth 1 -type f -print0 | xargs -0 rm -f --
+}
+
+read_features_dir()
+{
+	for f in `ls -AU "$1"` ; do
+		if [ -f "$1/$f" ] ; then
+			read -r KF < "$1/$f" || true
+			echo -n "$f {$KF } "
+		elif [ -d "$1/$f" ] ; then
+			echo -n "$f {"
+			KF=`read_features_dir "$1/$f"` || true
+			echo -n "$KF} "
+		fi
+	done
+}
+
+clear_cache_if_outdated() {
+	if [ -r "$PROFILES"/cache/.features ]; then
+		if [ -d "$AA_SFS"/features ]; then
+			KERN_FEATURES=`read_features_dir "$AA_SFS"/features`
+		else
+			read -r KERN_FEATURES < "$AA_SFS"/features
+		fi
+		CACHE_FEATURES=`tr '\n' ' ' < "$PROFILES"/cache/.features`
+		if [ "$KERN_FEATURES" != "$CACHE_FEATURES" ]; then
+			clear_cache
+		fi
+	fi
+}

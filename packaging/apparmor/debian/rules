@@ -1,0 +1,187 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# Uncomment to turn on verbose build-time test output
+#export VERBOSE=1
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+# libapparmor uses autotools
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_ARCH_OS   ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+CONFFLAGS = --prefix=/usr --with-perl --with-python
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  CONFFLAGS += --build $(DEB_HOST_GNU_TYPE)
+else
+  CONFFLAGS += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	cd libraries/libapparmor && \
+		sh autogen.sh && \
+		sh configure $(CONFFLAGS)
+	touch configure-stamp
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	cd libraries/libapparmor && $(MAKE) && $(MAKE) check
+	cd utils && $(MAKE)
+ifneq (,$(filter $(DEB_HOST_ARCH_OS), kfreebsd knetbsd hurd ))
+	cd parser && $(MAKE) indep
+else
+	cd parser && $(MAKE) && $(MAKE) check
+endif
+	cd profiles && $(MAKE)
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	for i in utils parser profiles changehat/mod_apparmor \
+		  changehat/pam_apparmor ; do \
+		[ ! -f $$i/Makefile ] || $(MAKE) -C $$i clean; \
+		rm -f $$i/common; \
+	done
+	# Try to clean up from an autogen'd build
+	cd libraries/libapparmor && [ ! -f Makefile ] || $(MAKE) distclean
+	# Remove generated debhelper documentation.
+	rm -f $(CURDIR)/debian/debhelper/dh_apparmor.1
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	# Utils
+	cd utils; $(MAKE) \
+	    DESTDIR=$(CURDIR)/debian/tmp \
+	    PERLDIR=$(CURDIR)/debian/tmp/usr/share/perl5/Immunix \
+	    install
+
+	# Parser
+ifneq (,$(filter $(DEB_HOST_ARCH_OS), kfreebsd knetbsd hurd ))
+	install -D -m 755 $(CURDIR)/debian/non-linux/apparmor_parser \
+		$(CURDIR)/debian/tmp/sbin/apparmor_parser
+	cd parser; $(MAKE) \
+	    DESTDIR=$(CURDIR)/debian/tmp \
+	    install-indep
+else
+	cd parser; $(MAKE) \
+	    DESTDIR=$(CURDIR)/debian/tmp \
+	    install
+endif
+
+	# Changehat via libapparmor
+	cd libraries/libapparmor; $(MAKE) \
+	    DESTDIR=$(CURDIR)/debian/tmp \
+	    install
+	# fixup rpath for libapparmor-perl
+	find $(CURDIR)/debian/tmp/usr/lib/perl5 -name '*.so' | xargs chrpath --delete
+
+	# Changehat via mod_apparmor
+	cd changehat/mod_apparmor; $(MAKE) \
+	    DESTDIR=$(CURDIR)/debian/tmp \
+	    install
+	# Fix rpath in mod_apparmor.so
+	chrpath -d $(CURDIR)/debian/tmp/usr/lib/apache2/modules/mod_apparmor.so
+
+	# Changehat via libpam-apparmor
+	cd changehat/pam_apparmor; $(MAKE) \
+	    DESTDIR=$(CURDIR)/debian/tmp \
+	    install
+	# Fix rpath in pam_apparmor.so
+	chrpath -d $(CURDIR)/debian/tmp/lib/security/pam_apparmor.so
+
+	# Profiles
+	cd profiles; $(MAKE) \
+	    DESTDIR=$(CURDIR)/debian/tmp \
+	    EXTRAS_DEST=$(CURDIR)/debian/tmp/usr/share/doc/apparmor-profiles/extras \
+	    install
+	# set all profiles in apparmor-profiles to complain mode
+	cd $(CURDIR)/debian/tmp && sh $(CURDIR)/debian/put-all-profiles-in-complain-mode.sh
+
+	# Build debhelper documentation.
+	pod2man -c Debhelper -r "$(DEB_VERSION)" $(CURDIR)/debian/debhelper/dh_apparmor $(CURDIR)/debian/debhelper/dh_apparmor.1
+
+	dh_install
+
+# Must not depend on anything. This is to be called by
+# binary-arch/binary-indep
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_installexamples
+#	dh_installmenu
+	dh_installdebconf -papparmor
+#	dh_installlogrotate
+#	dh_installemacsen
+#	dh_installpam
+#	dh_installmime
+	dh_installinit --update-rcd-params='start 37 S .' --no-restart-on-upgrade --error-handler=true
+#	dh_installcron
+#	dh_installinfo
+	dh_installman
+	dh_lintian
+	dh_link
+	dh_strip
+	dh_compress -Xextras
+	dh_fixperms
+	dh_perl
+	dh_python2 -p python-libapparmor -p apparmor -p apparmor-utils --no-guessing-versions
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: build install
+	for profile in $(shell grep ^etc/apparmor.d/ $(CURDIR)/debian/apparmor-profiles.install | \
+			 cut -d/ -f3- | grep -v /); do \
+	    if [ -x /usr/bin/dh_apparmor ]; then \
+	        dh_apparmor --profile-name=$$profile -papparmor-profiles; \
+	    fi; \
+	done
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build install
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install configure
+
+VERSION_SEP=+
+VERSION=$(shell  dpkg-parsechangelog | grep ^Version | cut -d$(VERSION_SEP) -f1 | cut -d\  -f2)
+BZR_RELEASE=$(shell dpkg-parsechangelog | grep ^Version | cut -d$(VERSION_SEP) -f2 | cut -d. -f1 | cut -d- -f1 | sed -e 's/bzr//')
+ORIG_FILE=$(CURDIR)/../apparmor_$(VERSION)$(VERSION_SEP)bzr$(BZR_RELEASE).orig.tar.gz
+BZR_CO_DIR=$(CURDIR)/apparmor-$(VERSION)$(VERSION_SEP)bzr$(BZR_RELEASE)
+get-orig-source:
+	test ! -e $(ORIG_FILE)
+	test ! -e $(BZR_CO_DIR)
+	bzr checkout --lightweight -r $(BZR_RELEASE) lp:~apparmor-dev/apparmor/master $(BZR_CO_DIR)
+	tar czf $(ORIG_FILE) -C `dirname $(BZR_CO_DIR)` --exclude .bzr `basename $(BZR_CO_DIR)`
+	rm -rf $(BZR_CO_DIR)
