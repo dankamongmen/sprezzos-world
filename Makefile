@@ -2943,6 +2943,14 @@ $(GLADE): $(SPREZZ)/glade/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf glade-$(glade_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: glances
+glances:$(GLANCES)_$(ARCH).deb
+$(GLANCES): $(SPREZZ)/glances/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf glances-$(glances_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: glew
 glew:$(GLEW)_$(ARCH).deb
 $(GLEW): $(SPREZZ)/glew/debian/changelog
