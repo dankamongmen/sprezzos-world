@@ -258,6 +258,14 @@ $(NETBASE): $(SPREZZ)/netbase/debian/changelog
 	tar cJvf netbase_$(netbase_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: nvidia-support
+nvidia-support:$(NVIDIASUPPORT)_$(ARCH).deb
+$(NVIDIASUPPORT): $(SPREZZ)/nvidia-support/debian/changelog
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf nvidia-support_$(nvidia-support_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: python-apt
 python-apt:$(PYTHONAPT)_$(ARCH).deb
 $(PYTHONAPT): $(SPREZZ)/python-apt/debian/changelog

@@ -378,12 +378,12 @@ $(SPIKEPROXY): $(SPREZZ)/spikeproxy/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf spkproxy_$(spikeproxy_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: omphalos
-omphalos:$(OMPHALOS)_$(ARCH).deb
-$(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
-	git clone git://github.com/dankamongmen/omphalos.git $@
-	tar cJf $(OMPHALOSORIG) $@ --exclude-vcs
-	cp -r $(<D) $@/
+#.PHONY: omphalos
+#omphalos:$(OMPHALOS)_$(ARCH).deb
+#$(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
+#	git clone git://github.com/dankamongmen/omphalos.git $@
+#	tar cJf $(OMPHALOSORIG) $@ --exclude-vcs
+#	cp -r $(<D) $@/
 
 .PHONY: frei0r
 frei0r:$(FREI0R)_$(ARCH).deb
@@ -411,17 +411,18 @@ $(SICKBEARD): $(SPREZZ)/Sick-Beard/debian/changelog
 .PHONY: spl
 spl: $(SPL)_$(ARCH).deb
 $(SPL): $(SPREZZ)/spl/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	git clone git://github.com/zfsonlinux/spl.git $@
-	cd $@ && ./autogen.sh
-	tar cJf $(SPLORIG) $@ --exclude-vcs
-	cp -r $(<D) $@/
+	tar cJf $(SPL).orig.tar.xz $@ --exclude-vcs
+	false
 
 .PHONY: zfs
 zfs: $(ZFS)_$(ARCH).deb
 $(ZFS): $(SPREZZ)/zfs/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	git clone git://github.com/zfsonlinux/zfs.git $@
-	cd $@ && ./autogen.sh
-	tar cJf $(ZFSORIG) $@ --exclude-vcs
+	rm -rf $@/debian
+	tar cJf $(ZFS).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@/
 
 .PHONY: nethorologist
@@ -6136,6 +6137,14 @@ $(OCTAVE): $(SPREZZ)/octave/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf octave-$(octave_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: omphalos
+omphalos:$(OMPHALOS)_$(ARCH).deb
+$(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf omphalos-$(omphalos_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: opal
 opal:$(OPAL)_$(ARCH).deb
 $(OPAL): $(SPREZZ)/opal/debian/changelog
@@ -7632,6 +7641,14 @@ $(LIBWEBP): $(SPREZZ)/libwebp/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libwebp-$(libwebp_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libwibble
+libwibble:$(LIBWIBBLE)_$(ARCH).deb
+$(LIBWIBBLE): $(SPREZZ)/libwibble/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libwibble-$(libwibble_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: wget
 wget:$(WGET)_$(ARCH).deb
