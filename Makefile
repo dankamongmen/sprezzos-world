@@ -853,6 +853,14 @@ $(LIBCURSESPERL): $(SPREZZ)/libcurses-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Curses-$(libcurses-perl_UPVER).tgz $(TARARGS) $@
 
+.PHONY: libperl4-corelibs-perl
+libperl4-corelibs-perl:$(LIBPERL4CORELIBSPERL)_$(ARCH).deb
+$(LIBPERL4CORELIBSPERL): $(SPREZZ)/libperl4-corelibs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Perl4-CoreLibs-$(libperl4-corelibs-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libperlio-gzip-perl
 libperlio-gzip-perl:$(LIBPERLIOGZIPPERL)_$(ARCH).deb
 $(LIBPERLIOGZIPPERL): $(SPREZZ)/libperlio-gzip-perl/debian/changelog
