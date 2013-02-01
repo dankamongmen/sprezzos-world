@@ -1153,6 +1153,14 @@ $(APACHETOP): $(SPREZZ)/apachetop/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf apachetop-$(apachetop_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: apparmor
+apparmor:$(APPARMOR)_$(ARCH).deb
+$(APPARMOR): $(SPREZZ)/apparmor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf apparmor-$(apparmor_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: ardour
 ardour:$(ARDOUR)_$(ARCH).deb
 $(ARDOUR): $(SPREZZ)/ardour/debian/changelog
