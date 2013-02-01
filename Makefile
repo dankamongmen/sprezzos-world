@@ -4935,6 +4935,14 @@ $(LIBFCGI): $(SPREZZ)/libfcgi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fcgi-$(libfcgi_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libffi
+libffi:$(LIBFFI)_$(ARCH).deb
+$(LIBFFI): $(SPREZZ)/libffi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libffi-$(libffi_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libfontenc
 libfontenc:$(LIBFONTENC)_$(ARCH).deb
 $(LIBFONTENC): $(SPREZZ)/libfontenc/debian/changelog
