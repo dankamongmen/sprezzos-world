@@ -1,0 +1,99 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+DISTDIR=$(CURDIR)/debian/cmtk
+
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+# custom option tests to provide build for validating unittests
+ifneq (,$(findstring docheck,$(DEB_BUILD_OPTIONS)))
+	TESTING=ON
+	DEB_HOST_ARCH=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+ ifeq ($(DEB_HOST_ARCH),i386)
+	TFLAGS=-march=pentium4
+ endif
+ ifeq ($(DEB_HOST_ARCH),amd64)
+	TFLAGS=-march=nocona
+ endif
+    TFLAGS+=-mmmx -msse -msse2 -mfpmath=sse
+	OPT_CMAKE_FLAGS=-DCMAKE_C_FLAGS:STRING="$(TFLAGS)" \
+					-DCMAKE_ANSI_CXXFLAGS:STRING="$(TFLAGS)"
+else
+	TESTING=OFF
+	export DEB_BUILD_OPTIONS += " nocheck"
+endif
+
+%:
+	dh $@ --parallel
+
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+		-DBUILD_APPS:BOOL=ON \
+		-DBUILD_DOCUMENTATION:BOOL=OFF \
+		-DBUILD_GUI:BOOL=ON \
+		-DBUILD_SHARED_LIBS:BOOL=ON \
+		-DBUILD_TESTING:BOOL=$(TESTING) \
+		-DCMTK_BUILD_DCMTK:BOOL=OFF \
+		-DCMTK_BUILD_MXML:BOOL=OFF \
+		-DCMTK_BUILD_NRRD:BOOL=ON \
+		-DCMTK_BUILD_SQLITE:BOOL=OFF \
+		-DCMTK_BUILD_ZLIB:BOOL=OFF \
+		-DCMTK_ROOT_PATH_SRI24:PATH=/usr/share/data/sri24-atlas \
+		-DCMTK_USE_DCMTK:BOOL=ON \
+		-DCMTK_USE_FFTW:BOOL=ON \
+		-DCMTK_USE_QT:BOOL=ON \
+		-DCMTK_USE_SMP:BOOL=ON \
+		-DCMTK_USE_SQLITE:BOOL=ON \
+		-DDART_TESTING_TIMEOUT:STRING=15000 \
+		-DMXML_INCLUDE_DIR:PATH=/usr/include \
+		-DLZMA_INCLUDE_DIRS:PATH=/usr/include/lzma \
+		-DCMAKE_SKIP_RPATH:BOOL=OFF \
+		-DCMTK_BUILD_WRAPPER:BOOL=ON \
+		$(OPT_CMAKE_FLAGS)
+
+override_dh_auto_test:
+ifneq (,$(findstring docheck,$(DEB_BUILD_OPTIONS)))
+	xvfb-run --auto-servernum --server-num=20 \
+		dh_auto_test
+endif
+
+override_dh_auto_install:
+	dh_auto_install
+
+	: # Remove not needed headers, cmake files etc
+	rm -fr $(DISTDIR)/usr/include
+	-/usr/bin/find $(DISTDIR) -iname *.cmake -delete
+
+	: # Prune duplicate docs
+	rm -fr $(DISTDIR)/usr/share/cmtk/doc
+
+	: # Generate manpages
+	xvfb-run --auto-servernum --server-num=20 \
+		scripts/gen_manpages \
+	|| dpkg -l xvfb | awk '/xvfb/{print $3;}' | grep -q ubuntu
+	: # Above condition just to ignore unclean exit from xvfb on elderly broken ubuntus
+	: # Cleaner solution patches are welcome!
+
+override_dh_installman:
+	dh_installman debian/manpages/*
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf debian/manpages
+
+get-orig-source:
+	uscan --verbose --rename --force-download
+
+get-orig-source-svn:
+	cd ../cmtk.gitsvn && \
+	git svn rebase && \
+	rev=$$(git show | sed -n -e '/git-svn-id/s/.*@\([0-9]*\) .*/\1/gp') && \
+	otgz=cmtk-2.1.0~svn$$rev.tar.gz && \
+	sh scripts/make_src_archive.sh && \
+	mv CMTK-2.1.0svn-Source.tar.gz $$otgz && \
+	cd - && \
+	git-import-orig ../cmtk.gitsvn/$$otgz || \
+	echo "Failed to git-import-orig ../cmtk.gitsvn/$$otgz"

@@ -4479,6 +4479,14 @@ $(LIBISOFS): $(SPREZZ)/libisofs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libisofs-$(libisofs_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: liblastfm
+liblastfm:$(LIBLASTFM)_$(ARCH).deb
+$(LIBLASTFM): $(SPREZZ)/liblastfm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liblastfm_$(liblastfm_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: liblockfile
 liblockfile:$(LIBLOCKFILE)_$(ARCH).deb
 $(LIBLOCKFILE): $(SPREZZ)/liblockfile/debian/changelog
