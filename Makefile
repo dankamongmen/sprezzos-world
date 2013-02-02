@@ -44,7 +44,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) # -j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -562,6 +562,14 @@ $(AALIB): $(SPREZZ)/aalib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf $(AALIB).orig.tar.gz $(TARARGS) $@
+
+.PHONY: aaphoto
+aaphoto:$(AAPHOTO)_$(ARCH).deb
+$(AAPHOTO): $(SPREZZ)/aaphoto/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf aaphoto_$(aaphoto_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: ace
 ace:$(ACE)_$(ARCH).deb
@@ -7395,6 +7403,14 @@ $(SHADOW): $(SPREZZ)/shadow/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf shadow-$(shadow_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: sheepdog
+sheepdog:$(SHEEPDOG)_$(ARCH).deb
+$(SHEEPDOG): $(SPREZZ)/sheepdog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sheepdog_$(sheepdog_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: shotwell
 shotwell:$(SHOTWELL)_$(ARCH).deb
 $(SHOTWELL): $(SPREZZ)/shotwell/debian/changelog
@@ -8429,6 +8445,16 @@ $(ZLIB): $(SPREZZ)/zlib/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf zlib-$(zlib_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: zookeeper
+zookeeper:$(ZOOKEEPER)_$(ARCH).deb
+$(ZOOKEEPER): $(SPREZZ)/zookeeper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf zookeeper-$(zookeeper_UPVER).tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: zsh
 zsh:$(ZSH)_$(ARCH).deb
