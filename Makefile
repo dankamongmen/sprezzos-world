@@ -5953,6 +5953,14 @@ $(NGINX): $(SPREZZ)/nginx/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf nginx-$(nginx_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ntfs-3g
+ntfs-3g:$(NTFS3G)_$(ARCH).deb
+$(NTFS3G): $(SPREZZ)/ntfs-3g/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ntfs-3g_ntfsprogs-$(ntfs-3g_UPVER).tgz $(TARARGS) $@
+
 .PHONY: nfs-utils
 nfs-utils:$(NFSUTILS)_$(ARCH).deb
 $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
