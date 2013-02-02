@@ -1,0 +1,99 @@
+From: Uwe Kleine-König <u.kleine-koenig@pengutronix.de>
+Subject: remove cruft needed to build on glibc < 2.6
+
+All Debian platforms (but m68k which doesn't matter much) use a glibc >= 2.6.
+
+This fixes a (harmless) build warning
+
+	dpkg-shlibdeps: warning: dependency on libdl.so.2 could be avoided if "debian/rt-tests/usr/bin/svsematest debian/rt-tests/usr/bin/pmqtest debian/rt-tests/usr/bin/sendme debian/rt-tests/usr/bin/sigwaittest debian/rt-tests/usr/bin/ptsematest" were not uselessly linked against it (they use none of its symbols).
+
+Forwarded: not-needed
+Signed-off-by: Uwe Kleine-König <u.kleine-koenig@pengutronix.de>
+---
+ Makefile                 |    5 ++---
+ src/include/rt-get_cpu.h |   19 +------------------
+ src/lib/rt-get_cpu.c     |   27 ---------------------------
+ 3 files changed, 3 insertions(+), 48 deletions(-)
+
+--- a/Makefile
++++ b/Makefile
+@@ -7,7 +7,6 @@
+ TARGETS = $(sources:.c=)
+ 
+ LIBS 	= -lrt -lpthread -lrttest -L.
+-EXTRA_LIBS ?= -ldl	# for get_cpu
+ DESTDIR	?=
+ prefix  ?= /usr/local
+ bindir  ?= $(prefix)/bin
+@@ -97,8 +96,8 @@
+ hackbench: hackbench.o
+ 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
+ 
+-librttest.a: rt-utils.o error.o rt-get_cpu.o
+-	$(AR) rcs librttest.a rt-utils.o error.o rt-get_cpu.o
++librttest.a: rt-utils.o error.o
++	$(AR) rcs librttest.a rt-utils.o error.o
+ 
+ CLEANUP  = $(TARGETS) *.o .depend *.*~ *.orig *.rej rt-tests.spec *.d *.a
+ CLEANUP += $(if $(wildcard .git), ChangeLog)
+--- a/src/include/rt-get_cpu.h
++++ b/src/include/rt-get_cpu.h
+@@ -19,27 +19,10 @@
+         s = syscall(__NR_getcpu, &c, NULL, NULL);
+         return (s == -1) ? s : c;
+ }
+-#elif defined(__GLIBC__) && defined(__GLIBC_MINOR__)	\
+-	&& __GLIBC__>=2 && __GLIBC_MINOR__>=6
++#else
+ #include <utmpx.h>
+ static inline int get_cpu_setup(void) { return 0; }
+ static inline int get_cpu(void) { return sched_getcpu(); }
+-#else
+-extern int get_cpu_setup(void);
+-extern int (*get_cpu)(void);
+-extern int (*get_cpu_vdsop)(unsigned int *, unsigned int *, void *);
+-
+-static inline int getcpu_vdso(void)
+-{
+-	unsigned int c,s;
+-	/* Show the source of get_cpu */
+-#ifdef DEBUG
+-	fprintf(stderr, "getcpu_vdso\n");
+-#endif
+-	s = get_cpu_vdsop(&c, NULL, NULL);
+-        return (s == -1) ? s : c;
+-}
+-
+ #endif
+ 
+ #endif	/* __RT_GET_CPU_H */
+--- a/src/lib/rt-get_cpu.c
++++ /dev/null
+@@ -1,27 +0,0 @@
+-/*
+- * Copyright (C) 2009 John Kacur <jkacur@redhat.com>
+- */
+-#include "rt-get_cpu.h"
+-#ifdef __NR_getcpu
+-#elif defined(__GLIBC__) && defined(__GLIBC_MINOR__)	\
+-	&& __GLIBC__>=2 && __GLIBC_MINOR__>=6
+-#else
+-int (*get_cpu)(void);
+-int (*get_cpu_vdsop)(unsigned int *, unsigned int *, void *);
+-
+-int get_cpu_setup(void)
+-{
+-	void *handle = dlopen("linux-vdso.so.1", RTLD_LAZY);
+-	get_cpu_vdsop = NULL;
+-	if (handle) {
+-		get_cpu_vdsop = dlsym(handle, "getcpu");
+-		dlclose(handle);
+-		if (get_cpu_vdsop) {
+-			get_cpu = getcpu_vdso;
+-			return 0;
+-		}
+-	}
+-	return -1;
+-}
+-
+-#endif

@@ -4425,6 +4425,14 @@ $(LIBEXIF): $(SPREZZ)/libexif/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libexif-$(libexif_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libextractor
+libextractor:$(LIBEXTRACTOR)_$(ARCH).deb
+$(LIBEXTRACTOR): $(SPREZZ)/libextractor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libextractor-$(libextractor_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libgadu
 libgadu:$(LIBGADU)_$(ARCH).deb
 $(LIBGADU): $(SPREZZ)/libgadu/debian/changelog
