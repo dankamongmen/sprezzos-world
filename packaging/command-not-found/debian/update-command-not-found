@@ -1,0 +1,100 @@
+#!/usr/bin/python -Su
+#
+# Copyright (C) 2008 Julian Andres Klode <jak@debian.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+'''Create the databases (or cache) for command-not-found
+
+This program creates the databases in /var/cache/command-not-found/. It may
+take some time, because the files it reads are big.
+
+Patches are accepted, aswell as rewrites in Perl.'''
+import subprocess
+import os.path
+import gzip
+import sys
+import gdbm
+
+databases = {}
+
+def write_db_core(text):
+	'''Create the database from the Contents-*.gz file
+	
+	Write the information found in the fileobject 'text' to the database at
+	the path 'tgt'.
+	'''
+	
+	for i in text:
+		if not (i.startswith('usr/sbin') or i.startswith('usr/bin') or
+		   i.startswith('bin') or i.startswith('sbin')):
+		   continue
+		try:
+			fname, packages = i.split(None, 1)
+		except ValueError:
+			continue
+
+		fname = os.path.basename(fname)
+		
+		for package in packages.split(','):
+			section, package = package.strip().rsplit('/', 1)
+			if len(section.split('/')) == 2:
+				component, section = section.split('/')
+			else:
+				component = 'main'
+			if not component in databases:
+				databases[component] = gdbm.open(
+				"/var/cache/command-not-found/%s.db" % component, "n", 0644)
+				databases[component][':component:'] = component
+			try:
+				databases[component][fname] += '|' + package.strip()
+			except KeyError:
+				databases[component][fname] = package.strip()
+			break
+
+def write_db_apt_file():
+	import glob
+	for fname in glob.glob('/var/cache/apt/apt-file/*.gz'):
+		print 'I: Writing data for %s ...' % os.path.basename(fname),
+		fobj = gzip.open(fname)
+		try:
+			write_db_core(fobj)
+		finally:
+			fobj.close()
+		print '. done'
+
+
+if __name__ == '__main__':
+	from optparse import OptionParser
+
+	parser = OptionParser()
+	parser.add_option("-n", "--no-apt-file", action="store_true",
+                         help="Do not run apt-file prior to updating the cache")
+	parser.add_option("-u", "--no-umask", action="store_true",
+                          help="Do not change the umask to 0022.")
+    
+	(options, args) = parser.parse_args()
+
+	
+	if not options.no_apt_file:
+		subprocess.check_call(["/usr/bin/apt-file", "update"])
+	try:
+		if not options.no_umask:
+			umask = os.umask(0022)
+		write_db_apt_file()
+	finally:
+		for component, fobj in databases.iteritems():
+			fobj.close()
+		if not options.no_umask:
+			os.umask(umask)
