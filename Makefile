@@ -893,6 +893,14 @@ $(LIBDBDSQLITE3PERL): $(SPREZZ)/libdbd-sqlite3-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf DBD-SQLite-$(libdbd-sqlite3-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libnet-dbus-perl
+libnet-dbus-perl:$(LIBNETDBUSPERL)_$(ARCH).deb
+$(LIBNETDBUSPERL): $(SPREZZ)/libnet-dbus-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Net-DBus-$(libnet-dbus-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libnet-dns-perl
 libnet-dns-perl:$(LIBNETDNSPERL)_$(ARCH).deb
 $(LIBNETDNSPERL): $(SPREZZ)/libnet-dns-perl/debian/changelog
