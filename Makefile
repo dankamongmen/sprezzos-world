@@ -3937,6 +3937,14 @@ $(PAM): $(SPREZZ)/pam/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf Linux-PAM-$(pam_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libpaper
+libpaper:$(LIBPAPER)_$(ARCH).deb
+$(LIBPAPER): $(SPREZZ)/libpaper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libpaper-$(libpaper_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libpam-ssh
 libpam-ssh:$(LIBPAMSSH)_$(ARCH).deb
 $(LIBPAMSSH): $(SPREZZ)/libpam-ssh/debian/changelog
