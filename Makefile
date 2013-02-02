@@ -1705,6 +1705,14 @@ $(CICAP): $(SPREZZ)/c-icap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf c_icap-$(c-icap_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: c2esp
+c2esp:$(C2ESP)_$(ARCH).deb
+$(C2ESP): $(SPREZZ)/c2esp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf c2esp$(c2esp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: airport-utils
 airport-utils:$(AIRPORTUTILS)_$(ARCH).deb
 $(AIRPORTUTILS): $(SPREZZ)/airport-utils/debian/changelog
