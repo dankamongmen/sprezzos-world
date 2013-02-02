@@ -1,0 +1,83 @@
+#!/bin/sh
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+_CONFFILE="/etc/default/ntfs-3g"
+
+case "${1}" in
+	configure)
+		db_get ntfs-3g/setuid-root
+		NTFS3G_SETUID_ROOT="${RET}" # boolean
+
+		db_get ntfs-3g/initramfs
+		NTFS3G_INITRAMFS="${RET}" # boolean
+		db_stop
+
+		if [ ! -e "${_CONFFILE}" ]
+		then
+
+cat > "${_CONFFILE}" << EOF
+# /etc/default/ntfs-3g
+
+NTFS3G_INITRAMFS="${NTFS3G_INITRAMFS}"
+EOF
+		fi
+
+		cp -a -f "${_CONFFILE}" "${_CONFFILE}.tmp"
+
+		# If the admin deleted or commented some variables but then set
+		# them via debconf, (re-)add them to the config file.
+
+		test -z "${NTFS3G_INITRAMFS}" || \
+		grep -Eq '^ *NTFS3G_INITRAMFS=' "${_CONFFILE}" || \
+		echo "NTFS3G_INITRAMFS=" >> "${_CONFFILE}"
+
+		OLD_NTFS3G_INITRAMFS="$(awk -F= '/^NTFS3G_INITRAMFS=/ { print $2 }' /etc/default/ntfs-3g | sed -e 's|"||g' -e "s|'||g")"
+
+		sed -e "s|^ *NTFS3G_INITRAMFS=.*|NTFS3G_INITRAMFS=\"${NTFS3G_INITRAMFS}\"|" \
+		< "${_CONFFILE}" > "${_CONFFILE}.tmp"
+
+		mv -f "${_CONFFILE}.tmp" "${_CONFFILE}"
+
+		case "${NTFS3G_SETUID_ROOT}" in
+			true)
+				_MODE="4755"
+				;;
+
+			false)
+				_MODE="0755"
+				;;
+		esac
+
+		if [ -x /usr/sbin/dpkg-statoverride ] && \
+		   ! /usr/sbin/dpkg-statoverride --list /bin/ntfs-3g >/dev/null
+		then
+			chown root:root /bin/ntfs-3g
+			chmod ${_MODE} /bin/ntfs-3g
+		fi
+
+		if [ "${NTFS3G_INITRAMFS}" = "true" ] || \
+		   [ "${OLD_NTFS3G_INITRAMFS}" != "${NTFS3G_INITRAMFS}" ]
+		then
+			if [ -x /usr/sbin/update-initramfs ]
+			then
+				update-initramfs -u
+			fi
+		fi
+		;;
+
+	abort-upgrade|abort-remove|abort-deconfigure)
+
+		;;
+
+	*)
+		echo "postinst called with unknown argument \`${1}'" >&2
+		exit 1
+		;;
+esac
+
+#DEBHELPER#
+
+exit 0

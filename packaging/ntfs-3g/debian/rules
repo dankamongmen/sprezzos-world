@@ -1,0 +1,92 @@
+#!/usr/bin/make -f
+
+SHELL := sh -e
+
+DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+ifeq ($(DEB_HOST_ARCH_OS), linux)
+CONFIGURE_FLAGS = --enable-posix-acls
+endif
+
+upstream:
+	lynx -dump http://jp-andre.pagesperso-orange.fr/changelog.html > debian/local/changelog
+
+%:
+	dh ${@} --with autotools_dev
+
+override_dh_auto_configure:
+	dh_auto_configure -- --exec-prefix=/ --enable-crypto --enable-extras --enable-xattr-mappings --disable-ldconfig --with-fuse=external $(CONFIGURE_FLAGS)
+
+override_dh_auto_install:
+	dh_auto_install
+
+	# moving ntfsdecrypt, depends on /usr
+	mkdir -p debian/tmp/usr/bin
+	mv debian/tmp/bin/ntfsdecrypt debian/tmp/usr/bin
+
+	# adding initramfs-tools integration
+	install -D -m 0755 debian/local/ntfs-3g.hook debian/ntfs-3g/usr/share/initramfs-tools/hooks/ntfs_3g
+	install -D -m 0755 debian/local/ntfs-3g.local-premount debian/ntfs-3g/usr/share/initramfs-tools/scripts/local-premount/ntfs_3g
+	install -D -m 0755 debian/local/ntfs-3g.local-bottom debian/ntfs-3g/usr/share/initramfs-tools/scripts/local-bottom/ntfs_3g
+
+	# adding hal policy
+	install -D -m 0644 debian/local/25-ntfs-3g-policy.fdi debian/ntfs-3g/usr/share/hal/fdi/policy/10osvendor/25-ntfs-3g-policy.fdi
+
+	# removing unused files
+	rm -f debian/tmp/usr/lib/*/*.la
+
+	# removing rpath
+	for _PROGRAM in \
+		bin/lowntfs-3g \
+		bin/ntfs-3g \
+		bin/ntfs-3g.probe \
+		bin/ntfs-3g.secaudit \
+		bin/ntfs-3g.usermap \
+		bin/ntfscat \
+		bin/ntfscluster \
+		bin/ntfscmp \
+		bin/ntfsck \
+		bin/ntfsdump_logfile \
+		bin/ntfsfix \
+		bin/ntfsinfo \
+		bin/ntfsls \
+		bin/ntfsmftalloc \
+		bin/ntfsmove \
+		bin/ntfstruncate \
+		bin/ntfswipe \
+		sbin/mkntfs \
+		sbin/ntfsclone \
+		sbin/ntfscp \
+		sbin/ntfslabel \
+		sbin/ntfsresize \
+		sbin/ntfsundelete \
+		usr/bin/ntfsdecrypt; \
+	do \
+		chrpath --delete debian/tmp/$${_PROGRAM}; \
+	done
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
+
+override_dh_installchangelogs:
+	dh_installchangelogs debian/local/changelog
+
+override_dh_install:
+	dh_install --fail-missing
+
+override_dh_link:
+	rm -rf debian/ntfs-3g-dev/usr/share/doc
+
+	# correcting symlink target
+	dh_link -pntfs-3g-dev lib/$(DEB_HOST_MULTIARCH)/$$(basename $$(readlink debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libntfs-3g.so)) usr/lib/$(DEB_HOST_MULTIARCH)/libntfs-3g.so
+
+	dh_link --remaining-packages
+
+override_dh_makeshlibs:
+	dh_makeshlibs --add-udeb=ntfs-3g-udeb
+
+override_dh_strip:
+	dh_strip --dbg-package=ntfs-3g-dbg
