@@ -2635,6 +2635,14 @@ $(FESTIVAL): $(SPREZZ)/festival/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf festival-$(festival_UPVER)-release.tar.gz $(TARARGS) $@
 
+.PHONY: field3d
+field3d:$(FIELD3D)_$(ARCH).deb
+$(FIELD3D): $(SPREZZ)/field3d/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libfield3d_$(field3d_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: file-roller
 file-roller:$(FILEROLLER)_$(ARCH).deb
 $(FILEROLLER): $(SPREZZ)/file-roller/debian/changelog
