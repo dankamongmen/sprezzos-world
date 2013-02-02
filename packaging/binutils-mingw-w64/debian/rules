@@ -1,0 +1,95 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Copyright © 2010 Stephen Kitt <steve@sk2.org>
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+top_dir := $(shell pwd)
+binutils_dir := /usr/src/binutils
+upstream_dir := $(top_dir)/upstream
+build_dir := $(top_dir)/build
+source_version := $(shell dpkg-query -W -f="\$${Version}\n" binutils-source)
+deb_version := $(source_version)+$(shell dpkg-parsechangelog | sed -ne "s/^Version: \(.*\)/\1/p")
+deb_upstream_version := $(shell echo $(deb_version) | cut -d- -f1)
+gnu_upstream_version := $(shell echo $(deb_upstream_version) | cut -d. -f1-3)
+
+targets := i686-w64-mingw32 x86_64-w64-mingw32
+
+CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
+CFLAGS += -Wall
+
+unpack: unpack-stamp
+unpack-stamp:
+	tar xf $(binutils_dir)/binutils-$(gnu_upstream_version).tar.*
+	rm -rf $(upstream_dir)
+	mv binutils-$(deb_upstream_version) $(upstream_dir)
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -rf *-stamp $(build_dir) $(upstream_dir) $(patsubst %,debian/%-dllwrap.1,$(targets))
+	dh_clean
+
+configure-stamp: unpack-stamp
+	dh_testdir
+	for target in $(targets); do \
+		dh_auto_configure -B$(build_dir)/$$target -D$(upstream_dir) -- \
+				  --prefix=/usr --disable-multilib --enable-lto --enable-plugins --target=$$target; \
+	done
+	touch $@
+
+build-arch-stamp: configure-stamp
+	dh_testdir
+	for target in $(targets); do \
+		dh_auto_build --parallel -B$(build_dir)/$$target; \
+	done
+	touch $@
+
+build-indep-stamp:
+	touch $@
+
+install-arch: install-arch-stamp
+install-arch-stamp: build-arch-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	for target in $(targets); do \
+		dh_auto_install -B$(build_dir)/$$target; \
+	done
+
+	# Drop files which will conflict with other packages
+	rm -rf debian/tmp/usr/lib/*.a
+	rm -rf debian/tmp/usr/share/info
+	rm -rf debian/tmp/usr/share/locale
+
+	# The following aren't necessary and don't comply with the FHS
+	rm -rf $(patsubst %,debian/tmp/usr/%,$(targets))
+
+	# Copy the dllwrap manpages
+	for target in $(targets); do \
+		cp debian/dllwrap.1 debian/$$target-dllwrap.1; \
+	done
+
+	touch $@
+
+build: build-arch build-indep
+build-arch: build-arch-stamp
+build-indep: build-indep-stamp
+
+binary-indep: build-indep
+	dh $@
+
+binary-arch: install-arch
+	dh $@
+
+override_dh_installchangelogs:
+	dh_installchangelogs $(upstream_dir)/ChangeLog
+
+override_dh_gencontrol:
+	dh_gencontrol -- -v$(deb_version) -Vlocal:Version=$(deb_upstream_version) -Vbinutils:Version=$(source_version)
+
+binary: binary-indep binary-arch
+
+.PHONY: binary-indep binary-arch binary clean build-indep build-arch build install-arch
