@@ -1881,6 +1881,14 @@ $(CMAKE): $(SPREZZ)/cmake/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cmake-$(cmake_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cmtk
+cmtk:$(CMTK)_$(ARCH).deb
+$(CMTK): $(SPREZZ)/cmtk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf CMTK-$(cmtk_UPVER)-Source.tar.gz $(TARARGS) $@
+
 .PHONY: colormake
 colormake:$(COLORMAKE)_$(ARCH).deb
 $(COLORMAKE): $(SPREZZ)/colormake/debian/changelog
