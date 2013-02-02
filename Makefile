@@ -7179,6 +7179,14 @@ $(RTMPDUMP): $(SPREZZ)/rtmpdump/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rtmpdump-$(rtmpdump_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: rt-tests
+rt-tests:$(RTTESTS)_$(ARCH).deb
+$(RTTESTS): $(SPREZZ)/rt-tests/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rt-tests-$(rt-tests_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: rtorrent
 rtorrent:$(RTORRENT)_$(ARCH).deb
 $(RTORRENT): $(SPREZZ)/rtorrent/debian/changelog
