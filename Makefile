@@ -2863,7 +2863,7 @@ $(GDKPIXBUF): $(SPREZZ)/gdk-pixbuf/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gpk-pixbuf-$(gdk-pixbuf_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf gdk-pixbuf-$(gdk-pixbuf_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: gdl
 gdl:$(GDL)_$(ARCH).deb
@@ -8293,6 +8293,14 @@ $(YELPXSL): $(SPREZZ)/yelp-xsl/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf yelp-xsl-$(yelp-xsl_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: yum
+yum:$(YUM)_$(ARCH).deb
+$(YUM): $(SPREZZ)/yum/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf yum-$(yum_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: zerofree
 zerofree:$(ZEROFREE)_$(ARCH).deb
