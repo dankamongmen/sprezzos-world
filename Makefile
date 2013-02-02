@@ -1904,6 +1904,8 @@ $(COMMANDNOTFOUND): $(SPREZZ)/command-not-found/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf command-not-found_$(command-not-found_UPVER).orig.tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: cpptest
 cpptest:$(CPPTEST)_$(ARCH).deb
@@ -2280,6 +2282,14 @@ $(DCRAW): $(SPREZZ)/dcraw/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dcraw-$(dcraw_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: deluge
+deluge:$(DELUGE)_$(ARCH).deb
+$(DELUGE): $(SPREZZ)/deluge/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf deluge-$(deluge_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: devhelp
 devhelp:$(DEVHELP)_$(ARCH).deb
