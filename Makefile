@@ -1537,6 +1537,14 @@ $(BWMNG): $(SPREZZ)/bwm-ng/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bwm-ng-$(bwm-ng_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: byobu
+byobu:$(BYOBU)_$(ARCH).deb
+$(BYOBU): $(SPREZZ)/byobu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf byobu_$(byobu_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: flex
 flex:$(FLEX)_$(ARCH).deb
 $(FLEX): $(SPREZZ)/flex/debian/changelog
