@@ -39,7 +39,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | cut -d- -f1 && \
 	 echo -n "$(@F)_UPVER:=" && \
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-]SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-].*SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
@@ -1896,6 +1896,14 @@ $(COLORMAKE): $(SPREZZ)/colormake/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf colormake-$(colormake_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: command-not-found
+command-not-found:$(COMMANDNOTFOUND)_$(ARCH).deb
+$(COMMANDNOTFOUND): $(SPREZZ)/command-not-found/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf command-not-found_$(command-not-found_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: cpptest
 cpptest:$(CPPTEST)_$(ARCH).deb
