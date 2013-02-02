@@ -1,0 +1,269 @@
+#!/usr/bin/make -f
+
+# debian/rules for libhdf5,
+# (c) 2001 Brian Russo, under GPL. 
+# (c) 2003 Josselin Mouette
+# (c) 2007-2009 Francesco P. Lovergine.
+# (c) 2010-2012 Sylvestre Ledru
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+package = libhdf5
+pkgversion ?= $(shell dpkg-parsechangelog | awk '/^Version:/ {print $$2}')
+version ?= $(shell echo $(pkgversion) | sed 's/\([0-9\.]\)-.*$$/\1/')
+soname =  7
+major_version = $(shell echo $(version) | cut -d. -f1,2)
+serpack = $(package)-$(soname)
+openmpipack = $(package)-openmpi-$(soname)
+mpich2pack = $(package)-mpich2-$(soname)
+virtpack = $(package)-$(major_version)
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+DEFAULT_MPI=$(shell dpkg -s mpi-default-dev | grep Depends | sed "s/Depends: lib//" | sed "s/Depends: //" | sed "s/-dev//")
+
+# To be used if binary packages were buildable on any arch
+#ARCH_FLAG=-a
+#ARCHS=any
+ARCH_FLAG=-s
+ARCHS=alpha armel armhf amd64 i386 ia64 powerpc powerpcspe ppc64 sparc kfreebsd-i386 kfreebsd-amd64 hurd-i386
+
+ifeq ($(DEB_HOST_ARCH),arm)
+build_openmpi = no
+else ifeq ($(DEB_HOST_ARCH),hppa)
+build_openmpi = no
+else ifeq ($(DEB_HOST_ARCH),mips)
+build_openmpi = no
+else ifeq ($(DEB_HOST_ARCH),mipsel)
+build_openmpi = no
+else ifeq ($(DEB_HOST_ARCH),s390)
+build_openmpi = no
+else ifeq ($(DEB_HOST_ARCH),s390x)
+build_openmpi = no
+else ifeq ($(DEB_HOST_ARCH),sh4)
+build_openmpi = no
+else
+build_openmpi = yes
+endif
+
+ifeq ($(build_openmpi),yes)
+configure_stamp_openmpi = configure-stamp-openmpi
+build_stamp_openmpi = build-stamp-openmpi
+install_openmpi = install-openmpi
+else
+configure_stamp_openmpi =
+build_stamp_openmpi = 
+install_openmpi =
+endif
+
+ifeq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+       USE_PROD = yes
+else
+       USE_PROD = no
+endif
+
+### let's keep it commented out in case a compiler error happens again
+# ifeq (hppa-linux,$(DEB_BUILD_GNU_TYPE))
+#   DEBCC=gcc-3.2
+#   DEBCXX=g++-3.2
+# else
+#    DEBCC=gcc
+#    DEBCXX=g++
+#    DEBFORTRAN=gfortran
+# With gcc 4.3+ force optimization off, else some tests fail...
+#    DEBOPT=-O0
+# endif
+###
+
+# export DEB_BUILD_OPTIONS="parallel=2"
+#
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif	
+
+CONFIGURE_FLAGS = --prefix=/usr --host=$(DEB_HOST_GNU_TYPE) \
+		  --build=$(DEB_BUILD_GNU_TYPE) \
+		  --mandir=\$${prefix}/share/man \
+		  --with-pthread --enable-linux-lfs --enable-unsupported \
+		  --enable-shared --enable-production=$(USE_PROD) \
+		  --disable-sharedlib-rpath --with-zlib --with-default-api-version=v18
+SERIAL_ONLY_FLAGS = --enable-fortran --enable-threadsafe --enable-cxx
+
+configure: configure-stamp-debian configure-stamp \
+	   $(configure_stamp_openmpi) configure-stamp-mpich2
+
+configure-stamp-debian: debian/control.in
+	cd debian && for i in *_devlib; do j=`basename $$i _devlib`; \
+		ln -sf $$i $(package)-dev.$$j ; \
+		ln -sf $$i $(package)-openmpi-dev.$$j ; \
+		ln -sf $$i $(package)-mpich2-dev.$$j ; \
+		done
+	cd debian && for i in *_shlib; do j=`basename $$i _shlib`; \
+		ln -sf $$i $(serpack).$$j ; \
+		ln -sf $$i $(openmpipack).$$j ; \
+		ln -sf $$i $(mpich2pack).$$j ; \
+		done
+	sed -e "s/@SONAME@/$(soname)/g" debian/shlibs.in > debian/$(serpack).shlibs
+	touch $@
+
+configure-stamp: configure-stamp-debian
+	dh_testdir
+	-mkdir debian/build
+# configure serial version
+	cd debian/build && CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" FFLAGS="$(FFLAGS)" CC=/usr/bin/cc CXX=/usr/bin/c++ FC=gfortran \
+		../../configure $(CONFIGURE_FLAGS) $(SERIAL_ONLY_FLAGS) || { cat config.log; exit 1; }
+	touch $@
+
+configure-stamp-openmpi: configure-stamp-debian
+	dh_testdir
+	-mkdir debian/build-openmpi
+# configure version with openmpi
+	cd debian/build-openmpi && CPPFLAGS=-I/usr/lib/openmpi/include CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" FFLAGS="$(FFLAGS)" \
+		CC=mpicc.openmpi FC=mpif90.openmpi F9X=mpif90.openmpi RUNPARALLEL=/usr/bin/mpirun.openmpi \
+		LDFLAGS=-L/usr/lib/openmpi/lib/ \
+		OMPI_MCA_disable_memory_allocator=1 ../../configure $(CONFIGURE_FLAGS) --enable-fortran \
+		--enable-parallel=yes || { cat config.log; exit 1; }
+	touch $@
+
+configure-stamp-mpich2: configure-stamp-debian
+	dh_testdir
+	-mkdir debian/build-mpich2
+# configure version with mpich2
+	cd debian/build-mpich2 && FCFLAGS=-I/usr/lib/mpich2/include/ CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" FFLAGS="$(FFLAGS)" \
+		LDFLAGS=-L/usr/lib/mpich2/lib/ CC=mpicc.mpich2 \
+		CXX=mpicxx.mpich2 FC=mpif90.mpich2 F9X=mpif90.mpich2 RUNPARALLEL=/usr/bin/mpirun.mpich2 \
+		../../configure $(CONFIGURE_FLAGS) --enable-fortran \
+		--enable-parallel=yes || { cat config.log; exit 1; }
+	touch $@
+
+prep: 
+	dh_prep
+
+
+build: build-arch build-indep
+build-arch: build-stamp $(build_stamp_openmpi) build-stamp-mpich2
+build-indep:
+
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE) $(MAKEFLAGS) -C debian/build/
+	touch $@
+
+build-stamp-openmpi: configure-stamp-openmpi 
+	dh_testdir
+	$(MAKE)  $(MAKEFLAGS) -C debian/build-openmpi/ OMPI_MCA_disable_memory_allocator=1
+	touch $@
+
+build-stamp-mpich2: configure-stamp-mpich2 
+	dh_testdir
+	$(MAKE)  $(MAKEFLAGS) -C debian/build-mpich2/
+	touch $@
+
+#
+# Be sure to not have a previous version installed before running
+# the test suite
+#
+test: build-stamp
+	$(MAKE) -C debian/build/ test
+
+clean: 
+	test -f debian/control.in
+	-rm -rf debian/build
+	-rm -rf debian/build-openmpi
+	-rm -rf debian/build-mpich2
+	-find debian -type l | xargs rm -f
+	grep -v ^\% debian/control.in | sed -e "s/@SONAME@/$(soname)/g" -e "s/@ARCHS@/$(ARCHS)/" -e "s/@MAJOR_VERSION@/$(major_version)/" > debian/control
+	dh_clean configure-stamp* build-stamp* install-stamp* debian/*.shlibs
+
+install: build prep install-serial $(install_openmpi) install-mpich2 install-doc
+
+install-serial: build-stamp 
+	dh_testdir
+	dh_testroot
+	-mkdir debian/build/tmpinst
+	$(MAKE) -C debian/build/ install prefix=$(CURDIR)/debian/build/tmpinst/usr
+	dh_install -p$(serpack) -p$(package)-dev -phdf5-helpers -phdf5-tools \
+		--sourcedir=debian/build/tmpinst
+
+install-openmpi: build-stamp-openmpi
+	dh_testdir
+	dh_testroot
+	-mkdir debian/build-openmpi/tmpinst
+	$(MAKE) -C debian/build-openmpi/ install prefix=$(CURDIR)/debian/build-openmpi/tmpinst/usr
+	dh_install -p$(openmpipack) -p$(package)-openmpi-dev \
+		--sourcedir=debian/build-openmpi/tmpinst
+
+install-mpich2: build-stamp-mpich2
+	dh_testdir
+	dh_testroot
+	-mkdir debian/build-mpich2/tmpinst
+	$(MAKE) -C debian/build-mpich2/ install prefix=$(CURDIR)/debian/build-mpich2/tmpinst/usr
+	dh_install -p$(mpich2pack) -p$(package)-mpich2-dev \
+		--sourcedir=debian/build-mpich2/tmpinst
+
+install-doc: build-indep
+	dh_testdir
+	dh_testroot
+	dh_install -p$(package)-doc -X Dependencies -X Makefile.in -X CppUserNotes.doc
+
+binary-indep: install-doc
+	dh_testdir
+	dh_testroot
+	dh_installdocs -i
+	dh_installchangelogs -i -k release_docs/RELEASE.txt
+	dh_compress -i -X.pdf
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_lintian -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: prep install-serial $(install_openmpi) install-mpich2
+	dh_testdir
+	dh_testroot 
+	echo "hdf5-mpi-dev=libhdf5-$(DEFAULT_MPI)-dev" > debian/libhdf5-mpi-dev.substvars
+	dh_installdocs $(ARCH_FLAG)
+	dh_installman $(ARCH_FLAG)
+	dh_lintian $(ARCH_FLAG)
+	dh_installchangelogs -a -k release_docs/RELEASE.txt
+	dh_link $(ARCH_FLAG)
+	dh_strip -phdf5-tools
+	dh_strip -phdf5-helpers
+	dh_strip -p$(serpack) --dbg-package=$(serpack)-dbg
+	dh_strip -p$(mpich2pack) --dbg-package=$(mpich2pack)-dbg
+ifeq ($(build_openmpi),yes)
+	dh_strip -p$(openmpipack) --dbg-package=$(openmpipack)-dbg
+endif
+	dh_compress $(ARCH_FLAG)
+	dh_fixperms $(ARCH_FLAG)
+ifeq ($(build_openmpi),yes)
+	dh_makeshlibs -p$(openmpipack) -V $(openmpipack)
+endif
+	dh_makeshlibs -p$(mpich2pack) -V $(mpich2pack)
+	dh_makeshlibs -p$(serpack) -Xhdf5_cpp -Xhdf5_hl_cpp -V "$(serpack) | $(virtpack)"
+	dh_installdeb $(ARCH_FLAG)
+	dh_shlibdeps -p$(serpack) -L$(serpack) -ldebian/$(serpack)/usr/lib:debian/build/test/.libs
+	dh_shlibdeps -phdf5-tools -L$(serpack) -ldebian/$(serpack)/usr/lib:debian/build/test/.libs
+	dh_shlibdeps -phdf5-helpers -L$(serpack) -ldebian/$(serpack)/usr/lib:debian/build/test/.libs
+ifeq ($(build_openmpi),yes)
+	dh_shlibdeps -p$(openmpipack) -L$(openmpipack) -ldebian/$(openmpipack)/usr/lib
+endif
+	dh_shlibdeps -p$(mpich2pack) -L$(mpich2pack) -ldebian/$(mpich2pack)/usr/lib
+	dh_gencontrol $(ARCH_FLAG)
+	dh_md5sums $(ARCH_FLAG)
+	dh_builddeb $(ARCH_FLAG)
+
+binary: binary-indep binary-arch
+
+.PHONY: build clean binary-indep binary-arch binary install configure \
+		install-doc install-serial install-openmpi install-mpich2 prep
+
+.NOTPARALLEL: configure-stamp-debian configure-stamp \
+	   $(configure_stamp_openmpi) configure-stamp-mpich2
