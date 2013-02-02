@@ -6001,6 +6001,14 @@ $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf nfs-utils_$(nfs-utils_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libnetfilter-acct
+libnetfilter-acct:$(LIBNETFILTERACCT)_$(ARCH).deb
+$(LIBNETFILTERACCT): $(SPREZZ)/libnetfilter-acct/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libnetfilter_acct-$(libnetfilter-acct_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libnetfilter-cthelper
 libnetfilter-cthelper:$(LIBNETFILTERCTHELPER)_$(ARCH).deb
 $(LIBNETFILTERCTHELPER): $(SPREZZ)/libnetfilter-cthelper/debian/changelog
