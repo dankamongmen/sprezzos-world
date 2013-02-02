@@ -5697,6 +5697,14 @@ $(MPEG2DEC): $(SPREZZ)/mpeg2dec/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmpeg2-$(mpeg2dec_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: mpich2
+mpich2:$(MPICH2)_$(ARCH).deb
+$(MPICH2): $(SPREZZ)/mpich2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mpich-$(mpich2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libmediainfo
 libmediainfo:$(LIBMEDIAINFO)_$(ARCH).deb
 $(LIBMEDIAINFO): $(SPREZZ)/libmediainfo/debian/changelog
