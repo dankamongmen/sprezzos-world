@@ -5985,6 +5985,14 @@ $(NTFS3G): $(SPREZZ)/ntfs-3g/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ntfs-3g_ntfsprogs-$(ntfs-3g_UPVER).tgz $(TARARGS) $@
 
+.PHONY: nfacct
+nfacct:$(NFACCT)_$(ARCH).deb
+$(NFACCT): $(SPREZZ)/nfacct/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf nfacct-$(nfacct_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: nfs-utils
 nfs-utils:$(NFSUTILS)_$(ARCH).deb
 $(NFSUTILS): $(SPREZZ)/nfs-utils/debian/changelog
