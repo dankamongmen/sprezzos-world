@@ -1,0 +1,101 @@
+#! /usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/rules/patchsys-quilt.mk
+
+
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+DEB_CONFIGURE_SCRIPT_ENV += MPICH2LIB_CFLAGS="$(CFLAGS)" CFLAGS=""
+DEB_CONFIGURE_SCRIPT_ENV += MPICH2LIB_CXXFLAGS="$(CXXFLAGS)" CXXFLAGS=""
+DEB_CONFIGURE_SCRIPT_ENV += MPICH2LIB_FFLAGS="$(FFLAGS)" FFLAGS=""
+DEB_CONFIGURE_SCRIPT_ENV += MPICH2LIB_FCFLAGS="$(FCFLAGS)" FCFLAGS=""
+DEB_CONFIGURE_SCRIPT_ENV += FC="gfortran"
+
+DEB_CONFIGURE_EXTRA_FLAGS := \
+	--enable-shared \
+	--prefix=/usr \
+	--enable-fc \
+	--disable-rpath \
+	--sysconfdir=/etc/mpich2 \
+	--includedir=/usr/include/mpich2 \
+	--docdir=/usr/share/doc/mpich2 \
+	--with-hwloc-prefix=system
+
+# BLCR checkpointing support
+ifneq (,$(findstring $(DEB_HOST_ARCH),amd64 armel i386 powerpc))
+	DEB_CONFIGURE_EXTRA_FLAGS += --enable-checkpointing --with-hydra-ckpointlib=blcr
+endif
+
+# On sh4, OPA isn't available, so we need to fallback to
+# emulation mode. There's a performance penalty, unfortunately.
+ifneq (,$(findstring $(DEB_HOST_GNU_CPU),sh4))
+	        DEB_CONFIGURE_EXTRA_FLAGS += --with-atomic-primitives=no
+endif
+
+DEB_MAKE_CLEAN_TARGET := distclean
+
+clean::
+	rm -rf lib include share
+	rm -f src/binding/f90/libmpichf90.la
+	rm -f bin/mpic++
+	rm -f bin/parkill
+	rm -f src/mpe2/src/slog2sdk/awt_color.jar
+	rm -f src/mpe2/src/slog2sdk/share/logfiles/fpilog.clog
+	rm -f src/mpe2/src/slog2sdk/share/logfiles/fpilog.slog2
+	rm -f src/mpe2/src/slog2sdk/trace_rlog/share/logfiles/barrier.rlog
+	rm -f src/mpe2/src/callstack/bin/bt2line
+	rm -f src/pm/hydra/config.status
+	rm -f .mpich2
+	find -name configure.lineno -exec rm {} \;
+
+# run MPI test suite
+# Custom rules based on the makefile CDBS class
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+common-build-arch common-build-indep:: debian/stamp-makefile-testing
+debian/stamp-makefile-testing: debian/stamp-makefile-build
+	bash debian/run-tests.bash
+	touch $@
+
+makefile-clean::
+	rm -f debian/stamp-makefile-testing
+endif
+
+# do some post-installation renamings
+binary-install/libmpich2-dev::
+	for i in mpicc mpicxx mpif77 mpif90; do \
+	  (cd debian/libmpich2-dev/usr/bin/ && mv $$i $$i.mpich2); \
+	  (cd debian/libmpich2-dev/usr/share/man/man1/ && mv $$i.1 $$i.mpich2.1);\
+	done
+	rm -f debian/libmpich2-dev/usr/lib/libopa.la
+	rm -f debian/libmpich2-dev/usr/bin/mpic++ debian/libmpich2-dev/usr/share/man/man1/mpic++.1
+	dh_link -plibmpich2-dev /usr/bin/mpicxx.mpich2 /usr/bin/mpic++.mpich2
+	dh_link -plibmpich2-dev /usr/share/man/man1/mpicxx.mpich2.1 /usr/share/man/man1/mpic++.mpich2.1
+	for i in debian/libmpich2-dev/usr/lib/*.so ; do \
+	  dh_link -plibmpich2-dev usr/lib/`basename $$i` usr/lib/mpich2/lib/`basename $$i` ;\
+	done
+	# Fix incorrect paths in /etc/mpich2/*.conf and /usr/bin/mpi{cc,cxx,f77,f90}.mpich
+	for fn in debian/libmpich2-dev/etc/mpich2/*.conf debian/libmpich2-dev/usr/bin/mpicc.mpich2 \
+	    debian/libmpich2-dev/usr/bin/mpicxx.mpich2 debian/libmpich2-dev/usr/bin/mpif77.mpich2 \
+	    debian/libmpich2-dev/usr/bin/mpif90.mpich2; do \
+	  sed -i 's:$(CURDIR)/debian/tmp/::g' $$fn ;\
+	done
+
+binary-install/mpich2::
+	mv debian/mpich2/usr/bin/mpiexec debian/mpich2/usr/bin/mpiexec.mpich2
+	mv debian/mpich2/usr/bin/mpirun debian/mpich2/usr/bin/mpirun.mpich2
+	mv debian/mpich2/usr/share/man/man1/MPI.1 debian/mpich2/usr/share/man/man1/MPI.mpich2.1
+	mv debian/mpich2/usr/share/man/man1/mpiexec.1 debian/mpich2/usr/share/man/man1/mpiexec.mpich2.1
+	dh_link -pmpich2 /usr/share/man/man1/mpiexec.mpich2.1 /usr/share/man/man1/mpirun.mpich2.1
+
+list-missing-mine:
+	(cd debian/tmp && find . -type f -exec md5sum {} \+ | grep -v '/DEBIAN/') > debian/tmp-files
+	(for package in $(DEB_ALL_PACKAGES); do \
+	(cd debian/$$package && find . -type f -exec md5sum {} \+ | grep -v '/DEBIAN/'); done) > debian/pkg-files
+	awk '{print $$1}' debian/tmp-files > debian/tmp-files-md5
+	awk '{print $$1}' debian/pkg-files > debian/pkg-files-md5
+	for i in $$(combine debian/tmp-files-md5 not debian/pkg-files-md5); do \
+		grep $$i debian/tmp-files; done

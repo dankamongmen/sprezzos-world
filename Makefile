@@ -3673,6 +3673,14 @@ $(HDDTEMP): $(SPREZZ)/hddtemp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf hddtemp-$(hddtemp_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: hdf5
+hdf5:$(HDF5)_$(ARCH).deb
+$(HDF5): $(SPREZZ)/hdf5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hdf5-$(hdf5_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: hdparm
 hdparm:$(HDPARM)_$(ARCH).deb
 $(HDPARM): $(SPREZZ)/hdparm/debian/changelog
