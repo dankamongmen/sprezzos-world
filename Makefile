@@ -216,6 +216,15 @@ $(APITRACE): $(SPREZZ)/apitrace/debian/changelog
 	ln -sf apitrace-$(apitrace_UPVER).tar.xz apitrace_$(apitrace_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: libshairport
+libshairport:$(LIBSHAIRPORT)_$(ARCH).deb
+$(LIBSHAIRPORT): $(SPREZZ)/libshairport/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	git clone https://github.com/amejia1/libshairport.git $@
+	tar cJf libshairport-$(libshairport_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf libshairport-$(libshairport_UPVER).tar.xz libshairport_$(libshairport_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: emap
 emap:$(EMAP)_$(ARCH).deb
 $(EMAP): $(SPREZZ)/emap/debian/changelog
