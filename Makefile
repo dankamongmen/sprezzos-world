@@ -5761,6 +5761,14 @@ $(LIBMEDIAINFO): $(SPREZZ)/libmediainfo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmediainfo_$(libmediainfo_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libmemcached
+libmemcached:$(LIBMEMCACHED)_$(ARCH).deb
+$(LIBMEMCACHED): $(SPREZZ)/libmemcached/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmemcached-$(libmemcached_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libmicrohttpd
 libmicrohttpd:$(LIBMICROHTTPD)_$(ARCH).deb
 $(LIBMICROHTTPD): $(SPREZZ)/libmicrohttpd/debian/changelog
