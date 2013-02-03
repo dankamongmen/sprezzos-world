@@ -6731,6 +6731,14 @@ $(PACKAGEKIT): $(SPREZZ)/packagekit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf packagekit_$(packagekit_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: ppl
+ppl:$(PPL)_$(ARCH).deb
+$(PPL): $(SPREZZ)/ppl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf ppl-$(ppl_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: picard
 picard:$(PICARD)_$(ARCH).deb
 $(PICARD): $(SPREZZ)/picard/debian/changelog
