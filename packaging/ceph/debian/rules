@@ -1,0 +1,150 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+#export DH_VERBOSE=1
+
+export DESTDIR=$(CURDIR)/debian/tmp
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+CFLAGS		?= $(shell dpkg-buildflags --get CFLAGS)
+CPPFLAGS	?= $(shell dpkg-buildflags --get CPPFLAGS)
+LDFLAGS		?= $(shell dpkg-buildflags --get LDFLAGS)
+CFLAGS		+= $(HARDENING_CFLAGS)
+CPPFLAGS	+= $(HARDENING_CFLAGS)
+LDFLAGS		+= $(HARDENING_LDFLAGS)
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+# Recommended snippet for Autoconf 2.52 or later
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+export DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+extraopts += --with-ocf --with-rest-bench
+
+ifeq ($(DEB_HOST_ARCH), armel)
+  # armel supports ARMv4t or above instructions sets.
+  # libatomic-ops is only usable with Ceph for ARMv6 or above.
+  extraopts += --without-libatomic-ops
+endif
+
+ifneq ($(DEB_HOST_ARCH), i386)
+ifneq ($(DEB_HOST_ARCH), amd64)
+  # libgoogle-perftools-dev is only available on i386 and amd64
+  extraopts += --without-tcmalloc
+endif
+endif
+
+ifeq ($(shell grep -c -E '^Build-Depends:(.*,)?[[:space:]]*libgoogle-perftools-dev([[:space:]]|,|$$)' debian/control),0)
+  # if Build-Deps have been edited to skip libgoogle-perftools-dev (as
+  # we do for Debian lenny), tell configure it's ok to not have
+  # tcmalloc.
+  extraopts += --without-tcmalloc
+endif
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	./autogen.sh
+	./configure --prefix=/usr --sbindir=/sbin --localstatedir=/var \
+	  --sysconfdir=/etc --with-system-leveldb --with-system-libs3 \
+	  $(extraopts) $(confflags)
+	touch $@
+
+build-arch: build
+build-indep: build
+
+build: build-stamp
+build-stamp: configure-stamp  
+	dh_testdir
+
+	$(MAKE)
+
+	cp src/init-ceph debian/ceph.init
+	cp src/init-radosgw debian/radosgw.init
+	cp src/logrotate.conf debian/ceph.logrotate
+
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f aclocal.m4 compile config.sub config.guess config.log depcomp \
+	  install-sh ltmain.sh missing
+	rm -f configure Makefile.in man/Makefile.in
+	rm -f py-compile
+	cd src/ && rm -f Makefile.in acconfig.h.in gtest/aclocal.m4 \
+		gtest/configure gtest/Makefile.in ocf/Makefile.in
+	cd src/gtest/build-aux/ &&  rm -f config.guess config.h.in \
+		config.sub depcomp install-sh  ltmain.sh  missing
+	rm -f src/leveldb/libleveldb.a
+
+	rm -f debian/ceph.init debian/radosgw.init debian/ceph.logrotate
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	$(MAKE) DESTDIR=$(DESTDIR) install
+	sed -i "/dependency_libs/ s/'.*'/''/" `find . -name '*.la'`
+	install -D -m 644 udev/50-rbd.rules $(DESTDIR)/lib/udev/rules.d/50-rbd.rules
+
+# Add here commands to install the package into debian/testpack.
+# Build architecture-independent files here.
+binary-indep: build install
+
+# We have nothing to do by default.
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs 
+	dh_installdocs --all ChangeLog
+	dh_installexamples
+	dh_install --sourcedir=$(DESTDIR) --list-missing
+	dh_installlogrotate
+	dh_installinit --no-start
+	dh_installman
+	dh_lintian
+	dh_link
+
+	dh_strip -pceph --dbg-package=ceph-dbg -k --exclude=libcls_
+	dh_strip -pceph-fuse --dbg-package=ceph-fuse-dbg
+	dh_strip -pceph-common --dbg-package=ceph-common-dbg
+	dh_strip -plibrados2 --dbg-package=librados2-dbg
+	dh_strip -plibrbd1 --dbg-package=librbd1-dbg
+	dh_strip -plibcephfs1 --dbg-package=libcephfs1-dbg
+	dh_strip -pradosgw --dbg-package=radosgw-dbg
+	dh_strip -prest-bench --dbg-package=rest-bench-dbg
+
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs -n  # we do the postinst/postrm scripts manually
+	dh_python2
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure
