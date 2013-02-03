@@ -1,0 +1,201 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+#
+# Modified to make a template file for a multi-binary package with separated
+# build-arch and build-indep targets  by Bill Allombert 2001
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH   ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+CFLAGS = $(shell dpkg-buildflags --get CPPFLAGS; dpkg-buildflags --get CFLAGS) -Wall -g
+CXXFLAGS = $(shell dpkg-buildflags --get CXXFLAGS) -Wall -g
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+
+# FOR AUTOCONF 2.52 AND NEWER ONLY
+confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+confflags += --disable-ppl_lpsol --disable-ppl_lcdd
+
+# Disable the SWI-Prolog interface during architecture bootstrap, and
+# on some architectures
+ifneq (,$(filter stage1,$(DEB_STAGE))$(filter $(DEB_HOST_ARCH),arm64 hurd-i386))
+  confflags += --enable-interfaces=c,cxx
+  DH_OPTIONS += -Nlibppl-swi
+  export DH_OPTIONS
+else
+  confflags += --enable-interfaces=c,cxx,swi_prolog
+endif
+
+ifneq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+  with_check := disabled by DEB_BUILD_OPTIONS.
+else
+  ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+    with_check := disabled because cross-compiling.
+  else
+    with_check := yes
+  endif
+endif
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  NJOBS := -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+endif
+
+# If the version string was set using automake then the build would
+# have to be configured before the dpkg-buildpackage command.
+PPL_VERSION = $(shell grep "^AC_INIT" $(CURDIR)/configure.ac | sed -e "s/^AC_INIT.\[[^]]*\],[ \t]*\[\([^]]*\)\],.*/\1/")
+
+ifneq (,$(filter $(DEB_HOST_GNU_TYPE), arm-linux-gnueabi arm-linux-gnueabihf powerpc-linux-gnu))
+  # powerpc runs out of memory building the test suite with -g, but is OK
+  # with -gstabs instead.
+  CHECK_ENV := CFLAGS="$(CFLAGS:-g=-gstabs)" CXXFLAGS="$(CXXFLAGS:-g=-gstabs)"
+else
+  CHECK_ENV :=
+endif
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	cp -f /usr/share/misc/config.sub config.sub
+	cp -f /usr/share/misc/config.guess config.guess
+	./configure $(confflags) \
+		--prefix=/usr \
+		--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		CFLAGS="$(CFLAGS)" \
+		CXXFLAGS="$(CXXFLAGS)" \
+		LDFLAGS="$(LDFLAGS)"
+	touch $@
+
+build: build-arch
+build-arch: build-arch-stamp
+build-arch-stamp: configure-stamp
+	$(MAKE) $(NJOBS)
+	touch $@
+
+check:
+	dh_testdir
+ifeq ($(with_check),yes)
+  ifeq (,$(filter-out alpha-linux-gnu arm-linux-gnueabi,$(DEB_HOST_GNU_TYPE)))
+	# There are some failures in the testsuite on alpha,
+	# maybe related to http://gcc.gnu.org/PR8966
+	# Testsuite is miscompiled on arm, see #593324
+	$(MAKE) $(NJOBS) -k check $(CHECK_ENV) || true
+  else
+	$(MAKE) $(NJOBS) check $(CHECK_ENV)
+  endif
+else
+	@echo "Testsuite not run: $(with_check)."
+endif
+
+build-indep: build-indep-stamp
+build-indep-stamp: configure-stamp
+	export save_size=10000 ; $(MAKE) -C doc user-configured
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f configure-stamp build-stamp
+	rm -f build-arch-stamp build-indep-stamp
+	[ ! -e Makefile ] || $(MAKE) distclean
+	rm -f config.sub
+	rm -f config.guess
+	dh_clean
+
+install: install-indep install-arch
+
+# Destination directory for user manual.
+DOC_DIR=$(CURDIR)/debian/tmp/usr/share/doc/ppl
+install-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_installdirs -i
+#	Build all the documentation, then move it into debian/tmp
+#	directories which have fixed names.
+	mkdir -p $(DOC_DIR)/html || exit 1
+	mv $(DOC_DIR)/ppl-user-$(PPL_VERSION)-html $(DOC_DIR)/html/user-manual
+	mv $(DOC_DIR)/ppl-user-$(PPL_VERSION).pdf $(DOC_DIR)/ppl-user-browse.pdf
+	mv $(DOC_DIR)/ppl-user-$(PPL_VERSION).ps.gz $(DOC_DIR)/ppl-user-print.ps.gz
+
+install-arch: build-arch check
+	dh_testdir
+	dh_testroot
+	dh_installdirs -s
+#	Add here commands to install the arch part of the package into
+# 	debian/tmp.
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	mkdir -p debian/tmp/usr/include/$(DEB_HOST_MULTIARCH)
+	mv debian/tmp/usr/include/*.*h debian/tmp/usr/include/$(DEB_HOST_MULTIARCH)/
+	-chrpath -d \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libppl.so.12.0.0 \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libppl_c.so.4.0.0 \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/ppl/libppl_swiprolog.so
+
+binary-arch: install-arch
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -s ChangeLog
+	dh_installdocs -s
+	dh_install -s --sourcedir=debian/tmp
+#	dh_installexamples -s
+#	dh_installinfo -s
+#	dh_installman -s
+#	These directories will be symlinks instead.
+	rm -rf debian/libppl-c4/usr/share/doc/libppl-c4
+	rm -rf debian/libppl-swi/usr/share/doc/libppl-swi
+	dh_link -s
+	dh_strip -s
+	dh_compress -s
+	dh_fixperms -s
+	dh_makeshlibs -s
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary-indep: install-indep
+	dh_testdir
+	dh_testroot
+	dh_install -i --sourcedir=debian/tmp
+	dh_installchangelogs -i ChangeLog
+	dh_installdocs -i
+	rm -f debian/libppl-doc/usr/share/doc/libppl-doc/html/user-manual/jquery.js
+	dh_link -pppl-doc \
+		/usr/share/javascript/jquery/jquery.js \
+		/usr/share/doc/libppl-doc/html/user-manual/jquery.js
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+#	dh_lintian -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary: binary-arch binary-indep
+
+get-orig-source:
+	rm -f ppl_*.orig.tar.gz
+	wget ftp://ftp.cs.unipr.it/pub/ppl/snapshots/*.tar.gz
+	vers=`ls ppl-*.tar.gz | tail -1 | sed 's/^ppl-//' | sed 's/.tar.gz$$//'` ; \
+		debvers=`echo $$vers | sed 's/pre/~pre/'` ; \
+		tar xzf ppl-$$vers.tar.gz ; \
+		rm ppl-$$vers.tar.gz ; mv ppl-$$vers ppl-$$debvers ; \
+		tar czf ppl_$$debvers.orig.tar.gz ppl-$$debvers ; \
+		rm -r ppl-$$debvers
+
+.PHONY: configure build check clean binary-indep binary-arch binary install install-indep install-arch get-orig-source
