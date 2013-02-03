@@ -1,0 +1,208 @@
+collectd on Debian
+==================
+
+General notes:
+--------------
+
+- Some plugins require additional libraries. To prevent you from having to
+  install dozens of further packages that you don't actually need, there is no
+  strict dependency on those libraries. Rather, they are listed as recommenda-
+  tions ("collectd" package) or suggestions ("collectd-core" package"). See
+  /usr/share/doc/collectd-core/README.Debian.plugins for details.
+
+- The main components of collectd have been split into two packages:
+
+  * "collectd-core":
+    This package contains the main program file and the plugins but no config-
+    uration. It allows sites to, e.g., provide customizations on top of it
+    without having to modify the "collectd" package. For example, a custom
+    configuration and appropriate dependencies may be provided by some package
+    depending on "collectd-core" and conflicting / replacing / providing
+    "collectd". Ready-to-use sample config files (collectd.conf, filters.conf,
+    thresholds.conf) are available in /usr/share/doc/collectd-core/examples/.
+
+  * "collectd":
+    This package provides a full installation of the daemon, including a
+    configuration. It is meant to be ready to use for simple setups or first
+    steps.
+
+Configuring collectd:
+---------------------
+
+- See collectd.conf(5) for details about configuring collectd.
+
+Access the collected data:
+--------------------------
+
+collectd is able to write data to CSV (comma separated list) and RRD (round
+robin database - see http://oss.oetiker.ch/rrdtool/) files. However it does
+not create graphs from these files. This package contains two sample scripts
+in /usr/share/doc/collectd/examples/ which can be used for this purpose. They
+are meant to be a starting point for your own experiments - more sophisticated
+solutions are welcome.
+
+- collectd2html.pl: This script by Vincent Stehlé will search for RRD files in
+  "/var/lib/collectd/" and generate a static HTML file and a directory
+  containing several PNG files which are graphs of the RRD files found.
+
+- collection.cgi: Sample CGI script that creates graphs on the fly. The Perl
+  modules "RRDs" (package librrds-perl), "URI:Escape" (package liburi-perl),
+  "HTML::Entities" (package libhtml-parser-perl) and a CGI capable web server
+  (e.g. apache2 or boa) are required for this script to run. Simply install
+  the (gunzip'ed) script to a place where the webserver will treat it as a CGI
+  script (/usr/lib/cgi-bin/ by default) and visit that page in a browser
+  (http://localhost/cgi-bin/collection.cgi by default). Please refer to your
+  webserver's documentation for more details.
+
+  collection.cgi requires a small config file, which is installed to
+  /etc/collectd/collection.conf. You should not need to change anything there.
+
+- collection3: A graphing front-end for the RRD files created by and filled
+  with collectd. See /usr/share/doc/collectd/examples/collection3/README for
+  details. This is a successor for collection.cgi.
+
+Cleanup of old data:
+--------------------
+
+collectd itself does not take care of removing any data files (e.g. RRDtool)
+that are no longer updated (e.g., no longer existing hosts or instances).
+There are a couple of ways to take care of that. In any case, double-check the
+list of files to be removed before doing so! We do not take responsibility for
+any data loss or similar.
+
+- Check the last modification time of all RRD files:
+
+    find /var/lib/collectd/rrd/ -mtime +30 -type f
+
+  This will list all files that have not been updated within the last 30 days.
+  After double-checking the list of files, use a command like the following to
+  delete old files:
+
+    find /var/lib/collectd/rrd/ -mtime +30 -type f | xargs rm
+
+  NOTE: Some versions of RRDtool did not update mtime when writing to a file.
+        This has been fixed in version 1.3.5 of RRDtool. If your version is
+        affected by that, this approach does not work.
+
+- Check the 'last_update' header of the RRD files:
+
+    export IFS="
+    "
+    for file in $( find /var/lib/collectd/rrd/ -type f -name '*.rrd' ); do
+        last_update=$( rrdtool info $file | grep last_update | cut -d' ' -f3 )
+        if test -n "$last_update" \
+                -a $(( $( date +%s ) - $last_update )) -gt 2592000; then
+            echo $file
+        fi
+    done
+
+  This will also list all files that have not been updated within the last 30
+  days. It's a bit more expensive since each and every RRD file will have to
+  be read from disk rather than checking the file-system meta-data only.
+
+When doing those checks, take into account any caching times configured in the
+RRDtool plugin or when using RRDCacheD.
+
+Building your own plugins:
+--------------------------
+
+- Originally, plugins for collectd had to be written in C and linked as shared
+  objects. Starting with version 4.0.0, it is also possible to use plugins
+  written in the scripting language Perl or implemented as separate processes.
+  In later versions, support for Java and Python has been added. See the
+  appropriate collectd-<extension>(5) manual page for details.
+
+- If you want to contribute plugins to the official distribution you should
+  read http://collectd.org/dev-info.shtml.
+
+- If you want to build C plugins for your personal use only simply install the
+  collectd-dev package and use /usr/share/doc/collectd-dev/examples/myplugin.c
+  as a starting point (Note: This is already a working example, though it does
+  not collect any useful data).
+
+  The resulting file can be compiled as follows:
+
+    gcc -DHAVE_CONFIG_H -shared -fPIC -o myplugin.so myplugin.c
+
+  Copy myplugin.so to /usr/lib/collectd and add the following line to your
+  collectd config file:
+
+    LoadPlugin myplugin
+
+  Restart collectd and you're done.
+
+- The collectd-dev package also provides an example Perl plugin that can be
+  used as a starting point for your own development. It can be found in
+  /usr/share/doc/collectd-dev/examples/MyPlugin.pm (Note: This is already a
+  working example, though it does not collect any useful data).
+
+  To enable the plugin, copy it to a place where Perl can find it (i.e. a
+  subdirectory named "Collectd/Plugin" of a directory listed in @INC) and add
+  the following line to the perl plugin section in your config file:
+
+    LoadPlugin "Collectd::Plugin::MyPlugin"
+
+  or
+
+    BaseName "Collectd::Plugin"
+    LoadPlugin MyPlugin
+
+  Restart collectd and you're done.
+
+Examples:
+---------
+
+- SpamAssassin/: This directory contains a SpamAssassin plugin which passes
+  statistics to collectd using the email plugin. See the embedded POD
+  documentation for information about setup and configuration: perldoc
+  Collectd.pm.
+
+- iptables/: This directory contains a script which will setup iptables to do
+  global logging of all traffic going in and out of an interface. This
+  information can then be collected by collectd's iptables plugin.
+
+- collectd-network.py: Python module implementing the collectd network
+  protocol in pure Python. It currently supports to receive data and
+  notifications from collectd.
+
+- collectd-unixsock.py: Python module providing an interface to collect's
+  unixsock plugin.
+
+- cussh.pl: "Collectd Unix Socket SHell" is a small, interactive front-end for
+  the unixsock plugin. See the embedded POD documentation for details: perldoc
+  cussh.pl.
+
+- exec-munin.px: Script to be used with the exec-plugin (see collectd-exec(5)
+  for details) which executes munin plugins, parses the output and translates
+  it to a format the exec-plugin understands. The features are limited -
+  changing the munin plugins to use the output format understood by the
+  exec-plugin is recommended. See the embedded POD documentation for more
+  details: perldoc exec-munin.px.
+
+- exec-smartctl: Sample script for the exec plugin. Please refer to the
+  documentation in the file - you will have to adapt it to your needs anyway.
+
+- network-proxy.py: A simple unicast proxy for collectd traffic.
+
+- snmp-data.conf: Sample configuration for the SNMP plugin. This config
+  includes a few standard <Data ..> definitions that you can include in your
+  own config using the `Include' statement (available since version 4.2.0).
+  The config includes some data that is defined in the IF-MIB, e. g. octet or
+  packet counters, UPS-MIB and whatever people have send in. If you have some
+  more definitions please send them in, so others can profit from it.
+
+- snmp-probe-host.px: Script to be used to automatically generate SNMP
+  configuration snippets for the "snmp" plugin. See the embedded POD
+  documentation for more details: perldoc snmp-probe-host.px.
+
+Additional helper scripts:
+--------------------------
+
+- add_rra.sh: Before version 3.9.0 collectd used to create a different set of
+  RRAs. The most detailed of these old RRAs had a one minute resolution. This
+  script can be used to add three more RRAs: minimum, maximum and average with
+  a ten second resolution and 2200 rows (~6 hours). This will make hourly
+  statistics much more interesting. Please note that no sanity-checking
+  whatsoever is performed. You can seriously screw up your RRD files if you
+  don't know what you're doing.
+
