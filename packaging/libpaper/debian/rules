@@ -1,0 +1,114 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# debian/rules for libpaper
+
+export DH_OPTIONS=
+
+include /usr/share/dpkg/architecture.mk
+
+package	:= $(firstword $(shell dh_listpackages))
+prefix	:= $(CURDIR)/debian/tmp
+share	:= /usr/share
+
+config_flags	:= --prefix=/usr \
+	--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+	--sysconfdir=/etc \
+	--mandir=$(share)/man \
+	--infodir=$(share)/info \
+	--build=$(DEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+config_flags	+= --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+cflags	:= -g -Wall
+ifeq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+cflags	+= -O2
+else
+cflags	+= -O0
+endif
+
+export CFLAGS=$(cflags)
+export CXXFLAGS=$(cflags)
+
+version	:= $(shell dpkg-parsechangelog | \
+			sed -ne 's/^Version: *\([0-9]\+:\)*//p')
+
+get_misc_file		= ln -s /usr/share/misc/$(1) . || true
+update_config_sub       := $(call get_misc_file,config.sub)
+update_config_guess     := $(call get_misc_file,config.guess)
+
+tag:
+	cvs tag -c -F $(subst .,_,debian_version_$(version))
+ifeq ($(findstring -,$(version)),)
+	cvs tag -c -F $(subst .,_,upstream_version_$(version))
+endif
+
+config:	config-stamp
+config-stamp:
+	dh_testdir
+	autoconf
+	$(update_config_sub)
+	$(update_config_guess)
+	$(SHELL) ./configure $(config_flags)
+	touch $@
+
+build:	config build-stamp debian/libpaper1.config
+build-stamp:
+	$(MAKE)
+	touch $@
+
+debian/libpaper1.config: build-stamp
+	exec > $@.new \
+		&& sed -n '1,/^__BEGIN_PAPERSPECS__/p' $@ \
+		&& src/paperconf -amns \
+		&& sed -n '/^__END_PAPERSPECS__/,$$p' $@
+	mv $@.new $@
+
+clean:	checkroot
+	rm -f *-stamp
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean
+	exec > /tmp/libpaper1.new \
+		&& sed -n '1,/^__BEGIN_PAPERSPECS__/p' debian/libpaper1.config \
+		&& sed -n '/^__END_PAPERSPECS__/,$$p' debian/libpaper1.config
+	mv /tmp/libpaper1.new debian/libpaper1.config
+
+binary-indep:	DH_OPTIONS=-i
+binary-indep:	checkroot build
+	dh_prep
+	dh_installdirs
+
+	dh_link
+
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-arch:	DH_OPTIONS=-a
+binary-arch:	checkroot build
+	dh_prep
+	dh_installdirs
+
+	$(MAKE) install DESTDIR=$(prefix)
+
+	dh_install
+
+	dh_installchangelogs
+	dh_installdocs
+
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdebconf
+	dh_installdeb
+	dh_shlibdeps -L$(package) -ldebian/$(package)/usr/lib/$(DEB_HOST_MULTIARCH)
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+#binary: binary-indep binary-arch
+binary: binary-arch
+
+.PHONY:	binary binary-indep binary-arch clean checkroot build config tag

@@ -5073,6 +5073,14 @@ $(LIBFCGI): $(SPREZZ)/libfcgi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fcgi-$(libfcgi_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libfile-fcntllock-perl
+libfile-fcntllock-perl:$(LIBFILEFCNTLLOCKPERL)_$(ARCH).deb
+$(LIBFILEFCNTLLOCKPERL): $(SPREZZ)/libfile-fcntllock-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf File-FcntlLock-$(libfile-fcntllock-perl_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libffi
 libffi:$(LIBFFI)_$(ARCH).deb
 $(LIBFFI): $(SPREZZ)/libffi/debian/changelog
