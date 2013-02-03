@@ -22,6 +22,14 @@ $(ATTICA): $(SPREZZ)/attica/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf attica-$(attica_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: bluedevil
+bluedevil:$(BLUEDEVIL)_$(ARCH).deb
+$(BLUEDEVIL): $(SPREZZ)/bluedevil/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf bluedevil-$(bluedevil_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: calligra
 calligra:$(CALLIGRA)_$(ARCH).deb
 $(CALLIGRA): $(SPREZZ)/calligra/debian/changelog
@@ -253,6 +261,14 @@ $(KVIRC): $(SPREZZ)/kvirc/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf kvirc-$(kvirc_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libbluedevil
+libbluedevil:$(LIBBLUEDEVIL)_$(ARCH).deb
+$(LIBBLUEDEVIL): $(SPREZZ)/libbluedevil/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libbluedevil-$(libbluedevil_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: libdbusmenu-qt
 libdbusmenu-qt:$(LIBDBUSMENUQT)_$(ARCH).deb

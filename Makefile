@@ -1457,6 +1457,14 @@ $(BC): $(SPREZZ)/bc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf bc-$(bc_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: bcfg2
+bcfg2:$(BCFG2)_$(ARCH).deb
+$(BCFG2): $(SPREZZ)/bcfg2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bcfg2-$(bcfg2_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: beets
 beets:$(BEETS)_$(ARCH).deb
 $(BEETS): $(SPREZZ)/beets/debian/changelog
