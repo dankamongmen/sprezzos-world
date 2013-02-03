@@ -1,0 +1,119 @@
+#!/bin/bash
+
+set -e
+
+# some shorthands for sanity
+en="/etc/nagios3"
+enc="/etc/nagios3/conf.d"
+usn="/usr/share/nagios3"
+
+. /usr/share/debconf/confmodule
+. $usn/debian/httpd.webapps-common
+
+if [ -n "$NAG3DEBUG" ]; then
+  echo "now debugging $0 $@"
+  set -x
+fi
+
+# location of the default apache configuration for nagios.
+apacheconf=$en/apache2.conf
+# location of the default htpasswd authentication file.
+htpw=$en/htpasswd.users
+
+setperm() {
+    local user="$1"
+    local group="$2"
+    local mode="$3"
+    local file="$4"
+    shift 4
+    # only do something when no setting exists
+    if ! dpkg-statoverride --list "$file" >/dev/null 2>&1; then
+      chown "$user":"$group" "$file"
+      chmod "$mode" "$file"
+    fi
+}
+
+case "$1" in
+  configure)
+    if ! getent passwd nagios > /dev/null ; then
+      echo 'Adding system-user for nagios' 1>&2
+      adduser --system --group --home /var/lib/nagios \
+              --disabled-login --force-badname nagios > /dev/null
+    fi
+
+	# get the list of selected servers
+	db_get nagios3/httpd
+	servers=$(echo $RET | sed -e 's/,/ /g')
+	db_get nagios3/adminpassword
+	admpass="$RET"
+	# get whether they want support for 1.x urls:
+	db_get nagios3/nagios1-in-apacheconf
+	nagiosone="$RET"
+
+	unwanted_servers=""
+
+	#check which servers to uninclude
+	for s in $wc_httpd_supported
+	do
+		if ! echo $servers | grep -q $s 
+		then
+			unwanted_servers="$s $unwanted_servers"
+		fi
+	done
+
+	# register apache2.conf via ucf:
+	if [ "$nagiosone" = "true" ]; then
+		ucf --debconf-ok /usr/share/doc/nagios3-common/examples/apache2.nagios1.conf $apacheconf
+	else
+		ucf --debconf-ok /usr/share/doc/nagios3-common/examples/apache2.conf $apacheconf
+	fi
+
+
+	# configure the web servers, if it is desired
+	if [ "$servers" ]; then
+		if wc_httpd_apache_include $apacheconf nagios3 $servers; then
+			# reload the selected servers if they are running 
+			running_servers="$(wc_httpd_running $servers)"
+			if [ "$running_servers" ]; then
+				wc_httpd_invoke "reload" $running_servers
+			fi
+		fi	
+	fi
+
+	if [ "$unwanted_servers" ]; then
+		servers_to_deconf="$(wc_httpd_apache_configured $apacheconf nagios3 $unwanted_servers)"
+		if [ "$servers_to_deconf" ]; then
+			if wc_httpd_apache_uninclude $apacheconf nagios3 $servers_to_deconf; then
+				# reload the selected servers if they are running
+				running_servers="$(wc_httpd_running $unwanted_servers)"
+				if [ "$running_servers" ]; then
+					wc_httpd_invoke "reload" $running_servers
+				fi
+			fi
+		fi
+	fi
+
+
+	# we reset the password every run, so if it exists we're running
+	# after being specifically given a password and can unconditionally set it.
+	# XXX there's no way of setting the pw w/out giving it on the cmdline? wtf?
+	if [ -n "$admpass" ]; then
+		touch "$htpw"
+		htpasswd -b "$htpw" nagiosadmin "$admpass"
+	fi
+
+	# everything went well, so now let's reset the password
+	db_set nagios3/adminpassword ""
+	db_set nagios3/adminpassword-repeat ""
+	# ... done with debconf here
+	db_stop
+    ;;
+  abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+  *)
+    echo "postinst called with unknown argument \$1'" >&2
+    exit 1
+    ;;
+esac
+
+#DEBHELPER#

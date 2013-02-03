@@ -1,0 +1,188 @@
+# httpd-related functions
+# taken from the webapps-common project
+# copyright (c) 2005, sean finney (GPL)
+
+wc_httpd_apaches="apache2"
+
+# if they have not specified what they support, assume support for all
+if [ ! "$wc_httpd_supported" ]; then
+	wc_httpd_supported="$wc_httpd_apaches"
+fi
+
+#
+# wc_httpd_installed: test for installed httpds
+# usage:
+#	wc_httpd_installed [ httpd1 httpd2 ... ]
+#
+# no arguments implies to test for all servers
+wc_httpd_installed(){
+	local httpds
+	if [ "$*" ]; then
+		httpds=$*
+	else
+		httpds=$wc_httpd_supported
+	fi
+	for f in $httpds; do
+		if test -x /usr/sbin/$f; then
+			echo $f
+		fi
+	done
+}
+
+#
+# wc_httpd_running: test for running httpds
+# usage:
+#	wc_httpd_running [ httpd1 httpd2 ... ]
+#
+# no arguments implies to test for all servers
+wc_httpd_running(){
+	local httpds
+	if [ "$*" ]; then
+		httpds=$*
+	else
+		httpds=$wc_httpd_supported
+	fi
+	for f in $httpds; do
+		if pgrep -fx "/usr/sbin/$f( .*)*$" >/dev/null; then
+			echo $f
+		fi
+	done
+}
+
+# wc_httpd_invoke: issue start/stop/etc command to web server init script
+# usage:
+#	wc_httpd_invoke {start|stop|status|whatever} [ httpd1 httpd2 ... ]
+#
+# no servers implies to invoke all running servers
+wc_httpd_invoke(){
+	local httpds cmd err
+	if [ ! "$1" ]; then
+		echo "i need at least a command!" 2>&1
+		return 1
+	fi
+	cmd="$1"
+	shift
+	if [ "$*" ]; then
+		httpds=$*
+	else
+		httpds=`wc_httpd_running`
+	fi
+	for f in $httpds; do
+		if [ -x /etc/init.d/$f ]; then
+			invoke-rc.d $f $cmd || return $?
+		fi
+	done
+}
+
+# wc_httpd_apache_include:	include a file in the apache configuration
+# usage:
+#	wc_httpd_apache_include file name [ httpd1 httpd2 ... ]
+#
+# no arguments implies all installed apache servers
+wc_httpd_apache_include(){
+	local h incfile httpds confdir
+	if [ ! "$1" ]; then
+		echo "i need at least a file!" 2>&1
+		return 1
+	fi
+	incfile="$1"
+	shift
+	if [ ! "$1" ]; then
+		echo "i also need a name!" 2>&1
+		return 1
+	fi
+	name="$1"
+	shift
+	if [ ! -e "$incfile" ]; then
+		echo "include file $incfile does not exist!" 2>&1
+		return 1
+	fi
+	if [ "$*" ]; then
+		httpds=$*
+	else
+		httpds=`wc_httpd_installed $wc_httpd_supported`
+	fi
+	for h in $httpds; do
+		confdir="/etc/$h/conf.d"
+		conflink="$confdir/${name}.conf"
+		if [ -d "$confdir" -a ! -e "$conflink" ]; then
+			ln -s "$incfile" "$conflink"
+		fi
+	done
+}
+
+# wc_httpd_apache_configured:	determine what servers are configured for a pkg
+# usage:
+#	wc_httpd_apache_configured file name [ httpd1 httpd2 ... ]
+#
+# no arguments implies all installed apache servers
+# outputs the list of servers that are configured with file->name
+wc_httpd_apache_configured(){
+	local h incfile httpds confdir
+	if [ ! "$1" ]; then
+		echo "i need at least a file!" 2>&1
+		return 1
+	fi
+	incfile="$1"
+	shift
+	if [ ! "$1" ]; then
+		echo "i also need a name!" 2>&1
+		return 1
+	fi
+	name="$1"
+	shift
+	if [ ! -e "$incfile" ]; then
+		echo "include file $incfile does not exist!" 2>&1
+		return 1
+	fi
+	if [ "$*" ]; then
+		httpds=$*
+	else
+		httpds=`wc_httpd_installed $wc_httpd_supported`
+	fi
+	for h in $httpds; do
+		confdir="/etc/$h/conf.d"
+		conflink="$confdir/${name}.conf"
+		if [ -L "$conflink" ]; then
+			echo "$h "
+		fi
+	done
+}
+
+# wc_httpd_apache_uninclude:	uninclude a file in the apache configuration
+# usage:
+#	wc_httpd_apache_uninclude file name [ httpd1 httpd2 ... ]
+#
+# no arguments implies all installed apache servers
+wc_httpd_apache_uninclude(){
+	local h incfile name httpds conflink
+	if [ ! "$1" ]; then
+		echo "i need at least a file!" 2>&1
+		return 1
+	fi
+	incfile="$1"
+	shift
+	if [ ! "$1" ]; then
+		echo "i also need a name!" 2>&1
+		return 1
+	fi
+	name="$1"
+	shift
+	if [ ! -e "$incfile" ]; then
+		echo "include file $incfile does not exist!" 2>&1
+		return 1
+	fi
+	if [ "$*" ]; then
+		httpds=$*
+	else
+		httpds=`wc_httpd_installed $wc_httpd_supported`
+	fi
+	for h in $httpds; do
+		conflink="/etc/$h/conf.d/${name}.conf"
+		if [ -L "$conflink" ]; then
+			rm -f "$conflink"
+		elif [ -e "$conflink" ]; then
+			echo "warning: $conflink exists but is not a link" >&2
+		fi
+	done
+}

@@ -1033,6 +1033,14 @@ $(SOX): $(SPREZZ)/sox/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf sox-$(sox_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: swi-prolog
+swi-prolog:$(SWIPROLOG)_$(ARCH).deb
+$(SWIPROLOG): $(SPREZZ)/swi-prolog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pl-$(swi-prolog_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: swig
 swig:$(SWIG2.0)_$(ARCH).deb
 $(SWIG2.0): $(SPREZZ)/swig2.0/debian/changelog
