@@ -39,7 +39,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
 	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | cut -d- -f1 && \
 	 echo -n "$(@F)_UPVER:=" && \
-	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | tr \~ - | sed -e 's/[+-].*SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
+	 dpkg-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | sed -e 's/[+-].*SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
 	 ) > $@
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
@@ -5904,6 +5904,14 @@ $(MUTTER): $(SPREZZ)/mutter/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf mutter_$(mutter_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: nagios3
+nagios3:$(NAGIOS3)_$(ARCH).deb
+$(NAGIOS3): $(SPREZZ)/nagios3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nagios-$(nagios3_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: nasm
 nasm:$(NASM)_$(ARCH).deb

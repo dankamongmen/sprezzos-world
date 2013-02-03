@@ -1,0 +1,113 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include /usr/share/quilt/quilt.make
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+CFLAGS = `dpkg-buildflags --get CFLAGS`
+CFLAGS += -Wall
+LDFLAGS = `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS = `dpkg-buildflags --get CPPFLAGS`
+
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+else
+CROSS= --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+configure-stamp: patch
+	dh_testdir
+	cd m4 && rm -f audiofile.m4 esd.m4 gtk.m4 libmikmod.m4 libtool.m4 ogg.m4 vorbis.m4
+	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure \
+		$(CROSS) \
+		--prefix=/usr \
+		--mandir=\$${prefix}/share/man \
+	    	--enable-alsa --enable-oss --enable-esd --enable-nas \
+	    	--enable-jack --enable-oggvorbis=yes --enable-audiofile=no \
+		--enable-static --enable-shared 
+	touch configure-stamp
+
+maintainerclean: clean
+	aclocal -I m4
+	libtoolize --force --copy
+	automake --add-missing --copy
+	autoheader
+	autoconf
+
+build: configure-stamp
+	dh_testdir
+
+	$(MAKE)
+
+	touch build-stamp
+
+clean: unpatch
+	dh_testdir
+	dh_testroot
+
+	[ ! -f Makefile ] || $(MAKE) -k distclean
+
+	rm -f build-stamp install-stamp configure-stamp
+	rm -f config.cache
+
+	dh_clean
+
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	install -d debian/tmp
+	dh_installdirs
+
+	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+
+	# Remove files we won't include in a package
+	for dir in input output reader scopes interface; do \
+		rm -f debian/tmp/usr/lib/alsaplayer/$$dir/lib*.a \
+			debian/tmp/usr/lib/alsaplayer/$$dir/lib*.la ; \
+	done
+
+	touch install-stamp
+
+
+binary-indep: build install
+# Nothing to see here, move along
+
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install -a --sourcedir=debian/tmp --list-missing
+	dh_installdocs
+	dh_installexamples -palsaplayer-common
+	dh_installmenu -a
+	dh_installchangelogs ChangeLog
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_installmime -palsaplayer-gtk -palsaplayer-text -palsaplayer-daemon -palsaplayer-xosd
+
+	dh_fixperms -a
+	dh_makeshlibs -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+
+binary: binary-indep binary-arch
+
+
+.PHONY: build clean binary-indep binary-arch binary
