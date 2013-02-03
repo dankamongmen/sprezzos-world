@@ -1921,6 +1921,14 @@ $(CELESTIAGNOME): $(SPREZZ)/celestia-gnome/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf celestia-gnome-$(celestia-gnome_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ceph
+ceph:$(CEPH)_$(ARCH).deb
+$(CEPH): $(SPREZZ)/ceph/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf ceph-$(ceph_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: check
 check:$(CHECK)_$(ARCH).deb
 $(CHECK): $(SPREZZ)/check/debian/changelog
