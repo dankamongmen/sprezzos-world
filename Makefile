@@ -4425,6 +4425,14 @@ $(LIBAV): $(SPREZZ)/libav/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf $(LIBAV).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libcaca
+libcaca:$(LIBCACA)_$(ARCH).deb
+$(LIBCACA): $(SPREZZ)/libcaca/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libcaca-$(libcaca_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libcacard
 libcacard:$(LIBCACARD)_$(ARCH).deb
 $(LIBCACARD): $(SPREZZ)/libcacard/debian/changelog
