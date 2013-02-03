@@ -6499,6 +6499,14 @@ $(ISOMASTER): $(SPREZZ)/isomaster/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf isomaster-$(isomaster_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: ivy
+ivy:$(IVY)_$(ARCH).deb
+$(IVY): $(SPREZZ)/ivy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf apache-ivy-$(ivy_UPVER)-src.tar.gz $(TARARGS) $@
+
 .PHONY: opencolorio
 opencolorio:$(OPENCOLORIO)_$(ARCH).deb
 $(OPENCOLORIO): $(SPREZZ)/opencolorio/debian/changelog
