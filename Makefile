@@ -4219,6 +4219,14 @@ $(ECRYPTFSUTILS): $(SPREZZ)/ecryptfs-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ecryptfs-utils_$(ecryptfs-utils_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: euca2ools
+euca2ools:$(EUCA2OOLS)_$(ARCH).deb
+$(EUCA2OOLS): $(SPREZZ)/euca2ools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf euca2ools_$(euca2ools_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: edje
 edje:$(EDJE)_$(ARCH).deb
 $(EDJE): $(SPREZZ)/edje/debian/changelog
