@@ -7004,6 +7004,14 @@ $(PYTHONCOVERAGE): $(SPREZZ)/python-coverage/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-coverage_$(python-coverage_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-docutils
+python-docutils:$(PYTHONDOCUTILS)_$(ARCH).deb
+$(PYTHONDOCUTILS): $(SPREZZ)/python-docutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-docutils-$(python-docutils_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: python-gnutls
 python-gnutls:$(PYTHONGNUTLS)_$(ARCH).deb
 $(PYTHONGNUTLS): $(SPREZZ)/python-gnutls/debian/changelog
