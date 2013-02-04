@@ -2669,6 +2669,14 @@ $(FARSTREAM): $(SPREZZ)/farstream/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf farstream-$(farstream_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: fatrat
+fatrat:$(FATRAT)_$(ARCH).deb
+$(FATRAT): $(SPREZZ)/fatrat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fatrat_$(fatrat_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: fbset
 fbset:$(FBSET)_$(ARCH).deb
 $(FBSET): $(SPREZZ)/fbset/debian/changelog

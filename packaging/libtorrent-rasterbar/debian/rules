@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+export DEB_LDFLAGS_MAINT_APPEND  = -Wl,--as-needed
+
+PYVERSIONS=$(shell pyversions -vr)
+ALLPY=$(PYVERSIONS) $(PYVERSIONS:%=%-dbg)
+
+CONFIGURE_ARGS = --with-libgeoip
+
+%:
+	dh $@ --parallel --with python2
+
+override_dh_auto_configure-nopy:
+	dh_auto_configure --builddirectory build -- $(CONFIGURE_ARGS)
+
+override_dh_auto_configure-%:
+	dh_auto_configure --builddirectory build-py$* -- \
+		PYTHON=/usr/bin/python$* PYTHON_INSTALL_PARAMS="--root=$(CURDIR)/debian/tmp --install-layout=deb" \
+		--enable-python-binding --with-boost-python=boost_python-mt-py$(subst .,,$(subst -dbg,,$*)) \
+		$(CONFIGURE_ARGS)
+	mv build-py$*/bindings/python build/bindings/python$*
+	cp -r bindings/python/src build/bindings/python$*
+
+override_dh_auto_configure: override_dh_auto_configure-nopy $(ALLPY:%=override_dh_auto_configure-%)
+
+
+override_dh_auto_build-nopy:
+	dh_auto_build --builddirectory build
+	$(MAKE) -C docs/ -f makefile
+
+override_dh_auto_build-%:
+	dh_auto_build --builddirectory build/bindings/python$*
+
+override_dh_auto_build: override_dh_auto_build-nopy $(ALLPY:%=override_dh_auto_build-%)
+
+
+override_dh_auto_install-nopy:
+	dh_auto_install --builddirectory build
+
+override_dh_auto_install-%:
+	dh_auto_install --builddirectory build/bindings/python$*
+
+override_dh_auto_install: override_dh_auto_install-nopy $(ALLPY:%=override_dh_auto_install-%)
+
+
+override_dh_auto_clean:
+	rm -rf build build-py*
+	dh_auto_clean
+
+override_dh_compress:
+	dh_compress -Xcpp
+
+override_dh_strip:
+	dh_strip --dbg-package=libtorrent-rasterbar-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs -V
+
+override_dh_builddeb:
+	dh_builddeb -- -Z xz
