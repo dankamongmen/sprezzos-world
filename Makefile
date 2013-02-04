@@ -3819,6 +3819,14 @@ $(IBUS): $(SPREZZ)/ibus/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ibus-$(ibus_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ibus-table
+ibus-table:$(IBUSTABLE)_$(ARCH).deb
+$(IBUSTABLE): $(SPREZZ)/ibus-table/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ibus-table-$(ibus-table_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: icedove
 icedove:$(ICEDOVE)_$(ARCH).deb
 $(ICEDOVE): $(SPREZZ)/icedove/debian/changelog
