@@ -5587,6 +5587,14 @@ $(MINITUBE): $(SPREZZ)/minitube/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf minitube-$(minitube_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: tzdata
+tzdata:$(TZDATA)_$(ARCH).deb
+$(TZDATA): $(SPREZZ)/tzdata/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tzdata$(tzdata_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: miniupnpc
 miniupnpc:$(MINIUPNPC)_$(ARCH).deb
 $(MINIUPNPC): $(SPREZZ)/miniupnpc/debian/changelog
