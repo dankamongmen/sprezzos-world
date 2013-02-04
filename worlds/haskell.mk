@@ -110,6 +110,14 @@ $(HASKELLBLAZEMARKUP): $(SPREZZ)/haskell-blaze-markup/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf blaze-markup-$(haskell-blaze-markup_UPVER).tar.gz $(TARARGS) $@
 	
+.PHONY: haskell-bloomfilter
+haskell-bloomfilter:$(HASKELLBLOOMFILTER)_$(ARCH).deb
+$(HASKELLBLOOMFILTER): $(SPREZZ)/haskell-bloomfilter/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bloomfilter-$(haskell-bloomfilter_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-case-insensitive
 haskell-case-insensitive:$(HASKELLCASEINSENSITIVE)_$(ARCH).deb
 $(HASKELLCASEINSENSITIVE): $(SPREZZ)/haskell-case-insensitive/debian/changelog
@@ -893,3 +901,36 @@ $(HUGS98): $(SPREZZ)/hugs98/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hugs98-$(hugs98_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-warp
+haskell-warp:$(HASKELLWARP)_$(ARCH).deb
+$(HASKELLWARP): $(SPREZZ)/haskell-warp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf warp-$(haskell-warp_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-dbus
+haskell-dbus:$(HASKELLDBUS)_$(ARCH).deb
+$(HASKELLDBUS): $(SPREZZ)/haskell-dbus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dbus-$(haskell-dbus_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-yesod
+haskell-yesod:$(HASKELLYESOD)_$(ARCH).deb
+$(HASKELLYESOD): $(SPREZZ)/haskell-yesod/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf yesod-$(haskell-yesod_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-yesod-static
+haskell-yesod-static:$(HASKELLYESODSTATIC)_$(ARCH).deb
+$(HASKELLYESODSTATIC): $(SPREZZ)/haskell-yesod-static/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf yesod-static-$(haskell-yesod-static_UPVER).tar.gz $(TARARGS) $@
+
