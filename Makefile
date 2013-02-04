@@ -4152,7 +4152,7 @@ $(LYNX): $(SPREZZ)/lynx/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf lynx-$(lynx_UPVER).tar.xg $(TARARGS) $@
+	tar xjvf lynx$(lynx_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: e2fsprogs
 e2fsprogs:$(E2FSPROGS)_$(ARCH).deb
