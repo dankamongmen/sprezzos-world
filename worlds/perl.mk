@@ -36,5 +36,13 @@ $(LIBFONTFREETYPEPERL): $(SPREZZ)/libfont-freetype-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf Font-Freetype-$(libfont-freetype-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Font-FreeType-$(libfont-freetype-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libglib-perl
+libglib-perl:$(LIBGLIBPERL)_$(ARCH).deb
+$(LIBGLIBPERL): $(SPREZZ)/libglib-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libglib-perl-$(libglib-perl_UPVER).tar.gz $(TARARGS) $@
 
