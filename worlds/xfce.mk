@@ -22,6 +22,14 @@ $(LIBXFCE4UTIL): $(SPREZZ)/libxfce4util/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libxfce4util-$(libxfce4util_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: mousepad
+mousepad:$(MOUSEPAD)_$(ARCH).deb
+$(MOUSEPAD): $(SPREZZ)/mousepad/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf mousepad-$(mousepad_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: thunar
 thunar:$(THUNAR)_$(ARCH).deb
 $(THUNAR): $(SPREZZ)/thunar/debian/changelog
@@ -68,7 +76,7 @@ $(XFCE4TERMINAL): $(SPREZZ)/xfce4-terminal/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf Terminal-$(xfce4-terminal_UPVER).tar.bz2 $(TARARGS) $@
+	tar xjvf xfce4-terminal-$(xfce4-terminal_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: xfce4-utils
 xfce4-utils:$(XFCE4UTILS)_$(ARCH).deb
