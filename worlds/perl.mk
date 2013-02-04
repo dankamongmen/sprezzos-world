@@ -222,3 +222,51 @@ $(LIBYAMLLIBYAMLPERL): $(SPREZZ)/libyaml-libyaml-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf YAML-LibYAML-$(libyaml-libyaml-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgnome2-gconf-perl
+libgnome2-gconf-perl:$(LIBGNOME2GCONFPERL)_$(ARCH).deb
+$(LIBGNOME2GCONFPERL): $(SPREZZ)/libgnome2-gconf-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Gnome2-GConf-$(libgnome2-gconf-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libgtk2-appindicator-perl
+libgtk2-appindicator-perl:$(LIBGTK2APPINDICATORPERL)_$(ARCH).deb
+$(LIBGTK2APPINDICATORPERL): $(SPREZZ)/libgtk2-appindicator-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Gtk2-AppIndicator-$(libgtk2-appindicator-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libgtk2-imageview-perl
+libgtk2-imageview-perl:$(LIBGTK2IMAGEVIEWPERL)_$(ARCH).deb
+$(LIBGTK2IMAGEVIEWPERL): $(SPREZZ)/libgtk2-imageview-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Gtk2-ImageView-$(libgtk2-imageview-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libgtk2-unique-perl
+libgtk2-unique-perl:$(LIBGTK2UNIQUEPERL)_$(ARCH).deb
+$(LIBGTK2UNIQUEPERL): $(SPREZZ)/libgtk2-unique-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Gtk2-Unique-$(libgtk2-unique-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libjson-xs-perl
+libjson-xs-perl:$(LIBJSONXSPERL)_$(ARCH).deb
+$(LIBJSONXSPERL): $(SPREZZ)/libjson-xs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf JSON-XS-$(libjson-xs-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libgoo-canvas-perl
+libgoo-canvas-perl:$(LIBGOOCANVASPERL)_$(ARCH).deb
+$(LIBGOOCANVASPERL): $(SPREZZ)/libgoo-canvas-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Goo-Canvas-$(libgoo-canvas-perl_UPVER).tar.gz $(TARARGS) $@
+
