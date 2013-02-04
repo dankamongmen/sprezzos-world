@@ -8360,6 +8360,14 @@ $(XORGXSERVER): $(SPREZZ)/xorg-xserver/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xorg-server-$(xorg-xserver_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xosd
+xosd:$(XOSD)_$(ARCH).deb
+$(XOSD): $(SPREZZ)/xosd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xosd-$(xosd_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xserver-xorg-input-wacom
 xserver-xorg-input-wacom:$(XSERVERXORGINPUTWACOM)_$(ARCH).deb
 $(XSERVERXORGINPUTWACOM): $(SPREZZ)/xserver-xorg-input-wacom/debian/changelog
