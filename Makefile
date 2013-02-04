@@ -1352,7 +1352,7 @@ $(AUTODOCKSUITE): $(SPREZZ)/autodocksuite/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf autodock-suite-$(autodocksuite_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf autodocksuite-$(autodocksuite_UPVER)-src.tar.gz $(TARARGS) $@
 
 .PHONY: autogen
 autogen:$(AUTOGEN)_$(ARCH).deb
