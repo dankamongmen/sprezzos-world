@@ -8496,6 +8496,14 @@ $(XTERM): $(SPREZZ)/xterm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xterm-$(xterm_UPVER).tgz $(TARARGS) $@
 
+.PHONY: xtermcontrol
+xtermcontrol:$(XTERMCONTROL)_$(ARCH).deb
+$(XTERMCONTROL): $(SPREZZ)/xtermcontrol/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xtermcontrol-$(xtermcontrol_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xtrace
 xtrace:$(XTRACE)_$(ARCH).deb
 $(XTRACE): $(SPREZZ)/xtrace/debian/changelog
