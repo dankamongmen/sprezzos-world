@@ -4211,6 +4211,14 @@ $(ECORE): $(SPREZZ)/ecore/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf ecore_$(ecore_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: ecryptfs-utils
+ecryptfs-utils:$(ECRYPTFSUTILS)_$(ARCH).deb
+$(ECRYPTFSUTILS): $(SPREZZ)/ecryptfs-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ecryptfs-utils_$(ecryptfs-utils_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: edje
 edje:$(EDJE)_$(ARCH).deb
 $(EDJE): $(SPREZZ)/edje/debian/changelog
