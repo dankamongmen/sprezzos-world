@@ -8368,6 +8368,14 @@ $(XMLSTARLET): $(SPREZZ)/xmlstarlet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xmlstarlet-$(xmlstarlet_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xmlto
+xmlto:$(XMLTO)_$(ARCH).deb
+$(XMLTO): $(SPREZZ)/xmlto/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xmlto-$(xmlto_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: xmms2
 xmms2:$(XMMS2)_$(ARCH).deb
 $(XMMS2): $(SPREZZ)/xmms2/debian/changelog
