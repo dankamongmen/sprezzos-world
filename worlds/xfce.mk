@@ -140,5 +140,5 @@ $(XFCE4MIXER): $(SPREZZ)/xfce4-mixer/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xfce4-mixer-$(xfce4-mixer_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf xfce4-mixer-$(xfce4-mixer_UPVER).tar.bz2 $(TARARGS) $@
 
