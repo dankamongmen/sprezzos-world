@@ -270,3 +270,11 @@ $(LIBGOOCANVASPERL): $(SPREZZ)/libgoo-canvas-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Goo-Canvas-$(libgoo-canvas-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libnet-dbus-glib-perl
+libnet-dbus-glib-perl:$(LIBNETDBUSGLIBPERL)_$(ARCH).deb
+$(LIBNETDBUSGLIBPERL): $(SPREZZ)/libnet-dbus-glib-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Net-DBus-GLib-$(libnet-dbus-glib-perl_UPVER).tar.gz $(TARARGS) $@
+
