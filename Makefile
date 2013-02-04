@@ -3139,6 +3139,14 @@ $(GLIBNETWORKING): $(SPREZZ)/glib-networking/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf glib-networking-$(glib-networking_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gloox
+gloox:$(GLOOX)_$(ARCH).deb
+$(GLOOX): $(SPREZZ)/gloox/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gloox-$(gloox_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: GLU
 GLU:$(GLU)_$(ARCH).deb
 $(GLU): $(SPREZZ)/GLU/debian/changelog
