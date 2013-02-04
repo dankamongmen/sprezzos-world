@@ -46,3 +46,11 @@ $(LIBGLIBPERL): $(SPREZZ)/libglib-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Glib-$(libglib-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgnome2-vfs-perl
+libgnome2-vfs-perl:$(LIBGNOME2VFSPERL)_$(ARCH).deb
+$(LIBGNOME2VFSPERL): $(SPREZZ)/libgnome2-vfs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Gnome2-VFS-$(libgnome2-vfs-perl_UPVER).tar.gz $(TARARGS) $@
+
