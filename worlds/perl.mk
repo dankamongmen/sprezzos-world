@@ -70,3 +70,11 @@ $(LIBGNOME2PERL): $(SPREZZ)/libgnome2-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Gnome2-$(libgnome2-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgtk2-perl
+libgtk2-perl:$(LIBGTK2PERL)_$(ARCH).deb
+$(LIBGTK2PERL): $(SPREZZ)/libgtk2-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Gtk2-$(libgtk2-perl_UPVER).tar.gz $(TARARGS) $@
+
