@@ -1,0 +1,85 @@
+Description: Do proper temporary file creation
+ Upstream is using predictable temporary file names. Fix this in Debian
+ for now by using QTemporaryFile. This additionally ensures removal of
+ temporary files upon exit.
+Author: Jakob Haufe <sur5r@sur5r.net>
+Bug-Debian: http://bugs.debian.org/644935
+
+diff --git a/src/temporary.cpp b/src/temporary.cpp
+index 362cbd8..bebcd1f 100644
+--- a/src/temporary.cpp
++++ b/src/temporary.cpp
+@@ -1,7 +1,7 @@
+ #include "temporary.h"
+ #include "constants.h"
+ 
+-static QList<QString> paths;
++static QList<QTemporaryFile*> tempfiles;
+ #ifdef Q_WS_X11
+ static QString userName;
+ #endif
+@@ -10,43 +10,21 @@ Temporary::Temporary() { }
+ 
+ QString Temporary::filename() {
+ 
+-    static const QString tempDir = QDesktopServices::storageLocation(QDesktopServices::TempLocation);
++    QTemporaryFile *tempfile = new QTemporaryFile(QDir::tempPath() + "/" + Constants::UNIX_NAME + "-XXXXXX");
+ 
+-    QString tempFile = tempDir + "/" + Constants::UNIX_NAME + "-" + QString::number(qrand());
++    tempfiles << tempfile;
+ 
+-#ifdef Q_WS_X11
+-    if (userName.isNull()) {
+-        userName = QString(getenv("USERNAME"));
+-        if (userName.isEmpty())
+-            userName = QString(getenv("USER"));
+-    }
+-    if (!userName.isEmpty())
+-        tempFile += "-" + userName;
+-#endif
+-
+-    // tempFile += ".mp4";
+-
+-    if (QFile::exists(tempFile) && !QFile::remove(tempFile)) {
+-        qDebug() << "Cannot remove temp file" << tempFile;
++    if (tempfiles.size() > 1) {
++        QTemporaryFile *removedFile = tempfiles.takeFirst();
++        delete removedFile;
+     }
+ 
+-    paths << tempFile;
+-
+-    if (paths.size() > 1) {
+-        QString removedFile = paths.takeFirst();
+-        if (QFile::exists(removedFile) && !QFile::remove(removedFile)) {
+-            qDebug() << "Cannot remove temp file" << removedFile;
+-        }
+-    }
+-
+-    return tempFile;
+-
++    tempfile->open();
++    return tempfile->fileName();
+ }
+ 
+ void Temporary::deleteAll() {
+-    foreach(QString path, paths) {
+-        if (QFile::exists(path) && !QFile::remove(path)) {
+-            qDebug() << "Cannot remove temp file" << path;
+-        }
++    foreach(QTemporaryFile *tempfile, tempfiles) {
++        delete tempfile;
+     }
+ }
+diff --git a/src/temporary.h b/src/temporary.h
+index 50b9633..0453572 100644
+--- a/src/temporary.h
++++ b/src/temporary.h
+@@ -3,6 +3,7 @@
+ 
+ #include <QtCore>
+ #include <QDesktopServices>
++#include <QTemporaryFile>
+ 
+ class Temporary {
+ 
