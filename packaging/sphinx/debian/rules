@@ -1,0 +1,158 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+include /usr/share/python/python.mk
+
+export PYTHONWARNINGS=d
+export PYTHONHASHSEED=random
+
+here = $(dir $(firstword $(MAKEFILE_LIST)))/..
+debian_version = $(word 2,$(shell cd $(here) && dpkg-parsechangelog | grep ^Version:))
+upstream_dfsg_version = $(firstword $(subst -, ,$(debian_version)))
+upstream_version = $(firstword $(subst +, ,$(debian_version)))
+
+locales = $(notdir $(patsubst %/LC_MESSAGES,%,$(wildcard sphinx/locale/*/LC_MESSAGES)))
+scripts = $(basename $(wildcard sphinx-*.py))
+
+debroot = debian/tmp/
+site_packages = $(call py_libdir,$(shell pyversions -d))
+py3_site_packages = $(call py_libdir,$(shell py3versions -d))
+javascript_path = /usr/share/javascript/sphinxdoc/1.0/
+
+python_all = pyversions -r | tr ' ' '\n' | xargs -t -I {} env {}
+python3_all = py3versions -r | tr ' ' '\n' | xargs -t -I {} env {}
+
+ifeq "$(filter nocheck,$(DEB_BUILD_OPTIONS))" ""
+msgfmt_options = -c
+endif
+
+build-arch:
+
+build-indep build: build-stamp
+
+build-stamp:
+	dh_testdir
+	ln -sf /usr/share/javascript/jquery/jquery.js sphinx/themes/basic/static/
+	ln -sf /usr/share/javascript/underscore/underscore.js sphinx/themes/basic/static/
+	python ./sphinx-build.py doc build/html/
+	rm -rf build/man
+	cp -rl build/html build/man
+	python ./sphinx-build.py -b man doc build/man
+	python setup.py build --build-lib build/py2/
+	python3 setup.py build --build-lib build/py3/
+	find sphinx/locale/ -name '*.po' | sed -e 's/[.]po$$//' \
+	| xargs -t -I {} msgfmt $(msgfmt_options) {}.po -o {}.mo
+ifeq "$(filter nocheck,$(DEB_BUILD_OPTIONS))" ""
+	$(python_all) tests/run.py --verbose --no-skip
+	$(python3_all) tests/run.py --verbose
+	cd build/py3/ && rm -rf tests/ sphinx/pycode/Grammar.pickle
+	xvfb-run -a ./debian/jstest/run-tests build/html/
+endif
+	touch build-stamp
+
+clean:
+	dh_testdir
+	find . -name '*.py[co]' -delete
+	rm -rf build
+	rm -f $(basename $(wildcard debian/*.in))
+	dh_clean 
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	python setup.py \
+		build --build-lib build/py2/ \
+		install --no-compile --install-layout=deb --root $(debroot)
+	python3 setup.py \
+		build --build-lib build/py3/ \
+		install --no-compile --install-layout=deb --root $(debroot)
+	rm $(debroot)/usr/lib/python*/*-packages/Sphinx-*.egg-info/SOURCES.txt
+	# move static files outside {site,dist}-packages
+	sed -i -e "s!^package_dir = .*!package_dir = '/usr/share/sphinx'!" \
+		$(debroot)$(site_packages)/sphinx/__init__.py \
+		$(debroot)$(py3_site_packages)/sphinx/__init__.py
+	rm -rf $(debroot)/usr/share/sphinx/
+	mkdir -p $(debroot)/usr/share/sphinx/
+	cd $(debroot) && mv -t usr/share/sphinx/ \
+		.$(site_packages)/sphinx/texinputs \
+		.$(site_packages)/sphinx/themes
+	mkdir -p $(debroot)/usr/share/sphinx/pycode/
+	cd $(debroot) && mv -t usr/share/sphinx/pycode/ \
+		.$(site_packages)/sphinx/pycode/Grammar.txt
+	cp -t $(debroot)/usr/share/sphinx/pycode/ sphinx/pycode/Grammar.pickle
+	mkdir -p $(debroot)/usr/share/sphinx/ext/autosummary/
+	cd $(debroot) && mv -t usr/share/sphinx/ext/autosummary/ \
+		.$(site_packages)/sphinx/ext/autosummary/templates
+	cd $(debroot)$(py3_site_packages)/sphinx/ && \
+		rm -rf texinputs/ themes/ pycode/Grammar.txt ext/autosummary/templates/
+	set -e -x; \
+	cd $(debroot) && \
+		for lang in $(locales); \
+		do \
+			install -m 644 -D .$(site_packages)/sphinx/locale/$$lang/LC_MESSAGES/sphinx.js \
+				usr/share/sphinx/locale/$$lang/sphinx.js; \
+			install -m 644 -D .$(site_packages)/sphinx/locale/$$lang/LC_MESSAGES/sphinx.mo \
+				usr/share/locale/$$lang/LC_MESSAGES/sphinx.mo; \
+		done
+	cd $(debroot)$(site_packages)/sphinx/locale && rm -rf sphinx.pot */
+	cd $(debroot)$(py3_site_packages)/sphinx/locale && rm -rf sphinx.pot */
+	# install scripts not touched by easy install
+	set -e -x; \
+	for python in python2 python3; do \
+		dir=$(debroot)/usr/share/sphinx/scripts/$$python/; \
+		mkdir -p $$dir; \
+		for script in $(scripts); do \
+			sed -e "1 s,#!.*,#!/usr/bin/$${python%2}," $$script.py \
+			> $$dir/$$script; \
+			rm -f $(debroot)/usr/bin/$$script; \
+		done; \
+		chmod 755 $$dir/*; \
+	done
+	set -e -x; \
+	for maintscript in $(wildcard debian/sphinx-common.*.in); do \
+		sed -e 's/@SCRIPTS@/$(scripts)/' $$maintscript > $${maintscript%.in}; \
+	done
+	# Move JavaScript code to libjs-sphinxdoc:
+	rm -f build/html/_static/websupport.js
+	set -e -x; \
+	for js in $$(find build/html/_static/ -name '*.js'); do \
+		rm -f debian/libjs-sphinxdoc/$(javascript_path)/$${js##*/}; \
+		cp -f $$js debian/libjs-sphinxdoc/$(javascript_path); \
+	done
+	set -e; \
+	for js in $$(find $(debroot)/usr/share/sphinx/themes/ -name '*.js' -a '!' -name 'websupport.js'); do \
+		mv $$js debian/libjs-sphinxdoc/$(javascript_path); \
+		ln -sf "$(javascript_path)/$${js##*/}" $$js; \
+	done
+	cd debian/dh-sphinxdoc/ && pod2man -c Debhelper -r '' dh_sphinxdoc dh_sphinxdoc.1
+
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs CHANGES
+	dh_installdocs
+	dh_install -p sphinx-common -X /scripts/
+	dh_install -N sphinx-common --fail-missing
+	dh_lintian
+	./debian/dh-sphinxdoc/dh_sphinxdoc -p sphinx-doc /usr/share/doc/sphinx-doc/html/
+	dh_installexamples
+ifneq ($(shell grep -h '^[.]TH' debian/*.1 | cut -d ' ' -f 6-7 | sort -u), "Sphinx $(upstream_version)")
+	$(warning W: version numbers in the manual pages are out of date)
+endif
+	dh_installman
+	dh_pysupport -p python-sphinx
+	dh_python3 -p python3-sphinx --no-guessing-deps
+	dh_compress -X.py -X.js -X.rst -X.json -X.txt -Xobjects.inv
+	dh_link
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-arch:
+
+binary: binary-indep binary-arch
+
+.PHONY: build-arch build-indep build clean binary-indep binary-arch binary install

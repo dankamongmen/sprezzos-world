@@ -44,5 +44,5 @@ $(LIBGLIBPERL): $(SPREZZ)/libglib-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libglib-perl-$(libglib-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Glib-$(libglib-perl_UPVER).tar.gz $(TARARGS) $@
 
