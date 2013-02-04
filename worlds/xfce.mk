@@ -133,3 +133,12 @@ $(XFCE4PANEL): $(SPREZZ)/xfce4-panel/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfce4-panel-$(xfce4-panel_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xfce4-mixer
+xfce4-mixer:$(XFCE4MIXER)_$(ARCH).deb
+$(XFCE4MIXER): $(SPREZZ)/xfce4-mixer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xfce4-mixer-$(xfce4-mixer_UPVER).tar.gz $(TARARGS) $@
+
