@@ -100,6 +100,7 @@ $(DEBIANCD): $(SPREZZ)/debian-cd/debian/changelog
 	cp -r $(<D)/.. $@
 	rm -rf $@/debian
 	tar cJvf debian-cd-$(debian-cd_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf debian-cd-$(debian-cd_UPVER).tar.xz debian-cd_$(debian-cd_UPVER).orig.tar.xz
 	cp -r $(<D) $@
 
 .PHONY: debootstrap
