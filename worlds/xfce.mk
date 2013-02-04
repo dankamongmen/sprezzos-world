@@ -117,3 +117,19 @@ $(XFWM4): $(SPREZZ)/xfwm4/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfwm4-$(xfwm4_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xfce4-power-manager
+xfce4-power-manager:$(XFCE4POWERMANAGER)_$(ARCH).deb
+$(XFCE4POWERMANAGER): $(SPREZZ)/xfce4-power-manager/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfce4-power-manager-$(xfce4-power-manager_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xfce4-panel
+xfce4-panel:$(XFCE4PANEL)_$(ARCH).deb
+$(XFCE4PANEL): $(SPREZZ)/xfce4-panel/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfce4-panel-$(xfce4-panel_UPVER).tar.bz2 $(TARARGS) $@
