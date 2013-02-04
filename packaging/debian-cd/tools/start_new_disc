@@ -1,0 +1,473 @@
+#!/bin/bash
+#
+# start_new_disc
+#
+# Start a new temporary disc tree, including all the basic metadata
+# needed
+
+set -e
+#set -x
+
+BASEDIR=$1
+MIRROR=$2
+TDIR=$3
+CODENAME=$4
+ARCHES="$5"
+DISKNUM=$6
+SOURCEDISK=0
+BINARYDISK=0
+
+BDIR=$TDIR/$CODENAME
+CDDIR=$BDIR/CD${DISKNUM}
+DATE=`cat $BDIR/DATE`
+DI_DATA_DIR=$BASEDIR/data/$DI_CODENAME
+
+CAPCODENAME=`perl -e "print ucfirst("$CODENAME")"`
+
+NUM_ARCHES=`echo $ARCHES | wc -w`
+case "$ARCHES" in
+    *kfreebsd*) DEBIAN_KERNEL="GNU/kFreeBSD";;
+    *hurd*)     DEBIAN_KERNEL="GNU/Hurd";;
+    *)          DEBIAN_KERNEL="GNU/Linux";;
+esac
+export DEBIAN_KERNEL
+
+if [ "$VOLID_BASE"x = ""x ] ; then
+    VOLID_BASE="Debian $DEBVERSION"
+fi
+
+if [ $NUM_ARCHES = 1 ] ; then
+    case $ARCHES in
+        source)
+            SOURCEDISK=1
+            export DISKINFO="Debian $DEBVERSION \"$CAPCODENAME\" - $OFFICIAL $DISKTYPE Source-$DISKNUM $BUILD_DATE"
+            export VOLID="$VOLID_BASE Source $DISKNUM"
+            export SOURCEONLY=yes
+            ;;
+        *)
+            BINARYDISK=1
+            export DISKINFO="Debian ${DEBIAN_KERNEL} $DEBVERSION \"$CAPCODENAME\" - $OFFICIAL $ARCHES $DISKTYPE Binary-$DISKNUM $BUILD_DATE"
+            case "$ARCHES" in
+                powerpc)
+                    export VOLID="$VOLID_BASE ppc $DISKNUM" ;;
+                kfreebsd-i386)
+                    export VOLID="$VOLID_BASE f-i386 $DISKNUM" ;;
+                kfreebsd-amd64)
+                    export VOLID="$VOLID_BASE f-amd64 $DISKNUM" ;;
+                hurd-i386)
+                    export VOLID="$VOLID_BASE h-i386 $DISKNUM" ;;
+                *)
+                    export VOLID="$VOLID_BASE $ARCHES $DISKNUM" ;;
+            esac
+            ;;
+    esac
+    export ARCHDEF=$ARCHES
+else
+    BINARYDISK=1
+    case "$ARCHES" in
+        *source*) SOURCEDISK=1;;
+    esac
+    export ARCHDEF=`echo $ARCHES | sed 's? ?/?g'`
+    export DISKINFO="Debian ${DEBIAN_KERNEL} $DEBVERSION \"$CAPCODENAME\" - $OFFICIAL Multi-architecture $ARCHDEF $DISKTYPE #$DISKNUM $BUILD_DATE"
+    export VOLID="$VOLID_BASE M-A $DISKNUM"
+fi
+
+mkdir -p $CDDIR
+echo "  Adding the required directories"
+
+if [ ! -e $CDDIR/debian ] ; then
+    ln -sf . $CDDIR/debian
+fi
+
+if [ ! -d $CDDIR/dists/$CODENAME ] ; then
+    mkdir -p $CDDIR/dists/$CODENAME
+fi
+
+# Commodity link for tools which want local in dists/local/local ...
+if [ -n "$LOCAL" ]
+then
+    ln -sf $CODENAME $CDDIR/dists/local
+fi
+
+if [ ! -d $CDDIR/.disk ] ; then
+    mkdir $CDDIR/.disk
+fi
+
+if [ "$DISC_START_HOOK"x != ""x ] ; then
+    echo "  Calling start hook: $DISC_START_HOOK"
+    $DISC_START_HOOK $TDIR $MIRROR $DISKNUM $CDDIR "$ARCHES"
+fi
+
+echo "  Generating the image label and volume id"
+echo -n $DISKINFO                   > $CDDIR/.disk/info
+echo -n "$DISKINFO ($DATE)"         >  $BDIR/$DISKNUM.diskinfo
+echo '#define DISKNAME ' $DISKINFO  >  $CDDIR/README.diskdefines
+echo '#define ARCH ' $ARCHDEF       >> $CDDIR/README.diskdefines
+for ARCH in $ARCHES
+do
+    echo '#define ARCH'$ARCH ' 1'       >> $CDDIR/README.diskdefines
+done
+echo '#define DISKNUM ' $DISKNUM    >> $CDDIR/README.diskdefines
+echo '#define DISKNUM'$DISKNUM ' 1' >> $CDDIR/README.diskdefines
+echo -n $VOLID                      >  $BDIR/$DISKNUM.volid
+
+if [ $BINARYDISK = 1 ] ; then
+    echo '#define TYPEbinary  1'        >> $CDDIR/README.diskdefines
+    $BASEDIR/tools/set_mkisofs_opts bin $DISKNUM       >> $BDIR/$DISKNUM.mkisofs_opts
+fi
+if [ $SOURCEDISK = 1 ] ; then
+    echo '#define TYPEsource  1'        >> $CDDIR/README.diskdefines
+    $BASEDIR/tools/set_mkisofs_opts src $DISKNUM       >> $BDIR/$DISKNUM.mkisofs_opts
+fi
+
+if [ $DISKNUM = 1 ] ; then
+    if [ "$OMIT_DOC_TOOLS" != "1" ]; then
+        if [ ! -e $MIRROR/doc ]; then
+            echo "You need a Debian mirror with the doc directory!"
+            exit 1
+        fi
+    fi
+    
+    echo "  Adding .disk/base_components"
+    echo "main" > $CDDIR/.disk/base_components
+    if [ -n "$LOCAL" ] ; then
+        echo "local" >> $CDDIR/.disk/base_components
+    fi
+
+    echo "  Adding .disk/cd_type"
+    if [ "$COMPLETE"x = "1"x ]; then
+        if [ $DISKTYPE = DVD ] || [ $DISKTYPE = DLDVD ]; then
+            if [ "$MAXCDS"x = "1"x ]; then
+                echo "dvd/single" > $CDDIR/.disk/cd_type
+            else
+                echo "dvd" > $CDDIR/.disk/cd_type
+            fi
+        elif [ $DISKTYPE = BD ] || [ $DISKTYPE = DLBD ]; then
+            if [ "$MAXCDS"x = "1"x ]; then
+                echo "bluray/single" > $CDDIR/.disk/cd_type
+            else
+                echo "bluray" > $CDDIR/.disk/cd_type
+            fi
+        else
+            if [ "$MAXCDS"x = "1"x ]; then
+                echo "full_cd/single" > $CDDIR/.disk/cd_type
+            else
+                echo "full_cd" > $CDDIR/.disk/cd_type
+            fi
+        fi
+    else
+        echo "not_complete" > $CDDIR/.disk/cd_type
+    fi
+
+    if [ $NUM_ARCHES -gt 1 ]; then
+        echo "  Adding .disk/multi_arch"
+        touch $CDDIR/.disk/multi_arch
+    fi
+
+    echo "  Adding udeb/base includes/excludes"
+
+    for ARCH in $ARCHES
+    do
+        if [ $ARCH != source ] ; then
+            # Netinst/businesscard CD have different
+            # udeb_include and udeb_exclude files
+            if [ -z "$UDEB_INCLUDE" ] ; then
+                case "$INSTALLER_CD"x in
+                    "1"x)
+                        UDEB_INCLUDE=$DI_DATA_DIR/"$ARCH"_businesscard_udeb_include;;
+                    "2"x|"C"x)
+                        UDEB_INCLUDE=$DI_DATA_DIR/"$ARCH"_netinst_udeb_include;;
+                    *)
+                        UDEB_INCLUDE=$DI_DATA_DIR/"$ARCH"_udeb_include;;
+                esac
+            fi
+
+            if [ -z "$UDEB_EXCLUDE" ] ; then
+                case "$INSTALLER_CD"x in
+                    "1"x)
+                        UDEB_EXCLUDE=$DI_DATA_DIR/"$ARCH"_businesscard_udeb_exclude;;
+                    "2"x|"C"x)
+                        UDEB_EXCLUDE=$DI_DATA_DIR/"$ARCH"_netinst_udeb_exclude;;
+                    *)
+                        UDEB_EXCLUDE=$DI_DATA_DIR/"$ARCH"_udeb_exclude;;
+                esac
+            fi
+
+            # Sort out the udeb include and exclude files
+            if [ -n "$UDEB_INCLUDE" ] ; then
+                if [ -r "$UDEB_INCLUDE" ] ; then
+                    cat "$UDEB_INCLUDE" >> "$CDDIR/.disk/udeb_include"
+                else
+                    echo "WARNING: Unable to read UDEB_INCLUDE file $UDEB_INCLUDE"
+                fi
+            fi
+            if [ -n "$UDEB_EXCLUDE" ] ; then
+                if [ -r "$UDEB_EXCLUDE" ] ; then
+                    cat "$UDEB_EXCLUDE" >> "$CDDIR/.disk/udeb_exclude"
+                else
+                    echo "WARNING: Unable to read UDEB_EXCLUDE file $UDEB_EXCLUDE"
+                fi
+            fi
+
+            # Ditto the base include and exclude
+            if [ -n "$BASE_INCLUDE" ] ; then
+                if [ -r "$BASE_INCLUDE" ] ; then
+                    cat "$BASE_INCLUDE" >> "$CDDIR/.disk/base_include"
+                else
+                    echo "WARNING: Unable to read BASE_INCLUDE file $BASE_INCLUDE"
+                fi
+            fi
+            if [ -n "$BASE_EXCLUDE" ] ; then
+                if [ -r "$BASE_EXCLUDE" ] ; then
+                    cat "$BASE_EXCLUDE" >> "$CDDIR/.disk/base_exclude"
+                else
+                    echo "WARNING: Unable to read BASE_EXCLUDE file $BASE_EXCLUDE"
+                fi
+            fi
+        fi
+    done
+
+    if [ "$OMIT_DOC_TOOLS" != "1" ]; then
+        echo "  Adding docs to CD1"
+        $BASEDIR/tools/add_files $CDDIR $MIRROR doc
+        find $CDDIR/doc -name "dedication-*" | grep -v "$DEBVERSION" | xargs rm -f
+        find $CDDIR/doc -name "debian-keyring.tar.gz" | xargs rm -f
+
+        if [ ! -e $CDDIR/doc/FAQ/html ] ; then
+            echo "  Extracting FAQ on CD1"
+            mkdir $CDDIR/doc/FAQ/html
+            cd $CDDIR/doc/FAQ/html
+            if [ -e "../debian-faq.en.html.tar.gz" ] ; then
+                tar xzf ../debian-faq.en.html.tar.gz
+            else
+                tar xzf ../debian-faq.html.tar.gz
+            fi
+        fi
+    fi
+
+    # Installtools
+    mkdir $CDDIR/install
+    if [ -x "$BASEDIR/tools/$CODENAME/installtools.sh" ] ; then
+        echo "  Adding installtools"
+        $BASEDIR/tools/$CODENAME/installtools.sh $CDDIR "$ARCHES"
+    fi
+
+    for ARCH in $ARCHES
+    do
+        if [ -e $MIRROR/dists/$DI_CODENAME/main/disks-$ARCH ] ; then
+            echo "  Adding disks-$ARCH stuff ..."
+            mkdir -p $CDDIR/dists/$DI_CODENAME/main/disks-$ARCH
+            $BASEDIR/tools/add_files $CDDIR/dists/$DI_CODENAME/main/disks-$ARCH $MIRROR/dists/$DI_CODENAME/main/disks-$ARCH . 
+            touch $CDDIR/.disk/kernel_installable
+            cd $CDDIR/dists/$DI_CODENAME/main/disks-$ARCH
+            rm -rf base-images-*
+            if [ -L current ] ; then
+                CURRENT_LINK=`readlink current`
+                mv $CURRENT_LINK .tmp_link
+                rm -rf [0123456789]*
+                mv .tmp_link $CURRENT_LINK
+            elif [ -d current ] ; then
+                rm -rf [0123456789]* 
+            fi
+        fi
+    done
+
+    # See if we had to remove anything because it was too big. Warn the user.
+    if [ -s $BDIR/sourcetoobig ] ; then
+        echo "  Adding README.excluded (some source files were too big)"
+        echo "For size reasons, the following source packages were excluded from this disc set:" >> $CDDIR/README.excluded
+        echo >> $CDDIR/README.excluded
+        cat $BDIR/sourcetoobig >> $CDDIR/README.excluded
+        if [ -s $BDIR/sourcetoobig-deps ] ; then
+            echo "and that caused the following packages to be also excluded because" >> $CDDIR/README.excluded
+            echo "of dependencies:" >> $CDDIR/README.excluded
+            echo >> $CDDIR/README.excluded
+            cat $BDIR/sourcetoobig-deps >> $CDDIR/README.excluded
+            echo >> $CDDIR/README.excluded
+            echo "Beware that this may break dependencies in this disc set." >> $CDDIR/README.excluded
+        fi
+        echo >> $CDDIR/README.excluded
+    fi
+
+    # Stop the greps below from complaining
+    touch $BDIR/sort_deps_dummy.log
+
+    grep "refused because of toobig" $BDIR/sort_deps*.log | sort -u | awk '{print $1}' > $BDIR/toobig
+    if [ -s $BDIR/toobig ] ; then
+        echo "  Adding README.excluded (some package files were too big)"
+        echo "For size reasons, the following packages were excluded from this disc set:" >> $CDDIR/README.excluded
+        echo >> $CDDIR/README.excluded
+        cat $BDIR/toobig >> $CDDIR/README.excluded
+        grep "Can't add.*toobig" $BDIR/sort_deps*.log | sort -u | awk '{print $3}' > $BDIR/toobig-deps
+        if [ -s $BDIR/toobig-deps ] ; then
+            echo >> $CDDIR/README.excluded
+            echo "and that caused the following packages to be also excluded because" >> $CDDIR/README.excluded
+            echo "of dependencies:" >> $CDDIR/README.excluded
+            echo >> $CDDIR/README.excluded
+            cat $BDIR/toobig-deps >> $CDDIR/README.excluded
+        fi
+    fi
+fi
+
+# Create an empty dirs file; will be appended to later if needed
+> $BDIR/$DISKNUM.mkisofs_dirs
+
+echo "  Adding common docs on CD$DISKNUM"
+$BASEDIR/tools/add-bin-doc $DISKNUM "$ARCHES"
+
+# Common stuff for all disks in the set
+if [ "$SOURCEONLY"x = "yes"x ] ; then
+    echo -n "-J -joliet-long" >> $BDIR/$DISKNUM.mkisofs_opts
+fi
+
+echo "  Adding Release files"
+# Release files
+cd $CDDIR
+
+SECTIONS="main"
+if [ "${NONFREE:-0}" != "0" -o "${EXTRANONFREE:-0}" != "0" ] ; then
+    SECTIONS="${SECTIONS} non-free"
+fi
+if [ "${CONTRIB:-0}" != "0" ] ; then
+    SECTIONS="${SECTIONS} contrib"
+fi
+
+if [ -n "$LOCAL" ] ; then
+    SECTIONS="$SECTIONS local"
+fi
+
+# these two lines can be inserted below the "Architectures" line below,
+# to sort out broken Release files just after the testing --> stable
+# transition
+#     sed -e "s/^Suite: .*$/Suite: stable/" | \
+#     sed -e "s/^Description: .*$/Description: Debian $DEBVERSION/" | \
+
+if [ -e "$MIRROR/dists/$CODENAME/Release" ] ; then
+    # Strip the MD5Sum and SHA1 fields
+    # Update some other information as well
+    sed -e "s/^Architectures: .*$/Architectures: $ARCHES/" \
+        $MIRROR/dists/$CODENAME/Release | \
+        sed -e "s|^Components: .*$|Components: $SECTIONS|" | \
+        perl -ne 'if (/^(MD5Sum|SHA1|SHA256):/i) { $f=1; next } 
+    if ($f) { 
+        unless (/^ /) { print; $f=0 }
+    } else { print }' > dists/$CODENAME/Release
+    if [ "$EARLY_BUILD_HACK"x = "1"x ] ; then
+        RDATE=`awk '/^Date:/ { print $2,$3,$4,$5}' dists/$CODENAME/Release`
+        sed -i -e "s/^Suite: .*$/Suite: stable/" dists/$CODENAME/Release
+        sed -i -e "s/^Description: .*$/Description: Debian $DEBVERSION Released $RDATE/" dists/$CODENAME/Release
+    fi
+
+    # Create the suite symlink
+    SUITE=$(sed -n "/^Suite:/ s/.*: //p" dists/$CODENAME/Release)
+    if [ -n "$SUITE" ] && [ x"$SUITE" != x"$CODENAME" ]; then
+        ln -sf $CODENAME dists/$SUITE
+    fi
+else
+    echo "ERROR: Release file ($MIRROR/dists/$CODENAME/Release) is missing !"
+    exit 1
+fi
+
+# Copying individual release files
+for ARCH in $ARCHES
+do
+    for SECT in $SECTIONS
+    do
+        # Install the release files
+        if [ -e "$MIRROR/dists/$CODENAME/$SECT/binary-$ARCH/Release" ] ; then
+            mkdir -p dists/$CODENAME/$SECT/binary-$ARCH
+            cp $MIRROR/dists/$CODENAME/$SECT/binary-$ARCH/Release \
+                dists/$CODENAME/$SECT/binary-$ARCH/
+            if [ "$DEBVERSION" != "testing" ] ; then
+                sed -i "s/^Archive:.*$/Archive: stable/" dists/$CODENAME/$SECT/binary-$ARCH/Release
+            fi
+        fi
+        if [ -n "$NONUS" -a -e "$NONUS/dists/$CODENAME/non-US/$SECT/binary-$ARCH/Release" ] ; then
+            mkdir -p dists/$CODENAME/non-US/$SECT/binary-$ARCH
+            cp $NONUS/dists/$CODENAME/non-US/$SECT/binary-$ARCH/Release \
+                dists/$CODENAME/non-US/$SECT/binary-$ARCH/
+            if [ "$DEBVERSION" != "testing" ] ; then
+                sed -i "s/^Archive:.*$/Archive: stable/" dists/$CODENAME/non-US/$SECT/binary-$ARCH/Release
+            fi
+        fi
+    done
+
+    if [ -n "$LOCALDEBS" -a -n "$LOCAL" ] ; then
+        if [ -e $LOCALDEBS/dists/$CODENAME/local/binary-$ARCH/Release ] ; then
+            mkdir -p dists/$CODENAME/local/binary-$ARCH
+            cp $LOCALDEBS/dists/$CODENAME/local/binary-$ARCH/Release \
+                dists/$CODENAME/local/binary-$ARCH/
+        fi
+    fi
+
+    if [ -e "$MIRROR/dists/$DI_CODENAME/main/debian-installer/binary-$ARCH/Release" ] ; then
+        mkdir -p dists/$CODENAME/main/debian-installer/binary-$ARCH
+        cp $MIRROR/dists/$DI_CODENAME/main/debian-installer/binary-$ARCH/Release \
+            dists/$CODENAME/main/debian-installer/binary-$ARCH/
+        if [ "$DEBVERSION" != "testing" ] ; then
+            sed -i "s/^Archive:.*$/Archive: stable/" dists/$CODENAME/main/debian-installer/binary-$ARCH/Release
+        fi
+    fi
+done
+
+# Upgrade packages / kernels
+if [ "$SOURCEONLY"x != "yes"x ] ; then
+    echo "  Trying to add upgrade* directories"
+    if [ -x "$BASEDIR/tools/$CODENAME/upgrade.sh" ] ; then
+        $BASEDIR/tools/$CODENAME/upgrade.sh
+    fi
+fi
+
+for ARCH in $ARCHES
+do
+    export ARCH=$ARCH
+    if [ $ARCH != source ] ; then
+        if [ -x "$BASEDIR/tools/$CODENAME/upgrade-$ARCH.sh" ] ; then
+            $BASEDIR/tools/$CODENAME/upgrade-$ARCH.sh $DISKNUM $CDDIR
+        fi
+
+        echo "  (Optionally) making the image bootable for $ARCH:"
+        if [ -f $BASEDIR/tools/boot/$DI_CODENAME/boot-$ARCH ] ; then
+            cd $TDIR
+            echo "    Running tools/boot/$DI_CODENAME/boot-$ARCH $DISKNUM $CDDIR"
+            $BASEDIR/tools/boot/$DI_CODENAME/boot-$ARCH $DISKNUM $CDDIR || booterror=$?
+            if [ "$booterror"x != ""x ] ; then
+                echo "      FAILED: error $booterror"
+                exit $booterror
+            fi
+        else
+            if [ "${IGNORE_MISSING_BOOT_SCRIPT:-0}" = "0" ] ; then
+                echo "    No script to make CDs bootable for $ARCH"
+                echo "    We've not been asked to ignore this. Aborting."
+                exit 1
+            fi
+        fi
+    fi
+done
+
+# If we've had to extract any files from packages to put them onto the
+# CD (e.g. bootloader files), then we will have listed them in
+# $BDIR/$DISKNUM.pkgs_extracted. If that file exists, add a README.source
+# to the root of the CD
+if [ -e $BDIR/$DISKNUM.pkgs_extracted ] && \
+    [ ""x != "$ARCHIVE_EXTRACTED_SOURCES"x ] ; then
+    echo "  Adding README.source"
+    cat > $CDDIR/README.source <<EOF
+Creation of this disk image included extracting files from some Debian
+packages. In case you do not have those packages already, both the
+binary and source packages are archived at
+
+EOF
+    echo "$ARCHIVE_EXTRACTED_SOURCES" >> $CDDIR/README.source
+    echo "" >> $CDDIR/README.source
+    echo "The following binary/source packages were used:" >> $CDDIR/README.source
+    sort $BDIR/$DISKNUM.pkgs_extracted | uniq | \
+        xargs -n1 basename >> $CDDIR/README.source
+fi
+
+if [ "$DISC_PKG_HOOK"x != ""x ] ; then
+    echo "  Calling pkg hook: $DISC_PKG_HOOK"
+    $DISC_PKG_HOOK $TDIR $MIRROR $DISKNUM $CDDIR "$ARCHES"
+fi
+
+exit 0

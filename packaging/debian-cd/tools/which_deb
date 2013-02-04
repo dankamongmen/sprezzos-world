@@ -1,0 +1,167 @@
+#!/usr/bin/perl -w
+#
+# which_deb
+#
+# Simple helper tool to find the appropriate version of a package in
+# the archive to meet a requirement in the debian-cd build
+
+use strict;
+use List::Util qw{first};
+
+my ($mirror, $codename, $pkg, $pth, $output, $text_out);
+
+$mirror = shift;
+$codename = shift;
+$pkg = shift;
+$output = shift;
+$pth = "$mirror/dists/$codename";
+$text_out = "";
+
+my @components = qw(main);
+push @components, 'contrib' if $ENV{CONTRIB};
+push @components, 'non-free' if $ENV{NONFREE};
+push @components, 'local' if $ENV{LOCAL};
+
+if (!defined ($output)) {
+    $output = "binary";
+}
+
+# Give preference to i386 and amd64, if specified
+my @ARCHES;
+if ( $ENV{ARCHES} ) {
+    push @ARCHES, 'i386' if $ENV{ARCHES} =~ /i386/;
+    push @ARCHES, 'amd64' if $ENV{ARCHES} =~ /amd64/;
+    push @ARCHES, grep { !/source|i386|amd64/ } split /\s+/, $ENV{ARCHES};
+}
+
+# We seem to be building a source-only CD. Check for whatever binary
+# arches exist in the archive; #695244
+if (!@ARCHES) {
+        my %found_arches;
+        my $dh;
+        for my $component(@components) {
+                opendir ($dh, "$pth/$component");
+                if ($dh) {
+                        while (my $entry = readdir $dh) {
+                                $entry =~ /^binary-(.*)/ and $1 !~ /all/ and $found_arches{$1} = 1;
+                        }
+                }
+                close $dh;
+        }
+        if ($found_arches{"i386"}) {
+                push @ARCHES, 'i386';
+        }
+        if ($found_arches{"amd64"}) {
+                push @ARCHES, 'amd64';
+        }
+        for my $arch (sort keys %found_arches) {                
+                push @ARCHES, $arch;
+        }
+}
+
+sub grab_bin_info {
+    my $pth = shift;
+    my $arch = shift;
+    my $pkgname = shift;
+    my $old_split = $/;
+    my $match;
+    my $result = "";
+    
+    $/ = ''; # Browse by paragraph    
+
+    for my $component ( @components ) {
+        my $pgz = "$pth/$component/binary-$arch/Packages.gz";
+        if ( $component eq 'local' and $ENV{LOCALDEBS} ) {
+            $pgz = "$ENV{LOCALDEBS}/dists/$codename/local/binary-$arch/Packages.gz";
+        }
+        if (-e $pgz) {
+            open(PFILE, "zcat $pgz |") or
+                die "Failed to read Packages file $pgz";
+
+            while (defined($match = <PFILE>)) {
+                if (($match =~ /^Package: \Q$pkgname\E$/m)) {
+                    $result = $match;
+                    close PFILE;
+                    return $result;
+                }
+            }
+            # Fell through
+            close PFILE;
+        }
+    }
+    return "";
+}
+
+sub grab_src_info {
+    my $pth = shift;
+    my $pkgname = shift;
+    my $old_split = $/;
+    my $match;
+    my $result = "";
+    
+    $/ = ''; # Browse by paragraph    
+
+    for my $component ( @components ) {
+        my $pgz = "$pth/$component/source/Sources.gz";
+
+        if (-e $pgz) {
+            open(PFILE, "zcat $pgz |") or
+                die "Failed to read Sources file $pgz";
+
+            while (defined($match = <PFILE>)) {
+                if (($match =~ /^Package: \Q$pkgname\E$/m)) {
+                    $result = $match;
+                    close PFILE;
+                    return $result;
+                }
+            }
+            # Fell through
+            close PFILE;
+        }
+    }
+    return "";
+}
+
+my $bin_deb = "";
+my $pkgdata = "";
+my $srcname = "";
+
+if ($pkg eq "silo") {
+    $pkgdata = grab_bin_info($pth, "sparc", $pkg);
+
+} elsif ($pkg eq "syslinux") {
+    first { $pkgdata = grab_bin_info($pth, $_, "syslinux-common") } @ARCHES;
+    if (length($pkgdata) < 3) {
+        first { $pkgdata = grab_bin_info($pth, $_, "syslinux") } @ARCHES;
+    }
+} elsif ($pkg eq "yaboot") {
+    $pkgdata = grab_bin_info($pth, "powerpc", $pkg);
+} else { # Fallthrough for all other packages
+    first { $pkgdata = grab_bin_info($pth, $_, $pkg) } @ARCHES;
+}
+
+if (length($pkgdata) > 2) {
+    if ($output eq "binary") {
+        $pkgdata =~ m/^Filename: (\S+)/m and $bin_deb = $1;
+	$text_out = "$bin_deb\n";
+    }
+    elsif ($output eq "source") {
+        $srcname = $pkg;
+        $pkgdata =~ m/^Source: (\S+)/m and $srcname = $1;
+        $pkgdata = grab_src_info($pth, $srcname);
+        if (length($pkgdata) > 2) {
+            my $dir;
+            $pkgdata =~ m/^Directory: (\S+)/m and $dir = $1;
+            # Explicitly use the md5 lines in the Sources stanza, hence the xdigit(32) here
+            while ($pkgdata =~ m/^ ([[:xdigit:]]{32}) (\d+) (\S+)/msg) {
+		$text_out = $text_out . "$dir/$3\n";
+	    }
+        }
+    }
+}
+
+if (length($text_out) < 2) {
+    die "which_deb: can't find $output file(s) for $pkg in $codename\n";
+}
+
+print $text_out;

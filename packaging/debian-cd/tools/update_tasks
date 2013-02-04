@@ -1,0 +1,267 @@
+#!/usr/bin/perl -w
+
+use strict;
+
+my $arch;
+my $old_split = $/;
+my (@desktop_tasks, @user_tasks, @l10n_tasks, @server_tasks, @special_tasks);
+my ($section, $taskname);
+
+my $codename = $ENV{'CODENAME'};
+if (! defined($codename)) {
+    die "update_tasks: codename not specified\n";
+}
+
+my $mirror = $ENV{'MIRROR'};
+if (! defined($mirror)) {
+    die "update_tasks: mirror not specified\n";
+}
+
+my $bdir = $ENV{'BDIR'};
+if (! defined($bdir)) {
+    die "update_tasks: temp dir not specified\n";
+}
+
+my $basedir = $ENV{'BASEDIR'};
+if (! defined($basedir)) {
+    die "update_tasks: basedir not specified\n";
+}
+
+my $tdir = "$bdir/update_tasks";
+system("mkdir -p $tdir");
+
+# Look for the coreutils package (which should exist in all archs, and
+# is a non -all package) to determine a valid arch for the rest of
+# this script
+my $coreutils_deb = `$basedir/tools/which_deb $mirror $codename coreutils binary`;
+if ($coreutils_deb =~ m/_([[:alnum:]]+)\.deb/) {
+    $arch = $1;
+} else {
+    die "update_tasks: Can't determine arch!\n";
+}
+
+# Extract the tasksel-data deb for our suite; we need to parse the
+# data in it
+my $tasksel_deb = `$basedir/tools/which_deb $mirror $codename tasksel-data binary`;
+
+# For testing purposes - set up FORCE_SID_TASKSEL to force us to use
+# sid's tasksel data even if we're using stable/testing.
+if (defined($ENV{'FORCE_SID_TASKSEL'}) and $ENV{'FORCE_SID_TASKSEL'} eq '1') {
+    print "update_tasks: forcing use of the sid tasksel-data tasks\n";
+    $tasksel_deb = `$basedir/tools/which_deb $mirror sid tasksel-data binary`;
+}
+
+$tasksel_deb = "$mirror/$tasksel_deb";
+chomp $tasksel_deb;
+
+# Several types of task package we care about:
+#
+# task-$DESKTOP-desktop            - core package set for desktop $DESKTOP
+# task-$LANGUAGE                   - core package set for language $LANGUAGE
+# task-$LANGUAGE-desktop           - general desktop i18n packages for $LANGUAGE
+# task-$LANGUAGE-$DESKTOP-desktop  - i18n packages for $DESKTOP, $LANGUAGE
+# task-$FOO                        - package set for $FOO (mail-server, laptop, etc.)
+#
+# VERY much complicated by the freeform style of the names here:
+# * languages can be 1, 2 or 3 words (eg. english, brazilian-portuguese, south-african-english)
+# * non-desktop tasks can be 1 or 2 words (e.g. laptop, file-server)
+#
+# Need to parse debian-tasks.desc to work out what each type is
+
+system("dpkg -x $tasksel_deb $tdir/tasksel");
+
+my $descfile = "usr/share/tasksel/descs/debian-tasks.desc";
+
+open (TASKS, "$tdir/tasksel/$descfile")
+    or die "can't open $tdir/tasksel/$descfile: $!\n";
+
+while (defined (my $task = <TASKS>)) {
+    chomp $task;
+    if ($task =~ m/^Task: (\S+)/) {
+        $taskname = $1;
+    }
+    if ($task =~ m/^Section: (\S+)/) {
+        $section = $1;
+        if ($section eq "l10n") {
+            push (@l10n_tasks, $taskname);
+        } elsif ($section eq "server") {
+            push (@server_tasks, $taskname);
+        } elsif ($section eq "user") {
+            if ($taskname =~ m/^[[:alnum:]]+-desktop/) {
+                push (@desktop_tasks, $taskname);
+            } else {
+                push (@user_tasks, $taskname);
+            }
+        } elsif ($section eq "special") {
+            push (@special_tasks, $taskname);
+        } else {
+            die "update_tasks: task $taskname has unknown section $section!\n";
+        }
+
+    }
+}
+close TASKS;
+
+#print "l10n: @l10n_tasks\n";
+#print "desktop: @desktop_tasks\n";
+#print "user: @user_tasks\n";
+#print "server: @server_tasks\n";
+#print "special: @special_tasks\n";
+
+# Reduce special-casing and duplicate code. Add "light-desktop",
+# "generic-desktop" and "all-desktop" tasks that we can use here.
+push (@desktop_tasks, "light-desktop");
+push (@desktop_tasks, "generic-desktop");
+push (@desktop_tasks, "all-desktop");
+
+# Write out all the groupings
+foreach my $desktop (@desktop_tasks) {
+    my $filename;
+    my $desktop_name = $desktop;
+    $desktop_name =~ s/-desktop//g;
+
+    # Essential; $DESKTOP
+    $filename = "task-essential-$desktop_name";    
+    open (DESKOUT, "> $filename") or die "can't open file $filename for writing, $!\n";
+
+    # in all-desktop, add all the desktop tasks
+    if ($desktop_name eq "all") {
+        foreach my $taskname (@desktop_tasks) {
+            print DESKOUT "task-$taskname\n";
+        }
+    } elsif ($desktop_name eq "generic") {
+        print DESKOUT "task-gnome-desktop\n";
+    } elsif ($desktop_name eq "light") {
+        print DESKOUT "task-lxde-desktop\n";
+        print DESKOUT "task-xfce-desktop\n";
+    } else {
+        print DESKOUT "task-$desktop\n";
+    }
+
+    # generic-desktop and all-desktop want all the server and user
+    # tasks included too
+    if ($desktop_name eq "all" or $desktop_name eq "generic") {
+        foreach my $taskname (@user_tasks) {
+            print DESKOUT "task-$taskname\n";
+        }
+        foreach my $taskname (@server_tasks) {
+            print DESKOUT "task-$taskname\n";
+        }
+    }
+    close DESKOUT;
+
+    # Full; $DESKTOP
+    $filename = "task-full-$desktop_name";    
+    open (DESKOUT, "> $filename") or die "can't open file $filename for writing, $!\n";
+
+    # in all-desktop, add all the desktop tasks now
+    if ($desktop_name eq "all") {
+        foreach my $taskname (@desktop_tasks) {
+            print DESKOUT "task-$taskname\n";
+        }
+    } elsif ($desktop_name eq "generic") {
+        print DESKOUT "task-gnome-desktop\n";
+    } elsif ($desktop_name eq "light") {
+        print DESKOUT "task-lxde-desktop\n";
+        print DESKOUT "task-xfce-desktop\n";
+    } else {
+        print DESKOUT "task-$desktop\n";
+    }
+
+    # generic-desktop and all-desktop want all the server and user
+    # tasks included too
+    if ($desktop_name eq "all" or $desktop_name eq "generic") {
+        foreach my $taskname (@user_tasks) {
+            print DESKOUT "task-$taskname\n";
+        }
+        foreach my $taskname (@server_tasks) {
+            print DESKOUT "task-$taskname\n";
+        }
+    }
+
+    # task-$LANGUAGE, same for all flavours
+    foreach my $taskname (@l10n_tasks) {
+        if ($taskname !~ m/desktop/) {
+            print DESKOUT "task-$taskname\n";
+        }
+    }
+
+    # task-$LANGUAGE-desktop, same for all flavours
+    foreach my $taskname (@l10n_tasks) {
+        if ($taskname =~ m/desktop/) {
+            my $include = 1;
+            foreach my $dsk (@desktop_tasks) {
+                if ($taskname =~ m/$dsk/) {
+                    $include = 0;
+                    last;
+                }
+            }
+            if ($include) {
+                print DESKOUT "task-$taskname\n";
+            }
+        }
+    }
+
+    # in all-desktop, add all the desktop l10n tasks
+    if ($desktop_name eq "all") {
+        # task-$LANGUAGE-$DESKTOP-desktop
+        foreach my $taskname (@l10n_tasks) {
+            foreach my $dsk (@desktop_tasks) {
+                if ($taskname =~ m/$dsk/) {
+                    print DESKOUT "task-$taskname\n";
+                }
+            }
+        }
+
+    } elsif ($desktop_name eq "generic") {
+        # in generic-desktop, add the desktop l10n tasks as though for
+        # Gnome *first*. Others will come later
+
+        # task-$LANGUAGE-$DESKTOP-desktop
+        foreach my $taskname (@l10n_tasks) {
+            if ($taskname =~ m/gnome/) {
+                print DESKOUT "task-$taskname\n";
+            }
+        }
+        # task-!gnome-desktop
+        foreach my $taskname (@desktop_tasks) {
+            if ($taskname !~ m/gnome/) {
+                print DESKOUT "task-$taskname\n";
+            }
+        }
+
+        # task-$LANGUAGE-!gnome-desktop
+        foreach my $taskname (@l10n_tasks) {
+            if ($taskname =~ m/desktop$/) {
+                my $include = 0;
+                foreach my $dsk (@desktop_tasks) {
+                    if ($dsk !~ m/gnome/ and $taskname =~ m/$dsk/) {
+                        $include = 1;
+                        last;
+                    }
+                }
+                if ($include) {
+                    print DESKOUT "task-$taskname\n";
+                }
+            }
+        }
+    } elsif ($desktop_name eq "light") {
+        # task-$LANGUAGE-$DESKTOP-desktop
+        foreach my $taskname (@l10n_tasks) {
+            if ($taskname =~ m/lxde/ or $taskname =~ m/xfce/) {
+                print DESKOUT "task-$taskname\n";
+            }
+        }        
+    } else {
+        # a specific desktop, just add the desktop l10n tasks for this
+        # desktop
+
+        # task-$LANGUAGE-$DESKTOP-desktop
+        foreach my $taskname (@l10n_tasks) {
+            if ($taskname =~ m/$desktop_name/) {
+                print DESKOUT "task-$taskname\n";
+            }
+        }
+    }
+    close DESKOUT;
+}

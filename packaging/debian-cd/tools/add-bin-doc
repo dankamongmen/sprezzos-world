@@ -1,0 +1,124 @@
+#!/bin/bash
+
+#set -x
+set -e
+
+BDIR=$TDIR/$CODENAME
+SDIR=$TDIR/$CODENAME
+DISK=$1
+ARCHES="$2"
+
+DEBMAINVER="`echo $DEBVERSION | sed -e 's/[ _r].*//'`"
+
+if [ "$COMPLETE"x = ""x ] ; then
+	COMPLETE=0
+fi
+
+if [ "$OMIT_RELEASE_NOTES"x = ""x ] ; then
+	OMIT_RELEASE_NOTES=0
+fi
+
+if [ "$OMIT_MANUAL"x = ""x ] ; then
+	OMIT_MANUAL=0
+fi
+
+if [ "$FORCE_FIRMWARE"x = ""x ] ; then
+	FORCE_FIRMWARE=0
+fi
+
+dir=$BDIR/CD$DISK
+for file in $MIRROR/README*; do
+	if [ -e $file ]; then
+		cp -pdf $file $dir/ 
+	else
+		echo "ERROR: no README* files in the mirror $MIRROR"
+		if [ "$OMIT_DOC_TOOLS" != "1" ]; then
+			exit 1
+		fi
+	fi
+done
+
+if [ -f $dir/doc/dedication-$DEBMAINVER.txt ]; then
+	mv $dir/doc/dedication-$DEBMAINVER.txt $dir/dedication.txt
+	ln -s ../dedication.txt $dir/doc/dedication-$DEBMAINVER.txt
+fi
+
+rm -f $dir/README $dir/README.1ST \
+	$dir/README.CD-manufacture $dir/README.multicd \
+	$dir/README.pgp $dir/README.non-US ; \
+
+rm -f $dir/README.html
+cpp -traditional -undef -P -C -Wall -nostdinc -I$dir \
+    -D DISKTYPE$DISKTYPE \
+    -D FORCE_FIRMWARE="$FORCE_FIRMWARE" \
+    -D COMPLETE="$COMPLETE" \
+    -D OMIT_MANUAL="$OMIT_MANUAL" \
+    -D OFFICIAL_VAL=$OFFICIAL_VAL \
+    -D OMIT_RELEASE_NOTES="$OMIT_RELEASE_NOTES" \
+    -D DEBIAN_KERNEL="$DEBIAN_KERNEL" \
+    -D OUTPUTtext $BASEDIR/data/$CODENAME/README.html.in \
+	| sed -e 's/%%.//g' > $dir/README.html
+
+rm -f $dir/README.txt
+lynx -dump -force_html $dir/README.html | todos \
+> $dir/README.txt ; \
+
+cpp -traditional -undef -P -C -Wall -nostdinc -I $dir/ \
+    -D DISKTYPE$DISKTYPE \
+    -D FORCE_FIRMWARE="$FORCE_FIRMWARE" \
+    -D OMIT_MANUAL="$OMIT_MANUAL" \
+    -D OFFICIAL_VAL=$OFFICIAL_VAL \
+    -D OMIT_RELEASE_NOTES="$OMIT_RELEASE_NOTES" \
+    -D DEBIAN_KERNEL="$DEBIAN_KERNEL" \
+    -D OUTPUThtml $BASEDIR/data/$CODENAME/README.html.in \
+	| sed -e 's/%%.//g' > $dir/README.html
+
+rm -f $dir/README.diskdefines
+mkdir -p $dir/pics 
+cp -p $BASEDIR/data/pics/*.* $dir/pics/ 
+
+mkdir -p $dir/css
+cp -pf $BASEDIR/data/$CODENAME/*.css $dir/css/ || true
+cp -pf $BASEDIR/data/$CODENAME/*.{png,gif} $dir/pics || true
+
+if [ -e $MIRROR/dists/$CODENAME/main/Release-Notes ] ; then 
+   cp -pf $MIRROR/dists/$CODENAME/main/Release-Notes $dir/
+fi
+
+if [ -e $BASEDIR/data/$CODENAME/README.multicd ]; then 
+    cp -pf $BASEDIR/data/$CODENAME/README.multicd $dir/
+fi
+
+for ARCH in $ARCHES
+do
+	if [ $ARCH != "source" ] ; then
+		if [ "$INSTALLER_CD" = "0" ] ; then
+			if [ -e $MIRROR/dists/$CODENAME/Contents-$ARCH.gz ] ; then
+			   cp -pf $MIRROR/dists/$CODENAME/Contents-$ARCH.gz $dir/dists/$CODENAME/
+			else
+			   echo "WARNING: there's no Contents-$ARCH.gz file for $CODENAME !"
+			fi
+		fi
+
+		if [ -n "$NONUS" ] ; then
+			if [ -e $NONUS/dists/$CODENAME/non-US/Contents-$ARCH.gz ] ; then
+			 cp -pf $NONUS/dists/$CODENAME/non-US/Contents-$ARCH.gz \
+				$dir/dists/$CODENAME/non-US/
+			else
+			echo "WARNING: there's no Content-$ARCH.gz file for $CODENAME/non-US !"
+			fi
+		fi
+
+		if [ -e $BASEDIR/data/$CODENAME/README.$ARCH ] ; then 
+			cp -pf $BASEDIR/data/$CODENAME/README.$ARCH $dir/
+		fi
+
+		if [ -e $BASEDIR/data/$CODENAME/README.1ST.$ARCH ] ; then 
+			echo "This disc is labelled :" >> $dir/README.1ST
+			cat $dir/.disk/info >>$dir/README.1ST
+			echo -e "\n\n" >>$dir/README.1ST
+			cat $BASEDIR/data/$CODENAME/README.1ST.$ARCH >> $dir/README.1ST
+			todos $dir/README.1ST
+		fi
+	fi
+done

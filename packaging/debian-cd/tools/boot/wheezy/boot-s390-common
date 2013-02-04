@@ -1,0 +1,109 @@
+#!/bin/bash
+#
+# boot-s390-common
+#
+# Common code for s390 and s390x
+#
+# (C) 2001 Jochen Röhrig <jr@debian.org>
+#     2005 Frans Pop <fjp@debian.org>
+#
+# Released under the GNU general Public License.
+# See the copyright file for license details.
+# Released as part of the debian_cd package, not much use stand alone.
+#
+# Install stuff for booting an s390 system from VM-reader, tape,
+# FTP-server, CD-ROM  or emulated tape.
+#
+# $1 is the CD number
+# $2 is the temporary CD build dir
+
+. $BASEDIR/tools/boot/$CODENAME/common.sh
+
+set -e
+
+N=$1
+CDDIR=$2
+
+cd $CDDIR/..
+
+if [ $N != "1" ] && [ $N != "1_NONUS" ] ; then
+    add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-J -joliet-long"
+	exit 0
+fi
+
+if [ "$DI_WWW_HOME" = "default" ];then
+    # Tempting as it might be to merge these two definitions using $ARCH,
+    # do *not* do that - these defs are parsed out by other scripts that
+    # won't cope with that
+	if [ "$ARCH" = s390 ]; then
+		DI_WWW_HOME="http://d-i.debian.org/daily-images/s390/daily"
+	else
+		DI_WWW_HOME="http://d-i.debian.org/daily-images/s390x/daily"
+	fi
+    if [ -n "$DI_DIR" -a -e "$DI_DIR/~${DI_WWW_HOME#*~}" ] ; then
+        DI_DIR="$DI_DIR/${DI_WWW_HOME#*http://}"
+	    DI_WWW_HOME=""
+    fi
+fi
+if [ ! "$DI_DIST" ]; then
+   DI_DIST="$DI_CODENAME"
+fi
+
+imagedir="boot$N/boot"
+mkdir -p $imagedir
+
+# Install the two kernel images, the ramdisk and the parameter file
+# The following files need to be included:
+# - generic/parmfile.debian    : parameter file
+# - generic/initrd.debian      : initrd; to be used for both VM-reader and tape
+# - generic/kernel.debian      : kernel for WM-reader
+# - tape/kernel.debian         : kernel for tape
+# - tape/kernel.debian-nolabel : kernel for tape (nolabel)
+
+images_S390="generic/parmfile.debian generic/initrd.debian generic/kernel.debian tape/kernel.debian tape/kernel.debian-nolabel"
+
+for image in $images_S390; do
+	case $image in
+		generic/parmfile.debian)
+			imagedest=parmfile ;;
+		generic/initrd.debian)
+			imagedest=root.bin ;;
+		generic/kernel.debian)
+			imagedest=linux_vm ;;
+		tape/kernel.debian)
+			imagedest=linux_tp ;;
+		tape/kernel.debian-nolabel)
+			imagedest=linux_nl ;;
+	esac
+	imagedest="$imagedir/$imagedest"
+
+	if [ -n "$LOCAL"  -a -f "${LOCALDEBS:-$MIRROR}/dists/$DI_DIST/local/installer-$ARCH/current/images/$image" ]; then
+		cp "${LOCALDEBS:-$MIRROR}/dists/$DI_DIST/local/installer-$ARCH/current/images/$image" "$imagedest"
+	elif [ ! "$DI_WWW_HOME" ];then
+		if [ ! "$DI_DIR" ];then
+			DI_DIR="$MIRROR/dists/$DI_DIST/main/installer-$ARCH/current/images"
+		fi
+		cp "$DI_DIR/$image" "$imagedest"
+	else
+		wget "$DI_WWW_HOME/$image" -O "$imagedest"
+	fi
+done
+
+# Copy the different boot files
+# - d390.ins    : for booting from CD-ROM or FTP-Server
+# - d390oco.ins : same, using object-code-only-modules-ramdisk (example)
+# - d390.tdf    : for booting from emulated tape
+# - d390oco.tdf : same, using object-code-only-modules-ramdisk (example)
+cp $BASEDIR/data/$CODENAME/$ARCH/d390* "$imagedir/"
+sed -e 's,^[^*],boot/&,g' < $BASEDIR/data/$CODENAME/$ARCH/d390.ins > "boot$N/d390.ins"
+
+# Create the files specifying offset and size of the initrd
+perl -e "print pack('N', 0x800000)" >"$imagedir/root.off"
+perl -e "print pack('N', -s '$imagedir/root.bin')" >"$imagedir/root.siz"
+
+# Copy the README file
+cp $BASEDIR/data/$CODENAME/$ARCH/README.boot "boot$N/"
+
+# Include the boot$N/-tree into the iso-image
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-J"
+add_mkisofs_opt $CDDIR/../$N.mkisofs_dirs "boot$N"

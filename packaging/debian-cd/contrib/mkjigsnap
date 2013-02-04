@@ -1,0 +1,226 @@
+#!/bin/sh
+#
+# mkjigsnap
+#
+# (c) 2004 Steve McIntyre
+#
+# Server-side wrapper; run this on a machine with a mirror to set up
+# the snapshots for jigit
+#
+# GPL v2 - see COPYING 
+#
+# Some things needed:
+#   location of the mirror
+#   the keyword to look for (e.g. Debian)
+#   the snapshot dirname (e.g. today's date)
+#   the jigdo files
+# Example:
+# ./mkjigsnap -m /tmp/mirror \
+#      -k Debian -k Non-US \
+#      -d 20041017 \
+#      jigdo1 jigdo2 jigdo3 ...
+
+STARTDATE=`date`
+
+while [ $# -gt 0 ]
+do
+    case "$1"x in
+        "-m"x)
+            shift
+            MIRROR=$1
+            shift
+            ;;
+        "-d"x)
+            shift
+            DIRNAME=$1
+            shift
+            ;;
+        "-j"x)
+			shift
+			JIGDOLIST=$1
+			shift
+			;;
+        "-t"x)
+            shift
+            TF_TMPDIR="--directory $1"
+            SORT_TMPDIR="-T $1"
+            shift
+            ;;
+        *)
+            JIGDOS="$JIGDOS $1"
+            shift
+            ;;
+    esac
+done
+
+if [ "$MIRROR"x = ""x ] ; then
+    echo "You must specify the location of the mirror!"
+    exit 1
+fi
+    
+if [ "$DIRNAME"x = ""x ] ; then
+    echo "You must specify the snapshot directory name!"
+    exit 1
+fi
+    
+if [ "$JIGDOS"x = ""x ] ; then
+    if [ "$JIGDOLIST"x = ""x ] ; then
+		echo "You must specify some jigdo files!"
+		exit 1
+	fi
+fi
+
+TMPFILE=`tempfile $TF_TMPDIR`
+if [ "$JIGDOLIST"x != ""x ] ; then
+	for JIGDO in `cat $JIGDOLIST`
+	do
+		zcat -f $JIGDO | sed -n "s/^.*Debian://gp" >> $TMPFILE
+	done
+fi
+
+if [ "$JIGDOS"x != ""x ] ; then 
+	zcat -f $JIGDOS | sed -n "s/^.*Debian://gp" >> $TMPFILE
+fi
+
+LISTDONEDATE=`date`
+
+TMPFILE1=`tempfile $TF_TMPDIR`
+TOTAL_FILES=`wc -l < $TMPFILE`
+
+cat $TMPFILE | sort -u $SORT_TMPDIR > $TMPFILE1
+
+SORTDONEDATE=`date`
+NUM_FILES=`wc -l < $TMPFILE1`
+
+mv -f $TMPFILE1 $TMPFILE
+  
+NUM=`cat $TMPFILE | wc -l`
+
+LINKS_DONE=0
+(echo $NUM; echo $MIRROR; echo $DIRNAME; cat $TMPFILE ) | perl -we '
+
+    use File::Basename;
+	use File::Find;
+    my $num;
+    my $mirrorpath;
+    my $outdir;
+    my $dirname;
+    my $filename;
+    my $done = 0;
+	my $failed = 0;
+	my @file_list;
+    my $old_deleted = 0;
+    my $link;
+    $| = 1;
+
+    # Make a dir tree
+    sub mkdirs {
+        my $input = shift;
+        my $dir;
+        my @components;
+        my $need_slash = 0;
+
+        if (! -d $input) {
+            @components = split /\//,$input;
+            foreach $component (@components) {
+                if ($need_slash) {
+                    $dir = join ("/", $dir, $component);
+                } else {
+                    $dir = $component;
+                    $need_slash = 1;
+                }
+                if (! -d $dir) {
+                    mkdir $dir;
+                }
+            }
+        }
+    }        
+
+	sub delete_redundant {
+		my $ref;
+
+		if (-f) {
+			$ref = $file_list{$File::Find::name};
+			if (!defined($ref)) {
+				unlink($File::Find::name);
+				$old_deleted++;
+				if ( !($old_deleted % 1000) ) {
+					print "$old_deleted\n";
+				}
+			}
+		}
+	}
+
+    while (<>) {
+        chomp;
+
+        if (!defined($num)) {
+            $num = $_;
+            next;
+        }
+        if (!defined($mirrorpath)) {
+            $mirrorpath = $_;
+            next;
+        }
+        if (!defined($outdir)) {
+            $outdir = $_;
+            print "Linking $num files from $mirrorpath to $outdir\n";
+            next;
+        }
+
+        $outfile = $outdir . "/" . $_;
+		$file_list{$outfile}++;
+        if (! -e $outfile) {
+            $dirname = dirname($_);
+            $filename = basename($_);
+
+            mkdirs($outdir . "/" . $dirname);
+	    my $link_ok = 0;
+	    foreach $mirror (split /:/,$mirrorpath) {
+		$infile = $mirror . "/" . $_;
+		if (-l $infile) {
+		    $link = readlink($infile);
+		    if ($link =~ m#^/#) {
+		        $infile = $link;
+                    } else {
+                        $infile = dirname($infile) . "/" . $link;
+                    }
+                }
+                $outfile = $outdir . "/" . $_;
+                if (link ($infile, $outfile)) {
+		    $link_ok = 1;
+		    last;
+		}
+		$infile = $mirror . "/" . $filename;
+#		print "Falling back to $infile\n";
+                if (link ($infile, $outfile)) {
+		    $link_ok = 1;
+		    last;
+		}		
+            }
+	    if ($link_ok == 0) {
+	        print "\nFailed to create link $outfile\n";
+	        $failed++;
+            }
+        }
+        $done++;
+	if ( !($done % 1000) ) {
+		print "$done/$num\n";
+	    }
+    }
+	print "  Finished: $done/$num, $failed failed\n\n";
+
+	# Now walk the tree and delete files that we no longer need
+	print "Scanning for now-redundant files\n";
+	find(\&delete_redundant, $outdir);
+	print "  Finished: $old_deleted old files removed\n";
+'
+
+rm -f $TMPFILE
+echo
+
+echo "$STARTDATE: startup"
+echo "$LISTDONEDATE: $TOTAL_FILES found"
+echo "$SORTDONEDATE: $NUM_FILES after sorting"
+echo `date`": mkjigsnap finished successfully"
+

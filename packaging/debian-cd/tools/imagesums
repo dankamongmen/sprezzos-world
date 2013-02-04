@@ -1,0 +1,70 @@
+#!/bin/bash
+
+VERBOSE=0
+
+if [ "$1" = "-v" ] ; then
+    VERBOSE=1
+    shift
+fi
+
+cd $1
+
+if [ "$2"x != ""x ] ; then
+    EXT="$2"
+fi
+
+if [ "$CHECKSUMS"x = ""x ] ; then
+    CHECKSUMS="sha1 md5 sha512 sha256"
+fi
+
+for SUM in $CHECKSUMS; do
+	UPSUM=`echo $SUM | tr 'a-z' 'A-Z'`
+	FILE=$UPSUM"SUMS"$EXT
+	if [ $VERBOSE -eq 1 ] ; then
+	    echo "Clearing $PWD/$FILE"
+	fi
+	:> $FILE
+done
+
+# 2 calls to find here to get the ordering right - we *really* want to
+# get the jigdo files first
+for file in `find * -name \*.jigdo` `find * -name \*.iso`; do
+    case $file in
+        *.jigdo)
+            iso=${file%%.jigdo}.iso
+            JIGDO=1
+            ;;
+        *.iso)
+            iso=$file
+            JIGDO=0
+            ;;
+        *)
+            echo "Found unexpected file $file!"
+            exit 1
+            ;;
+    esac
+
+	for SUM in $CHECKSUMS; do
+		UPSUM=`echo $SUM | tr 'a-z' 'A-Z'`
+		FILE=$UPSUM"SUMS"$EXT
+		CMD="$SUM"sum
+
+		grep -q $iso $FILE
+		if [ $? -ne 0 ] ; then
+			CKSUM=""
+			if [ "$JIGDO" == 1 ] ; then
+				CKSUM=`zcat -f $file | grep -i "Image Hex $CMD" | \
+                       awk '{print $5}'`
+			fi
+			if [ "$CKSUM"x != ""x ] ; then
+				echo "$CKSUM  $iso" >> $FILE
+				grep $iso $FILE
+			else
+				echo "No Jigdo help for $SUM, doing it the long way with $CMD"
+				$CMD $iso >> $FILE
+				grep $iso $FILE
+			fi
+		fi
+
+	done
+done

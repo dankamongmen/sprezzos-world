@@ -1,0 +1,111 @@
+#!/bin/sh
+#
+# grab_md5
+# (c) 2004 Steve McIntyre <steve@einval.com>
+#
+# GPL v2
+#
+# Parse Packages and Sources files out of a mirror and pre-process
+# them into a single list ready for mkisofs to check later
+
+set -e
+
+MIRROR=$1
+ARCHES="$2"
+CODENAME=$3
+DI_CODENAME=$4
+OUT=$5
+
+for ARCH in $ARCHES
+do
+    LOCATIONS="$MIRROR/dists/$CODENAME/ $MIRROR/dists/$DI_CODENAME/"
+    echo "Looking in $LOCATIONS"
+
+    for LOCATION in $LOCATIONS; do
+        if [ ! -d $LOCATION ]; then
+            echo "Error: $LOCATION is not a directory"
+            exit 1
+        fi
+    done
+
+    case $ARCH in
+        source)
+            FILES=`find $LOCATIONS -name Sources.gz`
+            echo "Using MD5 sums from Sources files:"
+            echo $FILES
+            zcat -f $FILES | MIRROR=$MIRROR perl -ne '
+                chomp;
+                my %files;
+                my $dir;
+                my $mirror = $ENV{"MIRROR"};
+                my $filename;
+                while (<>) {
+                    if (m/^ ([[:xdigit:]]{32}) (\d+) (\S+)/sg) {
+                        $files{$3}{"md5"} = $1;
+                        $files{$3}{"size"} = $2;
+                    }
+                    if (m/^Directory: (\S+)/sg) {
+                        $dir = $1;
+                    }
+                    if (m/^$/) {
+                        for $filename (keys %files) {
+                            printf("%s  %12s  %s/%s/%s\n",
+                                $files{$filename}{"md5"},
+                                $files{$filename}{"size"},
+                                $mirror, $dir, $filename);
+                        }
+                        undef %files;
+                    }
+                }' | sort | uniq >> $OUT
+            ;;
+        *)
+            FILES=`find $LOCATIONS -name Packages.gz | grep binary-$ARCH`
+            echo "Using MD5 sums from Packages files:"
+            echo $FILES
+            NUM_FILES=`echo $FILES | wc -w`
+            if [ $NUM_FILES -eq 1 ] ; then
+                echo "No files found for arch $ARCH. Abort!"
+                exit 1
+            fi
+            zcat -f $FILES | MIRROR=$MIRROR perl -ne '
+                chomp;
+                my $mirror = $ENV{"MIRROR"};
+                my $filename;
+                my $size;
+                my $md5;
+                while (<>) {
+                    if (m/^Filename: (\S+)/sg) {
+                        $filename = $1;
+                    }
+                    if (m/^Size: (\S+)/sg) {
+                        $size = $1;
+                    }
+                    if (m/^MD5sum: (\S+)/sg) {
+                        $md5 = $1;
+                    }
+                    if (m/^$/) {
+                        printf("%s  %12s  %s/%s\n", $md5, $size, $mirror, $filename);
+                    }
+                }' | sort | uniq >> $OUT
+            # Use the new D-I images. Do NOT use the "current"
+            # link; it causes problems with overlaid files...
+            for VER in $MIRROR/dists/$DI_CODENAME/main/installer-$ARCH/*
+            do
+                if [ -d $VER ] && [ ! -L $VER ] ; then
+                    FILE=$VER/images/MD5SUMS
+                    echo "Using MD5 sums from d-i: $FILE"
+                    LOC=dists/$DI_CODENAME/main/installer-$ARCH/`basename $VER`/images
+                    for ENTRY in `cat $FILE | sed 's/  /:/g'`
+                    do
+                        PATH=`echo $ENTRY | /bin/sed "s?^.*:\./?$MIRROR/$LOC/?g"`
+                        MD5=`echo $ENTRY | /bin/sed 's/:.*$//g'`
+                        SIZE=`/usr/bin/stat -c %s $PATH`
+                        printf '%s  %12.12s  %s\n' $MD5 $SIZE $PATH
+                    done | sort | uniq >> $OUT
+                 fi
+            done
+            ;;             
+    esac
+done
+
+exit 0

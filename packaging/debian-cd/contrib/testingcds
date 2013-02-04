@@ -1,0 +1,269 @@
+#!/bin/bash
+#
+# testingcds (c) 2005 Santiago Garcia Mantinan <manty@manty.net>
+#
+# Updates since then by:
+# Joey Hess <joey@kitenet.net>
+# Steve McIntyre <steve@einval.com>
+#
+# GPL v2
+#
+# See cronjob.weekly and cronjob.daily for examples of how to call this script
+
+#set -x
+
+if [ "$CONF"x = ""x ] ; then
+    CONF=~/build.wheezy/CONF.sh
+fi
+export CF=$CONF
+if [ "$DCD_DIR"x = ""x ] ; then
+    DCD_DIR=~/build.wheezy/debian-cd
+fi
+export CF=$CONF
+
+now () {
+    date -u +%F:%H:%M:%S
+}
+
+# Set up and cleaning
+if [ $# -lt 1 ] ; then
+    echo $0 \$ARCH
+    echo "variables: PUBDIR[ISO|JIG]"
+    exit 1
+fi
+
+if [ ! "$DATE_BUILD" ] ; then
+    DATE_BUILD=`/bin/date -u +%Y%m%d`
+fi
+
+export ARCH="$1"
+NUM_ARCHES=`echo $ARCH | wc -w`
+
+if [ ! "$JIGDOFALLBACKURLS" ] ; then
+   export JIGDOFALLBACKURLS="Debian=http://us.cdimage.debian.org/cdimage/snapshot/Debian/"
+fi
+
+# $DI is used to set DI_CODENAME and also to specify the directory for images
+if [ "$DI" ] ; then
+    export DI_CODENAME="$DI"
+fi
+
+export LOG="`pwd`/log/"
+if [ "$NUM_ARCHES"x = "1"x ] ; then
+    export OUTARCH=$ARCH
+else
+    export OUTARCH="multi-arch"
+fi
+export RUN="$INSTALLER_CD$DI$OUTARCH$LOGAPPEND"
+export LOGFILE="$LOG/$RUN"
+
+case "$INSTALLER_CD" in
+    1)
+        export DISKTYPE=BC;;
+    2|7|8|C)
+        export DISKTYPE=NETINST;;
+    3|6)
+        export OUT_TYPE=dvd
+        export DISKTYPE=DVD;;
+    4)
+        export DISKTYPE=kde-CD;;
+    5)
+        export DISKTYPE=xfce-CD;;
+    A)
+        export DISKTYPE=lxde-CD;;
+    B)
+        export DISKTYPE=xfce+lxde-CD;;
+    9)
+        export OUT_TYPE=bd
+        export DISKTYPE=BD;;
+    D)
+        export OUT_TYPE=dlbd
+        export DISKTYPE=DLBD;;
+    *)  export DISKTYPE=CD;;
+esac
+
+if [ "$OUT_TYPE"x = ""x ] ; then
+    OUT_TYPE=cd
+fi
+
+export IMAGETARGET=official_images
+cd $DCD_DIR && . $CONF
+
+if [ "$OUT"x = ""x ] ; then
+    echo Config error
+    exit 1
+fi
+
+if [ "$BUILDNAME"x = ""x ] ; then
+    TRACEFILE="$OUT_TYPE-trace"
+    echo "  Making $ARCH ${DISKTYPE} in $OUT"
+else
+    TRACEFILE="$BUILDNAME-trace"
+    echo "  Making $ARCH ${DISKTYPE} (${BUILDNAME}) in $OUT"
+fi
+
+if [ "$INSTALLER_CD" = "1" ] ; then
+    export OFFICIAL="Official BusinessCard Snapshot"
+elif [ "$INSTALLER_CD" = "2" ] ; then
+    export OFFICIAL="Official NetInst Snapshot"
+elif [ "$INSTALLER_CD" = "4" ]; then
+    export OFFICIAL="Official KDE CD Snapshot"
+elif [ "$INSTALLER_CD" = "5" ]; then
+    export OFFICIAL="Official Xfce CD Snapshot"
+elif [ "$INSTALLER_CD" = "A" ]; then
+    export OFFICIAL="Official LXDE CD Snapshot"
+elif [ "$INSTALLER_CD" = "B" ]; then
+    export OFFICIAL="Official Xfce/LXDE CD Snapshot"
+elif [ "$INSTALLER_CD" = "6" ]; then
+    export OFFICIAL="Official Multi-Arch DVD"
+elif [ "$INSTALLER_CD" = "7" ]; then
+    export OFFICIAL="Official Multi-Arch Netinst"
+elif [ "$INSTALLER_CD" = "8" ]; then
+    export OFFICIAL="Official Multi-Arch Netinst"
+elif [ "$INSTALLER_CD" = "C" ]; then
+    export OFFICIAL="Unofficial Netinst including firmware"
+fi
+
+rm -rf "$OUT"
+mkdir -p "$OUT"
+rm -f "$PUBDIRJIG"/$OUTARCH/$TRACEFILE
+#mkdir -p "$LOG"
+
+overview_log="$LOG/overview"
+overview () {
+    if [ -e $overview_log ]; then
+    	grep -v " $1 " $overview_log > $overview_log.new
+        mv $overview_log.new $overview_log
+    fi
+    LANG=C echo "$(dpkg --print-architecture) ($(date)) $(whoami)@$(hostname | cut -d . -f 1) $1 $2" >> $overview_log
+}
+
+> $LOGFILE
+
+# Do the actual building
+START=`now`
+if ./build.sh "$ARCH" >>"$LOGFILE" 2>&1 ; then
+    # if it went ok get things ready for publishing
+    # we treat the daily netinst images in a different way
+    if [ "$INSTALLER_CD" = "1" ] || \
+       [ "$INSTALLER_CD" = "2" ] || \
+       [ "$INSTALLER_CD" = "C" ] ; then
+
+        ##################################
+        # NETINST STUFF
+        ##################################
+
+	if [ "$INSTALLER_CD" = "C" ] ; then
+	    if [ "${DI}" = "sid" ] ; then
+		ARCHDIR=$OUT_FW_SID/$OUTARCH
+	    else
+		ARCHDIR=$OUT_FW_TST/$OUTARCH
+	    fi
+	else # non-FW build
+	    if [ "${DI}" = "sid" ] ; then
+		ARCHDIR=$OUT_FREE_SID/$OUTARCH
+	    else
+		ARCHDIR=$OUT_FREE_TST/$OUTARCH
+	    fi
+	fi
+
+	mkdir -p $ARCHDIR/list-cd
+        # put the isos and jigdos in their place
+        for i in "$OUT"/*-1.iso; do
+            BASE=`basename $i .iso`
+            NETINSTNAME=`echo $BASE | sed 's/-BC-1/-businesscard/g;s/-NETINST-1/-netinst/g'`
+            mv $OUT/$BASE.iso $ARCHDIR/iso-cd/$NETINSTNAME.iso
+            cat $OUT/$BASE.jigdo | \
+                sed 's/-BC-1/-businesscard/g;s/-NETINST-1/-netinst/g' | \
+                gzip --best --no-name > $ARCHDIR/jigdo-cd/$NETINSTNAME.jigdo
+            rm $OUT/$BASE.jigdo
+            mv $OUT/$BASE.template $ARCHDIR/jigdo-cd/$NETINSTNAME.template
+            # Make sure that the ISO is as new/newer than the jigdo file; #587774
+            touch $ARCHDIR/iso-cd/$NETINSTNAME.iso
+	    mv $OUT/$BASE.list.gz $ARCHDIR/list-cd/$NETINSTNAME.list.gz
+        done
+        rm -f "$OUT"/*
+        END=`now`
+        mkdir -p "$PUBDIRJIG"/$OUTARCH
+        echo -e "start=$START\nend=$END\nerror=0\nlogfile=$RUN\n" > "$PUBDIRJIG"/$OUTARCH/$TRACEFILE
+
+    else
+
+        #######################################
+        # NORMAL STUFF - full builds (weekly)
+        #######################################
+
+        # finish up the jigdos (compress & move them)
+        gzip --best --no-name "$OUT"/*.jigdo
+        for i in "$OUT"/*.jigdo.gz; do
+            mv $i ${i%.gz}
+        done
+
+        # Make sure that the ISOs are as new/newer than the jigdo files; #587774
+	for file in "$OUT"/*.iso; do
+	    if [ -e $file ] ; then 
+		touch $file
+	    fi
+        done
+
+        mkdir -p "$PUBDIRJIG"/$OUTARCH/jigdo-${OUT_TYPE}
+	for file in "$OUT"/*SUMS${SUMS_EXTENSION}; do
+	    outfile="$PUBDIRJIG"/$OUTARCH/jigdo-${OUT_TYPE}/`basename $file`
+	    cat $file >> $outfile
+	done
+        mv "$OUT"/*.template "$PUBDIRJIG"/$OUTARCH/jigdo-${OUT_TYPE}
+        mv "$OUT"/*.jigdo    "$PUBDIRJIG"/$OUTARCH/jigdo-${OUT_TYPE}
+
+        mkdir -p "$PUBDIRJIG"/$OUTARCH/iso-${OUT_TYPE}
+	for file in "$OUT"/*SUMS${SUMS_EXTENSION}; do
+	    outfile="$PUBDIRJIG"/$OUTARCH/iso-${OUT_TYPE}/`basename $file`
+	    cat $file >> $outfile
+	done
+        mv "$OUT"/*.iso    "$PUBDIRJIG"/$OUTARCH/iso-${OUT_TYPE}
+
+        mkdir -p "$PUBDIRJIG"/$OUTARCH/list-${OUT_TYPE}
+	mv "$OUT"/*list*gz "$PUBDIRJIG"/$OUTARCH/list-${OUT_TYPE}
+
+        END=`now`
+        echo -e "start=$START\nend=$END\nerror=0\nlogfile=$RUN\n" > "$PUBDIRJIG"/$OUTARCH/$TRACEFILE
+    fi
+
+    touch $TDIR/$CODENAME/1.pkgs_extracted # so we don't get errors below
+    for file in `cat $TDIR/$CODENAME/*.pkgs_extracted | sort | uniq`; do
+        basefile=`basename $file`
+        if [ ! -e $EXTRACTED_SOURCES/$file ] ; then
+            cp -a  $MIRROR/$file $EXTRACTED_SOURCES
+        fi
+    done
+
+    # Mail the sizes of the images
+    if [ -e "../.debian-cd.mail" ] ; then
+        MYEMAIL=`grep -v "^#" "../.debian-cd.mail"`
+    else
+        MYEMAIL=`whoami`
+    fi
+
+    for i in $MYEMAIL
+    do
+        grep -e "extents written" -e "Written to medi." "$LOGFILE"|mail -s "$RELEASE_BUILD testingcds $RUN ($OUTARCH $DISKTYPE) went ok" "$i"
+    done
+    overview "$RUN" success
+
+else
+    # Run failed
+    if [ -e "../.debian-cd.mail" ] ; then
+        MYEMAIL=`grep -v "^#" "../.debian-cd.mail"`
+    else
+        MYEMAIL=`whoami`
+    fi
+    for i in $MYEMAIL
+    do
+        (echo Error when trying to create cds for $RUN ; cat $LOGFILE) | \
+            mail -s "testingcds $RUN has failed; log included" "$i"
+    done
+    overview "$RUN" failed
+    END=`now`
+    mkdir -p "$PUBDIRJIG"/$OUTARCH
+    echo -e "start=$START\nend=$END\nerror=1\nlogfile=$RUN\n" > "$PUBDIRJIG"/$OUTARCH/$TRACEFILE
+    exit 1
+fi

@@ -93,6 +93,15 @@ $(CONSOLESETUP): $(SPREZZ)/console-setup/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf console-setup_$(console-setup_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
+.PHONY: debian-cd
+debian-cd:$(DEBIANCD)_$(ARCH).deb
+$(DEBIANCD): $(SPREZZ)/debian-cd/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf debian-cd-$(debian-cd_UPVER).tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: debootstrap
 debootstrap:$(DEBOOTSTRAP)_$(ARCH).deb
 $(DEBOOTSTRAP): $(SPREZZ)/debootstrap/debian/changelog

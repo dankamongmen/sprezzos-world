@@ -1,0 +1,111 @@
+#!/bin/sh
+
+set -e
+
+TOPDIR=`pwd`
+. $TOPDIR/settings.sh
+. $TOPDIR/.ftp.buildnum
+
+MYCOPY=$TOPDIR/.ftp.cron
+BUILDLOCK=$HOME/.debian-cd.lock
+MAILLIST=$TOPDIR/.debian-cd.mail
+
+# Change these to abort daily/weekly builds as appropriate
+ABORT_DAILY=n
+ABORT_WEEKLY=n
+
+if [ "$1"x = "-f"x ] ; then
+    FORCE=1
+fi
+
+mail_list() {
+    if [ -e "$MAILLIST" ] ; then
+        MYEMAIL=`grep -v "^#" "$MAILLIST"`
+    else
+        MYEMAIL=`whoami`
+    fi
+    for i in $MYEMAIL
+      do
+      cat "$MYCOPY"|mail -s "$1" "$i"
+    done
+    return 0
+}
+
+if [ -f "$TRACE" ] ; then
+    if [ "$FORCE"x = "1"x ] || ! /usr/bin/cmp -s "$MYCOPY".lastbuild "$TRACE" ; then
+        if [ -e "$BUILDLOCK" ]; then
+            if ! /usr/bin/cmp -s "$MYCOPY" "$TRACE" ; then
+                if ! /usr/bin/cmp -s "$MYCOPY" "$MYCOPY".building ; then
+                    mail_list "testingcds missed the daily build for the pulse because of a lock"
+                fi
+                cp "$TRACE" "$MYCOPY"
+                cat "$MYCOPY" >> "$MYCOPY".stats
+            fi
+        else
+            if ! /usr/bin/cmp -s "$MYCOPY" "$TRACE" ; then
+                cp "$TRACE" "$MYCOPY"
+                cat "$MYCOPY" >> "$MYCOPY".stats
+            fi
+
+            # Work out the next build date/number combo
+            if [ "$LASTDATE"x != "$DATE"x ] ; then
+                BUILDNUM=1
+            else
+                BUILDNUM=$(($LASTBUILDNUM + 1))
+            fi
+            echo "LASTDATE=$DATE" > $TOPDIR/.ftp.buildnum
+            echo "LASTBUILDNUM=$BUILDNUM" >> $TOPDIR/.ftp.buildnum
+            export DATE BUILDNUM
+
+            echo "Last build was $LASTDATE-$LASTBUILDNUM"
+            echo "New build will be $DATE-$BUILDNUM"
+
+            cp "$MYCOPY" "$MYCOPY".building
+
+            # "Daily" builds
+            # Only run certain builds, otherwise we're just wasting
+            # time reproducing identical results:
+            # - archive changes are likely to be minimal
+            # - packages only get uploaded at best once daily for most buildds
+            # - it's fairly unlikely they'll actually affect/improve installs,
+            #   especially for the small images
+            # - D-I images only get built once or at most twice daily
+	    DAILIES_DESIRED="1 5"
+            ODD_BUILD=`echo "$BUILDNUM % 2" | bc`
+            if [ "$ABORT_DAILY"x = "y"x ] && [ "$FORCE"x != "1"x ] ; then
+                echo "BAILING OUT OF DAILY BUILD"
+                mail_list "$HOSTNAME BAILING OUT OF DAILY BUILD"
+            elif [ "$ODD_BUILD" = "0" ] && [ "$FORCE"x != "1"x ] ; then
+                echo "Not running even-numbered daily build #$BUILDNUM"
+            else
+		echo "Running daily build #$BUILDNUM."
+		if [ "$FORCE"x = "1"x ] ; then
+		    echo "Build forced by hand"
+		else
+		    echo "Triggered by mirror pulse:"
+		    cat "$TRACE"
+		fi
+                $TOPDIR/cronjob.daily
+                cp "$MYCOPY" "$MYCOPY".lastbuild
+                if ! /usr/bin/cmp -s "$MYCOPY".lastbuild "$TRACE" ; then
+                    mail_list "testingcds has detected a pulse while we were building dailies"
+                fi
+            fi
+
+            # Weekly build
+            if [ `date +%a` = "Mon" -a "$BUILDNUM"x = "1"x ] ; then
+                if [ "$ABORT_WEEKLY"x = "y"x ] && [ "$FORCE"x != "1"x ] ; then
+                    echo "BAILING OUT OF WEEKLY BUILD"
+                    mail_list "$HOSTNAME BAILING OUT OF WEEKLY BUILD"
+                else
+                    $TOPDIR/cronjob.weekly
+                fi
+            fi
+	    cd $HOME && ./bin/cdbuilder_log_analyser > build/log/analysis.html
+            exit 0
+        fi
+    fi
+fi
+exit 1
+
+

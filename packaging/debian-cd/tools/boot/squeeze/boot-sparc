@@ -1,0 +1,93 @@
+#!/bin/bash -e
+# 
+# boot-sparc
+#
+# Do install stuff for sparc, including making first CD bootable
+
+. $BASEDIR/tools/boot/$DI_CODENAME/common.sh
+
+set -e
+
+N=$1
+CDDIR=$2
+if [ "$DI_WWW_HOME" = "default" ];then
+   DI_WWW_HOME="http://people.debian.org/~stappers/d-i/sparc/daily/cdrom"
+   if [ -n "$DI_DIR" ];then
+       DI_DIR="$DI_DIR/${DI_WWW_HOME#*http://}"
+       DI_WWW_HOME=""                     
+   fi
+fi
+if [ ! "$DI_DIST" ]; then
+   DI_DIST="$DI_CODENAME"
+fi
+
+# Only disc 1* bootable
+if [ $N != 1 -a $N != 1_NONUS ]; then 
+	exit 0; 
+fi
+
+install_languages $CDDIR
+
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-G boot1/boot/isofs.b -B ..."
+add_mkisofs_opt $CDDIR/../$N.mkisofs_dirs "boot1"
+
+inst=boot1
+
+cd $CDDIR/..
+
+# Setup directories
+mkdir -p $inst/boot
+
+silo_deb=$(find_pkg_file silo)
+if [ -z "$silo_deb" ]; then
+       echo "ERROR: silo package is required"
+       exit 1
+fi 
+# put the relevant parts of SILO boot loader
+(dpkg --fsys-tarfile $MIRROR/$silo_deb | \
+	tar xf - -C $inst/ ./boot/{isofs,second}.b)
+
+echo $silo_deb >> $CDDIR/../$N.pkgs_extracted
+find_pkg_file silo source >> $CDDIR/../$N.pkgs_extracted
+
+# Some custom etc files
+cp -f -p $BASEDIR/data/squeeze/sparc/silo.conf $inst/boot/
+if [ -n "$KERNEL_PARAMS" ]; then
+	# Add KERNEL_PARAMS to any existing append line
+	sed -i "/^[[:space:]]*append=\"/ s|append=\"|append=\"$KERNEL_PARAMS |" \
+		$inst/boot/silo.conf
+	# If there is no default append= line, add it
+	if ! grep -q "^append=" $inst/boot/silo.conf; then
+		sed -i "/^default=/ a\append=\"$KERNEL_PARAMS\"" \
+			$inst/boot/silo.conf
+	fi
+fi
+cat $BASEDIR/data/squeeze/sparc/debian.txt \
+ | sed "s/\${MEDIA_TYPE}/CDROM/" \
+ | sed "s/\${DEBIAN_VERSION}/${CODENAME}/g" \
+ | sed "s/\${BUILD_DATE}/${BUILD_DATE}/g" \
+ > $inst/boot/debian.txt
+cp $BASEDIR/data/squeeze/sparc/notsupported.txt $inst/boot/
+
+# Sparc64 kernel is so big, that uncompressing it corrupts SILO memory, so
+# uncompress it before hand.
+
+if [ ! "$DI_WWW_HOME" ];then
+	if [ ! "$DI_DIR" ];then
+	   DI_DIR="$MIRROR/dists/$DI_DIST/main/installer-$ARCH/current/images/cdrom"
+	fi
+else
+	DI_DIR="cdrom"
+	mkdir "./$DI_DIR"
+	wget "$DI_WWW_HOME" -O ./$DI_DIR/di.dir
+	sparc64=$(sed -n 's/.*a href="\(vmlinuz-.*-sparc64\)".*/\1/ip' ./$DI_DIR/di.dir)
+	wget "$DI_WWW_HOME/$sparc64" -O ./$DI_DIR/vmlinuz-x-sparc64
+	wget "$DI_WWW_HOME/initrd.gz" -O ./$DI_DIR/initrd.gz
+fi
+
+if [ ! -e "$DI_DIR"/initrd.gz ] ; then
+    DI_DIR="$DI_DIR"/2.6
+fi
+cp "$DI_DIR"/initrd.gz "$inst/boot/initrd.gz"
+#cp "$DI_DIR"/vmlinuz-*-sparc32 "$inst/boot/sparc32"
+zcat "$DI_DIR"/vmlinuz-*-sparc64 > "$inst/boot/sparc64"

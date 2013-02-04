@@ -1,0 +1,83 @@
+#!/bin/sh
+#
+# update_popcon
+#
+# Simple helper script to update our popularity-contest generated task
+# list from the data available at popcon.debian.org
+
+DATE=`date`
+
+# Determine temp dir to use
+if [ "$BDIR"x = ""x ] ; then
+    if [ "$TMPDIR"x != ""x ] ; then
+        BDIR=$TMPDIR
+    else
+        BDIR=/tmp
+    fi
+    echo "update_popcon not given a temp dir, using $BDIR" >&2
+fi
+if [ ! -d "$BDIR" ] ; then
+    echo "update_popcon: temp dir '$BDIR' does not exist" >&2
+    exit 1
+fi
+
+# Create temp dir and ensure cleanup
+TDIR=$BDIR/update_popcon.$$
+mkdir -p $TDIR
+trap 'rm -rf $TDIR' EXIT HUP INT QUIT TERM
+
+dl_file () {
+    # Grab the headers for each file so that we can check the size.
+    # We've had problems in the past with download failures causing issues,
+    # so let's make sure that we get the complete file in each case
+    DIST=$1
+    SITE="http://popcon.debian.org/"
+
+    curl -s --head $SITE/$DIST/by_inst > $TDIR/$DIST.head
+    error=$?
+    if [ $error -ne 0 ] ; then
+        echo "Failed to download correctly: curl error $error on HEAD" >&2
+        exit 1
+    fi
+    HEAD_SIZE=`cat $TDIR/$DIST.head | \
+               awk '/^Content-Length/ {gsub("\r","");print $2}'`
+
+    curl -s $SITE/$DIST/by_inst > $TDIR/$DIST
+    error=$?
+    DL_SIZE=`stat -c %s $TDIR/$DIST`
+    if [ $error -ne 0 ] ; then
+        echo "Failed to download correctly: curl error $error" >&2
+        exit 1
+    fi
+
+    if [ $DL_SIZE != $HEAD_SIZE ] ; then
+        echo "Failed to download correctly: expected $HEAD_SIZE bytes, but got $DL_SIZE bytes" >&2
+        exit 1
+    fi
+
+    LASTMOD=`awk '/^Last-Modified:/ {
+                 gsub("\r","")
+                 gsub("^Last-Modified: ","")
+                 print $0}' $TDIR/$DIST.head`
+    echo "$LASTMOD"
+}
+
+MAIN_DATE=`dl_file main`
+CONTRIB_DATE=`dl_file contrib`
+
+OUT=$1
+rm -f $OUT
+
+echo "/*" >> $OUT
+echo "   Popularity Contest results" >> $OUT
+echo "   See the README for details on updating." >> $OUT
+echo "" >> $OUT
+echo "   Last update:               $DATE" >> $OUT
+echo "   Based on main data from    $MAIN_DATE" >> $OUT
+echo "   Based on contrib data from $CONTRIB_DATE" >> $OUT
+echo "*/" >> $OUT
+echo "" >> $OUT
+
+cat $TDIR/main $TDIR/contrib | \
+    egrep -v '(^#|Total|-----|kernel-source)' | \
+    sort -rn -k3,3 -k7,7 -k4,4 | awk '{print $2}' >> $OUT

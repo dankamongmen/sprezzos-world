@@ -1,0 +1,335 @@
+debian-cd
+=========
+
+Copyright 1999-2001 Raphaël Hertzog <hertzog@debian.org> and others,
+2004-2010 Steve McIntyre <steve@einval.com>
+This set of tools is licensed under the General Public License version
+2 or any later version. You can find it in
+/usr/share/common-licenses/GPL on a Debian GNU system.
+
+Some of the ideas here (a loooong time ago) came from Steve McIntyre's
+slink_cd script.
+
+Thanks also to all the contributors on the debian-cd mailing list.
+
+What is needed?
+===============
+Software:
+- the apt-get (>= 0.3.11.1) tool
+- perl (>= 5.004)
+- bash (or another POSIX shell)
+- make
+- cpp
+- mkisofs/genisoimage
+- the perl Digest::MD5 module
+- the perl Compress::Zlib module
+- lynx (for text version of README.html) and todos from sysutils
+  to convert docs to DOS format (although you can rip that out, too)
+- if you want to generate jigdo files: jigdo-file (see below)
+Other:
+- apt-utils (for apt-ftparchive)
+- lots of free space on your disks
+- a Debian mirror, on a partition where you can write.
+  If you can't write on it then you may try to use a symlink farm,
+  but it's not the recommended way to build Debian CDs.
+
+
+		-------------------------------
+		- GENERATING DEBIAN CD IMAGES -
+		-------------------------------
+
+
+For the people that don't have time, here's the quick explanation
+=================================================================
+
+Edit the CONF.sh and change the PATHs for the mirror and so on.
+$ sensible-editor CONF.sh
+$ . CONF.sh
+$ make distclean
+$ make status
+$ make official_images
+
+However, you really should consider reading further for more information.
+You can also take a look at build.sh and build_all.sh for an automated
+way of building CD images. 
+
+The script easy-build.sh offers the easiest way to build a specific image
+or set of images, but is still very flexible and powerful. It is the
+recommended tool for building test images and for people new to debian-cd.
+See the file README.easy-build for further info.
+
+How to build a CD set - step by step
+====================================
+
+If you haven't already, change to the /usr/share/debian-cd/ directory
+(or, alternatively, set the variable BASEDIR in CONF.sh to point
+there).
+
+The process of building a CD is composed of the following steps:
+
+- first configure what is needed in CONF.sh and source it in your shell:
+
+    $ . CONF.sh
+
+  The exported environment variables will be used by all the
+  tools involved here (Makefiles, perl scripts, shell scripts).
+
+  If you want to build CD images for more than one arch, you will
+  have to build them one after the other (you may use a shell
+  script for this).
+
+  Note that the temporary dir must be on the same device as the
+  mirror because debian-cd uses hardlinks for generating an image 
+  tree. If you can't do this, you'll have to use a symlink farm.
+  The symlink farm is explained at the end of this README.
+
+  Keep in mind that the environment variables will stay in the
+  environment after your debian-cd run, and may interfere with
+  other program using the same variables (e.g. kernel-package).
+  So if you want to be 100% safe, run debian-cd in a
+  separate shell that you can leave after you're done.
+
+- then we clean everything that may still be there from previous runs:
+
+    $ make distclean
+
+- then we initialize the temporary directory used for the build:
+
+    $ make status
+
+  If this has failed then this will be automatically launched:
+
+    $ make correctstatus
+
+  Note however that "make status" should never fail if it is
+  used for building a CD set for the stable release...
+
+- now you can decide what you want on your CDs
+
+  Note that task files are always taken from the subdirectory in ./tasks/
+  that matches the CODENAME environment variable. At the beginning of a
+  build these "static" task files are copied to the working directory.
+  During the build some additional task files - that are referenced from
+  the static task files - are generated automatically using scripts from
+  the ./tools directory.
+
+  Examples:
+
+    $ make packagelists TASK=Debian-generic COMPLETE=1
+
+  or
+
+    $ make packagelists TASK=Debian-kde COMPLETE=0
+
+  or
+
+    $ export NONFREE=1; make packagelists TASK=your-task-here COMPLETE=1
+
+  or for something like an official image for the USA (without non-free):
+
+    $ make packagelists COMPLETE=1
+
+  .... take a look at the file tasks/* to see the options you can have :)
+
+  You can change the behaviour of this command with the following
+  variables:
+  - if NONFREE is set, then packages from non-free will be allowed
+    (NONFREE must be exported to all sub-shells)
+  - if EXTRANONFREE is set, then non-free packages will be included
+    on an extra CD (the last CD in fact). Don't use NONFREE and
+    EXTRANONFREE at the same time!
+    (EXTRANONFREE must be exported to all sub-shells)
+  - if COMPLETE is set, all packages that are not listed in the
+    selected task file will be included at the end
+  - setting INSTALLER_CD will use an appropriate task file for
+    building small CDs (businesscard and netinst)
+
+- now, we'll start making temporary trees:
+
+    $ make image-trees
+
+  This will first work sort the list of packages for each architecture
+  into order so that standard, required, important and base packages
+  are placed first, then other packages will be added in the order
+  given modulo dependency ordering. Once the sorted list is created,
+  the different architecture lists will be merged (if more than one
+  architecture is selected).
+
+  Then the code will start laying out temporary directory trees for
+  the CDs. In order, this includes the following steps:
+
+  - Creating an empty directory layout
+  - Generating an image label and volume ID and other metadata such as
+    debian-installer information files
+  - Add documentation and installation/upgrade tools
+  - Add Release files and other archive metadata
+  - Make the image bootable for the selected architecture(s)
+  - Start generating the md5sum.txt file
+
+  If you want to use boot-floppies built by yourself you can add
+  a parameter BOOTDISKS=<dir> which specifies the directory where
+  they are. Note that $BOOTDISKS/current must be a symlink to the
+  real directory and it must follow the same setup as the FTP
+  mirror. Your boot-floppies must also be on the same partition as
+  your mirror and temporary dir (hardlinks are used here too).
+
+  Once the disc tree has all of this start data, we start filling the
+  directory trees with packages from the sorted list. The size of the
+  image to be created is set using DISKTYPE in CONF.sh; if the
+  standard sizes do not match what you're after, use DISKTYPE=CUSTOM
+  and specify your own size using CUSTOMSIZE. The algorithm is simple
+  for adding packages:
+
+  - link the package into the temporary disc tree
+  - append the metadata to the appropriate Packages or Sources file
+  - add md5sum information for the added file(s) to the md5sum.txt file
+
+  This continues until the temporary tree grows one package *too
+  large* for the selected image size. At that point, we roll back the
+  last set of changes associated with that package. Then:
+
+  - check if the disc contains all the packages needed to install a base system
+  - finish off the Release file, using the checksums of the
+    Packages/Sources files we generated
+  - finish off the md5sum.txt file
+
+  Next, we continue to the next disc tree, using the same process:
+  start it, copy packages in until they overflow, roll back and
+  finish. And repeat. Each time a package is found to be too large to
+  fit inside an image, it will be kept back and will (obviously) be
+  the first package placed into the next disc tree.
+
+- now we can create the images:
+
+    $ make images
+
+  If you don't have enough space for all images, you can generate 
+  only one image (of the second CD for example) with:
+
+    $ make image CD=2
+
+  Note: here we use "make images", but you could as well use
+  "make official_images" since the latter is the same as the former
+  with some dependencies on targets that you already launched
+  (make bootable packages sources).
+
+- if you want to generate a MD5SUMS file with the md5sums of the
+  images you can do it with:
+
+    $ make imagesums
+
+Official images
+===============
+
+If you use make official_images you're building CD images that have
+the same properties than official CD images but they still doesn't
+have the name of "Official Images". The name of the images is given
+by setting the OFFICIAL and DEBVERSION environment variable (check
+CONF.sh). 
+
+Please never ever use the "Official" name for a CD image that you
+built yourself. The only images that can be called "Official" are the
+ones built by Debian itself and which are provided on Debian's
+servers.
+
+The default configuration shipped with this package will automatically
+name the images "Unofficial". CD will work exactly in the same way
+with all Debian tools, only the label is different. That means you
+can use build.sh and build_all.sh to build your "Unofficial" images
+without modifying anything.
+
+
+Local packages
+==============
+
+If you provide some custom made packages and you want to put them on
+Debian CD set you can do it. Simply put your packages in
+$MIRROR/dists/$CODENAME/local/binary-$ARCH/<section>.
+The organization of this sub-tree is the same than what you can find
+in the main, contrib or non-free part. You may use different section
+names if you want. Be sure to create Packages files (and Sources.gz if you
+include sources).
+
+You can also put your local packages under $MIRROR/pool/local (just a new
+facility for people who don't want packages under dists/). To include local
+packages, the LOCAL environment variable must be set to "1" while building
+the CDs.
+
+You can also set the LOCALDEBS environment variable, and it will be used
+instead of MIRROR when looking for local packages.
+
+
+Additional targets
+==================
+
+Jigdo
+-----
+You may also want to make the CD images available in jigdo format.
+Jigsaw Download, the successor to the Pseudo-Image Kit.
+See http://www.debian.org/CD/jigdo-cd/ for more information on jigdo.
+
+Set the DOJIGDO and related variables in CONF.sh. This is no separate target
+for jigdo, merely a modification of the "images" targets. You can choose
+only .iso generation (default), only .jigdo generation (for highly reduced
+disk usage), or both .iso and .jigdo generation.
+
+To generate the jigdo files and templates, you need an
+appropriately-patched version of mkisofs/genisoimage, as shipped in
+Debian Etch.
+
+The MD5SUMS file generated by the "imagesums" target will contain the MD5
+checksums of all generated images, regardless of the DOJIGDO setting. If
+no full iso image is available, the MD5sum will be extracted from the
+.template file. A note in the Makefile shows how the original file size
+can be extracted from the .template in a similar way.
+
+About jigdo "fallback servers":
+
+jigdo works by downloading individual packages and other files from a
+normal Debian mirror, and using them to regenerate a CD/DVD image. 
+However, the content of Debian mirrors changes over time, files are
+added and removed. But jigdo must have access to all files needed for
+the image it has to regenerate, even those that have been removed from
+the normal Debian mirrors.
+
+A fallback server contains a backup of the Debian FTP space for the
+moment the .jigdo files were generated. This backup is made available
+under a certain URL which is written to the .jigdo files. jigdo will
+*only* revert to the fallback server after an unsuccessful attempt to
+retrieve a file from the normal user-selected Debian mirror, so the
+bandwidth requirements are modest.
+
+A fallback is even necessary for .jigdo files of the stable release,
+because some files (typically documentation or boot floppies) can
+change at any time.
+
+debian-cd allows you to automatically create a directory on disc which
+is suitable for use as a fallback mirror. It is populated with hard
+links to the archive contents. In CONF.sh, simply supply as
+JIGDOFALLBACKPATH the name of the directory, and as JIGDOFALLBACKURLS
+the URLs under which it will be made available.
+
+About the hook system
+=====================
+
+A hook script can be executed at different times during the CD build
+process to customise your CDs. You can specify the script by setting
+the various HOOK variables in CONF.sh; look there for more information
+about what hook points are available.
+
+About the symlink farm
+======================
+
+If you don't have write access on the disk where you have the mirror
+or if for another reason hardlink cannot be used, you can try to
+use a symlink farm. Instead of having real files, your temporary tree
+will be filled with symlinks that mkhybrid will change into files when
+it will build the image. You'll need to use a special options. You
+have 2 lines of options in CONF.sh as examples.
+
+I've never tested the symlink farm ... it may well generate unusable
+images. Don't use it for ISO images that will used by many users.
+
+Note that you will also need a patched mkhybrid that does support the
+-F option. Have a look here about it :
+http://www.chiark.greenend.org.uk/~stevem/DebianCD/

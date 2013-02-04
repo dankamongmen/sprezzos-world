@@ -1,0 +1,129 @@
+#!/bin/sh
+#
+# Copyright 1999 Raphaël Hertzog <hertzog@debian.org>
+# Copyright 2011 Steve McIntyre <93sam@debian.org>
+# See the README file for the license
+#
+# This script will create the Packages.gz and Sources.gz files, and
+# write matching Release files
+
+# Argument 1 = root directory of the CD
+# Argument 2 = architecture we're building for, or "source"
+#
+# Various other environment vars:
+# $BASEDIR
+# $MIRROR
+# $TDIR
+# etc...
+
+#set -e
+#set -x
+
+CDDIR=$1
+ARCH=$2
+
+cd $CDDIR
+
+DPKG_SCANPACKAGES=$BASEDIR/tools/my-dpkg-scanpackages
+BDIR=$TDIR/$CODENAME-$ARCH
+
+PREFIX=`echo $CDDIR | sed "s?$BDIR/CD?$BDIR/?"`
+
+NUM=${PREFIX##$BDIR/}
+if [ -n "$NONFREE" -o -n "$EXTRANONFREE" ]; then
+    SECTIONS="main contrib non-free"
+else
+    SECTIONS="main contrib"
+fi
+
+checksum_file () {
+    CHECK=$1
+    FILE=$2
+    case $CHECK in
+	MD5Sum) prog=md5sum;;
+	SHA1)   prog=sha1sum;;
+	SHA256) prog=sha256sum;;
+	SHA512) prog=sha512sum;;
+	*)      echo "Unknown checksum algorithm $CHECK. Exit."; exit 1;;
+    esac
+    checksum=`$prog $file | awk '{print $1}'`
+    echo $checksum
+}
+
+case $ARCH in
+
+    source)
+	#### SOURCE
+	for SECT in $SECTIONS; do
+	    if [ -d "pool/$SECT" ]; then
+		mkdir -p dists/$CODENAME/$SECT/source
+		dpkg-scansources pool/$SECT > dists/$CODENAME/$SECT/source/Sources
+		if [ -f dists/$CODENAME/$SECT/source/Sources ] ; then
+		    gzip --best dists/$CODENAME/$SECT/source/Sources
+		fi
+	    fi
+	done
+	cp $MIRROR/dists/$CODENAME/Release Release.in
+	;;
+
+    *)
+	#### BINARY
+        # Create an override file for dpkg-scanpackages
+	if [ ! -e "../overrides" ]; then
+            # Create an override file with all sections
+	    for SECT in $SECTIONS; do
+		zcat $MIRROR/indices/override.$CODENAME.$SECT.gz >> ../overrides
+	    done
+	fi
+
+        # Now create a Packages file for all packages on the CD, just
+        # looking in pool/
+	$DPKG_SCANPACKAGES -m "`cat .disk/info`" -a $ARCH pool ../overrides > $PREFIX.Packages 2>/dev/null
+
+        # Split the Packages file by section, and install matching
+        # Release files
+	for SECT in $SECTIONS; do
+            mkdir -p dists/$CODENAME/$SECT/binary-$ARCH
+	    grep-dctrl -FFilename -e "/$SECT/" $PREFIX.Packages | \
+		grep -v ^X-Medium > dists/$CODENAME/$SECT/binary-$ARCH/Packages
+	    gzip --best -c < dists/$CODENAME/$SECT/binary-$ARCH/Packages \
+		> dists/$CODENAME/$SECT/binary-$ARCH/Packages.gz
+	    cp $MIRROR/dists/$CODENAME/$SECT/binary-$ARCH/Release \
+   		dists/$CODENAME/$SECT/binary-$ARCH/
+	done
+	rm -f $PREFIX.Packages
+	sed -e "s/^Architectures: .*$/Architectures: $ARCH/" \
+	    $MIRROR/dists/$CODENAME/Release > Release.in
+	;;
+
+esac
+
+# Munge the Release file from the archive
+if [ -e "$MIRROR/dists/$CODENAME/Release" ]; then
+    # Strip the MD5Sum and SHA* fields, update some other information
+    # as well
+    cat Release.in | sed -e "s|^Components: .*$|Components: $SECTIONS|" | \
+	perl -ne 'if (/^(MD5Sum|SHA\d+):/i) { $f=1; next } 
+    if ($f) { 
+	unless (/^ /) { print; $f=0 }
+    } else { print }' > dists/$CODENAME/Release
+    rm -f Release.in
+fi
+
+# Now update the Release file with checksums etc.
+cd dists/$CODENAME
+for check in MD5Sum SHA1 SHA256 SHA512; do
+    echo "$check:" >> Release
+    for SECT in $SECTIONS; do
+	if [ -d $SECT ] ; then
+	    for file in $SECT/*/*; do
+		cksum=`checksum_file $check $file`
+		size=`stat -c %s $file`
+		printf " %s %8d %s\n" $cksum $size $file >> Release
+	    done
+	fi
+    done
+done
+cd ../..
+
+exit 0

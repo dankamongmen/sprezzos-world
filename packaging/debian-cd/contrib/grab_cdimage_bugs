@@ -1,0 +1,173 @@
+#!/usr/bin/perl -w
+#
+# Grab bug information from the Debian BTS via SOAP, and update the
+# HEADER.html pages on cdimage.debian.org using that information
+#
+# Copyright 2011 Steve McIntyre <93sam@debian.org>
+# GPL v2
+
+use strict;
+use lib '/usr/share/devscripts';
+use Devscripts::Debbugs;
+use Getopt::Long;
+use Data::Dumper;
+
+my ($daily_out, $weekly_out, $release_out);
+GetOptions ("daily=s"   => \$daily_out,
+            "weekly=s"  => \$weekly_out,
+            "release=s" => \$release_out);
+
+my $bugs;
+my $num_bugs;
+my $status;
+my %severities = (
+    wishlist   => 1,
+    minor      => 2,
+    normal     => 3,
+    important  => 4,
+    serious    => 5,
+    grave      => 6,
+    critical   => 7
+    );
+my (@dailies, @weeklies, @releases);
+my $text;
+my $time_text;
+
+sub get_time()
+{
+    my @tm;
+    my $text;
+
+    @tm = gmtime();
+    $text = sprintf("%4d-%02d-%02d %02d:%02d:%02d UTC",
+                    (1900 + $tm[5]),(1 + $tm[4]),$tm[3],$tm[2],$tm[1],$tm[0]);
+    return $text;
+}
+
+sub sort_bug ($$)
+{
+    my $a = shift;
+    my $b = shift;
+    if ($severities{$status->{$a}{"severity"}} > $severities{$status->{$b}{"severity"}}) {
+        return -1;
+    }
+    if ($severities{$status->{$a}{"severity"}} < $severities{$status->{$b}{"severity"}}) {
+        return 1;
+    }
+    return ($a cmp $b);
+}
+
+sub print_bugs (\@)
+{
+    my $listref = shift;
+    my @list = @$listref;
+    my $last_severity = "GUARD";
+    my $num_bugs = scalar (@list);
+    my $text = "";
+
+    if ($num_bugs) {
+        for my $bug (@list) {
+            my $severity = $status->{$bug}{"severity"};
+            if ($severity !~ $last_severity) {
+                if ($last_severity !~ "GUARD") {
+                    $text .= "  </ul>\n";
+                } else {
+                    $text .= "<ul>\n";
+                }
+                $text .= "  <li>Severity: $severity\n";
+                $text .= "  <ul>\n";
+            }
+            $last_severity = $severity;
+            $text .= "    <li><a href=\"http://bugs.debian.org/$bug\">$bug</a>: ";
+            $text .= $status->{$bug}{"subject"} . "\n";
+        }
+        $text .= "  </ul>\n";
+        $text .= "</ul>\n";
+    } else {
+        $text .= "<p>No bugs found</p>\n";
+    }
+}
+
+sub update_file($$$)
+{
+    my $file = shift;
+    my $text = shift;
+    my $time_text = shift;
+    my $update = 0;
+
+    if (-f $file) {
+        open(IN, "<", $file) or die "Can't open input file \"$file\" for reading\n";
+        open(OUT, ">", "$file.new") or die "Can't open output file \"$file.new\" for writing\n";
+
+        while (my $line = <IN>) {
+            if ($line =~ /<!-- END BUGS -->/)
+            {
+                print OUT "<p>Last bug check: $time_text</p>\n";
+                $update = 0;
+            }
+            if (!$update) {
+                print OUT $line;
+            }
+            if ($line =~ /<!-- START BUGS -->/)
+            {
+                $update = 1;
+                print OUT $text;
+            }
+        }
+        close(IN);
+        close(OUT);
+        rename "$file.new", "$file";
+    }
+}
+
+$bugs = Devscripts::Debbugs::select("package:cdimage.debian.org", "tags:d-i", "status", "tags");
+if (not defined $bugs) {
+    die "Error while retrieving bugs from SOAP server";
+}
+
+$status = Devscripts::Debbugs::status(@{$bugs});
+for my $bug (keys %{$status}) {
+    my @versions = (@{$status->{$bug}{"found_versions"}});
+    my $version;
+    if (!$status->{$bug}{"done"}) {
+        foreach my $tmpver (@versions) {
+            if ($tmpver =~ m/daily-image-(.*)$/) {
+                $version = $1;
+                push(@dailies, $bug);
+            } elsif ($tmpver =~ m/weekly-image/) {
+                $version = "";
+                push(@weeklies, $bug);
+            } elsif ($tmpver =~ m/(\S*)-image/) {
+                $version = $1;
+                push(@releases, $bug);
+            } else {
+                print "unknown ver: " . $tmpver . "\n";
+            }
+        }
+    }
+}
+
+$time_text = get_time();
+my $num_files = 0;
+
+if (defined ($daily_out)) {
+    @dailies = sort sort_bug @dailies;
+    $text = print_bugs(@dailies);
+    update_file($daily_out, $text, $time_text);
+    $num_files++;
+}
+if (defined ($weekly_out)) {
+    @weeklies = sort sort_bug @weeklies;
+    $text = print_bugs(@weeklies);
+    update_file($weekly_out, $text, $time_text);
+    $num_files++;
+}
+if (defined ($release_out)) {
+    @releases = sort sort_bug @releases;
+    $text = print_bugs(@releases);
+    update_file($release_out, $text, $time_text);
+    $num_files++;
+}
+if (!$num_files) {
+    die "No output files defined\n";
+}

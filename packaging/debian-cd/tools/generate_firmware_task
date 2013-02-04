@@ -1,0 +1,94 @@
+#!/usr/bin/perl -w
+#
+# generate_firmware_task
+#
+# Work out which firmware packages we need
+# Several steps:
+#
+# 1. Look for packages which contain "firmware" or "microcode" in their package names
+# 2. Check each of those packages to see if they contain files in /lib/firmware
+# 3. For those that do, output the package name into the firmware task
+#
+# Copyright Steve McIntyre <93sam@debian.org> 2011
+#
+# GPL 2
+#
+
+use strict;
+
+my ($mirror, $codename, $archlist, $outfile, $localdebs);
+my $date;
+my $pkgfiles = "";
+my ($pkg, $filename, $arch);
+my %seen;
+
+$codename = $ENV{'CODENAME'};
+$mirror = $ENV{'MIRROR'};
+$localdebs = $ENV{'LOCALDEBS'};
+$archlist = shift;
+$outfile = shift;
+
+if (!defined($codename) || !defined($mirror) ||
+    !defined($archlist) || !defined($outfile)) {
+    die "Error in arguments\n";
+}
+
+foreach $arch (split(' ', $archlist)) {
+    $pkgfiles = "$pkgfiles $mirror/dists/$codename/*/binary-$arch/Packages.gz";
+}
+
+if (defined($localdebs)) {
+    foreach $arch (split(' ', $archlist)) {
+        $pkgfiles = "$pkgfiles $localdebs/dists/$codename/*/binary-$arch/Packages.gz";
+    }
+}
+
+open (OUT, "> $outfile") or die "Can't open outfile for writing: $!\n";
+
+$date = `date -u`;
+chomp $date;
+
+print OUT "/*\n";
+print OUT " * 'firmware' task file; generated automatically by generate_firmware_task\n";
+print OUT " * for \"$archlist\" on $date\n";
+print OUT " * Do not edit - changes will not be preserved\n";
+print OUT " */\n";
+
+print "$0: Checking for firmware packages:\n";
+
+open (INPKG, "zcat $pkgfiles |") or die "Can't read input package files: $!\n";
+$/ = ''; # Browse by paragraph
+
+sub contains_firmware($$) {
+    my $count = 0;
+    open (PKGLISTING, "dpkg --contents $mirror/$filename | grep ' ./lib/firmware/' |") or
+        die "Can't check package file $filename: $!\n";
+    while ($_ = <PKGLISTING>) {
+        $count++;
+    }
+    if ($count) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+while (defined($_ = <INPKG>)) {
+    m/^Package: (\S+)/m and $pkg = $1;
+    m/^Filename: (\S+)/m and $filename = $1;
+
+    if (! ($pkg =~ /(microcode|firmware)/)) {
+        next;
+    }
+
+    if (!exists $seen{$filename}) {
+        $seen{$filename} = 1;
+        if (contains_firmware($mirror, $filename)) {
+            print "  $pkg ($filename)\n";
+            print OUT "$pkg\n";
+        }
+    }
+}
+
+close INPKG;
+close OUT;

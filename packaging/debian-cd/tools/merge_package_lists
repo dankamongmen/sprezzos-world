@@ -1,0 +1,191 @@
+#!/bin/sh
+#
+# merge_package_lists
+#
+# Quick, hacky script to merge the package lists for multiple arches
+# together, with 2 priorities:
+#
+# 1. keep the ordering of the original files wherever possible
+# 2. collect together instances of the same package on multiple arches
+#
+# expects multiple files containing lines of the form, one arch per file
+#
+#    <arch>:<component>:<pkgname>
+#
+# and will output similar
+#
+# The files MUST be passed by filename rather than simply piped in,
+# otherwise the ordering constraint will be lost
+#
+# Things also get quite complicated here due to considering
+# source. Depending on how things are being run:
+#
+#   1. If we're not doing source, life is easy - simply interleave the
+#      binary packages
+#   2. If we're *only* doing source, then we won't be called at all -
+#      the Makefile will just dump the sources directly into "packages"
+#      without needing our help
+#   3. If we're doing mixed source/binary discs, then we have to work
+#      quite hard here. We generate the list of sources from the
+#      binaries given to us. For each binary, we will attempt to place
+#      its source *first* onto the disc so we can make nice GPL-compliant
+#      media. However, we also need to check whether or not that source
+#      has already been placed due to an *earlier* binary package (a
+#      different binary built from the same source, or the same for
+#      another arch). To allow us to so that, we need to parse the Sources
+#      files first to build up the src<->bin relationship. Ick... :-/
+#
+# An added bit of grot: to make sure that sources are placed first, we
+# *temporarily* call the source architecture "aaaaaaaaaaaaaaaaaa" to force
+# it to sort first, then replace it woth "source" again later. *grin*
+#
+# Steve McIntyre <steve@einval.com> 2006, GPL v2
+
+BDIR=$1
+ADIR=$2
+ARCHES="$3"
+OUT="$4"
+
+case "$ARCHES" in
+	*source*) source=yes;;
+	*)        source=no;;
+esac
+
+for ARCH in $ARCHES_NOSRC
+do
+    list="$list $BDIR/packages.$ARCH"
+done
+
+echo "# Starting merge at "`date` >> $BDIR/list.mid
+if [ $source = "yes" ] ; then
+	echo "DONEDONE" > $BDIR/DONE
+	awk -v max_size=$MAX_PKG_SIZE '
+
+	# First parse the Sources files
+	/^Package:/ {
+				  srcname=$2
+				  srcs_done++
+				}
+	/^Binary:/  {
+				  bins=$0
+				  gsub("^Binary:","",bins)
+				  gsub(",","",bins)
+				  nb=split(bins, binarray)
+				  for (i=1; i <= nb; i++) {
+					bin2src[binarray[i]] = srcname
+					bins_done++
+				  }
+				}
+
+    /^Files:/   {
+                  in_files = 1
+                  next
+                }
+    /^ / {
+                  if (in_files) {
+                      size[srcname]+=$2
+                      next
+                  }
+                }
+
+    # Done reading the Sources
+	/^DONEDONE/ {
+				  parsed=1
+				  printf("# Parsed Sources files: %d sources producing %d binaries\n", srcs_done, bins_done)
+				  next
+				}
+
+	# Now start placing source packages, depending on the order of the binary packages
+	/.*/        {
+                  in_files = 0
+				  if (parsed) {
+				  	split($0,fields,":")
+					arch=fields[1]
+					component=fields[2]
+					pkg=fields[3]
+                    pkgsize=fields[4]
+					source=bin2src[pkg]
+                    if ("" == source) {
+      		            if ("main-installer" == component) {
+	                        printf("# Ignoring source for udeb %s\n", pkg)
+                        } else {
+                            printf("# Source for pkg %s is UNKNOWN!\n", pkg)
+                        }
+					} else {
+					    if (!included[source]) {
+						printf("# Adding source %s at %d because of %s:%s\n",
+						  source, FNR, arch, pkg)
+						  included[source] = pkg
+						  incarch[source] = arch
+						  indexnr[source] = FNR
+						  sourcecomp[source] = component
+					    } else {
+						if (FNR < indexnr[source]) {
+							printf("# Updating source %s: was due to %d:%s:%s, now moved earlier because of %d:%s:%s\n",
+							  source, indexnr[source],
+							  incarch[source], included[source],
+							  FNR, arch, pkg)
+							included[source] = pkg
+							incarch[source] = arch
+							indexnr[source] = FNR
+						} else {
+							printf("# Not adding pkg %s source (%d:%s:%s), already added due to %d:%s:%s\n",
+							  pkg, FNR, arch, source,
+							  indexnr[source], incarch[source],
+							  included[source])
+						}
+					    }
+					}
+                    if (size[source] <= max_size) {
+                        printf("%d:%s\n", FNR, $0)
+                    } else {
+                        printf("%d:%s-DEPTOOBIG\n", FNR, $0)
+                    }
+				  }
+				}
+
+	END {
+	    for (source in included) {
+            if (size[source] > max_size) {
+                 printf("%d:aaaaaaaaaaaaaaaaaa:%s:%s-SRCTOOBIG\n", indexnr[source], sourcecomp[source], source, size[source])
+            } else {
+                 printf("%d:aaaaaaaaaaaaaaaaaa:%s:%s\n", indexnr[source], sourcecomp[source], source, size[source])
+            }
+	    }
+	}' $ADIR/$CODENAME-source/apt-state/lists/*Sources $BDIR/DONE $list | sort -nk 1 -t : >> $BDIR/list.mid
+else
+	awk '{printf("%d:%s\n", FNR, $0)}' $list | sort -nk 1 -t : >> $BDIR/list.mid
+fi
+echo "# Ending merge pass 1 at "`date` >> $BDIR/list.mid
+
+# We now have all the files stuck together, with line numbers
+# prepended to allow us to shuffle them properly. Remove any comments
+# logged from the awk code above, then sort and remove the line numbers
+# again
+grep -v -e ^# -e TOOBIG $BDIR/list.mid | awk -F : '
+    {
+        if (!($4 in add))
+        {
+            pkgname[number_packages++] = $4
+        }
+		gsub("aaaaaaaaaaaaaaaaaa", "source", $2) # Undo the source sorting hack
+		gsub("main-installer", "main", $3)
+        add[$4] = add[$4] $2 ":" $3 ":" $4 ":" $5 " "
+    }
+END {
+        for (i = 0; i < number_packages; i++)
+        {
+            gsub(" $", "", add[pkgname[i]])
+            gsub(" ", "\n", add[pkgname[i]])
+            print add[pkgname[i]]
+        }
+    }' > $OUT
+echo "# Ending merge pass 2 at "`date` >> $BDIR/list.mid
+
+awk -F : '
+    /SRCTOOBIG/   { print $3 }
+' $BDIR/list.mid > $BDIR/sourcetoobig
+
+awk -F : '
+    /DEPTOOBIG/   { print $3 }
+' $BDIR/list.mid > $BDIR/sourcetoobig-deps

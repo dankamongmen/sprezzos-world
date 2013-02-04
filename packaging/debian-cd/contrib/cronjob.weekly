@@ -1,0 +1,278 @@
+#!/bin/bash
+
+export TOPDIR=$(dirname $0)
+
+. $TOPDIR/settings.sh
+
+export PUBDIRJIG=$PUBDIR/weekly-builds
+export DATE_BUILD="$DATE-$BUILDNUM"
+BUILDLOCK=$HOME/.debian-cd.lock
+
+. $TOPDIR/common.sh
+
+# Make sure the machine isn't rebooted while we're busy
+reboot_lock
+
+# Uncomment the following to use daily d-i builds for weekly images
+# rather than what's in the archive
+USE_DAILY_DI=Y
+
+if [ "$RELEASE_BUILD"x = ""x ] ; then
+    export RSYNC_TARGET=/mnt/nfs-cdimage/weekly-builds
+else
+    export RSYNC_TARGET=/mnt/nfs-cdimage/.${RELEASE_BUILD}
+    export CONF=~/build.wheezy/CONF.sh.${RELEASE_BUILD}
+    export RELEASE_BUILD=$RELEASE_BUILD
+    # If we're doing a normal set of daily/weekly builds, leave the
+    # checksum filenames alone. Otherwise, make life easier for people
+    # combining things later and append a suitable name as we build.
+    export SUMS_EXTENSION=".large"
+    USE_DAILY_DI=N
+fi
+
+. images4testing_d-i
+
+if [ "$USE_DAILY_DI"x = "Y"x ] ; then
+    export DI=sid
+    export DI_WWW_HOME=default
+else
+    unset DI_WWW_HOME
+fi
+
+export DI_DIST
+export DI_CODENAME
+
+BUILDS_RUNNING=""
+
+if [ "$ARCHES"x = ""x ] ; then
+    ARCHES="i386 source amd64 multi powerpc armel armhf ia64 mips mipsel s390 s390x sparc kfreebsd-amd64 kfreebsd-i386"
+fi
+
+if lockfile -r0 $BUILDLOCK ; then
+#    echo "NOT checking for svn updates"
+    echo "svn update debian-cd"
+    cd debian-cd && svn cleanup; svn up ; cd ..
+
+#    echo "NOT checking for popcon updates"
+    cd debian-cd && ./tools/update_popcon tasks/wheezy/popularity-contest ; cd ..
+
+    cd $TOPDIR
+    mkdir -p $PUBDIRJIG/trace
+    mkdir -p $RSYNC_TARGET
+
+    for arch in $ARCHES; do
+        # Reset envvars for next iteration
+        arch_error=""
+        if [ "$arch" != multi ] ; then
+            rm -rf $PUBDIRJIG/$arch
+            mkdir -p $PUBDIRJIG/$arch
+            arch_start=`now`
+
+#            export DI_DIR="$ARCH_DI_DIR" 
+	    export VARIANTS=""
+
+            # Full CD set
+            if [ "$NOCD"x = ""x ] && [ "$NOFULLCD"x = ""x ] ; then
+		unset FORCE_CD_SIZE1
+                export MAX_PKG_SIZE=500000000
+                case $arch in
+                    i386|amd64)
+                        export MAXISOS=8; export MAXJIGDOS=ALL ;;
+                    source)
+		        # don't make CD ISOs for source, DVD will do
+                        export MAXISOS=0; export MAXJIGDOS=ALL ;;
+                    *)
+                        export MAXISOS=3; export MAXJIGDOS=ALL ;;
+                esac
+		build_started CD
+                ./testingcds "$arch" &
+            fi
+
+            # Full DVD set
+            if [ "$NODVD"x = ""x ] ; then
+		unset FORCE_CD_SIZE1
+                export MAX_PKG_SIZE=999999999999
+                case $arch in
+                    i386|amd64)
+                        export MAXISOS=3
+			export MAXJIGDOS=ALL
+			export VARIANTS=xen
+                        # Special case: make DVD1 fit on a 4GB USB
+                        # stick (#612074)
+			export FORCE_CD_SIZE1=STICK4GB
+			;;
+                    source)
+                        export MAXISOS=ALL; export MAXJIGDOS=ALL ;;
+                    powerpc)
+                        # Special case: make DVD1 fit on a 4GB USB
+                        # stick (#686471)
+			export FORCE_CD_SIZE1=STICK4GB
+                        export MAXISOS=1; export MAXJIGDOS=ALL ;;
+                    *)
+                        export MAXISOS=1; export MAXJIGDOS=ALL ;;
+                esac
+                export DESKTOP=all
+		build_started DVD
+                INSTALLER_CD=3 TASK=Debian-all \
+                    KERNEL_PARAMS='desktop=all' \
+                    ./testingcds "$arch" &
+            fi
+
+            # Full BD set
+            if [ "$NOBD"x = ""x ] ; then
+		unset DESKTOP
+		unset FORCE_CD_SIZE1
+                export MAX_PKG_SIZE=999999999999
+                case $arch in
+                    i386|amd64|source)
+                        export MAXISOS=0
+                        export MAXJIGDOS=ALL
+                        export DESKTOP=all
+			export VARIANTS=xen
+			build_started BD
+                        INSTALLER_CD=9 TASK=Debian-all \
+                            KERNEL_PARAMS='desktop=all' \
+                            ./testingcds "$arch" &
+                        ;;
+                    *)
+                        echo "  Not running BD build for $arch"
+                        ;;
+                esac
+            fi
+
+            # Full DLBD set
+            if [ "$NOBD"x = ""x ] ; then
+		unset DESKTOP
+		unset FORCE_CD_SIZE1
+                export MAX_PKG_SIZE=999999999999
+                case $arch in
+                    i386|amd64|source)
+                        export MAXISOS=0
+                        export MAXJIGDOS=ALL
+                        export DESKTOP=all
+			export VARIANTS=xen
+			build_started DLBD
+                        INSTALLER_CD=D TASK=Debian-all \
+                            KERNEL_PARAMS='desktop=all' \
+                            ./testingcds "$arch" &
+                        ;;
+                    *)
+                        echo "  Not running DLBD build for $arch"
+                        ;;
+                esac
+            fi
+
+            # kde, xfce and lxde cds
+            if [ "$arch"x != "source"x ] && [ "$NOCD"x = ""x ] ; then
+		if [ "$NOKDECD"x = ""x ] ; then
+                    export MAX_PKG_SIZE=300000000
+                    export DESKTOP=kde
+                    export MAXISOS=1; export MAXJIGDOS=1
+		    unset FORCE_CD_SIZE1
+		    export VARIANTS=""
+		    build_started KDECD
+                    INSTALLER_CD=4 TASK=Debian-kde \
+                        KERNEL_PARAMS='desktop=kde' \
+                        MAXCDS=1 MAXISOS=ALL MAXJIGDOS=ALL \
+                        ./testingcds "$arch" &
+		fi
+
+		if [ "$NOXFCECD"x = ""x ] ; then
+                    export MAX_PKG_SIZE=300000000
+                    export DESKTOP=xfce
+                    export MAXISOS=1; export MAXJIGDOS=1
+		    unset FORCE_CD_SIZE1
+		    export VARIANTS=""
+		    build_started XFCECD
+                    INSTALLER_CD=5 TASK=Debian-xfce \
+			KERNEL_PARAMS='desktop=xfce' \
+			MAXCDS=1 MAXISOS=ALL MAXJIGDOS=ALL \
+			./testingcds "$arch" &
+		fi
+
+		if [ "$NOLXDECD"x = ""x ] ; then
+                    export MAX_PKG_SIZE=300000000
+                    export DESKTOP=lxde
+                    export MAXISOS=1; export MAXJIGDOS=1
+		    unset FORCE_CD_SIZE1
+		    export VARIANTS=""
+		    build_started LXDECD
+                    INSTALLER_CD=A TASK=Debian-lxde \
+			KERNEL_PARAMS='desktop=lxde' \
+			MAXCDS=1 MAXISOS=ALL MAXJIGDOS=ALL \
+			./testingcds "$arch" &
+		fi
+            fi
+
+	    catch_parallel_builds
+
+            if [ "$NOSYNC"x = ""x ] ; then
+                if [ "$arch_error"x = "none"x ] ; then
+                    echo "  Running ~/build.wheezy/iso_run $PUBDIRJIG/ $RSYNC_TARGET/ $arch &"
+                    ~/build.wheezy/iso_run $PUBDIRJIG/ $RSYNC_TARGET/ $arch &
+                else
+                    ~/build.wheezy/report_build_error $RSYNC_TARGET $arch "$arch_error"
+                fi
+            fi
+        else # multi
+            rm -rf $PUBDIRJIG/multi-arch
+            for i in iso-dvd jigdo-dvd; do
+                mkdir -p $PUBDIRJIG/multi-arch/$i
+            done
+
+            if [ "$NODVD"x = ""x ] ; then
+                export MAX_PKG_SIZE=999999999999
+                export DESKTOP=all
+                # Special case: make DVD1 fit on a 4GB USB
+                # stick (#612074)
+		build_started DVD
+		export FORCE_CD_SIZE1=STICK4GB
+                INSTALLER_CD=6 TASK=Debian-all \
+                    KERNEL_PARAMS='desktop=all' \
+                    MAXCDS=1 MAXISOS=ALL MAXJIGDOS=ALL \
+		    VARIANTS=xen \
+                    ./testingcds "i386 amd64 source"
+                # We don't do multi in parallel, only one build type
+                # to do!
+                build_finished $arch $BUILDNAME $DVDSTART
+
+                mv $PUBDIRJIG/multi/jigdo-dvd/debian* $PUBDIRJIG/multi-arch/jigdo-dvd
+                for file in $PUBDIRJIG/multi/jigdo-dvd/*SUMS$SUMS_EXTENSION; do
+                    outfile=$PUBDIRJIG/multi-arch/jigdo-dvd/`basename $file`
+                    cat $file >> $outfile
+                done
+
+                mv $PUBDIRJIG/multi/iso-dvd/debian* $PUBDIRJIG/multi-arch/iso-dvd
+                for file in $PUBDIRJIG/multi/iso-dvd/*SUMS$SUMS_EXTENSION; do
+                    outfile=$PUBDIRJIG/multi-arch/iso-dvd/`basename $file`
+                    cat $file >> $outfile
+                done
+
+                rm -rf $PUBDIRJIG/multi
+            fi
+
+            if [ "$NOSYNC"x = ""x ] ; then
+                if [ "$arch_error"x = "none"x ] || [ "$arch_error"x = ""x ] ; then
+                    echo "  Running ~/build.wheezy/iso_run $PUBDIRJIG/ $RSYNC_TARGET/ multi-arch &"
+                    ~/build.wheezy/iso_run $PUBDIRJIG/ $RSYNC_TARGET/ multi-arch &
+                else
+                    ~/build.wheezy/report_build_error $RSYNC_TARGET multi-arch "$arch_error"
+                fi
+            fi
+        fi # end of multi
+
+    done
+
+    if [ "$NOFW"x = ""x ] ; then
+	~/build.wheezy/generate_firmware_images wheezy
+	~/build.wheezy/generate_firmware_images sid
+    fi
+    
+    if [ "$NOSNAP"x = ""x ] ; then
+        ~/bin/weekly-snapshots
+    fi
+
+    date -u > $PUBDIRJIG/trace/cdimage.debian.org
+
+    rm -f $BUILDLOCK
+fi

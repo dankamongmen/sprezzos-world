@@ -1,0 +1,55 @@
+#!/bin/bash
+
+STATE=/home/stevem/watch-state
+
+R_HOST=cd-builder.debian.net
+R_LOC=testing/weekly-builds
+R_WEBROOT=$R_LOC
+R_RSYNCROOT=/org/cdimage.debian.org/www/$R_LOC
+R_USER=steve
+
+CACHE_DIR=/org/jigdo-snapshots
+OUT_DIR=/org/jigdo-area/testing
+MIRROR=/org/ftp/debian
+SNAP_AREA=/org/jigdo-area/snapshot
+LOCK=$STATE/lock
+
+# Check to see if another sync is in progress
+if lockfile -! -l 43200 -r 0 "$LOCK" >/dev/null 2>&1 ; then
+#    echo `hostname` is unable to start CD sync, lock file exists
+    exit 1
+fi
+trap "rm -f $LOCK > /dev/null 2>&1" exit  
+
+wget -q -O $STATE/cd.new http://$R_HOST/$R_WEBROOT/trace/bla.wolffelaar.nl
+OLD=`cat $STATE/cd`
+NEW=`cat $STATE/cd.new`
+if [ "$OLD"x != "$NEW"x ] ; then
+    echo "Old date $OLD, New $NEW"
+    echo "Time to get new jigdos"
+    mv -f $STATE/cd.new $STATE/cd
+
+    rsync -rvtlz --delete \
+	$R_USER@$R_HOST:$R_RSYNCROOT/ \
+	$OUT_DIR/
+
+    SNAP_DATE=`date +%Y%m%d`
+    echo "And snapshot to $SNAP_DATE"
+
+    mkdir -p $CACHE_DIR/$SNAP_DATE
+    cd $OUT_DIR
+    find . -name '*.jigdo' | xargs tar cf - | ( cd $CACHE_DIR/$SNAP_DATE && tar xf - )
+
+    # Now generate a list of all the jigdo files that we should be
+    # looking at
+    find $CACHE_DIR -name '*.jigdo' > $CACHE_DIR/jigdo.list
+
+    # And now update and check the snapshot from those jigdo files
+    DATE=`date`
+    echo "$DATE: Updating snapshot"
+
+    ~/bin/mkjigsnap -m $MIRROR -d $SNAP_AREA/Debian -j $CACHE_DIR/jigdo.list -t ~/tmp
+
+    DATE=`date`
+    echo "  $DATE: done"
+fi

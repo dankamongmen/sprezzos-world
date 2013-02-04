@@ -1,0 +1,338 @@
+#!/bin/bash
+#
+# $Id: update-cd 2338 2012-05-30 07:35:23Z 93sam $
+# 
+# (c) Steve McIntyre <stevem@chiark.greenend.org.uk> Released under
+# GNU GPL v2 1st January 2001
+#
+# Quick and dirty script to create update CDs for people to upgrade
+# from an initial stable release (r0) to the latest point release level
+#
+
+set -e
+
+# Configuration goes here.
+
+# Where is your mirror?
+MIRROR_NORM=/org/cdbuilder.debian.org/src/ftp/debian
+MIRROR_AMD64=/org/cdbuilder.debian.org/src/ftp/debian-amd64/debian
+
+# Do you want non-free? 1 for yes, 0 for no
+NONFREE=0
+
+# What release version is this?
+VER=6.0.2.1
+
+# Is this an official CD?
+OFFICIAL=Official
+# OFFICIAL="Unofficial snapshot"
+
+# Path to use with mkisofs/mkhybrid
+MKISOFS="$PWD/../genisoimage -jigdo-template-compress bzip2 -r -checksum_algorithm_iso md5,sha1,sha256,sha512"
+
+# Use JTE extensions to mkisofs to make jigdo files?
+JTE=1
+
+# The working directory to use. MUST be on the same partition as the mirror.
+TDIR=/org/cdbuilder.debian.org/src/deb-cd/tmp/squeeze-update/cd-work
+
+# Building squeeze cd set ...
+CODENAME=squeeze
+
+# Path where the images will be written
+OUT=/org/cdbuilder.debian.org/src/deb-cd/tmp/squeeze-update/cd-out
+
+# Location(s) for the snapshot(s)
+SNAPSHOT='Debian=http://us.cdimage.debian.org/cdimage/snapshot/Debian/ --try-last'
+
+# Type of disc image, cd or dvd (lower case)
+if [ "$1"x = ""x ] ; then
+    TYPE=cd
+else
+    TYPE=$1
+fi
+case $TYPE in
+    cd|CD)
+        TYPE=cd
+        TYPEUP=CD;;
+    dvd|DVD)
+        TYPE=dvd
+        TYPEUP=DVD;;
+    *)
+        echo "Specify a disk type..."
+        exit 1;;
+esac
+
+# Location of the diff file to use to determine the changes. If you leave
+# this blank, we'll try to determine the changes from the ChangeLog files,
+# which is probably less accurate. 
+DIFF=/home/debian-cd/lists/squeeze/r0-r2.diff
+
+if [ "$TYPE" = "cd" ] ; then
+    CDSIZE=644 # megabytes, leaving space for metadata
+else
+    CDSIZE=4300 # megabytes, leaving space for metadata
+fi
+
+REL=Debian"$VER"
+CLOG=dists/$CODENAME/ChangeLog
+UPD=$TDIR/$CODENAME-update
+DATE=`date +%Y%m%d`
+BASEDIR=`pwd`
+SECTS="main non-free contrib"
+VERBOSE=2
+GRAB_MD5=$BASEDIR/tools/grab_md5
+export VERBOSE BASEDIR SECTS
+
+FIRSTVER=`echo $VER | cut -c 1-4`0
+CAPCODE=`perl -e "print ucfirst("$CODENAME")"`
+
+export FIRSTVER CAPCODE
+
+if [ "$ARCHLIST"x = ""x ] ; then
+    ARCHLIST="armel armhf amd64 i386 ia64 mips mipsel powerpc s390 s390x sparc source kfreebsd-amd64 kfreebsd-i386" # amd64 # all dealt with specially
+fi
+
+export TDIR NONFREE VER MIRROR CODENAME OUT BASEDIR
+
+CDSIZE=$(($CDSIZE * 1024))
+
+create_control=$BASEDIR/tools/create_control
+set_mkisofs_opts=$BASEDIR/tools/set_mkisofs_opts
+addfiles=$BASEDIR/tools/add_files
+
+copy_file () {
+    ROOTDIR=$1
+    shift
+    FILE=$1
+    DIR=`dirname $FILE`
+    if [ ! -d $ROOTDIR/$DIR ] ; then
+        mkdir -p $ROOTDIR/$DIR
+    fi
+    if [ -e $MIRROR/$FILE ] ; then
+        cp -l $MIRROR/$FILE $ROOTDIR/$FILE
+    else
+        echo
+        echo "File $FILE not found!"
+        exit 1
+    fi
+}
+
+make_cd () {
+    CDNUM=$1
+    shift
+    THISNUM=$1
+    shift
+    THISARCH=$1
+    shift
+    SRCFILES=$1
+    shift
+    ARCHFILES=$1
+    shift
+    ALLFILES=$1
+    echo
+    echo "  Creating Packages and Sources files for CD$CDNUM"
+    cd $UPD
+    $create_control CD$CDNUM $THISARCH
+    echo "  Creating image for CD$CDNUM ($SRCFILES source files, $ARCHFILES $ARCH debs, $ALLFILES all debs)"
+    echo -n "    "
+
+    BASENAME="debian-update-$VER-$THISARCH-$TYPEUP-$THISNUM"
+    ISODIR=$OUT/$THISARCH/iso-$TYPE
+    JIGDODIR=$OUT/$THISARCH/jigdo-$TYPE
+    LISTDIR=$OUT/$THISARCH/list-$TYPE
+
+    if [ ! -d ${ISODIR} ] ; then
+        mkdir -p ${ISODIR}
+    fi
+    if [ $JTE = 1 ] && [ ! -d ${JIGDODIR} ] ; then
+        mkdir -p ${JIGDODIR}
+    fi
+    if [ ! -d ${LISTDIR} ] ; then
+        mkdir -p ${LISTDIR}
+    fi
+
+    if [ $JTE = 1 ] ; then
+	set +e
+        ${MKISOFS} -J -r -V "Debian $VER update $TYPEUP" -o \
+            ${ISODIR}/${BASENAME}.iso \
+            -jigdo-jigdo ${JIGDODIR}/${BASENAME}.jigdo \
+            -jigdo-template ${JIGDODIR}/${BASENAME}.template \
+            -jigdo-map Debian=$MIRROR/ \
+            -jigdo-force-md5 /pool/ \
+            -md5-list $UPD/md5-check \
+            $UPD/CD$CDNUM 2>&1 | grep "extents written"
+	if [ $? -ne 0 ] ; then
+	    echo "${MKISOFS} failed, error $?"
+	    exit 1
+	fi
+	set -e
+        $BASEDIR/tools/jigdo_cleanup \
+            ${JIGDODIR}/${BASENAME}.jigdo \
+            ${BASENAME}.iso \
+            $OUT ${BASENAME}.template \
+            "Debian ${DEBIAN_KERNEL} $VER - $OFFICIAL $THISARCH $FIRSTVER->$VER update $TYPEUP #$THISNUM"
+        echo $SNAPSHOT >> ${JIGDODIR}/${BASENAME}.jigdo
+        # Make sure that the ISO is as new/newer than the jigdo file; #587774
+        touch ${ISODIR}/${BASENAME}.iso
+
+        MD5=`cat ${JIGDODIR}/${BASENAME}.jigdo | \
+            awk '/Image Hex MD5Sum/ {print $5}'`
+        echo "$MD5  ${BASENAME}.iso" >> ${JIGDODIR}/MD5SUMS.update
+        echo "$MD5  ${BASENAME}.iso" >> ${ISODIR}/MD5SUMS.update
+        for SHA_SIZE in 1 256 512; do
+            SHA=`cat ${JIGDODIR}/${BASENAME}.jigdo | \
+                awk "/Image Hex SHA${SHA_SIZE}Sum/ {print \\$5}"`
+            if [ "$SHA"x = ""x ] ; then
+                echo "SHA fail"
+                exit 1
+            fi
+            echo "$SHA  ${BASENAME}.iso" >> ${JIGDODIR}/SHA${SHA_SIZE}SUMS.update
+            echo "$SHA  ${BASENAME}.iso" >> ${ISODIR}/SHA${SHA_SIZE}SUMS.update
+        done
+        gzip -9 ${JIGDODIR}/${BASENAME}.jigdo
+        mv ${JIGDODIR}/${BASENAME}.jigdo.gz ${JIGDODIR}/${BASENAME}.jigdo
+    else
+	set +e
+        ${MKISOFS} -J -r -V "Debian $VER update $TYPEUP" -o \
+            $OUT/iso-$TYPE/${BASENAME}.iso \
+            $UPD/CD$CDNUM 2>&1 | grep "extents written"
+	if [ $? -ne 0 ] ; then
+	    echo "${MKISOFS} failed, error $?"
+	    exit 1
+	fi
+	set -e
+    fi
+    find $UPD/CD$CDNUM/pool -type f | sed 's?^.*/??g' | gzip -9 > ${LISTDIR}/${BASENAME}.list.gz
+}
+
+add_file () {
+    file=$1
+    case "$THISARCH" in
+        source)
+            case "$file" in
+                *.gz|*.bz2|*.dsc)
+                    copy_file $UPD/CD$CDNUM $file
+                    SRCFILES=$(($SRCFILES + 1))
+                    ;;
+            esac
+            echo -en "\r$SRCFILES copied"
+            ;;
+        *)
+            case "$file" in
+                *_$THISARCH.deb)
+                    copy_file $UPD/CD$CDNUM $file
+                    ARCHFILES=$(($ARCHFILES + 1))
+                    ;;
+                *_all.deb)
+                    copy_file $UPD/CD$CDNUM $file
+                    ALLFILES=$(($ALLFILES + 1))
+                    ;;
+            esac
+            echo -en "\r$THISARCH:$ARCHFILES all:$ALLFILES copied"
+            ;;
+    esac
+}
+
+start_new_disc () {
+    echo
+    cd $MIRROR
+    THISNUM=$((THISNUM + 1))
+    if [ $THISARCH = "source" ] ; then
+        echo "Creating $TYPEUP$CDNUM for source (part $THISNUM)"
+    else
+        echo "Creating $TYPEUP$CDNUM for binary-$THISARCH (part $THISNUM)"
+    fi
+    mkdir $UPD/CD$CDNUM $UPD/CD$CDNUM/.disk
+    INFO="Debian ${DEBIAN_KERNEL} $VER Update $TYPEUP $DATE: $THISARCH $TYPEUP $THISNUM"
+    echo $INFO > $UPD/CD$CDNUM/.disk/info
+    SIZE_USED=0
+    SRCFILES=0
+    ARCHFILES=0
+    ALLFILES=0
+}
+
+echo Cleaning up
+rm -rf $UPD
+mkdir -p $UPD
+CDNUM=1
+
+echo Creating file list
+
+if [ ! -e $DIFF ] ; then
+    echo "NO DIFF FOUND. ABORT!"
+    exit 1
+fi
+
+cp $DIFF $UPD/list
+if [ "$NONFREE"x != "1"x ] ; then
+    echo "Removing non-free files from the list"
+    grep -v non-free $UPD/list > $UPD/list1
+    mv -f $UPD/list1 $UPD/list
+fi
+
+$GRAB_MD5 $MIRROR_NORM "$ARCHLIST" $CODENAME $CODENAME $UPD/md5-check
+
+for THISARCH in $ARCHLIST
+do
+    THISNUM=0
+
+    MIRROR=$MIRROR_NORM
+
+    case "$THISARCH" in
+        kfreebsd) DEBIAN_KERNEL="GNU/kFreeBSD";;
+        hurd)     DEBIAN_KERNEL="GNU/Hurd";;
+        source)   DEBIAN_KERNEL="";;
+        *)        DEBIAN_KERNEL="GNU/Linux";;
+    esac
+    export DEBIAN_KERNEL
+
+    rm -rf $OUT/$THISARCH/*-$TYPE
+
+    for file in `cat $UPD/list`
+    do
+        if [ ! -d $UPD/CD$CDNUM ] ; then
+	    start_new_disc
+        fi  
+
+        if [ "$BACKOUT_FILE"x != ""x ] ; then
+            echo "Starting with backed-out file $BACKOUT_FILE"
+            add_file $BACKOUT_FILE
+            BACKOUT_FILE=""
+        fi
+
+        add_file $file
+
+        SIZE_USED=`du -sk $UPD/CD$CDNUM | awk '{print $1}'`
+        if [ $SIZE_USED -gt $CDSIZE ] ; then
+        # Back out the last file added
+            size=`stat -c %s $UPD/CD$CDNUM/$file`
+            rm -f $UPD/CD$CDNUM/$file
+            echo 
+            echo "  Overfull: back out $file ($size bytes)"
+            DIR=`dirname $file`
+            rmdir $DIR > /dev/null 2>&1 || true
+            BACKOUT_FILE=$file
+            make_cd $CDNUM $THISNUM $THISARCH $SRCFILES $ARCHFILES $ALLFILES
+            CDNUM=$(($CDNUM + 1))
+            continue
+        fi
+    done
+
+    echo
+    echo "Making last disc in set for $THISARCH: size $SIZE_USED, BACKOUT_FILE \"$BACKOUT_FILE\""
+    # Catch the case where we still have a backout file at the very
+    # end of the set
+    if [ "$BACKOUT_FILE"x != ""x ] ; then
+	if [ ! -d $UPD/CD$CDNUM ] ; then
+	    start_new_disc
+	fi
+        echo "Starting last disc with backed-out file $BACKOUT_FILE"
+        add_file $BACKOUT_FILE
+        BACKOUT_FILE=""
+    fi
+
+    make_cd $CDNUM $THISNUM $THISARCH $SRCFILES $ARCHFILES $ALLFILES
+    CDNUM=$(($CDNUM + 1))
+done
+

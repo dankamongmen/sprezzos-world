@@ -1,0 +1,137 @@
+#!/bin/bash
+#
+# Do install stuff for powerpc, including making bootable CDs
+# Works with debian-installer
+#
+# $1 is the CD number
+# $2 is the temporary CD build dir
+
+. $BASEDIR/tools/boot/$DI_CODENAME/common.sh
+
+set -e
+#set -x
+
+N=$1
+CDDIR=$2
+INSTALLDIR=$CDDIR/install
+if [ "$DI_WWW_HOME" = "default" ];then
+   DI_WWW_HOME="http://d-i.debian.org/daily-images/powerpc/daily"
+   if [ -n "$DI_DIR" ];then
+       DI_DIR="$DI_DIR/${DI_WWW_HOME#*http://}"
+       DI_WWW_HOME=""
+   fi
+fi
+if [ ! "$DI_DIST" ]; then
+   DI_DIST="$DI_CODENAME"
+fi
+
+cd $CDDIR/..
+
+install_languages $CDDIR
+
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "--iso-level 4"
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "--netatalk"
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-hfs"
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-probe"
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-map $BASEDIR/data/hfs.map"
+
+# Recommended size for a HFS Catalog is 4 megas per giga, defaults to 4 megas
+# MAXDISKBLOCKS is measured in 2K blocks
+newsize=`echo "$MAXDISKBLOCKS * 2048 / 256" | bc`
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-hfs-parms MAX_XTCSIZE=$newsize"
+
+# Only disk 1* bootable
+if [ $N != 1 ] ; then
+	exit 0
+fi
+
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "--chrp-boot"
+# For newworld Mac booting  - Note, no spaces in volid!
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-part"
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-no-desktop"
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-hfs-bless CD$N/install"
+add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-hfs-volid Debian/PowerPC_${CODENAME}"
+
+cd $INSTALLDIR
+# Extract yaboot from the archive
+if [ -z "$YABOOT_DEBUG" ]; then
+    YADEB=$(find_pkg_file yaboot)
+    if [ -z "$YADEB" ]; then
+        echo "ERROR: the yaboot package is required." >&2
+        exit 1
+    fi
+    (dpkg --fsys-tarfile "$MIRROR/$YADEB" | \
+	tar xf - -C . ./usr/lib/yaboot/yaboot)
+    mv usr/lib/yaboot/yaboot .
+    rm -rf usr
+
+    echo $YADEB >> $CDDIR/../$N.pkgs_extracted
+    find_pkg_file yaboot source >> $CDDIR/../$N.pkgs_extracted
+
+else
+ cp -f $YABOOT_DEBUG yaboot
+fi
+
+#
+# generate/download images for "powerpc"
+# (missing: bootvars1.3b.sit.hqx, BootX_1.2.2.sit, boot-floppy-hfs.img)
+cat $BASEDIR/data/$DI_CODENAME/yaboot/boot.msg \
+ | sed "s/\${MEDIA_TYPE}/CDROM/" \
+ | sed "s/\${DEBIAN_VERSION}/${CODENAME}/g" \
+ | sed "s/\${BUILD_DATE}/${BUILD_DATE}/g" \
+ > boot.msg
+cat $BASEDIR/data/$DI_CODENAME/yaboot/yaboot.conf \
+ | sed "s/CODENAME/${CODENAME}/g" > yaboot.conf
+if [ -n "$KERNEL_PARAMS" ]; then
+    sed -i "/^[[:space:]]\+append=\"/ s|append=\"|append=\"$KERNEL_PARAMS |" yaboot.conf
+fi
+cp $BASEDIR/data/$DI_CODENAME/yaboot/ofboot.b ofboot.b
+
+for subarch in powerpc powerpc64 #prep
+do
+  case $subarch in
+    powerpc|prep)
+      bitness=
+      ;;
+    powerpc64)
+      bitness=64
+      ;;
+  esac
+  if [ ! "$DI_WWW_HOME" ];then
+        if [ ! "$DI_DIR" ];then 
+           DI_DIR="$MIRROR/dists/$DI_DIST/main/installer-$ARCH/current/images"
+        fi
+	if ! cp -a "$DI_DIR/$subarch/cdrom" "$subarch" && [ "$bitness" ]; then
+	   cp -a "$DI_DIR/$subarch/cdrom${bitness}" "$subarch"
+	fi
+  else
+	if ! wget -r -nd --no-parent --level=1 -P "$subarch" -R 'index*' "$DI_WWW_HOME/$subarch/cdrom/" && [ "$bitness" ]; then
+	   wget -r -nd --no-parent --level=1 -P "$subarch" -R 'index*' "$DI_WWW_HOME/$subarch/cdrom${bitness}/"
+	fi
+  fi
+
+done
+
+if [ -f prep/vmlinuz-prep.initrd ]; then
+  add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-prep-boot install/prep/vmlinuz-prep.initrd"
+elif [ -f powerpc/vmlinuz-prep.initrd ]; then
+  # We are still missing this for prep
+  add_mkisofs_opt $CDDIR/../$N.mkisofs_opts "-prep-boot install/powerpc/vmlinuz-prep.initrd"
+fi
+
+# Copy pegasos forth script, since pegasos machines don't support yaboot yet.
+cat $BASEDIR/data/$DI_CODENAME/pegasos/pegasos \
+ | sed "s/\${MEDIA_TYPE}/CDROM/" \
+ | sed "s/\${DEBIAN_VERSION}/${CODENAME}/g" \
+ | sed "s/\${BUILD_DATE}/${BUILD_DATE}/g" \
+ > pegasos
+
+# Let's copy the IBM CHRP stuff into place now.
+cd $CDDIR
+mkdir ppc
+mkdir ppc/chrp
+cp $BASEDIR/data/$DI_CODENAME/chrp/bootinfo.txt ppc
+mkdir etc
+cp $INSTALLDIR/yaboot.conf etc
+
+exit 0

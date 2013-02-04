@@ -1,0 +1,767 @@
+#!/usr/bin/perl -w
+#
+# Copyright 1999 Raphaël Hertzog <hertzog@debian.org>
+# See the README file for the license
+#
+# This script takes 1 argument on input :
+# - a filename listing all the packages to include
+#
+# and it sorts those packages such that dependencies are met in order
+#
+# Used to be called list2cds, renamed as it now just sorts
+# dependencies. Later code in make_disc_trees.pl actually splits on a
+# per-disc basis now.
+
+#
+# this version is slightly modified to suit the needs of Debian Edu
+#
+
+use strict;
+
+my $list = shift;
+
+my $nonfree = read_env('NONFREE', 0);
+my $extranonfree = read_env('EXTRANONFREE', 0);
+my $force_firmware = read_env('FORCE_FIRMWARE', 0);
+my $local = read_env('LOCAL', 0);
+my $complete = read_env('COMPLETE', 0);
+my $norecommends = read_env('NORECOMMENDS', 1);
+my $nosuggests = read_env('NOSUGGESTS', 1);
+my $verbose = read_env('VERBOSE', 0);
+my $max_pkg_size = read_env('MAX_PKG_SIZE', 9999999999999);
+
+my $apt = "$ENV{'BASEDIR'}/tools/apt-selection";
+my $adir = "$ENV{'APTTMP'}/$ENV{'CODENAME'}-$ENV{'ARCH'}";
+my $arch = "$ENV{'ARCH'}";
+my $dir = "$ENV{'TDIR'}/$ENV{'CODENAME'}";
+
+my @output;
+
+$| = 1; # Autoflush for debugging
+
+open(LOG, ">$dir/sort_deps.$arch.log")
+       || die "Can't write in $dir/sort_deps.$arch.log !\n";
+
+sub read_env {
+    my $env_var = shift;
+    my $default = shift;
+
+    if (exists($ENV{$env_var})) {
+        return $ENV{$env_var};
+    }
+    # else
+    return $default;
+}
+
+sub msg {
+	my $level = shift;
+	if ($verbose >= $level) {
+		print @_;
+	}
+	print LOG @_;
+}
+
+my %included;
+my %excluded;
+my %packages;
+
+msg(0, "Running sort_deps to sort packages for $arch (edu):\n");
+msg(1, "======================================================================
+Here are the settings you've chosen for making the list:
+Architecture: $arch
+List of prefered packages: $list
+Output file: $dir/packages.$arch
+");
+msg(1, "Complete selected packages with all the rest: ");
+msg(1, yesno($complete)."\n");
+msg(1, "Include non-free packages: ");
+msg(1, yesno($nonfree)."\n");
+msg(1, "Force inclusion of firmware packages: ");
+msg(1, yesno($force_firmware)."\n");
+msg(1, "Include recommended packages: ");
+msg(1, yesno(!$norecommends)."\n");
+msg(1, "======================================================================
+");
+
+# Get the information on all packages
+my $oldrs = $/;
+$/ = '';
+open(AVAIL, "$apt cache dumpavail |") || die "Can't fork : $!\n";
+my ($p, $re);
+while (defined($_=<AVAIL>)) {
+	next if not m/^Package: (\S+)\s*$/m;
+	$p = $1;
+	$included{$p} = 0;
+	$packages{$p}{"Package"} = $p;
+	foreach $re (qw(Version Priority Section Filename Size MD5sum)) {
+		(m/^$re: (\S+)\s*$/m and $packages{$p}{$re} = $1)
+		|| msg(1, "Header field '$re' missing for package '$p'.\n");
+	}
+	$packages{$p}{"Depends"} = [];
+	$packages{$p}{"Suggests"} = [];
+	$packages{$p}{"Recommends"} = [];
+	$packages{$p}{"IsUdeb"} = ($packages{$p}{"Filename"} =~ /.udeb$/) ? 1 : 0;
+	$packages{$p}{"IsFirmware"} = ($packages{$p}{"Filename"} =~ /(firmware|microcode)/) ? 1 : 0;
+	if ($packages{$p}{"Section"} =~ /contrib\//) {
+		$packages{$p}{"Component"} = "contrib";
+	} elsif ($packages{$p}{"Section"} =~ /non-free\//) {
+		$packages{$p}{"Component"} = "non-free";
+	} elsif ($packages{$p}{"IsUdeb"}) {
+		$packages{$p}{"Component"} = "main-installer";
+	} else {
+		$packages{$p}{"Component"} = "main";
+	}
+
+}
+close AVAIL or die "apt-cache failed : $@ ($!)\n";
+$/ = $oldrs;
+
+# Get the list of excluded packages
+%excluded = %included;
+my $count_excl = 0;
+
+# Now exclude packages because of the non-free rules
+if (not $nonfree) {
+	foreach (grep { $packages{$_}{"Section"} =~ /non-free/ }
+	              (keys %packages)) {
+        if ($force_firmware and $packages{$_}{"IsFirmware"}) {
+            msg(1, "force_firmware: keeping non-free package $_\n");
+        } else {
+            $excluded{$_} = 'nonfree';
+            $count_excl++;
+        }
+	}
+}
+
+msg(1, "Statistics:
+Number of packages: @{ [scalar(keys %packages)] }
+Number of excluded: $count_excl of @{ [scalar(keys %excluded)] }
+======================================================================
+
+");
+
+open(STATS, "> $dir/stats.excluded.$arch") 
+                       || die "Can't write in stats.excluded.$arch: $!\n";
+foreach (keys %excluded) {
+	print STATS "$_ => $excluded{$_}\n";
+}
+close (STATS);
+
+# Browse the list of packages to include
+my ($output_size, $size) = (0, 0, 0);
+my %cds;
+
+# Generate a dependency tree for each package
+msg(0, "  Generating dependency tree with apt-cache depends...\n");
+my (@list) = keys %packages;
+while (@list) {
+	my (@pkg) = splice(@list,0,200);
+	$ENV{'LC_ALL'} = 'C'; # Required since apt is now translated
+	open (APT, "$apt cache depends @pkg |") || die "Can't fork : $!\n";
+	my (@res) = (<APT>);
+	close APT or die "« apt-cache depends » failed ... \n" . 
+	                 "you must have apt >= 0.3.11.1 !\n";
+	# Getting rid of conflicts/replaces/provides
+	my $i = 0;
+	my $nb_lines = scalar @res;
+	push @res, ""; # Avoid warnings ...
+	while ($i < $nb_lines) {
+		if ($res[$i] !~ m/^(\S+)\s*$/) {
+			msg(0, "UNEXPECTED: Line `$res[$i]' while parsing " .
+			       "end of deptree from '$p'\n");
+		}
+		$p = lc $1; $i++;
+		msg(2, "   Dependency tree of `$p' ...\n");
+		read_depends (\$i, \@res, $p);
+	}
+	
+}
+
+msg(0, "  Adding standard, required, important and base packages first\n");
+# Automatically include packages listed in the status file
+open(STATUS, "< $adir/status") || die "Can't open status file $adir/status: $!\n";
+while (defined($_ = <STATUS>)) {
+       next if not m/^Package: (\S+)/;
+       $p = $1;
+       if (not exists $packages{$p}) {
+               msg(1, "WARNING: Package `$p' is listed in the status file "
+                      . "but doesn't exist ! (ignored) \n",
+                      "    TIP: Try to generate the status file with " .
+                       "make (correct)status (after a make distclean)...\n");
+                next;
+       }
+       next if $excluded{$p};
+       add_package($p, ! $norecommends, ! $nosuggests);
+}
+close STATUS;
+msg(0, "  S/R/I/B packages take $output_size bytes\n");
+
+# Now start to look for packages wanted by the user ...
+msg(0, "  Adding the rest of the requested packages\n");
+open (LIST, "< $list") || die "Can't open $list : $!\n";
+while (defined($_=<LIST>)) {
+	chomp;
+	next if m/^\s*$/;
+	if (not exists $packages{$_}) { 
+	    msg(1, "WARNING: '$_' does not appear to be available ... " . 
+	           "(ignored)\n");
+	    next;
+	}
+	next if $excluded{$_};
+	if ($included{$_}) {
+	    msg(3, "$_ has already been included.\n");
+	    next;
+	}
+	# This is because udebs tend to have bad dependencies but work
+	# nevertheless ... this may be removed once the udebs have a
+	# better depencency system
+	if ($packages{$_}{"IsUdeb"}) {
+	    add_to_output($packages{$_}{"Size"}, [$_]);
+	} else {
+	    add_package ($_, ! $norecommends, ! $nosuggests);
+	}
+}
+close LIST;
+
+msg(0, "  Now up to $output_size bytes\n");
+# All requested packages have been included
+# But we'll continue to add if $complete was requested
+if ($complete) {
+    msg(0, "  COMPLETE=1; add all remaining packages\n");
+    # Try to sort them by section even if packages from
+    # other sections will get in through dependencies
+    # With some luck, most of them will already be here
+    foreach my $p (sort { ($packages{lc $a}{"Section"} cmp $packages{lc $b}{"Section"})
+                       || (lc $a cmp lc $b) }
+             grep { not ($included{$_} or $excluded{$_}) } keys %packages) {
+	# At this point, we should *not* be adding any more udebs,
+	# as they're no use to anybody.
+	if ($packages{lc $p}{"IsUdeb"}) {
+	    msg(2, "  Ignoring udeb $p ...\n");
+	} else {
+	    add_package (lc $p, 0, 0);
+	}
+    }
+}
+
+# Now select the non-free packages for an extra CD
+if ($extranonfree and (! $nonfree))
+{
+	my ($p, @toinclude);
+	
+	msg(0, "  Adding non-free packages now\n");
+
+	# Finally accept non-free packages ...
+	foreach $p (grep { $excluded{$_} eq "nonfree" } (keys %excluded))
+	{
+		$excluded{$p} = 0;
+		push @toinclude, $p;
+	}
+	
+	# Include non-free packages
+	foreach $p (@toinclude)
+	{
+		add_package(lc $p, 1, 1);
+	}
+
+	# If a contrib package was listed in the list of packages to
+	# include and if COMPLETE=0 there's a chance that the package
+	# will not get included in any CD ... so I'm checking the complete
+	# list again
+	open (LIST, "< $list") || die "Can't open $list : $!\n";
+	while (defined($_=<LIST>)) {
+		chomp;
+		next if m/^\s*$/;
+		next if $included{$_};
+		next if $included{lc $_};
+		next if $excluded{$_};
+		next if $excluded{lc $_};
+		if (not exists $packages{$_} && not exists $packages{lc $_}) { 
+		  msg(1, "WARNING: '$_' does not appear to be available ... " . 
+	          	 "(ignored)\n");
+		  next;
+		}
+		if ($packages{lc $p}{"IsUdeb"}) {
+			msg(2, "  Ignoring udeb $p ...\n");
+		} else {
+			add_package (lc $_, 1, 1);
+		}
+	}
+	close LIST;
+
+	# Try to include other packages that could not be included
+	# before (because they depends on excluded non-free packages)
+	if ($complete)
+	{
+	    foreach $p (sort { ($packages{$a}{"Section"} 
+				cmp $packages{$b}{"Section"}) || ($a cmp $b) }
+			grep { not ($included{$_} or $excluded{$_}) } 
+			keys %packages) 
+	    {
+			if ($packages{lc $p}{"IsUdeb"}) {
+				msg(2, "  Ignoring udeb $p ...\n");
+			} else {
+				add_package (lc $p, 0, 0);
+			}
+		}
+	}
+
+}
+
+# Remove old files
+foreach (glob("$dir/*.packages*")) {
+	unlink $_;
+}
+
+# Now write the list down
+my $count = 0;
+open(CDLIST, "> $dir/packages.$arch") 
+    || die "Can't write in $dir/$_.packages.$arch: $!\n";
+open(FWLIST, ">> $dir/firmware-packages")
+    || die "Can't write in $dir/firmware-packages: $!\n";
+foreach (@output) {
+    my $component = $packages{$_}{"Component"};
+    my $size = $packages{$_}{"Size"};
+    print CDLIST "$arch:$component:$_:$size\n";
+    if ($packages{$_}{"IsFirmware"}) {
+        print FWLIST "$_\n";
+    }
+    $count++;
+}
+close CDLIST;
+close FWLIST;
+msg(0, "Done: processed/sorted $count packages, total size $output_size bytes.\n");
+
+close LOG;
+
+## END OF MAIN
+## BEGINNING OF SUBS
+
+sub read_depends {
+	my $i = shift;     # Ref
+	my $lines = shift; # Ref
+	my $pkg = shift;   # string
+	my $types = "(?:Pre)?Depends|Suggests|Recommends|Replaces|Conflicts|Breaks|Enhances";
+	my (@dep, @rec, @sug);
+	my ($type, $or, $elt);
+
+	while ($lines->[$$i] =~ m/^\s([\s\|])($types):/) {
+		$type = $2; $or = $1;
+		# Get rid of replaces and conflicts ...
+		if (($type eq "Replaces") or
+			($type eq "Conflicts") or
+			($type eq "Breaks") or
+			($type eq "Enhances")) {
+			$$i++;
+			while ($lines->[$$i] =~ m/^\s{4}/) {
+				$$i++;
+			}
+			next;
+		}
+		# Check the kind of depends : or, virtual, normal
+		if ($or eq '|') {
+			$elt = read_ordepends ($i, $lines);
+		} elsif ($lines->[$$i] =~ m/^\s\s$type: <([^>]+)>/) {
+			$elt = read_virtualdepends ($i, $lines);
+		} elsif ($lines->[$$i] =~ m/^\s\s$type: (\S+)/) {
+			$elt = $1; $$i++;
+			# Special case for packages providing not
+			# truely virtual packages
+			if ($lines->[$$i] =~ m/^\s{4}/) {
+				$elt = [ $elt ];
+				while ($lines->[$$i] =~ m/\s{4}(\S+)/) {
+					push @{$elt}, $1;
+					$$i++;
+				}
+			}
+		} else {
+			msg(0, "ERROR: Unknown depends line : $lines->[$$i]\n");
+			foreach ($$i - 3 .. $$i + 3) {
+				msg(0, "      ", $lines->[$_]);
+			}
+		}
+		$type =~ s/^Pre//; # PreDepends are like Depends for me 
+		next if dep_satisfied($elt);
+		push @{$packages{$pkg}{$type}}, $elt;
+	}
+}
+
+sub dep_satisfied {
+	my $p = shift;
+	if (ref $p) {
+		foreach (@{$p}) {
+			return 1 if $included{$_};
+		}
+	} else {
+		return $included{$p};
+	}
+	return 0;
+}
+
+sub read_ordepends {
+	my $i = shift;
+	my $lines = shift;
+	my @or = ();
+	my ($val,$dep, $last) = ('','',0);
+	
+	while ($lines->[$$i] 
+	            =~ m/^\s([\s\|])((?:Pre)?Depends|Suggests|Recommends): (\S+)/) {
+		$val = $3;
+		$last = 1 if $1 ne '|'; #Stop when no more '|'
+		if ($val =~ m/^<.*>$/) {
+			$dep = read_virtualdepends ($i, $lines);
+			if (ref $dep) {
+				push @or, @{$dep};
+			} else {
+				push @or, $dep;
+			}
+		} else {
+			push @or, $val; $$i++;
+			# Hack for packages providing not a truely
+			# virtual package
+			while ($lines->[$$i] =~ m/^\s{4}(\S+)/) {
+				push @or, $1;
+				$$i++;
+			}
+		}
+		last if $last;
+	}
+	return \@or;
+}
+
+sub read_virtualdepends {
+	my $i = shift;
+	my $lines = shift;
+	my $virtual;
+	my @or = ();
+
+	#Check for the lines with <>
+	if ($lines->[$$i] 
+	    =~ m/^\s[\s\|]((?:Pre)?Depends|Recommends|Suggests): <([^>]+)>/) {
+	    $virtual = $2;
+	    $$i++
+	}
+	# Now look at the alternatives on the following lines
+	while ($lines->[$$i] =~ m/^\s{4}(\S+)/) {
+		push @or, $1;
+		$$i++;
+	}
+	if (@or) {
+		return \@or;
+	} else {
+		return $virtual;
+	}
+}
+
+sub add_package {
+	my $p = shift;
+	my $add_rec = shift; # Do we look for recommends
+	my $add_sug = shift; # Do we look for suggests
+	my ($ok, $reasons);
+	
+	msg(2, "+ Trying to add $p...\n");
+	if ($included{$p}) {
+		msg(2, "  Already included ...\n");
+		return;
+	}
+	
+	# Get all dependencies (not yet included) of each package
+	my (@dep) = (get_missing ($p, $add_rec));
+
+	# Stop here if apt failed
+	if (not scalar(@dep)) {
+		msg(2, "Can't add $p ... dependency problem.\n");
+		return;
+	}
+
+	if ($packages{$p}{"Size"} > $max_pkg_size) {
+		msg(2, "Can't add $p ... too big!\n");
+		$excluded{$p} = 'toobig';
+		return;
+	}
+	
+	msg(3, "  \@dep before checklist = @dep\n");
+	
+	# Check if all packages are allowed (fail if one cannot)
+	($ok, $reasons) = check_list (\@dep, 1);
+	if (not $ok) {
+		msg(2, "Can't add $p ... one of the packages needed has " .
+		       "been refused. Reasons: $reasons\n"); 
+		return;
+	}
+	
+	msg(3, "  \@dep after checklist = @dep\n");
+	
+	if ($add_rec) {
+	    #TODO: Look for recommends (not yet included !!)
+	    add_recommends (\@dep, $add_rec);
+	    # Check again but doesn't fail if one of the package cannot be
+	    # installed, just ignore it (it will be removed from @dep)
+		($ok, $reasons) = check_list (\@dep, 0);
+		if (not $ok) {
+			msg(0, "UNEXPECTED: It shouldn't fail here !\n");
+			return;
+		}
+		msg(3, "  \@dep after checklist2 = @dep\n");
+	}
+
+	if ($add_sug) {
+	    #TODO: Look for suggests (not yet included !!)
+		add_suggests (\@dep);
+        # Check again but doesn't fail if one of the package cannot be
+        # installed, just ignore it (it will be removed from @dep)
+        ($ok, $reasons) = check_list (\@dep, 0);
+        if (not $ok) {
+            msg(0, "UNEXPECTED: It shouldn't fail here !\n");
+            return;
+        }
+		msg(3, "  \@dep after checklist3 = @dep\n");
+	}
+	
+	# All packages are ok, now check for the size issue
+	$size = get_size (\@dep);
+	add_to_output ($size, \@dep);
+}
+
+sub accepted {
+	my $p = shift;
+	return not $excluded{$p} if (exists $excluded{$p});
+	# Return false for a non-existant package ...
+	msg(1, "WARNING: $p cannot be accepted, it doesn't exist ...\n");
+	return 0;
+}
+
+sub add_suggests {
+	my $list = shift;
+	my $p; # = shift;
+	my @copy = @{$list}; # A copy is needed since I'll modify the array
+	
+	foreach $p (@copy) {
+		add_missing($list, $packages{$p}{"Suggests"}, $p, 0);
+	}
+		
+}
+
+sub add_recommends {
+	my $list = shift;
+	my $add_rec = shift; # Do we look for recommends
+	my $p; # = shift;
+	my @copy = @{$list}; # A copy is needed since I'll modify the array
+	
+	foreach $p (@copy) {
+		add_missing($list, $packages{$p}{"Recommends"}, $p, $add_rec);
+	}
+		
+}
+
+sub get_missing {
+	my $p = shift;
+	my $add_rec = shift; # Do we look for recommends
+	my @list = ();
+	
+	msg(0, "Looking for Depends for $p (add-rec = $add_rec)\n");
+	if (not add_missing (\@list, $packages{$p}{"Depends"}, $p, $add_rec)) {
+		return ();
+	}
+
+	if ($add_rec) {
+		msg(0, "Looking for Recommends for $p\n");
+		add_missing (\@list, $packages{$p}{"Recommends"}, $p, $add_rec);
+	}
+
+	remove_entry($p, \@list);
+	push @list, $p;
+	return (@list);
+}
+
+# Recursive function adding to the 
+sub add_missing {
+	my $list = shift;
+	my $new = shift;
+	my $pkgin = shift;
+	my $add_rec = shift; # Do we look for recommends
+	my @backup = @{$list};
+	my $ok = 1;
+	
+	# Check all dependencies 
+	foreach (@{$new}) {
+		if (ref) {
+			my $textout = "";
+			foreach my $orpkg (@{$_}) {
+				$textout .= "$orpkg ";
+			}
+			msg(3, "    $pkgin Dep: ( OR $textout)\n");
+		} else {
+			msg(3, "    $pkgin Dep: $_\n");
+		}
+		next if dep_satisfied ($_);
+		# If it's an OR
+		if (ref) {
+			my $or_ok = 0;
+			# Loop over each package in the OR
+			# We always add the first package in the OR to allow
+			# APT to figure out which is the better one to install
+			# for any combination of packages that have similar
+			# alternative dependencies, but in different order.
+			# Having the first alternative available should be good
+			# enough for all cases we care about.
+			foreach my $pkg (@{$_}) {
+				next if not accepted ($pkg);
+				# If the package is already included
+				# then don't worry
+				if ($included{$pkg}) {
+					$or_ok = 1;
+					last;
+				}
+				# Check we don't already have the package
+				if (is_in ($pkg, $list)) {
+					$or_ok = 1;
+					last;
+				# Otherwise try to add it
+				} else {
+					# Stop after the first package that is
+					# added successfully
+					push (@{$list}, $pkg);
+					if (add_missing ($list, $packages{$pkg}{"Depends"}, $pkg, $add_rec)) {
+						$or_ok = 1;
+						remove_entry($pkg, $list);
+						push @{$list}, $pkg;
+						last;
+					} else {
+						pop @{$list};
+					}
+				}
+			}
+			$ok &&= $or_ok;
+			if (not $ok) {
+				msg(1, "  $pkgin failed, couldn's satisfy OR dep\n");
+			}				
+		# Else it's a simple dependency
+		} else {
+            msg(1, "  Looking at adding $_ to satisfy dep\n");
+			if (not exists $packages{lc $_}) {
+				msg(1, "  $_ doesn't exist...\n");
+				msg(1, "  $pkgin failed, couldn't satisfy dep on $_\n");
+				$ok = 0;
+				last;
+			}
+			next if $included{lc $_}; # Already included, don't worry
+			next if is_in (lc $_, $list);
+			push @{$list}, lc $_;
+			if (not add_missing ($list, $packages{lc $_}{"Depends"}, lc $_, $add_rec)) {
+				msg(1, "couldn't add $_ ...\n");
+				msg(1, "$pkgin failed, couldn't satisfy dep on $_\n");
+				pop @{$list};
+				$ok = 0;
+			} elsif ($add_rec) {
+				my $reclist = $packages{lc $_}{"Recommends"};
+				msg(0, "trying to add recommends $reclist ...\n");
+				# depends added successfully, add recommends too
+				add_missing ($list, $reclist, lc $_, $add_rec);
+			}
+			remove_entry(lc $_, $list);
+			push @{$list}, lc $_;
+		}
+	}
+	# If a problem has come up, then restore the original list
+	if (not $ok) {
+		@{$list} = @backup;
+	}
+    if (not is_in(lc $pkgin, $list)) {
+        push @{$list}, lc $pkgin;
+    }
+	return $ok;
+}
+
+# Check if $value is in @{$array}
+sub is_in {
+	my $value = shift;
+	my $array = shift;
+	foreach my $key (@{$array}) {
+		return 1 if ($key eq $value);
+	}
+	return 0;		
+}
+
+# Remove an antry from @{$array}
+sub remove_entry {
+    my $value = shift;
+    my $array = shift;
+    my $entries = scalar(@{$array});
+    my $i;
+
+    for ($i=0; $i < $entries; $i++) {
+        if (@{$array}[$i] eq $value) {
+            splice(@{$array}, $i, 1);
+            $i--;
+            $entries--;
+        }
+    }
+}
+
+# The size of a group of packages
+sub get_size {
+	my $arrayref = shift;
+	my $size = 0;
+	foreach (@{$arrayref}) {
+		$size += $packages{$_}{"Size"};
+	}
+	return $size;
+}
+
+# Check a list of packages
+sub check_list {
+	my $ref = shift;
+	my $fail = shift;
+	my $ok = 1;
+	my @to_remove = ();
+	my $reasons = "";
+	foreach (@{$ref}) {
+		if (not exists $excluded{$_}) {
+		  msg(1,"  $_ has been refused because it doesn't exist ...\n");
+		  $ok = 0;
+		  push @to_remove, $_;
+		  $reasons = $reasons . " noexist";
+		  next;
+		}
+		if (not accepted($_)) {
+		  msg(1,"  $_ has been refused because of $excluded{$_} ...\n");
+		  $ok = 0;
+		  push @to_remove, $_;
+		  $reasons = $reasons . " " . $excluded{$_};
+		  next;
+		}
+		if ($included{$_}) {
+		  msg(1, 
+		      "  $_ has already been included in CD $included{$_}.\n");
+		  push @to_remove, $_;
+		  $reasons = $reasons . " alreadyinc";
+		  next;
+		}
+	}
+	foreach my $removed (@to_remove) {
+		msg(2, "  Removing $removed ... ($reasons )\n");
+		@{$ref} = grep { $_ ne $removed } @{$ref};
+	}
+	return ($fail ? $ok : 1, $reasons);
+}
+
+# Add packages to the output list
+sub add_to_output {
+	my $size = shift;
+	my $ref = shift;
+
+	msg(2, "  \$output_size = $output_size, \$size = $size\n");
+
+	$output_size += $size;
+
+	foreach my $pkg (@{$ref}) {
+	    $included{$pkg} = 1;
+	}
+	push(@output, @{$ref});
+}
+
+sub yesno {
+  my $in = shift;
+  return $in ? "yes" : "no";
+}
