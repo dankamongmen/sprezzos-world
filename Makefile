@@ -8432,6 +8432,14 @@ $(XSERVERXORGVIDEOATI): $(SPREZZ)/xserver-xorg-video-ati/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86-video-ati-$(xserver-xorg-video-ati_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-video-dummy
+xserver-xorg-video-dummy:$(XSERVERXORGVIDEODUMMY)_$(ARCH).deb
+$(XSERVERXORGVIDEODUMMY): $(SPREZZ)/xserver-xorg-video-dummy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-video-dummy-$(xserver-xorg-video-dummy_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xserver-xorg-video-geode
 xserver-xorg-video-geode:$(XSERVERXORGVIDEOGEODE)_$(ARCH).deb
 $(XSERVERXORGVIDEOGEODE): $(SPREZZ)/xserver-xorg-video-geode/debian/changelog
