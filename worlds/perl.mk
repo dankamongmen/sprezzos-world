@@ -78,3 +78,19 @@ $(LIBGTK2PERL): $(SPREZZ)/libgtk2-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Gtk2-$(libgtk2-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libnet-dropbox-api-perl
+libnet-dropbox-api-perl:$(LIBNETDROPBOXAPIPERL)_$(ARCH).deb
+$(LIBNETDROPBOXAPIPERL): $(SPREZZ)/libnet-dropbox-api-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Net-Dropbox-API-$(libnet-dropbox-api-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libproc-processtable-perl
+libproc-processtable-perl:$(LIBPROCPROCESSTABLEPERL)_$(ARCH).deb
+$(LIBPROCPROCESSTABLEPERL): $(SPREZZ)/libproc-processtable-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Proc-ProcessTable-$(libproc-processtable-perl_UPVER).tar.gz $(TARARGS) $@
+
