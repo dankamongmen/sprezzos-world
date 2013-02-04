@@ -7597,6 +7597,14 @@ $(POCKETSPHINX): $(SPREZZ)/pocketsphinx/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pocketsphinx-$(pocketsphinx_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: sphinx
+sphinx:$(SPHINX)_$(ARCH).deb
+$(SPHINX): $(SPREZZ)/sphinx/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Sphinx-$(sphinx_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: sphinxbase
 sphinxbase:$(SPHINXBASE)_$(ARCH).deb
 $(SPHINXBASE): $(SPREZZ)/sphinxbase/debian/changelog
