@@ -1,0 +1,156 @@
+#!/usr/bin/make -f
+
+export PYTHONWARNINGS=d
+export PYTHONHASHSEED=random
+
+-include /usr/share/python/python.mk
+
+scripts = \
+	rst-buildhtml \
+	rst2html \
+	rst2latex \
+	rst2man \
+	rst2odt \
+	rst2odt_prepstyles \
+	rst2pseudoxml \
+	rst2s5 \
+	rst2xetex \
+	rst2xml \
+	rstpep2html \
+
+pre_localize_css = 's,href="(([.][.]/)*)docutils/.*/([^/]+[.]css)",href="$$1css/$$3",g;'
+pre_strip_images1 = 's,<img src="http://[^"]+" alt="([^"]*)"[^>]*>,$$1,g;'
+pre_strip_images2 = 's,<img alt="([^"]*)"[^>]*\bsrc="http://[^"]+"[^>]*>,$$1,g;'
+pre_strip_images = $(pre_strip_images1)$(pre_strip_images2)
+
+python_all = pyversions -r | tr ' ' '\n' | xargs -t -I {} env {}
+python3_all = $(patsubst py%,py3%,$(python_all))
+
+build build-indep: build-stamp
+build-stamp:
+	dh_testdir
+	# Remove convenience copy of the roman module
+	rm -f docutils/utils/roman.py
+	# Check if move-data-to-usr-share.diff is up-to-date
+	if grep -r __file__ --include='*.py' docutils/ | grep -vw _datadir; then \
+		echo "Error: Some uses of __file__ are not guarded by _datadir()." \
+			"Is move-data-to-usr-share.diff up-to-date?"; \
+		exit 1; \
+	fi
+	# Build modules for Python 2.X
+	python setup.py build --build-lib=build/py2/
+ifeq "$(filter nocheck,$(DEB_BUILD_OPTIONS))" ""
+	# Run test suite for Python 2.X:
+	$(python_all) test/alltests.py --verbose
+	# Run rst-buildhtml tests:
+	PYTHONPATH=$(CURDIR)/build/py2 python tools/test/test_buildhtml.py --verbose
+endif
+	# Build modules for Python 3.X
+	python3 setup.py build --build-lib=build/py3/
+ifeq "$(filter nocheck,$(DEB_BUILD_OPTIONS))" ""
+	# Run test suite for Python 3.X:
+	$(python3_all) test3/alltests.py --verbose
+endif
+	# Build documentation:
+	PYTHONPATH=. python tools/buildhtml.py \
+		--local --link-stylesheet --traceback \
+		.
+	PYTHONPATH=. python tools/buildhtml.py \
+		--link-stylesheet --traceback \
+		docs
+	( ls *.html && find docs/ -name '*.html' ) \
+	| xargs perl -0777 -p -i -e $(pre_localize_css)$(pre_strip_images)
+	touch build-stamp
+
+clean:
+	dh_testdir
+	rm -f build-stamp
+	rm -rf build/
+	find -name '*.py[co]' -delete
+	rm -f *.html
+	find docs -name '*.html' -not -name 'quickref.html' -delete
+	rm -rf docutils.egg-info
+	cd test && rm -rf alltests.out record.txt functional/output/*/ functional/output/[a-z]*.*
+	rm -rf test3/
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	mkdir -p debian/tmp
+	python setup.py build --build-lib=build/py2/ install \
+	    --root debian/tmp --no-compile $(py_setup_install_args) \
+	    --install-scripts=/usr/share/docutils/scripts/python2/
+	python3 setup.py build --build-lib=build/py3/ install \
+	    --root debian/tmp --no-compile $(py_setup_install_args) \
+	    --install-scripts=/usr/share/docutils/scripts/python3/
+	# Move data files outside dist-packages:
+	mkdir -p debian/tmp/usr/share/
+	cp -rlf debian/tmp/usr/lib/python2.*/*-packages/docutils debian/tmp/usr/share/
+	find debian/tmp/usr/lib/python[23]*/*-packages/docutils/ -type f '!' -name '*.py' -delete
+	find debian/tmp/usr/share/docutils/ \( -name '*.py' -o -name '*.py[co]' \) '!' -path '*/scripts/*' -delete
+	find debian/tmp/ -type d -empty -delete
+	sed -i -e 's/^\(_debian_package\) = /\1 = 1/' debian/tmp/usr/lib/python[23]*/*-packages/docutils/__init__.py
+	# Give scripts canonical names
+	mkdir -p debian/tmp/usr/share/docutils/scripts/python2/
+	set -ex && for python in python2 python3; do \
+		dir=debian/tmp/usr/share/docutils/scripts/$$python/; \
+		for exe in $(filter-out rst-buildhtml,$(scripts)); do \
+			mv $$dir/$$exe.py $$dir/$$exe; \
+		done; \
+		install tools/buildhtml.py $$dir/rst-buildhtml; \
+		sed -i -e "1 s,^#!.*,#!/usr/bin/$${python%2}," $$dir/rst-buildhtml; \
+	done
+	: # Make the man pages (we want to do this *after* renaming all the
+	: # tools, because their executable name goes into the --help output)
+	mkdir -p debian/tmp/man/
+	set -ex && for exe in $(filter-out rst2odt_prepstyles,$(scripts)); do \
+		export PYTHONPATH=.; \
+		cp debian/$$exe.txt debian/tmp/man/$$exe.txt; \
+		python debian/tmp/usr/share/docutils/scripts/python2/$$exe --help | \
+			sed \
+				-e '1 s/^Usage$$/Synopsis/' \
+				-e 's/^=/====/' \
+				-e '3 s/^  //' \
+				-e '4 a Description' \
+				-e '4 a ===========' \
+			>> debian/tmp/man/$$exe.txt;\
+		python tools/rst2man.py debian/tmp/man/$$exe.txt \
+			debian/tmp/man/$$exe.1; \
+	done
+	PYTHONPATH=. python tools/rst2man.py debian/rst2odt_prepstyles.txt \
+		debian/tmp/man/rst2odt_prepstyles.1
+	sed -i -e 's,"\(docutils/writers/\),"/usr/share/\1,g' debian/tmp/man/*
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -XCOPYING
+	mkdir -p debian/docutils-doc/usr/share/doc/python-docutils/
+	cd debian/docutils-doc/usr/share/doc/python-docutils/ && ln -sf ../docutils-doc/*.html .
+	dh_install -p docutils-common -X /scripts/
+	dh_install -N docutils-common
+	dh_lintian
+	dh_pysupport -p python-docutils
+	dh_python3 -p python3-docutils
+	dh_installexamples
+	dh_installcatalogs
+	dh_installxmlcatalogs
+	dh_installman
+	dh_installchangelogs
+	dh_link
+	dh_compress -p docutils-doc -X.dtd -X.html -X.txt
+	dh_compress -N docutils-doc
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+build-arch binary-arch:
+# We have nothing to do by default.
+
+binary: binary-indep binary-arch
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install configure
