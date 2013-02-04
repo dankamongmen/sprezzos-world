@@ -595,7 +595,7 @@ bool aptitudeDepCache::build_selection_list(OpProgress &Prog, bool WithLock,
 
   duplicate_cache(&backup_state);
 
-  if(aptcfg->FindB(PACKAGE "::Auto-Upgrade", false) && do_initselections)
+  if(aptcfg->FindB(PACKAGE "::Auto-Upgrade", true) && do_initselections)
     mark_all_upgradable(aptcfg->FindB(PACKAGE "::Auto-Install", true),
 			true, NULL);
   Prog.Done();

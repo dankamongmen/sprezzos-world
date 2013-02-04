@@ -652,7 +652,7 @@ static void do_really_quit_answer(bool should_i_quit)
 
 static void do_quit()
 {
-  if(aptcfg->FindB(PACKAGE "::UI::Prompt-On-Exit", true))
+  if(aptcfg->FindB(PACKAGE "::UI::Prompt-On-Exit", false))
     {
       if(!really_quit_active)
 	{

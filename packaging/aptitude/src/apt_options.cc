@@ -191,7 +191,7 @@ option_item ui_options[]={
 	      N_("If this option is enabled, aptitude will "
 		 "not terminate until you confirm that you "
 		 "really want to quit."),
-	      PACKAGE "::UI::Prompt-On-Exit", true),
+	      PACKAGE "::UI::Prompt-On-Exit", false),
   option_item::radio(N_("Pause after downloading files"),
 		     N_("This option controls whether aptitude will wait for confirmation after a download before it goes ahead and installs packages."),
 		     PACKAGE "::UI::Pause-After-Download",
@@ -229,7 +229,7 @@ option_item ui_options[]={
 		 "action on a package (for instance, installing or "
 		 "removing it) will move the selection to the next "
 		 "package in the list."),
-	      PACKAGE "::UI::Advance-On-Action", false),
+	      PACKAGE "::UI::Advance-On-Action", true),
   option_item(N_("Automatically show why packages are broken"),
 	      N_("If this option is enabled, then highlighting a "
 		 "package that has broken dependencies will "
@@ -283,13 +283,13 @@ option_item misc_options[]={
 	      N_("If this option is enabled, then on startup, "
 		 "aptitude will select all upgradable packages for "
 		 "upgrade."),
-	      PACKAGE "::Auto-Upgrade", false),
+	      PACKAGE "::Auto-Upgrade", true),
   option_item(N_("Remove obsolete package files after downloading new package lists"),
 	      N_("If this option is enabled, then after every "
 		 "install run, aptitude will delete from the package "
 		 "cache any package files that can no longer be "
 		 "downloaded from any archive in sources.list."),
-	      PACKAGE "::AutoClean-After-Update", false),
+	      PACKAGE "::AutoClean-After-Update", true),
   option_item(N_("Display a preview of what will be done before doing it"),
 	      N_("If this option is enabled, then when you ask "
 		 "aptitude to perform an install run, it will "

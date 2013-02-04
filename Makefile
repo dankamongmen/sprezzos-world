@@ -45,7 +45,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) # -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -2676,6 +2676,14 @@ $(FATRAT): $(SPREZZ)/fatrat/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fatrat_$(fatrat_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libtorrent-rasterbar
+libtorrent-rasterbar:$(LIBTORRENTRASTERBAR)_$(ARCH).deb
+$(LIBTORRENTRASTERBAR): $(SPREZZ)/libtorrent-rasterbar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtorrent-rasterbar-$(libtorrent-rasterbar_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: fbset
 fbset:$(FBSET)_$(ARCH).deb

@@ -80,7 +80,7 @@ bool pkg_tree_node::dispatch_key(const cw::config::key &k, cw::tree *owner)
   else
     delete grp;
 
-  if(aptcfg->FindB(PACKAGE "::UI::Advance-On-Action", false))
+  if(aptcfg->FindB(PACKAGE "::UI::Advance-On-Action", true))
     owner->level_line_down();
 
   package_states_changed();
