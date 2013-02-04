@@ -1,0 +1,55 @@
+#!/usr/bin/make -f
+
+DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+
+CFLAGS += -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+
+# ecryptfs-utils does not (yet) build with hardening build flags
+export DEB_BUILD_MAINT_OPTIONS = hardening=-all
+
+%:
+	dh ${@} --with autotools_dev,python2
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--enable-gpg --enable-pam --enable-static --enable-tspi \
+		--disable-gui --disable-openssl --disable-pkcs11-helper \
+		CFLAGS="$(CFLAGS)"
+
+override_dh_auto_install:
+	dh_auto_install
+
+	install -D -m 0644 debian/local/ecryptfs-utils.pam-auth-update debian/ecryptfs-utils/usr/share/pam-configs/ecryptfs-utils
+
+	# Adding kmod integration
+	install -D -m 0644 debian/local/ecryptfs-utils.kmod debian/ecryptfs-utils/lib/modules-load.d/ecryptfs.conf
+
+	# Removing useless files
+	find debian/tmp -name "*.pyc" | xargs rm -f
+
+	rm -f debian/tmp/usr/lib/*/*.la
+
+	rm -f debian/tmp/usr/lib/python*/dist-packages/ecryptfs-utils/*.la
+	rm -f debian/tmp/usr/lib/python*/dist-packages/ecryptfs-utils/*.a
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz -z9
+
+override_dh_fixperms:
+	dh_fixperms
+
+	chmod 4755 debian/ecryptfs-utils/sbin/mount.ecryptfs_private
+
+override_dh_install:
+	dh_install --fail-missing
+
+override_dh_python2:
+	dh_python2 --no-guessing-versions
+
+	# Adding missing symlinks
+	cd debian/python-ecryptfs/usr/lib/python*/dist-packages/ecryptfs-utils && \
+	ln -s _libecryptfs.so _libecryptfs.so.0.0 && \
+	ln -s _libecryptfs.so _libecryptfs.so.0.0.0
+
+override_dh_strip:
+	dh_strip --dbg-package=ecryptfs-utils-dbg

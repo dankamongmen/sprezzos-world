@@ -54,3 +54,11 @@ $(LIBGNOME2VFSPERL): $(SPREZZ)/libgnome2-vfs-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Gnome2-VFS-$(libgnome2-vfs-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgd-gd2-perl
+libgd-gd2-perl:$(LIBGDGD2PERL)_$(ARCH).deb
+$(LIBGDGD2PERL): $(SPREZZ)/libgd-gd2-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf GD-$(libgd-gd2-perl_UPVER).tar.gz $(TARARGS) $@
+
