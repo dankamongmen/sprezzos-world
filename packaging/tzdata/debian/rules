@@ -1,0 +1,166 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+export LC_ALL=C
+
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+TZGEN := $(CURDIR)/tzgen
+TZGEN_JAVA := $(CURDIR)/tzgen-java
+
+VERSION := $(shell dpkg-parsechangelog | sed -e '/^Version/!d;s/^Version: //g;s/.*://g;s/-.*//g')
+EMDEBIAN := $(shell dpkg-parsechangelog | egrep '^Version: .*em[0-9]+')
+
+JHOME := $(wildcard /usr/lib/jvm/java-6-openjdk-$(DEB_HOST_ARCH)/ /usr/lib/jvm/java-6-openjdk/)
+
+TIMEZONES := africa \
+             antarctica \
+             asia \
+             australasia \
+             europe \
+             northamerica \
+             southamerica \
+             etcetera \
+             factory \
+             backward \
+             systemv \
+	     pacificnew
+
+ifeq ($(EMDEBIAN),)
+TIMEZONES += solar87 \
+             solar88 \
+             solar89
+endif
+
+TIMEZONES_JAVA := gmt \
+                  jdk11_backward
+
+TEMPLATES_FILE := $(CURDIR)/debian/tzdata.templates
+TEMPLATES_AREAS := Africa \
+                   America \
+		   Antarctica \
+		   Australia \
+		   Arctic \
+		   Asia \
+		   Atlantic \
+		   Europe \
+		   Indian \
+		   Pacific \
+		   SystemV \
+		   US \
+		   Etc
+
+build: build-arch build-indep
+build-arch:
+
+build-indep: build-indep-stamp
+build-indep-stamp:
+	dh_testdir
+
+	# Build the "default" version
+	for zone in $(TIMEZONES); do \
+	  /usr/sbin/zic -d $(TZGEN) -L /dev/null -y yearistype.sh $${zone} ; \
+	done
+	
+	# Build the "posix" and "right" versions
+ifeq ($(EMDEBIAN),)
+	for zone in $(TIMEZONES); do \
+	  /usr/sbin/zic -d $(TZGEN)/posix -L /dev/null -y yearistype.sh $${zone} ; \
+	  /usr/sbin/zic -d $(TZGEN)/right -L leapseconds -y $(TZGEN)/yearistype.sh $${zone} ; \
+	done
+endif
+
+	# Generate a posixrules file
+	/usr/sbin/zic -d $(TZGEN) -p America/New_York
+
+	# Replace hardlinks by symlinks
+	cd $(TZGEN) ; \
+	fdupes -1 -H -q -R . | while read line ; do \
+	  set -- $${line} ; \
+	  tgt="$${1##./}" ; \
+	  shift ; \
+	  while [ "$$#" != 0 ] ; do \
+	    link="$${1##./}" ; \
+	    reltgt="$$(echo $$link | sed -e 's,[^/]\+$$,,g' -e 's,[^/]\+,..,g')$${tgt}" ; \
+	    ln -sf $${reltgt} $${link} ; \
+	    shift ; \
+	  done ; \
+	done
+
+	# Generate a java version
+	$(JHOME)/bin/java -jar $(JHOME)/jre/lib/javazic.jar -V $(VERSION) -d $(TZGEN_JAVA) $(TIMEZONES) $(TIMEZONES_JAVA)
+
+	# Generate the templates file
+	( echo "Template: tzdata/Areas" ; \
+	echo "Type: select" ; \
+	echo "# Note to translators:" ; \
+	echo "# - \"Etc\" will present users with a list" ; \
+	echo "#    of \"GMT+xx\" or \"GMT-xx\" timezones" ; \
+	echo "# - SystemV will give the choice between zone named as per SystemV conventions:" ; \
+	echo "#   EST5, MST7, etc." ; \
+	echo -n "__Choices: " ; \
+	echo "$(TEMPLATES_AREAS)" | sed -e 's# #, #g' -e 's#, $$##' ; \
+	echo "_Description: Geographic area:" ; \
+	echo " Please select the geographic area in which you live. Subsequent" ; \
+	echo " configuration questions will narrow this down by presenting a list of" ; \
+	echo " cities, representing the time zones in which they are located." ; \
+	echo ; \
+	for i in $(TEMPLATES_AREAS) ; do \
+	    echo "Template: tzdata/Zones/$$i" ; \
+	    echo "Type: select" ; \
+	    echo "# Translators: do not translate underscores. You can use spaces instead." ; \
+	    if [ "$$i" = "Etc" ] || [ "$$i" = "SystemV" ] ; then \
+		    echo -n "Choices: " ; \
+	    else \
+		    echo -n "__Choices: " ; \
+	    fi ; \
+	    cd $(CURDIR)/tzgen/$$i ; \
+	    find . -maxdepth 2 -type f -o -type l | sed -e 's#^\./##' | \
+	    	egrep -v '^(Ashkhabad|Chungking|Dacca|Macao|Thimbu|Ulan_Bator|Faeroe|ACT|LHI|NSW|North|Queensland|South|Tasmania|Victoria|West|Argentina/ComodRivadavia|Buenos_Aires|Catamarca|Cordoba|Jujuy|Mendoza|Rosario|Louisville|Fort_Wayne|Indianapolis|Knox_IN|East-Indiana|East-Starke|Asmera|South_Pole|Saigon|Calcutta|Katmandu)$$' | \
+		sort -n | tr '\n' ',' | sed -e 's#,#, #g' -e 's#, $$#\n#' ; \
+	    echo "_Description: Time zone:" ; \
+	    echo " Please select the city or region corresponding to your time zone." ; \
+	    echo ; \
+	done ) > $(TEMPLATES_FILE)
+	debconf-updatepo
+						
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	-rm -rf $(TZGEN) $(TZGEN_JAVA)
+	rm -f build-indep-stamp
+	rm -f patch-log
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	# Do nothing
+
+# Build architecture-dependent files here.
+binary-arch: build install
+# We have nothing to do by default.
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installdebconf
+	dh_installdirs
+	dh_install
+	dh_installchangelogs
+	dh_link
+	dh_installdocs
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install
