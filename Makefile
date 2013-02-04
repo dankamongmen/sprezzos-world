@@ -21,6 +21,7 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 -include $(subst $(SPREZZ),sprezzos-world/,$(PACKAGES))
 
 include worlds/kde.mk
+include worlds/perl.mk
 include worlds/lxde.mk
 include worlds/xfce.mk
 include worlds/mint.mk
@@ -4505,14 +4506,6 @@ $(LIBEVENT): $(SPREZZ)/libevent/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libevent-$(libevent_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: libextutils-parsexs-perl
-libextutils-parsexs-perl:$(LIBEXTUTILSPARSEXSPERL)_$(ARCH).deb
-$(LIBEXTUTILSPARSEXSPERL): $(SPREZZ)/libextutils-parsexs-perl/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ExtUtils-ParseXS-$(shell echo $(libextutils-parsexs-perl_UPVER) | sed -e 's/0*$$//').tar.gz $(TARARGS) $@
 
 .PHONY: libedit
 libedit:$(LIBEDIT)_$(ARCH).deb
