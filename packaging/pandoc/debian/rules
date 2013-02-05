@@ -1,0 +1,123 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/upstream-tarball.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/hlibrary.mk
+
+# ABI by default follows upstream version (without repackaging suffix)
+abi = $(DEB_UPSTREAM_TARBALL_VERSION)
+
+DEB_UPSTREAM_URL = http://hackage.haskell.org/packages/archive/$(DEB_UPSTREAM_PACKAGE)/$(DEB_UPSTREAM_TARBALL_VERSION)
+DEB_UPSTREAM_TARBALL_MD5 = 53276e2a09933b4cce7dac0e736ad87d
+
+DEB_COPYRIGHT_CHECK_IGNORE_REGEX = ^.*\.(gif|jpg|odt)|debian/(changelog|copyright(|_hints|_newhints))$
+
+DEB_INSTALL_MANPAGES_pandoc = man/man1/*.1 man/man5/*.5 debian/hsmarkdown.1
+
+DEB_SETUP_GHC6_CONFIGURE_ARGS = -fblaze_html_0_5
+
+# Use threaded RTS only when supported
+DEB_SETUP_GHC6_CONFIGURE_ARGS += $(if $(wildcard /usr/lib/ghc-$(GHC6_VERSION)/libHSrts_thr.a),,--flags=-threaded)
+
+# Disable timer to help build on slow arches like hppa
+DEB_SETUP_GHC6_CONFIGURE_ARGS += --ghc-options="+RTS -V0 -RTS"
+
+# put aside upstream-shipped temp files during build but after copyright-check
+upstreamtmpfiles = man/man1/pandoc.1 man/man5/pandoc_markdown.5
+pre-build:: debian/stamp-upstreamtmpstuff
+debian/stamp-upstreamtmpstuff: debian/stamp-copyright-check
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file ] || [ -e $$file.upstream ] || cp $$file $$file.upstream; \
+	done
+	touch $@
+clean::
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file.upstream ] || mv -f $$file.upstream $$file; \
+	done
+	rm -f debian/stamp-upstreamtmpstuff
+
+# Generate (and cleanup) files containing variables static per build
+infiles = $(filter-out debian/control.in, $(wildcard debian/*.in))
+outfiles = $(basename $(infiles))
+DEB_PHONY_RULES += $(outfiles)
+pre-build:: $(outfiles)
+$(outfiles): %: %.in
+	perl -pe 's/__ABI__/$(abi)/g' <$< >$@
+clean::
+	rm -f $(outfiles)
+
+# Let Haskell cleanup after itself (apparently forgotten in hlibrary.mk)
+DEB_PHONY_RULES += haskell-clean
+cleanbuilddir:: haskell-clean
+haskell-clean:
+	[ ! -x "$(DEB_SETUP_BIN_NAME)" ] || $(DEB_SETUP_BIN_NAME) clean
+
+# Haskell dependencies for any build from pandoc.cabal
+#  * Versions only relevant post Squeeze when libhc-* namespace was introduced
+deps-ghc += parsec3,<<,3.2
+deps-ghc += mtl,<<,2.2
+deps-ghc += network,<<,2.5
+deps-ghc += zip-archive,<<,0.2
+# Should be safe to drop versioning for Squeeze
+deps-ghc += utf8-string,<<,0.4
+deps-ghc += http,<<,1:4000.3
+deps-ghc += texmath,<<,0.7
+deps-ghc += xml,<<,1.4
+deps-ghc += random,<<1.1
+deps-ghc += extensible-exceptions,<<,0.2
+deps-ghc += citeproc-hs,<<,0.4
+deps-ghc += pandoc-types,<<,1.10
+deps-ghc += json,<<,0.8
+deps-ghc += tagsoup,<<,0.13
+deps-ghc += base64-bytestring,<<,1.1
+deps-ghc += zlib,<<,0.6
+deps-ghc += highlighting-kate,>=,0.5.1,<<,0.6
+deps-ghc += temporary,<<,1.2
+deps-ghc += blaze-html,>=,0.5,<<,0.6
+deps-ghc += blaze-markup,<<,0.6
+# Should be safe to drop versioning for Squeeze
+deps-ghc += syb,<<,0.4
+
+# Haskell dependencies for testsuite from pandoc.cabal
+deps-ghc-test += diff
+deps-ghc-test += test-framework,<<,0.7
+deps-ghc-test += test-framework-hunit,<<,0.3
+deps-ghc-test += test-framework-quickcheck2,<<,0.3
+deps-ghc-test += quickcheck,<<,2.6
+deps-ghc-test += hunit,<<,1.3
+deps-ghc-test += template-haskell,<<,2.8
+deps-ghc-test += ansi-terminal,<<,0.6
+
+# Haskell dependencies (maybe) needed for documentation
+# TODO: actually use these (not maintain Build-depends-indep by hand)
+deps-ghc-doc += binary
+deps-ghc-doc += digest
+deps-ghc-doc += pcre-light
+deps-ghc-doc += transformers
+deps-ghc-doc += blaze-builder
+deps-ghc-doc += hs-bibutils
+deps-ghc-doc += random
+deps-ghc-doc += text
+
+expand-ghc-dep = $(comma) libghc-$2-$1 $(if $3,($3 $4)$(if $5,$(comma) libghc-$2-$1 ($5 $6)))
+strip-ghc-deps = $(foreach dep,$2,$(call expand-ghc-dep,$1,$(word 1,$(subst $(comma),$(space),$(dep)))))
+expand-ghc-deps = $(foreach dep,$2,$(call expand-ghc-dep,$1,$(word 1,$(subst $(comma),$(space),$(dep))),$(word 2,$(subst $(comma),$(space),$(dep))),$(word 3,$(subst $(comma),$(space),$(dep))),$(word 4,$(subst $(comma),$(space),$(dep))),$(word 5,$(subst $(comma),$(space),$(dep)))))
+
+# Needed by upstream build process
+CDBS_BUILD_DEPENDS += , ghc
+CDBS_BUILD_DEPENDS += $(call expand-ghc-deps,dev,$(deps-ghc))
+# FIXME: enable, set DEB_ENABLE_TESTS = yes, and configure with -ftests
+#CDBS_BUILD_DEPENDS += $(call expand-ghc-deps,dev,$(deps-ghc-test))
+CDBS_BUILD_DEPENDS += , ghc-prof
+CDBS_BUILD_DEPENDS += , $(call strip-ghc-deps,prof,$(deps-ghc))
+CDBS_BUILD_DEPENDS_INDEP += , ghc-doc
+CDBS_BUILD_DEPENDS_INDEP += , $(call strip-ghc-deps,doc,$(deps-ghc) $(deps-ghc-doc))
+
+# Needed for our packaging
+CDBS_BUILD_DEPENDS += , haskell-devscripts (>=0.5.12)
+
+# Needed (often/seldom) at runtime
+#  texlive-* needed for PDF output support
+CDBS_RECOMMENDS_pandoc = libghc-citeproc-hs-data
+CDBS_SUGGESTS_pandoc = texlive-latex-recommended, texlive-xetex, texlive-luatex
