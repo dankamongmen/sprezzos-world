@@ -2958,13 +2958,13 @@ $(HASKELLHFUSE): $(SPREZZ)/haskell-hfuse/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hfuse-$(haskell-hfuse_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-highlighting-kate
-haskell-highlighting-kate:$(HASKELLHIGHLIGHTINGKATE)_$(ARCH).deb
-$(HASKELLHIGHLIGHTINGKATE): $(SPREZZ)/haskell-highlighting-kate/debian/changelog
+.PHONY: highlighting-kate
+highlighting-kate:$(HIGHLIGHTINGKATE)_$(ARCH).deb
+$(HIGHLIGHTINGKATE): $(SPREZZ)/highlighting-kate/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf highlighting-kate-$(haskell-highlighting-kate_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf highlighting-kate-$(highlighting-kate_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hipmunk
 haskell-hipmunk:$(HASKELLHIPMUNK)_$(ARCH).deb
@@ -4293,4 +4293,12 @@ $(HASKELLUTF8STRING): $(SPREZZ)/haskell-utf8-string/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf utf8-string-$(haskell-utf8-string_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-pcre-light
+haskell-pcre-light:$(HASKELLPCRELIGHT)_$(ARCH).deb
+$(HASKELLPCRELIGHT): $(SPREZZ)/haskell-pcre-light/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pcre-light-$(haskell-pcre-light_UPVER).tar.gz $(TARARGS) $@
 
