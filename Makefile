@@ -2805,6 +2805,14 @@ $(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	unzip SourceSansPro_FontsOnly-$(fonts-adobe-sourcesanspro_UPVER).zip -d $@
 
+.PHONY: fotoxx
+fotoxx:$(FOTOXX)_$(ARCH).deb
+$(FOTOXX): $(SPREZZ)/fotoxx/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fotoxx-$(fotoxx_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: fraqtive
 fraqtive:$(FRAQTIVE)_$(ARCH).deb
 $(FRAQTIVE): $(SPREZZ)/fraqtive/debian/changelog
