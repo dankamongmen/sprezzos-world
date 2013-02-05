@@ -1204,7 +1204,7 @@ $(HASKELLBINDINGSDSL): $(SPREZZ)/haskell-bindings-dsl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf bindings-dsl-$(haskell-bindings-dsl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf bindings-DSL-$(haskell-bindings-dsl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-bindings-gpgme
 haskell-bindings-gpgme:$(HASKELLBINDINGSGPGME)_$(ARCH).deb
