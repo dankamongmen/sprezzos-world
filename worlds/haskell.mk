@@ -1278,14 +1278,6 @@ $(HASKELLCPPHS): $(SPREZZ)/haskell-cpphs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cpphs-$(haskell-cpphs_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-criterion
-haskell-criterion:$(HASKELLCRITERION)_$(ARCH).deb
-$(HASKELLCRITERION): $(SPREZZ)/haskell-criterion/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf criterion-$(haskell-criterion_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-csv
 haskell-csv:$(HASKELLCSV)_$(ARCH).deb
 $(HASKELLCSV): $(SPREZZ)/haskell-csv/debian/changelog
@@ -1422,14 +1414,6 @@ $(HASKELLFEED): $(SPREZZ)/haskell-feed/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf feed-$(haskell-feed_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-fgl
-haskell-fgl:$(HASKELLFGL)_$(ARCH).deb
-$(HASKELLFGL): $(SPREZZ)/haskell-fgl/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf fgl-$(haskell-fgl_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-filemanip
 haskell-filemanip:$(HASKELLFILEMANIP)_$(ARCH).deb
 $(HASKELLFILEMANIP): $(SPREZZ)/haskell-filemanip/debian/changelog
@@ -1494,14 +1478,6 @@ $(HASKELLGITIT): $(SPREZZ)/haskell-gitit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gitit-$(haskell-gitit_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-glade
-haskell-glade:$(HASKELLGLADE)_$(ARCH).deb
-$(HASKELLGLADE): $(SPREZZ)/haskell-glade/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf glade-$(haskell-glade_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-glfw
 haskell-glfw:$(HASKELLGLFW)_$(ARCH).deb
 $(HASKELLGLFW): $(SPREZZ)/haskell-glfw/debian/changelog
@@ -1510,22 +1486,6 @@ $(HASKELLGLFW): $(SPREZZ)/haskell-glfw/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf glfw-$(haskell-glfw_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-glib
-haskell-glib:$(HASKELLGLIB)_$(ARCH).deb
-$(HASKELLGLIB): $(SPREZZ)/haskell-glib/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf glib-$(haskell-glib_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-glut
-haskell-glut:$(HASKELLGLUT)_$(ARCH).deb
-$(HASKELLGLUT): $(SPREZZ)/haskell-glut/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf glut-$(haskell-glut_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-gstreamer
 haskell-gstreamer:$(HASKELLGSTREAMER)_$(ARCH).deb
 $(HASKELLGSTREAMER): $(SPREZZ)/haskell-gstreamer/debian/changelog
@@ -1533,22 +1493,6 @@ $(HASKELLGSTREAMER): $(SPREZZ)/haskell-gstreamer/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gstreamer-$(haskell-gstreamer_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-gtk
-haskell-gtk:$(HASKELLGTK)_$(ARCH).deb
-$(HASKELLGTK): $(SPREZZ)/haskell-gtk/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gtk-$(haskell-gtk_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-gtkglext
-haskell-gtkglext:$(HASKELLGTKGLEXT)_$(ARCH).deb
-$(HASKELLGTKGLEXT): $(SPREZZ)/haskell-gtkglext/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gtkglext-$(haskell-gtkglext_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-gtksourceview2
 haskell-gtksourceview2:$(HASKELLGTKSOURCEVIEW2)_$(ARCH).deb
@@ -2438,14 +2382,6 @@ $(HASKELLALGEBRA): $(SPREZZ)/haskell-algebra/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf algebra-$(haskell-algebra_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-alut
-haskell-alut:$(HASKELLALUT)_$(ARCH).deb
-$(HASKELLALUT): $(SPREZZ)/haskell-alut/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf alut-$(haskell-alut_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-ami
 haskell-ami:$(HASKELLAMI)_$(ARCH).deb
 $(HASKELLAMI): $(SPREZZ)/haskell-ami/debian/changelog
@@ -2526,14 +2462,6 @@ $(HASKELLCONTRAVARIANT): $(SPREZZ)/haskell-contravariant/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf contravariant-$(haskell-contravariant_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-convertible
-haskell-convertible:$(HASKELLCONVERTIBLE)_$(ARCH).deb
-$(HASKELLCONVERTIBLE): $(SPREZZ)/haskell-convertible/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf convertible-$(haskell-convertible_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-cpphs
 haskell-cpphs:$(HASKELLCPPHS)_$(ARCH).deb
 $(HASKELLCPPHS): $(SPREZZ)/haskell-cpphs/debian/changelog
@@ -2574,22 +2502,6 @@ $(HASKELLCSVCONDUIT): $(SPREZZ)/haskell-csv-conduit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf csv-conduit-$(haskell-csv-conduit_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-csv
-haskell-csv:$(HASKELLCSV)_$(ARCH).deb
-$(HASKELLCSV): $(SPREZZ)/haskell-csv/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf csv-$(haskell-csv_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-curl
-haskell-curl:$(HASKELLCURL)_$(ARCH).deb
-$(HASKELLCURL): $(SPREZZ)/haskell-curl/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf curl-$(haskell-curl_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-darcs
 haskell-darcs:$(HASKELLDARCS)_$(ARCH).deb
 $(HASKELLDARCS): $(SPREZZ)/haskell-darcs/debian/changelog
@@ -2597,14 +2509,6 @@ $(HASKELLDARCS): $(SPREZZ)/haskell-darcs/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf darcs-$(haskell-darcs_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-data-accessor
-haskell-data-accessor:$(HASKELLDATAACCESSOR)_$(ARCH).deb
-$(HASKELLDATAACCESSOR): $(SPREZZ)/haskell-data-accessor/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf data-accessor-$(haskell-data-accessor_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-data-accessor-mtl
 haskell-data-accessor-mtl:$(HASKELLDATAACCESSORMTL)_$(ARCH).deb
@@ -2662,14 +2566,6 @@ $(HASKELLDATECACHE): $(SPREZZ)/haskell-date-cache/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf date-cache-$(haskell-date-cache_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-datetime
-haskell-datetime:$(HASKELLDATETIME)_$(ARCH).deb
-$(HASKELLDATETIME): $(SPREZZ)/haskell-datetime/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf datetime-$(haskell-datetime_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-debian
 haskell-debian:$(HASKELLDEBIAN)_$(ARCH).deb
 $(HASKELLDEBIAN): $(SPREZZ)/haskell-debian/debian/changelog
@@ -2717,14 +2613,6 @@ $(HASKELLDIFF): $(SPREZZ)/haskell-diff/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf diff-$(haskell-diff_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-digest
-haskell-digest:$(HASKELLDIGEST)_$(ARCH).deb
-$(HASKELLDIGEST): $(SPREZZ)/haskell-digest/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf digest-$(haskell-digest_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-dimensional
 haskell-dimensional:$(HASKELLDIMENSIONAL)_$(ARCH).deb
@@ -2782,22 +2670,6 @@ $(HASKELLEDISONAPI): $(SPREZZ)/haskell-edison-api/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf edison-api-$(haskell-edison-api_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-edison-core
-haskell-edison-core:$(HASKELLEDISONCORE)_$(ARCH).deb
-$(HASKELLEDISONCORE): $(SPREZZ)/haskell-edison-core/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf edison-core-$(haskell-edison-core_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-editline
-haskell-editline:$(HASKELLEDITLINE)_$(ARCH).deb
-$(HASKELLEDITLINE): $(SPREZZ)/haskell-editline/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf editline-$(haskell-editline_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-ekg
 haskell-ekg:$(HASKELLEKG)_$(ARCH).deb
 $(HASKELLEKG): $(SPREZZ)/haskell-ekg/debian/changelog
@@ -2813,14 +2685,6 @@ $(HASKELLEMAILVALIDATE): $(SPREZZ)/haskell-email-validate/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf email-validate-$(haskell-email-validate_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-erf
-haskell-erf:$(HASKELLERF)_$(ARCH).deb
-$(HASKELLERF): $(SPREZZ)/haskell-erf/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf erf-$(haskell-erf_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-event-list
 haskell-event-list:$(HASKELLEVENTLIST)_$(ARCH).deb
@@ -2845,22 +2709,6 @@ $(HASKELLEXECUTABLEPATH): $(SPREZZ)/haskell-executable-path/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf executable-path-$(haskell-executable-path_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-explicit-exception
-haskell-explicit-exception:$(HASKELLEXPLICITEXCEPTION)_$(ARCH).deb
-$(HASKELLEXPLICITEXCEPTION): $(SPREZZ)/haskell-explicit-exception/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf explicit-exception-$(haskell-explicit-exception_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-fastcgi
-haskell-fastcgi:$(HASKELLFASTCGI)_$(ARCH).deb
-$(HASKELLFASTCGI): $(SPREZZ)/haskell-fastcgi/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf fastcgi-$(haskell-fastcgi_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-fclabels
 haskell-fclabels:$(HASKELLFCLABELS)_$(ARCH).deb
@@ -2902,22 +2750,6 @@ $(HASKELLFILELOCATION): $(SPREZZ)/haskell-file-location/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf file-location-$(haskell-file-location_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-filemanip
-haskell-filemanip:$(HASKELLFILEMANIP)_$(ARCH).deb
-$(HASKELLFILEMANIP): $(SPREZZ)/haskell-filemanip/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf filemanip-$(haskell-filemanip_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-filestore
-haskell-filestore:$(HASKELLFILESTORE)_$(ARCH).deb
-$(HASKELLFILESTORE): $(SPREZZ)/haskell-filestore/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf filestore-$(haskell-filestore_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-filesystem-conduit
 haskell-filesystem-conduit:$(HASKELLFILESYSTEMCONDUIT)_$(ARCH).deb
 $(HASKELLFILESYSTEMCONDUIT): $(SPREZZ)/haskell-filesystem-conduit/debian/changelog
@@ -2942,14 +2774,6 @@ $(HASKELLFTPHS): $(SPREZZ)/haskell-ftphs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ftphs-$(haskell-ftphs_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-gconf
-haskell-gconf:$(HASKELLGCONF)_$(ARCH).deb
-$(HASKELLGCONF): $(SPREZZ)/haskell-gconf/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gconf-$(haskell-gconf_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-gd
 haskell-gd:$(HASKELLGD)_$(ARCH).deb
 $(HASKELLGD): $(SPREZZ)/haskell-gd/debian/changelog
@@ -2958,22 +2782,6 @@ $(HASKELLGD): $(SPREZZ)/haskell-gd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gd-$(haskell-gd_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-ghc-events
-haskell-ghc-events:$(HASKELLGHCEVENTS)_$(ARCH).deb
-$(HASKELLGHCEVENTS): $(SPREZZ)/haskell-ghc-events/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ghc-events-$(haskell-ghc-events_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-ghc-mtl
-haskell-ghc-mtl:$(HASKELLGHCMTL)_$(ARCH).deb
-$(HASKELLGHCMTL): $(SPREZZ)/haskell-ghc-mtl/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ghc-mtl-$(haskell-ghc-mtl_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-ghc-syb-utils
 haskell-ghc-syb-utils:$(HASKELLGHCSYBUTILS)_$(ARCH).deb
 $(HASKELLGHCSYBUTILS): $(SPREZZ)/haskell-ghc-syb-utils/debian/changelog
@@ -2981,14 +2789,6 @@ $(HASKELLGHCSYBUTILS): $(SPREZZ)/haskell-ghc-syb-utils/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ghc-syb-utils-$(haskell-ghc-syb-utils_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-gio
-haskell-gio:$(HASKELLGIO)_$(ARCH).deb
-$(HASKELLGIO): $(SPREZZ)/haskell-gio/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gio-$(haskell-gio_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-github
 haskell-github:$(HASKELLGITHUB)_$(ARCH).deb
@@ -3014,14 +2814,6 @@ $(HASKELLGLADE): $(SPREZZ)/haskell-glade/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf glade-$(haskell-glade_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-glfw
-haskell-glfw:$(HASKELLGLFW)_$(ARCH).deb
-$(HASKELLGLFW): $(SPREZZ)/haskell-glfw/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf glfw-$(haskell-glfw_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-glib
 haskell-glib:$(HASKELLGLIB)_$(ARCH).deb
 $(HASKELLGLIB): $(SPREZZ)/haskell-glib/debian/changelog
@@ -3037,14 +2829,6 @@ $(HASKELLGLUT): $(SPREZZ)/haskell-glut/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf glut-$(haskell-glut_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-gstreamer
-haskell-gstreamer:$(HASKELLGSTREAMER)_$(ARCH).deb
-$(HASKELLGSTREAMER): $(SPREZZ)/haskell-gstreamer/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gstreamer-$(haskell-gstreamer_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-gtk
 haskell-gtk:$(HASKELLGTK)_$(ARCH).deb
@@ -3062,22 +2846,6 @@ $(HASKELLGTKGLEXT): $(SPREZZ)/haskell-gtkglext/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gtkglext-$(haskell-gtkglext_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-gtksourceview2
-haskell-gtksourceview2:$(HASKELLGTKSOURCEVIEW2)_$(ARCH).deb
-$(HASKELLGTKSOURCEVIEW2): $(SPREZZ)/haskell-gtksourceview2/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gtksourceview2-$(haskell-gtksourceview2_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-haddock
-haskell-haddock:$(HASKELLHADDOCK)_$(ARCH).deb
-$(HASKELLHADDOCK): $(SPREZZ)/haskell-haddock/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf haddock-$(haskell-haddock_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-hakyll
 haskell-hakyll:$(HASKELLHAKYLL)_$(ARCH).deb
 $(HASKELLHAKYLL): $(SPREZZ)/haskell-hakyll/debian/changelog
@@ -3085,30 +2853,6 @@ $(HASKELLHAKYLL): $(SPREZZ)/haskell-hakyll/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hakyll-$(haskell-hakyll_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-happstack
-haskell-happstack:$(HASKELLHAPPSTACK)_$(ARCH).deb
-$(HASKELLHAPPSTACK): $(SPREZZ)/haskell-happstack/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf happstack-$(haskell-happstack_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-happstack-server
-haskell-happstack-server:$(HASKELLHAPPSTACKSERVER)_$(ARCH).deb
-$(HASKELLHAPPSTACKSERVER): $(SPREZZ)/haskell-happstack-server/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf happstack-server-$(haskell-happstack-server_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-harp
-haskell-harp:$(HASKELLHARP)_$(ARCH).deb
-$(HASKELLHARP): $(SPREZZ)/haskell-harp/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf harp-$(haskell-harp_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hashmap
 haskell-hashmap:$(HASKELLHASHMAP)_$(ARCH).deb
@@ -3125,14 +2869,6 @@ $(HASKELLHASHTABLES): $(SPREZZ)/haskell-hashtables/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hashtables-$(haskell-hashtables_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-haskeline
-haskell-haskeline:$(HASKELLHASKELINE)_$(ARCH).deb
-$(HASKELLHASKELINE): $(SPREZZ)/haskell-haskeline/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf haskeline-$(haskell-haskeline_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-haskelldb
 haskell-haskelldb:$(HASKELLHASKELLDB)_$(ARCH).deb
@@ -3182,14 +2918,6 @@ $(HASKELLHASKELLLEXER): $(SPREZZ)/haskell-haskell-lexer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-lexer-$(haskell-haskell-lexer_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-haskore
-haskell-haskore:$(HASKELLHASKORE)_$(ARCH).deb
-$(HASKELLHASKORE): $(SPREZZ)/haskell-haskore/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf haskore-$(haskell-haskore_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-hastache
 haskell-hastache:$(HASKELLHASTACHE)_$(ARCH).deb
 $(HASKELLHASTACHE): $(SPREZZ)/haskell-hastache/debian/changelog
@@ -3205,14 +2933,6 @@ $(HASKELLHAXML): $(SPREZZ)/haskell-haxml/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haxml-$(haskell-haxml_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-haxr
-haskell-haxr:$(HASKELLHAXR)_$(ARCH).deb
-$(HASKELLHAXR): $(SPREZZ)/haskell-haxr/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf haxr-$(haskell-haxr_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hbro-contrib
 haskell-hbro-contrib:$(HASKELLHBROCONTRIB)_$(ARCH).deb
@@ -3302,14 +3022,6 @@ $(HASKELLHIPMUNK): $(SPREZZ)/haskell-hipmunk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hipmunk-$(haskell-hipmunk_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-hjavascript
-haskell-hjavascript:$(HASKELLHJAVASCRIPT)_$(ARCH).deb
-$(HASKELLHJAVASCRIPT): $(SPREZZ)/haskell-hjavascript/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hjavascript-$(haskell-hjavascript_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-hjsmin
 haskell-hjsmin:$(HASKELLHJSMIN)_$(ARCH).deb
 $(HASKELLHJSMIN): $(SPREZZ)/haskell-hjsmin/debian/changelog
@@ -3374,22 +3086,6 @@ $(HASKELLHSCOLOUR): $(SPREZZ)/haskell-hscolour/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hscolour-$(haskell-hscolour_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-hscurses
-haskell-hscurses:$(HASKELLHSCURSES)_$(ARCH).deb
-$(HASKELLHSCURSES): $(SPREZZ)/haskell-hscurses/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hscurses-$(haskell-hscurses_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-hsemail
-haskell-hsemail:$(HASKELLHSEMAIL)_$(ARCH).deb
-$(HASKELLHSEMAIL): $(SPREZZ)/haskell-hsemail/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hsemail-$(haskell-hsemail_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-hsmagick
 haskell-hsmagick:$(HASKELLHSMAGICK)_$(ARCH).deb
 $(HASKELLHSMAGICK): $(SPREZZ)/haskell-hsmagick/debian/changelog
@@ -3397,22 +3093,6 @@ $(HASKELLHSMAGICK): $(SPREZZ)/haskell-hsmagick/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hsmagick-$(haskell-hsmagick_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-hsql
-haskell-hsql:$(HASKELLHSQL)_$(ARCH).deb
-$(HASKELLHSQL): $(SPREZZ)/haskell-hsql/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hsql-$(haskell-hsql_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-hsql-postgresql
-haskell-hsql-postgresql:$(HASKELLHSQLPOSTGRESQL)_$(ARCH).deb
-$(HASKELLHSQLPOSTGRESQL): $(SPREZZ)/haskell-hsql-postgresql/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hsql-postgresql-$(haskell-hsql-postgresql_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hssyck
 haskell-hssyck:$(HASKELLHSSYCK)_$(ARCH).deb
