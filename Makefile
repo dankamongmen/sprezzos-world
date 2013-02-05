@@ -2261,6 +2261,14 @@ $(CRAMFS): $(SPREZZ)/cramfs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cramfs-$(cramfs_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cron
+cron:$(CRON)_$(ARCH).deb
+$(CRON): $(SPREZZ)/cron/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	unshar ../cron-$(cron_UPVER).shar $@
+
 .PHONY: csstidy
 csstidy:$(CSSTIDY)_$(ARCH).deb
 $(CSSTIDY): $(SPREZZ)/csstidy/debian/changelog
