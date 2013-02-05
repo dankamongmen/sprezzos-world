@@ -2566,14 +2566,6 @@ $(HASKELLDATECACHE): $(SPREZZ)/haskell-date-cache/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf date-cache-$(haskell-date-cache_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-debian
-haskell-debian:$(HASKELLDEBIAN)_$(ARCH).deb
-$(HASKELLDEBIAN): $(SPREZZ)/haskell-debian/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf debian-$(haskell-debian_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-diagrams-cairo
 haskell-diagrams-cairo:$(HASKELLDIAGRAMSCAIRO)_$(ARCH).deb
 $(HASKELLDIAGRAMSCAIRO): $(SPREZZ)/haskell-diagrams-cairo/debian/changelog
@@ -2590,14 +2582,6 @@ $(HASKELLDIAGRAMSCORE): $(SPREZZ)/haskell-diagrams-core/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf diagrams-core-$(haskell-diagrams-core_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-diagrams
-haskell-diagrams:$(HASKELLDIAGRAMS)_$(ARCH).deb
-$(HASKELLDIAGRAMS): $(SPREZZ)/haskell-diagrams/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf diagrams-$(haskell-diagrams_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-diagrams-lib
 haskell-diagrams-lib:$(HASKELLDIAGRAMSLIB)_$(ARCH).deb
 $(HASKELLDIAGRAMSLIB): $(SPREZZ)/haskell-diagrams-lib/debian/changelog
@@ -2605,14 +2589,6 @@ $(HASKELLDIAGRAMSLIB): $(SPREZZ)/haskell-diagrams-lib/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf diagrams-lib-$(haskell-diagrams-lib_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-diff
-haskell-diff:$(HASKELLDIFF)_$(ARCH).deb
-$(HASKELLDIFF): $(SPREZZ)/haskell-diff/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf diff-$(haskell-diff_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-dimensional
 haskell-dimensional:$(HASKELLDIMENSIONAL)_$(ARCH).deb
@@ -2662,14 +2638,6 @@ $(HASKELLDYRE): $(SPREZZ)/haskell-dyre/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dyre-$(haskell-dyre_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-edison-api
-haskell-edison-api:$(HASKELLEDISONAPI)_$(ARCH).deb
-$(HASKELLEDISONAPI): $(SPREZZ)/haskell-edison-api/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf edison-api-$(haskell-edison-api_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-ekg
 haskell-ekg:$(HASKELLEKG)_$(ARCH).deb
 $(HASKELLEKG): $(SPREZZ)/haskell-ekg/debian/changelog
@@ -2717,14 +2685,6 @@ $(HASKELLFCLABELS): $(SPREZZ)/haskell-fclabels/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fclabels-$(haskell-fclabels_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-feed
-haskell-feed:$(HASKELLFEED)_$(ARCH).deb
-$(HASKELLFEED): $(SPREZZ)/haskell-feed/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf feed-$(haskell-feed_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-fgl
 haskell-fgl:$(HASKELLFGL)_$(ARCH).deb
