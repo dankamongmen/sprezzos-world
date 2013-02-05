@@ -2654,14 +2654,6 @@ $(HASKELLEMAILVALIDATE): $(SPREZZ)/haskell-email-validate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf email-validate-$(haskell-email-validate_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-event-list
-haskell-event-list:$(HASKELLEVENTLIST)_$(ARCH).deb
-$(HASKELLEVENTLIST): $(SPREZZ)/haskell-event-list/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf event-list-$(haskell-event-list_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-exception-transformers
 haskell-exception-transformers:$(HASKELLEXCEPTIONTRANSFORMERS)_$(ARCH).deb
 $(HASKELLEXCEPTIONTRANSFORMERS): $(SPREZZ)/haskell-exception-transformers/debian/changelog
@@ -4293,4 +4285,12 @@ $(HASKELLZLIBENUM): $(SPREZZ)/haskell-zlib-enum/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf zlib-enum-$(haskell-zlib-enum_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-utf8-string
+haskell-utf8-string:$(HASKELLUTF8STRING)_$(ARCH).deb
+$(HASKELLUTF8STRING): $(SPREZZ)/haskell-utf8-string/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf utf8-string-$(haskell-utf8-string_UPVER).tar.gz $(TARARGS) $@
 

@@ -8746,6 +8746,14 @@ $(ATK): $(SPREZZ)/atk/debian/changelog $(ATKORIG)
 	tar xJvf $(ATKORIG) $(TARARGS) $@
 	cp -r $(<D) $@/
 
+.PHONY: pandoc
+pandoc:$(PANDOC)_$(ARCH).deb
+$(PANDOC): $(SPREZZ)/pandoc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pandoc-$(pandoc_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: pango
 pango:$(PANGO)_$(ARCH).deb
 $(PANGO): $(SPREZZ)/pango/debian/changelog
