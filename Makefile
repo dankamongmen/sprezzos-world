@@ -2261,6 +2261,14 @@ $(CRAMFS): $(SPREZZ)/cramfs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cramfs-$(cramfs_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: burg
+burg:$(BURG)_$(ARCH).deb
+$(BURG): $(SPREZZ)/burg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf burg-src-$(burg_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: cron
 cron:$(CRON)_$(ARCH).deb
 $(CRON): $(SPREZZ)/cron/debian/changelog
