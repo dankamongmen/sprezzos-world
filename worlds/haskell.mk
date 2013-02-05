@@ -790,6 +790,14 @@ $(HASKELLTRANSFORMERSBASE): $(SPREZZ)/haskell-transformers-base/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf transformers-base-$(haskell-transformers-base_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-transformers-compat
+haskell-transformers-compat:$(HASKELLTRANSFORMERSCOMPAT)_$(ARCH).deb
+$(HASKELLTRANSFORMERSCOMPAT): $(SPREZZ)/haskell-transformers-compat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf transformers-compat-$(haskell-transformers-compat_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: haskell-unordered-containers
 haskell-unordered-containers:$(HASKELLUNORDEREDCONTAINERS)_$(ARCH).deb
 $(HASKELLUNORDEREDCONTAINERS): $(SPREZZ)/haskell-unordered-containers/debian/changelog
@@ -3316,7 +3324,7 @@ $(HASKELLMEMOTRIE): $(SPREZZ)/haskell-memotrie/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf memotrie-$(haskell-memotrie_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf MemoTrie-$(haskell-memotrie_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-mersenne-random
 haskell-mersenne-random:$(HASKELLMERSENNERANDOM)_$(ARCH).deb
