@@ -1126,3 +1126,115 @@ $(HASKELLCONFIGFILE): $(SPREZZ)/haskell-configfile/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf configfile-$(haskell-configfile_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-arrows
+haskell-arrows:$(HASKELLARROWS)_$(ARCH).deb
+$(HASKELLARROWS): $(SPREZZ)/haskell-arrows/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf arrows-$(haskell-arrows_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-async
+haskell-async:$(HASKELLASYNC)_$(ARCH).deb
+$(HASKELLASYNC): $(SPREZZ)/haskell-async/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf async-$(haskell-async_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-attempt
+haskell-attempt:$(HASKELLATTEMPT)_$(ARCH).deb
+$(HASKELLATTEMPT): $(SPREZZ)/haskell-attempt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf attempt-$(haskell-attempt_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-authenticate
+haskell-authenticate:$(HASKELLAUTHENTICATE)_$(ARCH).deb
+$(HASKELLAUTHENTICATE): $(SPREZZ)/haskell-authenticate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf authenticate-$(haskell-authenticate_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-authenticate-oauth
+haskell-authenticate-oauth:$(HASKELLAUTHENTICATEOAUTH)_$(ARCH).deb
+$(HASKELLAUTHENTICATEOAUTH): $(SPREZZ)/haskell-authenticate-oauth/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf authenticate-oauth-$(haskell-authenticate-oauth_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-base16-bytestring
+haskell-base16-bytestring:$(HASKELLBASE16BYTESTRING)_$(ARCH).deb
+$(HASKELLBASE16BYTESTRING): $(SPREZZ)/haskell-base16-bytestring/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf base16-bytestring-$(haskell-base16-bytestring_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-bifunctors
+haskell-bifunctors:$(HASKELLBIFUNCTORS)_$(ARCH).deb
+$(HASKELLBIFUNCTORS): $(SPREZZ)/haskell-bifunctors/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bifunctors-$(haskell-bifunctors_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-binary-communicator
+haskell-binary-communicator:$(HASKELLBINARYCOMMUNICATOR)_$(ARCH).deb
+$(HASKELLBINARYCOMMUNICATOR): $(SPREZZ)/haskell-binary-communicator/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf binary-communicator-$(haskell-binary-communicator_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-binary-shared
+haskell-binary-shared:$(HASKELLBINARYSHARED)_$(ARCH).deb
+$(HASKELLBINARYSHARED): $(SPREZZ)/haskell-binary-shared/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf binary-shared-$(haskell-binary-shared_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-bindings-dsl
+haskell-bindings-dsl:$(HASKELLBINDINGSDSL)_$(ARCH).deb
+$(HASKELLBINDINGSDSL): $(SPREZZ)/haskell-bindings-dsl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bindings-dsl-$(haskell-bindings-dsl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-bindings-gpgme
+haskell-bindings-gpgme:$(HASKELLBINDINGSGPGME)_$(ARCH).deb
+$(HASKELLBINDINGSGPGME): $(SPREZZ)/haskell-bindings-gpgme/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bindings-gpgme-$(haskell-bindings-gpgme_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-bindings-libzip
+haskell-bindings-libzip:$(HASKELLBINDINGSLIBZIP)_$(ARCH).deb
+$(HASKELLBINDINGSLIBZIP): $(SPREZZ)/haskell-bindings-libzip/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bindings-libzip-$(haskell-bindings-libzip_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-bindings-sane
+haskell-bindings-sane:$(HASKELLBINDINGSSANE)_$(ARCH).deb
+$(HASKELLBINDINGSSANE): $(SPREZZ)/haskell-bindings-sane/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bindings-sane-$(haskell-bindings-sane_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-bitarray
+haskell-bitarray:$(HASKELLBITARRAY)_$(ARCH).deb
+$(HASKELLBITARRAY): $(SPREZZ)/haskell-bitarray/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bitarray-$(haskell-bitarray_UPVER).tar.gz $(TARARGS) $@
+
