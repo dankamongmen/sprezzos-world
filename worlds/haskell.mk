@@ -948,7 +948,7 @@ $(HASKELLBOOLEAN): $(SPREZZ)/haskell-boolean/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf boolean-$(haskell-boolean_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Boolean-$(haskell-boolean_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-brainfuck
 haskell-brainfuck:$(HASKELLBRAINFUCK)_$(ARCH).deb
