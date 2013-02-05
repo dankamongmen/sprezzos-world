@@ -1,0 +1,121 @@
+Subversion-to-Git Migration Notes
+=================================
+
+The following is a documentation of the exact steps that were taken to convert
+Debian cron's subversion repository to a git repository. This was a one-shot
+conversion, after which the git repository became authoritative. git-svn's
+bridging features were therefore not needed.
+
+The following packages were used in this conversion:
+    * git-svn
+    * pristine-tar
+
+Additionally, a collection of scripts known as git-svn-abandon were used. These
+scripts post-process a git repository cloned from SVN by converting subversion
+tag branches into proper git tags, rewriting commits and so on. They were
+retrieved from:
+
+    https://github.com/nothingmuch/git-svn-abandon 
+
+The grafting step was skipped, as there were no branch merges within SVN.
+
+
+STEPS
+=====
+
+1)  The git-svn-abandon scripts were cloned, and the destination directory was
+    added to $PATH:
+    
+        $ git clone git://github.com/nothingmuch/git-svn-abandon.git
+        $ PATH=$PATH:$PWD/git-svn-abandon/
+
+    A tiny patch was applied to the scripts to prettify the tags during the
+    process (upstream/*, debian/*, and so on). The patch can be found at the
+    bottom of this document.
+
+
+2)  Before importing the svn history, an authors file /path/to/authors-file
+    was created for use by git-svn. See git-svn(1) for more info.
+
+
+3)  The svn repository was cloned with
+
+        $ git svn clone --stdlayout --authors-file=/path/to/authors-file \
+            --prefix=svn/ svn://anonscm.debian.org/pkg-cron
+
+
+4)  The resulting git repository was then post-processed with git-svn-abandon:
+
+        $ git svn-abandon-fix-refs
+        $ git svn-abandon-cleanup
+
+    At this point, all SVN branches had been converted to git branches, and all
+    SVN tags to git tags (annotated).
+
+
+5)  The resulting repository was slightly restructured. All update branches
+    were renamed to update/<release>,
+
+        $ for brname in woody slink potato lenny; do
+            git branch -m ${brname}_updates updates/$brname;
+          done
+
+    and all other branches -- except sf3! -- were removed:
+
+        $ git branch -D rDoS-patch sid-squeeze source-dist
+
+        
+6)  The new upstream branch was created from commit e5a00cee3 ("Initial
+    revision"), which corresponds to SVN revision #2 -- that is, the commit
+    with which the original upstream source was initially added to the repository:
+
+        $ git branch upstream e5a00cee31b43146f8e661fef0623a4203d00f9e
+
+    Comparing the contents of the tree of that commit to the contents of
+    original source tarball currently in the archive (as there has only been one
+    upstream version, ever), one can easily verify that their contents are
+    identical. (This process is not shown here).
+
+
+7) The pristine-tar delta was committed so that the original tarball could be
+   recreated from the upstream branch:
+
+        $ pristine-tar commit /path/to/cron_3.0pl1.orig.tar.gz
+
+    At this point, the pristine-tar/upstream/master branches commonly used by
+    git-buildpackage are properly set up.
+
+
+==> At this point, the git repository became authoritative, and all further
+    commits to the subversion repository were ignored.
+
+
+ -- Christian Kastner <debian@kvr.at>  Wed, 15 Jun 2011 15:39:26 +0200
+
+
+
+diff --git a/git-svn-abandon-fix-refs b/git-svn-abandon-fix-refs
+index c47405d..960b9a1 100755
+--- a/git-svn-abandon-fix-refs
++++ b/git-svn-abandon-fix-refs
+@@ -27,13 +27,19 @@ git for-each-ref --format='%(refname)' refs/remotes/svn/tags/* | while read tag_
+         target_ref="$tag_ref"
+     fi
+ 
++    # Added for Debian cron: prettify tags
++    pretty_tag=`echo $tag | sed -re \
++        's,debian_version_3(_|\.)0pl1-([0-9]+),debian/3.0pl1-\2,;
++         s,upstream.*,upstream/3.0pl1,;
++         s,debian-sf3-3\.0pl1-([0-9]+),sf3/\1,'`
++
+     # create an annotated tag based on the last commit in the tag, and delete the "branchy" ref for the tag
+     git show -s --pretty='format:%s%n%n%b' "$tag_ref" | \
+     perl -ne 'next if /^git-svn-id:/; $s++, next if /^\s*r\d+\@.*:.*\|/; s/^ // if $s; print' | \
+     env GIT_COMMITTER_NAME="$(  git show -s --pretty='format:%an' "$tag_ref" )" \
+         GIT_COMMITTER_EMAIL="$( git show -s --pretty='format:%ae' "$tag_ref" )" \
+         GIT_COMMITTER_DATE="$(  git show -s --pretty='format:%ad' "$tag_ref" )" \
+-        git tag -a -F - "$tag" "$target_ref"
++        git tag -a -F - "$pretty_tag" "$target_ref"
+ 
+     git update-ref -d "$tag_ref"
+ done
