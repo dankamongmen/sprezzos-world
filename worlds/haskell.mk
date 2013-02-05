@@ -1340,7 +1340,7 @@ $(HASKELLDIFF): $(SPREZZ)/haskell-diff/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf diff-$(haskell-diff_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Diff-$(haskell-diff_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-digest
 haskell-digest:$(HASKELLDIGEST)_$(ARCH).deb
