@@ -5659,6 +5659,14 @@ $(MANDB): $(SPREZZ)/man-db/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf man-db-$(man-db_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: make
+make:$(MAKE)_$(ARCH).deb
+$(MAKE): $(SPREZZ)/make/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf make-$(make_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: manpages
 manpages:$(MANPAGES)_$(ARCH).deb
 $(MANPAGES): $(SPREZZ)/manpages/debian/changelog
