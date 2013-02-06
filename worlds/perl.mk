@@ -1,3 +1,11 @@
+.PHONY: libalgorithm-merge-perl
+libalgorithm-merge-perl:$(LIBALGORITHMERGEPERL)_$(ARCH).deb
+$(LIBALGORITHMERGEPERL): $(SPREZZ)/libalgorithm-merge-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Algorithm-Merge-$(libalgorithm-merge-perl_UPVER).tgz $(TARARGS) $@
+
 .PHONY: libfile-libmagic-perl
 libfile-libmagic-perl:$(LIBFILELIBMAGICPERL)_$(ARCH).deb
 $(LIBFILELIBMAGICPERL): $(SPREZZ)/libfile-libmagic-perl/debian/changelog
