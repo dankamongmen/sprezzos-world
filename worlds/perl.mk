@@ -1,10 +1,26 @@
-.PHONY: libalgorithm-merge-perl
-libalgorithm-merge-perl:$(LIBALGORITHMERGEPERL)_$(ARCH).deb
-$(LIBALGORITHMERGEPERL): $(SPREZZ)/libalgorithm-merge-perl/debian/changelog
+.PHONY: libipc-sharelite-perl
+libipc-sharelite-perl:$(LIBIPCSHARELITEPERL)_$(ARCH).deb
+$(LIBIPCSHARELITEPERL): $(SPREZZ)/libipc-sharelite-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf Algorithm-Merge-$(libalgorithm-merge-perl_UPVER).tgz $(TARARGS) $@
+	tar xzvf IPC-sharelite-$(libipc-sharelite-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libipc-sharedcache-perl
+libipc-sharedcache-perl:$(LIBIPCSHAREDCACHEPERL)_$(ARCH).deb
+$(LIBIPCSHAREDCACHEPERL): $(SPREZZ)/libipc-sharedcache-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf IPC-SharedCache-$(libipc-sharedcache-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libalgorithm-merge-perl
+libalgorithm-merge-perl:$(LIBALGORITHMMERGEPERL)_$(ARCH).deb
+$(LIBALGORITHMMERGEPERL): $(SPREZZ)/libalgorithm-merge-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Algorithm-Merge-$(libalgorithm-merge-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libfile-libmagic-perl
 libfile-libmagic-perl:$(LIBFILELIBMAGICPERL)_$(ARCH).deb
