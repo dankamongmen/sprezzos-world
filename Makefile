@@ -3529,7 +3529,7 @@ $(FFMPEG): $(SPREZZ)/ffmpeg/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ffmpeg-$(ffmpeg_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf ffmpeg-$(ffmpeg_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: ffms2
 ffms2:$(FFMS2)_$(ARCH).deb
