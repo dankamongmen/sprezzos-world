@@ -7581,6 +7581,14 @@ $(SCOWL): $(SPREZZ)/scowl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf scowl-$(scowl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: screen
+screen:$(SCREEN)_$(ARCH).deb
+$(SCREEN): $(SPREZZ)/screen/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf screen_$(screen_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: screenlets
 screenlets:$(SCREENLETS)_$(ARCH).deb
 $(SCREENLETS): $(SPREZZ)/screenlets/debian/changelog
