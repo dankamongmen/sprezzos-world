@@ -4,7 +4,7 @@ $(LIBIPCSHARELITEPERL): $(SPREZZ)/libipc-sharelite-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf IPC-sharelite-$(libipc-sharelite-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf IPC-ShareLite-$(libipc-sharelite-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libipc-sharedcache-perl
 libipc-sharedcache-perl:$(LIBIPCSHAREDCACHEPERL)_$(ARCH).deb
