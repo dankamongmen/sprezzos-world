@@ -1,0 +1,149 @@
+#!/usr/bin/make -f
+# debian.rules file for rsync
+# Copyright 1996 by Philip Hands.
+# Copyright 2001 Colin Walters <walters@debian.org>
+# Based on the  sample debian.rules file - for GNU Hello (1.3).
+#   Copyright 1994,1995 by Ian Jackson.
+# I hereby give you perpetual unlimited permission to copy,
+# modify and relicense this file, provided that you do not remove
+# my name from the file itself.  (I assert my moral right of
+# paternity under the Copyright, Designs and Patents Act 1988.)
+
+
+SHELL =	/bin/bash
+BINS = rsync
+CFLAGS= -Wall
+INSTALL = install
+INSTALL_FILE = $(INSTALL) -p    -o root -g root  -m  644
+INSTALL_PROGRAM = $(INSTALL) -p    -o root -g root  -m  755
+INSTALL_SCRIPT = $(INSTALL) -p    -o root -g root  -m  755
+INSTALL_DIR = $(INSTALL) -p -d -o root -g root  -m  755
+
+CFLAGS += `dpkg-buildflags --get CFLAGS`
+LDFLAGS = `dpkg-buildflags --get LDFLAGS`
+
+CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
+
+# policy stuff
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -g
+else
+CFLAGS += -g -O2
+endif
+
+# backwards compatibility stuff, from dpkg-architecture manpage
+DEB_BUILD_ARCH := $(shell dpkg --print-architecture)
+DEB_BUILD_GNU_CPU := $(patsubst hurd-%,%,$(DEB_BUILD_ARCH))
+ifeq ($(filter-out hurd-%,$(DEB_BUILD_ARCH)),)
+DEB_BUILD_GNU_SYSTEM := gnu
+else
+DEB_BUILD_GNU_SYSTEM := linux
+endif
+DEB_BUILD_GNU_TYPE=$(DEB_BUILD_GNU_CPU)-$(DEB_BUILD_GNU_SYSTEM)
+
+DEB_HOST_ARCH=$(DEB_BUILD_ARCH)
+DEB_HOST_GNU_CPU=$(DEB_BUILD_GNU_CPU)
+DEB_HOST_GNU_SYSTEM=$(DEB_BUILD_GNU_SYSTEM)
+DEB_HOST_GNU_TYPE=$(DEB_BUILD_GNU_TYPE)
+
+DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+INSTALL_CROSS := 
+else
+INSTALL_CROSS := INSTALLCMD='$(INSTALL) --strip-program=$(DEB_HOST_GNU_TYPE)-strip'
+endif
+
+# keep lintian happy:
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+
+build-stamp:
+	@echo building build tree
+	-rm -rf debian/buildtree
+	mkdir debian/buildtree
+	cp -p * debian/buildtree || true
+	cp -r lib popt support testsuite zlib debian/buildtree
+	@echo applying misc Debian patches
+	for i in debian/patches/*.patch debian/patches/*.diff; do if [ -s $$i ]; then echo "  $$i ..."; cat $$i | (cd debian/buildtree; patch -p1) || exit 1; fi; done
+	@echo configuring
+	(cd debian/buildtree; ./configure --prefix=/usr --mandir='$${prefix}/share/man' --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE) LDFLAGS="$(LDFLAGS)")
+	@echo building
+	$(MAKE) --directory=debian/buildtree CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" all
+	touch build-stamp
+	@echo done
+
+clean: checkdir
+	-rm -f build-stamp
+	-rm -rf debian/buildtree
+	-rm -rf *~ debian/tmp debian/*~ debian/*.bak debian/files* debian/substvars
+
+binary-indep:	checkroot build
+# nothing to do
+
+binary-arch:	checkroot build
+	-rm -rf debian/tmp
+	$(INSTALL_DIR) 	debian/tmp \
+			debian/tmp/DEBIAN \
+			debian/tmp/usr/bin \
+			debian/tmp/usr/share/doc/rsync/examples \
+			debian/tmp/usr/share/doc/rsync/scripts \
+			debian/tmp/usr/share/man/man1 \
+			debian/tmp/usr/share/man/man5 \
+			debian/tmp/usr/share/lintian/overrides \
+			debian/tmp/lib/systemd/system \
+			debian/tmp/etc \
+			debian/tmp/etc/default \
+			debian/tmp/etc/init.d
+			# debian/tmp/usr/lib/debian-test/tests
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	$(MAKE) --directory=debian/buildtree install-strip prefix=`pwd`/debian/tmp/usr exec_prefix=`pwd`/debian/tmp/usr $(INSTALL_CROSS)
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	strip --remove-section=.comment --remove-section=.note debian/tmp/usr/bin/rsync
+else
+	$(DEB_HOST_GNU_TYPE)-strip --remove-section=.comment --remove-section=.note debian/tmp/usr/bin/rsync
+endif
+else
+	$(MAKE) --directory=debian/buildtree install prefix=`pwd`/debian/tmp/usr exec_prefix=`pwd`/debian/tmp/usr
+endif
+	$(INSTALL_FILE) debian/changelog debian/tmp/usr/share/doc/rsync/changelog.Debian
+	$(INSTALL_FILE) README tech_report.tex debian/tmp/usr/share/doc/rsync/
+	$(INSTALL_FILE) TODO                   debian/tmp/usr/share/doc/rsync/
+	$(INSTALL_FILE) NEWS                   debian/tmp/usr/share/doc/rsync/changelog
+	$(INSTALL_FILE) packaging/cull_options debian/tmp/usr/share/doc/rsync/scripts/
+	$(INSTALL_FILE) support/atomic-rsync support/cvs2includes support/file-attr-restore support/files-to-excludes support/git-set-file-times support/logfilter support/lsh support/mnt-excl support/munge-symlinks support/rrsync support/rsyncstats debian/tmp/usr/share/doc/rsync/scripts/
+	# $(INSTALL_FILE) debian/README.Debian   debian/tmp/usr/share/doc/rsync/
+	echo -e '\n\f' >> debian/tmp/usr/share/doc/rsync/changelog
+	cat OLDNEWS    >> debian/tmp/usr/share/doc/rsync/changelog
+	gzip -9fr `find debian/tmp/usr/share/doc/ debian/tmp/usr/share/man/ -type f`
+	$(INSTALL_FILE) debian/rsyncd.conf debian/logrotate.conf.rsync debian/tmp/usr/share/doc/rsync/examples/
+	$(INSTALL_FILE) debian/copyright debian/tmp/usr/share/doc/rsync/
+	# $(INSTALL_SCRIPT) test.sh debian/tmp/usr/lib/debian-test/tests/rsync
+	$(INSTALL_SCRIPT) debian/postinst debian/tmp/DEBIAN/
+	$(INSTALL_SCRIPT) debian/prerm    debian/tmp/DEBIAN/
+	$(INSTALL_SCRIPT) debian/postrm   debian/tmp/DEBIAN/
+	$(INSTALL_FILE) debian/rsync.service debian/tmp/lib/systemd/system/
+	$(INSTALL_FILE) debian/default  debian/tmp/etc/default/rsync
+	$(INSTALL_SCRIPT) debian/init.d debian/tmp/etc/init.d/rsync
+	$(INSTALL_FILE) debian/lintian.overrides  debian/tmp/usr/share/lintian/overrides/rsync
+	(cd debian/tmp; find ./etc -type f | sed s,.,,) > debian/tmp/DEBIAN/conffiles
+	(cd debian/tmp; find lib usr -type f -print0 | xargs -0 md5sum) > debian/tmp/DEBIAN/md5sums
+	dpkg-shlibdeps debian/tmp/usr/bin/$(BINS)
+	dpkg-gencontrol -isp
+	chown -R root.root debian/tmp
+	chmod -R go=rX debian/tmp
+	dpkg --build debian/tmp ..
+
+# Below here is fairly generic really
+
+binary:		binary-indep binary-arch
+
+checkdir:
+	@test -f rsync.c -a -f debian/rules
+
+checkroot: checkdir
+	@test 0 = `id -u` || { echo "Error: not super-user"; exit 1; }
+
+.PHONY: binary binary-arch binary-indep clean checkroot checkdir build build-arch build-indep

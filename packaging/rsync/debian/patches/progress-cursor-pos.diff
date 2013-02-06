@@ -1,0 +1,127 @@
+From: Wayne Davison <wayned@samba.org>
+Date: Sat, 5 Jul 2008 07:21:05 +0000 (-0700)
+Subject: The --progress output now leaves the cursor at the end of the line
+X-Git-Url: http://git.samba.org/?p=rsync.git;a=commitdiff_plain;h=bb4e4d889f51065dcef6f34d8ba4a80c051149a1;hp=93f3fbf73e2e2b1c2560482fb395c3f9a6835fc8
+
+The --progress output now leaves the cursor at the end of the line
+(instead of the start) in order to be extra sure that an error won't
+overwrite it.  We also ensure that the progress option can't be enabled
+on the server side.
+---
+
+diff --git a/cleanup.c b/cleanup.c
+index e59565d..279b532 100644
+--- a/cleanup.c
++++ b/cleanup.c
+@@ -27,6 +27,7 @@ extern int am_daemon;
+ extern int io_error;
+ extern int keep_partial;
+ extern int got_xfer_error;
++extern int progress_is_active;
+ extern char *partial_dir;
+ extern char *logfile_name;
+ 
+@@ -115,6 +116,11 @@ NORETURN void _exit_cleanup(int code, const char *file, int line)
+ 
+ 		exit_code = unmodified_code = code;
+ 
++		if (progress_is_active) {
++			fputc('\n', stdout);
++			progress_is_active = 0;
++		}
++
+ 		if (verbose > 3) {
+ 			rprintf(FINFO,
+ 				"_exit_cleanup(code=%d, file=%s, line=%d): entered\n",
+diff --git a/log.c b/log.c
+index 975ebaf..9100f5d 100644
+--- a/log.c
++++ b/log.c
+@@ -321,7 +321,7 @@ void rwrite(enum logcode code, const char *buf, int len, int is_utf8)
+ 		exit_cleanup(RERR_MESSAGEIO);
+ 	}
+ 
+-	if (progress_is_active && !am_server) {
++	if (progress_is_active) {
+ 		fputc('\n', f);
+ 		progress_is_active = 0;
+ 	}
+@@ -329,6 +329,12 @@ void rwrite(enum logcode code, const char *buf, int len, int is_utf8)
+ 	trailing_CR_or_NL = len && (buf[len-1] == '\n' || buf[len-1] == '\r')
+ 			  ? buf[--len] : 0;
+ 
++	if (len && buf[0] == '\r') {
++		fputc('\r', f);
++		buf++;
++		len--;
++	}
++
+ #ifdef ICONV_CONST
+ 	if (ic != (iconv_t)-1) {
+ 		xbuf outbuf, inbuf;
+diff --git a/options.c b/options.c
+index 0ad26f8..0ac5bfd 100644
+--- a/options.c
++++ b/options.c
+@@ -1532,8 +1532,12 @@ int parse_arguments(int *argc_p, const char ***argv_p)
+ 		log_before_transfer = !am_server;
+ 	}
+ 
+-	if (do_progress && !verbose && !log_before_transfer && !am_server)
+-		verbose = 1;
++	if (do_progress) {
++		if (am_server)
++			do_progress = 0;
++		else if (!verbose && !log_before_transfer && !am_server)
++			verbose = 1;
++	}
+ 
+ 	if (dry_run)
+ 		do_xfers = 0;
+diff --git a/progress.c b/progress.c
+index 86f8ea1..25033b8 100644
+--- a/progress.c
++++ b/progress.c
+@@ -71,6 +71,11 @@ static void rprint_progress(OFF_T ofs, OFF_T size, struct timeval *now,
+ 	double rate, remain;
+ 
+ 	if (is_last) {
++		snprintf(eol, sizeof eol,
++			" (xfer#%d, to-check=%d/%d)\n",
++			stats.num_transferred_files,
++			stats.num_files - current_file_index - 1,
++			stats.num_files);
+ 		/* Compute stats based on the starting info. */
+ 		if (!ph_start.time.tv_sec
+ 		    || !(diff = msdiff(&ph_start.time, now)))
+@@ -79,6 +84,7 @@ static void rprint_progress(OFF_T ofs, OFF_T size, struct timeval *now,
+ 		/* Switch to total time taken for our last update. */
+ 		remain = (double) diff / 1000.0;
+ 	} else {
++		strlcpy(eol, "  ", sizeof eol);
+ 		/* Compute stats based on recent progress. */
+ 		if (!(diff = msdiff(&ph_list[oldest_hpos].time, now)))
+ 			diff = 1;
+@@ -106,18 +112,13 @@ static void rprint_progress(OFF_T ofs, OFF_T size, struct timeval *now,
+ 			 (int) remain % 60);
+ 	}
+ 
+-	if (is_last) {
+-		snprintf(eol, sizeof eol, " (xfer#%d, to-check=%d/%d)\n",
+-			stats.num_transferred_files,
+-			stats.num_files - current_file_index - 1,
+-			stats.num_files);
+-	} else
+-		strlcpy(eol, "\r", sizeof eol);
+ 	progress_is_active = 0;
+-	rprintf(FCLIENT, "%12s %3d%% %7.2f%s %s%s",
++	rprintf(FCLIENT, "\r%12s %3d%% %7.2f%s %s%s",
+ 		human_num(ofs), pct, rate, units, rembuf, eol);
+-	if (!is_last)
++	if (!is_last) {
+ 		progress_is_active = 1;
++		fflush(stdout);
++	}
+ }
+ 
+ void set_current_file_index(struct file_struct *file, int ndx)
