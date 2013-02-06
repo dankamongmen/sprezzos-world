@@ -14,6 +14,14 @@ $(LIBIPCSHAREDCACHEPERL): $(SPREZZ)/libipc-sharedcache-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf IPC-SharedCache-$(libipc-sharedcache-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libalgorithm-diff-perl
+libalgorithm-diff-perl:$(LIBALGORITHMDIFFPERL)_$(ARCH).deb
+$(LIBALGORITHMDIFFPERL): $(SPREZZ)/libalgorithm-diff-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libalgorithm-diff-perl_$(libalgorithm-diff-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: libalgorithm-merge-perl
 libalgorithm-merge-perl:$(LIBALGORITHMMERGEPERL)_$(ARCH).deb
 $(LIBALGORITHMMERGEPERL): $(SPREZZ)/libalgorithm-merge-perl/debian/changelog
