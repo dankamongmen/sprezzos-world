@@ -1,3 +1,11 @@
+.PHONY: libfile-libmagic-perl
+libfile-libmagic-perl:$(LIBFILELIBMAGICPERL)_$(ARCH).deb
+$(LIBFILELIBMAGICPERL): $(SPREZZ)/libfile-libmagic-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf File-LibMagic-$(libfile-libmagic-perl_UPVER).tgz $(TARARGS) $@
+
 .PHONY: libcairo-perl
 libcairo-perl:$(LIBCAIROPERL)_$(ARCH).deb
 $(LIBCAIROPERL): $(SPREZZ)/libcairo-perl/debian/changelog
