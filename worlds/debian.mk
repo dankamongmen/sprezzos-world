@@ -185,6 +185,15 @@ $(HOSTNAME): $(SPREZZ)/hostname/debian/changelog
 	tar cJvf hostname_$(hostname_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: ifupdown
+ifupdown:$(IFUPDOWN)_$(ARCH).deb
+$(IFUPDOWN): $(SPREZZ)/ifupdown/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf ifupdown_$(ifupdown_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: initramfs-tools
 initramfs-tools:$(INITRAMFSTOOLS)_$(ARCH).deb
 $(INITRAMFSTOOLS): $(SPREZZ)/initramfs-tools/debian/changelog
