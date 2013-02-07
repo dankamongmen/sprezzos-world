@@ -285,6 +285,14 @@ $(NVIDIASUPPORT): $(SPREZZ)/nvidia-support/debian/changelog
 	tar cJvf nvidia-support_$(nvidia-support_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: pkgsel
+pkgsel:$(PKGSEL)_$(ARCH).deb
+$(PKGSEL): $(SPREZZ)/pkgsel/debian/changelog
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf pkgsel_$(pkgsel_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: python-apt
 python-apt:$(PYTHONAPT)_$(ARCH).deb
 $(PYTHONAPT): $(SPREZZ)/python-apt/debian/changelog
