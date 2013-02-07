@@ -1,0 +1,170 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+# Avoid perl warnings in any of the chroot calls below
+export LANG=C
+
+REMOUNT_CD=""
+DIVERTS='/usr/bin/scrollkeeper-update /usr/bin/scrollkeeper-rebuilddb /usr/bin/fc-cache'
+
+log() {
+	logger -t pkgsel "$@"
+}
+warning() {
+	log "warning: $@"
+}
+
+cleanup() {
+	for divert in $DIVERTS; do
+		rm -f "/target$divert"
+		log-output -t pkgsel chroot /target dpkg-divert \
+			--package pkgsel --rename --quiet --remove "$divert"
+	done
+}
+
+aptfailed() {
+	ret=$?
+	if [ "$ret" != 0 ]; then
+		# In case packages failed to install, try to clean up.
+		in-target dpkg --configure -a || true
+
+		# TODO useful error message here (for ret != 30)
+		db_progress INFO pkgsel/progress/cleanup
+		if ! cleanup; then
+			log "cleanup failed"
+		fi
+		db_progress STOP
+		load_install_cd
+		exit $ret
+	fi
+}
+
+load_install_cd() {
+	if [ "$REMOUNT_CD" ]; then
+		load-install-cd "/target" || true
+	fi
+}
+
+db_progress START 0 1000 debian-installer/pkgsel/title
+db_progress INFO pkgsel/progress/init
+
+# d-i debconf variables used by packages
+debconf-copydb -p \
+	"^(debian-installer/language|debian-installer/country|debian-installer/keymap|passwd/username)$" \
+	configdb target_configdb
+
+# temporarily divert programs that take a long time
+for divert in $DIVERTS; do
+	log-output -t pkgsel chroot /target dpkg-divert --package pkgsel \
+		--rename --quiet --add "$divert"
+	ln -sf /bin/true "/target$divert"
+done
+
+db_progress STEP 10
+
+# Unmount the installation CD to allow CD changing; as it may be needed
+# again after pkgsel, make sure it is reloaded before exiting
+if [ -e /var/lib/install-cd.id ]; then
+	log-output -t pkgsel umount /cdrom || true
+	REMOUNT_CD=1
+fi
+
+
+db_get pkgsel/upgrade
+if [ "$RET" = none ]; then
+	tasksel_start=50
+else
+	upgrade_type="$RET"
+	db_progress INFO pkgsel/progress/upgrade
+	sleep 2 # allow the message to be seen
+
+	log "checking for (security) updates to the base system"
+	# Exclude Recommends to avoid installing new packages as part of
+        # an upgrade.
+	in-target sh -c "debconf-apt-progress --from 50 --to 100 --logstderr -- aptitude -q --without-recommends -y -o DPkg::options=--force-confnew '$upgrade_type'" || aptfailed
+	tasksel_start=100
+fi
+
+partsdir="/usr/lib/pre-pkgsel.d"
+if [ -d "$partsdir" ]; then
+	log "running pre-pkgsel hook scripts"
+
+	scriptcount=$(ls "$partsdir"/* 2>/dev/null | wc -l)
+	if [ $scriptcount -lt 10 ]; then
+		scripts_range=$(($scriptcount * 10))
+	else
+		scripts_range=100
+	fi
+	scripts_start=$tasksel_start
+	tasksel_start=$(($scripts_start + $scripts_range))
+
+	scriptcur=0
+	for script in $(ls "$partsdir"/* 2>/dev/null); do
+		base=$(basename $script | sed 's/[0-9]*//')
+		if ! db_progress INFO pkgsel/progress/$base; then
+			db_subst pkgsel/progress/fallback SCRIPT "$base"
+			db_progress INFO pkgsel/progress/fallback
+		fi
+		if [ -x "$script" ]; then
+			# be careful to preserve exit code
+			if log-output -t pkgsel "$script"; then
+				:
+			else
+				warning "$script returned error code $?"
+			fi
+		else
+			error "Unable to execute $script"
+		fi
+
+		# Advance progress bar
+		scriptcur=$(($scriptcur + 1))
+		db_progress SET $(($scripts_start + $scripts_range * $scriptcur / $scriptcount))
+	done
+fi
+
+db_get pkgsel/include
+if [ "$RET" ]; then
+	tasksel_end=900
+else
+	tasksel_end=950
+fi
+
+log "starting tasksel"
+db_progress INFO pkgsel/progress/tasksel
+in-target sh -c "tasksel --new-install --debconf-apt-progress='--from $tasksel_start --to $tasksel_end --logstderr'" || aptfailed
+
+if db_get pkgsel/include/install-recommends; then
+	log "The template pkgsel/include/install-recommends is no longer used; please use base-installer/install-recommends instead"
+fi
+
+db_get pkgsel/include
+if [ "$RET" ]; then
+	log "installing additional packages"
+
+	# Allow comma-separation so that this can more easily be preseeded
+	# at the kernel command line.
+	RET="$(printf '%s' "$RET" | sed 's/,/ /g')"
+	in-target sh -c "debconf-apt-progress --from 900 --to 950 --logstderr -- aptitude -q -y install -- $RET" || aptfailed
+fi
+
+log "finishing up"
+db_progress INFO pkgsel/progress/cleanup
+if ! cleanup; then
+	log "cleanup failed"
+fi
+
+db_progress STEP 20
+
+if [ -x /target/usr/bin/scrollkeeper-update ]; then
+	log-output -t pkgsel chroot /target scrollkeeper-update -q || true
+fi
+if [ -x /target/usr/bin/fc-cache ]; then
+	chroot /target fc-cache -f -v >/target/var/log/fontconfig.log 2>&1 \
+		|| true
+fi
+
+db_progress STEP 30
+db_progress STOP
+
+load_install_cd
