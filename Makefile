@@ -6661,6 +6661,14 @@ $(ilmbase): $(SPREZZ)/ilmbase/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ilmbase-$(ilmbase_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: isc-dhcp
+isc-dhcp:$(ISCDHCP)_$(ARCH).deb
+$(ISCDHCP): $(SPREZZ)/isc-dhcp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dhcp-$(isc-dhcp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: isomaster
 isomaster:$(ISOMASTER)_$(ARCH).deb
 $(ISOMASTER): $(SPREZZ)/isomaster/debian/changelog
