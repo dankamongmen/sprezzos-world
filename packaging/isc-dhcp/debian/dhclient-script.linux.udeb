@@ -1,0 +1,123 @@
+#!/bin/sh
+
+set -e
+
+# reduced dhclient-script for the Debian installer
+# changes by Joshua Kwan <joshk@triplehelix.org>,
+# Bastian Blank <waldi@debian.org>
+
+# dhclient-script for Linux. Dan Halbert, March, 1997.
+# Updated for Linux 2.[12] by Brian J. Murrell, January 1999.
+# Modified for Debian.  Matt Zimmerman and Eloy Paris, December 2003
+
+# update /etc/resolv.conf based on received values
+make_resolv_conf() {
+    local new_resolv_conf
+
+    if [ -n "$new_domain_name" ] || [ -n "$new_domain_name_servers" ]; then
+        new_resolv_conf=/etc/resolv.conf.dhclient-new
+        rm -f $new_resolv_conf
+
+        if [ -n "$new_domain_name" ]; then
+            echo "search $new_domain_name" >>$new_resolv_conf
+        fi
+
+        for nameserver in $new_domain_name_servers; do
+            echo "nameserver $nameserver" >>$new_resolv_conf
+        done
+
+        mv $new_resolv_conf /etc/resolv.conf
+    fi
+}
+
+# set host name
+set_hostname() {
+    local current_hostname
+
+    if [ -n "$new_host_name" ]; then
+        current_hostname=$(cat /proc/sys/kernel/hostname)
+
+        if [ -z "$current_hostname" ] || [ "$current_hostname" = "(none)" ]; then
+            echo "$new_host_name" > /proc/sys/kernel/hostname
+        fi
+    fi
+}
+
+# set up some variables for DHCP handlers below
+if [ -n "$new_subnet_mask" ]; then
+    new_mask="/$(ptom $new_subnet_mask)"
+fi
+if [ -n "$old_subnet_mask" ]; then
+    old_mask="/$(ptom $old_subnet_mask)"
+fi
+
+# Execute the operation
+case "$reason" in
+    MEDIUM|ARPCHECK|ARPSEND)
+        # Do nothing
+        ;;
+    PREINIT)
+        ip link set $interface up
+
+        # We need to give the kernel some time to get the interface up.
+        sleep 1
+
+        ;;
+
+    BOUND|RENEW|REBIND|REBOOT)
+        set_hostname
+
+        if [ -n "$old_ip_address" ] &&
+           [ "$old_ip_address" != "$new_ip_address" ]; then
+            # IP address changed. Bringing down the interface will delete all routes,
+            # and clear the ARP cache.
+            ip addr del $old_ip_address$old_mask ${old_broadcast_address:+broadcast $old_broadcast_address} \
+                dev $interface
+            ip link set $interface down
+        fi
+
+        if [ -n "$new_interface_mtu" ]; then
+            ip link set $interface mtu $new_interface_mtu || true
+        fi
+
+        if [ -z "$old_ip_address" ] ||
+           [ "$old_ip_address" != "$new_ip_address" ] ||
+           [ "$reason" = "BOUND" ] || [ "$reason" = "REBOOT" ]; then
+
+            ip link set $interface up
+            ip addr flush dev $interface
+            ip addr add $new_ip_address$new_mask ${new_broadcast_address:+broadcast $new_broadcast_address} \
+                 dev $interface
+
+            for router in $new_routers; do
+                ip route add default via $router
+            done
+        fi
+
+        make_resolv_conf
+
+        # Get the domain name into a file suitable for netcfg to read.
+        printf "$new_domain_name" > /tmp/domain_name
+
+        if [ -n "$new_ntp_servers" ]; then
+            printf "$new_ntp_servers" > /tmp/dhcp-ntp-servers
+        fi
+
+        ;;
+
+    EXPIRE|FAIL|RELEASE|STOP)
+        if [ -n "$old_ip_address" ]; then
+            # Shut down interface, which will delete routes and clear arp cache.
+            ip addr flush dev $interface
+            ip link set $interface down
+        fi
+
+        ;;
+
+    TIMEOUT)
+        ip link set $interface down
+
+        ;;
+esac
+
+exit 0

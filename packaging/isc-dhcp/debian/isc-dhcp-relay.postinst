@@ -1,0 +1,89 @@
+#!/bin/sh
+#
+#
+
+set -e
+
+case "$1" in
+	configure)
+		# continue below
+		;;
+
+	abort-upgrade|abort-remove|abort-deconfigure)
+		exit 0
+		;;
+
+	*)
+		echo "postinst called with unknown argument \`$1'" >&2
+		exit 0
+		;;
+esac
+
+# Handle debconf
+. /usr/share/debconf/confmodule
+
+# We generate several files during the postinst, and we don't want
+#	them to be readable only by root.
+umask 022
+
+INITCONFFILE=/etc/default/isc-dhcp-relay
+
+# Generate configuration file if it does not exist, using default values.
+[ -r "${INITCONFFILE}" ] || {
+	echo Generating ${INITCONFFILE}... >&2
+	cat >${INITCONFFILE} <<'EOFMAGICNUMBER1234'
+# Defaults for isc-dhcp-relay initscript
+# sourced by /etc/init.d/isc-dhcp-relay
+# installed at /etc/default/isc-dhcp-relay by the maintainer scripts
+
+#
+# This is a POSIX shell fragment
+#
+
+# What servers should the DHCP relay forward requests to?
+SERVERS="172.16.0.10"
+
+# On what interfaces should the DHCP relay (dhrelay) serve DHCP requests?
+INTERFACES="eth0"
+
+# Additional options that are passed to the DHCP relay daemon?
+OPTIONS=""
+EOFMAGICNUMBER1234
+}
+
+# ------------------------- Debconf questions start ---------------------
+
+db_get isc-dhcp-relay/interfaces || true
+INTERFACES="${RET}"
+
+TMPFILE=`mktemp -q /tmp/dhcp.config.XXXXXX`
+sed -e "s/^[[:space:]]*INTERFACES[[:space:]]*=.*/INTERFACES=\"${INTERFACES}\"/" \
+	<${INITCONFFILE} >${TMPFILE}
+cp ${TMPFILE} ${INITCONFFILE}
+rm ${TMPFILE}
+
+db_get isc-dhcp-relay/servers || true
+SERVERS="${RET}"
+
+TMPFILE=`mktemp -q /tmp/dhcp.config.XXXXXX`
+sed -e "s/^[[:space:]]*SERVERS[[:space:]]*=.*/SERVERS=\"${SERVERS}\"/" \
+        <${INITCONFFILE} >${TMPFILE}
+cp ${TMPFILE} ${INITCONFFILE}
+rm ${TMPFILE}
+
+db_get isc-dhcp-relay/options || true
+OPTIONS="${RET}"
+
+TMPFILE=`mktemp -q /tmp/dhcp.config.XXXXXX`
+sed -e "s/^[[:space:]]*OPTIONS[[:space:]]*=.*/OPTIONS=\"${OPTIONS}\"/" \
+        <${INITCONFFILE} >${TMPFILE}
+cp ${TMPFILE} ${INITCONFFILE}
+rm ${TMPFILE}
+
+# ------------------------- Debconf questions end ---------------------
+
+db_stop
+
+#DEBHELPER#
+
+exit 0

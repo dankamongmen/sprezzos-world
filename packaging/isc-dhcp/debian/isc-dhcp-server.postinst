@@ -1,0 +1,105 @@
+#!/bin/sh
+#
+# Inspiration stolen from the fetchmail* packages. Thanks Henrique!
+#
+#
+
+set -e
+
+case "$1" in
+	configure)
+		# continue below
+		;;
+
+	abort-upgrade|abort-remove|abort-deconfigure)
+		exit 0
+		;;
+
+	*)
+		echo "postinst called with unknown argument \`$1'" >&2
+		exit 0
+		;;
+esac
+
+# Handle debconf
+. /usr/share/debconf/confmodule
+
+INITCONFFILE="/etc/default/isc-dhcp-server"
+
+# We generate several files during the postinst, and we don't want
+#	them to be readable only by root.
+umask 022
+
+# Generate configuration file if it does not exist, using default values.
+[ -r "${INITCONFFILE}" ] || {
+	echo Generating ${INITCONFFILE}... >&2
+	cat >${INITCONFFILE} <<'EOFMAGICNUMBER1234'
+# Defaults for isc-dhcp-server initscript
+# sourced by /etc/init.d/isc-dhcp-server
+# installed at /etc/default/isc-dhcp-server by the maintainer scripts
+
+#
+# This is a POSIX shell fragment
+#
+
+# Path to dhcpd's config file (default: /etc/dhcp/dhcpd.conf).
+#DHCPD_CONF=/etc/dhcp/dhcpd.conf
+
+# Path to dhcpd's PID file (default: /var/run/dhcpd.pid).
+#DHCPD_PID=/var/run/dhcpd.pid
+
+# Additional options to start dhcpd with.
+#	Don't use options -cf or -pf here; use DHCPD_CONF/ DHCPD_PID instead
+#OPTIONS=""
+
+# On what interfaces should the DHCP server (dhcpd) serve DHCP requests?
+#	Separate multiple interfaces with spaces, e.g. "eth0 eth1".
+INTERFACES=""
+EOFMAGICNUMBER1234
+}
+
+# ------------------------- Debconf questions start ---------------------
+
+db_get isc-dhcp-server/interfaces || true
+INTERFACES="${RET}"
+
+if [ -n "$INTERFACES" ]; then
+    TMPFILE="$(mktemp -q ${INITCONFFILE}.new.XXXXXX)"
+    sed -e "s,^[[:space:]]*INTERFACES[[:space:]]*=.*,INTERFACES=\"${INTERFACES}\"," \
+		<${INITCONFFILE} >${TMPFILE}
+    cp ${TMPFILE} ${INITCONFFILE}
+    rm ${TMPFILE}
+fi
+
+# ------------------------- Debconf questions end ---------------------
+db_stop
+
+if [ ! -e /var/lib/dhcp/dhcpd.leases ]; then
+    if test -e /var/lib/dhcp3/dhcpd.leases; then
+        cp /var/lib/dhcp3/dhcpd.leases /var/lib/dhcp/dhcpd.leases
+    else
+	touch /var/lib/dhcp/dhcpd.leases
+    fi
+fi
+
+# If we're upgrading from dhcp3, copy the config and leases over to the new
+# locations
+if [ -z "$2" ]; then
+	if [ -f /etc/dhcp3/dhcpd.conf ]; then
+		cp /etc/dhcp3/dhcpd.conf /etc/dhcp/dhcpd.conf
+	fi
+	if [ -f /var/lib/dhcp3/dhcpd.leases ]; then
+		cp /var/lib/dhcp3/dhcpd.leases /var/lib/dhcp/dhcpd.leases
+	fi
+fi
+
+[ -x /sbin/restorecon ] && restorecon /var/lib/dhcp/dhcpd.leases
+
+init_script_error_handler()
+{
+	return 0
+}
+
+#DEBHELPER#
+
+exit 0
