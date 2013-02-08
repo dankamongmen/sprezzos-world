@@ -341,3 +341,19 @@ $(LIBYAMLSYCKPERL): $(SPREZZ)/libyaml-syck-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf YAML-Syck-$(libyaml-syck-perl_UPVER).tar.gz $(TARARGS) $@
 
+
+.PHONY: libdevel-leak-perl
+libdevel-leak-perl:$(LIBDEVELLEAKPERL)_$(ARCH).deb
+$(LIBDEVELLEAKPERL): $(SPREZZ)/libdevel-leak-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Devel-Leak-$(libdevel-leak-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libsoap-lite-perl
+libsoap-lite-perl:$(LIBSOAPLITEPERL)_$(ARCH).deb
+$(LIBSOAPLITEPERL): $(SPREZZ)/libsoap-lite-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf SOAP-Lite-$(libsoap-lite-perl_UPVER).tar.gz $(TARARGS) $@
