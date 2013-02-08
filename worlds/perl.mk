@@ -318,3 +318,17 @@ $(LIBNETDBUSGLIBPERL): $(SPREZZ)/libnet-dbus-glib-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Net-DBus-GLib-$(libnet-dbus-glib-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libfcgi-perl
+libfcgi-perl:$(LIBFCGIPERL)_$(ARCH).deb
+$(LIBFCGIPERL): $(SPREZZ)/libfcgi-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf FCGI-$(libfcgi-perl_UPVER).tar.gz $(TARARGS) $@
+.PHONY: ossp-uuid
+ossp-uuid:$(OSSPUUID)_$(ARCH).deb
+$(OSSPUUID): $(SPREZZ)/ossp-uuid/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf uuid-$(ossp-uuid_UPVER).tar.gz $(TARARGS) $@
