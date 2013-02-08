@@ -8582,7 +8582,7 @@ $(XSERVERXORGVIDEOVMWARE): $(SPREZZ)/xserver-xorg-video-vmware/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xserver-xorg-video-vmware-$(xserver-xorg-video-vmware_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf xf86-video-vmware-$(xserver-xorg-video-vmware_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xterm
 xterm:$(XTERM)_$(ARCH).deb
