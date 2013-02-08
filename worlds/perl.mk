@@ -332,3 +332,12 @@ $(OSSPUUID): $(SPREZZ)/ossp-uuid/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf uuid-$(ossp-uuid_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libyaml-syck-perl
+libyaml-syck-perl:$(LIBYAMLSYCKPERL)_$(ARCH).deb
+$(LIBYAMLSYCKPERL): $(SPREZZ)/libyaml-syck-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf YAML-Syck-$(libyaml-syck-perl_UPVER).tar.gz $(TARARGS) $@
+
