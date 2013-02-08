@@ -8520,6 +8520,14 @@ $(XSERVERXORGVIDEOATI): $(SPREZZ)/xserver-xorg-video-ati/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86-video-ati-$(xserver-xorg-video-ati_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-video-cirrus
+xserver-xorg-video-cirrus:$(XSERVERXORGVIDEOCIRRUS)_$(ARCH).deb
+$(XSERVERXORGVIDEOCIRRUS): $(SPREZZ)/xserver-xorg-video-cirrus/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-video-cirrus-$(xserver-xorg-video-cirrus_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xserver-xorg-video-dummy
 xserver-xorg-video-dummy:$(XSERVERXORGVIDEODUMMY)_$(ARCH).deb
 $(XSERVERXORGVIDEODUMMY): $(SPREZZ)/xserver-xorg-video-dummy/debian/changelog
@@ -8551,6 +8559,22 @@ $(XSERVERXORGVIDEOINTEL): $(SPREZZ)/xserver-xorg-video-intel/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86-video-intel-$(xserver-xorg-video-intel_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-r128
+xserver-xorg-video-r128:$(XSERVERXORGVIDEOR128)_$(ARCH).deb
+$(XSERVERXORGVIDEOR128): $(SPREZZ)/xserver-xorg-video-r128/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-video-r128-$(xserver-xorg-video-r128_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-mach64
+xserver-xorg-video-mach64:$(XSERVERXORGVIDEOMACH64)_$(ARCH).deb
+$(XSERVERXORGVIDEOMACH64): $(SPREZZ)/xserver-xorg-video-mach64/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-video-mach64-$(xserver-xorg-video-mach64_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: xserver-xorg-video-modesetting
 xserver-xorg-video-modesetting:$(XSERVERXORGVIDEOMODESETTING)_$(ARCH).deb
