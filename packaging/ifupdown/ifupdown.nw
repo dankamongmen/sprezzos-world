@@ -1,0 +1,5929 @@
+
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{noweb}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usetikzlibrary{positioning}
+\pagestyle{noweb}
+\noweboptions{smallcode,hideunuseddefs}
+\begin{document}
+@
+
+\def\nwendcode{\endtrivlist\endgroup}
+\let\nwdocspar=\relax
+
+\title{ Interface Tools\thanks{
+Copyright \copyright\ 1999--2007 Anthony Towns. This program is free
+software; you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any
+later version.  
+}}
+
+\author{ Anthony Towns \\ { \tt aj@azure.humbug.org.au } }
+
+\pagenumbering{roman}
+
+\maketitle
+\tableofcontents
+
+\vfill
+\pagebreak
+\pagenumbering{arabic}
+
+\section{Introduction}
+
+This source defines the commands [[ifup]], [[ifdown]], and [[ifquery]], used
+to manipulate interfaces in an easily controllable manner.
+
+\subsection{Assumed Knowledge}
+
+The reader is assumed to have knowledge of the C \cite{K&R} and Perl
+\cite{camel} programming languages in a Unix environment \cite{StevensUnix}.
+A cursory understanding of network administration on the appropriate
+platform is also assumed, along with access to the relevant manual
+pages as necessary.
+
+This source has been written as a literate program using the [[noweb]]
+\cite{wwwnoweb} tool suite, and typeset using \LaTeX\ \cite{latex}.
+
+\subsection{Program Structure}
+
+We shall decompose this program into four main areas of functionality:
+compile-time configuration, run-time configuration, execution, and the
+overall driver.
+
+Compile-time configuration will deal with differing available address
+families (IP vs IPX vs IPv6, and so on), and the differing methods of
+enabling and disabling interfaces configured for each family. This will
+be implemented using the [[addrfam]] module, and various [[.defn]] files,
+for the address family definitions.
+
+Run-time configuration will deal with determining the local setup
+based on the file [[/etc/network/interfaces]], and producing a data
+structure encapsulating these details. This will be implemented in the
+[[config]] module.
+
+Execution will deal with issues relating to working out exactly which
+commands to run based on a somewhat abstract description from the
+compile-time configuration and the details determined at
+run-time. This will be dealt with in the [[execute]] module.
+
+The remaining work --- argument parsing, error reporting, and,
+essentially, putting all the pieces together --- is done by the
+[[main]] module.
+
+The following diagram gives a brief idea of the information and control
+flow amongst the modules.
+
+\def\vsep{2.5cm}
+\def\hsep{1.4cm}
+\begin{figure}
+\centering
+\begin{tikzpicture}[every text node part/.style={text centered}]
+    \tikzstyle{block}=[rectangle,draw, text width=2cm, minimum height=2cm]
+    \tikzstyle{big}=[minimum height=4.5cm]
+    \tikzstyle{annot}=[above left]
+
+    \node[block] (ip) at (0,0) {IP address family};
+    \node[annot] at (ip.south east) {\small inet.defn};
+
+    \node[block] (ipx) at (0,-\vsep) {IPX address
+    family};
+    \node[annot] at (ipx.south east) {\small inet.defn};
+
+    \node[block,big] (addrfam) at (\hsep*2,-\vsep/2) {Compile time configuration};
+    \node[annot] at (addrfam.south east) {\small addrfam.c};
+
+    \node[block,big] (config) at (\hsep*4,-\vsep/2) {Runtime configuration};
+    \node[annot] at (config.south east) {\small config.c};
+
+    \node[block] (exec) at (\hsep*6,0) {Execution};
+    \node[annot] at (exec.south east) {\small execute.c};
+
+    \node[block] (main) at (\hsep*6,-\vsep) {Driver};
+    \node[annot] at (main.south east) {\small main.c};
+
+    \draw[-stealth] (ip.east) -- (addrfam.west |- ip);
+    \draw[-stealth] (ipx.east) -- (addrfam.west |- ipx);
+    \draw[-stealth] (addrfam) -- (config);
+    \draw[stealth-] (exec.west) -- (config.east |- exec);
+    \draw[stealth-] (main.west) -- (config.east |- main);
+    \draw[-stealth] (main) -- (exec);
+
+    \node[below=1.2cm of config.south] (mainf) {main()};
+
+    \draw[-stealth, rounded corners=0.3cm] (mainf) -- +(0,1cm) -| (main.south);
+\end{tikzpicture}
+\end{figure}
+
+
+Much of the information sharing will be done by defining and filling
+in some data structures and allowing the other modules to just access
+that information directly. Rather than hiding the information itself,
+most of our modules simply attempt to hide how that information was
+originally written. Because of this, we shall find that these modules are
+too closely linked to be completely separated in a convenient manner,
+so they will all make use of a single header file for each other's
+structure definitions, exported interfaces and so on.
+
+<<header.h>>=
+#ifndef HEADER_H
+#define HEADER_H
+
+<<type definitions>>
+<<function type definitions>>
+<<structure definitions>>
+<<constant definitions>>
+<<exported symbols>>
+<<address family declarations>>
+
+#endif /* HEADER_H */
+@ 
+
+\section{The Build System}
+
+We shall begin with the template for the Makefile we shall use.
+
+<<Makefile>>=
+<<make options>>
+ARCH ?= linux
+
+BASEDIR ?= $(DESTDIR)
+
+CFILES := addrfam.c execute.c config.c main.c arch$(ARCH).c
+HFILES := header.h arch$(ARCH).h
+PERLFILES := defn2c.pl defn2man.pl
+DEFNFILES := inet.defn ipx.defn inet6.defn can.defn
+
+OBJ := main.o addrfam.o execute.o config.o \
+	$(patsubst %.defn,%.o,$(DEFNFILES)) arch$(ARCH).o meta.o link.o
+
+MAN := $(patsubst %.defn,%.man,$(DEFNFILES))
+DEFNFILES += meta.defn
+
+default : executables
+all : executables docs
+
+executables : ifup ifdown ifquery ifup.8 ifdown.8 ifquery.8 interfaces.5
+docs : ifupdown.ps.gz ifup.8.ps.gz interfaces.5.ps.gz ifupdown.pdf
+
+.PHONY : executables 
+<<phony targets>>
+<<executable targets>>
+<<manpage targets>>
+<<extra dependencies>>
+<<implicit rules>>
+
+<<generated dependency inclusion>>
+@ 
+
+We shall build exactly three executables, [[ifup]], [[ifdown]] and
+[[ifquery]], which will in truth simply be three names for a single binary,
+albeit with different functionality.
+
+<<executable targets>>=
+ifup: $(OBJ)
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(OUTPUT_OPTION)
+
+ifdown: ifup
+	ln -sf ifup ifdown
+
+ifquery: ifup
+	ln -sf ifup ifquery
+@ 
+
+All three of these executables have a manpage. Since they're actually the
+same executable, what could be more appropriate than them having the
+same manpage too?
+
+<<manpage targets>>=
+interfaces.5: interfaces.5.pre $(MAN)
+	sed $(foreach man,$(MAN),-e '/^##ADDRESSFAM##$$/r $(man)') \
+	     -e '/^##ADDRESSFAM##$$/d' < $< > $@	
+
+ifdown.8 ifquery.8: ifup.8
+	ln -sf $< $@
+
+%.5.ps: %.5
+	groff -mandoc -Tps $< > $@
+%.8.ps: %.8
+	groff -mandoc -Tps $< > $@
+@ 
+
+Further, for convenience, we'll make use of two phony targets, [[clean]],
+[[clobber]] and [[distclean]], which will delete working files, everything
+that can be rebuilt with a [[make]] command, and everything that can be
+rebuilt at all, respectively.
+
+<<phony targets>>=
+.PHONY : clean clobber
+
+install :
+	install -m 0755 -d     ${BASEDIR}/sbin
+	install -m 0755 ifup   ${BASEDIR}/sbin
+	ln ${BASEDIR}/sbin/ifup ${BASEDIR}/sbin/ifdown	
+	ln ${BASEDIR}/sbin/ifup ${BASEDIR}/sbin/ifquery
+
+clean :
+	rm -f *.aux *.toc *.log *.bbl *.blg *.ps *.eps *.pdf
+	rm -f *.o *.d $(patsubst %.defn,%.c,$(DEFNFILES)) *~
+	rm -f $(patsubst %.defn,%.man,$(DEFNFILES))
+	rm -f ifup ifdown ifquery interfaces.5 ifdown.8 ifquery.8
+	rm -f ifupdown.dvi *.ps{,.gz}
+
+clobber : clean
+	rm -f ifupdown.tex $(PERLFILES) $(CFILES) $(HFILES) $(DEFNFILES) arch*
+
+distclean : clobber
+	rm -f makecdep.sh makenwdep.sh Makefile
+@ 
+
+We have some fairly standard rules to build the printed version of the
+source code using \LaTeX\ that are, unfortunately, not included in
+[[make(1)]]'s builtin rules, so we'll note them here.
+
+<<implicit rules>>=
+%.tex : %.nw
+	noweave -delay -index -latex $< >$@
+
+%.bbl : %.tex biblio.bib
+	latex $<
+	bibtex $(basename $<)
+
+%.dvi : %.tex %.bbl
+	latex $<
+	latex $<
+
+%.pdf : %.tex %.bbl
+	pdflatex $<
+	pdflatex $<
+
+%.ps : %.dvi
+	dvips -o $@ $<
+
+%.gz : %
+	gzip --best --stdout $< >$@
+@ 
+
+Additionally, some of [[make]]'s builtin rules are fairly
+conservative, so we'll encourage it to use a more entertaining method
+of compiling source code.
+
+<<make options>>=
+VERSION ?= 0.7
+CFLAGS ?= -Wall -W -g -O2 -D'IFUPDOWN_VERSION="$(VERSION)"'
+@ 
+
+\subsection{Graphics}
+
+We include a few graphics (made using dia) in this document. We have to
+express these fairly explicitly, unfortunately.
+
+<<implicit rules>>=
+%.eps : %.dia
+	dia --nosplash -e $@ $<
+
+%.pdf : %.eps
+	gs -q -sDEVICE=pdfwrite -dNOPAUSE -sOutputFile=$@ - < $<
+@
+
+<<extra dependencies>>=
+ifupdown.dvi: modules.eps execution.eps
+ifupdown.ps: modules.eps execution.eps
+ifupdown.pdf: modules.pdf execution.pdf
+@
+
+\subsection{Automatic Dependencies}
+
+To build the system, we'll make use of some techniques discussed in
+\cite{recursivemake} for determining dependencies. Namely, a number
+of files will have an associated [[.d]] file containing dynamically
+determined dependency information. The first such file we will construct
+is the dependency information for [[noweb]] source files, which can be
+identified by the [[.nw]] extension.
+
+<<implicit rules>>=
+%.d: %.nw makenwdep.sh
+	./makenwdep.sh $< > $@
+@
+
+To construct the dependency information, we may use the [[noroots(1)]]
+command to determine the \emph{root chunks} in the [[noweb]] source
+(stripping the unwanted [[<<]] and [[>>]] markers as we go, and
+denoting that in such a way that [[noweb]] doesn't mistakenly think
+the [[sed]] command is a chunk reference itself), and then noting down
+appropriate commands to construct the target.
+
+<<makenwdep.sh>>=
+<<parse makenwdep arguments>>
+
+noroots $FILE | sed 's/^<''<\(.*\)>>$/\1/' |
+	while read chunk; do
+		<<output dependency info for [[$chunk]]>>
+	done
+@ 
+
+Our dependency information is straightforward. To construct a file from
+[[noweb]] source, we simply need to run [[notangle(1)]] over it. We add
+a couple of extra tweaks in order to only update files that were actually
+changed (the [[cpif(1)]] call), and to handle tabs properly.
+
+We also need some extra things to take care of particular types of files.
+In particular its important to have our scripts marked executable, so we
+can use them as part of the build process itself, and it's also important
+to have the dependency information for our C files (which are dealt with
+next) included at some point.
+
+<<output dependency info for [[$chunk]]>>=
+printf "%s : %s\n" "$chunk" "$FILE"
+case $chunk in
+	*.pl|*.sh)
+		printf "\tnotangle -R\$@ \$< >\$@\n"
+		printf "\tchmod 755 %s\n" "$chunk"
+		;;
+	*.c)
+		printf "\tnotangle -L -R\$@ \$< | cpif \$@\n"
+		printf "include ${chunk%.c}.d\n"
+		;;
+	*.h)
+		printf "\tnotangle -L -R\$@ \$< | cpif \$@\n"
+		;;
+	*)
+		printf "\tnotangle -t8 -R\$@ $< >\$@\n"
+		;;
+esac
+@ 
+
+Finally, our fairly primitive argument parsing is simply:
+
+<<parse makenwdep arguments>>=
+FILE=$1
+
+if [ "$FILE" = "" -o ! -f "$FILE" ]; then
+	echo "Please specify a .nw file"
+	exit 1
+fi
+@ 
+
+We have a related system for object files generated from C source
+code. Since each object file depends not only on its source, but also
+the headers included in that source, we generate a [[.d]] file indicating
+exactly which headers need to be checked.
+
+<<implicit rules>>=
+%.d: %.c makecdep.sh
+	./makecdep.sh $< > $@
+@ 
+
+We can do this using [[gcc(1)]]'s convenient [[-MM -MG]] options,
+which do exactly this, with the added proviso that the [[.d]] file
+itself can possibly depend on any of the header files being modified
+(and, in particular, [[#include]] lines being added or deleted).
+
+<<makecdep.sh>>=
+#!/bin/sh
+<<parse makecdep arguments>>
+
+gcc -MM -MG $FILE |
+  sed -e 's@^\(.*\)\.o:@\1.o \1.d:@'
+@ 
+
+\emph{Deja vu}, anyone?
+
+<<parse makecdep arguments>>= 
+FILE=$1
+if [ "$FILE" = "" -o ! -f "$FILE" ]; then
+	echo "Please specify a .c file"
+	exit 1
+fi
+@
+
+To include the generated dependencies in [[Makefile]], we have to
+be a bit careful.  The problem here is that they should not be rebuild
+when merely the cleaning of the source tree is asked for.  Any targets
+ending in [[clean]], plus the [[clobber]] target prevent the inclusion
+of the generated dependencies.
+
+Unfortunately, [[make]] doesn't allow logical combinations within
+[[ifeq]] and friends, so we have to simulate this.
+
+<<generated dependency inclusion>>=
+include-deps := YES
+ifneq "" "$(filter %clean,$(MAKECMDGOALS))"
+include-deps := NO
+endif
+ifeq "clobber" "$(MAKECMDGOALS)"
+include-deps := NO
+endif
+@
+
+Finally, include the dependency information:
+
+<<generated dependency inclusion>>=
+ifeq "$(strip $(include-deps))" "YES"
+include ifupdown.d
+endif
+@
+
+\section{Compile Time Configuration}
+
+At compile time we need to determine all the possible address families
+that may be used, and all the methods of setting up interfaces for
+those address families, along with the various possible options
+affecting each method.
+
+Our key definition at this point is that of the [[address_family]]
+structure, which encapsulates all the compile time information about
+each address family.
+
+<<type definitions>>=
+typedef struct address_family address_family;
+@ 
+
+<<structure definitions>>=
+struct address_family {
+	char *name;
+	int n_methods;
+	method *method;
+};
+@ 
+
+Each defined address family will be included in the [[addr_fams]]
+array, which becomes the \emph{raison d'\^etre} of the [[addrfam]]
+module.
+
+<<exported symbols>>=
+extern address_family *addr_fams[];
+@ 
+
+Each address family incorporates a number of methods, which
+encapsulate various ways of configuring an interface for a particular
+address family. There are three components of a method: two sets of
+commands to bring an interface up and down, a number of options for
+the commands, and a set of conversion functions to allow programmatic
+manipulation of the options.
+
+<<type definitions>>=
+typedef struct method method;
+@ 
+
+<<structure definitions>>=
+struct method {
+	char *name;
+	command_set *up, *down;
+	conversion *conversions;
+	option_default *defaults;
+};
+@ 
+
+Each command set is implemented as a single function, accepting two
+parameters: the definitions of the interface the commands should deal
+with, and the function that should be used to execute them. See the
+[[execute]] module for more details.
+
+<<function type definitions>>=
+typedef int (execfn)(char *command);
+typedef int (command_set)(interface_defn *ifd, execfn *e);
+@ 
+
+Each conversion is implemented as a mapping from an option name, to a
+function that updates that option's value or adds a new variable which
+value is the result of conversion, as follows:
+
+<<type definitions>>=
+typedef struct conversion conversion;
+typedef struct option_default option_default;
+@
+
+<<structure definitions>>=
+struct conversion {
+	char *option;
+	char *newoption;
+	void (*fn)(interface_defn *, char **, int, char **);
+	int argc;
+	char ** argv;
+};
+
+struct option_default {
+	char *option;
+	char *value;
+};
+@
+
+As our compile-time configuration is done at, well, compile-time, there
+is little need for functions in the actual module, and we can make do with
+a single exported array.
+
+<<addrfam.c>>=
+#include <stdlib.h>
+#include "header.h"
+
+address_family *addr_fams[] = {
+	<<address family references>>
+	NULL
+};
+@ 
+
+\subsection{Generating C Code}
+
+Unfortunately, while the [[.defn]] representation is reasonably
+convenient for human use, it's less convenient for a compiler. As
+such, at build time, we will build a single structure of type
+[[address_family]] in a separate module, and reference that from
+[[addrfam.c]].
+
+Naturally, we'll use a [[perl]] script to convert [[.defn]] files to C
+code.
+
+<<implicit rules>>=
+%.c : %.defn defn2c.pl
+	./defn2c.pl $< > $@
+@ 
+
+The functionality of our program is pretty basic: read from the file
+specified as the argument, output to [[stdout]]; and correspondingly
+the structure of the program is similarly simple. We make use of a
+couple of global variables, a few helpful subroutines, and then build
+our C program.
+
+<<defn2c.pl>>=
+#!/usr/bin/perl -w
+
+use strict;
+
+<<determine the target architecture>>
+
+# declarations
+<<defn2c variables>>
+
+# subroutines
+<<defn2c subroutines>>
+
+# main code
+<<output headers for address family>>
+<<parse [[.defn]] file and output intermediate structures>>
+<<output address family data structure>>
+@ 
+
+First of all, we determine the target architecture by calling [[dpkg-architecture]] and stripping the trailing newline:
+<<determine the target architecture>>=
+my $DEB_HOST_ARCH_OS = `dpkg-architecture -qDEB_HOST_ARCH_OS`;
+
+$DEB_HOST_ARCH_OS =~ s/\n//;
+@ 
+
+Clearly we need to reference some of the data structures we defined
+above, so we can begin with the rather trivial:
+
+<<output headers for address family>>=
+print "#include <stddef.h>\n";
+print "#include \"header.h\"\n\n\n";
+@ 
+
+The overall purpose of the C code we're trying to construct is to
+define a structure of type [[address_family]], and have it externally
+visible. So we'd like to declare a statically-initialized structure of
+this type, and be done with it.
+
+To do this, however, we need to have some way of uniquely identifying
+the structure to avoid naming conflicts. We'll do this by assuming we
+have a previously initialized variable, [[$address_family]], and that
+names of the form [[addr_foo]] won't be used elsewhere.
+
+<<defn2c variables>>=
+my $address_family = "";
+@
+
+We also need to reference an array of pointers to this address
+family's [[method]]s, which will have to be initialized separately.
+We'll assume that previous code will create such a structure, and call
+it (imaginatively) [[methods]].
+
+<<output address family data structure>>=
+<<output [[methods]] data structure>>
+
+print <<EOF;
+address_family addr_${address_family} = {
+	"$address_family",
+	sizeof(methods)/sizeof(struct method),
+	methods
+};
+EOF
+@ 
+
+Our [[methods]] array will be a little more complicated to
+construct. The first difficulty is that it will actually require some
+state from having read the [[.defn]] file. To handle this, we'll
+introduce a hash [[%methods]] that has the value [[1]] for each method
+from the [[.defn]] file. We use a hash instead of a list because it
+makes some error checking more convenient later, and since order
+doesn't particularly matter.
+
+<<defn2c variables>>=
+my %methods = ();
+my %ourmethods = ();
+@
+
+We'll use standard names, such as [[foo_up]], [[foo_down]], and
+[[foo_conv]] for the various elements of each method which cannot
+be defined inline. The two functions and the array will be declared
+static to avoid name conflicts.
+
+<<output [[methods]] data structure>>=
+print "static method methods[] = {\n";
+%ourmethods = %methods if (our_arch());
+my $method;
+foreach $method (keys %ourmethods) {
+	print <<EOF;
+	{
+		"$method",
+		_${method}_up, _${method}_down,
+		_${method}_conv, _${method}_default
+	},
+EOF
+}
+print "};\n\n";
+@ 
+
+In a reasonably obvious manner we can then proceed to process the
+[[.defn]] file to initialize the aforementioned variables, and to
+output the method-specific functions and array. We'll begin by
+defining a variable to keep track of the current line.
+
+<<defn2c variables>>=
+my $line = "";
+@ 
+
+Our semantics for this variable will be basically that it contains a
+valid, meaningful input line. It won't be blank, or contain comments,
+and if there aren't any more lines to be read, it will evaluate to
+[[false]]. In order to keep these semantics, we'll use the subroutine
+[[nextline]] to update it. (Since we'll later find we'll want to reuse
+this subroutine, we'll keep it in a chunk of its own)
+
+We need to extract from the [[.defn]] file the only set of methods that
+corresponds to our target architecture. To perform this, we need to keep
+the current architecture name in a variable which we define globally:
+
+<<defn2c variables>>=
+my $arch = "";
+@ 
+
+<<defn2c subroutines>>=
+<<[[nextline]] subroutine>>
+<<[[our_arch]] function>>
+@ 
+
+<<[[nextline]] subroutine>>=
+sub nextline {
+	$line = <>;
+	while($line and ($line =~ /^#/ or $line =~ /^\s*$/)) {
+		$line = <>;
+	}
+	if (!$line) { return 0; }
+	chomp $line;
+	while ($line =~ m/^(.*)\\$/) {
+		my $addon = <>;
+		chomp $addon;
+		$line = $1 . $addon;
+	}
+	return 1;
+}
+@ 
+
+We accept any valid Debian OS identifier (that is, [[DEB_HOST_ARCH_OS]]) as
+the architecture name, as well as the literal string `[[any]]' which means
+the definition file is functional on every architecture.
+
+<<[[our_arch]] function>>=
+sub our_arch {
+    return ($arch eq $DEB_HOST_ARCH_OS) || ($arch eq "any")
+}
+@ 
+
+Our high-level logic then looks basically like:
+
+<<parse [[.defn]] file and output intermediate structures>>=
+nextline;
+while($line) {
+	<<parse a top-level section and output intermediate structures>>
+
+	# ...otherwise
+	die("Unknown command \"$line\"");
+}
+@
+
+To make all this stuff easier, we'll use a `matching' function to help
+with parsing lines: basically, given a line, a command, and possibly
+an indentation prefix (eg [["    "]]). (As with [[nextline]], this will
+also be useful to reuse, hence it has its own pair of chunks, too)
+
+<<defn2c variables>>=
+my $match = "";
+@ 
+
+<<defn2c subroutines>>=
+<<[[match]] subroutine>>
+@ 
+
+<<[[match]] subroutine>>=
+sub match {
+	my $line = $_[0];
+	my $cmd = "$_[1]" ? "$_[1]\\b\\s*" : "";;
+	my $indentexp = (@_ == 3) ? "$_[2]\\s+" : "";
+
+	if ($line =~ /^${indentexp}${cmd}(([^\s](.*[^\s])?)?)\s*$/) {
+		$match = $1;
+		return 1;
+	} else {
+		return 0;
+	} 
+}
+@ 
+
+Okay. So, the first line we expect to see is the name of the address
+family we're defining.
+
+<<parse a top-level section and output intermediate structures>>=
+if (match($line, "address_family")) {
+	get_address_family $match;
+	next;
+}
+@ 
+
+This is, as you'd imagine, pretty simple to deal with. We just need to
+store the address family's name, and move on to the next line.
+
+<<defn2c subroutines>>=
+sub get_address_family {
+	$address_family = $_[0] if ($address_family eq "");
+	nextline;
+}
+@ 
+
+Which brings us to determining the architecture.
+
+<<parse a top-level section and output intermediate structures>>=
+if (match($line, "architecture")) {
+	get_architecture $match;
+	next;
+}
+@ 
+
+You'd never guess what, but it's just as easy as the address family thing
+was.
+
+<<defn2c subroutines>>=
+sub get_architecture {
+        %ourmethods = %methods if (our_arch());
+	$arch = $_[0];
+	if (!our_arch) {
+		%methods = ();
+	} else {
+		print "#include \"arch${DEB_HOST_ARCH_OS}.h\"\n\n\n";
+	}
+	nextline;
+}
+@ 
+
+After each [[architecture]] keyword occurrence, we drop all the methods
+defined for the previous architecture.
+
+Next, we actually create the functions and array for each method.
+
+<<parse a top-level section and output intermediate structures>>=
+if (match($line, "method")) {
+	if (our_arch()) {
+		get_method $match;
+	} else {
+		skip_section;
+	}
+	next;
+}
+@
+
+The basic premise is to check for each of our options in a given
+order: if they don't match, then we can presume they don't exist ---
+any errors will be reported when the main function finds something
+weird going on. All we really have to take care of so far is ensuring
+an appropriate level of indentation, and that we're not defining the
+same method twice.
+
+<<defn2c subroutines>>=
+sub get_method {
+	my $method = $_[0];
+	my $indent = ($line =~ /(\s*)[^\s]/) ? $1 : "";
+	my @options = ();
+	my @variables = ();
+
+	die "Duplicate method $method\n" if ($methods{$method}++);
+
+	nextline;
+	<<output code for description>>
+	<<output code for options list>>
+	<<output code for conversions>>
+	<<output code for up commands>>
+	<<output code for down commands>>
+}
+@ 
+
+The description section is just a documentation chunk,
+and hence isn't at all relevant for the C code.
+
+<<output code for description>>=
+if (match($line, "description", $indent)) {
+	skip_section();
+}
+@ 
+
+Skipping a section is fairly easy: we just need to check alignments. This is
+yet another subroutine that'll come in handy elsewhere.
+
+<<defn2c subroutines>>=
+<<[[skip_section]] subroutine>>
+@ 
+
+<<[[skip_section]] subroutine>>=
+sub skip_section {
+	my $struct = $_[0];
+	my $indent = ($line =~ /(\s*)[^\s]/) ? $1 : "";
+
+	1 while (nextline && match($line, "", $indent));
+}
+@ 
+
+The options section is processed to check later that no repetitive
+options created by the conversions.
+
+<<output code for options list>>=
+if (match($line, "options", $indent)) {
+	@options = get_options();
+}
+print "static option_default _${method}_default[] = {\n";
+if (@options) {
+	foreach my $o (@options) {
+		if ($o =~ m/^\s*(\S*)\s*(.*)\s+--\s+(\S[^[]*)(\s+\[([^]]*)\]\s*)?$/) {
+			my $opt = $1;
+			my $optargs = $2;
+			my $dsc = $3;
+			push @variables, $opt;
+			if ($4) {
+				print "\t{ \"$opt\", \"$5\" },\n";
+			}
+		}
+	}
+}
+print "\t{ NULL, NULL }\n";
+print "};\n";
+@ 
+
+Checking the various relevant components of each method is fairly
+simple: we need to see if it exists, and if it does, parse and output
+it, while if it doesn't, we need to output a place holder.
+
+<<output code for up commands>>=
+if (match($line, "up", $indent)) {
+	get_commands(${method}, "up");
+} else {
+	print "static int _${method}_up(interface_defn ifd) { return 0; }\n"
+}
+@ 
+
+<<output code for down commands>>=
+if (match($line, "down", $indent)) {
+	get_commands(${method}, "down");
+} else {
+	print "static int _${method}_down(interface_defn ifd) { return 0; }\n"
+}
+@
+
+<<output code for conversions>>=
+print "static conversion _${method}_conv[] = {\n";
+if (match($line, "conversion", $indent)) {
+	while (nextline && match($line, "", "$indent  ")) {
+		my $foo = $line;
+		$foo =~ s/^\s+//;
+		$foo =~ m/^\s*(\S+)\s+(\([^)]+\)|\S+)\s*(\S+)?\s*$/;
+		my $option = $1;
+		my $fn = $2;
+		my $newoption = $3;
+		if ($fn =~ m/^\((.*)\)$/) {
+			my @params = split(/ /, $1);
+			$fn = shift(@params);
+			foreach (@params) {
+				if ($_ =~ m/^"(.*)"$/) {
+				    $_ = $1;
+				}
+			}
+			$fn .= (", ".scalar(@params).", (char * []){\"".join("\", \"", @params)."\"}");
+		} else {
+			$fn .= ", 0, NULL";
+		}
+		if ($newoption) {
+			$newoption =~ s/^=//;
+			die "Duplicate option use: $newoption (from $method/$option)" if (grep $_ eq $newoption, @variables);
+			push @variables, $newoption;
+			print "\t{ \"$option\", \"$newoption\", $fn },\n";
+		} else {
+			print "\t{ \"$option\", NULL, $fn },\n";
+		}
+	}
+}
+print "\t\{ NULL, NULL, NULL, 0, NULL }\n";
+print "};\n";
+@
+
+<<defn2c subroutines>>=
+sub get_commands {
+	my $method = $_[0];
+	my $mode = $_[1];
+	my $function = "_${method}_${mode}";
+	my $indent = ($line =~ /(\s*)[^\s]/) ? $1 : "";
+
+	print "static int ${function}(interface_defn *ifd, execfn *exec) {\n";
+
+	while (nextline && match($line, "", $indent)) {
+		if ( $match =~ /^(.*[^\s])\s+if\s*\((.*)\)\s*$/ ) {
+			print "if ( $2 ) {\n";
+			print "  if (!execute(\"$1\", ifd, exec)) return 0;\n";
+			print "}\n";
+		} elsif ( $match =~ /^(.*[^\s])\s+elsif\s*\((.*)\)\s*$/ ) {
+			print "else if ( $2 ) {\n";
+			print "  if (!execute(\"$1\", ifd, exec)) return 0;\n";
+			print "}\n";
+		} elsif ( $match =~ /^(.*[^\s])\s*$/ ) {
+			print "{\n";
+			print "  if (!execute(\"$1\", ifd, exec)) return 0;\n";
+			print "}\n";
+		}
+	}
+
+	print "return 1;\n";
+	print "}\n";
+}
+@ 
+
+\subsection{Building Manual Pages}
+
+So having C code is all very well, but if you want to ignore all user
+problems with a casual ``RTFM!'' there has to be some semblance of an
+M for them to R. So we need a script to generate some useful
+descriptions of the various methods.
+
+We'll achieve this by making another Perl script, [[defn2man.pl]],
+which will generate fragments of [[troff]] that can be catted together
+with a general overview of [[ifupdown]] to produce real manpages.
+
+<<implicit rules>>=
+%.man: %.defn defn2man.pl
+	./defn2man.pl $< > $@
+@ 
+
+So we'll use a similar structure to [[defn2c.pl]].
+
+<<defn2man.pl>>=
+#!/usr/bin/perl -w
+
+use strict;
+
+<<determine the target architecture>>
+
+# declarations
+<<defn2man variables>>
+
+# subroutines
+<<defn2man subroutines>>
+
+# main code
+<<parse [[.defn]] file and output intermediate structures>>
+@ 
+
+As predicted, we'll also incorporate [[nextline]], [[match]] and
+[[skip_section]]:
+
+<<defn2man variables>>=
+my $line;
+my $match;
+my $arch = "";
+@ 
+
+<<defn2man subroutines>>=
+<<[[nextline]] subroutine>>
+<<[[our_arch]] function>>
+<<[[match]] subroutine>>
+<<[[skip_section]] subroutine>>
+@ 
+
+We use the same main loop as in [[defn2c]] with absolutely no changes.
+
+The [[get_address_family]] and [[get_architecture]] subroutines are
+fairly straight forward:
+
+<<defn2man subroutines>>=
+sub get_address_family {
+	print ".SH " . uc($match) . " ADDRESS FAMILY\n";
+	print "This section documents the methods available in the\n";
+	print "$match address family.\n";
+	nextline;
+}
+@ 
+
+<<defn2man subroutines>>=
+sub get_architecture {
+	$arch = $_[0];
+	nextline;
+}
+@ 
+
+Which only leaves extracting the description and options for each
+method. And, of course, this imposes less restrictions of the
+[[.defn]] file than [[defn2c.pl]] did. It's a crazy old world.
+
+<<defn2man subroutines>>=
+sub get_method {
+	my $method = shift;
+	my $indent = ($line =~ /(\s*)\S/) ? $1 : "";
+	my $description = "";
+	my @options = ();
+
+	nextline;
+	while ($line and match($line, "", $indent)) {
+		if (match($line, "description", $indent)) {
+			$description = get_description();
+		} elsif (match($line, "options", $indent)) {
+			@options = get_options();
+		} else {
+			skip_section;
+		}
+	}
+
+	<<output [[$method]] introduction man fragment>>
+	<<output [[$description]] man fragment>>
+	<<output [[@options]] man fragment>>
+}
+@
+
+<<output [[$method]] introduction man fragment>>=
+print ".SS The $method Method\n";
+@ 
+
+Okay. Now our [[$description]] is just the description with any [['\n']]
+characters it may've had, but without the leading spaces.
+
+<<defn2man subroutines>>=
+sub get_description {
+	my $desc = "";
+	my $indent = ($line =~ /(\s*)\S/) ? $1 : "";
+	while(nextline && match($line, "", $indent)) {
+		$desc .= "$match\n";
+	}
+	return $desc;
+}
+@ 
+
+We're actually going to be a little tricky here, and allow some formatting
+in our descriptions. Basically, we'll allow bold and italic encoding
+to be denoted by [[*bold*]] and [[/italics/]] in the wonderful Usenet
+tradition. As such, we'll use a cute little function to convert the
+Usenet style to \emph{roff}. We'll also take care not to do this conversion
+within words (for things like [[/etc/hosts]], eg). Voila:
+
+<<defn2man subroutines>>=
+sub usenet2man {
+	my $in = shift;
+	my $out = "";
+
+	$in =~ s/\s+/ /g;
+	while ($in =~ m%^([^*/]*)([*/])([^*/]*)([*/])(.*)$%s) {
+		my ($pre, $l, $mid, $r, $post) = ($1, $2, $3, $4, $5);
+		if ($l eq $r && " $pre"  =~ m/[[:punct:][:space:]]$/ 
+			     && "$post " =~ m/^[[:punct:][:space:]]/) {
+			$out .= $pre;
+			$out .= ($l eq "*" ? '\fB' : '\fI') . $mid . '\fP';
+			($in = $post) =~ s/^\s+/ /;
+		} else {
+			$out .= $pre . $l;
+			$in = $mid . $r . $post;
+		}
+	} 
+	return $out . $in;
+}
+@
+
+The only further thing to note about this is that we're being careless
+and ignoring the possibility of \emph{roff} escape sequences in the input. But
+since this is for internal use only, well, too bad. So here we go:
+
+<<output [[$description]] man fragment>>=
+if ($description ne "") {
+	print usenet2man($description) . "\n";
+} else {
+	print "(No description)\n";
+}
+@ 
+
+Damn that was fun.
+
+Reading the options is almost exactly the same as the description,
+except we want a list instead of just a string.
+
+<<defn2man subroutines>>=
+<<[[get_options]] fragment>>
+@ 
+
+<<defn2c subroutines>>=
+<<[[get_options]] fragment>>
+@ 
+
+<<[[get_options]] fragment>>=
+sub get_options {
+	my @opts = ();
+	my $indent = ($line =~ /(\s*)\S/) ? $1 : "";
+	while(nextline && match($line, "", $indent)) {
+		push @opts, $match;
+	}
+	return @opts;
+}
+@ 
+
+Output is slightly more complicated, but not too much so.
+
+<<output [[@options]] man fragment>>=
+print ".PP\n";
+print ".B Options\n";
+print ".RS\n";
+if (@options) {
+	foreach my $o (@options) {
+		if ($o =~ m/^\s*(\S*)\s*(.*)\s+--\s+(\S[^[]*)(\s+\[([^]]*)\]\s*)?$/) {
+			my $opt = $1;
+			my $optargs = $2;
+			my $dsc = $3;
+			$dsc .= (length($5)) ? ". Default value: \"$5\"" : "";
+			print ".TP\n";
+			print ".BI $opt";
+			print " \" $optargs\"" unless($optargs =~ m/^\s*$/);
+			print "\n";
+			print usenet2man($dsc) . "\n";
+		} else {
+			print ".TP\n";
+			print ".B $o\n";
+		}
+	}
+} else {
+	print ".TP\n";
+	print "(No options)\n";
+}
+print ".RE\n";
+@ 
+
+\section{Run-time Configuration}
+
+Our module is of the usual form, and we'll make use of a few fairly standard
+headers. Please move along, there's nothing to see here.
+
+<<config.c>>=
+<<config headers>>
+<<config function declarations>>
+<<config functions>>
+@ 
+
+<<config headers>>=
+#include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <assert.h>
+@ 
+
+We'll also make use of some of our other modules. This is, after all,
+why we had a single header in the first place.
+
+<<config headers>>=
+#include "header.h"
+@ 
+
+The key function we're interested in defining here is
+[[read_interfaces()]], which will (wait for it) read an interfaces
+file. The intention is to make it really easy to deal with the
+vagaries of [[/etc/network/interfaces]] anywhere else.
+
+So the first question we need to deal with is ``What's a convenient
+form for other functions which deal with interfaces?'' Well, our
+answer to that is basically:
+
+\begin{enumerate}
+	\item an array of interface names that should be brought up at
+	bootup.
+
+	\item a singly linked list to represent the various mappings.
+
+	\item another singly linked list to represent the interface
+	definitions themselves.
+\end{enumerate}
+
+ These are almost in exact correspondence with the original file.
+
+<<type definitions>>=
+typedef struct interfaces_file interfaces_file;
+@ 
+
+<<structure definitions>>=
+struct interfaces_file {
+	allowup_defn *allowups;
+	interface_defn *ifaces;
+	mapping_defn *mappings;
+};
+@
+
+So, at run-time, we first need a way of dealing with the [[auto]] and
+[[allow-*]] lines. We'll treat [[allow-auto]] and [[auto]] as equivalent,
+making that pretty straightforward:
+
+<<type definitions>>=
+typedef struct allowup_defn allowup_defn;
+@
+
+<<structure definitions>>=
+struct allowup_defn {
+	allowup_defn *next;
+
+	char *when;
+	int max_interfaces;
+	int n_interfaces;
+	char **interfaces;
+};
+@ 
+
+We also require a way of representing each interface listed in the
+configuration file. This naturally needs to reference an address family
+and method, and all the options a user may specify about an interface.
+
+<<type definitions>>=
+typedef struct interface_defn interface_defn;
+@ 
+
+<<structure definitions>>=
+struct interface_defn {
+	interface_defn *next;
+
+	char *logical_iface;
+	char *real_iface;
+
+	address_family *address_family;
+	method *method;
+
+	int automatic;
+
+	int max_options;
+	int n_options;
+	variable *option;
+};
+@
+
+The last component in the above, the options, is represented by a
+series of name/value pairs, as follows:
+
+<<type definitions>>=
+typedef struct variable variable;
+@ 
+
+<<structure definitions>>=
+struct variable {
+	char *name;
+	char *value;
+};
+@ 
+
+We'll define a function to help us build arrays of these [[variables]].
+It's fairly straightforward: to add a variable, we simply construct
+a new structure and add it at the end of our array of variables,
+increasing the size of the array first if necessary. [[set_variable]]
+function adds a variable if it doesn't exist yet, or updates one which
+is already set but only if the variable name doesn't end with a question
+mark. If [[set_variable]] didn't do anything to the variable, it returns
+NULL.
+
+<<exported symbols>>=
+variable * set_variable(char *filename, char *name, char *value, 
+		variable **var, int *n_vars, int *max_vars);
+void convert_variables(char *filename, conversion *conversions, 
+		interface_defn *ifd);
+@
+
+<<config functions>>=
+variable * set_variable(char *filename, char *name, char *value, 
+		variable **var, int *n_vars, int *max_vars)
+{
+	/*
+	 * if name ends with '?', don't update
+	 * the variable if it already exists
+	 */
+	bool dont_update = false;
+
+	size_t len = strlen(name);
+
+	if (name[len - 1] == '?') {
+	    dont_update = true;
+	    len--;
+	}
+	if (strcmp(name, "pre-up") != 0
+    	&& strcmp(name, "up") != 0
+	    && strcmp(name, "down") != 0
+	    && strcmp(name, "post-down") != 0)
+	{
+		int j;
+		for (j = 0; j < *n_vars; j++) {
+			if (strncmpz(name, (*var)[j].name, len) == 0)
+			{
+				if (dont_update) {
+					return NULL;
+				}
+
+				free((*var)[j].value);
+				(*var)[j].value = strdup(value);
+				if (!(*var)[j].value) {
+					<<report internal error and die>>
+				}
+
+				return &((*var)[j]);
+			}
+		}
+	}
+
+	if (*n_vars >= *max_vars) {
+		variable *new_var;
+		*max_vars += 10;
+		new_var = realloc(*var, sizeof(variable) * *max_vars);
+		if (new_var == NULL) {
+			<<report internal error and die>>
+		}
+		*var = new_var;
+	}
+
+	(*var)[*n_vars].name = strndup(name, len);
+	(*var)[*n_vars].value = strdup(value);
+
+	if (!(*var)[*n_vars].name) {
+		<<report internal error and die>>
+	}
+
+	if (!(*var)[*n_vars].value) {
+		<<report internal error and die>>
+	}
+
+	(*n_vars)++;
+	return &((*var)[(*n_vars) - 1]);
+}
+
+void convert_variables(char *filename, conversion *conversions, 
+		interface_defn *ifd)
+{
+	conversion *c;
+	for (c = conversions; c && c->option && c->fn; c++) {
+		if (strcmp(c->option, "iface") == 0) {
+			if (c->newoption) {
+				variable *o = set_variable(filename, c->newoption, ifd->real_iface,
+					&ifd->option, &ifd->n_options, &ifd->max_options);
+				if (o)
+					c->fn(ifd, &o->value, c->argc, c->argv);
+				continue;
+			}
+		}
+
+		int j;
+		for (j = 0; j < ifd->n_options; j++) {
+			if (strcmp(ifd->option[j].name, c->option) == 0)
+			{
+				if (c->newoption) {
+					variable *o = set_variable(filename, c->newoption, ifd->option[j].value,
+						&ifd->option, &ifd->n_options, &ifd->max_options);
+					if (o)
+						c->fn(ifd, &o->value, c->argc, c->argv);
+				} else {
+					variable *o = &(ifd->option[j]);
+					c->fn(ifd, &o->value, c->argc, c->argv);
+				}
+			}
+		}
+	}
+}
+@
+
+In addition, we want to represent each mapping in the configuration
+file. This is somewhat simpler, since each mapping is entirely self
+contained, and doesn't need to reference previously determined address
+families or methods or anything.
+
+<<type definitions>>=
+typedef struct mapping_defn mapping_defn;
+@ 
+
+<<structure definitions>>=
+struct mapping_defn {
+	mapping_defn *next;
+
+	int max_matches;
+	int n_matches;
+	char **match;
+
+	char *script;
+
+	int max_mappings;
+	int n_mappings;
+	char **mapping;
+};
+@ 
+
+We can thus begin to instantiate our actual function. What we want is
+something that, given the name of a file, will produce the appropriate
+linked list of interfaces defined in it, or possibly give some sort of
+helpful error message. Pretty simple, hey?
+
+<<exported symbols>>=
+interfaces_file *read_interfaces(char *filename);
+interfaces_file *read_interfaces_defn(interfaces_file *defn, char *filename);
+@ 
+
+<<config functions>>=
+interfaces_file *read_interfaces(char *filename) {
+	interfaces_file *defn;
+
+	<<allocate defn or [[return NULL]]>>
+	return read_interfaces_defn(defn, filename);
+}
+
+interfaces_file *read_interfaces_defn(interfaces_file *defn, char *filename) {
+	<<variables local to read interfaces>>
+
+	<<open file or [[return NULL]]>>
+
+	while (<<we've gotten a line from the file>>) {
+		<<process the line>>
+	}
+	if (<<an error occurred getting the line>>) {
+		<<report internal error and die>>
+	}
+
+	<<close file>>
+
+	return defn;
+}
+@ 
+
+<<allocate defn or [[return NULL]]>>=
+defn = malloc(sizeof(interfaces_file));
+if (defn == NULL) {
+	return NULL;
+}
+defn->allowups = NULL;
+defn->mappings = NULL;
+defn->ifaces = NULL;
+@ 
+
+\subsection{File Handling}
+
+So, the first and most obvious thing to deal with is the file
+handling. Nothing particularly imaginative here.
+
+<<variables local to read interfaces>>=
+FILE *f;
+int line;
+@ 
+
+<<open file or [[return NULL]]>>=
+f = fopen(filename, "r");
+if ( f == NULL ) return NULL;
+line = 0;
+@
+
+<<close file>>=
+fclose(f);
+line = -1;
+@
+
+\subsection{Line Parsing}
+
+Our next problem is to work out how to read a single line from our
+input file. While this is nominally easy, we also want to deal nicely
+with things like continued lines, comments, and very long lines.
+
+So we're going to have to write and make use of a complicated little
+function, which we'll imaginatively call [[get_line()]]. It will need
+a pointer to the file it's reading from, as well as a buffer to store
+the line it finds. Since this buffer's size can't be known in advance
+we'll need to make it [[realloc()]]-able, which means we need to pass
+around references to both the buffer's location (which may change),
+and it's size (which probably will). Our function declaration is thus:
+
+<<config function declarations>>=
+static int get_line(char **result, size_t *result_len, FILE *f, int *line);
+@ 
+
+To use it, we'll need a couple of variables to stores the buffer's
+location, and it's current length.
+
+<<variables local to read interfaces>>=
+char *buf = NULL;
+size_t buf_len = 0;
+@ 
+
+Given these, and presuming we can actually implement the function, our
+key chunk can thus be implemented simply as:
+
+<<we've gotten a line from the file>>=
+get_line(&buf,&buf_len,f,&line)
+@ 
+
+We'll also add the requirement that errors are indicated by the
+[[errno]] variable being non-zero, which is usual and reasonable for
+all the circumstances where [[get_line()]] might have problems.
+
+<<config headers>>=
+#include <errno.h>
+@ 
+
+<<an error occurred getting the line>>=
+ferror(f) != 0
+@ 
+
+Actually defining the function is, as you'd probably imagine, a little
+more complicated. We begin by reading a line from the file. If it was
+a comment (that is, it has a [[#]] character at the first non-blank
+position) then we try again. Otherwise, if the line is continued
+(indicated by a [[\]] character at the very end of the line) we append
+the next line to the buffer. We go to a little bit of effort to trim
+whitespace, and finally return a boolean result indicating whether we
+got a line or not.
+
+<<config functions>>=
+static int get_line(char **result, size_t *result_len, FILE *f, int *line) {
+	<<variables local to get line>>
+
+	do {
+		<<clear buffer>>
+		<<append next line to buffer, or [[return 0]]>>
+		<<trim leading whitespace>>
+	} while (<<line is a comment>>);
+
+	while (<<buffer is continued>>) {
+		<<remove continuation mark>>
+		<<append next line to buffer, or [[return 0]]>>
+	}
+
+	<<trim trailing whitespace>>
+
+	return 1;
+}
+@ 
+
+In order to do string concatenation efficiently, we'll keep track of
+where the end of the line so far is --- this is thus where the
+terminating [[NUL]] will be by the end of the function.
+
+<<variables local to get line>>=
+size_t pos;
+@ 
+
+We can thus clear the buffer by simply resetting where we append new
+text to the beginning of the buffer. What could be simpler?
+
+<<clear buffer>>=
+pos = 0;
+@ 
+
+We'll be making use of the [[fgets()]] function to read the line
+(rather than, say, [[fgetc()]]) so to get an entire line we may have
+to make multiple attempts (if the line is bigger than our
+buffer). Realising this, and the fact that we may not have any
+allocated space for our buffer initially, we need a loop something
+like:
+
+<<append next line to buffer, or [[return 0]]>>=
+do {
+	<<reallocate buffer as necessary, or [[return 0]]>>
+	<<get some more of the line, or [[return 0]]>>
+} while(<<the line isn't complete>>);
+
+<<remove trailing newline>>
+
+(*line)++;
+
+assert( (*result)[pos] == '\0' );
+@ 
+
+When reallocating the buffer, we need to make sure it increases in
+chunks large enough that we don't have to do this too often, but not
+so huge that we run out of memory just to read an 81 character line.
+We'll use two fairly simple heuristics for this: if we've got room to
+add no more than 10 characters, we may as well reallocate the buffer,
+and when reallocating, we want to more or less double the buffer, but
+we want to at least add 80 characters. So we do both.
+
+<<reallocate buffer as necessary, or [[return 0]]>>=
+if (*result_len - pos < 10) {
+	char *newstr = realloc(*result, *result_len * 2 + 80);
+	if (newstr == NULL) {
+		return 0;
+	}
+	*result = newstr;
+	*result_len = *result_len * 2 + 80;
+}
+@ 
+
+The only time we need to keep reading is when the buffer wasn't big
+enough for the entire line. This is indicated by a full buffer, with
+no newline at the end. There is, actually, one case where this can
+happen legitimately --- where the last line of the file is
+\emph{exactly} the length of the buffer. We need to detect this
+because [[fgets()]] will return [[NULL]] and indicate that it's hit
+the end of the file, but we won't want to indicate that until the
+\emph{next} time we try to get a line. Complicated, isn't it?
+
+<<the line isn't complete>>=
+pos == *result_len - 1 && (*result)[pos-1] != '\n'
+@ 
+
+So having thought through all that, actually working with [[fgets()]]
+is fairly simple, especially since we deal with the actual errors
+elsewhere. All we need to do is make the call, update [[pos]] and
+check that the problems [[fgets()]] may have actually bother us.
+
+<<get some more of the line, or [[return 0]]>>=
+if (!fgets(*result + pos, *result_len - pos, f)) {
+	if (ferror(f) == 0 && pos == 0) return 0;
+	if (ferror(f) != 0) return 0;
+}
+pos += strlen(*result + pos);
+@ 
+
+[[fgets()]] leaves a [[\n]] in our buffer in some cases. We're never
+actually interested in it, however, so it's a good move to get rid of
+it.
+
+<<remove trailing newline>>=
+if (pos != 0 && (*result)[pos-1] == '\n') {
+	(*result)[--pos] = '\0';
+}
+@ 
+
+
+Pretty simple, hey? Now the next thing we want to do is get rid of
+some of the whitespace lying about. This is all pretty basic, and just
+involves finding where the whitespace begins and ends, and, well,
+getting rid of it.
+
+<<config headers>>=
+#include <ctype.h>
+@ 
+
+<<trim leading whitespace>>=
+{ 
+	int first = 0; 
+	while (isspace((*result)[first]) && (*result)[first]) {
+		first++;
+	}
+
+	memmove(*result, *result + first, pos - first + 1);
+	pos -= first;
+}
+@ 
+
+<<trim trailing whitespace>>=
+while (isspace((*result)[pos-1])) { /* remove trailing whitespace */
+	pos--;
+}
+(*result)[pos] = '\0';
+@ 
+
+As we mentioned earlier, a line is a comment iff it's first character
+is a [[#]] symbol. Similarly, it's continued iff it's very last
+character is a [[\]]. And, rather obviously, if we want to remove a
+single trailing [[\]], we can do so by changing it to a [[NUL]].
+
+<<line is a comment>>=
+(*result)[0] == '#'
+@ 
+
+<<buffer is continued>>=
+(*result)[pos-1] == '\\'
+@ 
+
+<<remove continuation mark>>=
+(*result)[--pos] = '\0';
+@ 
+
+\subsection{Line Processing}
+
+So. We've gone to a lot of trouble to get a line that we can parse
+with a snap of our fingers, so we probably better jump to it, to mix
+some \emph{clich\'e's}.
+
+We have two alternative bits of state to maintain between lines: either
+what interface we're currently defining, or what mapping we're currently
+defining.
+
+<<variables local to read interfaces>>=
+interface_defn *currif = NULL;
+mapping_defn *currmap = NULL;
+enum { NONE, IFACE, MAPPING } currently_processing = NONE;
+@ 
+
+Since our configuration files are pretty basic, we can work out what
+any particular line means based on the first word in it. To cope with
+this, we'll thus make use of a couple of variables, one to store the
+first word, and the other to store the rest of the line.
+
+<<variables local to read interfaces>>=
+char firstword[80];
+char *rest;
+@ 
+
+To initialize these variables we'll make use of a function I'm overly
+fond of called [[next_word()]]. It copies the first word in a string
+to a given buffer, and returns a pointer to the rest of the buffer.
+
+<<config function declarations>>=
+static char *next_word(char *buf, char *word, int maxlen);
+@
+
+<<config functions>>=
+static char *next_word(char *buf, char *word, int maxlen) {
+	if (!buf) return NULL;
+	if (!*buf) return NULL;
+
+	while(!isspace(*buf) && *buf) {
+		if (maxlen-- > 1) *word++ = *buf;
+		buf++;
+	}
+	if (maxlen > 0) *word = '\0';
+
+	while(isspace(*buf) && *buf) buf++;
+
+	return buf;
+}
+@ 
+
+So after all this, there are basically three different sorts of line
+we can get: the start of a new interface, the start of a new mapping,
+or an option for whatever interface we're currently working with.
+Note that we check for blank lines, but \emph{not} for options with
+empty values.  This has to be done on a case-by-case basis.
+
+<<process the line>>=
+rest = next_word(buf, firstword, 80);
+if (rest == NULL) continue; /* blank line */
+
+if (strcmp(firstword, "mapping") == 0) {
+	<<process [[mapping]] line>>
+	currently_processing = MAPPING;
+} else if (strcmp(firstword, "source") == 0) {
+	<<process [[source]] line>>
+	currently_processing = NONE;
+} else if (strcmp(firstword, "iface") == 0) {
+	<<process [[iface]] line>>
+	currently_processing = IFACE;
+} else if (strcmp(firstword, "auto") == 0) {
+	<<process [[auto]] line>>
+	currently_processing = NONE;
+} else if (strncmp(firstword, "allow-", 6) == 0 && strlen(firstword) > 6) {
+	<<process [[allow-]] line>>
+	currently_processing = NONE;
+} else {
+	<<process option line>>
+}
+@ 
+
+<<process option line>>=
+switch(currently_processing) {
+	case IFACE:
+		<<process iface option line>>
+		break;
+	case MAPPING:
+		<<process mapping option line>>
+		break;
+	case NONE:
+	default:
+		<<report bad option and die>>
+}
+@ 
+
+\subsubsection{Source Line}
+
+When processing the [[source]] stanza, we use [[wordexp]] function to expand wildcards 
+and environment variables. 
+
+<<config headers>>=
+#include <wordexp.h>
+@
+
+We use [[WRDE_NOCMD]] flag, so no command substitution occurs
+because of security concerns. Then we go through the output array and read interfaces 
+recursively into already allocated [[defn]].
+
+<<process [[source]] line>>=
+wordexp_t p;
+char ** w;
+size_t i;
+int fail = wordexp(rest, &p, WRDE_NOCMD);
+if (!fail)
+{
+	w = p.we_wordv;
+	for (i = 0; i < p.we_wordc; i++)
+	{
+		read_interfaces_defn(defn, w[i]);
+	}
+	wordfree(&p);
+}
+@
+
+\subsubsection{Mapping Line}
+
+Declaring a new mapping is reasonably copewithable --- we need to process
+a few things, but they're reasonably easy to handle.
+
+The main weirdness is that we're processing the [[mapping]] line itself
+and the rest of the stanza in separate blocks of code. So this first
+chunk just needs to do the basics of initialising the data structure,
+but can't really fill in all that much of it.
+
+<<process [[mapping]] line>>=
+<<allocate new mapping>>
+<<parse mapping interfaces>>
+<<set other mapping options to defaults>>
+<<add to list of mappings>>
+@ 
+
+<<allocate new mapping>>=
+currmap = malloc(sizeof(mapping_defn));
+if (currmap == NULL) {
+	<<report internal error and die>>
+}
+@ 
+
+<<parse mapping interfaces>>=
+currmap->max_matches = 0;
+currmap->n_matches = 0;
+currmap->match = NULL;
+
+while((rest = next_word(rest, firstword, 80))) {
+	if (currmap->max_matches == currmap->n_matches) {
+		char **tmp;
+		currmap->max_matches = currmap->max_matches * 2 + 1;
+		tmp = realloc(currmap->match, 
+			sizeof(*tmp) * currmap->max_matches);
+		if (tmp == NULL) {
+			currmap->max_matches = (currmap->max_matches - 1) / 2;
+			<<report internal error and die>>
+		}
+		currmap->match = tmp;
+	}
+
+	currmap->match[currmap->n_matches++] = strdup(firstword);
+}
+@ 
+
+<<set other mapping options to defaults>>=
+currmap->script = NULL;
+
+currmap->max_mappings = 0;
+currmap->n_mappings = 0;
+currmap->mapping = NULL;
+@ 
+
+<<add to list of mappings>>=
+{
+	mapping_defn **where = &defn->mappings;
+	while(*where != NULL) {
+		where = &(*where)->next;
+	}
+	*where = currmap;
+	currmap->next = NULL;
+}
+@ 
+
+So that's that. But as mentioned, we also need to cope with the options
+within the stanza, as well as the lead in. As before, it's not really
+complicated, and we do it thusly:
+
+<<process mapping option line>>=
+if (strcmp(firstword, "script") == 0) {
+	<<handle [[script]] line>>
+} else if (strcmp(firstword, "map") == 0) {
+	<<handle [[map]] line>>
+} else {
+	<<report bad option and die>>
+}
+@ 
+
+<<handle [[script]] line>>=
+if (currmap->script != NULL) {
+	<<report duplicate script in mapping and die>>
+} else {
+	currmap->script = strdup(rest);
+}
+@ 
+
+<<handle [[map]] line>>=
+if (currmap->max_mappings == currmap->n_mappings) {
+	char **opt;
+	currmap->max_mappings = currmap->max_mappings * 2 + 1;
+	opt = realloc(currmap->mapping, sizeof(*opt) * currmap->max_mappings);
+	if (opt == NULL) {
+		<<report internal error and die>>
+	}
+	currmap->mapping = opt;
+}
+currmap->mapping[currmap->n_mappings] = strdup(rest);
+currmap->n_mappings++;
+@ 
+
+\subsubsection{Interface line}
+
+Declaring a new interface follows the same pattern, but is somewhat more
+interesting and some more complicated data structures are involved.
+
+<<process [[iface]] line>>=
+{
+	<<variables local to process [[iface]] line>>
+
+	<<allocate new interface>>
+
+	<<parse interface settings>>
+
+	<<set iface name>>
+	<<set address family>>
+	<<set method>>
+	<<set other interface options to defaults>>
+
+	<<add to list of interfaces>>
+}
+@ 
+
+We'll deal with each of these phases one by one and pretty much in
+order, so prepare yourself for the intense excitement of memory
+allocation!
+
+<<allocate new interface>>=
+currif = malloc(sizeof(interface_defn));
+if (!currif) {
+	<<report internal error and die>>
+}
+@ 
+
+When we introduce a new interface, we simultaneously name the
+interface, the address family, and the method. We cope with this by,
+well, getting somewhere to store each of them, and then, well, storing
+them.
+
+<<variables local to process [[iface]] line>>=
+char iface_name[80];
+char address_family_name[80];
+char method_name[80];
+@ 
+
+<<parse interface settings>>=
+rest = next_word(rest, iface_name, 80);
+rest = next_word(rest, address_family_name, 80);
+rest = next_word(rest, method_name, 80);
+
+if (rest == NULL) {
+	<<report too few parameters for iface line and die>>
+}
+
+if (rest[0] != '\0') {
+	<<report too many parameters for iface line and die>>
+}
+@ 
+
+We then want to store the interface name.
+
+<<set iface name>>=
+currif->logical_iface = strdup(iface_name);
+if (!currif->logical_iface) {
+	<<report internal error and die>>
+}
+@ 
+
+Setting the address family is a little more involved, because it's not
+very useful to know what the name of the address family is, you really
+want to know all the details recorded in the appropriate
+[[address_family]] structure. So we'll make use of a little helper
+function, called [[get_address_family()]] to convert the useless
+string, to the hopefully less useless structure.
+
+<<config function declarations>>=
+static address_family *get_address_family(address_family *af[], char *name);
+@ 
+
+<<set address family>>=
+currif->address_family = get_address_family(addr_fams, address_family_name);
+if (!currif->address_family) {
+	<<report unknown address family and die>>
+}
+@ 
+
+Of course, we probably need to actually implement the function too. We
+won't do anything particularly fancy here, just a simple linear
+search. \emph{Should this really be here, or an exported symbol from
+[[addrfam.c]]? --- aj}
+
+<<config functions>>=
+static address_family *get_address_family(address_family *af[], char *name) {
+	int i;
+	for (i = 0; af[i]; i++) {
+		if (strcmp(af[i]->name, name) == 0) {
+			return af[i];
+		}
+	}
+	return NULL;
+}
+@
+
+We do something incredibly similar when dealing with the method the
+user wishes to use, and we do it for incredibly similar reasons. Again
+we declare a cute little helper function, this time imaginatively
+called [[get_method()]], and then go and use it and implement in
+almost exactly the same way as before. I told you this was going to be
+a thrill. \emph{The same note applies here, too --- aj}
+
+<<config function declarations>>=
+static method *get_method(address_family *af, char *name);
+@ 
+
+<<set method>>=
+currif->method = get_method(currif->address_family, method_name);
+if (!currif->method) {
+	<<report unknown method and die>>
+	return NULL; /* FIXME */
+}
+@
+
+<<config functions>>=
+static method *get_method(address_family *af, char *name) {
+	int i;
+	for (i = 0; i < af->n_methods; i++) {
+		if (strcmp(af->method[i].name, name) == 0) {
+			return &af->method[i];
+		}
+	}
+	return NULL;
+}
+@
+
+You'll continue to be enthralled as we set the remaining options to
+some default values.
+
+<<set other interface options to defaults>>=
+currif->automatic = 1;
+currif->max_options = 0;
+currif->n_options = 0;
+currif->option = NULL;
+@ 
+
+Since we want to keep the interfaces in order, we have to go all the
+way to the end of the list of interfaces to add the new interface, and
+we can hence set the [[next]] pointer to NULL in all cases. Gee. Whiz.
+
+We allow multiple interface definitions just to cope well with multiple
+network addresses which can be assigned to the same interface (which is
+a standard feature in IPv6, for example).
+
+<<add to list of interfaces>>=
+{
+	interface_defn **where = &defn->ifaces; 
+	while(*where != NULL) {
+		where = &(*where)->next;
+	}
+
+	*where = currif;
+	currif->next = NULL;
+}
+@ 
+
+Dealing with the per-interface options is the next thing to deal
+with. 
+
+<<process iface option line>>=
+<<convert [[post-up]] and [[pre-down]] aliases to [[up]] and [[down]]>>
+<<check for duplicate options>>
+<<add option>>
+@
+
+<<convert [[post-up]] and [[pre-down]] aliases to [[up]] and [[down]]>>=
+if (strcmp(firstword, "post-up") == 0) {
+	strcpy(firstword, "up");
+}
+if (strcmp(firstword, "pre-down") == 0) {
+	strcpy(firstword, "down");
+} 
+@
+
+<<check for duplicate options>>=
+{
+	int i;
+
+	if (strlen (rest) == 0) {
+		<<report empty option and die>>
+	}
+
+	if (strcmp(firstword, "pre-up") != 0 
+	    && strcmp(firstword, "up") != 0
+	    && strcmp(firstword, "down") != 0
+	    && strcmp(firstword, "post-down") != 0)
+        {
+		for (i = 0; i < currif->n_options; i++) {
+			if (strcmp(currif->option[i].name, firstword) == 0) {
+				size_t l = strlen(currif->option[i].value);
+				currif->option[i].value = realloc(currif->option[i].value, l + strlen(rest) + 2); /* 2 for NL and NULL */
+				if (!currif->option[i].value) {
+					<<report internal error and die>>
+				}
+
+				currif->option[i].value[l] = '\n';
+				strcpy(&(currif->option[i].value[l + 1]), rest);
+			}
+		}
+	}
+}
+@ 
+
+Given the previous definition of [[set_variable()]] adding an option
+is straightforward.
+
+<<add option>>=
+set_variable(filename, firstword, rest,
+	 &currif->option, &currif->n_options, &currif->max_options);
+@
+
+\subsubsection{Auto and Allow Lines}
+
+Processing the [[auto]] and [[allow-]] lines is pretty straightforward
+after the above, we just need to add each parameter to the list and
+check for duplicates. Since we're doing essentially the same thing twice,
+we'll break the common part out into a function.
+
+<<process [[auto]] line>>=
+allowup_defn *auto_ups = get_allowup(&defn->allowups, "auto");
+if (!auto_ups) {
+	<<report internal error and die>>
+}
+while((rest = next_word(rest, firstword, 80))) {
+	if (!add_allow_up(filename, line, auto_ups, firstword))
+		return NULL;
+}
+@ 
+<<process [[allow-]] line>>=
+allowup_defn *allow_ups = get_allowup(&defn->allowups, firstword + 6);
+if (!allow_ups) {
+	<<report internal error and die>>
+}
+while((rest = next_word(rest, firstword, 80))) {
+	if (!add_allow_up(filename, line, allow_ups, firstword))
+		return NULL;
+}
+@ 
+
+<<config function declarations>>=
+allowup_defn *get_allowup(allowup_defn **allowups, char *name);
+
+<<config functions>>=
+allowup_defn *get_allowup(allowup_defn **allowups, char *name) {
+	for (; *allowups; allowups = &(*allowups)->next) {
+		if (strcmp((*allowups)->when, name) == 0) break;
+	}
+	if (*allowups == NULL) {
+		*allowups = malloc(sizeof(allowup_defn));
+		if (*allowups == NULL) return NULL;
+		(*allowups)->when = strdup(name);
+		(*allowups)->next = NULL;
+		(*allowups)->max_interfaces = 0;
+		(*allowups)->n_interfaces = 0;
+		(*allowups)->interfaces = NULL;
+	}
+	return *allowups;
+}
+@
+
+We'll want to export a little helper function to make finding the appropriate
+allowup easier too:
+
+<<exported symbols>>=
+allowup_defn *find_allowup(interfaces_file *defn, char *name);
+@
+
+<<config functions>>=
+allowup_defn *find_allowup(interfaces_file *defn, char *name) {
+	allowup_defn *allowups = defn->allowups;
+	for (; allowups; allowups = allowups->next) {
+		if (strcmp(allowups->when, name) == 0) break;
+	}
+	return allowups;
+}
+@
+
+<<config function declarations>>=
+allowup_defn *add_allow_up(char *filename, int line,
+	 allowup_defn *allow_up, char *iface_name);
+@
+
+<<config functions>>=
+allowup_defn *add_allow_up(char *filename, int line,
+	allowup_defn *allow_up, char *iface_name)
+{
+	<<check [[iface_name]] isn't already an [[allow_up]] interface or die>>
+	<<add [[iface_name]] as an [[allow_up]] interface or die>>
+	return allow_up;
+}
+@
+
+<<check [[iface_name]] isn't already an [[allow_up]] interface or die>>=
+{
+	int i;
+
+	for (i = 0; i < allow_up->n_interfaces; i++) {
+		if (strcmp(iface_name, allow_up->interfaces[i]) == 0) {
+			<<report [[iface_name]] as [[allow_up]] duplicate, die>>
+		}
+	}
+}
+@
+
+<<add [[iface_name]] as an [[allow_up]] interface or die>>=
+if (allow_up->n_interfaces == allow_up->max_interfaces) {
+	char **tmp;
+	allow_up->max_interfaces *= 2;
+	allow_up->max_interfaces++;
+	tmp = realloc(allow_up->interfaces, 
+		sizeof(*tmp) * allow_up->max_interfaces);
+	if (tmp == NULL) {
+		<<report internal error and die>>
+	}
+	allow_up->interfaces = tmp;
+}
+
+allow_up->interfaces[allow_up->n_interfaces] = strdup(iface_name);
+allow_up->n_interfaces++;
+@
+
+\subsection{Error Handling}
+
+We don't do anything too fancy about handling errors that occur, we
+just print out a hopefully helpful error message, and return from the
+function. \emph{We probably should also go to some effort to close files,
+and free memory, but well, you know. Maybe version $n+1$. --- aj}
+
+<<report internal error and die>>=
+perror(filename);
+return NULL;
+@ 
+
+<<report too few parameters for iface line and die>>=
+fprintf(stderr, "%s:%d: too few parameters for iface line\n", filename, line);
+return NULL;
+@
+
+<<report too many parameters for iface line and die>>=
+fprintf(stderr, "%s:%d: too many parameters for iface line\n", filename, line);
+return NULL;
+@
+
+<<report unknown address family and die>>=
+fprintf(stderr, "%s:%d: unknown address type\n", filename, line);
+return NULL;
+@
+
+<<report unknown method and die>>=
+fprintf(stderr, "%s:%d: unknown method\n", filename, line);
+return NULL;
+@
+
+<<report unknown interface and die>>=
+fprintf(stderr, "Unknown interface %s\n", iface);
+return 1;
+@
+
+<<report [[iface_name]] as [[allow_up]] duplicate, die>>=
+fprintf(stderr, "%s:%d: interface %s declared allow-%s twice\n", 
+	filename, line, iface_name, allow_up->when);
+return NULL;
+@
+
+<<report duplicate script in mapping and die>>=
+fprintf(stderr, "%s:%d: duplicate script in mapping\n", filename, line);
+return NULL;
+@ 
+
+<<report bad option and die>>=
+fprintf(stderr, "%s:%d: misplaced option\n", filename, line);
+return NULL;
+@
+
+<<report empty option and die>>=
+fprintf(stderr, "%s:%d: option with empty value\n", filename, line);
+return NULL;
+@ 
+
+\section{Execution}
+
+The [[execute]] module will be laid out in the standard manner, and
+will make use of the usual header files.
+
+<<execute.c>>=
+<<execute headers>>
+<<execute global variables>>
+<<execute function declarations>>
+<<execute functions>>
+@ 
+
+<<execute headers>>=
+#include <stdio.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+
+#include "header.h"
+@
+
+The key functions we export from here are all the functions that as a
+fairly direct result run some executable.
+
+\begin{itemize}
+	\item [[iface_up()]] and [[iface_down()]] which will actually
+	configure or deconfigure an interface.
+
+	\item [[iface_list()]] which permits querying a list of known
+	interfaces by class.
+
+	\item [[iface_query()]], to query configuration details about a
+	specific interface by name.
+
+	\item [[execute()]] which will take an interface definition and
+	a command and fill in the details from the first into the
+	second, and the execute the result. This is basically just a
+	callback for the address family module.
+
+	\item [[run_mapping()]] which will run a mapping script and
+	determine if a new logical interface should be selected.
+\end{itemize}
+
+We'll discuss each of these in order.
+
+\subsection{Interface Configuration and Deconfiguration}
+
+Most of the complexity is involved in implementing the [[iface_up()]] and
+[[iface_down()]] functions. These are complicated enough that an explanatory
+diagram is probably useful:
+
+\begin{center}
+\includegraphics[height=60mm]{execution}
+\end{center}
+
+At a conceptual level, [[iface_up()]] and [[iface_down()]] have a
+reasonably straightforward job: they have to run one set of scripts,
+then configure or deconfigure the interface, then run another set of
+scripts.
+
+This is complicated slightly in that they also have to handle the
+possibility that some of an interface's required arguments may be missing
+(in which case none of the commands should be attempted), and that some
+of the commands may fail (in which case none of the following commands
+should be attempted). We've already encoded most of the early-abort
+logic for the latter case into the address family definitions; so the way
+we'll handle the the former case is simply to call the address family's
+method [[up()]] or [[down()]] twice: once to ensure all the variables are
+appropriately filled out, and once to actually configure the interface.
+
+\subsubsection{Command checking}
+
+As such, we'll make use of two execution functions, each of which take
+one parameter, a shell command. We'll uninventively call these [[doit()]]
+and [[check()]]. They'll return 0 on failure, non-zero on success.
+
+[[check()]] is thus fairly trivial:
+
+<<execute function declarations>>=
+static int check(char *str);
+@
+
+<<execute functions>>=
+static int check(char *str) {
+	return str != NULL;
+}
+@ 
+
+\subsubsection{Environment handling}
+
+[[doit()]] is much more complicated, mainly by the fact that we
+don't simply want to just run the programs, but because we also want
+to setup a sanitized environment. In particular, we want to make the
+environment variables [[IFACE]], and [[MODE]] available (eg, [[eth0]] and
+[[start]] respectively), and we want to export all the given options as
+[[IF_OPTION]], with some sanitisation.
+
+We'll do this just once per interface rather than once per command,
+and so we'll use a global variable to store our new environment, and a
+special function which will initialise it for us.
+
+<<execute global variables>>=
+static char **environ = NULL;
+@ 
+
+[[environ]] will be in the format used by the [[execle()]] function call,
+that is, a [[NULL]]-terminated array of strings of the form [[foo=bar]].
+
+<<execute function declarations>>=
+static void set_environ(interface_defn *iface, char *mode, char *phase);
+@
+
+Our function then will be:
+
+<<execute functions>>=
+static void set_environ(interface_defn *iface, char *mode, char *phase) {
+	<<variables local to set environ>>
+	int i;
+	const int n_env_entries = iface->n_options + 8;
+
+	<<initialise environ [[n_env_entries]]>>
+
+	for (i = 0; i < iface->n_options; i++) {
+		<<[[continue]] if option is a command>>
+
+		<<add [[IF_]]option to environment>>
+	}
+
+	<<add [[IFACE]] to environment>>
+	<<add [[LOGICAL]] to environment>>
+	<<add [[ADDRFAM]] to environment>>
+	<<add [[METHOD]] to environment>>
+
+	<<add [[MODE]] to environment>>
+	<<add [[PHASE]] to environment>>
+	<<add [[VERBOSITY]] to environment>>
+
+	<<add [[PATH]] to environment>>
+}
+@
+
+Since we keep adding at the end, we'll make use of a pointer to keep track
+of where the end actually is, namely:
+
+<<variables local to set environ>>=
+char **environend;
+@
+
+Initialising thus becomes:
+
+<<initialise environ [[n_env_entries]]>>=
+<<clear environ if necessary>>
+environ = malloc(sizeof(char*) * (n_env_entries + 1 /* for final NULL */));
+environend = environ; 
+*environend = NULL;
+@
+
+<<clear environ if necessary>>=
+{
+	char **ppch;
+	if (environ != NULL) {
+		for (ppch = environ; *ppch; ppch++) {
+			free(*ppch);
+			*ppch = NULL;
+		}
+		free(environ);
+		environ = NULL;
+	}
+}
+@
+
+Our continue chunk is also fairly straight forward:
+
+<<[[continue]] if option is a command>>=
+if (strcmp(iface->option[i].name, "pre-up") == 0
+    || strcmp(iface->option[i].name, "up") == 0
+    || strcmp(iface->option[i].name, "down") == 0
+    || strcmp(iface->option[i].name, "post-down") == 0)
+{
+	continue;
+}
+@
+
+We'll make use of a small helper function for actually setting the
+environment. This function will handle [[malloc]]ing enough memory, and
+ensuring the environment variable name is reasonably sensible. It'll
+take three parameters: a [[printf]]-style format string presumed to
+contain two [[%s]]s, and the two parameters to that format string.
+
+<<execute function declarations>>=
+static char *setlocalenv(char *format, char *name, char *value);
+@
+
+We can then go ahead and fill in the environment.
+
+<<add [[IF_]]option to environment>>=
+*(environend++) = setlocalenv("IF_%s=%s", iface->option[i].name,
+                              iface->option[i].value ? iface->option[i].value : "");
+*environend = NULL;
+@
+
+<<add [[IFACE]] to environment>>=
+*(environend++) = setlocalenv("%s=%s", "IFACE", iface->real_iface);
+*environend = NULL;
+@
+
+<<add [[LOGICAL]] to environment>>=
+*(environend++) = setlocalenv("%s=%s", "LOGICAL", iface->logical_iface);
+*environend = NULL;
+@
+
+<<add [[MODE]] to environment>>=
+*(environend++) = setlocalenv("%s=%s", "MODE", mode);
+*environend = NULL;
+@
+
+<<add [[PHASE]] to environment>>=
+*(environend++) = setlocalenv("%s=%s", "PHASE", phase); 
+*environend = NULL;
+@
+
+<<add [[PATH]] to environment>>=
+*(environend++) = setlocalenv("%s=%s", "PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+*environend = NULL;
+@
+
+<<add [[VERBOSITY]] to environment>>=
+*(environend++) = setlocalenv("%s=%s", "VERBOSITY", verbose ? "1" : "0");
+*environend = NULL;
+@
+
+<<add [[ADDRFAM]] to environment>>=
+*(environend++) = setlocalenv("%s=%s", "ADDRFAM", iface->address_family->name);
+*environend = NULL;
+@
+
+<<add [[METHOD]] to environment>>=
+*(environend++) = setlocalenv("%s=%s", "METHOD", iface->method->name);
+*environend = NULL;
+@
+
+Our helper function then will then be something like:
+
+<<execute functions>>=
+static char *setlocalenv(char *format, char *name, char *value) {
+	char *result;
+
+	<<allocate memory for [[result]]>>
+
+	sprintf(result, format, name, value);
+
+	<<tidy [[result]]>>
+
+	return result;
+}
+@
+
+Allocating the memory is fairly straightforward (although working out
+exactly how much memory involves a little guesswork, and assuming the
+caller passes in a reasonable [[format]]).
+
+<<allocate memory for [[result]]>>=
+result = malloc(strlen(format)   /* -4 for the two %s's */
+                + strlen(name) 
+                + strlen(value) 
+                + 1);
+if (!result) {
+	perror("malloc");
+	exit(1);
+}
+@
+
+And finally, tidying the result is a fairly simple matter of eliding all
+the characters we don't like, or translating them to ones we do like. We
+do like upper case letters, digits and underscores; and we're willing
+to translate hyphens and lower case letters. So here we go.
+
+<<tidy [[result]]>>=
+{
+	char *here, *there;
+
+	for(here = there = result; *there != '=' && *there; there++) {
+		if (*there == '-') *there = '_';
+		if (isalpha(*there)) *there = toupper(*there);
+
+		if (isalnum(*there) || *there == '_') {
+			*here = *there;
+			here++;
+		}
+	}
+	memmove(here, there, strlen(there) + 1);
+}
+@
+
+\subsubsection{Command Execution}
+
+Our [[doit()]] function is then essentially a rewrite of the standard
+[[system()]] function call. The only additions are that we setup our
+child's environment as discussed previously, and we make use of two
+external globals, [[no_act]] and [[verbose]] and modify our behaviour
+based on those.
+
+<<exported symbols>>=
+int doit(char *str);
+@
+
+<<execute functions>>=
+int doit(char *str) {
+	assert(str);
+
+	if (verbose || no_act) {
+		fprintf(stderr, "%s\n", str);
+	}
+	if (!no_act) {
+		pid_t child;
+		int status;
+
+		fflush(NULL);
+		setpgid(0, 0);
+		switch(child = fork()) {
+		    case -1: /* failure */
+			return 0;
+		    case 0: /* child */
+			execle("/bin/sh", "/bin/sh", "-c", str, NULL, environ);
+			exit(127);
+		    default: /* parent */
+		    	break;
+		}
+		waitpid(child, &status, 0);
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+			return 0;
+	}
+	return 1;
+}
+@
+
+\subsubsection{Executing a list of commands}
+
+In addition to the above, we also need a function to cope with running
+all the [[pre-up]] commands and so forth.
+
+<<exported symbols>>=
+int execute_options(interface_defn *ifd, execfn *exec, char *opt);
+int execute_scripts(interface_defn *ifd, execfn *exec, char *opt);
+@ 
+
+All we need to do for this is to iterate through the options in the
+interface definition, and execute whichever ones are the right type,
+and call the [[run-parts]] command on the appropriate directory of
+scripts. That doesn't make for thrilling code.
+
+This function will generally have [[doit]] passed in as the [[exec]]
+parameter.
+
+<<execute functions>>=
+int execute_options(interface_defn *ifd, execfn *exec, char *opt) {
+	int i;
+	for (i = 0; i < ifd->n_options; i++) {
+		if (strcmp(ifd->option[i].name, opt) == 0) {
+			if (!(*exec)(ifd->option[i].value)) {
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+int execute_scripts(interface_defn *ifd, execfn *exec, char *opt) {
+	if (!run_scripts) return;
+
+	char buf[100];
+	snprintf(buf, sizeof(buf), "run-parts %s /etc/network/if-%s.d",
+		verbose ? "--verbose" : "", opt);
+
+	(*exec)(buf); 
+
+	return 1;
+}
+@ 
+
+\subsubsection{[[iface_up()]], [[iface_down()]], [[iface_list()]], and [[iface_query()]]}
+
+Our functions, then are:
+
+<<exported symbols>>=
+int iface_preup(interface_defn *iface);
+int iface_postup(interface_defn *iface);
+int iface_up(interface_defn *iface);
+int iface_predown(interface_defn *iface);
+int iface_postdown(interface_defn *iface);
+int iface_down(interface_defn *iface);
+int iface_list(interface_defn *iface);
+int iface_query(interface_defn *iface);
+@ 
+
+<<execute functions>>=
+int iface_preup(interface_defn *iface) {
+	if (!iface->method->up(iface,check)) return -1;
+
+	set_environ(iface, "start", "pre-up");
+	if (!execute_options(iface,doit,"pre-up")) return 0;
+	if (!execute_scripts(iface,doit,"pre-up")) return 0;
+
+	return 1;
+}
+
+int iface_postup(interface_defn *iface) {
+	if (!iface->method->up(iface,doit)) return 0;
+
+	set_environ(iface, "start", "post-up");
+	if (!execute_options(iface,doit,"up")) return 0;
+	if (!execute_scripts(iface,doit,"up")) return 0;
+
+	return 1;
+}
+
+int iface_up(interface_defn *iface) {
+	int result = iface_preup(iface);
+	if (result != 1) return result;
+	return iface_postup(iface);
+}
+@ 
+
+When bringing interface down, we check if there's [[ifup]] is still running
+and send [[SIGTERM]] to terminate it.
+
+<<terminate ifup if it's still running>>=
+char pidfilename[100];
+snprintf(pidfilename, sizeof(pidfilename), RUN_DIR "ifup-%s.pid",
+	iface->real_iface);
+FILE * pidfile = fopen(pidfilename, "r");
+if (pidfile) {
+	int pid;
+	if (fscanf(pidfile, "%d", &pid)) {
+		if (verbose) {
+			fprintf(stderr, "Terminating ifup (pid %d)\n", pid);
+		}
+		kill((pid_t) -pid, SIGTERM);
+	}
+	fclose(pidfile);
+	unlink(pidfilename);
+}
+@ 
+
+<<execute functions>>=
+int iface_predown(interface_defn *iface) {
+	if (!no_act) {
+	    <<terminate ifup if it's still running>>
+	}
+
+	if (!iface->method->down(iface,check)) return -1;
+
+	set_environ(iface, "stop", "pre-down");
+	if (!execute_scripts(iface,doit,"down")) return 0;
+	if (!execute_options(iface,doit,"down")) return 0;
+
+	return 1;
+}
+
+int iface_postdown(interface_defn *iface) {
+	if (!iface->method->down(iface,doit)) return 0;
+
+	set_environ(iface, "stop", "post-down");
+	if (!execute_scripts(iface,doit,"post-down")) return 0;
+	if (!execute_options(iface,doit,"post-down")) return 0;
+
+	return 1;
+}
+
+int iface_down(interface_defn *iface) {
+	int result = iface_predown(iface);
+	if (result != 1) return result;
+	return iface_postdown(iface);
+}
+@ 
+
+<<execute functions>>=
+int iface_list(interface_defn *iface) {
+	printf("%s\n",iface->real_iface);
+	return 0;
+}
+@
+
+<<execute functions>>=
+int iface_query(interface_defn *iface) {
+	int i;
+	for (i = 0; i < iface->n_options; i++) {
+		printf("%s: %s\n",iface->option[i].name, iface->option[i].value);
+	}
+	return 0;
+}
+@
+
+\subsection{Command Parsing}
+
+All the above just leave one thing out: how the address family method's
+configuration function gets back to calling [[doit()]]. This function
+answers that question:
+
+<<exported symbols>>=
+int execute(char *command, interface_defn *ifd, execfn *exec);
+@ 
+
+At the somewhat abstract level, this is fairly trivial. The devil is
+in the details of the parsing, which makes up the rest of the module.
+
+<<execute functions>>=
+int execute(char *command, interface_defn *ifd, execfn *exec) { 
+	char *out;
+	int ret;
+
+	out = parse(command, ifd);
+	if (!out) { return 0; }
+
+	ret = (*exec)(out);
+
+	free(out);
+	return ret;
+}
+@ 
+
+We'll need a basic parser function, which we'll call [[parse()]], to
+make the appropriate substitutions into a command. It's probably worth
+a note as to exactly what substitutions may be made:
+
+\begin{itemize}
+
+	\item Special characters can be escaped with a backslash. eg
+	[[ls MoreThan80\%]].
+
+	\item Variables can be substituted by including their name
+	delimeted by percents. eg [[ls %directory%]].
+
+	\item Optional components may be enclosed in double square
+	brackets. Optional components will be included exactly when
+	every variable referenced within exists. eg
+	[[ls [[--color=%color%]]][[] %directory%]]. Optional components
+	may be nested.
+
+\end{itemize}
+
+Most of the parsing is fairly straightforward -- basically, we keep an
+output buffer, and add things to it as we stroll through the input
+buffer: either the actual character we want, or whatever the value of
+the variable we're looking at is, or whatever. The only particularly
+complicated bit is how we deal with the optional sections, which will
+be explained when we get to them.
+
+<<execute function declarations>>=
+static char *parse(char *command, interface_defn *ifd);
+@ 
+
+<<execute functions>>=
+static char *parse(char *command, interface_defn *ifd) {
+	<<variables local to parse>>
+
+	while(*command) {
+		switch(*command) {
+			<<handle a token>>
+		}
+	}
+
+	<<deal with error conditions>>
+
+	<<return result>>
+}
+@
+
+\subsubsection{Maintain output buffer}
+
+So the first thing we need to do is actually write some code to deal
+with the output buffer, which will need to be dynamically resized and
+so on to take care of possibly long strings and what-not. It is the
+caller's responsibility to [[free()]] this buffer. We'll maintain two
+extra variables for convenience: who much memory we've allocated
+[[len]], and where the next character should be stuck [[pos]].
+
+<<variables local to parse>>=
+char *result = NULL;
+size_t pos = 0, len = 0;
+@ 
+
+This makes it pretty easy to return the result to the caller, too.
+
+<<return result>>=
+return result;
+@
+
+The main thing to be done to this buffer is to add characters or
+strings to it. To deal with this, we'll make use of an [[addstr()]]
+function that resizes the buffer as necessary, and appends a string to
+it. So we can deal with single characters, and substrings in general,
+we'll specify the string to be added as a pointer-length combination,
+rather than as a [[NUL]] terminated string.
+
+<<execute function declarations>>=
+void addstr(char **buf, size_t *len, size_t *pos, char *str, size_t strlen);
+@ 
+
+<<execute functions>>=
+void addstr(char **buf, size_t *len, size_t *pos, char *str, size_t strlen) {
+	assert(*len >= *pos);
+	assert(*len == 0 || (*buf)[*pos] == '\0');
+
+	if (*pos + strlen >= *len) {
+		char *newbuf;
+		newbuf = realloc(*buf, *len * 2 + strlen + 1);
+		if (!newbuf) {
+			perror("realloc");
+			exit(1); /* a little ugly */
+		}
+		*buf = newbuf;
+		*len = *len * 2 + strlen + 1;
+	}
+
+	while (strlen-- >= 1) {
+		(*buf)[(*pos)++] = *str;
+		str++;
+	}
+	(*buf)[*pos] = '\0';
+}
+@ 
+
+Given this, we can define our default behaviour for a character:
+
+<<handle a token>>=
+default:
+	addstr(&result, &len, &pos, command, 1);
+	command++;
+	break;
+@ 
+
+\subsubsection{Escaped characters}
+
+We can also deal pretty simply with escaped tokens. The only special
+circumstance is if the [[\]] is at the very end of string. We don't
+want buffer overflows afterall.
+
+<<handle a token>>=
+case '\\':
+	if (command[1]) {
+		addstr(&result, &len, &pos, command+1, 1);
+		command += 2;
+	} else {
+		addstr(&result, &len, &pos, command, 1);
+		command++;
+	}
+	break;
+@ 
+
+\subsubsection{Optional components}
+
+Basically we keep track of each optional section we're in, whether
+we've been unable to fill in any variables, and where we started
+it. When we reach the end of an optional section, we check to see if
+we were unable to fill in any variables, and, if so, we discard any
+text we'd added within that block. This also allows us to neatly check
+for any errors trying to fill in variables that aren't in optional
+sections.
+
+Basically what we'll do here is keep one stack to represent where the
+various thingos started, and another to represent whether any
+variables didn't exist. We'll use the bottom-most entry in the stack
+to represent the entire command, and thus keep track of whether or not
+we have to return an error because an undefined variable was used in a
+non-optional part of the command.
+
+<<constant definitions>>=
+#define MAX_OPT_DEPTH 10
+@ 
+
+<<variables local to parse>>=
+size_t old_pos[MAX_OPT_DEPTH] = {0};
+int okay[MAX_OPT_DEPTH] = {1};
+int opt_depth = 1;
+@ 
+
+Given this, when we encounter a double open bracket, we need to just
+add the appropriate values to our stacks, and, similarly, when we
+encounter a double close bracket, we simply need to pop the stack, and
+see whether we need to move back or not, as well as taking care of an
+possible errors, naturally. \emph{We probably could actually give
+error messages here instead of just treating the brackets literally
+when they might cause problems. But there doesn't seem much point,
+really. --- aj}
+
+<<handle a token>>=
+case '[':
+	if (command[1] == '[' && opt_depth < MAX_OPT_DEPTH) {
+		old_pos[opt_depth] = pos;
+		okay[opt_depth] = 1;
+		opt_depth++;
+		command += 2;
+	} else {
+		addstr(&result, &len, &pos, "[", 1);
+		command++;
+	}
+	break;
+@ 
+
+<<handle a token>>=
+case ']':
+	if (command[1] == ']' && opt_depth > 1) {
+		opt_depth--;
+		if (!okay[opt_depth]) {
+			pos = old_pos[opt_depth];
+			result[pos] = '\0';
+		}
+		command += 2;
+	} else {
+		addstr(&result, &len, &pos, "]", 1);
+		command++;
+	}
+	break;
+@
+
+Finally, at the end of the function, the stacks can be left in an
+unacceptable state --- either one of the optional blocks was never
+closed, or an undefined variable was used elsewhere. We'll note these
+circumstances by returning [[NULL]] and setting [[errno]].
+
+<<execute headers>>=
+#include <errno.h>
+@
+
+<<constant definitions>>=
+#define EUNBALBRACK 10001
+#define EUNDEFVAR   10002
+@ 
+
+<<deal with error conditions>>=
+if (opt_depth > 1) {
+	errno = EUNBALBRACK;
+	free(result);
+	return NULL;
+}
+
+if (!okay[0]) {
+	errno = EUNDEFVAR;
+	free(result);
+	return NULL;
+}
+@ 
+
+\subsubsection{Variables}
+
+Dealing with variables is comparatively fairly simple. We just need to
+find the next percent, and see if whatever's in-between is a variable,
+and, if so, get it's value.
+
+<<constant definitions>>=
+#define MAX_VARNAME    32
+#define EUNBALPER   10000
+@ 
+
+<<handle a token>>=
+case '%':
+{
+	<<variables local to handle percent token>>
+	char *varvalue;
+
+	<<determine variable name>>
+
+	<<get [[varvalue]]>>
+
+	if (varvalue) {
+		<<replace the character if needed>>
+		addstr(&result, &len, &pos, varvalue, strlen(varvalue));
+		free(varvalue);
+	} else {
+		if (opt_depth == 1) {
+			fprintf(stderr, "Missing required variable: %.*s\n", namelen, command);
+		}
+		okay[opt_depth - 1] = 0;
+	}
+
+	<<move to token after closing percent>>
+
+	break;
+}
+@ 
+
+We don't do anything particularly clever dealing with the next percent
+--- just a pointer to the appropriate character.
+
+<<variables local to handle percent token>>=
+char *nextpercent;
+size_t namelen;
+char pat = 0, rep = 0;
+@ 
+
+We support doing a simple replacement in the values returned by [[get_var()]].
+When the syntax `\verb!%var/p/r/%!' is used, the first occurence of the
+symbol `\verb!p!' will be replaced by `\verb!r!' when the substitution
+is done. Currently, both pattern and replacement string can be one character
+length only.
+
+<<determine variable name>>=
+command++;
+nextpercent = strchr(command, '%');
+namelen = nextpercent - command;
+if (!nextpercent) {
+	errno = EUNBALPER;
+	free(result);
+	return NULL;
+}
+/* %var/p/r% */
+if (*(nextpercent - 4) == '/') {
+	pat = *(nextpercent - 3);
+	rep = *(nextpercent - 1);
+	namelen -= 4;
+}
+@ 
+
+<<replace the character if needed>>=
+char * position = strchr(varvalue, pat);
+if (position) {
+	*position = rep;
+}
+@ 
+
+<<move to token after closing percent>>=
+command = nextpercent + 1;
+@
+
+The slightly tricky thing we do here is use a [[strncmpz]] function,
+which allows us to check that a string represented by a [[char*]] and
+a length is the same as a [[NUL]] terminated string.
+
+<<exported symbols>>=
+int strncmpz(char *l, char *r, size_t llen);
+@ 
+
+<<execute functions>>=
+int strncmpz(char *l, char *r, size_t llen) {
+	int i = strncmp(l, r, llen);
+	if (i == 0)
+		return -r[llen];
+	else
+		return i;
+}
+@ 
+
+Given the above, the implementation of the [[get_var()]] function to
+lookup the value of a variable, is reasonably straight forward. The
+only issue to address in this function is a pseudo-variable
+[[%iface%]].
+
+<<exported symbols>>=
+char *get_var(char *id, size_t idlen, interface_defn *ifd);
+@ 
+
+<<execute functions>>=
+char *get_var(char *id, size_t idlen, interface_defn *ifd) {
+	int i;
+
+	if (strncmpz(id, "iface", idlen) == 0) {
+		return strdup(ifd->real_iface);
+	}
+
+	{
+		for (i = 0; i < ifd->n_options; i++) {
+			if (strncmpz(id, ifd->option[i].name, idlen) == 0) {
+				if (!ifd->option[i].value) {
+				    return NULL;
+				}
+				if (strlen(ifd->option[i].value) > 0) {
+					return strdup(ifd->option[i].value);
+				} else {
+					return NULL;
+				}
+			}
+		}
+	}
+
+	return NULL;
+}
+@ 
+
+Which means we can finish of the chunk, thus:
+
+<<get [[varvalue]]>>=
+varvalue = get_var(command, namelen, ifd);
+@ 
+
+We also define an exported [[var_true()]] function to allow methods to
+have lines of code that are conditional on the value of a variable.
+
+<<exported symbols>>=
+int var_true(char *id, interface_defn *ifd);
+@
+
+<<execute functions>>=
+int var_true(char *id, interface_defn *ifd) {
+	char *varvalue;
+
+	varvalue = get_var(id, strlen(id), ifd);
+	if (varvalue) {
+		if (strcmp(varvalue, "1") == 0 ||
+			strcasecmp(varvalue, "on") == 0 ||
+			strcasecmp(varvalue, "true") == 0 ||
+			strcasecmp(varvalue, "yes") == 0)
+		{
+			free(varvalue);
+			return 1;
+		} else {
+			free(varvalue);
+			return 0;
+		}
+	} else
+		return 0;
+}
+@
+
+\subsection{Mapping Scripts}
+
+Doing a mapping is moderately complicated, since we need to pass a
+fair bit of stuff to the script. The way we'll do this is via a
+mixture of command line arguments, and [[stdin]]: basically, we'll
+pass all the mapping variables from the interfaces file via [[stdin]],
+and anything else necessary will be a command line argument. The
+script will be expected to exit successfully with the appropriate
+logical interface as the first line of [[stdout]] if it made a match,
+or exit unsuccessfully (error code [[1]], eg) otherwise.
+
+<<exported symbols>>=
+int run_mapping(char *physical, char *logical, int len, mapping_defn *map);
+@ 
+
+<<execute functions>>=
+int run_mapping(char *physical, char *logical, int len, mapping_defn *map) {
+	FILE *in, *out;
+	int i, status;
+	pid_t pid;
+
+	<<execute the mapping script>>
+	<<send input to mapping script>>
+	<<wait for mapping script to finish>>
+	<<check output from mapping script>>
+
+	return 1;
+}
+@ 
+
+The latter options here are fairly straightforward, given some Unix
+knowledge.
+
+<<send input to mapping script>>=
+for (i = 0; i < map->n_mappings; i++) {
+	fprintf(in, "%s\n", map->mapping[i]);
+}
+fclose(in);
+@ 
+
+<<wait for mapping script to finish>>=
+waitpid(pid, &status, 0);
+@ 
+
+<<check output from mapping script>>=
+if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+	if (fgets(logical, len, out)) {
+		char *pch = logical + strlen(logical) - 1;
+		while (pch >= logical && isspace(*pch)) 
+			*(pch--) = '\0';
+	}
+}
+fclose(out);	
+@ 
+
+Slightly more complicated is setting up the child process and grabbing
+its [[stdin]] and [[stdout]]. Unfortunately we can't just use
+[[popen()]] for this, since it'll only allow us to go one way. So,
+instead we'll write our own [[popen()]]. It'll look like:
+
+<<execute headers>>=
+#include <stdarg.h>
+@ 
+
+<<execute function declarations>>=
+static int popen2(FILE **in, FILE **out, char *command, ...);
+@ 
+
+The varargs component will be the arguments, as per [[execl()]], and
+the return value will be the [[PID]] if the call was successful, or 0
+otherwise.
+
+As such, we will be able to execute the script thusly:
+
+<<execute the mapping script>>=
+pid = popen2(&in, &out, map->script, physical, NULL);
+if (pid == 0) {
+	return 0;
+}
+@ 
+
+Writing [[popen2()]] is an exercise in Unix arcana.
+
+<<execute headers>>=
+#include <unistd.h>
+#include <sys/wait.h>
+@ 
+
+<<execute functions>>=
+static int popen2(FILE **in, FILE **out, char *command, ...) {
+	va_list ap;
+	char *argv[11] = {command};
+	int argc;
+	int infd[2], outfd[2];
+	pid_t pid;
+
+	argc = 1;
+	va_start(ap, command);
+	while((argc < 10) && (argv[argc] = va_arg(ap, char*))) {
+		argc++;
+	}
+	argv[argc] = NULL; /* make sure */
+	va_end(ap);
+
+	if (pipe(infd) != 0) return 0;
+	if (pipe(outfd) != 0) {
+		close(infd[0]); close(infd[1]);
+		return 0;
+	}
+
+	fflush(NULL);
+	switch(pid = fork()) {
+		case -1: /* failure */
+			close(infd[0]); close(infd[1]);
+			close(outfd[0]); close(outfd[1]);
+			return 0;
+		case 0: /* child */
+			/* release the current directory */
+			chdir("/");
+			dup2(infd[0], 0);
+			dup2(outfd[1], 1);
+			close(infd[0]); close(infd[1]);
+			close(outfd[0]); close(outfd[1]);
+			execvp(command, argv);
+			exit(127);
+		default: /* parent */
+			*in = fdopen(infd[1], "w");
+			*out = fdopen(outfd[0], "r");
+			close(infd[0]);	close(outfd[1]);
+			return pid;
+	}
+	/* unreached */
+}
+@
+
+\section{The Driver}
+
+The final C module we'll have is the one with the [[main()]]
+function. It's put together in a fairly straightforward way.
+
+<<main.c>>=
+<<main headers>>
+<<main global variables>>
+<<main function declarations>>
+<<main functions>>
+<<main>>
+@ 
+
+Equally, there's nothing particularly special about our headers.
+
+<<main headers>>=
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <errno.h>
+#include <assert.h>
+
+#include "header.h"
+@
+
+Now, after all the above modules, our main program doesn't have too
+much to do: it just has to interpret arguments and coordinate the
+intervening modules. Since we're being ``smart'', as well as parsing
+arguments, we'll decide whether the interface is going up or down
+depending on whether we were called as [[ifup]] or [[ifdown]], or if we're
+querying /etc/network/interfaces (when called as [[ifquery]]).
+
+<<main>>=
+int main(int argc, char **argv) {
+	<<variables local to main>>
+
+	<<ensure environment is sane>>
+
+	<<parse command name or die>>
+	<<parse arguments>>
+
+	<<read interfaces files or die>>
+
+	<<run commands for appropriate interfaces>>
+
+	return 0;
+}
+@
+
+\subsection{Check the Environment}
+
+In the earlier code we assume that we have stdin, stdout and stderr all
+available. We need to assure that, just in case:
+
+<<main headers>>=
+#include <unistd.h>
+#include <fcntl.h>
+@
+
+<<ensure environment is sane>>=
+{
+	int i;
+	for (i = 0; i <= 2; i++) {
+		if (fcntl(i, F_GETFD) == -1) {
+			if (errno == EBADF && open("/dev/null", 0) == -1) {
+				fprintf(stderr,
+					"%s: fd %d not available; aborting\n",
+					argv[0], i);
+				exit(2);
+			} else if (errno == EBADF) {
+				errno = 0; /* no more problems */
+			} else {
+				/* some other problem -- eeek */
+				perror(argv[0]);
+				exit(2);
+			}
+		}
+	}
+}
+@
+
+\subsection{Configuring or Deconfiguring?}
+
+So the very first real thing we need to do is parse the command name. To
+do this, we'll obviously need to work out somewhere to store the result. A
+reasonable thing to do here is just to keep a function pointer about,
+which will point to one of the previously defined [[iface_up]] or
+[[iface_down]] functions, depending on which should be used on the
+specified interfaces.
+
+<<variables local to main>>=
+int (*cmds)(interface_defn *) = NULL;
+@
+
+So given this, we can just:
+
+<<parse command name or die>>=
+{
+	char *command;
+
+	<<set [[command]] to the base of the command name>>
+	<<set [[cmds]] based on [[command]] or die>>
+}
+@
+
+And fill out each component in the reasonably obvious manner of:
+
+<<set [[command]] to the base of the command name>>=
+if ((command = strrchr(argv[0],'/'))) {
+	command++; /* first char after / */
+} else {
+	command = argv[0]; /* no /'s in argv[0] */
+}
+@
+
+<<set [[cmds]] based on [[command]] or die>>=
+if (strcmp(command, "ifup")==0) {
+	cmds = iface_up;
+} else if (strcmp(command, "ifdown")==0) {
+	cmds = iface_down;
+} else if (strcmp(command, "ifquery")==0) {
+	cmds = iface_query;
+	no_act = 1;
+} else {
+	fprintf(stderr,"This command should be called as ifup, ifdown, or ifquery\n");
+	exit(1);
+}
+@ 
+
+In addition, since our later behaviour varies depending on whether we're
+bringing interfaces up, taking them down, or querying /etc/network/interfaces,
+we'll define four chunks to assist with this, namely:
+
+<<we're querying an interface's config>>=
+(cmds == iface_query)
+@
+
+<<we're listing known interfaces>>=
+(cmds == iface_list)
+@
+
+<<we're bringing interfaces up>>=
+(cmds == iface_up)
+@
+
+<<we're taking interfaces down>>=
+(cmds == iface_down)
+@
+
+The [[--allow]] option lets us limit the interfaces ifupdown will act on.
+It's implemented by having an [[allow_class]] that tells us which class
+of interfaces we're working with, and skipping interfaces that aren't
+in that class, like so:
+
+<<we're limiting to [[--allow]]ed interfaces>>=
+(allow_class != NULL)
+
+<<find [[iface]] in [[allow_class]] or [[continue]]>>=
+{
+	int i;
+	allowup_defn *allowup = find_allowup(defn, allow_class);
+	if (allowup == NULL)
+		continue;
+
+	for (i = 0; i < allowup->n_interfaces; i++) {
+		if (strcmp(allowup->interfaces[i], iface) == 0)
+			break;
+	}
+	if (i >= allowup->n_interfaces)
+		continue;
+}
+@
+
+Finally, the behaviour might vary depending on whether we are 
+excluding this interface or not. Notice that
+the exclude option can use a full interface name or substrings that
+match interfaces. A user could easily have unexpected behaviour
+if he uses a small string to do the match:
+
+<<we're [[--exclude]]ing this interface>>=
+(excludeints != 0 && match_patterns(iface, excludeints, excludeint))
+@
+
+[[match_patterns]] function goes through exclusion patterns and returns [[true]] if it finds at least one match.
+
+<<main function declarations>>=
+bool match_patterns(char * string, int argc, char * argv[]);
+@
+
+It's implemented using [[fnmatch]] function, so we can use shell globs.
+
+<<main functions>>=
+bool match_patterns(char * string, int argc, char * argv[]) {
+	if (!argc || !argv || !string) return false;
+	int i;
+	for (i = 0; i < argc; i++) {
+		if (fnmatch(argv[i], string, 0) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+@
+
+\subsection{Argument Handling}
+
+Okay, so next on our agenda is argument handling.
+
+We'll do argument handling via the GNU [[getopt]] function, which
+means we have to include the appropriate header, and define a cute
+little structure to represent our long options:
+
+<<main headers>>=
+#include <getopt.h>
+@
+
+<<variables local to main>>=
+struct option long_opts[] = {
+	{"help",        no_argument,       NULL, 'h'},
+	{"version",     no_argument,       NULL, 'V'},
+	{"verbose",     no_argument,       NULL, 'v'},
+	{"all",         no_argument,       NULL, 'a'},
+	{"allow",	required_argument, NULL,  3 },
+	{"interfaces",  required_argument, NULL, 'i'},
+	{"exclude",     required_argument, NULL, 'X'},
+	{"no-act",      no_argument,       NULL, 'n'},
+	{"no-mappings", no_argument,       NULL,  1 },
+	{"no-scripts",  no_argument,       NULL,  4 },
+	{"force",       no_argument,       NULL,  2 },
+	{"option",      required_argument, NULL, 'o'},
+	{"list",        no_argument,       NULL, 'l'},
+	{0,0,0,0}
+};
+@ 
+
+The usual way of dealing with options then is to have a variable to store
+the various things. The only special note here is that we need to export
+[[no_act]] and [[verbose]] to the [[execute]] module.
+
+<<exported symbols>>=
+extern int no_act;
+extern int verbose;
+extern int run_scripts;
+@
+
+<<constant definitions>>=
+#define RUN_DIR "/run/network/"
+@ 
+
+<<main global variables>>=
+int no_act = 0;
+int run_scripts = 1;
+int verbose = 0;
+char *statefile = RUN_DIR "ifstate";
+char *tmpstatefile = RUN_DIR ".ifstate.tmp";
+@
+
+<<variables local to main>>=
+int do_all = 0;
+int run_mappings = 1;
+int force = 0;
+int list = 0;
+char *allow_class = NULL;
+char *interfaces = "/etc/network/interfaces";
+char **excludeint = NULL;
+int excludeints = 0;
+variable *option = NULL;
+int n_options = 0;
+int max_options = 0;
+@ 
+
+We'll also have two helper functions to display usage information,
+like so:
+
+<<main function declarations>>=
+static void usage(char *execname);
+static void help(char *execname, int (*cmds)(interface_defn *));
+static void version(char *execname);
+@ 
+
+<<main functions>>=
+static void usage(char *execname) {
+	fprintf(stderr, "%s: Use --help for help\n", execname);
+	exit(1);
+}
+@ 
+
+<<main functions>>=
+static void version(char *execname) {
+	printf("%s version " IFUPDOWN_VERSION "\n", execname);
+	printf("Copyright (c) 1999-2007 Anthony Towns\n\n");
+	printf(
+
+"This program is free software; you can redistribute it and/or modify\n"
+"it under the terms of the GNU General Public License as published by\n"
+"the Free Software Foundation; either version 2 of the License, or (at\n"
+"your option) any later version.\n"
+
+	);
+	exit(0);
+}
+@ 
+
+<<main functions>>=
+static void help(char *execname, int (*cmds)(interface_defn *)) {
+	printf("Usage: %s <options> <ifaces...>\n", execname);
+	if (<<we're listing known interfaces>>
+	    || <<we're querying an interface's config>>)
+		printf("       %s <options> --list\n", execname);
+	printf("\n");
+	printf("Options:\n");
+	printf("\t-h, --help\t\tthis help\n");
+	printf("\t-V, --version\t\tcopyright and version information\n");
+	printf("\t-a, --all\t\tprocess all interfaces marked \"auto\"\n");
+	printf("\t--allow CLASS\t\tignore non-\"allow-CLASS\" interfaces\n");
+	printf("\t-i, --interfaces FILE\tuse FILE for interface definitions\n");
+	printf("\t-X, --exclude PATTERN\texclude interfaces from the list of\n\t\t\t\tinterfaces to operate on by a PATTERN\n");
+	if (!<<we're listing known interfaces>>
+	    && !<<we're querying an interface's config>>)
+		printf("\t-n, --no-act\t\tprint out what would happen, but don't do it\n");
+	printf("\t\t\t\t(note that this option doesn't disable mappings)\n");
+	printf("\t-v, --verbose\t\tprint out what would happen before doing it\n");
+	printf("\t-o OPTION=VALUE\t\tset OPTION to VALUE as though it were in\n");
+	printf("\t\t\t\t/etc/network/interfaces\n");
+	printf("\t--no-mappings\t\tdon't run any mappings\n");
+	printf("\t--no-scripts\t\tdon't run any hook scripts\n");
+	if (!<<we're listing known interfaces>>
+	    && !<<we're querying an interface's config>>)
+		printf("\t--force\t\t\tforce de/configuration\n");
+	if (<<we're listing known interfaces>>
+	    || <<we're querying an interface's config>>)
+		printf("\t--list\t\t\tlist all matching known interfaces\n");
+	exit(0);
+}
+@ 
+
+Now, the meat of argument parsing is done with [[getopt()]] and a
+[[switch]], like so:
+
+<<parse arguments>>=
+for(;;) {
+	int c;
+	c = getopt_long(argc, argv, "X:s:i:o:hVvnal", long_opts, NULL);
+	if (c == EOF) break;
+
+	switch(c) {
+		<<[[getopt]] possibilities>>
+	}
+}
+
+<<check unreasonable arguments>>
+@ 
+
+Now, our [[getopt]] possibilities are basically each option, or something
+really bad. Actual interface names are automagically collected at the end
+by [[getopt()]].So first, the legitimate cases get handled:
+
+<<[[getopt]] possibilities>>=
+case 'i':
+	interfaces = strdup(optarg);
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 'v':
+	verbose = 1;
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 'a':
+	do_all = 1;
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 3:
+	allow_class = strdup(optarg);
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 'n':
+        if (<<we're listing known interfaces>> || <<we're querying an interface's config>>)
+		usage(argv[0]);
+	no_act = 1;
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 1:
+	run_mappings = 0;
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 4:
+	run_scripts = 0;
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 2:
+        if (<<we're listing known interfaces>> || <<we're querying an interface's config>>)
+		usage(argv[0]);
+	force = 1;
+	break;
+@
+<<[[getopt]] possibilities>>=
+case 'X':
+	/* */
+	excludeints++;
+	excludeint = realloc(excludeint, excludeints * sizeof(char *));
+	if (excludeint == NULL) {
+		char * filename = argv[0];
+		<<report internal error and die>>
+	}
+	excludeint[excludeints - 1] = strdup(optarg);
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 'o':
+{
+	char *name = strdup(optarg);
+	char *val = strchr(name, '=');
+	if (val == NULL) {
+		fprintf(stderr, "Error in --option \"%s\" -- no \"=\" character\n",
+			optarg);
+		exit(1);
+	}
+	*val++ = '\0';
+
+	if (strcmp(name, "post-up") == 0) {
+		strcpy(name, "up");
+	}
+	if (strcmp(name, "pre-down") == 0) {
+		strcpy(name, "down");
+	}
+	
+	set_variable(argv[0], name, val, &option, &n_options, &max_options);
+	free(name);
+
+	break;
+}
+@ 
+<<[[getopt]] possibilities>>=
+case 'l':
+        if (!<<we're querying an interface's config>>)
+		usage(argv[0]);
+	list = 1;
+	cmds = iface_list;
+	break;
+@ 
+
+And we also have a help option and a version option:
+
+<<[[getopt]] possibilities>>=
+case 'h':
+	help(argv[0],cmds);
+	break;
+@ 
+<<[[getopt]] possibilities>>=
+case 'V':
+	version(argv[0]);
+	break;
+@ 
+
+And we also have the possibility that the user is just making up
+options:
+
+<<[[getopt]] possibilities>>=
+default:
+	usage(argv[0]);
+	break;
+@
+
+After all that there are still some things that can be a bit weird. We
+can be told either to act on all interfaces (except the noauto ones),
+or we can be told to act on specific interface. We won't accept been
+told to do both, and we won't accept not being told to do one or the
+other. We can test these two cases as follows:
+
+<<check unreasonable arguments>>=
+if (argc - optind > 0 && (do_all || list)) {
+	usage(argv[0]);
+}
+@ 
+
+<<check unreasonable arguments>>=
+if (argc - optind == 0 && !do_all && !list) {
+	usage(argv[0]);
+}
+@ 
+
+<<check unreasonable arguments>>=
+if (do_all && <<we're querying an interface's config>>) {
+	usage(argv[0]);
+}
+@ 
+
+\subsection{Reading the Interfaces File}
+
+Since this has all been covered in a previous section, this is pretty
+trivial.
+
+<<variables local to main>>=
+interfaces_file *defn;
+@ 
+
+<<read interfaces files or die>>=
+defn = read_interfaces(interfaces);
+if ( !defn ) {
+	fprintf(stderr, "%s: couldn't read interfaces file \"%s\"\n",
+		argv[0], interfaces);
+	exit(1);
+}
+@
+
+\subsection{Execution}
+
+A broad overview of what we'll actually be doing is as follows:
+
+<<run commands for appropriate interfaces>>=
+<<determine target interfaces>>
+<<run pre-up and pre-down scripts for all>>
+{
+	int i;
+	for (<<each target interface, [[i]]>>) {
+		char iface[80], liface[80];
+		const char *current_state;
+
+		<<initialize [[iface]] to [[i]]th target interface>>
+		current_state = read_state(argv[0], iface);
+		if (!force) {
+			<<check ifupdown state (possibly [[continue]])>>
+		}
+
+		if (<<we're limiting to [[--allow]]ed interfaces>>) {
+			<<find [[iface]] in [[allow_class]] or [[continue]]>>
+		}
+
+		if (<<we're [[--exclude]]ing this interface>>)  
+			continue;
+
+		bool have_mapping = false;
+		if ((<<we're bringing interfaces up>> && run_mappings) || <<we're querying an interface's config>>) {
+			<<run mappings>>
+		}
+
+		<<bring interface up/down and update ifupdown state>>
+	}
+}
+<<run post-up and post-down scripts for all>>
+@
+
+We'll leave determining the appropriate target interfaces and dealing
+with the state until a little later. That leaves us with covering running
+the mappings and bringing the interface up or taking it down.
+
+Mappings are dealt with like so:
+
+<<run mappings>>=
+{
+	mapping_defn *currmap;
+	for (currmap = defn->mappings; currmap; currmap = currmap->next) {
+		int i;
+		for (i = 0; i < currmap->n_matches; i++) {
+			<<[[continue]] unless mapping matches>>
+			<<run mapping>>
+			break;
+		}
+	}
+}
+@
+
+We check if mappings match by using shell globs, so we'll need a new header
+to take care of that.
+
+<<main headers>>=
+#include <fnmatch.h>
+@ 
+
+<<[[continue]] unless mapping matches>>=
+if (fnmatch(currmap->match[i], liface, 0) != 0)
+	continue;
+@
+
+Actually running a mapping is fairly straightforward, thanks to our
+previous handywork.
+
+<<run mapping>>=
+if (<<we're querying an interface's config>> && !run_mappings) {
+	if (verbose) {
+		fprintf(stderr, "Not running mapping scripts for %s\n",
+			liface);
+	}
+	have_mapping = true;
+	break;
+}
+if (verbose) {
+	fprintf(stderr, "Running mapping script %s on %s\n",
+		currmap->script, liface);
+}
+run_mapping(iface, liface, sizeof(liface), currmap);
+@
+
+Bringing an interface up or taking it down can be done thusly:
+
+<<bring interface up/down and update ifupdown state>>=
+{
+	interface_defn *currif;
+	int okay = 0;
+	int failed = 0; 
+
+	<<update ifupdown state>>
+
+	if (<<we're listing known interfaces>>) {
+	    for (currif = defn->ifaces; currif; currif = currif->next) {
+		    if (strcmp(liface, currif->logical_iface) == 0) {
+			okay = 1;
+		    }
+	    }
+	    if (!okay) {
+		    mapping_defn *currmap;
+		    for (currmap = defn->mappings; currmap; currmap = currmap->next) {
+			    int i;
+			    for (i = 0; i < currmap->n_matches; i++) {
+				    <<[[continue]] unless mapping matches>>
+				    okay = 1;
+				    break;
+			    }
+		    }
+	    }
+	    if (okay) {
+		    currif = defn->ifaces;
+		    currif->real_iface = iface;
+		    cmds(currif);
+		    currif->real_iface = NULL;
+	    }
+	    okay = 0;
+	    continue;
+	}
+
+	for (currif = defn->ifaces; currif; currif = currif->next) {
+		if (strcmp(liface, currif->logical_iface) == 0) {
+			<<configure the link>>
+			okay = 1;
+
+			<<add default options to [[currif]]>>
+
+			<<add options from command line to [[currif]]>>
+
+			currif->real_iface = iface;
+
+			<<convert options>>
+
+			<<run commands for [[currif]]; set [[failed]] on error>>
+
+			currif->real_iface = NULL;
+
+			if (failed) break;
+			/* Otherwise keep going: this interface may have
+			 * match with other address families */
+		}
+	}
+
+	<<deconfigure the link>>
+
+	if (!okay && <<we're querying an interface's config>>) {
+		if (!run_mappings) {
+			if (have_mapping) {
+				okay = 1;
+			}
+		}
+		if (!okay) {
+			<<report unknown interface and die>>
+		}
+	}
+
+	if (!okay && !force) {
+		fprintf(stderr, "Ignoring unknown interface %s=%s.\n", 
+			iface, liface);
+		update_state (argv[0], iface, NULL);
+	} else {
+		<<update ifupdown state>>
+	}
+}
+@
+
+<<configure the link>>=
+	if (!okay && <<we're bringing interfaces up>>) {
+		interface_defn link = {
+		    .real_iface = iface,
+		    .max_options = 0,
+		    .address_family = &addr_link,
+		    .method = &(addr_link.method[0]),
+		    .n_options = 0,
+		    .option = NULL
+		};
+		convert_variables(argv[0], link.method->conversions, &link);
+
+		if (!link.method->up(&link, doit)) break;
+		if (link.option) free(link.option);
+	}
+@ 
+
+<<deconfigure the link>>=
+	if (okay && <<we're taking interfaces down>>) {
+		interface_defn link = {
+		    .real_iface = iface,
+		    .max_options = 0,
+		    .address_family = &addr_link,
+		    .method = &(addr_link.method[0]),
+		    .n_options = 0,
+		    .option = NULL
+		};
+		convert_variables(argv[0], link.method->conversions, &link);
+
+		if (!link.method->down(&link, doit)) break;
+		if (link.option) free(link.option);
+	}
+@ 
+
+<<create pidfile>>=
+{
+	char * command;
+	<<set [[command]] to the base of the command name>>
+	snprintf(pidfilename, sizeof(pidfilename), RUN_DIR "%s-%s.pid",
+		command, currif->real_iface);
+	if (!no_act) {
+		FILE * pidfile = fopen(pidfilename, "w");
+		if (pidfile) {
+			fprintf(pidfile, "%d", getpid());
+			fclose(pidfile);
+		} else {
+			fprintf(stderr, 
+				"%s: failed to open pid file %s: %s\n",
+				command, pidfilename, strerror(errno));
+		}
+	}
+}
+@ 
+
+<<remove pidfile>>=
+	if (!no_act) {
+		unlink(pidfilename);
+	}
+@ 
+
+<<run commands for [[currif]]; set [[failed]] on error>>=
+{
+	if (verbose) {
+		fprintf(stderr, "%s interface %s=%s (%s)\n", 
+			<<we're querying an interface's config>> ? "Querying" :
+			"Configuring",
+			iface, liface, currif->address_family->name);
+	}
+
+	char pidfilename[100];
+	<<create pidfile>>
+
+	switch(cmds(currif)) {
+	    case -1:
+		fprintf(stderr, "Missing required configuration variables for interface %s/%s.\n", 
+			liface, currif->address_family->name);
+		failed = 1;
+		break;
+	    case 0:
+		failed = 1;
+		break;
+		/* not entirely successful */
+	    case 1:
+	    	failed = 0;
+		break;
+		/* successful */
+	    default:
+	    	fprintf(stderr, "Unexpected value when configuring interface %s/%s; considering it failed.\n", 
+			liface, currif->address_family->name);
+	    	failed = 1;
+		/* what happened here? */
+	}
+
+	<<remove pidfile>>
+}
+@ 
+
+Before bringing interfaces up or putting them down, we may want to call some
+scripts interested in being notified when all the interfaces are going to
+be brought up:
+
+<<run pre-up and pre-down scripts for all>>=
+interface_defn meta_iface = {
+    .next = NULL,
+    .real_iface = "--all",
+    .address_family = &addr_meta,
+    .method = &(addr_meta.method[0]),
+    .automatic = 1,
+    .max_options = 0,
+    .n_options = 0,
+    .option = NULL
+};
+
+if (do_all) {
+    meta_iface.logical_iface = allow_class ? allow_class : "auto";
+
+    int okay = 1;
+    if (<<we're bringing interfaces up>>) {
+	okay = iface_preup(&meta_iface);
+    }
+    if (<<we're taking interfaces down>>) {
+	okay = iface_predown(&meta_iface);
+    }
+    if (!okay) {
+	fprintf(stderr, "%s: pre-%s script failed.\n", argv[0], &argv[0][2]);
+	exit(1);
+    }
+}
+@ 
+
+<<run post-up and post-down scripts for all>>=
+if (do_all) {
+    int okay = 1;
+    if (<<we're bringing interfaces up>>) {
+	okay = iface_postup(&meta_iface);
+    }
+    if (<<we're taking interfaces down>>) {
+	okay = iface_postdown(&meta_iface);
+    }
+    if (!okay) {
+	fprintf(stderr, "%s: pre-%s script failed.\n", argv[0], &argv[0][2]);
+	exit(1);
+    }
+}
+@ 
+
+Before adding any options from the command line we set the default options if
+they've not been set already:
+
+<<add default options to [[currif]]>>=
+{
+	option_default *o;
+	for (o = currif->method->defaults; o && o->option && o->value; o++) {
+		int j;
+		int found = 0;
+		for (j = 0; j < currif->n_options; j++) {
+			if (strcmp(currif->option[j].name, 
+			           o->option) == 0) 
+			{
+				found = 1;
+				break;
+			}
+		}
+		if (!found) {
+			set_variable(argv[0], o->option, o->value,
+				&currif->option, &currif->n_options, 
+				&currif->max_options);
+		}
+	}
+}
+@
+
+Adding the options from the command line is tedious, but simple:
+
+<<add options from command line to [[currif]]>>=
+{
+	int i;
+	for (i = 0; i < n_options; i++) {
+		if (option[i].value[0] == '\0') {
+			<<remove [[option[i]]] from [[currif]]>>
+		} else {
+			<<add [[option[i]]] to [[currif]]>>
+		}
+	}
+}
+@
+
+Convert the options:
+
+<<convert options>>=
+{
+	convert_variables(argv[0], currif->method->conversions, currif);
+}
+@
+
+<<add [[option[i]]] to [[currif]]>>=
+{
+	set_variable(argv[0], option[i].name, option[i].value,
+		&currif->option, &currif->n_options, 
+		&currif->max_options);
+}
+@
+
+<<remove [[option[i]]] from [[currif]]>>=
+{
+	if (strcmp(option[i].name, "pre-up") != 0
+    	    && strcmp(option[i].name, "up") != 0
+	    && strcmp(option[i].name, "down") != 0
+	    && strcmp(option[i].name, "post-down") != 0)
+	{
+		int j;
+		for (j = 0; j < currif->n_options; j++) {
+			if (strcmp(currif->option[j].name, 
+			           option[i].name) == 0) 
+			{
+				currif->n_options--;
+				break;
+			}
+		}
+		for (; j < currif->n_options; j++) {
+			option[j].name = option[j+1].name;
+			option[j].value = option[j+1].value;
+		}
+	} else {
+		/* do nothing */
+	}
+}
+@
+
+\subsection{Target Interfaces}
+
+So, if we're going to actually do something, we should probably figure
+out exactly what we're going to do it to. So, we need to know the set
+of interfaces we're going to hax0r. This is just an array of interfaces,
+either [[physical_iface]] or [[physical_iface=logical_iface]].
+
+<<variables local to main>>=
+int n_target_ifaces;
+char **target_iface;
+@ 
+
+<<each target interface, [[i]]>>=
+i = 0; i < n_target_ifaces; i++
+@
+
+We initialise this based on our command line arguments.
+
+<<determine target interfaces>>=
+if (do_all || list) {
+	if (<<we're listing known interfaces>>
+            || <<we're bringing interfaces up>>) {
+		allowup_defn *autos = find_allowup(defn, allow_class ? allow_class : "auto");
+		target_iface = autos ? autos->interfaces : NULL;
+		n_target_ifaces = autos ? autos->n_interfaces : 0;
+	} else if (<<we're taking interfaces down>>) {
+		read_all_state(argv[0], &target_iface, &n_target_ifaces);
+	} else {
+		fprintf(stderr, "%s: can't tell if interfaces are going up or down\n", argv[0]);
+		exit(1);
+	}	
+} else {
+	target_iface = argv + optind;
+	n_target_ifaces = argc - optind;
+}
+@ 
+
+<<initialize [[iface]] to [[i]]th target interface>>=
+strncpy(iface, target_iface[i], sizeof(iface));
+iface[sizeof(iface)-1] = '\0';
+
+{
+	char *pch;
+	if ((pch = strchr(iface, '='))) {
+		*pch = '\0';
+		strncpy(liface, pch+1, sizeof(liface));
+		liface[sizeof(liface)-1] = '\0';
+	} else {
+		strncpy(liface, iface, sizeof(liface));
+		liface[sizeof(liface)-1] = '\0';
+	}
+}
+@ 
+
+\subsection{State}
+
+Since it's generally not feasible to rerun a mapping script after an
+interface is configured (since a mapping script may well bring the
+interface down while it's investigating matters), we need to maintain a
+statefile between invocations to keep track of which physical interfaces
+were mapped to which logical ones.  This file also serves to record
+which interfaces have been configured so far, and which haven't.  It
+is stored in [[/run/network/ifstate]].
+
+Because different interfaces may be brought up and down at the same time,
+it's important that all updates to the state file are atomic and that we
+aren't confused by any changes made by another running process.  For this
+reason we use functions to examine or modify the state file at the point
+necessary rather than holding it all in memory.
+
+<<main function declarations>>=
+static const char *read_state(const char *argv0, const char *iface);
+static void read_all_state(const char *argv0, char ***ifaces, int *n_ifaces);
+static void update_state(const char *argv0, const char *iface, const char *liface);
+@ 
+
+The first of these functions reads the state file to look for an interface
+and returns the current state of it as a pointer to a static buffer which
+should be copied if it's needed for any duration.  If the interface has no
+current state (ie. is down) then NULL is returned.
+
+<<main functions>>=
+static const char *
+read_state (const char *argv0, const char *iface)
+{
+	char *ret = NULL;
+
+	<<open ifupdown state>>
+
+	while((p = fgets(buf, sizeof buf, state_fp)) != NULL) {
+		<<parse ifupdown state line>>
+
+		if (strncmp(iface, pch, strlen(iface)) == 0) {
+			if (pch[strlen(iface)] == '=') {
+				ret = pch + strlen(iface) + 1;
+				break;
+			}
+		}
+	}
+
+	<<close ifupdown state>>
+
+	return ret;
+}
+@
+
+The second of these functions is a variant on the above used to grab a list
+of all currently up interfaces so we can tear them all down. Also, we reverse
+the order of the interfaces so we don't break complex
+configurations with VLAN devices.
+
+<<main functions>>=
+static void
+read_all_state (const char *argv0, char ***ifaces, int *n_ifaces)
+{
+	int i;
+	<<open ifupdown state>>
+
+	*n_ifaces = 0;
+	*ifaces = NULL;
+
+	while((p = fgets(buf, sizeof buf, state_fp)) != NULL) {
+		<<parse ifupdown state line>>
+
+		(*n_ifaces)++;
+		*ifaces = realloc (*ifaces, sizeof (**ifaces) * *n_ifaces);
+		(*ifaces)[(*n_ifaces)-1] = strdup (pch);
+	}
+
+	for (i = 0; i < ((*n_ifaces)/2); i++) {
+		char * temp = (*ifaces)[i];
+		(*ifaces)[i] = (*ifaces)[(*n_ifaces) - i - 1];
+		(*ifaces)[(*n_ifaces) - i - 1] = temp;
+	}
+
+	<<close ifupdown state>>
+}
+@
+
+The last of these functions is used to modify a state file, specifically
+for the interface given as the first argument.  If the second argument is
+NULL then any existing state for that interface is removed from the file,
+otherwise any existing state is changed to the new state or a new state
+line is appended.
+
+<<main functions>>=
+static void update_state(const char *argv0, const char *iface, const char *state)
+{
+	FILE *tmp_fp;
+
+	<<open ifupdown state>>
+
+	if (no_act)
+		goto noact;
+
+	tmp_fp = fopen(tmpstatefile, "w");
+	if (tmp_fp == NULL) {
+		fprintf(stderr, 
+			"%s: failed to open temporary statefile %s: %s\n",
+			argv0, tmpstatefile, strerror(errno));
+		exit (1);
+	}
+
+	while((p = fgets(buf, sizeof buf, state_fp)) != NULL) {
+		<<parse ifupdown state line>>
+
+		if (strncmp(iface, pch, strlen(iface)) == 0) {
+			if (pch[strlen(iface)] == '=') {
+				if (state != NULL) {
+					fprintf (tmp_fp, "%s=%s\n",
+						 iface, state);
+					state = NULL;
+				}
+
+				continue;
+			}
+		}
+
+		fprintf (tmp_fp, "%s\n", pch);
+	}
+
+	if (state != NULL)
+		fprintf (tmp_fp, "%s=%s\n", iface, state);
+
+	fclose (tmp_fp);
+	if (rename (tmpstatefile, statefile)) {
+		fprintf(stderr, 
+			"%s: failed to overwrite statefile %s: %s\n",
+			argv0, statefile, strerror(errno));
+		exit (1);
+	}
+
+	<<close ifupdown state>>
+}
+@ 
+
+The state file is opened and locked, blocking parallel updates:
+
+<<main function declarations>>=
+static int lock_fd (int fd);
+@ 
+
+<<main functions>>=
+static int lock_fd (int fd) {
+	struct flock lock;
+
+	lock.l_type = F_WRLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+
+	if  (fcntl(fd, F_SETLKW, &lock) < 0) {
+		return -1;
+	}
+
+	return 0;
+}
+@ 
+
+<<open ifupdown state>>=
+FILE *state_fp;
+char buf[80];
+char *p;
+
+state_fp = fopen(statefile, no_act ? "r" : "a+");
+if (state_fp == NULL) {
+	if (!no_act) {
+		fprintf(stderr, 
+			"%s: failed to open statefile %s: %s\n",
+			argv0, statefile, strerror(errno));
+		exit (1);
+	} else {
+		goto noact;
+	}
+}
+
+if (!no_act) {
+	int flags;
+
+	if ((flags = fcntl(fileno(state_fp), F_GETFD)) < 0
+	    || fcntl(fileno(state_fp), F_SETFD, flags | FD_CLOEXEC) < 0) {
+		fprintf(stderr, 
+			"%s: failed to set FD_CLOEXEC on statefile %s: %s\n",
+			argv0, statefile, strerror(errno));
+		exit(1);
+	}
+
+	if (lock_fd (fileno(state_fp)) < 0) {
+		fprintf(stderr, 
+			"%s: failed to lock statefile %s: %s\n",
+			argv0, statefile, strerror(errno));
+		exit(1);
+	}
+}
+@
+
+<<parse ifupdown state line>>=
+char *pch;
+
+pch = buf + strlen(buf) - 1;
+while(pch > buf && isspace(*pch)) pch--;
+*(pch+1) = '\0';
+
+pch = buf;
+while(isspace(*pch)) pch++;
+@ 
+
+<<close ifupdown state>>=
+noact:
+if (state_fp != NULL) {
+	fclose(state_fp);
+	state_fp = NULL;
+}
+@
+
+This leaves our two useful chunks. The first checks to ensure what we're
+proposing to do is reasonable (ie, we're not downing an interface that's
+not up, or uping one that's not down).
+
+<<check ifupdown state (possibly [[continue]])>>=
+{
+	if (<<we're bringing interfaces up>>) {
+		if (current_state != NULL) {
+			if (!do_all) {
+				fprintf(stderr, 
+					"%s: interface %s already configured\n",
+					argv[0], iface);
+			}
+			continue;
+		}
+	} else if (<<we're taking interfaces down>>) {
+		if (current_state == NULL) {
+			if (!do_all) {
+				fprintf(stderr, "%s: interface %s not configured\n",
+					argv[0], iface);
+			}
+			continue;
+		}
+		strncpy(liface, current_state, 80);
+		liface[79] = 0;
+	} else if (<<we're querying an interface's config>>) {
+		if (current_state != NULL) {
+			strncpy(liface, current_state, 80);
+			liface[79] = 0;
+			run_mappings = 0;
+		}
+
+	} else if (!<<we're listing known interfaces>>
+	           && !<<we're querying an interface's config>>)
+	{
+		assert(0);
+	}
+}
+@ 
+
+And finally, we also need to be able to update the state as we bring
+interfaces up and down.
+
+<<update ifupdown state>>=
+{
+	if (<<we're bringing interfaces up>>) {
+		if ((current_state == NULL) || (no_act)) {
+			if (failed == 1) {
+				printf("Failed to bring up %s.\n", liface);
+				update_state (argv[0], iface, NULL);
+			} else {
+				update_state (argv[0], iface, liface);
+			}
+		} else {
+			update_state (argv[0], iface, liface);
+		}
+	} else if (<<we're taking interfaces down>>) {
+		update_state (argv[0], iface, NULL);
+	} else if (!<<we're listing known interfaces>>
+	           && !<<we're querying an interface's config>>)
+	{
+		assert(0);
+	}
+}
+@ 
+
+\appendix
+
+\section{Architecture-dependent functions}
+\subsection{Common functions}
+<<common functions declarations>>=
+#include "header.h"
+
+int execable(char *);
+#define iface_is_link() (!_iface_has(ifd->real_iface, ":."))
+#define iface_has(s) _iface_has(ifd->real_iface, (s))
+int _iface_has(char *, char *);
+void cleanup_hwaddress(interface_defn *ifd, char **pparam, int argc, char ** argv);
+void make_hex_address(interface_defn *ifd, char **pparam, int argc, char ** argv);
+void compute_v4_addr(interface_defn *ifd, char **pparam, int argc, char ** argv);
+void compute_v4_mask(interface_defn *ifd, char **pparam, int argc, char ** argv);
+void compute_v4_broadcast(interface_defn *ifd, char **pparam, int argc, char ** argv);
+void set_preferred_lft(interface_defn *ifd, char **pparam, int argc, char ** argv);
+void get_token(interface_defn *ifd, char **pparam, int argc, char ** argv);
+void to_decimal(interface_defn *ifd, char **pparam, int argc, char ** argv);
+@ 
+
+<<common functions implementations>>=
+#ifdef __GNUC__
+#define UNUSED __attribute__((unused))
+#else
+#define UNUSED
+#endif
+
+int _iface_has(char *iface, char *delims) {
+	char _iface[80];
+	strncpy(_iface, iface, sizeof(_iface));
+	_iface[sizeof(_iface) - 1] = 0;
+	strtok(_iface, delims);
+	void * token = strtok(NULL, delims);
+	return (token != NULL);
+}
+
+int execable(char *program) {
+	struct stat buf;
+
+	if (0 == stat(program, &buf)) {
+		if (S_ISREG(buf.st_mode) && (S_IXUSR & buf.st_mode)) return 1;
+	}
+	return 0;
+}
+
+void cleanup_hwaddress(interface_defn *ifd UNUSED, char **pparam, int argc UNUSED, char ** argv UNUSED) {
+	char *rest = *pparam;
+		/* we're shrinking the text, so no realloc needed */
+	char *space = strchr(rest, ' ');
+
+	if (space == NULL)
+		return;
+
+	*space = '\0';
+	if (strcasecmp(rest, "ether") == 0 ||
+		strcasecmp(rest, "ax25") == 0 ||
+		strcasecmp(rest, "ARCnet") == 0 ||
+		strcasecmp(rest, "netrom") == 0)
+	{
+		/* found deprecated <class> attribute */
+		memmove(rest, space+1, strlen(space+1)+1);
+	} else {
+		*space = ' ';
+	}
+}
+
+void make_hex_address(interface_defn *ifd UNUSED, char **pparam, int argc UNUSED, char ** argv UNUSED)
+{
+	char addrcomp[4];
+	int maxlen = strlen("0000:0000");
+
+	int ret = sscanf(*pparam, "%3hhu.%3hhu.%3hhu.%3hhu",
+		&addrcomp[0], &addrcomp[1], &addrcomp[2], &addrcomp[3]);
+
+	if (ret != 4)
+		return;
+
+	*pparam = realloc(*pparam, maxlen + 1);
+	if (*pparam == NULL) return;
+	snprintf(*pparam, maxlen + 1, "%.2hhx%.2hhx:%.2hhx%.2hhx",
+		addrcomp[0], addrcomp[1], addrcomp[2], addrcomp[3]);
+}
+
+#include <arpa/inet.h>
+
+void compute_v4_addr(interface_defn *ifd UNUSED, char **pparam, int argc UNUSED, char ** argv UNUSED)
+{
+	char s[INET_ADDRSTRLEN * 2 + 2]; /* 2 is for slash and \0 */
+	strncpy(s, *pparam, sizeof(s));
+	s[sizeof(s) - 1] = 0;
+
+	char * token = strtok(s, "/");
+	if (!token) return;
+
+	*pparam = realloc(*pparam, strlen(token) + 1);
+	if (*pparam == NULL) return;
+	strcpy(*pparam, token);
+}
+
+void compute_v4_mask(interface_defn *ifd UNUSED, char **pparam, int argc UNUSED, char ** argv UNUSED)
+{
+	char s[INET_ADDRSTRLEN * 2 + 2]; /* 2 is for slash and \0 */
+	strncpy(s, *pparam, sizeof(s));
+	s[sizeof(s) - 1] = 0;
+
+	char * token = strtok(s, "/");
+	if (!token) return;
+
+	uint8_t addr[sizeof(struct in_addr)];
+	struct in_addr mask;
+	if (inet_pton(AF_INET, token, &addr) != 1) return;
+	token = strtok(NULL, "/");
+	int maskwidth = -1;
+	if (!token) {
+		if (addr[0] <= 127) {
+		    maskwidth = 8;
+		} else if ((addr[0] >= 128) && (addr[0] <= 191)) {
+		    maskwidth = 16;
+		} else if ((addr[0] >= 192) && (addr[0] <= 223)) {
+		    maskwidth = 24;
+		} else {
+		    maskwidth = 32;
+		}
+	} else {
+		switch (inet_pton(AF_INET, token, &mask)) {
+			case -1:
+				return;
+
+			case 0:
+				if (sscanf(token, "%d", &maskwidth) != 1) return;
+		}
+	}
+	if (maskwidth != -1) {
+		mask.s_addr = htonl(~((1L << (32 - maskwidth)) - 1));
+	}
+
+	if (inet_ntop(AF_INET, &mask, s, sizeof(s)) == NULL) return;
+	*pparam = realloc(*pparam, strlen(s) + 1);
+	if (*pparam == NULL) return;
+	strcpy(*pparam, s);
+}
+
+void compute_v4_broadcast(interface_defn *ifd, char **pparam, int argc UNUSED, char ** argv UNUSED)
+{
+	/* If we don't get special value don't do anything */
+	if (strcmp(*pparam, "+") && strcmp(*pparam, "-")) return;
+
+	struct in_addr addr;
+	struct in_addr mask;
+
+	char * s = get_var("address", strlen("address"), ifd);
+	if (!s) return;
+	int r = inet_pton(AF_INET, s, &addr);
+	free(s);
+	if (r != 1) return;
+
+	s = get_var("netmask", strlen("netmask"), ifd);
+	if (!s) return;
+	r = inet_pton(AF_INET, s, &mask);
+	free(s);
+	if (r != 1) return;
+
+	if (mask.s_addr != htonl(0xfffffffe)) {
+	    if (!strcmp(*pparam, "+")) {
+		addr.s_addr |= ~mask.s_addr;
+	    }
+
+	    if (!strcmp(*pparam, "-")) {
+		addr.s_addr &= mask.s_addr;
+	    }
+	} else {
+	    if (!strcmp(*pparam, "+")) {
+		addr.s_addr = 0xffffffff;
+	    }
+
+	    if (!strcmp(*pparam, "-")) {
+		addr.s_addr = 0;
+	    }
+	}
+
+	char buffer[INET_ADDRSTRLEN + 1];
+	if (inet_ntop(AF_INET, &addr, buffer, sizeof(buffer)) == NULL) return;
+	*pparam = realloc(*pparam, strlen(buffer) + 1);
+	if (*pparam == NULL) return;
+	strcpy(*pparam, buffer);
+}
+
+void set_preferred_lft(interface_defn *ifd, char **pparam, int argc UNUSED, char ** argv UNUSED)
+{
+	if (!ifd->real_iface) return;
+	if (iface_has(":")) {
+		char s[] = "0";
+		*pparam = realloc(*pparam, sizeof(s));
+		if (*pparam == NULL) return;
+		strcpy(*pparam, s);
+	}
+}
+
+void get_token(interface_defn *ifd UNUSED, char **pparam, int argc, char ** argv)
+{
+	if (argc == 0) return;
+
+	int token_no;
+	if (argc == 1) {
+		token_no = 0;
+	} else {
+		token_no = atoi(argv[1]);
+	}
+
+	char * s = strdup(*pparam);
+	char * token = strtok(s, argv[0]);
+	while (token_no > 0) {
+		token = strtok(NULL, argv[0]);
+		token_no--;
+	}
+	if (token) {
+	    strcpy(*pparam, token);
+	} else {
+	    if (argc == 3) {
+		*pparam = realloc(*pparam, strlen(argv[2]) + 1);
+		if (*pparam == NULL) return;
+		strcpy(*pparam, argv[2]);
+	    }
+	}
+	free(s);
+}
+
+void to_decimal(interface_defn *ifd UNUSED, char **pparam, int argc, char ** argv)
+{
+	int base = 10;
+
+	if (argc == 1) {
+		base = atoi(argv[0]);
+	}
+
+	char * result;
+	long value = strtol(*pparam, &result, base);
+	if (result == *pparam) return;
+
+	snprintf(*pparam, strlen(*pparam) + 1, "%ld", value);
+}
+
+@ 
+
+\subsection{Linux-specific functions}
+
+<<archlinux.h>>=
+unsigned int mylinuxver();
+unsigned int mylinux(int,int,int);
+<<common functions declarations>>
+@
+
+<<archlinux.c>>=
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/utsname.h>
+#include <sys/stat.h>
+
+#include "archlinux.h"
+
+unsigned int mylinuxver() {
+	static int maj = -1, rev = 0, min = 0;
+
+	if (maj == -1) {
+		struct utsname u;
+		char *pch;
+		uname(&u);
+		maj = atoi(u.release);
+		pch = strchr(u.release, '.');
+		if (pch) {
+			rev = atoi(pch+1);
+			pch = strchr(pch+1, '.');
+			if (pch) {
+				min = atoi(pch+1);
+			}
+		}
+	}
+
+	return mylinux(maj,rev,min);
+}
+
+unsigned int mylinux(int maj, int rev, int min) { 
+	return min | rev << 10 | maj << 13;
+}
+
+<<common functions implementations>>
+@ 
+
+\subsection{kFreeBSD-specific functions}
+
+<<archkfreebsd.h>>=
+/* no OS-specific functions yet */
+<<common functions declarations>>
+@
+
+<<archkfreebsd.c>>=
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/utsname.h>
+#include <sys/stat.h>
+
+#include "archkfreebsd.h"
+
+<<common functions implementations>>
+@ 
+
+\subsection{Hurd-specific functions}
+
+<<archhurd.h>>=
+/* no OS-specific functions yet */
+<<common functions declarations>>
+@
+
+<<archhurd.c>>=
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/utsname.h>
+#include <sys/stat.h>
+
+#include "archhurd.h"
+
+<<common functions implementations>>
+@ 
+
+\section{Linux Address Families}
+\subsection{IPv4 Address Family}
+
+<<address family declarations>>=
+extern address_family addr_inet;
+@ 
+
+<<address family references>>=
+&addr_inet, 
+@ 
+
+<<inet.defn>>=
+address_family inet
+architecture linux
+
+<<Linux inet methods>>
+
+@ 
+
+<<Linux inet methods>>=
+<<Linux inet methods: loopback>>
+
+<<Linux inet methods: static>>
+
+<<inet methods: manual>>
+
+<<Linux inet methods: dhcp>>
+
+<<inet methods: bootp>>
+
+<<Linux inet methods: tunnel>>
+
+<<inet methods: ppp>>
+
+<<inet methods: wvdial>>
+
+<<inet methods: ipv4ll>>
+@ 
+
+<<Linux inet methods: loopback>>=
+method loopback
+  description
+    This method may be used to define the IPv4 loopback interface.
+
+  up
+    ip link set dev %iface% up
+
+  down
+    ip link set dev %iface% down
+@ 
+
+<<Linux inet methods: static>>=
+method static
+  description
+    This method may be used to define Ethernet interfaces with statically
+    allocated IPv4 addresses.
+      
+  options
+    address address             -- Address (dotted quad/netmask) *required*
+    netmask mask                -- Netmask (dotted quad or CIDR)
+    broadcast broadcast_address -- Broadcast address (dotted quad, + or -) [+]
+    metric metric               -- Routing metric for default gateway (integer)
+    gateway address             -- Default gateway (dotted quad)
+    pointopoint address         -- Address of other end point (dotted quad). \
+                                   Note the spelling of "point-to".
+    hwaddress address           -- Link local address.
+    mtu size                    -- MTU size
+    scope                       -- Address validity scope. Possible values: \
+                                   global, link, host
+
+  conversion
+    hwaddress cleanup_hwaddress
+    address compute_v4_mask =netmask?
+    address compute_v4_addr
+    broadcast compute_v4_broadcast
+
+  up
+    ip addr add %address%[[/%netmask%]] [[broadcast %broadcast%]] \
+	[[peer %pointopoint%]] [[scope %scope%]] dev %iface% label %iface%
+    ip link set dev %iface% [[mtu %mtu%]] [[address %hwaddress%]] up
+
+    [[ ip route add default via %gateway% [[metric %metric%]] dev %iface% ]]
+
+  down
+    [[ ip route del default via %gateway% [[metric %metric%]] dev %iface% 2>&1 1>/dev/null || true ]]
+    ip -4 addr flush dev %iface% label %iface%
+    ip link set dev %iface% down \
+		if (iface_is_link())
+@
+
+<<inet methods: manual>>=
+method manual
+  description
+    This method may be used to define interfaces for which no configuration
+    is done by default.  Such interfaces can be configured manually by
+    means of *up* and *down* commands or /etc/network/if-*.d scripts.
+
+  up
+
+  down
+@ 
+
+<<Linux inet methods: dhcp>>=
+method dhcp
+  description
+    This method may be used to obtain an address via DHCP with any of
+    the tools: dhclient, pump, udhcpc, dhcpcd.
+    (They have been listed in their order of precedence.)
+    If you have a complicated DHCP setup you should
+    note that some of these clients use their own configuration files
+    and do not obtain their configuration information via *ifup*.
+
+  options
+    hostname hostname       -- Hostname to be requested (pump, dhcpcd, udhcpc)
+    metric metric           -- Metric for added routes (dhclient)
+    leasehours leasehours   -- Preferred lease time in hours (pump)
+    leasetime leasetime     -- Preferred lease time in seconds (dhcpcd)
+    vendor vendor           -- Vendor class identifier (dhcpcd)
+    client client           -- Client identifier (dhcpcd, udhcpc)
+    hwaddress address       -- Hardware address.
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    [[ip link set dev %iface% address %hwaddress%]]
+    dhclient -1 -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+	[[-e IF_METRIC=%metric%]] \
+        if (execable("/sbin/dhclient"))
+    dhclient3 -1 -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
+	[[-e IF_METRIC=%metric%]] \
+        elsif (execable("/sbin/dhclient3"))
+    pump -i %iface% [[-h %hostname%]] [[-l %leasehours%]] \
+        elsif (execable("/sbin/pump") && mylinuxver() >= mylinux(2,1,100))
+    udhcpc -n -p /run/udhcpc.%iface%.pid -i %iface% [[-H %hostname%]] \
+           [[-c %client%]] \
+        elsif (execable("/sbin/udhcpc") && mylinuxver() >= mylinux(2,2,0))
+    dhcpcd [[-h %hostname%]] [[-i %vendor%]] [[-I %client%]] \
+           [[-l %leasetime%]] %iface% \
+        elsif (execable("/sbin/dhcpcd"))
+
+  down
+    dhclient -v -r -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+    dhclient3 -r -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
+        elsif (execable("/sbin/dhclient3"))
+    pump -i %iface% -r \
+        elsif (execable("/sbin/pump") && mylinuxver() >= mylinux(2,1,100))
+    kill -USR2 $(cat /run/udhcpc.%iface%.pid); kill -TERM $(cat /run/udhcpc.%iface%.pid) \
+        elsif (execable("/sbin/udhcpc"))
+    dhcpcd -k %iface% \
+        elsif (execable("/sbin/dhcpcd"))
+
+    ip link set dev %iface% down \
+		if (iface_is_link())
+@ 
+
+<<inet methods: bootp>>=
+method bootp
+  description
+    This method may be used to obtain an address via bootp.
+
+  options
+    bootfile file  -- Tell the server to use /file/ as the bootfile.
+    server address -- Use the IP address /address/ to communicate with \
+                      the server.
+    hwaddr addr    -- Use /addr/ as the hardware address instead of \
+                      whatever it really is.
+
+  up
+    bootpc [[--bootfile %bootfile%]] --dev %iface% [[--server %server%]] \
+           [[--hwaddr %hwaddr%]] --returniffail --serverbcast
+
+  down
+    ip link set dev %iface% down \
+        if (execable("/sbin/ip") && iface_is_link())
+    ifconfig %iface% down \
+        elsif (1)
+@ 
+
+<<Linux inet methods: tunnel>>=
+method tunnel
+  description
+    This method is used to create GRE or IPIP tunnels. You need to have
+    the *ip* binary from the *iproute* package. For GRE tunnels, you
+    will need to load the ip_gre module and the ipip module for
+    IPIP tunnels.
+  options
+    address address       -- Local address (dotted quad) *required*
+    mode type             -- Tunnel type (either GRE or IPIP) *required*
+    endpoint address      -- Address of other tunnel endpoint *required*
+    dstaddr address       -- Remote address (remote address inside tunnel)
+    local address         -- Address of the local endpoint
+    gateway address       -- Default gateway
+    ttl time              -- TTL setting
+    mtu size              -- MTU size
+  up
+    ip tunnel add %iface% mode %mode% remote %endpoint% [[local %local%]] \
+       [[ttl %ttl%]]
+    ip link set %iface% up
+    ip addr add %address%/%netmask% dev %iface% [[peer %dstaddr%]]
+    [[ ip route add default via %gateway% ]]
+  down
+    ip tunnel del %iface%
+@ 
+
+<<inet methods: ppp>>=
+method ppp
+  description
+    This method uses pon/poff to configure a PPP interface. See those
+    commands for details.
+  options
+    provider name  -- Use /name/ as the provider (from /etc/ppp/peers).
+    unit number    -- Use /number/ as the ppp unit number.
+    options string -- Pass /string/ as additional options to pon.
+  up
+    pon [[%provider%]] [[unit %unit%]] [[%options%]]
+  down
+    poff [[%provider%]]
+@ 
+
+<<inet methods: wvdial>>=
+method wvdial
+  description
+    This method uses wvdial to configure a PPP interface. See that command
+    for more details.
+  options
+    provider name  -- Use /name/ as the provider (from /etc/wvdial.conf).
+  up
+    /sbin/start-stop-daemon --start -x /usr/bin/wvdial \
+                      -p /run/wvdial.%iface%.pid -b -m -- [[ %provider% ]]
+  down
+    /sbin/start-stop-daemon --stop -x /usr/bin/wvdial \
+                      -p /run/wvdial.%iface%.pid -s 2
+
+<<inet methods: ipv4ll>>=
+method ipv4ll
+  description
+    This method uses avahi-autoipd to configure an interface with an
+    IPv4 Link-Layer address (169.254.0.0/16 family). This method is also
+    known as APIPA or IPAC, and often colloquially referred to
+    as "Zeroconf address".
+  up
+    /usr/sbin/avahi-autoipd -D %iface%
+  down
+    /usr/sbin/avahi-autoipd --kill %iface%
+@
+
+
+
+
+\subsection{IPv6 Address Family}
+
+<<address family declarations>>=
+extern address_family addr_inet6;
+@ 
+
+<<address family references>>=
+&addr_inet6,
+@ 
+
+<<inet6.defn>>=
+address_family inet6
+architecture linux
+
+method auto
+  description
+    This method may be used to define interfaces with automatically assigned
+    IPv6 addresses. Using this method on its own doesn't mean that RDNSS options
+    will be applied, too. To make this happen, *rdnssd* daemon must be installed,
+    properly configured and running.
+    If stateless DHCPv6 support is turned on, then additional network
+    configuration parameters such as DNS and NTP servers will be retrieved
+    from a DHCP server.
+
+  options
+    privext int            -- Privacy extensions (RFC3041) (0=off, 1=assign, 2=prefer)
+    dhcp int               -- Use stateless DHCPv6 (0=off, 1=on)
+  up
+    modprobe -q net-pf-10 > /dev/null 2>&1 || true # ignore failure.
+    [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.use_tempaddr=%privext%]]
+    sysctl -q -e -w net.ipv6.conf.%iface/.//%.accept_ra=1
+    sysctl -q -e -w net.ipv6.conf.%iface/.//%.autoconf=1
+    ip link set dev %iface% up
+    dhclient -6 -1 -S -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (var_true("dhcp", ifd) && execable("/sbin/dhclient"))
+  down
+    ip -6 addr flush dev %iface% scope global
+    ip link set dev %iface% down \
+		if (iface_is_link())
+
+method loopback
+  description
+    This method may be used to define the IPv6 loopback interface.
+  up
+    ip link set dev %iface% up
+    ip addr add dev %iface% ::1
+  down
+    ip addr del dev %iface% ::1
+    ip link set dev %iface% down
+
+method static
+  description
+    This method may be used to define interfaces with statically assigned
+    IPv6 addresses. By default, stateless autoconfiguration is disabled for
+    this interface.
+
+  options
+    address address        -- Address (colon delimited/netmask) *required*
+    netmask mask           -- Netmask (number of bits, eg 64)
+    gateway address        -- Default gateway (colon delimited)
+    media type             -- Medium type, driver dependent
+    hwaddress address      -- Hardware address
+    mtu size               -- MTU size
+    accept_ra int          -- Accept router advertisements (0=off, 1=on)
+    autoconf int           -- Perform stateless autoconfiguration (0=off, 1=on) [0]
+    privext int            -- Privacy extensions (RFC3041) (0=off, 1=assign, 2=prefer)
+    scope                  -- Address validity scope. Possible values: \
+                              global, site, link, host
+    preferred-lifetime int -- Time that address remains preferred []
+
+  conversion
+    hwaddress cleanup_hwaddress
+    preferred-lifetime set_preferred_lft
+    address (get_token / 1 "") =netmask?
+    address (get_token / 0 "")
+
+  up
+    modprobe -q net-pf-10 > /dev/null 2>&1 || true # ignore failure.
+    [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.use_tempaddr=%privext%]]
+    [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.accept_ra=%accept_ra%]]
+    [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.autoconf=%autoconf%]]
+    ip link set dev %iface% [[mtu %mtu%]] [[address %hwaddress%]] up
+    ip -6 addr add %address%[[/%netmask%]] [[scope %scope%]] dev %iface% [[preferred_lft %preferred-lifetime%]]
+    [[ ip -6 route add default via %gateway% dev %iface% ]]
+
+  down
+    ip -6 addr flush dev %iface% scope global
+    ip link set dev %iface% down \
+		if (iface_is_link())
+
+method manual
+  description
+    This method may be used to define interfaces for which no configuration
+    is done by default.  Such interfaces can be configured manually by
+    means of *up* and *down* commands or /etc/network/if-*.d scripts.
+
+  up
+
+  down
+
+method dhcp
+  description
+    This method may be used to obtain network interface configuration via
+    stateful DHCPv6 with dhclient.  In stateful DHCPv6, the DHCP server is
+    responsible for assigning addresses to clients.
+
+  options
+    hwaddress address      -- Hardware address
+    accept_ra int          -- Accept router advertisements (0=off, 1=on) [0]
+    autoconf int           -- Perform stateless autoconfiguration (0=off, 1=on)
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    modprobe -q net-pf-10 > /dev/null 2>&1 || true # ignore failure.
+    [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.accept_ra=%accept_ra%]]
+    [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.autoconf=%autoconf%]]
+    ip link set dev %iface% [[address %hwaddress%]] up
+    dhclient -6 -1 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+
+  down
+    dhclient -6 -r -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+    ip link set dev %iface% down \
+		if (iface_is_link())
+
+method v4tunnel
+  description
+    This method may be used to setup an IPv6-over-IPv4 tunnel. It requires
+    the *ip* command from the *iproute* package.
+
+  options
+    address address       -- Address (colon delimited) *required*
+    netmask mask          -- Netmask (number of bits, eg 64) 
+    endpoint address      -- Address of other tunnel endpoint (IPv4 \
+                             dotted quad) *required*
+    local address         -- Address of the local endpoint (IPv4 \
+                             dotted quad)
+    gateway address       -- Default gateway (colon delimited)
+    ttl time              -- TTL setting
+    mtu size              -- MTU size
+
+  up
+    modprobe -q net-pf-10 > /dev/null 2>&1 || true # ignore failure.
+    ip tunnel add %iface% mode sit remote %endpoint% [[local %local%]] \
+       [[ttl %ttl%]]
+    ip link set %iface% up [[mtu %mtu%]]
+    [[ ip addr add %address%[[/%netmask%]] dev %iface% ]]
+    [[ ip route add %gateway% dev %iface% ]]
+    [[ ip route add ::/0 via %gateway% dev %iface% ]]
+
+  down
+    ip tunnel del %iface%
+
+method 6to4
+  description
+    This method may be used to setup an 6to4 tunnel. It requires
+    the *ip* command from the *iproute* package.
+
+  options
+    local address         -- Address of the local endpoint (IPv4 \
+                             dotted quad) *required*
+    ttl time              -- TTL setting
+    mtu size              -- MTU size
+
+  conversion
+    local make_hex_address =hexaddress
+
+  up
+    modprobe -q net-pf-10 > /dev/null 2>&1 || true # ignore failure.
+    ip tunnel add %iface% mode sit remote any local %local% \
+       [[ttl %ttl%]]
+    ip link set %iface% up [[mtu %mtu%]]
+    ip addr add 2002:%hexaddress%::1/16 dev %iface%
+    ip route add 2000::/3 via ::192.88.99.1 dev %iface%
+
+  down
+    ip -6 route flush dev %iface%
+    ip link set dev %iface% down
+    ip tunnel del %iface%
+@ 
+
+\subsection{IPX Address Family}
+
+<<address family declarations>>=
+extern address_family addr_ipx;
+@ 
+
+<<address family references>>=
+&addr_ipx,
+@ 
+
+<<ipx.defn>>=
+address_family ipx
+architecture linux
+
+method static
+  description
+    This method may be used to setup an IPX interface.  It requires the
+    /ipx_interface/ command.
+
+  options
+    frame type             -- /type/ of Ethernet frames to use (e.g. *802.2*)
+    netnum id              -- Network number
+
+  up
+    ipx_interface add %iface% %frame% %netnum%
+
+  down
+    ipx_interface del %iface% %frame%
+
+method dynamic
+  description
+    This method may be used to setup an IPX interface dynamically.
+
+  options
+    frame type             -- /type/ of Ethernet frames to use (e.g. *802.2*)
+
+  up
+    ipx_interface add %iface% %frame%
+
+  down
+    ipx_interface del %iface% %frame%
+@ 
+
+\subsection{CAN Address Family}
+
+<<address family declarations>>=
+extern address_family addr_can;
+@ 
+
+<<address family references>>=
+&addr_can,
+@ 
+
+<<can.defn>>=
+address_family can
+architecture linux
+
+method static
+  description
+    This method may be used to setup an Controller Area Network (CAN)
+    interface. It requires the the *ip* command from the *iproute* package.
+
+  options
+    bitrate bitrate		-- bitrate (1..1000000) *required*
+    samplepoint samplepoint	-- sample point (0.000..0.999)
+    loopback loopback		-- loop back CAN Messages (on|off)
+    listenonly listenonly	-- listen only mode (on|off)
+    triple triple		-- activate triple sampling (on|off)
+    oneshot oneshot		-- one shot mode (on|off)
+    berr berr			-- activate berr reporting (on|off) 
+
+  up
+    ip link set %iface% type can bitrate %bitrate%
+    [[ ip link set %iface% type can loopback %loopback% ]]
+    [[ ip link set %iface% type can listen-only %listenonly% ]]
+    [[ ip link set %iface% type can triple-sampling %triple% ]]
+    [[ ip link set %iface% type can one-shot %oneshot% ]]
+    [[ ip link set %iface% type can berr-reporting %berr% ]]
+    ip link set %iface% up
+
+  down
+    ip link set %iface% down
+@
+
+\section{kFreeBSD Address Families}
+\subsection{IPv4 Address Family}
+
+<<inet.defn>>=
+architecture kfreebsd
+
+<<kFreeBSD inet methods>>
+@ 
+
+<<kFreeBSD inet methods>>=
+<<kFreeBSD inet methods: loopback>>
+
+<<kFreeBSD inet methods: static>>
+
+<<inet methods: manual>>
+
+<<kFreeBSD inet methods: dhcp>>
+
+<<inet methods: bootp>>
+
+<<inet methods: ppp>>
+
+<<inet methods: wvdial>>
+
+<<inet methods: ipv4ll>>
+@ 
+
+<<kFreeBSD inet methods: loopback>>=
+method loopback
+  description
+    This method may be used to define the IPv4 loopback interface.
+
+  up
+    ifconfig %iface% 127.0.0.1 up
+
+  down
+    ifconfig %iface% down
+@ 
+
+<<kFreeBSD inet methods: static>>=
+method static
+  description
+    This method may be used to define Ethernet interfaces with statically
+    allocated IPv4 addresses.
+      
+  options
+    address address             -- Address (dotted quad/netmask) *required*
+    netmask mask                -- Netmask (dotted quad or CIDR)
+    broadcast broadcast_address -- Broadcast address (dotted quad)
+    metric metric               -- Routing metric for default gateway (integer)
+    gateway address             -- Default gateway (dotted quad)
+    pointopoint address         -- Address of other end point (dotted quad). \
+                                   Note the spelling of "point-to".
+    hwaddress address           -- Link local address.
+    mtu size                    -- MTU size
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    [[ ifconfig %iface% link %hwaddress%]]
+    ifconfig %iface% %address% [[netmask %netmask%]] [[broadcast %broadcast%]] \
+	[[pointopoint %pointopoint%]] [[media %media%]] [[mtu %mtu%]] \
+	up
+    [[ /lib/freebsd/route add default %gateway% ]]
+
+  down
+    [[ /lib/freebsd/route del default %gateway% 2>&1 1>/dev/null || true ]]
+    ifconfig %iface% down
+@
+
+<<kFreeBSD inet methods: dhcp>>=
+method dhcp
+  description
+    This method may be used to obtain an address via DHCP with any of
+    the tools: dhclient, udhcpc, dhcpcd.
+    (They have been listed in their order of precedence.)
+    If you have a complicated DHCP setup you should
+    note that some of these clients use their own configuration files
+    and do not obtain their configuration information via *ifup*.
+
+  options
+    hostname hostname       -- Hostname to be requested (dhcpcd, udhcpc)
+    metric metric           -- Metric for added routes (dhclient)
+    leasetime leasetime     -- Preferred lease time in seconds (dhcpcd)
+    vendor vendor           -- Vendor class identifier (dhcpcd)
+    client client           -- Client identifier (dhcpcd, udhcpc)
+    hwaddress address       -- Hardware Address.
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    [[ifconfig %iface% link %hwaddress%]]
+    dhclient -1 -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+	[[-e IF_METRIC=%metric%]] \
+        if (execable("/sbin/dhclient"))
+    dhclient3 -1 -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
+	[[-e IF_METRIC=%metric%]] \
+        elsif (execable("/sbin/dhclient3"))
+    udhcpc -n -p /run/udhcpc.%iface%.pid -i %iface% [[-H %hostname%]] \
+           [[-c %client%]] \
+        elsif (execable("/sbin/udhcpc"))
+    dhcpcd [[-h %hostname%]] [[-i %vendor%]] [[-I %client%]] \
+           [[-l %leasetime%]] %iface% \
+        elsif (execable("/sbin/dhcpcd"))
+
+  down
+    dhclient -v -r -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+    dhclient3 -r -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
+        elsif (execable("/sbin/dhclient3"))
+    kill -USR2 $(cat /run/udhcpc.%iface%.pid); kill -TERM $(cat /run/udhcpc.%iface%.pid) \
+        elsif (execable("/sbin/udhcpc"))
+    dhcpcd -k %iface% \
+        elsif (execable("/sbin/dhcpcd"))
+
+    ifconfig %iface% down
+@ 
+
+\subsection{IPv6 Address Family}
+
+<<inet6.defn>>=
+architecture kfreebsd
+
+method loopback
+  description
+    This method may be used to define the IPv6 loopback interface.
+  up
+    ifconfig %iface% inet6 ::1
+  down
+    ifconfig %iface% down
+
+method static
+  description
+    This method may be used to define interfaces with statically assigned
+    IPv6 addresses.
+
+  options
+    address address        -- Address (colon delimited) *required*
+    netmask mask           -- Netmask (number of bits, eg 64) *required*
+    gateway address        -- Default gateway (colon delimited)
+    media type             -- Medium type, driver dependent
+    hwaddress address      -- Hardware address
+    mtu size               -- MTU size
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    ifconfig %iface% [[media %media%]] [[link %hwaddress%]] [[mtu %mtu%]] up
+    ifconfig %iface% inet6 %address%/%netmask% alias
+    [[ /lib/freebsd/route add -inet6 ::/0 %gateway% ]]
+
+  down
+    [[ /lib/freebsd/route -n del -inet6 ::/0 2>&1 1>/dev/null || true ]]
+    [[ ifconfig %iface% inet6 %address% -alias ]]
+    ifconfig %iface% down
+
+method manual
+  description
+    This method may be used to define interfaces for which no configuration
+    is done by default.  Such interfaces can be configured manually by
+    means of *up* and *down* commands or /etc/network/if-*.d scripts.
+
+  up
+
+  down
+
+method dhcp
+  description
+    This method may be used to obtain network interface configuration via
+    stateful DHCPv6 with dhclient.  In stateful DHCPv6, the DHCP server is
+    responsible for assigning addresses to clients.
+
+  options
+    hwaddress address      -- Hardware address
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    ifconfig %iface% [[link %hwaddress%]] up
+    dhclient -6 -1 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+
+  down
+    dhclient -6 -r -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+    ifconfig %iface% down
+
+@ 
+
+\section{Hurd Address Families}
+\subsection{IPv4 Address Family}
+
+<<inet.defn>>=
+architecture hurd
+
+<<Hurd inet methods>>
+@ 
+
+<<Hurd inet methods>>=
+<<Hurd inet methods: loopback>>
+
+<<Hurd inet methods: static>>
+
+<<inet methods: manual>>
+
+<<Hurd inet methods: dhcp>>
+
+<<inet methods: bootp>>
+
+<<inet methods: ppp>>
+
+<<inet methods: wvdial>>
+
+<<inet methods: ipv4ll>>
+@ 
+
+<<Hurd inet methods: loopback>>=
+method loopback
+  description
+    This method may be used to define the IPv4 loopback interface.
+
+  up
+    inetutils-ifconfig --interface %iface% 127.0.0.1 --up
+
+  down
+    inetutils-ifconfig --interface %iface% --down
+@ 
+
+<<Hurd inet methods: static>>=
+method static
+  description
+    This method may be used to define Ethernet interfaces with statically
+    allocated IPv4 addresses.
+      
+  options
+    address address             -- Address (dotted quad/netmask) *required*
+    netmask mask                -- Netmask (dotted quad or CIDR)
+    broadcast broadcast_address -- Broadcast address (dotted quad)
+    metric metric               -- Routing metric for default gateway (integer)
+    gateway address             -- Default gateway (dotted quad)
+    pointopoint address         -- Address of other end point (dotted quad). \
+                                   Note the spelling of "point-to".
+    hwaddress address           -- Link local address (Not yet supported)
+    mtu size                    -- MTU size
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    [[Warning: Option hwaddress: %hwaddress% not yet supported]]
+    inetutils-ifconfig --interface %iface% --address %address% [[--netmask %netmask%]] \
+    [[--broadcast %broadcast%]] [[--mtu %mtu%]] --up
+    [[fsysopts /servers/socket/2 $(showtrans /servers/socket/2) --gateway %gateway% ]]
+
+  down
+    inetutils-ifconfig --interface %iface% --down
+@
+
+<<Hurd inet methods: dhcp>>=
+method dhcp
+  description
+    This method may be used to obtain an address via DHCP with any of
+    the tools: dhclient, udhcpc, dhcpcd.
+    (They have been listed in their order of precedence.)
+    If you have a complicated DHCP setup you should
+    note that some of these clients use their own configuration files
+    and do not obtain their configuration information via *ifup*.
+
+  options
+    hostname hostname       -- Hostname to be requested (dhcpcd, udhcpc)
+    leasetime leasetime     -- Preferred lease time in seconds (dhcpcd)
+    vendor vendor           -- Vendor class identifier (dhcpcd)
+    client client           -- Client identifier (dhcpcd, udhcpc)
+    hwaddress address       -- Hardware Address (Not yet supported)
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    [[Warning: Option hwaddress: %hwaddress% not yet supported]]
+    dhclient -1 -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+    udhcpc -n -p /run/udhcpc.%iface%.pid -i %iface% [[-H %hostname%]] \
+           [[-c %client%]] \
+        elsif (execable("/sbin/udhcpc"))
+    dhcpcd [[-h %hostname%]] [[-i %vendor%]] [[-I %client%]] \
+           [[-l %leasetime%]] %iface% \
+        elsif (execable("/sbin/dhcpcd"))
+
+  down
+    dhclient -v -r -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+    kill -USR2 $(cat /run/udhcpc.%iface%.pid); kill -TERM $(cat /run/udhcpc.%iface%.pid) \
+        elsif (execable("/sbin/udhcpc"))
+    dhcpcd -k %iface% \
+        elsif (execable("/sbin/dhcpcd"))
+
+    ifconfig --interface %iface% --down
+@ 
+
+\subsection{IPv6 Address Family}
+
+<<inet6.defn>>=
+architecture hurd
+
+method loopback
+  description
+    This method may be used to define the IPv6 loopback interface.
+  up
+    [[FIXME: Add proper commands here for ipv6]]
+  down
+    [[FIXME: Add proper commands here for ipv6]]
+
+method static
+  description
+    This method may be used to define interfaces with statically assigned
+    IPv6 addresses.
+
+  options
+    address address        -- Address (colon delimited) *required*
+    netmask mask           -- Netmask (number of bits, eg 64) *required*
+    gateway address        -- Default gateway (colon delimited)
+    media type             -- Medium type, driver dependent
+    hwaddress address      -- Hardware address  (Not yet supported)
+    mtu size               -- MTU size
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    [[FIXME: Add proper commands here for ipv6]]
+    [[Warning: Option media: %media% not yet supported]]
+    [[Warning: Option hwaddress: %hwaddress% not yet supported]]
+
+  down
+    [[FIXME: Add proper commands here for ipv6]]
+
+method manual
+  description
+    This method may be used to define interfaces for which no configuration
+    is done by default.  Such interfaces can be configured manually by
+    means of *up* and *down* commands or /etc/network/if-*.d scripts.
+
+  up
+
+  down
+
+method dhcp
+  description
+    This method may be used to obtain network interface configuration via
+    stateful DHCPv6 with dhclient.  In stateful DHCPv6, the DHCP server is
+    responsible for assigning addresses to clients.
+
+  options
+    hwaddress address      -- Hardware address (Not yet supported)
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    [[Warning: Option hwaddress: %hwaddress% not yet supported]]
+    inetutils-ifconfig --interface %iface% --up
+    dhclient -6 -1 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+
+  down
+    dhclient -6 -r -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (execable("/sbin/dhclient"))
+    inetutils-ifconfig --interface %iface% --down
+
+@ 
+
+\section{Internal address metafamily}
+
+<<address family declarations>>=
+extern address_family addr_meta;
+@ 
+
+<<address family references>>=
+&addr_meta, 
+@ 
+
+<<meta.defn>>=
+address_family meta
+architecture any
+
+method none
+	description
+	up
+	down
+@ 
+
+\section{Link pseudo address family}
+
+<<exported symbols>>=
+extern address_family addr_link;
+@ 
+
+<<link.defn>>=
+address_family link
+architecture linux
+
+method none
+  description
+  conversion
+    iface (get_token . 0 "") =link
+    iface (get_token . 1 "") =vlan_id0
+    iface (get_token : 0 "") =iface0
+    vlan_id0 (get_token : 0 "") =vlan_id1
+    vlan_id1 (to_decimal 10) =vlan_id
+  up
+    if test -d /sys/class/net/%link% -a \
+            ! -d /sys/class/net/%iface0% ; \
+    then \
+        ip link set up dev %link%; \
+        ip link add link %link% name %iface0% type vlan id %vlan_id%; \
+    fi if (iface_has("."))
+  down
+    ip link del %iface% if (iface_has("."))
+
+architecture kfreebsd
+
+method none
+  description
+  up
+  down
+
+architecture hurd
+
+method none
+  description
+  up
+  down
+
+@ 
+
+\begin{flushleft}
+\bibliography{biblio}
+\bibliographystyle{unsrt}
+\end{flushleft}
+
+\end{document}
+% vim: noet ts=8
