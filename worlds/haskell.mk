@@ -1604,7 +1604,7 @@ $(HASKELLLEXER): $(SPREZZ)/haskell-lexer/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf haskell-lexer-$(haskell-haskell-lexer_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf haskell-lexer-$(haskell-lexer_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-haskell-src
 haskell-haskell-src:$(HASKELLHASKELLSRC)_$(ARCH).deb
