@@ -357,3 +357,11 @@ $(LIBSOAPLITEPERL): $(SPREZZ)/libsoap-lite-perl/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf SOAP-Lite-$(libsoap-lite-perl_UPVER).tar.gz $(TARARGS) $@
+.PHONY: libterm-size-perl
+libterm-size-perl:$(LIBTERMSIZEPERL)_$(ARCH).deb
+$(LIBTERMSIZEPERL): $(SPREZZ)/libterm-size-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Term-Size-$(libterm-size-perl_UPVER).tar.gz $(TARARGS) $@
+
