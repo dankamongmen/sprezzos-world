@@ -8576,6 +8576,14 @@ $(XSERVERXORGVIDEOVESA): $(SPREZZ)/xserver-xorg-video-vesa/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86-video-vesa-$(xserver-xorg-video-vesa_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-video-vmware
+xserver-xorg-video-vmware:$(XSERVERXORGVIDEOVMWARE)_$(ARCH).deb
+$(XSERVERXORGVIDEOVMWARE): $(SPREZZ)/xserver-xorg-video-vmware/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-vmware-$(xserver-xorg-video-vmware_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xterm
 xterm:$(XTERM)_$(ARCH).deb
 $(XTERM): $(SPREZZ)/xterm/debian/changelog
