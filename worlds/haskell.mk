@@ -1598,9 +1598,9 @@ $(HASKELLHASKELLDBHDBCSQLITE3): $(SPREZZ)/haskell-haskelldb-hdbc-sqlite3/debian/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskelldb-hdbc-sqlite3-$(haskell-haskelldb-hdbc-sqlite3_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-haskell-lexer
-haskell-haskell-lexer:$(HASKELLHASKELLLEXER)_$(ARCH).deb
-$(HASKELLHASKELLLEXER): $(SPREZZ)/haskell-haskell-lexer/debian/changelog
+.PHONY: haskell-lexer
+haskell-lexer:$(HASKELLLEXER)_$(ARCH).deb
+$(HASKELLLEXER): $(SPREZZ)/haskell-lexer/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
