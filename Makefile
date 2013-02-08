@@ -94,6 +94,23 @@ $(GTKPARASITE): $(SPREZZ)/gtkparasite/debian/changelog
 	ln -sf gtkparasite-$(gtkparasite_UPVER).tar.xz gtkparasite_$(gtkparasite_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: gpm
+gpm:$(GPM)_$(ARCH).deb
+$(GPM): $(SPREZZ)/gpm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpm-$(gpm_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gpm
+gpm:$(GPM)_$(ARCH).deb
+$(GPM): $(SPREZZ)/gpm/debian/changelog
+	git clone https://github.com/dankamongmen/gpm.git $@
+	rm -rf $@/debian
+	tar cJf gpm-$(gpm_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf gpm-$(gpm_UPVER).tar.xz gpm_$(gpm_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: mawk
 mawk:$(MAWK)_$(ARCH).deb
 $(MAWK): $(SPREZZ)/mawk/debian/changelog
@@ -3554,14 +3571,6 @@ $(GPERF): $(SPREZZ)/gperf/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gperf-$(gperf_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: gpm
-gpm:$(GPM)_$(ARCH).deb
-$(GPM): $(SPREZZ)/gpm/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gpm-$(gpm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gphoto2
 gphoto2:$(GPHOTO2)_$(ARCH).deb
