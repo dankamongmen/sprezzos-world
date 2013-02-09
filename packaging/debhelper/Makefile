@@ -1,5 +1,5 @@
 # List of files of dh_* commands. Sorted for debhelper man page.
-COMMANDS=$(shell find . -maxdepth 1 -type f -perm +100 -name "dh_*" -printf "%f\n" | sort)
+COMMANDS=$(shell find . -maxdepth 1 -type f -perm /100 -name "dh_*" -printf "%f\n" | sort)
 
 # Find deprecated commands by looking at their synopsis.
 DEPRECATED=$(shell egrep -l '^dh_.* - .*deprecated' $(COMMANDS))
