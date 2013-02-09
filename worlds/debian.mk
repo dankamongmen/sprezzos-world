@@ -112,7 +112,6 @@ $(DEBOOTSTRAP): $(SPREZZ)/debootstrap/debian/changelog
 	tar cJvf debootstrap_$(debootstrap_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
-.PHONY: dpkg
 .PHONY: desktop-base
 desktop-base:$(DESKTOPBASE)_$(ARCH).deb
 $(DESKTOPBASE): $(SPREZZ)/desktop-base/debian/changelog
