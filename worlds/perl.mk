@@ -365,3 +365,11 @@ $(LIBTERMSIZEPERL): $(SPREZZ)/libterm-size-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Term-Size-$(libterm-size-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libvariable-magic-perl
+libvariable-magic-perl:$(LIBVARIABLEMAGICPERL)_$(ARCH).deb
+$(LIBVARIABLEMAGICPERL): $(SPREZZ)/libvariable-magic-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Variable-Magic-$(libvariable-magic-perl_UPVER).tar.gz $(TARARGS) $@
+
