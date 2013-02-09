@@ -4318,3 +4318,19 @@ $(HASKELLCHASINGBOTTOMS): $(SPREZZ)/haskell-chasingbottoms/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ChasingBottoms-$(haskell-chasingbottoms_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-gluraw
+haskell-gluraw:$(HASKELLGLURAW)_$(ARCH).deb
+$(HASKELLGLURAW): $(SPREZZ)/haskell-gluraw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf GLURaw-$(haskell-gluraw_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-openglraw
+haskell-openglraw:$(HASKELLOPENGLRAW)_$(ARCH).deb
+$(HASKELLOPENGLRAW): $(SPREZZ)/haskell-openglraw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf OpenGLRaw-$(haskell-openglraw_UPVER).tar.gz $(TARARGS) $@
+
