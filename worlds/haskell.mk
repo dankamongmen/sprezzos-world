@@ -4310,3 +4310,11 @@ $(HASKELLPCRELIGHT): $(SPREZZ)/haskell-pcre-light/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pcre-light-$(haskell-pcre-light_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-chasingbottoms
+haskell-chasingbottoms:$(HASKELLCHASINGBOTTOMS)_$(ARCH).deb
+$(HASKELLCHASINGBOTTOMS): $(SPREZZ)/haskell-chasingbottoms/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ChasingBottoms-$(haskell-chasingbottoms_UPVER).tar.gz $(TARARGS) $@
+
