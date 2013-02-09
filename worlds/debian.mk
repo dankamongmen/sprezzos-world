@@ -256,8 +256,8 @@ $(METAGNOME): $(SPREZZ)/meta-gnome/debian/changelog
 	cp -r $(<D) $@
 
 .PHONY: meta-kde
-meta-kde:$(metakde)_$(ARCH).deb
-$(metakde): $(SPREZZ)/meta-kde/debian/changelog
+meta-kde:$(METAKDE)_$(ARCH).deb
+$(METAKDE): $(SPREZZ)/meta-kde/debian/changelog
 	cp -r $(<D)/.. $@
 	rm -rf $@/debian
 	tar cJvf meta-kde_$(meta-kde_UPVER).orig.tar.xz $@ --exclude-vcs
