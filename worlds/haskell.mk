@@ -1940,7 +1940,7 @@ $(HASKELLOPENAL): $(SPREZZ)/haskell-openal/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf openal-$(haskell-openal_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf OpenAL-$(haskell-openal_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-opengl
 haskell-opengl:$(HASKELLOPENGL)_$(ARCH).deb
@@ -1948,7 +1948,7 @@ $(HASKELLOPENGL): $(SPREZZ)/haskell-opengl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf opengl-$(haskell-opengl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf OpenGL-$(haskell-opengl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-pandoc
 haskell-pandoc:$(HASKELLPANDOC)_$(ARCH).deb
@@ -3884,7 +3884,7 @@ $(HASKELLSTATEVAR): $(SPREZZ)/haskell-statevar/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf statevar-$(haskell-statevar_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf StateVar-$(haskell-statevar_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-static-hash
 haskell-static-hash:$(HASKELLSTATICHASH)_$(ARCH).deb
