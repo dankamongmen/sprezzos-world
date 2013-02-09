@@ -94,13 +94,13 @@ $(GTKPARASITE): $(SPREZZ)/gtkparasite/debian/changelog
 	ln -sf gtkparasite-$(gtkparasite_UPVER).tar.xz gtkparasite_$(gtkparasite_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
-.PHONY: gpm
-gpm:$(GPM)_$(ARCH).deb
-$(GPM): $(SPREZZ)/gpm/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gpm-$(gpm_UPVER).tar.gz $(TARARGS) $@
+#.PHONY: gpm
+#gpm:$(GPM)_$(ARCH).deb
+#$(GPM): $(SPREZZ)/gpm/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@/
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xzvf gpm-$(gpm_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gpm
 gpm:$(GPM)_$(ARCH).deb
