@@ -1,0 +1,140 @@
+diff -ruN console-tools-0.2.3-old/lib/sfm-misc.c console-tools-0.2.3/lib/sfm-misc.c
+--- console-tools-0.2.3-old/lib/sfm-misc.c	1999-04-08 22:29:39.000000000 +0100
++++ console-tools-0.2.3/lib/sfm-misc.c	2004-04-18 11:54:52.000000000 +0100
+@@ -13,15 +13,67 @@
+ #include <ctype.h>
+ #include <fcntl.h>
+ #include <linux/kd.h>
++#include <linux/vt.h>
+ #include <sys/ioctl.h>
++#include <sys/stat.h>
+ 
+ #include <lct/local.h>
+ #include <lct/console.h>
+ 
++static int set_fd_foreground(int fd)
++{
++  struct vt_stat vstate;
++  struct stat stb;
++  int con;
++  
++  if (fstat(fd, &stb)) {
++    /* No fstat? No backup/restore possible... */
++    return 0;
++  }
++  if (!S_ISCHR(stb.st_mode)) {
++    /* Not character device? WTF? */
++    return 0;
++  }
++  if (major(stb.st_rdev) != 4) {
++    /* Not ttyX? No switching then, it cannot be worse... */
++    return 0;
++  }
++  if (ioctl(fd, VT_GETSTATE, &vstate)) {
++    /* Cannot get currently active VT? No clue what to restore then... */
++    return 0;
++  }
++  con = minor(stb.st_rdev);
++  if (con == 0 || con == vstate.v_active) {
++    /* /dev/tty0? It is current tty, so no switching */
++    return 0;
++  }
++  if (ioctl(fd, VT_ACTIVATE, con)) {
++    /* Activation failed? Let's try it without switching. */
++    return 0;
++  }
++  if (ioctl(fd, VT_WAITACTIVE, con)) {
++    /* Activation failed? Let's try it without switching. */
++    return 0;
++  }
++  return vstate.v_active;  
++}
++
++static void restore_fd_foreground(int fd, int con)
++{
++  /* If con==0 there was no VT switch */
++  if (con != 0) {
++    int savederrno = errno;
++    if (!ioctl(fd, VT_ACTIVATE, con)) {
++      ioctl(fd, VT_WAITACTIVE, con);
++    }
++    errno = savederrno;
++  }
++}
+ 
+ int set_kernel_unimap(int fd, struct unimapdesc *descr)
+ {
+   struct unimapinit advice;
++  int oldcon;
+ 
+   /* Note: after PIO_UNIMAPCLR and before PIO_UNIMAP
+    printf does not work. */
+@@ -30,6 +82,7 @@
+   advice.advised_hashstep = 0;
+   advice.advised_hashlevel = 1;	       /* FIXME: 0 or 1 ? */
+   
++  oldcon = set_fd_foreground(fd);
+ again:
+   if (ioctl(fd, PIO_UNIMAPCLR, &advice)) 
+     {
+@@ -41,6 +94,7 @@
+ 	} 
+       else
+ #endif
++          restore_fd_foreground(fd, oldcon);
+ 	  return -1;
+     }
+   
+@@ -51,9 +105,10 @@
+ 	  advice.advised_hashlevel++;
+ 	  goto again;
+ 	}
++      restore_fd_foreground(fd, oldcon);
+       return -1;
+     }
+-  
++  restore_fd_foreground(fd, oldcon);
+   return 0;
+ }
+ 
+@@ -61,15 +116,18 @@
+ int get_kernel_unimap(int fd, struct unimapdesc *descr)
+ {
+   int ct;
++  int con;
+   
+   descr->entry_ct = 0;
+   descr->entries = NULL;
+   
++  con = set_fd_foreground(fd);
+   /* get entry_ct */
+   if(ioctl(fd, GIO_UNIMAP, (unsigned long) descr)) /* failed */
+     {
+       if(errno != ENOMEM || descr->entry_ct == 0)
+ 	{
++	  restore_fd_foreground(fd, con);
+ 	  perror(_("GIO_UNIMAP (get count)"));
+ 	  return -1;
+ 	}
+@@ -84,10 +142,13 @@
+       /* actually get unipairs */
+       if(ioctl(fd, GIO_UNIMAP, (unsigned long) descr))
+ 	{
++	  restore_fd_foreground(fd, con);
+ 	  perror(_("GIO_UNIMAP (get map)"));
+ 	  return -1;
+ 	}
+ 
++      restore_fd_foreground(fd, con);
++
+       /* someone could change the unimap between our
+        * first and second ioctl, so we can have descrepancies
+        */
+@@ -106,6 +167,7 @@
+     }
+   else
+     {
++      restore_fd_foreground(fd, con);
+       /* no valid SFM currently loaded */
+       errno = ENXIO;
+       return -1;

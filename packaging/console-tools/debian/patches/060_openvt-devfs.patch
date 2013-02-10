@@ -1,0 +1,120 @@
+diff -urN console-tools-0.2.3.orig/vttools/openvt.c console-tools-0.2.3/vttools/openvt.c
+--- console-tools-0.2.3.orig/vttools/openvt.c	Thu Sep  5 13:08:46 2002
++++ console-tools-0.2.3/vttools/openvt.c	Thu Sep  5 13:17:24 2002
+@@ -21,6 +21,10 @@
+  *
+  * Fixed some bugs; made it a bit more robust; renamed to openvt
+  *  aeb@cwi.nl, 1998-06-06.
++ * 
++ * Fixed the bug that broke -w
++ *  Marc Haber <debian-packages@marc-haber.de>, 2000-04-25
++ *
+  */
+ 
+ #include <stdio.h>
+@@ -61,7 +65,8 @@
+  * Where your VTs are hidden
+  */
+ #ifdef __linux__
+-#define VTNAME "/dev/tty%d"
++#define VTNAME "/dev/vc/%d"
++#define OLDVTNAME "/dev/tty%d"
+ #endif
+ 
+ #ifdef ESIX_5_3_2_D
+@@ -190,9 +195,15 @@
+       }
+ 
+   sprintf(vtname, VTNAME, vtno);
+-
++  fd = open(vtname, O_RDWR);
++  if ((fd == -1) && (errno == ENOENT)) 
++    { 
++      /* Maybe we're on a system without devfs */
++      sprintf (vtname, OLDVTNAME, vtno);
++      fd = open (vtname, O_RDWR);
++    }
+   /* Can we open the vt we want? */
+-  if ((fd = open(vtname, O_RDWR)) == -1)
++  if (fd == -1)
+     {
+       int errsv = errno;
+       if (!optc)
+@@ -214,8 +225,8 @@
+ 	      }
+ 	  sprintf(vtname, VTNAME, vtno);
+ 	}
+-      fprintf(stderr, _("Unable to open %s: %s\n"),
+-	      vtname, strerror(errsv));
++      fprintf(stderr, _("Unable to open vt %d: %s\n"),
++	      vtno, strerror(errsv));
+       return(5);
+     }
+ got_vtno:
+@@ -315,13 +326,13 @@
+ 	}
+       close(1);
+       close(2);
+-      if (fd > 2)
++      if (fd > 2)				  /* FIXME: what's this ??! */
+ 	close(fd);	 
+       dup(fd);
+       dup(fd);
+ 
+       /* forking here makes show and wait and switch back work even if the old vt was in X */
+-      if (!do_wait || fork() == 0)
++      if (!do_wait || (fork() == 0))
+ 	{
+ 	  if(as_user)
+ 	    execlp("login", "login", "-f", username, NULL);
+@@ -329,8 +340,8 @@
+ 	    execlp(cmd, def_cmd, NULL);
+ 	  else
+ 	    execvp(cmd, &argv[optind]);
++	  _exit(127);				  /* exec failed */
+ 	}
+-      _exit(127);		/* exec failed */
+     }
+ 
+   if ( pid < 0 )
+@@ -351,7 +362,7 @@
+     }
+ 
+   return 0;
+-}
++    }
+ 
+ 
+ /*
+@@ -389,6 +400,7 @@
+   uid_t console_uid;
+   char filename[FILENAME_MAX+12];
+   struct passwd *pwnam;
++  int err;
+ 
+   if (!(dp=opendir("/proc")))
+     {
+@@ -398,10 +410,20 @@
+ 	
+   /* get the current tty */
+   sprintf(filename,"/dev/tty%d", curvt);
+-  if (stat(filename,&buf))
++  err = stat(filename,&buf);
++  if (err)
+     {
+-      perror(filename);
+-      exit(1);
++      /* Using a pre-devfsd system ? */
++      if (errno == ENOENT) 
++	{
++	  sprintf (filename, "/dev/tty%d", curvt);
++	  err = stat (filename, &buf);
++	}
++      if (err) 
++	{
++	  perror(filename);
++	  exit(1);
++	}
+     }
+   console_dev=buf.st_dev;
+   console_ino=buf.st_ino;

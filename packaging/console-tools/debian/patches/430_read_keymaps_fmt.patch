@@ -1,0 +1,154 @@
+diff -ruN console-tools-0.2.3-old/kbdtools/dumpkeys.c console-tools-0.2.3/kbdtools/dumpkeys.c
+--- console-tools-0.2.3-old/kbdtools/dumpkeys.c	2006-04-25 13:54:16.000000000 +0100
++++ console-tools-0.2.3/kbdtools/dumpkeys.c	2006-04-25 13:54:16.000000000 +0100
+@@ -150,7 +150,7 @@
+ 	printf(" ");
+ 	t = KTYP(code);
+ 	v = KVAL(code);
+-	if (t > KT_LETTER) {
++	if (t > syms_size) {
+ 		if (!numeric && (p = codetoksym(code)) != NULL)
+ 			printf("%-16s",p);
+ 		else
+diff -ruN console-tools-0.2.3-old/kbdtools/loadkeys.y console-tools-0.2.3/kbdtools/loadkeys.y
+--- console-tools-0.2.3-old/kbdtools/loadkeys.y	2006-04-25 13:54:16.000000000 +0100
++++ console-tools-0.2.3/kbdtools/loadkeys.y	2006-04-25 13:55:52.000000000 +0100
+@@ -319,6 +319,7 @@
+ char **args;
+ int optd = 0;
+ int optm = 0;
++int optu = 0;
+ int opts = 0;
+ int quiet = 0;
+ int nocompose = 0;
+@@ -360,6 +361,8 @@
+     { NULL, 0, NULL, 0 }
+   };
+   int c;
++  int fd;
++  int mode;
+   sigset_t sigset, old_sigset;
+   
+   setuplocale();
+@@ -389,6 +392,7 @@
+ 	  break;
+ 	case 'u':
+ 		set_charset("unicode");
++		optu = 1;
+ 		break;
+ 	case 'v':
+ 	  verbose++;
+@@ -404,6 +408,19 @@
+ 	}
+     }
+ 
++  if (!optm) {
++    fd = get_console_fd(NULL);
++    if (!optu) {
++      if (ioctl(fd, KDGKBMODE, &mode)) {
++         perror("KDGKBMODE");
++         fprintf(stderr, _("loadkeys: error reading keyboard mode\n"));
++         exit(1);
++       }
++      if (mode == K_UNICODE)
++         set_charset("unicode");
++      }
++  }
++
+   args = argv + optind - 1;
+   /* set up the first input file, if any */
+   yywrap();
+diff -ruN console-tools-0.2.3-old/lib/ksyms.c console-tools-0.2.3/lib/ksyms.c
+--- console-tools-0.2.3-old/lib/ksyms.c	2006-04-25 13:54:16.000000000 +0100
++++ console-tools-0.2.3/lib/ksyms.c	2006-04-25 13:54:16.000000000 +0100
+@@ -1629,6 +1629,8 @@
+ 
+ /* Functions for both dumpkeys and loadkeys. */
+ 
++static int prefer_unicode = 0;
++
+ void
+ list_charsets(FILE *f) {
+ 	int i,j,lth,ct;
+@@ -1720,8 +1722,7 @@
+ 	int i;
+ 	int j;
+ 	int keycode;
+-	static int fd = -1;
+-	int kbd_mode;
++	int save_prefer_unicode;
+ 	int syms_start = 0;
+ 	sym *p;
+ 
+@@ -1730,21 +1731,19 @@
+ 		return -1;
+ 	}
+ 
+-	if (fd < 0)
+-		fd = get_console_fd(NULL);
+-	ioctl(fd, KDGKBMODE, &kbd_mode);
+ 	if (!strncmp(s, "Meta_", 5)) {
+ 		/* Temporarily change kbd_mode to ensure that keycode is
+ 		   right. */
+-		ioctl(fd, KDSKBMODE, K_XLATE);
++		save_prefer_unicode = prefer_unicode;
++		prefer_unicode = 0;
+ 		keycode = ksymtocode(s+5);
+-		ioctl(fd, KDSKBMODE, kbd_mode);
++		prefer_unicode = save_prefer_unicode;
+ 		if (KTYP(keycode) == KT_LATIN)
+ 			return K(KT_META, KVAL(keycode));
+ 		/* fall through to error printf */
+ 	}
+ 
+-	if (kbd_mode == K_UNICODE) {
++	if (prefer_unicode) {
+ 		for (j = 0; j < 0x80; j++)
+ 			if (!strcmp(s,iso646_syms[j]))
+ 				return (j ^ 0xf000);
+@@ -1759,7 +1758,7 @@
+ 		if (!strcmp(s, synonyms[i].synonym))
+ 			return ksymtocode(synonyms[i].official_name);
+ 
+-	if (kbd_mode == K_UNICODE) {
++	if (prefer_unicode) {
+ 		for (i = 0; i < sizeof(charsets)/sizeof(charsets[0]); i++) {
+ 			p = charsets[i].charnames;
+ 			for (j = charsets[i].start; j < 256; j++, p++)
+@@ -1814,22 +1813,15 @@
+ int
+ add_number(int code)
+ {
+-	int kbd_mode;
+-	static int fd =  -1;
+-
+-	if (fd < 0)
+-		fd = get_console_fd(NULL);
+-
+ 	if (KTYP(code) == KT_META)
+ 		return code;
+-	ioctl(fd, KDGKBMODE, &kbd_mode);
+-	if (kbd_mode == K_UNICODE && KTYP(code) >= syms_size) {
++	if (prefer_unicode && KTYP(code) >= syms_size) {
+ 		if ((code ^ 0xf000) < 0x80)
+ 			return K(KT_LATIN, code ^ 0xf000);
+ 		else
+ 			return code;
+ 	}
+-	if (kbd_mode != K_UNICODE && KTYP(code) < syms_size)
++	if (!prefer_unicode && KTYP(code) < syms_size)
+ 		return code;
+ 	return ksymtocode(codetoksym(code));
+ }
+diff -ruN console-tools-0.2.3-old/po/cat-id-tbl.c console-tools-0.2.3/po/cat-id-tbl.c
+--- console-tools-0.2.3-old/po/cat-id-tbl.c	2006-04-25 13:54:15.000000000 +0100
++++ console-tools-0.2.3/po/cat-id-tbl.c	2006-04-25 13:54:16.000000000 +0100
+@@ -431,6 +431,7 @@
+   {"%s: too many arguments\n", 343},
+   {"%s: could not open tty\n", 344},
+   {"%s: TIOCSTI ioctl failed\n", 345},
++  {"null symbol found", 346},
+ };
+ 
+-int _msg_tbl_length = 345;
++int _msg_tbl_length = 346;

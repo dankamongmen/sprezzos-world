@@ -1,0 +1,120 @@
+diff -ruN console-tools-0.2.3-old/doc/man/fgconsole.1 console-tools-0.2.3/doc/man/fgconsole.1
+--- console-tools-0.2.3-old/doc/man/fgconsole.1	1999-04-08 21:29:41.000000000 +0000
++++ console-tools-0.2.3/doc/man/fgconsole.1	2004-04-13 09:47:45.000000000 +0000
+@@ -5,7 +5,7 @@
+ 
+ .SH SYNOPSIS
+ .B fgconsole
+-
++.BI [ "--help" | "--version" | "--show-available" ]
+ .SH DESCRIPTION
+ If the active VT is
+ .IR /dev/ttyN ,
+@@ -13,5 +13,14 @@
+ .I N
+ on standard output.
+ 
++If the console is a serial console, then 
++"serial" 
++is printed instead.
++.TP
++.I \-\-show\-available
++Will show the next unallocated virtual terminal. Normally 6 virtual
++terminals are allocated, with number 7 used for X; this will return
++"8" in this case.
++
+ .SH "SEE ALSO"
+ .BR chvt (1).
+diff -ruN console-tools-0.2.3-old/vttools/fgconsole.c console-tools-0.2.3/vttools/fgconsole.c
+--- console-tools-0.2.3-old/vttools/fgconsole.c	2004-04-13 09:23:09.000000000 +0000
++++ console-tools-0.2.3/vttools/fgconsole.c	2004-04-13 09:57:55.000000000 +0000
+@@ -1,34 +1,81 @@
+ /*
+  * fgconsole.c - aeb - 960123 - Print foreground console
+  * ydi, 1997-09-22: use getfd()
++ * amck, 2003: print "serial" if a serial console
++ * amck, 2004-04-13: add option for VT_OPENQRY 
+  */
+ #include <stdio.h>
++#include <stdlib.h>
+ #include <sys/ioctl.h>
++#include <sys/stat.h>
++#include <sys/types.h>
++#include <fcntl.h>
++#include <getopt.h>
+ #include <linux/vt.h>
+-
++#include <linux/serial.h>
+ #include <lct/local.h>
+ #include <lct/console.h>
+ 
+ static void usage(char *progname)
+ {
+-  printf(_("Usage: %s [vt_number]\n"
++  printf(_("Usage: %s\n"
+ 	   "Print foreground console\n"), progname);
+   OPTIONS_ARE();
+ 
+-  OPT("-h --help         ", HELPDESC);
+-  OPT("-V --version      ", VERSIONDESC);
++  OPT("-h --help           ", HELPDESC);
++  OPT("-V --version        ", VERSIONDESC);
++  OPT("-n --next-available ", _("Next Unallocated VT"));
+ }
+ 
+ int main(int argc, char **argv)
+ {
+   struct vt_stat vtstat;
+-  int fd;
++  int fd, vtno = -1, c, show_vt = 0;
++  struct serial_struct sr;
++  char *progname;
++  const struct option long_opts[] = {
++     { "help", no_argument, NULL, 'h' },
++     { "version", no_argument, NULL, 'V' },
++     { "next-available", no_argument, NULL, 'n' },
++     { NULL, 0, NULL, 0 } };
+ 
+   setuplocale();
++  progname = strip_path(argv[0]);
++  while (( c = getopt_long (argc, argv, "Vhn", long_opts, NULL)) != EOF) {
++    switch (c) {
++    case 'h':
++	    usage(progname);
++	    exit (0);
++    case 'V':
++	    version(progname);
++	    exit (0);
++    case 'n':
++	show_vt = 1;
++	break;
++    case '?':
++	usage(progname);
++	exit(1);
++    }
++  }
+   
+-  simple_options (argc, argv, usage, strip_path (argv[0]));
+-
+-  if (-1 == (fd = get_console_fd(NULL))) exit (1);
++  fd = open ("/dev/console", O_NONBLOCK);
++  if (fd == -1) {
++  	if (-1 == (fd = get_console_fd(NULL))) exit (1);
++  }
++
++  if (show_vt) {
++	  if ((ioctl(fd, VT_OPENQRY, &vtno) < 0) || vtno == -1) {
++	     perror (_("Couldn't read VTNO: "));
++	     exit(2);
++	  }
++	  printf ("%d\n", vtno);
++	  exit(0);
++  }
++  
++  if (ioctl(fd, TIOCGSERIAL, &sr) == 0) {
++	  printf ("serial\n");
++	  exit (0);
++  }
+   
+   if (ioctl(fd, VT_GETSTATE, &vtstat)) 
+     {
