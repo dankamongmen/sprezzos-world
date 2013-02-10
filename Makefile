@@ -2254,6 +2254,14 @@ $(CONPALETTE): $(SPREZZ)/conpalette/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf conpalette_$(conpalette_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: console-tools
+console-tools:$(CONSOLETOOLS)_$(ARCH).deb
+$(CONSOLETOOLS): $(SPREZZ)/console-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf console-tools-$(console-tools_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: consolekit
 consolekit:$(CONSOLEKIT)_$(ARCH).deb
 $(CONSOLEKIT): $(SPREZZ)/consolekit/debian/changelog
