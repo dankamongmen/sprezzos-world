@@ -6510,6 +6510,14 @@ $(LIBOPENOBEX): $(SPREZZ)/libopenobex/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openobex-$(libopenobex_UPVER)-Source.tar.gz $(TARARGS) $@
 
+.PHONY: obexd
+obexd:$(OBEXD)_$(ARCH).deb
+$(OBEXD): $(SPREZZ)/obexd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf obexd-$(obexd_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: obex-data-server
 obex-data-server:$(OBEXDATASERVER)_$(ARCH).deb
 $(OBEXDATASERVER): $(SPREZZ)/obex-data-server/debian/changelog
