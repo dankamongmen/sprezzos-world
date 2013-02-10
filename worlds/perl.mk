@@ -373,3 +373,11 @@ $(LIBVARIABLEMAGICPERL): $(SPREZZ)/libvariable-magic-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Variable-Magic-$(libvariable-magic-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: liberror-perl
+liberror-perl:$(LIBERRORPERL)_$(ARCH).deb
+$(LIBERRORPERL): $(SPREZZ)/liberror-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Error-$(liberror-perl_UPVER).tar.gz $(TARARGS) $@
+
