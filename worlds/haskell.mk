@@ -2116,7 +2116,7 @@ $(HASKELLSRCEXTS): $(SPREZZ)/haskell-src-exts/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf src-exts-$(haskell-src-exts_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf haskell-src-exts-$(haskell-src-exts_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-statistics
 haskell-statistics:$(HASKELLSTATISTICS)_$(ARCH).deb
