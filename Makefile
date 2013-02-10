@@ -6508,7 +6508,7 @@ $(LIBZAPOJIT): $(SPREZZ)/libzapojit/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libzapojit-$(libzapojit_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf libzapojit-$(libzapojit_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libopenobex
 libopenobex:$(LIBOPENOBEX)_$(ARCH).deb
