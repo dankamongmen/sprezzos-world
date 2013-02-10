@@ -381,3 +381,11 @@ $(LIBERRORPERL): $(SPREZZ)/liberror-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Error-$(liberror-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libtext-unidecode-perl
+libtext-unidecode-perl:$(LIBTEXTUNIDECODEPERL)_$(ARCH).deb
+$(LIBTEXTUNIDECODEPERL): $(SPREZZ)/libtext-unidecode-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Text-Unidecode-$(libtext-unidecode-perl_UPVER).tar.gz $(TARARGS) $@
+

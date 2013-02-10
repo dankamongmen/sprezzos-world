@@ -4930,7 +4930,7 @@ $(TEXINFO): $(SPREZZ)/texinfo/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf texinfo-$(texinfo_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf texinfo-$(texinfo_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: mpclib
 mpclib:$(MPCLIB)_$(ARCH).deb
