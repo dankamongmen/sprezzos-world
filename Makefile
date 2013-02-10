@@ -6502,6 +6502,14 @@ $(ID3LIB): $(SPREZZ)/id3lib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf id3lib-$(id3lib_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libzapojit
+libzapojit:$(LIBZAPOJIT)_$(ARCH).deb
+$(LIBZAPOJIT): $(SPREZZ)/libzapojit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libzapojit-$(libzapojit_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libopenobex
 libopenobex:$(LIBOPENOBEX)_$(ARCH).deb
 $(LIBOPENOBEX): $(SPREZZ)/libopenobex/debian/changelog
