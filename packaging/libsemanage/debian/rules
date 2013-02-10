@@ -1,0 +1,61 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ALL_PY_VERSION = $(shell pyversions -vr)
+
+# The build system doesn't use CPPFLAGS, pass them to CFLAGS to enable the
+# missing (hardening) flags.
+export DEB_CFLAGS_MAINT_APPEND = $(shell dpkg-buildflags --get CPPFLAGS)
+
+%:
+	dh $@ --with python2 --with ruby
+
+override_dh_auto_build:
+	$(MAKE) all LIBBASE="lib/${DEB_HOST_MULTIARCH}"
+
+	for version in $(ALL_PY_VERSION); do              \
+	  $(MAKE) pywrap PYTHON=python$$version  \
+	    PYINC=-I/usr/include/python$$version          \
+	    PYTHONLIBDIR=/usr/lib/libpython$${version}.so; \
+	done;
+
+	$(MAKE) -C src rubywrap RUBY=ruby1.8 RUBYLIBVER=1.8 \
+	  RUBYINC="-I/usr/lib/ruby/1.8/\$${RUBYPLATFORM}/"
+
+	$(MAKE) -C src rubywrap RUBY=ruby1.9.1 RUBYLIBVER=1.9.1 \
+	  RUBYINC="-I/usr/include/ruby-1.9.1/ -I/usr/include/ruby-1.9.1/\$${RUBYPLATFORM}/"
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR="${CURDIR}/debian/tmp" \
+	  LIBDIR="${CURDIR}/debian/tmp/usr/lib/${DEB_HOST_MULTIARCH}" \
+	  SHLIBDIR="${CURDIR}/debian/tmp/usr/lib/${DEB_HOST_MULTIARCH}"
+
+	for version in $(ALL_PY_VERSION); do              \
+	  $(MAKE) install-pywrap PYTHON=python$$version  \
+	    DESTDIR="${CURDIR}/debian/tmp" \
+	    PYLIBDIR="${CURDIR}/debian/tmp/usr/lib/python$$version";   \
+	done;
+
+	$(MAKE) -C src install-rubywrap RUBY=ruby1.8 RUBYLIBVER=1.8 DESTDIR="${CURDIR}/debian/tmp" \
+	    RUBYINSTALL="${CURDIR}/debian/tmp/usr/lib/ruby/vendor_ruby/\$${RUBYLIBVER}/\$${RUBYPLATFORM}";
+
+	$(MAKE) -C src install-rubywrap RUBY=ruby1.9.1 RUBYLIBVER=1.9.1 DESTDIR="${CURDIR}/debian/tmp" \
+	    RUBYINSTALL="${CURDIR}/debian/tmp/usr/lib/ruby/vendor_ruby/\$${RUBYLIBVER}/\$${RUBYPLATFORM}";
+
+override_dh_auto_clean:
+
+	for version in $(ALL_PY_VERSION); do              \
+	  $(MAKE) clean PYTHON=python$$version;  \
+	done;
+
+override_dh_install:
+	dh_install --list-missing
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod -x ${CURDIR}/debian/python-semanage/usr/share/pyshared/semanage.py
+
+override_dh_auto_test:
+	$(MAKE) test || true

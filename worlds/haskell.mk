@@ -4334,3 +4334,27 @@ $(HASKELLOPENGLRAW): $(SPREZZ)/haskell-openglraw/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf OpenGLRaw-$(haskell-openglraw_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-hxt-charproperties
+haskell-hxt-charproperties:$(HASKELLHXTCHARPROPERTIES)_$(ARCH).deb
+$(HASKELLHXTCHARPROPERTIES): $(SPREZZ)/haskell-hxt-charproperties/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hxt-charproperties-$(haskell-hxt-charproperties_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-hxt-regex-xmlschema
+haskell-hxt-regex-xmlschema:$(HASKELLHXTREGEXXMLSCHEMA)_$(ARCH).deb
+$(HASKELLHXTREGEXXMLSCHEMA): $(SPREZZ)/haskell-hxt-regex-xmlschema/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hxt-regex-xmlschema-$(haskell-hxt-regex-xmlschema_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-hxt-unicode
+haskell-hxt-unicode:$(HASKELLHXTUNICODE)_$(ARCH).deb
+$(HASKELLHXTUNICODE): $(SPREZZ)/haskell-hxt-unicode/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hxt-unicode-$(haskell-hxt-unicode_UPVER).tar.gz $(TARARGS) $@
+

@@ -4923,6 +4923,14 @@ $(LIBSECRET): $(SPREZZ)/libsecret/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libsecret-$(libsecret_UPVER).tar.xz $(TARARGS) $@
+	
+.PHONY: libsemanage
+libsemanage:$(LIBSEMANAGE)_$(ARCH).deb
+$(LIBSEMANAGE): $(SPREZZ)/libsemanage/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsemanage-$(libsemanage_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libselinux
 libselinux:$(LIBSELINUX)_$(ARCH).deb
@@ -8897,7 +8905,7 @@ $(POPPLER): $(SPREZZ)/poppler/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf $(POPPLERORIG) $(TARARGS) $@
+	tar xzvf poppler-$(poppler_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: slrn
 slrn:$(SLRN)_$(ARCH).deb
