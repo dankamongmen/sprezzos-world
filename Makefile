@@ -4923,6 +4923,22 @@ $(LIBSECRET): $(SPREZZ)/libsecret/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libsecret-$(libsecret_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: texinfo
+texinfo:$(TEXINFO)_$(ARCH).deb
+$(TEXINFO): $(SPREZZ)/texinfo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf texinfo-$(texinfo_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: mpclib
+mpclib:$(MPCLIB)_$(ARCH).deb
+$(MPCLIB): $(SPREZZ)/mpclib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mpc-$(mpclib_UPVER).tar.gz $(TARARGS) $@
 	
 .PHONY: libsemanage
 libsemanage:$(LIBSEMANAGE)_$(ARCH).deb

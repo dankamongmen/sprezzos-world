@@ -1,0 +1,105 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+export DH_OPTIONS
+
+DEB_CFLAGS_MAINT_APPEND=-Wall
+# needed for correct building of new texinfo
+DEB_CFLAGS_MAINT_STRIP=-Werror=format-security
+
+texinfo := $(CURDIR)/debian/texinfo
+ii := $(CURDIR)/debian/install-info
+tmpdir := $(CURDIR)/debian/tmp
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+
+build-stamp:
+	dh_testdir
+	./configure $(shell dpkg-buildflags --export=configure) \
+	  --with-external-Text-Unidecode=yes \
+	  --with-external-libintl-perl=yes \
+	  --prefix=/usr \
+          --infodir='$${prefix}/share/info' --mandir='$${prefix}/share/man'
+	$(MAKE)
+	touch $@
+
+check-stamp: build-stamp
+	$(MAKE) check ALL_TESTS=yes
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean install-stamp build-stamp check-stamp \
+		intl/libintl.h config.log
+
+install: install-stamp
+
+install-stamp: DH_OPTIONS=
+install-stamp: build-stamp check-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	$(MAKE) install install-tex prefix=$(tmpdir)/usr \
+                                    TEXMF=$(tmpdir)/usr/share/texmf
+	find $(tmpdir) -type f -name dir | xargs rm -f
+	#
+	# epsf.tex is in texlive
+	rm -rf $(tmpdir)/usr/share/texmf/tex/generic
+	# install all the files
+	dh_install --list-missing --sourcedir=debian/tmp -X share/info
+	dh_link
+	#
+	# install additional files that are not installed by default
+	install -m 0755 util/txixml2texi $(texinfo)/usr/bin/txixml2texi
+	#
+	# work on debian install-info
+	mv $(ii)/usr/bin/install-info $(ii)/usr/bin/ginstall-info
+	sed -e "s/install-info/g&/g" \
+		< $(ii)/usr/share/man/man1/install-info.1 \
+		> $(ii)/usr/share/man/man1/ginstall-info.1
+	rm -f $(ii)/usr/share/man/man1/install-info.1
+	install -m 0755 debian/install-info.sh $(ii)/usr/bin/install-info
+	install -m 0644 debian/install-info.1 $(ii)/usr/share/man/man1/install-info.1
+	install -m 0755 debian/update-info-dir $(ii)/usr/sbin/update-info-dir
+	mkdir -p $(ii)/usr/share/man/man8
+	install -m 0644 debian/update-info-dir.8 $(ii)/usr/share/man/man8/update-info-dir.8
+	cp debian/conf/50cyrtexinfo.cnf $(texinfo)/etc/texmf/fmt.d
+	echo "50cyrtexinfo" > $(texinfo)/var/lib/tex-common/fmtutil-cnf/texinfo.list
+	touch install-stamp
+
+binary-indep:
+# There aren't any architecture independent packages here.
+
+binary-arch: DH_OPTIONS=-a
+binary-arch: install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -A AUTHORS README NEWS TODO
+	dh_installdocs -p texinfo debian/README.cyrtexinfo \
+		doc/refcard/txirefcard*.pdf
+		
+	dh_installmenu
+	dh_installchangelogs ChangeLog
+ifeq "$(findstring nostrip,$(DEB_BUILD_OPTIONS))" ""
+	dh_strip
+endif
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+# other targets
+update-texinfo.tex:
+	wget -O $(CURDIR)/debian/texinfo.tex ftp://tug.org/tex/texinfo.tex
+
+.PHONY: build clean binary-indep binary-arch binary install

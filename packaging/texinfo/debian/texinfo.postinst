@@ -1,0 +1,87 @@
+#!/bin/sh -e
+
+build_format_if_format_exists ()
+{
+    v=`kpsewhich -var-value TEXMFSYSVAR` || return 0
+    c=`kpsewhich -var-value TEXMFSYSCONFIG` || return 0
+    TEXMFVAR="$v"
+    TEXMFCONFIG="$c"
+    export TEXMFVAR TEXMFCONFIG
+    if kpsewhich --format='web2c files' fmtutil.cnf > /dev/null 2>&1 ; then
+    	fmtcnffile=`kpsewhich --format='web2c files' fmtutil.cnf`
+    else
+    	return 0
+    fi
+    X=`cat $fmtcnffile | grep "^$2[[:space:]]" || true`
+    if [ ! "X$X" = "X" ] ; then
+        if [ "X$1" = "X--byhyphen" ] ; then
+	    build_format --byhyphen $3
+	else
+            build_format $1 $2
+	fi
+    fi
+}
+
+build_format ()
+{
+    tempfile=`mktemp -p /tmp fmtutil.XXXXXXXX`
+    echo -n "Building format(s) $1 `basename "$2"`. This may take some time. ..."
+    if fmtutil-sys $1 $2 > $tempfile 2>&1 ; then
+        rm -f $tempfile
+	echo " done."
+    else
+        echo
+	echo "fmtutil-sys failed. Output has been stored in"
+	echo "$tempfile"
+	echo "Please include this file if you report a bug."
+	echo
+	exit 1
+    fi
+}
+
+update_lsr_files ()
+{
+    tempfile=`mktemp -p /tmp mktexlsr.XXXXXXXX`
+    echo -n "Running mktexlsr. This may take some time. ..."
+    if mktexlsr /usr/share/texmf /var/lib/texmf > $tempfile 2>&1 ; then
+         rm -f $tempfile
+	 echo " done."
+    else
+          echo
+	  echo "mktexlsr failed. Output has been stored in"
+	  echo "$tempfile"
+	  echo "Please include this file if you report a bug."
+	  echo
+	  exit 1
+    fi
+}
+
+# common.functions end
+case "$1" in
+    configure|abort-upgrade|abort-remove|abort-deconfigure)
+	#
+	# update-fmtutil checks for /etc/texmf/fmt.d/00tex.cnf which
+	# may not be present, also the update-fmtutil is already
+	# present (config files are installed at config time!)
+	# So we have to check for the existence of this file
+	# before we can call update-fmtutil
+	if [ -r /etc/texmf/fmt.d/00tex.cnf ] ; then
+	    if which update-fmtutil > /dev/null ; then update-fmtutil ; fi
+	fi
+	if which mktexlsr >/dev/null; then update_lsr_files; fi
+	# tetex might be unpacked but not configured, we have to check
+	# whether /etc/texmf/texmf.cnf already exists. The following check
+	# does two things: 1) check whether libkpathsea is configured, and
+	# 2) whether tex-common is configured.
+	if kpsewhich texmf.cnf > /dev/null 2>&1 ; then 
+	    build_format_if_format_exists --byfmt texinfo
+	    build_format_if_format_exists --byfmt cyrtexinfo
+	fi
+	;;
+    *)
+    	echo "postinst called with unknown argument \`$1'" >&2
+	exit 1
+    ;;
+esac
+
+#DEBHELPER#
