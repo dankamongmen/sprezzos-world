@@ -389,11 +389,11 @@ $(LIBTEXTUNIDECODEPERL): $(SPREZZ)/libtext-unidecode-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Text-Unidecode-$(libtext-unidecode-perl_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: libintl-xs-perl
-libintl-xs-perl:$(LIBINTLXSPERL)_$(ARCH).deb
-$(LIBINTLXSPERL): $(SPREZZ)/libintl-xs-perl/debian/changelog
+.PHONY: libintl-perl
+libintl-perl:$(LIBINTLPERL)_$(ARCH).deb
+$(LIBINTLPERL): $(SPREZZ)/libintl-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf Intl-XS-$(libintl-xs-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libintl-perl-$(libintl-perl_UPVER).tar.gz $(TARARGS) $@
 
