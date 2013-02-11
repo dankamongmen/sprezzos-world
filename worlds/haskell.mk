@@ -12,7 +12,7 @@ $(GHC): $(SPREZZ)/ghc/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ghc-$(ghc_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf ghc-$(ghc_UPVER)-src.tar.bz2 $(TARARGS) $@
 
 .PHONY: haskell-aes
 haskell-aes:$(HASKELLAES)_$(ARCH).deb
