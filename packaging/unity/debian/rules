@@ -1,0 +1,56 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+DEB_HOST_ARCH := $(shell dpkg-architecture -qDEB_HOST_ARCH)
+gles2_architectures := armel armhf
+
+DEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
+
+export CC=gcc-4.6
+export CXX=g++-4.6
+
+CFLAGS=$(shell echo $$CFLAGS | sed -e 's/\-Wall//')
+
+CORE_ABIVERSION := $(shell sed -rn 's/^\#define[[:space:]]+CORE_ABIVERSION[[:space:]]+//p' /usr/include/compiz/core/abiversion.h )
+NUX_ABIVERSION := $(shell sed -rn 's/^\#define[[:space:]]+NUX_ABIVERSION[[:space:]]+//p' /usr/include/Nux-3.0/Nux/ABI.h )
+
+LIBUNITY_PRIVATE := $(shell pkg-config --libs-only-L unity-protocol-private | sed -e 's/-L\(.*\)/\1/' )
+
+override_dh_auto_configure:
+ifeq ($(DEB_HOST_ARCH),$(findstring $(DEB_HOST_ARCH), $(gles2_architectures)))
+	dh_auto_configure -- -DUSE_GSETTINGS=TRUE -DCOMPIZ_BUILD_WITH_RPATH=FALSE -DCOMPIZ_PACKAGING_ENABLED=TRUE -DCOMPIZ_PLUGIN_INSTALL_TYPE=package -DBUILD_GLES=TRUE -DDISABLE_MAINTAINER_CFLAGS=ON
+else
+	dh_auto_configure -- -DUSE_GSETTINGS=TRUE -DCOMPIZ_BUILD_WITH_RPATH=FALSE -DCOMPIZ_PACKAGING_ENABLED=TRUE -DCOMPIZ_PLUGIN_INSTALL_TYPE=package
+endif
+
+override_dh_install:
+	# install autopilot tests
+	cd tests/autopilot; \
+	set -ex; for python in $(shell pyversions -r); do \
+        $$python setup.py install --root=$(CURDIR)/debian/tmp --install-layout=deb; \
+	done; \
+	cd $(CURDIR)
+	find debian/tmp/usr/lib -name \*.*a -exec rm {} \;
+	rm -f debian/tmp/usr/share/compiz/networkarearegion.xml
+	rm -f debian/tmp//usr/lib/compiz/libnetworkarearegion.so
+	rm -f debian/tmp/usr/share/compiz/unitydialog.xml
+	rm -f debian/tmp/usr/lib/compiz/libunitydialog.so
+	rm -rf debian/tmp/usr/share/gconf/schemas/ 
+	dh_install --fail-missing
+
+override_dh_gencontrol:
+	dh_gencontrol -- -Vcoreabiversion=$(CORE_ABIVERSION) -Vnuxabiversion=$(NUX_ABIVERSION)
+
+override_dh_makeshlibs:
+	dh_makeshlibs -plibunity-core-6.0-5 -V 'libunity-core-6.0-5 (>= 4.14.2)'
+
+override_dh_shlibdeps:
+	dh_shlibdeps -l$(LIBUNITY_PRIVATE) -O--parallel
+
+override_dh_auto_test:
+	echo "not working right now"
+
+%:
+	dh $@ --with translations,quilt,python2,migrations --parallel
