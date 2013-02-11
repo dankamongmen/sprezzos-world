@@ -380,3 +380,14 @@ $(UDPKG): $(SPREZZ)/udpkg/debian/changelog
 	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
 	cp -r $(<D)/.. $@
 	tar cJvf udpkg_$(udpkg_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
+
+.PHONY: resolvconf
+resolvconf:$(RESOLVCONF)_$(ARCH).deb
+$(RESOLVCONF): $(SPREZZ)/resolvconf/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf resolvconf-$(resolvconf_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf resolvconf-$(resolvconf_UPVER).tar.xz $(RESOLVCONF).orig.tar.xz
+	cp -r $(<D) $@
+
