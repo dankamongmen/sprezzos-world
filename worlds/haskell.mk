@@ -1972,15 +1972,7 @@ $(HASKELLPARSEC2): $(SPREZZ)/haskell-parsec2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf parsec2-$(haskell-parsec2_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: haskell-parsec3
-haskell-parsec3:$(HASKELLPARSEC3)_$(ARCH).deb
-$(HASKELLPARSEC3): $(SPREZZ)/haskell-parsec3/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf parsec3-$(haskell-parsec3_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf parsec-$(haskell-parsec2_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-polyparse
 haskell-polyparse:$(HASKELLPOLYPARSE)_$(ARCH).deb
@@ -3526,13 +3518,13 @@ $(HASKELLPARSEARGS): $(SPREZZ)/haskell-parseargs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf parseargs-$(haskell-parseargs_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-parsec3
-haskell-parsec3:$(HASKELLPARSEC3)_$(ARCH).deb
-$(HASKELLPARSEC3): $(SPREZZ)/haskell-parsec3/debian/changelog
+.PHONY: haskell-parsec
+haskell-parsec:$(HASKELLPARSEC)_$(ARCH).deb
+$(HASKELLPARSEC): $(SPREZZ)/haskell-parsec/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf parsec3-$(haskell-parsec3_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf parsec-$(haskell-parsec_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-pastis
 haskell-pastis:$(HASKELLPASTIS)_$(ARCH).deb
