@@ -3518,14 +3518,6 @@ $(HASKELLPARSEARGS): $(SPREZZ)/haskell-parseargs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf parseargs-$(haskell-parseargs_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-parsec
-haskell-parsec:$(HASKELLPARSEC)_$(ARCH).deb
-$(HASKELLPARSEC): $(SPREZZ)/haskell-parsec/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf parsec-$(haskell-parsec_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-pastis
 haskell-pastis:$(HASKELLPASTIS)_$(ARCH).deb
 $(HASKELLPASTIS): $(SPREZZ)/haskell-pastis/debian/changelog
