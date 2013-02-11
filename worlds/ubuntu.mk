@@ -255,7 +255,7 @@ $(UNITY): $(SPREZZ)/unity/debian/changelog
 	bzr branch lp:unity $@
 	rm -rf $@/debian
 	tar cJf unity-$(unity_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf unity-$(unity_UPVER).tar.xz unity_$(unity_UPVER).orig.tar.xz
+	ln -sf unity-$(unity_UPVER).tar.xz $(UNITY).orig.tar.xz
 	cp -r $(<D) $@/
 
 # We're building from bzr in Makefile
