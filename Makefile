@@ -2194,6 +2194,22 @@ $(COLORDGTK): $(SPREZZ)/colord-gtk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf colord-gtk-$(colord-gtk_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: compizconfig-python
+compizconfig-python:$(COMPIZCONFIGPYTHON)_$(ARCH).deb
+$(COMPIZCONFIGPYTHON): $(SPREZZ)/compizconfig-python/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf compizconfig-python-$(compizconfig-python_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: compizconfig-settings-manager
+compizconfig-settings-manager:$(COMPIZCONFIGSETTINGSMANAGER)_$(ARCH).deb
+$(COMPIZCONFIGSETTINGSMANAGER): $(SPREZZ)/compizconfig-settings-manager/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf ccsm-$(compizconfig-settings-manager_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: libcompizconfig
 libcompizconfig:$(LIBCOMPIZCONFIG)_$(ARCH).deb
 $(LIBCOMPIZCONFIG): $(SPREZZ)/libcompizconfig/debian/changelog
