@@ -33,6 +33,27 @@ $(BAMF): $(SPREZZ)/bamf/debian/changelog
 #	cd $@ && uscan --force-download --download-current-version
 #	tar xjvf compiz-$(compiz9_UPVER).tar.bz2 $(TARARGS) $@
 #
+
+# There's a recipe for the released version commented out in worlds/ubuntu.mk
+.PHONY: compiz9
+compiz9:$(COMPIZ9)_$(ARCH).deb
+$(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
+	bzr branch lp:compiz $@
+	rm -rf $@/debian
+	tar cJf compiz-$(compiz9_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf compiz-$(compiz9_UPVER).tar.xz $(COMPIZ9).orig.tar.xz
+	cp -r $(<D) $@/
+
+# There's a recipe for the released version commented out in worlds/ubuntu.mk
+.PHONY: nux
+nux:$(NUX)_$(ARCH).deb
+$(NUX): $(SPREZZ)/nux/debian/changelog
+	bzr branch lp:nux $@
+	rm -rf $@/debian
+	tar cJf nux-$(nux_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf nux-$(nux_UPVER).tar.xz $(NUX).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: dbus-test-runner
 dbus-test-runner:$(DBUSTESTRUNNER)_$(ARCH).deb
 $(DBUSTESTRUNNER): $(SPREZZ)/dbus-test-runner/debian/changelog

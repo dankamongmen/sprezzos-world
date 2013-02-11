@@ -120,26 +120,6 @@ $(MAWK): $(SPREZZ)/mawk/debian/changelog
 	ln -sf mawk-$(mawk_UPVER).tar.xz mawk_$(mawk_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
-# There's a recipe for the released version commented out in worlds/ubuntu.mk
-.PHONY: compiz9
-compiz9:$(COMPIZ9)_$(ARCH).deb
-$(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
-	bzr branch lp:compiz $@
-	rm -rf $@/debian
-	tar cJf compiz-$(compiz9_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf compiz-$(compiz9_UPVER).tar.xz compiz_$(compiz9_UPVER).orig.tar.xz
-	cp -r $(<D) $@/
-
-# There's a recipe for the released version commented out in worlds/ubuntu.mk
-.PHONY: nux
-nux:$(NUX)_$(ARCH).deb
-$(NUX): $(SPREZZ)/nux/debian/changelog
-	bzr branch lp:nux $@
-	rm -rf $@/debian
-	tar cJf nux-$(nux_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf nux-$(nux_UPVER).tar.xz $(NUX).orig.tar.xz
-	cp -r $(<D) $@/
-
 .PHONY: software-properties
 software-properties:$(SOFTWAREPROPERTIES)_$(ARCH).deb
 $(SOFTWAREPROPERTIES): $(SPREZZ)/software-properties/debian/changelog
