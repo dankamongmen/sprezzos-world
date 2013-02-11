@@ -273,6 +273,6 @@ $(USBCREATOR): $(SPREZZ)/usb-creator/debian/changelog
 	bzr branch lp:usb-creator $@
 	rm -rf $@/debian
 	tar cJf usb-creator-$(usb-creator_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf usb-creator-$(usb-creator_UPVER).tar.xz usb-creator_$(usb-creator_UPVER).orig.tar.xz
+	ln -sf usb-creator-$(usb-creator_UPVER).tar.xz $(USBCREATOR).orig.tar.xz
 	cp -r $(<D) $@/
 
