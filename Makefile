@@ -2194,6 +2194,14 @@ $(COLORDGTK): $(SPREZZ)/colord-gtk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf colord-gtk-$(colord-gtk_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libcompizconfig
+libcompizconfig:$(LIBCOMPIZCONFIG)_$(ARCH).deb
+$(LIBCOMPIZCONFIG): $(SPREZZ)/libcompizconfig/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libcompizconfig-$(libcompizconfig_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: compiz
 compiz:$(COMPIZ)_$(ARCH).deb
 $(COMPIZ): $(SPREZZ)/compiz/debian/changelog
