@@ -193,8 +193,7 @@ $(LIBUNITYMISC): $(SPREZZ)/libunity-misc/debian/changelog
 	bzr branch lp:libunity-misc $@
 	rm -rf $@/debian
 	tar cJf libunity-misc-$(libunity-misc_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf libunity-misc-$(libunity-misc_UPVER).tar.xz \
-		libunity_misc-$(libunity-misc_UPVER).orig.tar.xz
+	ln -sf libunity-misc-$(libunity-misc_UPVER).tar.xz $(LIBUNITYMISC).orig.tar.xz
 	cp -r $(<D) $@/
 
 .PHONY: libunity-webapps
@@ -249,14 +248,22 @@ $(NTRACK): $(SPREZZ)/ntrack/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ntrack-$(ntrack_UPVER).tar.gz $(TARARGS) $@
 
+#.PHONY: unity
+#unity:$(UNITY)_$(ARCH).deb
+#$(UNITY): $(SPREZZ)/unity/debian/changelog
+#	bzr branch lp:unity $@
+#	rm -rf $@/debian
+#	tar cJf unity-$(unity_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf unity-$(unity_UPVER).tar.xz $(UNITY).orig.tar.xz
+#	cp -r $(<D) $@/
+
 .PHONY: unity
 unity:$(UNITY)_$(ARCH).deb
 $(UNITY): $(SPREZZ)/unity/debian/changelog
-	bzr branch lp:unity $@
-	rm -rf $@/debian
-	tar cJf unity-$(unity_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf unity-$(unity_UPVER).tar.xz $(UNITY).orig.tar.xz
+	mkdir $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unity-$(unity_UPVER).tar.gz $(TARARGS) $@
 
 # We're building from bzr in Makefile
 #.PHONY: nux
