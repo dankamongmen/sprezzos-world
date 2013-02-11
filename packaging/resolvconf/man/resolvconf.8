@@ -1,0 +1,482 @@
+.TH RESOLVCONF "8" "3 Feb 2013" "resolvconf" "resolvconf"
+.SH NAME
+resolvconf \- manage nameserver information
+.SH SYNOPSIS
+cat \fIFILE\fR |
+.B resolvconf
+\fB\-a\fR \fIIFACE.PROG\fR
+.PP
+.B resolvconf
+\fB\-d\fR \fIIFACE.PROG\fR
+.PP
+.B resolvconf
+\fB\-u\fR
+.PP
+.B resolvconf
+.B \-\-enable\-updates
+|
+.B \-\-disable\-updates
+|
+.B \-\-updates\-are\-enabled
+.SH DESCRIPTION
+The resolvconf package comprises a simple database
+for run-time nameserver information
+and a simple framework
+for notifying applications of changes in that information.
+Resolvconf thus sets itself up as the intermediary between programs that
+supply nameserver information and applications that use 
+that information.
+.PP
+Information is added to
+or removed from
+the database using the
+.B resolvconf
+program.
+See the
+.B OPTIONS
+section below for a discussion of the available options.
+.SH SUPPLIERS OF NAMESERVER INFORMATION
+Normally the
+.B resolvconf
+program is run only by network interface configuration programs
+such as
+.BR ifup (8),
+.BR ifdown ,
+.BR NetworkManager (8),
+.BR dhclient (8),
+and
+.BR pppd (8);
+and by local nameservers such as
+.BR dnsmasq (8).
+These programs obtain nameserver information from some source
+and push it to
+.BR resolvconf .
+.SS dhclient
+The
+.B dhclient 
+program,
+for example,
+may receive nameserver addresses
+and domain search list information 
+during its negotiation with the DHCP server;
+if so, its hook script
+.I /etc/dhcp/dhclient\-enter\-hooks.d/resolvconf
+pushes this information to 
+.B resolvconf.
+.SS ifup
+The
+.B ifup
+program can be used to configure network interfaces
+according to settings in
+.IR /etc/network/interfaces .
+To make 
+.B ifup
+push nameserver information to
+.B resolvconf
+when it configures an interface
+the administrator must add
+.B dns\-
+option lines to the relevant
+.B iface
+stanza in
+.IR interfaces (5).
+The following option names are supported:
+.BR dns\-nameservers ,
+.BR dns\-search ,
+and
+.BR dns\-sortlist .  
+The 
+.B dns\-domain
+option is deprecated in favor of
+.BR dns\-search .
+.PP
+To add nameserver addresses, add a single line beginning with
+.BR dns\-nameservers .
+.PP
+.EX
+    dns\-nameservers 192.168.1.254 8.8.8.8
+.EE
+.PP
+Note that one or more addresses can be given on this line,
+separated by spaces,
+and note the "s" at the end of the option name,
+in contrast with the 
+.IR resolv.conf (5)
+option name
+.BR nameserver .
+.PP
+To add search domain names, add a line beginning with
+.BR dns\-search .
+.PP
+.EX
+    dns\-search foo.org bar.com
+.EE
+
+The resulting stanza might look like the following example.
+.PP
+.EX
+    iface eth0 inet static
+        address 192.168.1.3
+        netmask 255.255.255.0
+        gateway 192.168.1.1
+        dns\-nameservers 192.168.1.254 8.8.8.8
+        dns\-search foo.org bar.com
+.EE
+.PP
+N.B.: On a machine where resolvconf
+has just been or is about to be installed
+and which previously relied on a static
+.I /etc/resolv.conf
+file,
+.IP \[bu]
+the nameserver information in that static file,
+(which is to say the information on
+.BR nameserver ,
+.BR domain ,
+.B search
+and
+.B sortlist
+lines)
+should be migrated to the appropriate
+.B iface
+stanza(s) in
+.IR /etc/network/interfaces (5)
+as just described;
+.IP \[bu]
+options
+(which is to say, any
+.B options
+lines)
+should be migrated to
+.IR /etc/resolvconf/resolv.conf.d/base .
+.PP
+.SS Command line
+The administrator
+.I can
+run
+.B resolvconf
+from the command line to add or delete nameserver information,
+but this is not normally necessary or advisable.
+.SH CONSUMERS OF NAMESERVER INFORMATION
+Nameserver information provided to
+.B resolvconf
+is stored for use by subscribers to
+.BR resolvconf 's
+notification service.
+Subscriber packages that need to know when nameserver information has changed
+should install a script in
+.I /etc/resolvconf/update.d/
+(or in
+.IR /etc/resolvconf/update\-libc.d/ :
+see below).
+For example, DNS caches such as
+.BR dnsmasq (8)
+and
+.BR pdnsd (8)
+subscribe to the notification service so that they know
+whither to forward queries.
+Client hook scripts will find the files containing nameserver
+information in the current directory.
+.SS libc
+The most important software package
+that subscribes to the notification service
+is the GNU C Library
+.IR resolver (3).
+This library is used by many applications
+that need to resolve domain names.
+When nameserver information is updated, the script
+.I /etc/resolvconf/update.d/libc
+generates a new version of the resolver configuration file,
+.IR /etc/resolvconf/run/resolv.conf , 
+as described below.
+If the new version of the file differs
+from the previously generated one
+then the hook scripts found in
+.IR /etc/resolvconf/update\-libc.d/ 
+are executed.
+.PP
+The dynamically generated resolver configuration file
+always starts with the contents of
+.I /etc/resolvconf/resolv.conf.d/head
+and ends with the contents of
+.IR /etc/resolvconf/resolv.conf.d/tail .
+Between
+.I head
+and
+.I tail
+the
+.I libc
+script inserts
+dynamic nameserver information
+compiled from,
+first,
+information provided for configured interfaces;
+second,
+static information from
+.IR /etc/resolvconf/resolv.conf.d/base .
+Specifically, it writes:
+.IP "  1)" 5
+up to three 
+.B nameserver
+lines,
+ordered according to
+.IR /etc/resolvconf/interface\-order ,
+possibly fewer
+if one of the addresses is a loopback address and the
+.B TRUNCATE_NAMESERVER_LIST_AFTER_LOOPBACK_ADDRESS 
+environment variable is affirmatively set, as discussed in the
+.B ENVIRONMENT VARIABLES
+section;
+.IP "  2)" 5
+up to one
+.B search
+line containing the combined domain search list from all
+"domain" and "search" input lines,
+also ordered according to
+.IR interface\-order (5);
+.IP "  3)" 5
+all other non-comment input lines.
+.PP
+To make the resolver use
+this dynamically generated resolver configuration file
+the administrator should ensure that
+.I /etc/resolv.conf
+is a symbolic link to
+.IR /etc/resolvconf/run/resolv.conf .
+This link is normally created on installation of the resolvconf package.
+The link is never modified by the
+.B resolvconf
+program itself.
+If you find that
+.I /etc/resolv.conf
+is not being updated,
+please check to make sure that the link is intact.
+.PP
+The GNU C Library resolver library isn't the only resolver library available.
+However, any resolver library that reads
+.I /etc/resolv.conf
+(and most of them do, in order to be compatible)
+should work fine with resolvconf.
+.PP
+Subscriber packages that need to know only when the resolver configuration file
+has changed should install a script in
+.I /etc/resolvconf/update\-libc.d/
+rather than in
+.IR /etc/resolvconf/update.d/ .
+(For example, two packages that install
+.I update\-libc.d/
+hook scripts are
+.B fetchmail
+and
+.BR squid .)
+This is important for synchronization purposes:
+scripts in
+.I update\-libc.d/
+are run
+.I after
+.I resolv.conf
+has been updated;
+the same is not necessarily true of scripts in
+.IR update.d/ .
+.SH OPTIONS
+.TP
+\fB\-a\fR \fIIFACE.PROG\fR
+Add or overwrite the record
+.I IFACE.PROG
+then run the update scripts if updating is enabled.
+When this option is used the information must be provided to
+.B resolvconf
+on its standard input in the format of the
+.IR resolv.conf (5)
+file.
+Each line in the file must be terminated by a newline.
+.TP
+\fB\-d\fR \fIIFACE.PROG\fR
+Delete the record
+.I IFACE.PROG
+then run the update scripts if updating is enabled.
+.PP
+The string
+.I IFACE.PROG
+may not contain
+spaces,
+slashes,
+an initial dot,
+an initial hyphen
+or an initial tilde.
+It is conventionally formed from
+.IR IFACE ,
+the name of the interface involved,
+a dot,
+and
+.IR IPROG ,
+the name of the interface configuration program,
+e.g., "eth0.dhclient".
+.TP
+\fB\-u\fR
+Just run the update scripts
+(if updating is enabled).
+.TP
+With \fB\-a\fR, \fB\-d\fR or \fB\-u\fR:
+if updating is not enabled, schedule a delayed update.
+The delayed update will be carried out when updates are enabled.
+.TP
+\fB\-\-enable\-updates\fR 
+Set the flag indicating that 
+.B resolvconf
+should run update scripts
+when invoked in the future with \fB\-a\fR, \fB\-d\fR or \fB\-u\fR.
+If a delayed update was scheduled then run update scripts.
+.TP
+\fB\-\-disable\-updates\fR
+Clear the flag.
+.TP
+\fB\-\-updates\-are\-enabled\fR
+Return 0 if the flag is set,
+otherwise return 1.
+.SH ENVIRONMENT VARIABLES
+The following variables can be set in the configuration file
+.IR /etc/default/resolvconf .
+If the file does not exist you will have to create it.
+.TP
+.B REPORT_ABSENT_SYMLINK
+If set to "yes" then
+.B resolvconf
+will print a message when
+.I /etc/resolv.conf
+is not a symbolic link
+to the
+.BR resolvconf -generated
+resolver configuration file.
+Set to "no" to prevent the printing of this message.
+The default is "yes".
+.TP
+.B TRUNCATE_NAMESERVER_LIST_AFTER_LOOPBACK_ADDRESS
+If set to "yes" then the 
+.I libc
+script will include
+no more nameserver addresses
+after the first nameserver address
+that is a loopback address.
+(In IPv4 a loopback address is any one that starts with "127.".
+In IPv6 the loopback address is "::1".)
+.IP 
+The advantage of truncating the nameserver list after a loopback address
+is that doing so inhibits unnecessary changes to
+.I resolv.conf 
+and thus reduces the number of instances in which the
+.I update\-libc.d/
+scripts have to be run.
+When an interface is brought up or down
+the local caching nameserver
+that listens on the loopback address
+is still informed of the change and adapts accordingly;
+the clients of the resolver which use the local caching nameserver
+do not need to be notified of the change.
+A disadvantage of this mode of operation is that applications have
+no secondary or tertiary nameserver address to fall back on should
+the local caching nameserver crash.
+Insofar as a local nameserver crash can be regarded
+as an unlikely event,
+this is a relatively minor disadvantage.
+Set to "no" to disable truncation.
+The default is "yes".
+.IP 
+A deprecated synonym for this variable is 
+.BR TRUNCATE_NAMESERVER_LIST_AFTER_127 .
+.SH FILES
+.TP
+.I /etc/default/resolvconf
+See the ENVIRONMENT VARIABLES section.
+.TP
+.I /etc/resolvconf/run
+This is a symbolic link to a location where nameserver information is stored.
+The location must be on a filesystem that is writable
+early in the boot sequence.
+In Debian the default location is
+.I /run/resolvconf
+and
+in the future this will be
+the only supported location;
+configurability of the location via
+.I /etc/resolvconf/run
+will be dropped.
+Nevertheless, clients should not make any assumptions
+about the location or the canonical path of this directory
+or the hierarchy that is constructed under it.
+.TP
+.I /etc/resolvconf/interface\-order
+Determines the order of precedence of nameserver addresses and search domain names.
+See above and
+.BR interface\-order (5).
+.TP
+.I /etc/resolvconf/resolv.conf.d/base
+File containing basic resolver information.
+The lines in this file are included in the resolver configuration file
+even when no interfaces are configured.
+.TP
+.I /etc/resolvconf/resolv.conf.d/head
+File to be prepended to the dynamically generated resolver configuration file.
+Normally this is just a comment line.
+.TP
+.I /etc/resolvconf/resolv.conf.d/tail
+File to be appended to the dynamically generated resolver configuration file.
+To append nothing, make this an empty file.
+This file is a good place to put a resolver
+.B options
+line if one is needed, e.g.,
+
+.EX
+    options inet6
+.EE
+.TP
+.I /etc/resolvconf/resolv.conf.d/original
+Copy of the
+.I /etc/resolv.conf
+file before the resolvconf package was installed.
+This file has no effect on the functioning of resolvconf;
+it is retained so that
+.I /etc/resolv.conf
+can be restored to its original state
+if the resolvconf package is removed.
+
+Note also that a copy of this file is included in the database
+until the first reboot after installation of the resolvconf package;
+this ensures that nameservers reachable before installation of resolvconf
+are still reachable after installation of resolvconf even though
+at that point
+not all suppliers of nameserver information may have supplied their
+information to
+.BR resolvconf (8).
+
+Note also
+that the administrator can choose to create a symbolic link in
+.I /etc/resolvconf/resolv.conf.d/
+from
+.I tail
+to
+.I original
+so that the contents of
+.I original
+are always added to the end of the
+dynamically generated file.
+
+.SH BUGS
+Currently
+.B resolvconf
+does not check the sanity of the information provided to it.
+.SH AUTHOR
+Written by Thomas Hood <jdthood@gmail.com>
+with contributions by Nathan Stratton Treadway.
+.SH COPYRIGHT
+Copyright \(co 2004-2013 Thomas Hood.
+.br
+This is free software; see the source for copying conditions.
+.SH "SEE ALSO"
+.BR interface\-order (5),
+.BR resolv.conf (5),
+.BR resolver (3).
+.PP
+Read the resolvconf package
+.I README
+file for more in-depth information.
