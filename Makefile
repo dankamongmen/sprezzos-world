@@ -3460,6 +3460,14 @@ $(GNOMECATALOG): $(SPREZZ)/gnomecatalog/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gnomecatalog_$(gnomecatalog_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: gnu-fdisk
+gnu-fdisk:$(GNUFDISK)_$(ARCH).deb
+$(GNUFDISK): $(SPREZZ)/gnu-fdisk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnu-fdisk-$(gnu-fdisk_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: gnucash
 gnucash:$(GNUCASH)_$(ARCH).deb
 $(GNUCASH): $(SPREZZ)/gnucash/debian/changelog
