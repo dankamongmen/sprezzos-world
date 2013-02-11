@@ -266,3 +266,13 @@ $(UNITY): $(SPREZZ)/unity/debian/changelog
 #	cp -r $(<D) $@/
 #	cd $@ && uscan --force-download --download-current-version
 #	tar xzvf nux-$(nux_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: usb-creator
+usb-creator:$(USBCREATOR)_$(ARCH).deb
+$(USBCREATOR): $(SPREZZ)/usb-creator/debian/changelog
+	bzr branch lp:usb-creator $@
+	rm -rf $@/debian
+	tar cJf usb-creator-$(usb-creator_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf usb-creator-$(usb-creator_UPVER).tar.xz usb-creator_$(usb-creator_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
