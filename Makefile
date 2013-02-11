@@ -6854,6 +6854,14 @@ $(LIBQUICKTIME): $(SPREZZ)/libquicktime/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libquicktime-$(libquicktime_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gparted
+gparted:$(GPARTED)_$(ARCH).deb
+$(GPARTED): $(SPREZZ)/gparted/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gparted-$(gparted_UPVER).tar.bz2 $(TARARGS) $@
+
 .PHONY: parted
 parted:$(PARTED)_$(ARCH).deb
 $(PARTED): $(SPREZZ)/parted/debian/changelog
