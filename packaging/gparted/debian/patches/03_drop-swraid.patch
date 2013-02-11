@@ -1,0 +1,286 @@
+Author: Curtis Gedak <gedakc@gmail.com>
+Description: Upstream patch to remove broken and uneeded swraid
+ support that was causing errors with mdadm devices (LP: #1074606)
+
+--- a/src/Proc_Partitions_Info.cc
++++ b/src/Proc_Partitions_Info.cc
+@@ -92,6 +92,10 @@
+ 			//Whole disk devices are the ones we want.
+ 			//Device names without a trailing digit refer to the whole disk.
+ 			device = Utils::regexp_label(line, "^[\t ]+[0-9]+[\t ]+[0-9]+[\t ]+[0-9]+[\t ]+([^0-9]+)$") ;
++			//Recognize /dev/md* devices (Linux software RAID - mdadm).
++			//E.g., device = /dev/md127, partition = /dev/md127p1
++			if ( device == "" )
++				device = Utils::regexp_label(line, "^[\t ]+[0-9]+[\t ]+[0-9]+[\t ]+[0-9]+[\t ]+(md[0-9]+)$") ;
+ 			//Recognize /dev/mmcblk* devices.
+ 			//E.g., device = /dev/mmcblk0, partition = /dev/mmcblk0p1
+ 			if ( device == "" )
+@@ -99,7 +103,7 @@
+ 			//Device names that end with a #[^p]# are HP Smart Array Devices (disks)
+ 			//E.g., device = /dev/cciss/c0d0, partition = /dev/cciss/c0d0p1
+ 			if ( device == "" )
+-				device = Utils::regexp_label(line, "^[\t ]+[0-9]+[\t ]+[0-9]+[\t ]+[0-9]+[\t ]+(.*[0-9]+[^p]{1}[0-9]+)$") ;
++				device = Utils::regexp_label(line, "^[\t ]+[0-9]+[\t ]+[0-9]+[\t ]+[0-9]+[\t ]+(cciss/c[0-9]+d[0-9]+)$") ;
+ 			if ( device != "" )
+ 			{
+ 				//add potential device to the list
+--- a/README
++++ b/README
+@@ -149,10 +149,6 @@
+             package before that.
+ 
+ 
+-For Linux software RAID support, the following package is required:
+-   mdadm           - tool to administer Linux MD arrays
+-
+-
+ For dmraid support, the following packages are required:
+ 
+    dmsetup         - removes /dev/mapper entries
+--- a/include/Makefile.am
++++ b/include/Makefile.am
+@@ -34,7 +34,6 @@
+ 	OperationLabelPartition.h	\
+ 	Partition.h  			\
+ 	Proc_Partitions_Info.h	\
+-	SWRaid.h				\
+ 	TreeView_Detail.h 		\
+ 	Utils.h 			\
+ 	Win_GParted.h 			\
+--- a/include/SWRaid.h
++++ /dev/null
+@@ -1,55 +0,0 @@
+-/* Copyright (C) 2009 Curtis Gedak
+- *
+- *  This program is free software; you can redistribute it and/or modify
+- *  it under the terms of the GNU General Public License as published by
+- *  the Free Software Foundation; either version 2 of the License, or
+- *  (at your option) any later version.
+- *
+- *  This program is distributed in the hope that it will be useful,
+- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- *  GNU Library General Public License for more details.
+- *
+- *  You should have received a copy of the GNU General Public License
+- *  along with this program; if not, write to the Free Software
+- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- */
+-
+-/* READ THIS!
+- * This class was created in an effort to reduce the complexity of the
+- * GParted_Core class.
+- * This class provides support for Linux software RAID devices (mdadm).
+- * Static elements are used in order to reduce the disk accesses required to
+- * load the data structures upon each initialization of the class.
+- */
+-
+-#ifndef SWRAID_H_
+-#define SWRAID_H_
+-
+-#include "../include/Utils.h"
+-
+-#include <vector>
+-
+-namespace GParted
+-{
+-
+-
+-class SWRaid
+-{
+-public:
+-	SWRaid() ;
+-	SWRaid( const bool & do_refresh ) ;
+-	~SWRaid() ;
+-	bool is_swraid_supported() ;
+-	void get_devices( std::vector<Glib::ustring> & swraid_devices ) ;
+-private:
+-	void load_swraid_cache() ;
+-	void set_commands_found() ;
+-	static bool swraid_cache_initialized ;
+-	static bool mdadm_found ;
+-	static std::vector<Glib::ustring> swraid_devices ;
+-};
+-
+-}//GParted
+-
+-#endif /* SWRAID_H_ */
+--- a/src/GParted_Core.cc
++++ b/src/GParted_Core.cc
+@@ -19,7 +19,6 @@
+ #include "../include/Win_GParted.h"
+ #include "../include/GParted_Core.h"
+ #include "../include/DMRaid.h"
+-#include "../include/SWRaid.h"
+ #include "../include/FS_Info.h"
+ #include "../include/LVM2_PV_Info.h"
+ #include "../include/OperationCopy.h"
+@@ -149,7 +148,6 @@
+ 	Proc_Partitions_Info pp_info( true ) ;  //Refresh cache of proc partition information
+ 	FS_Info fs_info( true ) ;  //Refresh cache of file system information
+ 	DMRaid dmraid( true ) ;    //Refresh cache of dmraid device information
+-	SWRaid swraid( true ) ;    //Refresh cache of swraid device information
+ 	LVM2_PV_Info lvm2_pv_info( true ) ;	//Refresh cache of LVM2 PV information
+ 	
+ 	init_maps() ;
+@@ -176,16 +174,6 @@
+ 				ped_device_get( temp_devices[ k ] .c_str() ) ;
+ 			}
+ 
+-			//Try to find all swraid devices
+-			if (swraid .is_swraid_supported() ) {
+-				std::vector<Glib::ustring> swraid_devices ;
+-				swraid .get_devices( swraid_devices ) ;
+-				for ( unsigned int k=0; k < swraid_devices .size(); k++ ) {
+-					set_thread_status_message( String::ucompose ( _("Scanning %1"), swraid_devices[k] ) ) ;
+-					ped_device_get( swraid_devices[k] .c_str() ) ;
+-				}
+-			}
+-
+ 			//Try to find all dmraid devices
+ 			if (dmraid .is_dmraid_supported() ) {
+ 				std::vector<Glib::ustring> dmraid_devices ;
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -44,7 +44,6 @@
+ 	OperationLabelPartition.cc	\
+ 	Partition.cc			\
+ 	Proc_Partitions_Info.cc		\
+-	SWRaid.cc				\
+ 	TreeView_Detail.cc		\
+ 	Utils.cc			\
+ 	Win_GParted.cc			\
+--- a/src/SWRaid.cc
++++ /dev/null
+@@ -1,104 +0,0 @@
+-/* Copyright (C) 2009 Curtis Gedak
+- *
+- *  This program is free software; you can redistribute it and/or modify
+- *  it under the terms of the GNU General Public License as published by
+- *  the Free Software Foundation; either version 2 of the License, or
+- *  (at your option) any later version.
+- *
+- *  This program is distributed in the hope that it will be useful,
+- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- *  GNU Library General Public License for more details.
+- *
+- *  You should have received a copy of the GNU General Public License
+- *  along with this program; if not, write to the Free Software
+- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- */
+-
+-#include "../include/SWRaid.h"
+-
+-namespace GParted
+-{
+-
+-//Initialize static data elements
+-bool SWRaid::swraid_cache_initialized = false ;
+-bool SWRaid::mdadm_found  = false ;
+-std::vector<Glib::ustring> SWRaid::swraid_devices ;
+-
+-SWRaid::SWRaid()
+-{
+-	//Ensure that cache has been loaded at least once
+-	if ( ! swraid_cache_initialized )
+-	{
+-		swraid_cache_initialized = true ;
+-		set_commands_found() ;
+-		load_swraid_cache() ;
+-	}
+-}
+-
+-SWRaid::SWRaid( const bool & do_refresh )
+-{
+-	//Ensure that cache has been loaded at least once
+-	if ( ! swraid_cache_initialized )
+-	{
+-		swraid_cache_initialized = true ;
+-		set_commands_found() ;
+-		if ( do_refresh == false )
+-			load_swraid_cache() ;
+-	}
+-
+-	if ( do_refresh )
+-		load_swraid_cache() ;
+-}
+-
+-SWRaid::~SWRaid()
+-{
+-}
+-
+-void SWRaid::load_swraid_cache()
+-{
+-	//Load data into swraid structures
+-	Glib::ustring output, error ;
+-	swraid_devices .clear() ;
+-
+-	if ( mdadm_found )
+-	{
+-		if ( ! Utils::execute_command( "mdadm --examine --scan", output, error, true ) )
+-		{
+-			if ( output .size() > 0 )
+-			{
+-				std::vector<Glib::ustring> temp_arr ;
+-				Utils::tokenize( output, temp_arr, "\n" ) ;
+-				for ( unsigned int k = 0; k < temp_arr .size(); k++ )
+-				{
+-					Glib::ustring temp = Utils::regexp_label( temp_arr[k], "^[^/]*(/dev/[^\t ]*)" ) ;
+-					if ( temp .size() > 0 )
+-						swraid_devices .push_back( temp ) ;
+-				}
+-			}
+-		}
+-	}
+-}
+-
+-void SWRaid::set_commands_found()
+-{
+-	//Set status of commands found 
+-	mdadm_found = (! Glib::find_program_in_path( "mdadm" ) .empty() ) ;
+-}
+-
+-bool SWRaid::is_swraid_supported()
+-{
+-	//Determine if Linux software RAID is supported
+-	return ( mdadm_found ) ;
+-}
+-
+-void SWRaid::get_devices( std::vector<Glib::ustring> & device_list )
+-{
+-	//Retrieve list of Linux software RAID devices
+-	device_list .clear() ;
+-
+-	for ( unsigned int k=0; k < swraid_devices .size(); k++ )
+-		device_list .push_back( swraid_devices[k] ) ;
+-}
+-
+-}//GParted
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -70,7 +70,7 @@
+ 	OperationDetail.$(OBJEXT) OperationFormat.$(OBJEXT) \
+ 	OperationResizeMove.$(OBJEXT) \
+ 	OperationLabelPartition.$(OBJEXT) Partition.$(OBJEXT) \
+-	Proc_Partitions_Info.$(OBJEXT) SWRaid.$(OBJEXT) \
++	Proc_Partitions_Info.$(OBJEXT) \
+ 	TreeView_Detail.$(OBJEXT) Utils.$(OBJEXT) \
+ 	Win_GParted.$(OBJEXT) btrfs.$(OBJEXT) exfat.$(OBJEXT) \
+ 	ext2.$(OBJEXT) ext3.$(OBJEXT) ext4.$(OBJEXT) fat16.$(OBJEXT) \
+@@ -296,7 +296,6 @@
+ 	OperationLabelPartition.cc	\
+ 	Partition.cc			\
+ 	Proc_Partitions_Info.cc		\
+-	SWRaid.cc				\
+ 	TreeView_Detail.cc		\
+ 	Utils.cc			\
+ 	Win_GParted.cc			\
+@@ -442,7 +441,6 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/OperationResizeMove.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Partition.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Proc_Partitions_Info.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/SWRaid.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/TreeView_Detail.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Utils.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Win_GParted.Po@am__quote@

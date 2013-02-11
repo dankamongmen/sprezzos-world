@@ -3466,7 +3466,7 @@ $(GNUFDISK): $(SPREZZ)/gnu-fdisk/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gnu-fdisk-$(gnu-fdisk_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf fdisk-$(gnu-fdisk_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: gnucash
 gnucash:$(GNUCASH)_$(ARCH).deb
