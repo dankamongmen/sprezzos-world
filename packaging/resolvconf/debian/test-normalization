@@ -1,0 +1,90 @@
+#!/bin/sh
+
+### BEGIN FUNCTION COPIED FROM THE resolvconf SCRIPT ###
+#
+# Echo stdin with:
+#	comments removed;
+#	initial and terminal whitespace removed;
+#	whitespace strings replaced by single blanks;
+#	leading zeroes removed from nameserver address fields;
+#	first set of zero fields in an IPv6 address collapsed to '::';
+#	empty lines removed.
+normalized_stdin() {
+	sed                                                                        \
+		-e 's/#.*$//'                                                      \
+		-e 's/[[:blank:]]\+$//'                                            \
+		-e 's/^[[:blank:]]\+//'                                            \
+		-e 's/[[:blank:]]\+/ /g'                                           \
+		-e '/^nameserver/!b ENDOFCYCLE'                                    \
+		-e 's/$/ /'                                                        \
+		-e 's/\([:. ]\)0\+/\10/g'                                          \
+		-e 's/\([:. ]\)0\([123456789abcdefABCDEF][[:xdigit:]]*\)/\1\2/g'   \
+		-e '/::/b ENDOFCYCLE; s/ \(0[: ]\)\+/ ::/'                         \
+		-e '/::/b ENDOFCYCLE; s/:\(0[: ]\)\+/::/'                          \
+		-e ': ENDOFCYCLE'                                                  \
+		- |                                                                \
+	sed                                                                        \
+		-e 's/[[:blank:]]\+$//'                                            \
+		-e '/^$/d'
+}
+### END FUNCTION COPIED FROM THE resolvconf SCRIPT ###
+
+test_result() {
+	[ "$1" = "$2" ] || { echo "Normalization test failed: actual '$1' != '$2' expected" ; exit 1 ; }
+}
+
+test_result "$(echo "" | normalized_stdin)" ""
+test_result "$(echo "
+" | normalized_stdin)" ""
+test_result "$(echo "nameserver 127.0.0.1" | normalized_stdin)" "nameserver 127.0.0.1"
+test_result "$(echo "  nameserver  127.0.0.1 # foo	" | normalized_stdin)" "nameserver 127.0.0.1"
+test_result "$(echo "nameserver 127.000.000.1" | normalized_stdin)" "nameserver 127.0.0.1"
+test_result "$(echo "nameserver 	127.000.000.1" | normalized_stdin)" "nameserver 127.0.0.1"
+test_result "$(echo "nameserver ::1" | normalized_stdin)" "nameserver ::1"
+test_result "$(echo "  nameserver  ::1 #	foo " | normalized_stdin)" "nameserver ::1"
+test_result "$(echo "nameserver 0:0:0:0:0:0:0:1" | normalized_stdin)" "nameserver ::1"
+test_result "$(echo "  nameserver	0:0:0:0:0:0:0:1	# foo	" | normalized_stdin)" "nameserver ::1"
+test_result "$(echo "nameserver 00:000:0:0000:0001" | normalized_stdin)" "nameserver ::1"
+test_result "$(echo "  nameserver		00:000:0:0000:0001" | normalized_stdin)" "nameserver ::1"
+test_result "$(echo "nameserver 003:1020:0105:55:0000:1000:0000:0000" | normalized_stdin)" "nameserver 3:1020:105:55::1000:0:0"
+test_result "$(echo " 	nameserver 003:1020:0105:55:0000:1000:0000:0000" | normalized_stdin)" "nameserver 3:1020:105:55::1000:0:0"
+test_result "$(echo "nameserver 30:1020:0105:55:0500:1000:0000:0000" | normalized_stdin)" "nameserver 30:1020:105:55:500:1000::"
+test_result "$(echo "	nameserver 30:1020:0105:55:0500:1000:0000:0000" | normalized_stdin)" "nameserver 30:1020:105:55:500:1000::"
+test_result "$(echo "nameserver 30::0500:100:0009:0000" | normalized_stdin)" "nameserver 30::500:100:9:0"
+test_result "$(echo " 	 nameserver 30::0500:100:0009:0000" | normalized_stdin)" "nameserver 30::500:100:9:0"
+test_result "$(echo "nameserver 30:0500:100::0009:0000" | normalized_stdin)" "nameserver 30:500:100::9:0"
+test_result "$(echo " 	 nameserver 30:0500:100::0009:0000" | normalized_stdin)" "nameserver 30:500:100::9:0"
+test_result "$(echo \
+"#foo
+	nameserver 30:1020:0105:55:0500:1000:0000:0000
+nameserver ::1
+  nameserver 0000::1 # foo nameserver bwaa haa
+  nameserver 0005::1 # foo	bar
+nameserver 003:1020:0105:55:0000:1000:0000:0000
+options nameserver
+anotherthing 1:2 03::4::0005   # Don't touch non-nameservers lines
+nameserver   127.0.0.1 #foo bar
+   nameserver 0:0:00:0000000:0:0:0:1
+bar
+search yoyodyne.biz yyy.xxx
+baz
+# foo 	" | normalized_stdin)" \
+"nameserver 30:1020:105:55:500:1000::
+nameserver ::1
+nameserver 0::1
+nameserver 5::1
+nameserver 3:1020:105:55::1000:0:0
+options nameserver
+anotherthing 1:2 03::4::0005
+nameserver 127.0.0.1
+nameserver ::1
+bar
+search yoyodyne.biz yyy.xxx
+baz"
+
+# Check that we are actually testing something
+( test_result "$(echo "nameserver 127.0.0.1" | normalized_stdin)" "bogusstring" ) > /dev/null
+[ "$?" = 1 ] || { echo "Normalization test script contains a programming error." ; exit 2 ; }
+
+echo "Normalization test passed."
+exit 0
