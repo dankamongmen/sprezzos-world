@@ -1,0 +1,140 @@
+lua5.1 for Debian
+=================
+
+This is packaging for Debian of the 5.1 series of the Lua programming
+language.  For package development see <http://pkg-lua.alioth.debian.org/>.
+
+Binary package index:
+
+    * lua5.1 - command line tools (i.e. interpreter and bytecode compiler)
+    * lua5.1-doc - documentation, including manual and examples
+    * liblua5.1-0-dev - development libraries
+    * liblua5.1-0 - runtime libraries
+
+
+II. Propaganda
+==============
+
+Best practices
+--------------
+See "./examples/debian/" in the lua5.1-doc package for some tips and best
+practices for using the Lua library in your app, building binary modules,
+etc.
+
+
+III. Rationale
+==============
+
+Packaging philosophy
+--------------------
+The packaging philosophy adopted is to avoid changes to upstream source as
+much as possible.
+
+
+Need to maintain old Lua releases
+---------------------------------
+While the Lua authors attempt to keep changes to the language and standard
+libraries backwards compatible, the C API often changes significantly between
+versions (e.g. from the 5.0 series to 5.1).  Applications in which Lua is
+embedded often become bound to a certain version of Lua indefinitely.  For
+these reasons, and in contrast to other interpreted languages which have more
+of a stand-alone focus, it's important to maintain old Lua library releases
+as long as they are in use by relevant applications.
+
+
+Naming convention (lua5.1 vs. lua51)
+------------------------------------
+The naming convention prior to the lua5.1 package, specifically the lack of
+delimiters in the version portion, lacked foresight.  The reason is that if
+the version ever has more than one digit per component, the terser name will
+be ambiguous.  Even if this will never be a problem in practice (will 61.1
+clash with 6.11?), lua12.3 seems more friendly than lua123.
+
+
+Major and minor versions
+------------------------
+Looking at a full Lua version number such as "5.0.2", "5.0" is considered
+the major number and ".2" the minor number.  The packaging scheme employed
+allows command line tools, modules, and libraries of multiple major Lua
+versions (for example, Lua 5.0 and 5.1) to exist together.  At the same time,
+it assumes that upstream will not break Lua language compatibility in a minor
+release.
+
+
+Module paths
+------------
+Upstream's package.path and package.cpath consist of paths under /usr/local.
+Corresponding paths under /usr are required to support Lua modules which will
+be packaged for Debian.  These have been added except in the case of /usr/lib
+in package.path.  Debian policy is clear that architecture-independent files
+(i.e. .lua modules) be placed under /usr/share, while binary files (i.e. module
+.so's) be under /usr/lib.  This implies that Lua's package.path should not
+contain references to /usr/lib.  Since /usr/local is not under Debian
+management, upstream's original paths were left intact.
+
+The implication for Lua modules packaged for Debian is that the correct module
+paths must be used at install time.  Instead of hard coding these paths, use
+of the "module_dir" and "binary_module_dir" info made available through
+pkg-config is recommended.  For example, in a makefile:
+
+  PREFIX = /usr
+  MODULE_PATH = $(PREFIX)/$(shell pkg-config lua5.1 --variable=module_dir)
+  BIN_MODULE_PATH = $(PREFIX)/$(shell pkg-config lua5.1 --variable=binary_module_dir)
+
+For those concerned about either pkg-config or these variables not being
+available everywhere, it is trivial to fall back to a hard coded path.
+
+
+Library SONAME
+--------------
+As explained, each series of Lua (e.g. 5.0, 5.1) is treated as a completely
+separate library.  Within a series, Libtool versioning is followed.  For
+example, the first release of Lua 5.1 (5.1.0) will have a soname
+"liblua5.1.so.0".  Let's say that 5.1.1 is later released, and it is binary
+compatible with the previous version.  In that case, the soname will stay
+the same, and existing applications do not need to relink.
+
+
+Package binaries: static vs. dynamic linking
+--------------------------------------------
+There are two executables in this source package: "lua" and "luac".  Due to
+luac's use of internal symbols in the Lua core, at present it cannot be
+dynamically linked.  Also, it's been reported that use of position-
+independent code hinders the VM's performance.  For these reasons, and for
+consistency, both executables are statically linked.
+
+
+IV. For packagers
+=================
+
+Package testing
+---------------
+Final testing should be done in a clean environment (e.g. via pbuilder).
+Important tests:
+    * package build
+    * install of each binary package without the others installed
+    * with all packages installed:
+        * run "make" in examples/debian/
+
+We have a package regression test which is intended to be run inside the
+pbuilder environment.  For example (assuming pbuilder is configured
+to bindmount your package result directory inside the chroot):
+
+    $ sudo pbuilder execute -- debian/tests/regression_test \
+        /var/cache/pbuilder/sid/result/lua5.1_5.1-1_i386.changes
+
+
+Unfinished business
+-------------------
+TODO: make version-specific aliases for LUA_INIT, LUA_PATH, LUA_CPATH
+TODO: add Mike Pall's advanced readline support as a module
+TODO: consider using libedit in place of libreadline, as it's easier than
+    explaining that our distribution of the "lua" interpreter is under the GPL.
+TODO: investigate use of versioned symbols in the .so.  This will allow e.g.
+    debuggers that can support multiple Lua versions simultaneously, and
+    apps which assemble components using different Lua versions.  (Hint:
+    module .so's *must* be linked against the Lua library.)
+TODO: include soname number in source package name (on next increment).  May
+    want to split library and command line tools into separate source packages.
+ISSUE: want way to avoid hard-coding package and path names in
+    lua5.1.postinst, etc.

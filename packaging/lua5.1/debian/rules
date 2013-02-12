@@ -1,0 +1,77 @@
+#!/usr/bin/make -f
+
+LUA_V = 5.1
+LUA_FULL_V = 5.1.5
+SONUM = 0
+LUA = lua$(LUA_V)
+
+DEB_DESTDIR := $(shell pwd)/debian/tmp/usr
+LIB_PACKAGE_NAME = lib$(LUA)-$(SONUM)
+
+PKG_DIR = $(DEB_DESTDIR)/lib/$(DEB_HOST_MULTIARCH)/pkgconfig
+PKG_CONFIG_FILE = $(PKG_DIR)/$(LUA).pc
+PKGPP_CONFIG_FILE = $(PKG_DIR)/$(LUA)-c++.pc
+DOC_DIR = debian/$(LUA)-doc/usr/share/doc/$(LUA)-doc
+
+LUA_MULTIARCH_INCLUDE = $(DEB_DESTDIR)/include/$(DEB_HOST_MULTIARCH)/
+LUA_MULTIARCH = lua5.1-deb-multiarch.h
+
+ifeq (hurd,$(shell dpkg-architecture -qDEB_HOST_ARCH_OS))
+	LDFLAGS=-lpthread
+endif
+
+%:
+	dh $*
+
+override_dh_auto_configure:
+	echo "#ifndef _LUA_DEB_MULTIARCH_" > src/$(LUA_MULTIARCH)
+	echo "#define _LUA_DEB_MULTIARCH_" >> src/$(LUA_MULTIARCH)
+	echo "#define DEB_HOST_MULTIARCH \"$(DEB_HOST_MULTIARCH)\"" >> \
+		src/$(LUA_MULTIARCH)
+	echo "#endif" >> src/$(LUA_MULTIARCH)
+
+override_dh_auto_build:
+	$(MAKE) debian_linux \
+		RPATH=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		LDFLAGS="$(LDFLAGS)"
+
+override_dh_auto_install:
+	$(MAKE) debian_install \
+		INSTALL_TOP=$(DEB_DESTDIR) \
+		INSTALL_MAN=$(DEB_DESTDIR)/share/man/man1 \
+		INSTALL_INC=$(DEB_DESTDIR)/include/$(LUA)
+
+override_dh_auto_clean:
+	rm -f src/$(LUA_MULTIARCH)
+	$(MAKE) debian_clean
+
+override_dh_auto_test:
+	$(MAKE) debian_test
+
+override_dh_installdocs:
+	dh_installdocs -X/man/ -A debian/README.Debian
+ifneq (,$(filter lua5.1-doc, $(shell dh_listpackages)))
+	chmod +x $(DOC_DIR)/examples/debian/script/hello
+	mv $(DOC_DIR)/doc/readme.html $(DOC_DIR)/doc/index.html
+endif
+
+override_dh_install:
+	mkdir -p $(PKG_DIR)
+	echo "prefix=/usr" > $(PKG_CONFIG_FILE)
+	echo "major_version=$(LUA_V)" >> $(PKG_CONFIG_FILE)
+	echo "version=$(LUA_FULL_V)" >> $(PKG_CONFIG_FILE)
+	echo "lib_name_include=lua$(LUA_V)" >> $(PKG_CONFIG_FILE)
+	echo "deb_host_multiarch=$(DEB_HOST_MULTIARCH)" >> $(PKG_CONFIG_FILE)
+	cat debian/lua.pc.in >> $(PKG_CONFIG_FILE)
+	echo "prefix=/usr" > $(PKGPP_CONFIG_FILE)
+	echo "major_version=$(LUA_V)" >> $(PKGPP_CONFIG_FILE)
+	echo "version=$(LUA_FULL_V)" >> $(PKGPP_CONFIG_FILE)
+	echo "lib_name_include=lua$(LUA_V)" >> $(PKGPP_CONFIG_FILE)
+	echo "deb_host_multiarch=$(DEB_HOST_MULTIARCH)" >> $(PKGPP_CONFIG_FILE)
+	cat debian/lua-c++.pc.in >> $(PKGPP_CONFIG_FILE)
+	mkdir -p $(LUA_MULTIARCH_INCLUDE)
+	cp src/$(LUA_MULTIARCH) $(LUA_MULTIARCH_INCLUDE)
+	dh_install
+
+override_dh_strip:
+	dh_strip --dbg-package=$(LIB_PACKAGE_NAME)-dbg

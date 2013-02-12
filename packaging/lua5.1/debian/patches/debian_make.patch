@@ -1,0 +1,87 @@
+Author: John V. Belmonte <jbelmonte@debian.org>
+Description: Add support for Debian package to makefiles.
+Index: lua5.1-5.1.5/Makefile
+===================================================================
+--- lua5.1-5.1.5.orig/Makefile	2012-02-10 10:50:23.000000000 +0100
++++ lua5.1-5.1.5/Makefile	2012-07-16 12:25:26.000000000 +0200
+@@ -12,7 +12,7 @@
+ INSTALL_TOP= /usr/local
+ INSTALL_BIN= $(INSTALL_TOP)/bin
+ INSTALL_INC= $(INSTALL_TOP)/include
+-INSTALL_LIB= $(INSTALL_TOP)/lib
++INSTALL_LIB= $(INSTALL_TOP)/lib/$(DEB_HOST_MULTIARCH)
+ INSTALL_MAN= $(INSTALL_TOP)/man/man1
+ #
+ # You probably want to make INSTALL_LMOD and INSTALL_CMOD consistent with
+@@ -126,3 +126,30 @@
+ .PHONY: all $(PLATS) clean test install local none dummy echo pecho lecho
+ 
+ # (end of Makefile)
++
++# Use libtool for binary installs, etc.
++
++export V
++export LIBTOOL = libtool --quiet --tag=CC
++export LIBTOOLPP = libtool --quiet --tag=CXX
++# See libtool manual about how to set this
++export LIB_VERSION = 0:0:0
++
++debian_clean:
++	cd src; $(MAKE) $@
++
++debian_test: debian_linux
++	src/lua$(V) test/hello.lua
++
++debian_install: debian_linux
++	cd src; mkdir -p $(INSTALL_BIN) $(INSTALL_INC) $(INSTALL_LIB) $(INSTALL_MAN)
++	cd src; $(LIBTOOL) --mode=install $(INSTALL_EXEC) lua$(V) luac$(V) $(INSTALL_BIN)
++	cd src; $(INSTALL_DATA) $(TO_INC) $(INSTALL_INC)
++	cd src; $(LIBTOOL) --mode=install $(INSTALL_DATA) liblua$(V).la $(INSTALL_LIB)
++	cd src; $(LIBTOOLPP) --mode=install $(INSTALL_DATA) liblua$(V)-c++.la $(INSTALL_LIB)
++	$(foreach NAME,$(TO_MAN),$(INSTALL_DATA) doc/$(NAME) $(INSTALL_MAN)/$(basename $(NAME))$(V)$(suffix $(NAME));)
++
++# ISSUE: MYCFLAGS not honored in the case of a CFLAGS override
++debian_linux:
++	cd src; $(MAKE) debian_all CFLAGS+=-DLUA_USE_LINUX \
++		LIB_LIBS="-lm -ldl" LUA_LIBS="-lreadline" LDFLAGS="$(LDFLAGS)"
+Index: lua5.1-5.1.5/src/Makefile
+===================================================================
+--- lua5.1-5.1.5.orig/src/Makefile	2012-02-13 21:41:22.000000000 +0100
++++ lua5.1-5.1.5/src/Makefile	2012-07-16 12:24:40.000000000 +0200
+@@ -180,3 +180,36 @@
+   ltm.h lzio.h lmem.h lopcodes.h lundump.h
+ 
+ # (end of Makefile)
++
++# The following rules use libtool for compiling and linking in order to
++# provide shared library support.  While we are at it, our desired version
++# suffixes are added to the targets, preventing conflicts with rules in
++# the upstream makefile.
++
++LIB_NAME = liblua$(V).la
++LIBPP_NAME = liblua$(V)-c++.la
++LIB_OBJS = $(CORE_O:.o=.lo) $(LIB_O:.o=.lo)
++LIBPP_OBJS = $(CORE_O:%.o=%-c++.lo) $(LIB_O:%.o=%-c++.lo)
++
++%-c++.lo %-c++.o: %.c
++	$(LIBTOOLPP) --mode=compile $(CXX) -o $*-c++.lo -c $(CPPFLAGS) $(CFLAGS) $<
++%.lo %.o: %.c
++	$(LIBTOOL) --mode=compile $(CC) -c $(CPPFLAGS) $(CFLAGS) $<
++
++$(LIB_NAME) $(LIB_NAME:.la=.a): $(LIB_OBJS)
++	$(LIBTOOL) --mode=link $(CC) -version-info $(LIB_VERSION) \
++            -rpath $(RPATH) -o $(LIB_NAME) $(LIB_OBJS) $(LIB_LIBS)
++$(LIBPP_NAME) $(LIBPP_NAME:.la=.a): $(LIBPP_OBJS)
++	$(LIBTOOLPP) --mode=link $(CXX) -version-info $(LIB_VERSION) \
++            -rpath $(RPATH) -o $(LIBPP_NAME) $(LIBPP_OBJS) $(LIB_LIBS)
++
++lua$(V): $(LUA_O) $(LIB_NAME)
++	$(LIBTOOL) --mode=link $(CC) -static -Wl,-E -o $@ $(LUA_O) $(LIB_NAME) $(LUA_LIBS) $(LDFLAGS)
++
++luac$(V): $(LUAC_O) $(LIB_NAME)
++	$(LIBTOOL) --mode=link $(CC) -static -o $@ $(LUAC_O) $(LIB_NAME)
++
++debian_clean:
++	$(LIBTOOL) --mode=clean $(RM) $(ALL_O:.o=.lo) $(LIB_NAME) lua$(V) luac$(V)
++
++debian_all: $(LIB_NAME) $(LIBPP_NAME) lua$(V) luac$(V)

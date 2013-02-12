@@ -1,0 +1,91 @@
+#!/bin/bash -e
+#
+# Regression test for Lua packages.
+#
+# Synopsis:
+#       $ regression_test  build-area/lua5.1_5.1-1_i386.changes
+#
+# As new packaging bugs are discovered, try to add a corresponding regression
+# test to this script.
+#
+# This script requires root privilege.  It's intended to be run in a
+# base chroot environment (e.g. via "pbuilder execute").
+#
+
+if (($# != 1)); then
+    echo "usage: $(basename $0) CHANGES_FILE"
+    exit 1
+fi 1>&2
+
+trap "echo 'Regression test FAILED.' 1>&2" EXIT
+
+CHANGES="$1"
+PACKAGE_DIR=$(dirname $CHANGES)
+
+PACKAGE_NAME=$(grep ^Source: $CHANGES | cut -d' ' -f2)
+PACKAGE_V=$(grep ^Version: $CHANGES | cut -d' ' -f2)
+DEBS=$(grep '\.deb$' $CHANGES | cut -d' ' -f6 |
+    xargs -iXX echo ${PACKAGE_DIR}/XX)
+PACKAGES=$(grep '\.deb$' $CHANGES | cut -d' ' -f6 | cut -d_ -f1)
+
+LUA_V=$(cut -d'-' -f1 <<<$PACKAGE_V)
+LUA_MAJOR_V=$(cut -d'.' -f-2 <<<$LUA_V)
+SRC_BASE=${PACKAGE_DIR}/${PACKAGE_NAME}_${PACKAGE_V}
+DSC_FILE=${SRC_BASE}.dsc
+DIFF_FILE=${SRC_BASE}.diff.gz
+
+APT_INSTALL="apt-get install -qq --force-yes"
+
+function msg
+{
+    echo "*** $@"
+}
+
+msg "Starting tests."
+
+# Since we are installing our .deb's directly, we have to manually install
+# dependencies.  It would be better to have our packages available through
+# an apt source.
+msg "(Installing dependencies...)"
+$APT_INSTALL libreadline-dev libncurses5-dev
+
+msg "Package install..."
+dpkg -i $DEBS
+
+msg "(Installing support packages...)"
+# install packages for other tests
+$APT_INSTALL pkg-config libtool lintian patchutils
+
+msg "Lintian test..."
+lintian -i --allow-root $DSC_FILE $DEBS
+
+msg "pkg-config test..."
+pkg-config --exists $PACKAGE_NAME
+[[ "$(pkg-config $PACKAGE_NAME --modversion)" == "$LUA_V" ]] || exit 1
+[[ "$(pkg-config $PACKAGE_NAME --variable major_version)" == \
+    "$LUA_MAJOR_V" ]] || exit 1
+
+msg "Examples test..."
+cd /usr/share/doc/${PACKAGE_NAME}-doc/examples/debian
+make -s
+cd -
+
+msg "Man page test..."
+man lua luac lua${LUA_MAJOR_V} luac${LUA_MAJOR_V} > /dev/null
+
+msg "Doc test..."
+# ensure every package has README.Debian
+for name in $PACKAGES; do
+    [[ -f /usr/share/doc/$name/README.Debian.gz ]] || exit 1
+done
+
+msg "Diff test..."
+if BAD_DIFFS=$(zcat $DIFF_FILE | lsdiff --strip=1 |
+        grep -v ^debian/); then
+    echo "ERROR: diff contains items outside of debian directory:"
+    echo "$BAD_DIFFS"
+    exit 1
+fi 1>&2
+
+msg "All tests passed."
+trap EXIT
