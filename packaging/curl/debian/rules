@@ -36,14 +36,14 @@ else
     endif
 endif
 
+CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS)
 CFLAGS   = $(shell dpkg-buildflags --get CFLAGS)
-CFLAGS  += $(shell dpkg-buildflags --get CPPFLAGS)
 LDFLAGS  = $(shell dpkg-buildflags --get LDFLAGS)
 
-# this will avoid unnecessary dependencies
+# this will avoid unneded dependencies
 LDFLAGS += -Wl,--as-needed
 
-# this will catch undefined symbols
+# this will catch miss-linking. (e.g. undefined symbols)
 #LDFLAGS+= -Wl,-z,defs
 
 CONFIGURE_ARGS = $(CROSS) --prefix=/usr --mandir=/usr/share/man	\
@@ -51,8 +51,7 @@ CONFIGURE_ARGS = $(CROSS) --prefix=/usr --mandir=/usr/share/man	\
 		--disable-dependency-tracking --enable-ipv6	\
 		--with-lber-lib=lber --disable-symbol-hiding	\
 		--enable-versioned-symbols --enable-manual	\
-		--enable-debug --disable-curldebug		\
-		CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
+		CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
 # this is still not ready
 #		--enable-ares
 # this fixes the ldap warning of dpkg-shlibdebs, but we dont want that.
@@ -62,8 +61,6 @@ ifneq (${DEB_BUILD_ARCH_OS},hurd)
 CONFIGURE_ARGS += --with-gssapi=/usr
 endif
 
-CONFIGURE_ARGS_UDEB = $(filter-out --with-lber-lib=lber --with-gssapi=/usr,$(CONFIGURE_ARGS))
-
 build-arch: build-stamp
 build-indep: build-stamp
 
@@ -71,14 +68,13 @@ build: build-arch build-indep
 
 configure-stamp:
 	dh_testdir
-	mkdir -p debian/build debian/build-gnutls debian/build-nss debian/build-udeb
+	mkdir -p debian/build debian/build-gnutls debian/build-nss
 	# pop the last patch (nss)
 	quilt pop
 	# pop the second last patch (gnutls)
 	quilt pop
 	# get the source without nss and gnutls patches
 	tar -cf - --exclude=debian --exclude=.pc . | tar -xf - -C debian/build
-	tar -cf - --exclude=debian --exclude=.pc . | tar -xf - -C debian/build-udeb
 	# push the second last patch which must be gnutls
 	quilt push
 	# get the source with gnutls patch applied
@@ -88,17 +84,11 @@ configure-stamp:
 	# get the source with nss patch applied
 	tar -cf - --exclude=debian --exclude=.pc . | tar -xf - -C debian/build-nss
 	# run buildconf and make sure to copy the patched ltmain.sh
-	for flavour in build build-udeb build-gnutls build-nss; do \
+	for flavour in build build-gnutls build-nss; do \
 		(cd debian/$$flavour && ./buildconf && cp ../../ltmain.sh .) \
 	done
 	cd debian/build && ./configure ${CONFIGURE_ARGS}		\
 		--with-librtmp --with-ca-path=/etc/ssl/certs
-	cd debian/build-udeb && ./configure ${CONFIGURE_ARGS_UDEB}	\
-		--with-ca-path=/etc/ssl/certs --without-gnutls		\
-		--without-nss --disable-ldap --disable-ldaps		\
-		--disable-file --disable-ftp --disable-pop4		\
-		--disable-rtsp --disable-imap --disable-smtp		\
-		--without-librtmp --without-libidn
 	cd debian/build-gnutls && ./configure ${CONFIGURE_ARGS}		\
 		--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt	\
 		--without-ssl --with-gnutls
@@ -110,12 +100,10 @@ configure-stamp:
 build-stamp: configure-stamp
 	dh_testdir
 	${MAKE} $(JOBS) -C debian/build
-	${MAKE} $(JOBS) -C debian/build-udeb
 	${MAKE} $(JOBS) -C debian/build-gnutls
 	${MAKE} $(JOBS) -C debian/build-nss
 ifeq (${DO_TEST},yes)
 	-${MAKE} -C debian/build test
-	-${MAKE} -C debian/build-udeb test
 	-${MAKE} -C debian/build-gnutls test
 	-${MAKE} -C debian/build-nss test
 endif
@@ -133,8 +121,6 @@ install: build-stamp
 	dh_prep
 	${MAKE} -C debian/build		\
 		DESTDIR=$(shell pwd)/debian/tmp install
-	${MAKE} -C debian/build-udeb	\
-		DESTDIR=$(shell pwd)/debian/tmp-udeb install
 	${MAKE} -C debian/build-gnutls	\
 		DESTDIR=$(shell pwd)/debian/tmp-gnutls install
 	${MAKE} -C debian/build-nss	\
@@ -143,8 +129,6 @@ install: build-stamp
 		--sourcedir=debian/tmp-gnutls
 	dh_install -plibcurl3-nss -plibcurl4-nss-dev		\
 		--sourcedir=debian/tmp-nss
-	dh_install -pcurl-udeb -plibcurl3-udeb			\
-		--sourcedir=debian/tmp-udeb
 	dh_install -pcurl -plibcurl3 -plibcurl4-openssl-dev	\
 		--sourcedir=debian/tmp
 	dh_lintian
@@ -168,8 +152,7 @@ binary-arch: build-stamp install
 	dh_strip --remaining-packages
 	dh_compress
 	dh_fixperms
-	dh_makeshlibs -plibcurl3 --add-udeb=libcurl3-udeb
-	dh_makeshlibs -Nlibcurl3
+	dh_makeshlibs
 	dh_installdeb
 	dh_shlibdeps
 	dh_md5sums
