@@ -220,12 +220,20 @@ $(LIBUNITYMISC): $(SPREZZ)/libunity-misc/debian/changelog
 .PHONY: libunity-webapps
 libunity-webapps:$(LIBUNITYWEBAPPS)_$(ARCH).deb
 $(LIBUNITYWEBAPPS): $(SPREZZ)/libunity-webapps/debian/changelog
-	bzr branch lp:libunity-webapps $@
-	rm -rf $@/debian
-	tar cJf unity_webapps-$(libunity-webapps_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf unity_webapps-$(libunity-webapps_UPVER).tar.xz \
-		$(LIBUNITYWEBAPPS).orig.tar.xz
+	mkdir $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unity_webapps-$(libunity-webapps_UPVER).tar.gz $(TARARGS) $@
+
+#.PHONY: libunity-webapps
+#libunity-webapps:$(LIBUNITYWEBAPPS)_$(ARCH).deb
+#$(LIBUNITYWEBAPPS): $(SPREZZ)/libunity-webapps/debian/changelog
+#	bzr branch lp:libunity-webapps $@
+#	rm -rf $@/debian
+#	tar cJf unity_webapps-$(libunity-webapps_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf unity_webapps-$(libunity-webapps_UPVER).tar.xz \
+#		$(LIBUNITYWEBAPPS).orig.tar.xz
+#	cp -r $(<D) $@/
 
 .PHONY: libvarpa
 libvarpa:$(LIBVARPA)_$(ARCH).deb

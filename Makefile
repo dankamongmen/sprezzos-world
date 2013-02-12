@@ -4545,6 +4545,14 @@ $(IMLIB): $(SPREZZ)/imlib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf imlib2-$(imlib_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: iucode-tool
+iucode-tool:$(IUCODETOOL)_$(ARCH).deb
+$(IUCODETOOL): $(SPREZZ)/iucode-tool/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf iucode-tool-$(iucode-tool_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: lame
 lame:$(LAME)_$(ARCH).deb
 $(LAME): $(SPREZZ)/lame/debian/changelog
@@ -5024,6 +5032,14 @@ $(LIBSSH): $(SPREZZ)/libssh/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libssh-$(libssh_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libssh2
+libssh2:$(LIBSSH2)_$(ARCH).deb
+$(LIBSSH2): $(SPREZZ)/libssh2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libssh2-$(libssh2_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libsynthesis
 libsynthesis:$(LIBSYNTHESIS)_$(ARCH).deb
