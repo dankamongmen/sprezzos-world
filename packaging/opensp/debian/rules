@@ -1,0 +1,215 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+pkg		:= opensp
+pkg-osp		:= $(pkg)
+libosp-maj-ver	:= $(shell egrep 'SP_LIBOSP_CUR=[0-9]+' configure.in|cut -d= -f2)
+ifeq (,$(libosp-maj-ver))
+$(error "Could not get value of SP_LIBOSP_CUR")
+endif
+pkg-libosp	:= libosp$(libosp-maj-ver)
+pkg-libosp-dev	:= libosp-dev
+
+# default SGML dir
+sgmldir			:= /usr/share/sgml
+local-sgmldir		:= /usr/local/share/sgml
+
+# default SGML pathing - see /usr/share/doc/opensp/sysid.htm
+default-sgml-path	:= $(local-sgmldir):$(sgmldir)
+default-catalogs	:= /etc/sgml/catalog
+
+# build tool abstraction
+install_	:= install -o root -g root -p
+install_file	:= install -o root -g root -m 644 -p
+install_script	:= install -o root -g root -m 755 -p
+install_program	:= install -o root -g root -m 755 -p
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+  install_program += --strip
+endif
+make_directory	:= install -d -o root -g root -m 755
+compress	:= gzip -9f
+
+DEB_BUILD_ARCH  := $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+ifeq (somearch,$(DEB_BUILD_ARCH))
+  CC	:= gcc-fubar
+  CXX	:= g++-fubar
+else
+  CC	:= gcc
+  CXX	:= g++
+endif
+
+CFLAGS		:= -g -pipe
+CXXFLAGS	:= -g -pipe
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  CFLAGS += -O0
+  CXXFLAGS += -O0
+else
+  CFLAGS += -O2
+  CXXFLAGS += -O2
+endif
+export CFLAGS
+export CXXFLAGS
+
+# flags to get automake to use the above
+inst_flags	:= INSTALL='$(install_)'
+inst_flags	+= INSTALL_PROGRAM='$(install_program)'
+inst_flags	+= INSTALL_SCRIPT='$(install_script)'
+inst_flags	+= INSTALL_DATA='$(install_file)'
+
+# first version of package providing the right shlibs
+SHLIBS_PKGVER	:= 1.5.2-1
+
+# determine our version numbers
+SRC_VERSION	:= $(shell LC_ALL=C dpkg-parsechangelog | grep ^Version: | sed 's/^Version: *//')
+UPSTREAM_VERSION:= $(shell echo $(SRC_VERSION) | sed -e 's/^\(.*\)-[^-]*$$/\1/')
+# stuff for cvs retrieval
+cvs_src		:= $(pkg)-$(UPSTREAM_VERSION)
+orig_name	:= $(pkg)_$(UPSTREAM_VERSION).orig.tar.gz
+cvs_base_dir	:= ../cvs
+cvs_src_dir	:= $(cvs_base_dir)/$(cvs_src)
+cvs_module	:= sp
+cvs_tag		:= opensp_1_5_branch
+cvs_root	:= :pserver:anonymous@cvs.openjade.sourceforge.net:/cvsroot/openjade
+
+sources-update:
+	rm -fr $(cvs_base_dir)
+	mkdir $(cvs_base_dir)
+	cd $(cvs_base_dir) && CVSROOT=$(cvs_root) \
+		cvs checkout -d $(cvs_src) -r $(cvs_tag) $(cvs_module)
+	# Upstream has an ancient debian subdirectory, but we do not use it.
+	rm -fr $(cvs_src_dir)/debian
+	find $(cvs_src_dir) -name .cvsignore -print | xargs rm -f
+	find $(cvs_src_dir) -type d -name CVS -print | xargs rm -fr
+	cd $(cvs_base_dir) && tar -zcf $(orig_name) $(cvs_src)
+
+# Maintainer target; set AM_MAINTAINER_MODE in configure.in, so this needs to
+# be run when autotools input files change.
+autoinit:
+	./autoinit.sh
+
+clean-stamp:
+	rm -f config-stamp build-stamp install-stamp
+
+clean:
+	dh_testdir
+	rm -f debian/buildinfo
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean config-stamp build-stamp install-stamp debian/copyright \
+	    debian/$(pkg-libosp).shlibs debian/$(pkg-libosp-dev).substvars \
+	    debian/README.Debian debian/$(pkg-libosp).README.Debian
+	# See /usr/share/doc/autotools-dev/README.Debian.gz
+	-test -r /usr/share/misc/config.sub && \
+		cp -f /usr/share/misc/config.sub config.sub
+	-test -r /usr/share/misc/config.guess && \
+		cp -f /usr/share/misc/config.guess config.guess
+
+config-stamp:
+	dh_buildinfo generate cat
+	CC=$(CC) CXX=$(CXX) ./configure --prefix=/usr \
+	   --enable-http --enable-shared --enable-static \
+	   --enable-default-catalog=$(default-catalogs) \
+	   --enable-default-search-path=$(default-sgml-path) \
+	   --disable-dtddecl --enable-full-doc-build
+	touch $@
+
+configure: config-stamp
+
+build-stamp: configure
+	dh_testdir
+	$(MAKE) SUBDIRS=lib CXXFLAGS="$(CXXFLAGS) -D_REENTRANT"
+	$(MAKE)
+	touch $@
+
+build: build-stamp
+
+debian/copyright:	COPYING debian/copyright.Debian
+#	 to ensure we have a verbatim copy of the upstream copyright, 
+#	 cat the Debian-specific stuff to the end of the upstream file
+	cat $^ > $@
+
+debian/$(pkg-libosp-dev).substvars:
+#	 indicate our providing version of shlibs; this must be
+#	 sync'd with debian/control
+	: > $@
+	echo "opensp:Version=$(pkg-osp) (= $(SRC_VERSION))"            >> $@
+	echo "libosp:Version=$(pkg-libosp) (= $(SRC_VERSION))"         >> $@
+	echo "libosp:ShlibVersion=$(pkg-libosp) (>= $(SHLIBS_PKGVER))" >> $@
+
+debian/$(pkg-libosp).shlibs:
+#	 std shlibs file, with the first version that supplied the version
+#	 that applications should build with
+	echo "libosp      $(libosp-maj-ver) $(pkg-libosp) (>= $(SHLIBS_PKGVER))" > $@
+
+debian/README.Debian:	debian/README.Debian.in
+#	 substitute the catalog paths
+	sed -e 's|%{default-catalogs}|$(default-catalogs)|' \
+	-e 's|%{default-sgml-path}|$(default-sgml-path)|' $^ > $@
+
+debian/$(pkg-libosp).README.Debian:	debian/$(pkg-libosp).README.Debian.in
+#	 substitute the catalog paths
+	sed -e 's|%{default-catalogs}|$(default-catalogs)|' \
+	-e 's|%{default-sgml-path}|$(default-sgml-path)|' $^ > $@
+
+install-common := debian/copyright debian/$(pkg-libosp-dev).substvars \
+		  debian/$(pkg-libosp).shlibs \
+		  debian/README.Debian debian/$(pkg-libosp).README.Debian
+
+# Install into DESTDIR, then move everything later. CURDIR is set by make.
+DESTDIR = $(CURDIR)/debian/tmp
+export DESTDIR
+install-stamp:
+	dh_testdir
+	dh_testroot
+	dh_prep
+	$(MAKE) install $(inst_flags)
+	cd $(DESTDIR)/usr/share/OpenSP && \
+	( [ -f unicode.decl ] || mv unicode.sd unicode.decl ) && \
+	( sed -e 's/unicode.sd/unicode.decl/' catalog > catalog.tmp && \
+	mv -f catalog.tmp catalog ) && \
+	chmod +x gensyntax.pl
+	# Ugly fix for man page generation error
+	sed 's~\.HP.*\[\\fIsysid\\fR\.\.\.\]~[\\fIsysid\\fR...]~' $(DESTDIR)/usr/share/man/man1/onsgmls.1 > $(DESTDIR)/usr/share/man/man1/onsgmls.1.tmp && mv $(DESTDIR)/usr/share/man/man1/onsgmls.1.tmp $(DESTDIR)/usr/share/man/man1/onsgmls.1
+	touch $@
+
+install: build install-stamp $(install-common)
+
+binary-indep: install
+# There are no architecture-independent binary packages generated from this
+# source package.
+
+binary-arch: install
+	dh_testdir
+	dh_testroot
+
+	dh_installdirs
+	dh_installdocs
+	dh_installchangelogs -A ChangeLog
+	dh_installman -p opensp
+	dh_install
+
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+
+	dh_buildinfo install
+
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+TAGS:
+	etags $$(find . -path ./debian -prune -o -regex '.*\.\(cxx\|c\|h\)' -print|sed -e 's/^.\///')
+
+.PHONY: clean build install binary-indep binary-arch binary
+
+# vim: set syntax=makefile:
+# Local variables:
+# compile-command: "cd .. && fakeroot dpkg-buildpackage -uc -us"
+# End:
