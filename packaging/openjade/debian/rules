@@ -1,0 +1,188 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE=1
+
+pkg			:= openjade
+pkg-openjade		:= $(pkg)
+pkg-libostyle		:= libostyle1c2
+pkg-libostyle-dev	:= libostyle-dev
+
+# build tool abstraction
+install_	:= install -o root -g root -p
+install_file	:= install -o root -g root -m 644 -p
+install_script	:= install -o root -g root -m 755 -p
+install_program	:= install -o root -g root -m 755 -p
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+  install_program += --strip
+endif
+make_directory	:= install -d -o root -g root -m 755
+compress	:= gzip -9f
+
+CFLAGS		:= -g --pipe
+CXXFLAGS	:= -g --pipe -fpermissive
+ifeq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  CFLAGS += -O2
+  CXXFLAGS += -O2
+else
+  CFLAGS += -O0
+  CXXFLAGS += -O0
+endif
+ifneq (,$(findstring hppa,$(DEB_BUILD_ARCH)))
+  CFLAGS += -ffunction-sections
+  CXXFLAGS += -ffunction-sections
+endif
+export CFLAGS
+export CXXFLAGS
+
+# flags to get automake to use the above
+inst_flags	:= INSTALL='$(install_)'
+inst_flags	+= INSTALL_PROGRAM='$(install_program)'
+inst_flags	+= INSTALL_SCRIPT='$(install_script)'
+inst_flags	+= INSTALL_DATA='$(install_file)'
+
+# first version of package providing the right shlibs
+SHLIBS_PKGVER	:= 1.4devel1-11
+
+# # extra docs we don't want
+# DOCS_TOO_MUCH	:= ABOUT-NLS COPYING copying.txt ChangeLog
+
+# determine our version numbers
+SRC_VERSION	:= $(shell LC_ALL=C dpkg-parsechangelog | grep ^Version: | sed 's/^Version: *//')
+UPSTREAM_VERSION:= $(shell echo $(SRC_VERSION) | sed -e 's/^\(.*\)-[^-]*$$/\1/')
+# stuff for snapshot/cvs building
+root_cmd		:= sudo
+deb_build		:= dpkg-buildpackage -pgpg -r$(root_cmd) -b
+cvs_build_dir		:= $(HOME)/debian/$(pkg-openjade)
+cvs_ver_build_dir	:= $(cvs_build_dir)/$(pkg-openjade)-$(UPSTREAM_VERSION)
+cvs_pure_src_dir	:= ..
+cvs_pure_src		:= $(pkg-openjade)
+
+# cvs snapshot building
+cvs-build:	clean
+	[ -d $(cvs_pure_src_dir)/$(cvs_pure_src)/CVS ] || exit 1
+	$(root_cmd) rm -rf $(cvs_ver_build_dir)
+#	rm -f $(cvs_build_dir)/$(pkg-openjade)_$(UPSTREAM_VERSION).orig.tar.gz
+#	 don't do cvs up or make the changelog
+	install -d -m 755 $(cvs_ver_build_dir)
+#	GZIP=-9 tar czf $(cvs_build_dir)/$(pkg-openjade)_$(UPSTREAM_VERSION).orig.tar.gz -C $(cvs_pure_src_dir) --exclude CVS $(cvs_pure_src)
+	tar cf - --exclude CVS . | tar xf - -C $(cvs_ver_build_dir)
+	[ -f ChangeLog ] || cvs2cl -r -t -b
+	cp ChangeLog $(cvs_ver_build_dir)/
+	cd $(cvs_ver_build_dir) && $(deb_build)
+
+ChangeLog:
+	[ ! -e OpenJade-$(UPSTREAM_VERSION) ]
+	[ -f $(cvs_pure_src_dir)/$(pkg-openjade)_$(UPSTREAM_VERSION).orig.tar.gz ]
+	tar -xzvf $(cvs_pure_src_dir)/$(pkg-openjade)_$(UPSTREAM_VERSION).orig.tar.gz OpenJade-1.4devel/ChangeLog
+	mv OpenJade-1.4devel/ChangeLog .
+	rm -r OpenJade-1.4devel
+
+autoinit:
+	aclocal
+	autoheader
+	libtoolize --force --copy
+	automake --add-missing --force-missing --copy
+	autoconf
+
+clean:
+	dh_testdir
+	rm -f debian/buildinfo
+	[ ! -f Makefile ] || $(MAKE) distclean || true
+	rm -f po/*.gmo
+	find . -type l | xargs rm -f
+	dh_clean configure-stamp build-stamp install-stamp debian/copyright
+	# The build process doesn't handle this properly, force a rebuild
+	-rm -f style/InterpreterMessages.cxx style/InterpreterMessages.h \
+	    style/DssslAppMessages.h jade/JadeMessages.h \
+	    jade/RtfMessages.h jade/HtmlMessages.h jade/TeXMessages.h \
+	    jade/MifMessages.h
+	# See /usr/share/doc/autotools-dev/README.Debian.gz
+	-test -r /usr/share/misc/config.sub && \
+		cp -f /usr/share/misc/config.sub config.sub
+	-test -r /usr/share/misc/config.guess && \
+		cp -f /usr/share/misc/config.guess config.guess
+
+configure: configure-stamp
+configure-stamp:
+	dh_buildinfo generate cat
+	./configure --prefix=/usr --enable-http --enable-shared --enable-static
+	touch $@
+
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: configure-stamp
+	dh_testdir jade
+	$(MAKE) SUBDIRS="grove spgrove style"
+	$(MAKE)
+	touch $@
+
+
+# Upstream copyright notice only appears in README; for Debian, it must be in
+# copyright file.  COPYING is the license, which appears to be BSD derived
+# (similar wording, with "Regents" changed to "James Clark"). Create
+# debian/copyright with all the right information.
+debian/copyright: README debian/license.Debian debian/copyright.Debian
+	cat $^ > $@
+
+# Install into DESTDIR, then move everything later. CURDIR is set by make.
+DESTDIR = $(CURDIR)/debian/tmp
+export DESTDIR
+install: build install-stamp
+install-stamp:
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	$(MAKE) install $(inst_flags)
+	touch $@
+
+clean-install:
+	rm -fr debian/tmp
+	rm install-stamp
+
+binary-indep: install
+# There are no architecture-independent binary packages generated from this
+# source package.
+
+binary-arch: install debian/copyright debian/README.Debian 
+	dh_testdir
+	dh_testroot
+	rm -f debian/*.debhelper
+	dh_clean -X tmp -d
+
+	dh_installdirs
+	dh_installdocs
+	dh_installchangelogs -A ChangeLog
+
+	mkdir -p $(DESTDIR)/usr/share/man/man1 && \
+	cp -p debian/openjade.1 \
+		$(DESTDIR)/usr/share/man/man1/openjade-1.4devel.1
+	dh_installman -p openjade
+
+	cp -p $(DESTDIR)/usr/bin/openjade $(DESTDIR)/usr/bin/openjade-1.4devel
+	dh_install
+
+	dh_installcatalogs
+
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs
+	dh_shlibdeps -L $(pkg-libostyle) -l debian/$(pkg-libostyle)/usr/lib
+
+	dh_buildinfo install
+
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+.PHONY: clean build install binary-indep binary-arch binary
+
+# vim: set syntax=makefile:
+# Local variables:
+# compile-command: "cd .. && fakeroot dpkg-buildpackage -uc -us"
+# End:
