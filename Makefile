@@ -1897,6 +1897,14 @@ $(LIBCROCO): $(SPREZZ)/libcroco/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libcroco-$(libcroco_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libcryptui
+libcryptui:$(LIBCRYPTUI)_$(ARCH).deb
+$(LIBCRYPTUI): $(SPREZZ)/libcryptui/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libcryptui-$(libcryptui_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: libcrypt-ssleay-perl
 libcrypt-ssleay-perl:$(LIBCRYPTSSLEAYPERL)_$(ARCH).deb
 $(LIBCRYPTSSLEAYPERL): $(SPREZZ)/libcrypt-ssleay-perl/debian/changelog
@@ -3312,6 +3320,14 @@ $(LIBGNOMEKEYRING): $(SPREZZ)/libgnome-keyring/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgnome-keyring_$(libgnome-keyring_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gpgme1.0
+gpgme1.0:$(GPGME1.0)_$(ARCH).deb
+$(GPGME1.0): $(SPREZZ)/gpgme1.0/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpgme1.0-$(gpgme1.0_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libgpg-error
 libgpg-error:$(LIBGPGERROR)_$(ARCH).deb
