@@ -4025,6 +4025,14 @@ $(JBIG2DEC): $(SPREZZ)/jbig2dec/debian/changelog
 	ln -sf jbig2dec-$(jbig2dec_UPVER).tar.xz jbig2dec_$(jbig2dec_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: opensp
+opensp:$(OPENSP)_$(ARCH).deb
+$(OPENSP): $(SPREZZ)/opensp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf OpenSP-$(opensp_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: jadetex
 jadetex:$(JADETEX)_$(ARCH).deb
 $(JADETEX): $(SPREZZ)/jadetex/debian/changelog
