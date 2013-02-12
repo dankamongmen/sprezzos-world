@@ -2092,7 +2092,7 @@ $(HASKELLSMTPCLIENT): $(SPREZZ)/haskell-smtpclient/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf smtpclient-$(haskell-smtpclient_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf SMTPClient-$(haskell-smtpclient_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-split
 haskell-split:$(HASKELLSPLIT)_$(ARCH).deb
@@ -2228,7 +2228,7 @@ $(HASKELLUNIXUTILS): $(SPREZZ)/haskell-unixutils/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf unixutils-$(haskell-unixutils_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Unixutils-$(haskell-unixutils_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-url
 haskell-url:$(HASKELLURL)_$(ARCH).deb
@@ -3300,7 +3300,7 @@ $(HASKELLMATHS): $(SPREZZ)/haskell-maths/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf maths-$(haskell-maths_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf foo-$(haskell-maths_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-mbox
 haskell-mbox:$(HASKELLMBOX)_$(ARCH).deb
@@ -3628,7 +3628,7 @@ $(HASKELLPUREMD5): $(SPREZZ)/haskell-puremd5/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf puremd5-$(haskell-puremd5_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf pureMD5-$(haskell-puremd5_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-pwstore-fast
 haskell-pwstore-fast:$(HASKELLPWSTOREFAST)_$(ARCH).deb
