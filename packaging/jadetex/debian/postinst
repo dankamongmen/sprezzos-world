@@ -1,0 +1,102 @@
+#!/bin/bash
+# jadetex postinst
+#   jobs: remove old cruft we used to make
+
+set -e
+
+# clear environment
+TETEXDIR=
+TEXMF=
+TEXINPUTS=
+
+PACKAGE=jadetex
+
+umask 022
+
+# emit a warning, generic routine
+warn ( ) {
+   echo $* 1>&2
+   if [ -f $MYTMPFILE ]; then
+       echo $* >> $MYTMPFILE
+   fi
+}
+
+dpkg_md5sum(){
+  dpkg-query -W -f='${Conffiles}' "$PACKAGE" \
+    | grep -F " $1 " | cut -d ' ' -f 3
+}
+
+config_rename ()
+{
+    oldfile=$1
+    oldmd5sum=$(dpkg_md5sum $oldfile)
+
+    if ! [ -r $oldfile ] ; then
+        return 0
+    fi
+    oldloc=$(dirname $oldfile)
+    newmd5sum=$(md5sum $oldfile |  cut -d ' ' -f 1)
+    if [ "$newmd5sum" = "$oldmd5sum" ] ; then
+        echo "Removing obsolete, unchanged conffile $oldfile"
+        rm $oldfile
+    else
+        echo "Conffile $oldfile was changed, renaming it to $oldfile.dpkg-save"
+	echo "Please see the TeX Policy on where to put the file."
+        mv $oldfile $oldfile.dpkg-save
+    fi
+    test -d $oldloc && rmdir --ignore-fail-on-non-empty $oldloc || true
+}
+
+remove_conffile_commit () {
+  # syntax: remove_conffile_commit filename
+  #
+  # Complete the removal of a conffile "filename" that has become obsolete.
+  #
+  # Call this function from a postinst script after having used
+  # remove_conffile_prepare() in the preinst.
+
+  # validate arguments
+  if [ $# -ne 1 ]; then
+    echo "remove_conffile_commit() called with wrong number of" \
+                "arguments; expected 1, got $#"
+    exit 2
+  fi
+
+  conffile="$1"
+
+  # if the temporary file created by remove_conffile_prepare() exists, remove it
+  if [ -e "$conffile.${PACKAGE}-tmp" ]; then
+    echo "committing removal of obsolete conffile $conffile"
+    rm "$conffile.${PACKAGE}-tmp"
+  fi
+}
+
+if [ "$1" = "configure" ] || [ "$1" = "reconfigure" ]; then
+    # old crufty stuff we used to build in postinst - I wonder whether we
+    # should actually do this in preinst?
+	remove_conffile_commit /etc/texmf/fmt.d/40jadetex.cnf
+
+    if [ -L /usr/lib/texmf/tex/jadetex/config ]; then
+	warn "removing old JadeTeX config symlink"
+	rm /usr/lib/texmf/tex/jadetex/config
+    fi
+    if [ -d /usr/lib/texmf/tex/jadetex ]; then
+	rmdir /usr/lib/texmf/tex/jadetex || \
+	  warn "unused, obsolete dir /usr/lib/texmf/tex/jadetex, remove it yourself if you care"
+    fi
+    if [ -f /etc/texmf/texmf.d/96JadeTeX ]; then
+	warn "removing old texmf.d config snippet"
+	rm /etc/texmf/texmf.d/96JadeTeX
+    fi
+    # rename the files in /etc/texmf/jadetex/ or remove them.
+    config_rename /etc/texmf/jadetex/jadetex.ini 
+    config_rename /etc/texmf/jadetex/pdfjadetex.ini 
+fi
+
+# call update-texmf with all postinst arguments
+update-texmf
+
+#DEBHELPER#
+
+exit 0
+
