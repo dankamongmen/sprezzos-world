@@ -9092,3 +9092,35 @@ update:
 clobber:
 	rm -rf -- $(FETCHED)
 
+.PHONY: tcl8.5
+tcl8.5:$(TCL8.5)_$(ARCH).deb
+$(TCL8.5): $(SPREZZ)/tcl8.5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tcl$(tcl8.5_UPVER)-src.tar.gz $(TARARGS) $@
+
+.PHONY: shared-mime-info
+shared-mime-info:$(SHAREDMIMEINFO)_$(ARCH).deb
+$(SHAREDMIMEINFO): $(SPREZZ)/shared-mime-info/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf shared-mime-info-$(shared-mime-info_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libassuan
+libassuan:$(LIBASSUAN)_$(ARCH).deb
+$(LIBASSUAN): $(SPREZZ)/libassuan/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libassuan-$(libassuan_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: autotools-dev
+autotools-dev:$(AUTOTOOLSDEV)_$(ARCH).deb
+$(AUTOTOOLSDEV): $(SPREZZ)/autotools-dev/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf autotools-dev-$(autotools-dev_UPVER).tar.gz $(TARARGS) $@
+
