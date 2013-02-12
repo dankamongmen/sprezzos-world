@@ -26,6 +26,7 @@ include worlds/lxde.mk
 include worlds/xfce.mk
 include worlds/mint.mk
 include worlds/gnome.mk
+include worlds/xapps.mk
 include worlds/debian.mk
 include worlds/ubuntu.mk
 include worlds/kernels.mk
@@ -2193,6 +2194,14 @@ $(COLORDGTK): $(SPREZZ)/colord-gtk/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf colord-gtk-$(colord-gtk_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: ccsm
+ccsm:$(CCSM)_$(ARCH).deb
+$(CCSM): $(SPREZZ)/ccsm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf $(CCSM).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: compizconfig-python
 compizconfig-python:$(COMPIZCONFIGPYTHON)_$(ARCH).deb
@@ -8725,6 +8734,14 @@ $(XZUTILS): $(SPREZZ)/xz-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xz-utils_$(xz-utils_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cclib
+cclib:$(CCLIB)_$(ARCH).deb
+$(CCLIB): $(SPREZZ)/cclib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cclib-$(cclib_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libunique3
 libunique3:$(LIBUNIQUE3)_$(ARCH).deb
 $(LIBUNIQUE3): $(SPREZZ)/libunique3/debian/changelog
@@ -9026,3 +9043,4 @@ update:
 
 clobber:
 	rm -rf -- $(FETCHED)
+
