@@ -9106,7 +9106,7 @@ $(SHAREDMIMEINFO): $(SPREZZ)/shared-mime-info/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf shared-mime-info-$(shared-mime-info_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf shared-mime-info-$(shared-mime-info_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libassuan
 libassuan:$(LIBASSUAN)_$(ARCH).deb
@@ -9116,11 +9116,27 @@ $(LIBASSUAN): $(SPREZZ)/libassuan/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libassuan-$(libassuan_UPVER).tar.bz2 $(TARARGS) $@
 
-.PHONY: autotools-dev
-autotools-dev:$(AUTOTOOLSDEV)_$(ARCH).deb
-$(AUTOTOOLSDEV): $(SPREZZ)/autotools-dev/debian/changelog
+.PHONY: libyaml
+libyaml:$(LIBYAML)_$(ARCH).deb
+$(LIBYAML): $(SPREZZ)/libyaml/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf autotools-dev-$(autotools-dev_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf yaml-$(libyaml_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: lua5.1
+lua5.1:$(LUA5.1)_$(ARCH).deb
+$(LUA5.1): $(SPREZZ)/lua5.1/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lua-$(lua5.1_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libthai
+libthai:$(LIBTHAI)_$(ARCH).deb
+$(LIBTHAI): $(SPREZZ)/libthai/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libthai-$(libthai_UPVER).tar.gz $(TARARGS) $@
 
