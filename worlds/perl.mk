@@ -405,3 +405,19 @@ $(LIBSCALARNUMBERPERL): $(SPREZZ)/libscalar-number-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Scalar-Number-$(libscalar-number-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgd-text-perl
+libgd-text-perl:$(LIBGDTEXTPERL)_$(ARCH).deb
+$(LIBGDTEXTPERL): $(SPREZZ)/libgd-text-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf GDTextUtil-$(libgd-text-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libgd-graph-perl
+libgd-graph-perl:$(LIBGDGRAPHPERL)_$(ARCH).deb
+$(LIBGDGRAPHPERL): $(SPREZZ)/libgd-graph-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf GDGraph-$(libgd-graph-perl_UPVER).tar.gz $(TARARGS) $@
+
