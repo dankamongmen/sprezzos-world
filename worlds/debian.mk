@@ -48,6 +48,16 @@ $(APTLISTCHANGES): $(SPREZZ)/apt-listchanges/debian/changelog
 	tar cJvf $(APTLISTCHANGES).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: autotools-dev
+autotools-dev:$(AUTOTOOLSDEV)_$(ARCH).deb
+$(AUTOTOOLSDEV): $(SPREZZ)/autotools-dev/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf autotools-dev-$(autotools-dev_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf autotools-dev-$(autotools-dev_UPVER).tar.xz $(AUTOTOOLSDEV).orig.tar.xz
+	cp -r $(<D) $@
+
 .PHONY: base-files
 base-files:$(BASEFILES)_$(ARCH).deb
 $(BASEFILES): $(SPREZZ)/base-files/debian/changelog
