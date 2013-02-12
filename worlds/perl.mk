@@ -397,3 +397,11 @@ $(LIBINTLPERL): $(SPREZZ)/libintl-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libintl-perl-$(libintl-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libscalar-number-perl
+libscalar-number-perl:$(LIBSCALARNUMBERPERL)_$(ARCH).deb
+$(LIBSCALARNUMBERPERL): $(SPREZZ)/libscalar-number-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Scalar-Number-$(libscalar-number-perl_UPVER).tar.gz $(TARARGS) $@
+
