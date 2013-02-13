@@ -3372,7 +3372,7 @@ $(HASKELLMONADRANDOM): $(SPREZZ)/haskell-monadrandom/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf monadrandom-$(haskell-monadrandom_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf MonadRandom-$(haskell-monadrandom_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-mtlparse
 haskell-mtlparse:$(HASKELLMTLPARSE)_$(ARCH).deb
@@ -4349,4 +4349,12 @@ $(HAPPY): $(SPREZZ)/happy/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf happy-$(happy_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-hspec-discover
+haskell-hspec-discover:$(HASKELLHSPECDISCOVER)_$(ARCH).deb
+$(HASKELLHSPECDISCOVER): $(SPREZZ)/haskell-hspec-discover/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hspec-discover-$(haskell-hspec-discover_UPVER).tar.gz $(TARARGS) $@
 
