@@ -1,0 +1,168 @@
+#!/usr/bin/make -f
+#	Debian rules file for gzip, requires the debhelper package.
+#	Crafted by Bdale Garbee, bdale@gag.com, 5 November 2000
+#	Cleanup by Thorsten Glaser, tg@debian.org, 20 June 2012
+#	based on the rules file of the jupp package
+
+# Comment this to turn off debhelper verbose mode.
+export DH_VERBOSE=1
+
+shellescape='$(subst ','\'',$(1))'
+shellexport=$(1)=$(call shellescape,${$(1)})
+
+DEB_BUILD_ARCH=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEB_HOST_ARCH=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE=$(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+# Automatic ${CC} selection for cross-compiles
+
+# is ${CC} defined anywhere (other than implicit rules?)
+ifneq (,$(findstring $(origin CC),default undefined))
+# no - then default to gcc (or cross-gcc)
+ifneq (${DEB_BUILD_ARCH},${DEB_HOST_ARCH})
+CC=			${DEB_HOST_GNU_TYPE}-gcc
+else
+CC=			gcc
+endif
+endif
+
+EXTRA_CFLAGS=		-Wall
+EXTRA_CPPFLAGS=
+
+ifeq (${DEB_HOST_ARCH},amd64)
+EXTRA_CPPFLAGS+=	-DUNALIGNED_OK
+endif
+
+# Automatic dpkg-buildflags selection, backport-friendly
+
+ifneq (,$(wildcard /usr/share/dpkg/buildflags.mk))
+# dpkg-dev (>= 1.16.1~)
+DEB_CFLAGS_MAINT_APPEND=${EXTRA_CFLAGS}
+DEB_CPPFLAGS_MAINT_APPEND=${EXTRA_CPPFLAGS}
+# maybe turn this on later
+#DEB_BUILD_MAINT_OPTIONS=hardening=+all
+include /usr/share/dpkg/buildflags.mk
+else
+# old-fashioned way to determine build flags
+CFLAGS=			-O$(if $(findstring noopt,${DEB_BUILD_OPTIONS}),0,2) -g
+CFLAGS+=		${EXTRA_CFLAGS}
+LDFLAGS+=		${EXTRA_LDFLAGS}
+endif
+
+# maybe turn this on later
+#ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+#NUMJOBS=		$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+#MAKEFLAGS+=		-j${NUMJOBS}
+#endif
+
+# whitespace-safe path to source directory
+_topdir=$(call shellescape,$(shell pwd))
+
+CONFIGURE_ARGS=		--prefix=/usr \
+			--bindir=/bin \
+			--infodir=${_topdir}/debian/gzip/usr/share/info \
+			--mandir=${_topdir}/debian/gzip/usr/share/man
+
+ifneq (${DEB_BUILD_ARCH},${DEB_HOST_ARCH})
+CONFIGURE_ARGS+=	--host=${DEB_HOST_GNU_TYPE}
+endif
+
+reconf-stamp:
+	cp -f /usr/share/misc/config.sub build-aux/config.sub
+	cp -f /usr/share/misc/config.guess build-aux/config.guess
+	autoreconf -v
+	:>$@
+
+configure: configure-stamp
+configure-stamp: reconf-stamp
+	dh_testdir
+	mkdir -p builddir
+	cd builddir && env \
+	    $(foreach i,CC CFLAGS CPPFLAGS LDFLAGS,$(call shellexport,$i)) \
+	    ../configure ${CONFIGURE_ARGS}
+	:>$@
+
+configure-indep: configure-indep-stamp
+configure-indep-stamp: reconf-stamp
+	dh_testdir
+	mkdir -p builddir-indep
+	cd builddir-indep && ../configure --host=i686-w64-mingw32
+	:>$@
+
+build: build-stamp build-indep-stamp
+
+build-arch: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	${MAKE} -C builddir
+ifeq (,$(filter nocheck,${DEB_BUILD_OPTIONS}))
+ifeq (${DEB_BUILD_ARCH},${DEB_HOST_ARCH})
+	${MAKE} -C builddir check
+endif
+endif
+	:>$@
+
+build-indep: build-indep-stamp
+build-indep-stamp: configure-indep-stamp
+	dh_testdir
+	${MAKE} -C builddir-indep
+	:>$@
+
+clean:
+	dh_testdir
+	dh_testroot
+	-rm -f build-stamp build-indep-stamp configure-stamp configure-indep-stamp reconf-stamp
+	-rm -rf builddir builddir-indep
+	dh_clean
+
+binary: binary-arch binary-indep
+
+binary-indep: build-indep-stamp
+	dh_testdir
+	dh_testroot
+	if test -x "$$(which dh_prep)"; then dh_prep; else dh_clean -k; fi
+	dh_installdirs
+	i686-w64-mingw32-strip builddir-indep/gzip.exe
+	install -m 0755 builddir-indep/gzip.exe \
+	    debian/gzip-win32/usr/share/win32/
+	dh_installdocs -i README* TODO
+	dh_installchangelogs -i ChangeLog
+	dh_lintian -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build-stamp
+	dh_testdir
+	dh_testroot
+	if test -x "$$(which dh_prep)"; then dh_prep; else dh_clean -k; fi
+	dh_installdirs
+	${MAKE} -C builddir install \
+	    prefix=${_topdir}/debian/gzip/usr \
+	    bindir=${_topdir}/debian/gzip/bin
+	dh_testdir -s
+	dh_testroot -s
+	dh_installdocs -s README* TODO
+	dh_installman *.1
+	dh_installinfo -s doc/gzip.info
+	dh_installchangelogs -s ChangeLog
+	dh_link -s
+	dh_lintian -s
+	dh_strip -s
+	dh_compress -s
+	ln -s gunzip.1.gz debian/gzip/usr/share/man/man1/uncompress.1.gz
+	ln -s zgrep.1.gz debian/gzip/usr/share/man/man1/zegrep.1.gz
+	ln -s zgrep.1.gz debian/gzip/usr/share/man/man1/zfgrep.1.gz
+	dh_fixperms -s
+	dh_makeshlibs -s
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+.PHONY: binary binary-arch binary-indep build build-arch build-indep clean
+.PHONY: configure configure-indep

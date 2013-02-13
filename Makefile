@@ -9156,3 +9156,11 @@ $(CELT): $(SPREZZ)/celt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf celt-$(celt_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gzip
+gzip:$(GZIP)_$(ARCH).deb
+$(GZIP): $(SPREZZ)/gzip/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gzip-$(gzip_UPVER).tar.gz $(TARARGS) $@
+
