@@ -9140,3 +9140,11 @@ $(LIBTHAI): $(SPREZZ)/libthai/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libthai-$(libthai_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: openntpd
+openntpd:$(OPENNTPD)_$(ARCH).deb
+$(OPENNTPD): $(SPREZZ)/openntpd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openntpd-$(openntpd_UPVER).tar.gz $(TARARGS) $@
+
