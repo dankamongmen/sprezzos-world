@@ -1278,14 +1278,6 @@ $(HASKELLCONVERTIBLE): $(SPREZZ)/haskell-convertible/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf convertible-$(haskell-convertible_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: haskell-cpphs
-haskell-cpphs:$(HASKELLCPPHS)_$(ARCH).deb
-$(HASKELLCPPHS): $(SPREZZ)/haskell-cpphs/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf cpphs-$(haskell-cpphs_UPVER).tar.gz $(TARARGS) $@
-
 .PHONY: haskell-csv
 haskell-csv:$(HASKELLCSV)_$(ARCH).deb
 $(HASKELLCSV): $(SPREZZ)/haskell-csv/debian/changelog
@@ -4341,4 +4333,20 @@ $(HASKELLHXTUNICODE): $(SPREZZ)/haskell-hxt-unicode/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hxt-unicode-$(haskell-hxt-unicode_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-byteorder
+haskell-byteorder:$(HASKELLBYTEORDER)_$(ARCH).deb
+$(HASKELLBYTEORDER): $(SPREZZ)/haskell-byteorder/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf byteorder-$(haskell-byteorder_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: happy
+happy:$(HAPPY)_$(ARCH).deb
+$(HAPPY): $(SPREZZ)/happy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf happy-$(happy_UPVER).tar.gz $(TARARGS) $@
 
