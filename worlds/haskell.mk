@@ -1780,7 +1780,7 @@ $(HASKELLHSTRINGTEMPLATE): $(SPREZZ)/haskell-hstringtemplate/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hstringtemplate-$(haskell-hstringtemplate_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf HStringTemplate-$(haskell-hstringtemplate_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hsx
 haskell-hsx:$(HASKELLHSX)_$(ARCH).deb
@@ -2964,7 +2964,7 @@ $(HASKELLHIPMUNK): $(SPREZZ)/haskell-hipmunk/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hipmunk-$(haskell-hipmunk_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Hipmunk-$(haskell-hipmunk_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hjsmin
 haskell-hjsmin:$(HASKELLHJSMIN)_$(ARCH).deb
@@ -4357,4 +4357,12 @@ $(HASKELLHSPECDISCOVER): $(SPREZZ)/haskell-hspec-discover/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hspec-discover-$(haskell-hspec-discover_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-cabal-install
+haskell-cabal-install:$(HASKELLCABALINSTALL)_$(ARCH).deb
+$(HASKELLCABALINSTALL): $(SPREZZ)/haskell-cabal-install/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cabal-install-$(haskell-cabal-install_UPVER).tar.gz $(TARARGS) $@
 
