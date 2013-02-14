@@ -1,0 +1,147 @@
+#!/usr/bin/perl
+#
+# Author:  Petter Reinholdtsen <pere@hungry.com>
+# Date:    2006-08-12
+# License: GNU GPL
+#
+# Read pciutils pci.ids and write it out as discover XML
+#
+# pciutils (card names) (Latest on http://pciids.sourceforge.net/pci.ids.gz)
+#  /usr/share/misc/pci.ids
+
+use strict;
+use warnings;
+
+use Getopt::Std;
+
+use vars qw($bus %pci $debug);
+
+$debug = 1;
+
+sub load_pciutils_names {
+    my ($filename) = @_;
+
+    my $type; # card or device
+
+    my $tmp;  # Store the current superclass/vendor
+    my $lastid;
+
+    open(PCIFILE, "<$filename") || die "Unable to read $filename";
+    while (<PCIFILE>) {
+        chomp;
+
+        last if ('usb' eq $bus && m/List of known device classes/);
+
+        # Remove comments
+        s/^\#.+$//;
+
+        # Skip empty lines
+        next if /^\s*$/;
+
+        if (m/^(\S{2,})\s+(.+)$/) {
+            # Vendor info
+            my ($id, $desc) = ($1, $2);
+            $type = 'card';
+
+            if ( ! defined $pci{'vendor'}{$id}{'desc'} && defined $desc) {
+                $pci{'vendor'}{$id}{'desc'} = $desc;
+            }
+
+            $tmp = $id;
+        } elsif (m/^(\S) (..)\s+(.+)$/) {
+            # Device classes
+            my ($foo, $bar, $desc) = ($1, $2, $3);
+            $type = 'device';
+
+            my $id = "$foo|$bar";
+
+            $pci{'class'}{$id} = $desc;
+
+            $tmp = $id;
+        } elsif (m/^\t(\S+)\s+(.+)$/) {
+            # Card info - using the vendor ID or
+            # Device subclass using the device class id
+            my ($id, $desc) = ($1, $2);
+
+            # Add the vendor id
+            $id = "$tmp$id";
+	    $lastid = $id;
+
+            if ("card" eq $type) {
+                $pci{'vendor'}{$tmp}{'cards'}{"$id"} = $desc;
+                
+                if ( ! defined $pci{'card'}{"$id"}{'desc'} && defined $desc) {
+                    $pci{'card'}{"$id"}{'desc'}   = $desc;
+                }
+            } elsif ("device" eq $type) {
+            } else {
+                die "Unknown type";
+            }
+        } elsif (m/^\t\t(\S+)\s(\S+)\s+(.+)$/) { # Handle subtypes
+	    if ("card" eq $type) {
+#		print "Subtype: $1 $2 = $3\n";
+		$pci{'card'}{"$lastid"}{'subtype'}{"$1$2"} = $3;
+	    }
+        }
+    }
+    close(PCIFILE);
+}
+
+sub to_xml_entity {
+    my $string = shift;
+    return unless defined $string;
+    $string =~ s/&/&amp;/g;
+    $string =~ s/</&lt;/g;
+    $string =~ s/>/&gt;/g;
+    $string =~ s/'/&apos;/g;
+    return $string;
+}
+
+sub save_xml_pci {
+    my ($vendorfile, $devicefile) = @_;
+    open(V, ">$vendorfile") || die $!;
+    print V <<EOF;
+<?xml version='1.0' encoding='UTF-8'?>
+<vendor_list bus='$bus'>
+EOF
+    for my $vendorid (sort keys %{$pci{'vendor'}}) {
+	my $name = to_xml_entity($pci{'vendor'}{$vendorid}{'desc'});
+	print V "  <vendor id='$vendorid' name='$name'/>\n";
+    }
+    print V <<EOF;
+</vendor_list>
+EOF
+    close(V);
+
+    open(V, ">$devicefile") || die $!;
+    print V <<EOF;
+<?xml version='1.0' encoding='UTF-8'?>
+<device_list bus='$bus'>
+EOF
+    for my $id (sort keys %{$pci{'card'}}) {
+        my ($vendorid, $modelid) = $id =~ m/^(....)(....)/;
+        my $name = to_xml_entity($pci{'card'}{"$id"}{'desc'});
+        print V "  <device vendor='$vendorid' model='$modelid' model_name='$name'/>\n";
+	if (exists $pci{'card'}{"$id"}{'subtype'}) {
+	    for my $subid (sort keys %{$pci{'card'}{"$id"}{'subtype'}}) {
+		my ($subvendorid, $submodelid) = $subid =~ m/^(....)(....)/;
+		my $subname =
+		    to_xml_entity($pci{'card'}{"$id"}{'subtype'}{$subid});
+		print V "  <device vendor='$vendorid' model='$modelid' subvendor='$subvendorid' subdevice='$submodelid' model_name='$name' subsystem_name='$subname'/>\n";
+	    }
+	}
+
+    }
+    print V <<EOF;
+</device_list>
+EOF
+}
+
+my %opts;
+getopts("b:i:v:d:", \%opts);
+
+$bus = $opts{b} || 'pci';
+
+load_pciutils_names($opts{i} || "pci.ids");
+
+save_xml_pci($opts{v} || "new-pci-vendor.xml", $opts{d} || "new-pci-device.xml");

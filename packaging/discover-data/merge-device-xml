@@ -1,0 +1,87 @@
+#!/usr/bin/perl
+#
+# Author:  Petter Reinholdtsen
+# Date:    2006-08-12
+# License: GNU General Public License
+#
+# Merge discover device XML files together, overriding earlier files
+# with information from the latter files in a list of files.
+#
+# Currently only able to update the model and submodel names.
+
+use warnings;
+use strict;
+
+use XML::LibXML;
+
+my $devices; # the current authorative data set
+
+my $parser = XML::LibXML->new();
+
+sub load_file {
+    my $filename = shift;
+    unless (defined $devices) {
+	$devices = $parser->parse_file($filename);
+	return;
+    }
+    my $names = $parser->parse_file($filename);
+
+    my $droot = $devices->getDocumentElement;
+    my $nroot = $names->getDocumentElement;
+
+    $devices->indexElements();
+    $names->indexElements();
+
+    foreach my $nnode ($nroot->findnodes('/device_list/device')) {
+
+	my ($vendor,$model, $subvendor, $subdevice, $name, $subname);
+	for my $attr ($nnode->attributes()) {
+	    $vendor = $attr->value if ("vendor" eq $attr->name);
+	    $model = $attr->value if ("model" eq $attr->name);
+	    $subvendor = $attr->value if ("subvendor" eq $attr->name);
+	    $subdevice = $attr->value if ("subdevice" eq $attr->name);
+	    $name = $attr->value if ("model_name" eq $attr->name);
+	    $subname = $attr->value if ("submodel_name" eq $attr->name);
+	}
+	my $searchstr;
+	if ($subvendor) {
+	    $searchstr =
+		"/device_list/device[\@vendor='$vendor' and \@model='$model' and \@subvendor='$subvendor' and \@subdevice='$subdevice']";
+	} else {
+	    $searchstr =
+		# Hm, how can we specify those without subvendor and subdevice?
+		"/device_list/device[\@vendor='$vendor' and \@model='$model' and not(\@subvendor)]";
+	}
+#	print STDERR "Looking for vendor=$vendor model=$model '$searchstr'\n";
+
+	my $found = 0;
+	my @nodes = $droot->findnodes($searchstr);
+	foreach my $node (@nodes) {
+	    for my $attr ($node->attributes()) {
+		if (defined $subvendor) {
+		    if ("submodel_name" eq $attr->name &&
+			$subname ne $attr->value) {
+			$attr->setValue($subname);
+			print STDERR "Updating submodel_name for $vendor:$model to '$subname'\n";
+		    }
+		} else {
+		    if ("model_name" eq $attr->name &&
+			$name ne $attr->value) {
+			$attr->setValue($name);
+			print STDERR "Updating model_name for $vendor:$model to '$name'\n";
+		    }
+		}
+	    }
+	    $found = 1;
+#            print STDERR $node->toString,"\n";
+	}
+	unless ($found) { # Missing node, add it to devices
+	    print STDERR "Adding new node ",$nnode->toString,"\n";
+	    $droot->addChild($nnode);
+	}
+    }
+}
+
+load_file($ARGV[0] || 'pci-device.xml');
+load_file($ARGV[1] || 'pci-device-pciids.xml');
+$devices->toFile("-");

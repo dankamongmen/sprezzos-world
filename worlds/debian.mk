@@ -401,3 +401,13 @@ $(RESOLVCONF): $(SPREZZ)/resolvconf/debian/changelog
 	ln -sf resolvconf-$(resolvconf_UPVER).tar.xz $(RESOLVCONF).orig.tar.xz
 	cp -r $(<D) $@
 
+.PHONY: discover-data
+discover-data:$(DISCOVERDATA)_$(ARCH).deb
+$(DISCOVERDATA): $(SPREZZ)/discover-data/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf discover-data-$(discover-data_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf discover-data-$(discover-data_UPVER).tar.xz $(DISCOVERDATA).orig.tar.xz
+	cp -r $(<D) $@
+
