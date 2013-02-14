@@ -9164,3 +9164,19 @@ $(GZIP): $(SPREZZ)/gzip/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gzip-$(gzip_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ispell
+ispell:$(ISPELL)_$(ARCH).deb
+$(ISPELL): $(SPREZZ)/ispell/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ispell-$(ispell_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: discover
+discover:$(DISCOVER)_$(ARCH).deb
+$(DISCOVER): $(SPREZZ)/discover/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf discover-$(discover_UPVER).tar.gz $(TARARGS) $@
+
