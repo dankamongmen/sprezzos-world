@@ -9180,3 +9180,11 @@ $(DISCOVER): $(SPREZZ)/discover/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf discover-$(discover_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: qca2
+qca2:$(QCA2)_$(ARCH).deb
+$(QCA2): $(SPREZZ)/qca2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qca2-$(qca2_UPVER).tar.gz $(TARARGS) $@
+
