@@ -9196,3 +9196,11 @@ $(LIBWLOCATE): $(SPREZZ)/libwlocate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libwlocate-$(libwlocate_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: shapelib
+shapelib:$(SHAPELIB)_$(ARCH).deb
+$(SHAPELIB): $(SPREZZ)/shapelib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf shapelib-$(shapelib_UPVER).tar.gz $(TARARGS) $@
+

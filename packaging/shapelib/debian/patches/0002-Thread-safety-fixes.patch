@@ -1,0 +1,181 @@
+From: M Joonas Pihlaja <jpihlaja@cc.helsinki.fi>
+Date: Fri, 8 Apr 2005 10:51:19 +0200
+Subject: [PATCH] Thread safety fixes
+
+---
+ dbfopen.c  |   60 +++++++++++++++++++++++++++++++++---------------------------
+ shapefil.h |    5 +++++
+ 2 files changed, 38 insertions(+), 27 deletions(-)
+
+diff --git a/dbfopen.c b/dbfopen.c
+index 43b25ac..178ae18 100644
+--- a/dbfopen.c
++++ b/dbfopen.c
+@@ -197,8 +197,6 @@ static char rcsid[] =
+ #  define TRUE		1
+ #endif
+ 
+-static int	nStringFieldLen = 0;
+-static char * pszStringField = NULL;
+ 
+ /************************************************************************/
+ /*                             SfRealloc()                              */
+@@ -431,6 +429,12 @@ DBFOpen( const char * pszFilename, const char * pszAccess )
+ 	      psDBF->panFieldOffset[iField-1] + psDBF->panFieldSize[iField-1];
+     }
+ 
++/* -------------------------------------------------------------------- */
++/*  Initialize our temporary input fields.                              */
++/* -------------------------------------------------------------------- */
++    psDBF->nStringFieldLen = 0;
++    psDBF->pszStringField = NULL;
++
+     return( psDBF );
+ }
+ 
+@@ -489,14 +493,12 @@ DBFClose(DBFHandle psDBF)
+     free( psDBF->pszHeader );
+     free( psDBF->pszCurrentRecord );
+ 
+-    free( psDBF );
+-
+-    if( pszStringField != NULL )
++    if( psDBF->pszStringField != NULL )
+     {
+-        free( pszStringField );
+-        pszStringField = NULL;
+-        nStringFieldLen = 0;
++        free( psDBF->pszStringField );
+     }
++
++    free( psDBF );
+ }
+ 
+ /************************************************************************/
+@@ -571,6 +573,12 @@ DBFCreate( const char * pszFilename )
+ 
+     psDBF->bNoHeader = TRUE;
+ 
++/* --------------------------------------------------------------------*/
++/*  Initialize our temporary input fields.*/
++/* --------------------------------------------------------------------*/
++    psDBF->nStringFieldLen = 0;
++    psDBF->pszStringField = NULL;
++
+     return( psDBF );
+ }
+ 
+@@ -691,7 +699,6 @@ static void *DBFReadAttribute(DBFHandle psDBF, int hEntity, int iField,
+     unsigned char	*pabyRec;
+     void	*pReturnField = NULL;
+ 
+-    static double dDoubleField;
+ 
+ /* -------------------------------------------------------------------- */
+ /*      Verify selection.                                               */
+@@ -734,30 +741,31 @@ static void *DBFReadAttribute(DBFHandle psDBF, int hEntity, int iField,
+ /* -------------------------------------------------------------------- */
+ /*	Ensure our field buffer is large enough to hold this buffer.	*/
+ /* -------------------------------------------------------------------- */
+-    if( psDBF->panFieldSize[iField]+1 > nStringFieldLen )
++    if( psDBF->panFieldSize[iField]+1 > psDBF->nStringFieldLen )
+     {
+-	nStringFieldLen = psDBF->panFieldSize[iField]*2 + 10;
+-	pszStringField = (char *) SfRealloc(pszStringField,nStringFieldLen);
++	psDBF->nStringFieldLen = psDBF->panFieldSize[iField]*2 + 10;
++	psDBF->pszStringField = (char *) SfRealloc(psDBF->pszStringField,
++						   psDBF->nStringFieldLen);
+     }
+ 
+ /* -------------------------------------------------------------------- */
+ /*	Extract the requested field.					*/
+ /* -------------------------------------------------------------------- */
+-    strncpy( pszStringField, 
++    strncpy( psDBF->pszStringField, 
+ 	     ((const char *) pabyRec) + psDBF->panFieldOffset[iField],
+ 	     psDBF->panFieldSize[iField] );
+-    pszStringField[psDBF->panFieldSize[iField]] = '\0';
++    psDBF->pszStringField[psDBF->panFieldSize[iField]] = '\0';
+ 
+-    pReturnField = pszStringField;
++    pReturnField = psDBF->pszStringField;
+ 
+ /* -------------------------------------------------------------------- */
+ /*      Decode the field.                                               */
+ /* -------------------------------------------------------------------- */
+     if( chReqType == 'N' )
+     {
+-        dDoubleField = atof(pszStringField);
++	psDBF->dDoubleField = atof(psDBF->pszStringField);
+ 
+-	pReturnField = &dDoubleField;
++	pReturnField = &psDBF->dDoubleField;
+     }
+ 
+ /* -------------------------------------------------------------------- */
+@@ -768,7 +776,7 @@ static void *DBFReadAttribute(DBFHandle psDBF, int hEntity, int iField,
+     {
+         char	*pchSrc, *pchDst;
+ 
+-        pchDst = pchSrc = pszStringField;
++        pchDst = pchSrc = psDBF->pszStringField;
+         while( *pchSrc == ' ' )
+             pchSrc++;
+ 
+@@ -776,7 +784,7 @@ static void *DBFReadAttribute(DBFHandle psDBF, int hEntity, int iField,
+             *(pchDst++) = *(pchSrc++);
+         *pchDst = '\0';
+ 
+-        while( pchDst != pszStringField && *(--pchDst) == ' ' )
++        while( pchDst != psDBF->pszStringField && *(--pchDst) == ' ' )
+             *pchDst = '\0';
+     }
+ #endif
+@@ -1351,9 +1359,6 @@ DBFReadTuple(DBFHandle psDBF, int hEntity )
+ {
+     int	       	nRecordOffset;
+     unsigned char	*pabyRec;
+-    static char	*pReturnTuple = NULL;
+-
+-    static int	nTupleLen = 0;
+ 
+ /* -------------------------------------------------------------------- */
+ /*	Have we read the record?					*/
+@@ -1375,14 +1380,15 @@ DBFReadTuple(DBFHandle psDBF, int hEntity )
+ 
+     pabyRec = (unsigned char *) psDBF->pszCurrentRecord;
+ 
+-    if ( nTupleLen < psDBF->nRecordLength) {
+-      nTupleLen = psDBF->nRecordLength;
+-      pReturnTuple = (char *) SfRealloc(pReturnTuple, psDBF->nRecordLength);
++    if ( psDBF->nStringFieldLen < psDBF->nRecordLength) {
++      psDBF->nStringFieldLen = psDBF->nRecordLength;
++      psDBF->pszStringField = (char *) SfRealloc(psDBF->pszStringField,
++						 psDBF->nRecordLength);
+     }
+     
+-    memcpy ( pReturnTuple, pabyRec, psDBF->nRecordLength );
++    memcpy ( psDBF->pszStringField, pabyRec, psDBF->nRecordLength );
+         
+-    return( pReturnTuple );
++    return( psDBF->pszStringField );
+ }
+ 
+ /************************************************************************/
+diff --git a/shapefil.h b/shapefil.h
+index 19ba921..0244ba1 100644
+--- a/shapefil.h
++++ b/shapefil.h
+@@ -401,6 +401,11 @@ typedef	struct
+     
+     int		bNoHeader;
+     int		bUpdated;
++
++    int		nStringFieldLen;
++    char	*pszStringField;
++
++    double	dDoubleField;
+ } DBFInfo;
+ 
+ typedef DBFInfo * DBFHandle;
+-- 
