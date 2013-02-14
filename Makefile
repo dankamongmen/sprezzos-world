@@ -9186,5 +9186,13 @@ $(QCA2): $(SPREZZ)/qca2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf qca2-$(qca2_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf qca-$(qca2_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libwlocate
+libwlocate:$(LIBWLOCATE)_$(ARCH).deb
+$(LIBWLOCATE): $(SPREZZ)/libwlocate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libwlocate-$(libwlocate_UPVER).tar.gz $(TARARGS) $@
 
