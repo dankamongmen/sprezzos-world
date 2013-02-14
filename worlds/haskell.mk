@@ -4366,3 +4366,11 @@ $(HASKELLCABALINSTALL): $(SPREZZ)/haskell-cabal-install/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cabal-install-$(haskell-cabal-install_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haxml
+haxml:$(HAXML)_$(ARCH).deb
+$(HAXML): $(SPREZZ)/haxml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf HaXml-$(haxml_UPVER).tar.gz $(TARARGS) $@
+
