@@ -1,0 +1,147 @@
+#!/usr/bin/make -f
+
+# $Progeny$
+
+# Copyright 2002 Hewlett-Packard Company
+# Copyright 2000, 2001, 2002, 2004 Progeny Linux Systems, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+# THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+VERSION=$(shell dpkg-parsechangelog | grep ^Version: | cut -d ' ' -f 2)
+ARCH=$(shell dpkg --print-architecture)
+
+# if $DEB_BUILD_OPTIONS *doesn't* contain "noopt"
+ifeq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+OPTIMIZE:=-O2
+endif
+
+# Figure out where the kernel PCMCIA headers are, searching the
+# directories in order of modification time (most recent
+# first).
+#PCMCIA_HEADERS:=$(shell \
+#	for KDIR in $$(ls -dt /usr/src/kernel* /usr/src/linux* 2>/dev/null); \
+#	  do \
+#	    if [ -d $$KDIR ]; then \
+#		for HFILE in $$(find $$KDIR -name version.h); do \
+#		    if expr "$$HFILE" : ".*/pcmcia/version\.h" > \
+#		      /dev/null 2>&1; then \
+#			echo "$${HFILE%/pcmcia/version.h}"; \
+#			break 2; \
+#		    fi \
+#		done \
+#	    fi \
+#	done)
+# if we found some, pass them to configure
+
+ifneq ($(PCMCIA_HEADERS),)
+CONFIGURE_PCMCIA:=--with-pcmcia-headers=$(PCMCIA_HEADERS)
+endif
+
+CFLAGS_DEB=CFLAGS="-g $(OPTIMIZE)"
+RUN_CONFIGURE=  ../configure $(CONFIGURE_PCMCIA) \
+		--prefix=/usr \
+		--sbindir=/sbin \
+		--sysconfdir=/etc \
+		--localstatedir=/var \
+		--mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info \
+		--with-default-url=file:///lib/discover/list.xml \
+		--disable-curl
+
+configure: configure-deb
+
+configure-deb: configure-deb-stamp
+configure-deb-stamp:
+	dh_testdir
+
+	mkdir builddeb
+	cd builddeb && $(CFLAGS_DEB) $(RUN_CONFIGURE)
+
+	touch $@
+
+build: build-deb
+
+build-deb: configure-deb-stamp build-deb-stamp
+build-deb-stamp:
+	dh_testdir
+
+	cd builddeb && $(MAKE)
+
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+
+	rm -rf builddeb build-deb-stamp configure-deb-stamp config.log config.status
+
+	debconf-updatepo
+
+	debconf-updatepo
+	dh_clean
+
+install: install-deb
+
+install-deb: build-deb
+	dh_testdir
+	dh_testroot
+	dh_installdirs -v
+
+	cd builddeb && $(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+
+	# reportbug helper script
+	install -d debian/tmp/usr/share/bug/discover
+	install -m 755 debian/discover.bug debian/tmp/usr/share/bug/discover
+
+	rm $(CURDIR)/debian/tmp/usr/bin/discover-static
+	mv $(CURDIR)/debian/tmp/usr/bin/discover \
+		$(CURDIR)/debian/tmp/sbin/discover
+
+	rm -f $(CURDIR)/debian/tmp/etc/discover.conf.example
+	rm -f $(CURDIR)/debian/tmp/etc/discover-modprobe.conf.example
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: discover-deb
+
+discover-deb: install-deb
+	dh_testdir
+	dh_testroot
+	dh_movefiles
+
+	dh_installdocs
+	dh_installchangelogs
+#	XXX: dh_installinit appears to be busted :-P (see Debian #140881)
+#	dh_installinit -v --no-restart-on-upgrade --update-rcd-params="start 36 S ."
+	dh_compress
+	dh_fixperms
+	dh_strip
+	dh_makeshlibs
+	dh_installdebconf
+	dh_installdeb
+	dh_shlibdeps -ldebian/libdiscover2/usr/lib
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-arch
+.PHONY: build clean binary-arch binary install configure
