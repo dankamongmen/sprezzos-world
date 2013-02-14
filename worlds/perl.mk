@@ -421,3 +421,35 @@ $(LIBGDGRAPHPERL): $(SPREZZ)/libgd-graph-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf GDGraph-$(libgd-graph-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libio-socket-ip-perl
+libio-socket-ip-perl:$(LIBIOSOCKETIPPERL)_$(ARCH).deb
+$(LIBIOSOCKETIPPERL): $(SPREZZ)/libio-socket-ip-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf IO-Socket-IP-$(libio-socket-ip-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: liburi-perl
+liburi-perl:$(LIBURIPERL)_$(ARCH).deb
+$(LIBURIPERL): $(SPREZZ)/liburi-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf URI-$(liburi-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libio-socket-ssl-perl
+libio-socket-ssl-perl:$(LIBIOSOCKETSSLPERL)_$(ARCH).deb
+$(LIBIOSOCKETSSLPERL): $(SPREZZ)/libio-socket-ssl-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf IO-Socket-SSL-$(libio-socket-ssl-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libnet-libidn-perl
+libnet-libidn-perl:$(LIBNETLIBIDNPERL)_$(ARCH).deb
+$(LIBNETLIBIDNPERL): $(SPREZZ)/libnet-libidn-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Net-LibIDN-$(libnet-libidn-perl_UPVER).tar.gz $(TARARGS) $@
+
