@@ -9274,3 +9274,11 @@ $(MERCURIAL): $(SPREZZ)/mercurial/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mercurial-$(mercurial_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: metapixel
+metapixel:$(METAPIXEL)_$(ARCH).deb
+$(METAPIXEL): $(SPREZZ)/metapixel/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf metapixel-$(metapixel_UPVER).tar.gz $(TARARGS) $@
+
