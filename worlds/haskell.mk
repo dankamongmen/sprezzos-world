@@ -4438,3 +4438,11 @@ $(HASKELLDUALTREE): $(SPREZZ)/haskell-dual-tree/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dual-tree-$(haskell-dual-tree_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-monad-logger
+haskell-monad-logger:$(HASKELLMONADLOGGER)_$(ARCH).deb
+$(HASKELLMONADLOGGER): $(SPREZZ)/haskell-monad-logger/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf monad-logger-$(haskell-monad-logger_UPVER).tar.gz $(TARARGS) $@
+
