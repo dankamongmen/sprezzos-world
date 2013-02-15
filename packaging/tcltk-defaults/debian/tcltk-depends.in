@@ -1,0 +1,260 @@
+#!/usr/bin/tclsh
+
+if {[info commands lassign] == ""} {
+
+# lassign --
+#	Assigns list contents to given variables. This command
+#	exists in Tcl 8.5, so the definition is conditional.
+#
+# Arguments:
+#	list	A list of assigning values.
+#	args	Variables to assign.
+#
+# Results:
+#	The rest of a list.
+#
+# Side effects:
+#	The given variables are assigned.
+
+    proc lassign {list args} {
+	foreach name $args {
+	    upvar $name var
+
+	    set var [lindex $list 0]
+	    set list [lrange $list 1 end]
+	}
+	return $list
+    }
+}
+
+# delsubstvar --
+#	Removes substitution variable from a substvar file for a given
+#	package in ./debian/ directory.
+#
+# Arguments:
+#	package	    Name of a package (file $package.substvars is used).
+#	substvar    Name of a substitution variable to delete.
+#
+# Results:
+#	An empty string.
+#
+# Side effects:
+#	File debian/$package.substvars is overwritten. The specified variable
+#	is deleted.
+
+proc delsubstvar {package substvar} {
+    set substvarfile [file join debian $package.substvars]
+    if {[file exists $substvarfile]} {
+	set fd [open $substvarfile]
+	set lines [split [string trim [read $fd]] "\n"]
+	close $fd
+
+	set fd [open $substvarfile w]
+	foreach line $lines {
+	    if {[string first $substvar= $line] != 0} {
+		puts $fd $line
+	    }
+	}
+	close $fd
+    }
+    return
+}
+
+# addsubstvar --
+#	Adds a dependency to a substitution variable in a substvar file
+#	for a given package in ./debian/ directory.
+#
+# Arguments:
+#	package	    Name of a package (file $package.substvars is used).
+#	substvar    Name of a substitution variable to add/change.
+#	deppackage  An added substitution dependency string.
+#
+# Results:
+#	An empty string.
+#
+# Side effects:
+#	File debian/$package.substvars is overwritten. The specified depandency
+#	string is added to the variable.
+
+proc addsubstvar {package substvar deppackage} {
+    set substvarfile [file join debian $package.substvars]
+    if {[file exists $substvarfile]} {
+	set fd [open $substvarfile]
+	set lines [split [string trim [read $fd]] "\n"]
+	close $fd
+
+	set fd [open $substvarfile w]
+	set found 0
+	foreach line $lines {
+	    if {[string first $substvar= $line] != 0} {
+		puts $fd $line
+	    } else {
+		set items [split [string range $line [string length $substvar=] end] ","]
+		set items1 {}
+		foreach i $items {
+		    lappend items1 [string trim $i]
+		}
+		lappend items1 $deppackage
+		puts $fd $substvar=[join $items1 ", "]
+		set found 1
+	    }
+	}
+	if {!$found} {
+	    puts $fd $substvar=$deppackage
+	}
+	close $fd
+    } else {
+	set fd [open $substvarfile w]
+	puts $fd $substvar=$deppackage
+	close $fd
+    }
+    return
+}
+
+# getpackages --
+#	Parses debhelper command line options and debian/control file and
+#	returns packages to act on.
+#
+# Arguments:
+#	arglist	    Dephelper options (only -a, -i, -p, -N options are
+#		    recognised).
+#
+# Results:
+#	Package names to work on or error message and exit if debian/control
+#	is unreadable or unknown option is specified.
+#
+# Side effects:
+#	None.
+
+proc getpackages {arglist} {
+    if {[catch {open [file join debian control]} fd]} {
+	puts [format "cannot read debian/control: %s" $fd]
+	exit 1
+    } else {
+	set arches all
+	set excluded {}
+	set explicit {}
+	while {[llength $arglist] > 0} {
+	    set arglist [lassign $arglist opt]
+	    switch -glob -- $opt {
+		-a -
+		--arch {
+		    # Only the last -a or -i options takes effect
+		    set arches arch
+		}
+		-i -
+		--indep {
+		    # Only the last -a or -i options takes effect
+		    set arches indep
+		}
+		-s -
+		--same-arch {
+		    puts "options -s and --same-arch aren't supported yet"
+		    exit 1
+		}
+		-p* {
+		    lappend explicit [string range $opt 2 end]
+		}
+		--package=* {
+		    lappend explicit [string range $opt 10 end]
+		}
+		-N* {
+		    lappend excluded [string range $opt 2 end]
+		}
+		--no-package=* {
+		    lappend excluded [string range $opt 13 end]
+		}
+		default {
+		    puts [format "unknown option %s" $opt]
+		    exit 1
+		}
+	    }
+	}
+
+	set data [read $fd]
+	regsub -all {\n( |\t)} $data {\1} data ; # Join up all continuatioin lines
+	set lines [split $data "\n"]
+	lappend lines "" ; # If debian/config doesn't have a trailing LF
+	close $fd
+	set packages {}
+	set allpackages {}
+
+	set package ""
+	set arch ""
+	set vars {}
+	foreach line $lines {
+	    switch -glob -- $line {
+		"Package: *" {
+		    set package [string trim [string range $line 9 end]]
+		}
+		"Architecture: *" {
+		    set arch [string trim [string range $line 14 end]]
+		}
+		"Pre-Depends: *" -
+		"Depends: *" -
+		"Recommends: *" -
+		"Suggests: *" -
+		"Enhances: *" -
+		"Breaks: *" -
+		"Conflicts: *" -
+		"Provides: *" -
+		"Replaces: *" {
+		    set vars [concat $vars [regexp -all -inline {\$\{\S*\}} $line]]
+		}
+		"" {
+		    if {$package == ""} {
+			# Two LF in a row or the end of a source package
+		    } elseif {[lsearch -exact $excluded $package] >= 0} {
+			# The package is excluded by -Npackage
+		    } elseif {[lsearch -exact $explicit $package] >= 0} {
+			# The package is explicitly required
+			lappend packages $package $vars
+		    } elseif {$arches == "arch" && $arch != "all"} {
+			# Arch dependent packages are requested
+			lappend packages $package $vars
+		    } elseif {$arches == "indep" && $arch == "all"} {
+			# Arch independent packages are requested
+			lappend packages $package $vars
+		    } elseif {$arches == "all"} {
+			lappend allpackages $package $vars
+		    }
+		    set package ""
+		    set arch ""
+		    set vars {}
+		}
+	    }
+	}
+	if {$arches == "all" && [llength $packages] == 0} {
+	    # There aren't explicitly requested packages
+	    set packages $allpackages
+	}
+	return $packages
+    }
+}
+
+set version "@COMPATVER@"
+if {$version == ""} {
+    set dep ""
+} else {
+    set dep " (>= $version)"
+}
+
+foreach {package vars} [getpackages $argv] {
+    delsubstvar $package "tcl:Depends"
+    if {[lsearch -exact $vars "\${tcl:Depends}"] >= 0} {
+	addsubstvar $package "tcl:Depends" "tcl$dep"
+    }
+    delsubstvar $package "tclsh:Depends"
+    if {[lsearch -exact $vars "\${tclsh:Depends}"] >= 0} {
+	addsubstvar $package "tclsh:Depends" "tcl$dep | tclsh"
+    }
+    delsubstvar $package "tk:Depends"
+    if {[lsearch -exact $vars "\${tk:Depends}"] >= 0} {
+	addsubstvar $package "tk:Depends" "tk$dep"
+    }
+    delsubstvar $package "wish:Depends"
+    if {[lsearch -exact $vars "\${wish:Depends}"] >= 0} {
+	addsubstvar $package "wish:Depends" "tk$dep | wish"
+    }
+}
+
