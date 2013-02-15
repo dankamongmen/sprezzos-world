@@ -4430,3 +4430,11 @@ $(HASKELLMONOIDEXTRAS): $(SPREZZ)/haskell-monoid-extras/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf monoid-extras-$(haskell-monoid-extras_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-dual-tree
+haskell-dual-tree:$(HASKELLDUALTREE)_$(ARCH).deb
+$(HASKELLDUALTREE): $(SPREZZ)/haskell-dual-tree/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dual-tree-$(haskell-dual-tree_UPVER).tar.gz $(TARARGS) $@
+
