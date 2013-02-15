@@ -14,3 +14,11 @@ $(ICOUTILS): $(SPREZZ)/icoutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf icoutils-$(icoutils_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: model-builder
+model-builder:$(MODELBUILDER)_$(ARCH).deb
+$(MODELBUILDER): $(SPREZZ)/model-builder/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf model-builder-$(model-builder_UPVER).tar.gz $(TARARGS) $@
+
