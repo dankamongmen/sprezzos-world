@@ -4970,6 +4970,14 @@ $(XFSPROGS): $(SPREZZ)/xfsprogs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xfsprogs-$(xfsprogs_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libjpeg8-turbo
+libjpeg8-turbo:$(LIBJPEG8TURBO)_$(ARCH).deb
+$(LIBJPEG8TURBO): $(SPREZZ)/libjpeg8-turbo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libjpeg-turbo-$(libjpeg8-turbo_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libjpeg
 libjpeg:$(LIBJPEG)_$(ARCH).deb
 $(LIBJPEG): $(SPREZZ)/libjpeg/debian/changelog
@@ -8946,17 +8954,6 @@ fbi:$(FBI)_$(ARCH).deb
 $(FBI): $(SPREZZ)/fbi/debian/changelog $(FBIUP).tar.gz
 	mkdir $@
 	tar xzvf $(FBIUP).tar.gz $(TARARGS) $@
-	cp -r $(<D) $@/
-
-FETCHED:=$(FETCHED) libjpeg-turbo-1.2.1.tar.gz
-libjpeg-turbo-1.2.1.tar.gz:
-	wget -nc -O$@ http://sourceforge.net/projects/libjpeg-turbo/files/1.2.1/libjpeg-turbo-1.2.1.tar.gz/download
-
-.PHONY: libjpeg-turbo
-libjpeg-turbo:$(LIBJPEG8TURBO)_$(ARCH).deb
-$(LIBJPEG8TURBO): $(SPREZZ)/libjpeg-turbo/debian/changelog libjpeg-turbo-1.2.1.tar.gz
-	mkdir $@
-	tar xzvf libjpeg-turbo-1.2.1.tar.gz $(TARARGS) $@
 	cp -r $(<D) $@/
 
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
