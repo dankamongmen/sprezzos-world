@@ -1,0 +1,65 @@
+#!/usr/bin/make -f
+
+FLAVOURS := pic nonpic
+
+CONFIGURE_ARGS_COMMON := --prefix=/usr --disable-examples --x-includes=/usr/include --x-libraries=/usr/lib
+CONFIGURE_ARGS_pic := -with-pic
+CONFIGURE_ARGS_nonpic := --disable-gpc
+DESTDIR_nonpic := debian/libagg-dev
+DESTDIR_pic := debian/tmp-pic
+
+builddir = $(patsubst %,obj-%,$(1))
+
+define do-flavour 
+
+configure-$(1): configure-$(1)-stamp
+	:
+configure-$(1)-stamp:
+	rm -rf $(CURDIR)/$(builddir)
+	mkdir -p $(CURDIR)/$(builddir)
+	find $(CURDIR)/* -maxdepth 0 -not -path '$(CURDIR)/obj-*' | \
+		xargs cp -rlf -t $(CURDIR)/$(builddir)
+	cd $(builddir) && env NOCONFIGURE=1 sh autogen.sh && ./configure $(CONFIGURE_ARGS_COMMON) $(CONFIGURE_ARGS_$(1)) $(shell dpkg-buildflags --export=configure)
+	touch $$@
+
+build-$(1): build-$(1)-stamp
+	:
+build-$(1)-stamp: configure-$(1)
+	$(MAKE) -C $(builddir)
+	touch $$@
+
+install-$(1): install-$(1)-stamp
+	:
+install-$(1)-stamp: build-$(1)
+	$(MAKE) -C $(builddir) install DESTDIR=$(CURDIR)/$(DESTDIR_$(1))
+	touch $$@
+
+endef
+
+$(foreach f,$(FLAVOURS),$(eval $(call do-flavour,$(f))))
+
+%:
+	dh $@
+
+override_dh_auto_build: $(foreach f,$(FLAVOURS),build-$(f))
+	:
+
+override_dh_auto_install: $(foreach f,$(FLAVOURS),install-$(f))
+
+	install -m644 $(DESTDIR_pic)/usr/lib/libaggfontfreetype.a \
+		$(CURDIR)/debian/libagg-dev/usr/lib/libaggfontfreetype_pic.a
+	install -m644 $(DESTDIR_pic)/usr/lib/libaggplatformsdl.a \
+		$(CURDIR)/debian/libagg-dev/usr/lib/libaggplatformsdl_pic.a
+	install -m644 $(DESTDIR_pic)/usr/lib/libaggplatformX11.a \
+		$(CURDIR)/debian/libagg-dev/usr/lib/libaggplatformX11_pic.a
+	install -m644 $(DESTDIR_pic)/usr/lib/libagg.a \
+		$(CURDIR)/debian/libagg-dev/usr/lib/libagg_pic.a
+
+        # Remove .so / .la files
+	find $(CURDIR)/debian/libagg-dev/usr/lib/ -name "*.so*" | xargs rm
+	find $(CURDIR)/debian/libagg-dev/usr/lib/ -name "*.la" | xargs rm
+
+override_dh_auto_clean:
+	rm -rf $(foreach f,$(FLAVOURS),obj-$(f))
+	rm -rf $(DESTDIR_pic)
+	dh_auto_clean

@@ -39,3 +39,11 @@ $(XBMC): $(SPREZZ)/xbmc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xbmc_$(xbmc_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: agg
+agg:$(AGG)_$(ARCH).deb
+$(AGG): $(SPREZZ)/agg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf agg-$(agg_UPVER).tar.gz $(TARARGS) $@
+
