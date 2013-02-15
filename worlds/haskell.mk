@@ -1484,7 +1484,7 @@ $(HASKELLGLFW): $(SPREZZ)/haskell-glfw/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf glfw-$(haskell-glfw_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf GLFW-$(haskell-glfw_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-gstreamer
 haskell-gstreamer:$(HASKELLGSTREAMER)_$(ARCH).deb
