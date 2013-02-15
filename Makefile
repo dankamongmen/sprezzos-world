@@ -9228,3 +9228,27 @@ $(OPENALSOFT): $(SPREZZ)/openal-soft/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf openal-soft-$(openal-soft_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: bibutils
+bibutils:$(BIBUTILS)_$(ARCH).deb
+$(BIBUTILS): $(SPREZZ)/bibutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bibutils_$(bibutils_UPVER)_src.tgz $(TARARGS) $@
+
+.PHONY: tcltk-defaults
+tcltk-defaults:$(TCLTKDEFAULTS)_$(ARCH).deb
+$(TCLTKDEFAULTS): $(SPREZZ)/tcltk-defaults/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tcltk-defaults-$(tcltk-defaults_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: tk8.5
+tk8.5:$(TK8.5)_$(ARCH).deb
+$(TK8.5): $(SPREZZ)/tk8.5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tk$(tk8.5_UPVER)-src.tar.gz $(TARARGS) $@
+
