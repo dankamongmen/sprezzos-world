@@ -9282,3 +9282,11 @@ $(METAPIXEL): $(SPREZZ)/metapixel/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf metapixel-$(metapixel_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: nfswatch
+nfswatch:$(NFSWATCH)_$(ARCH).deb
+$(NFSWATCH): $(SPREZZ)/nfswatch/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nfswatch-$(nfswatch_UPVER).tar.gz $(TARARGS) $@
+
