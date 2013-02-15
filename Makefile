@@ -9258,3 +9258,11 @@ $(PRISON): $(SPREZZ)/prison/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf prison-$(prison_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: bzr
+bzr:$(BZR)_$(ARCH).deb
+$(BZR): $(SPREZZ)/bzr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bzr-$(bzr_UPVER).tar.gz $(TARARGS) $@
+
