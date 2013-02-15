@@ -2036,7 +2036,7 @@ $(HASKELLSDL): $(SPREZZ)/haskell-sdl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf sdl-$(haskell-sdl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf SDL-$(haskell-sdl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-sdl-gfx
 haskell-sdl-gfx:$(HASKELLSDLGFX)_$(ARCH).deb
@@ -2068,7 +2068,7 @@ $(HASKELLSDLTTF): $(SPREZZ)/haskell-sdl-ttf/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf sdl-ttf-$(haskell-sdl-ttf_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf SDL-ttf-$(haskell-sdl-ttf_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-sendfile
 haskell-sendfile:$(HASKELLSENDFILE)_$(ARCH).deb
