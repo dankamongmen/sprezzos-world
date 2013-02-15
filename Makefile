@@ -8638,6 +8638,14 @@ $(XOSD): $(SPREZZ)/xosd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xosd-$(xosd_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-input-evdev
+xserver-xorg-input-evdev:$(XSERVERXORGINPUTEVDEV)_$(ARCH).deb
+$(XSERVERXORGINPUTEVDEV): $(SPREZZ)/xserver-xorg-input-evdev/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-input-evdev-$(xserver-xorg-input-evdev_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xserver-xorg-input-wacom
 xserver-xorg-input-wacom:$(XSERVERXORGINPUTWACOM)_$(ARCH).deb
 $(XSERVERXORGINPUTWACOM): $(SPREZZ)/xserver-xorg-input-wacom/debian/changelog
@@ -9203,4 +9211,12 @@ $(SHAPELIB): $(SPREZZ)/shapelib/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf shapelib-$(shapelib_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: shelltestrunner
+shelltestrunner:$(SHELLTESTRUNNER)_$(ARCH).deb
+$(SHELLTESTRUNNER): $(SPREZZ)/shelltestrunner/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf shelltestrunner-$(shelltestrunner_UPVER).tar.gz $(TARARGS) $@
 
