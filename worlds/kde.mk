@@ -437,3 +437,11 @@ $(YAKUAKE): $(SPREZZ)/yakuake/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf yakuake-$(yakuake_UPVER).tar.bz2 $(TARARGS) $@
+.PHONY: qjson
+qjson:$(QJSON)_$(ARCH).deb
+$(QJSON): $(SPREZZ)/qjson/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf qjson-$(qjson_UPVER).tar.bz2 $(TARARGS) $@
+
