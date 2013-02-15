@@ -20,5 +20,5 @@ $(MODELBUILDER): $(SPREZZ)/model-builder/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf model-builder-$(model-builder_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Model-Builder-$(model-builder_UPVER).tar.gz $(TARARGS) $@
 
