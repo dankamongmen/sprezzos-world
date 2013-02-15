@@ -4406,3 +4406,11 @@ $(HSCOLOUR): $(SPREZZ)/hscolour/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hscolour-$(hscolour_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-threads
+haskell-threads:$(HASKELLTHREADS)_$(ARCH).deb
+$(HASKELLTHREADS): $(SPREZZ)/haskell-threads/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf threads-$(haskell-threads_UPVER).tar.gz $(TARARGS) $@
+
