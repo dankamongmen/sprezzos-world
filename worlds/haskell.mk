@@ -4388,7 +4388,7 @@ $(HASKELLTENSOR): $(SPREZZ)/haskell-tensor/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf tensor-$(haskell-tensor_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Tensor-$(haskell-tensor_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-objectname
 haskell-objectname:$(HASKELLOBJECTNAME)_$(ARCH).deb
