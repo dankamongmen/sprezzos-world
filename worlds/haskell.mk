@@ -2116,7 +2116,7 @@ $(HASKELLSTREAM): $(SPREZZ)/haskell-stream/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf stream-$(haskell-stream_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Stream-$(haskell-stream_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-strict-concurrency
 haskell-strict-concurrency:$(HASKELLSTRICTCONCURRENCY)_$(ARCH).deb
@@ -4373,4 +4373,12 @@ $(HAXML): $(SPREZZ)/haxml/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf HaXml-$(haxml_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-string-qq
+haskell-string-qq:$(HASKELLSTRINGQQ)_$(ARCH).deb
+$(HASKELLSTRINGQQ): $(SPREZZ)/haskell-string-qq/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf string-qq-$(haskell-string-qq_UPVER).tar.gz $(TARARGS) $@
 
