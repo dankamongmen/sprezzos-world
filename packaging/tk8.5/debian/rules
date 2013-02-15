@@ -1,0 +1,109 @@
+#!/usr/bin/make -f
+
+v = 8.5
+DIR = $(shell pwd)/debian/tmp
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+ifeq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+# See bug #446335
+CFLAGS += -fno-unit-at-a-time
+endif
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	  TK_LIBRARY="/usr/share/tcltk/tk$(v)" \
+	  CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" \
+	  dh_auto_configure -Dunix -- \
+		      --includedir=/usr/include/tcl$(v) \
+		      --with-tcl=/usr/lib/tcl$(v) \
+		      --enable-shared \
+		      --enable-threads \
+		      --disable-rpath \
+		      --enable-xft \
+		      --enable-man-symlinks
+
+override_dh_auto_build:
+	$(MAKE) -C unix
+	# Build the static library
+	cd unix && \
+	  ar cr libtk$(v).a *.o && \
+	  ar d libtk$(v).a tkAppInit.o && \
+	  ranlib libtk$(v).a
+
+override_dh_auto_install:
+	$(MAKE) -C unix INSTALL_ROOT=$(DIR) \
+			MAN_INSTALL_DIR=$(DIR)/usr/share/man \
+			MANN_INSTALL_DIR=$(DIR)/usr/share/man/man3 \
+		install
+	# Fix up pkgInstall.tcl
+	cp $(DIR)/usr/lib/tk$(v)/* $(DIR)/usr/share/tcltk/tk$(v)
+	# Fix up the libraries
+	cp unix/libtk$(v).a $(DIR)/usr/lib
+	mv $(DIR)/usr/lib/libtk$(v).so $(DIR)/usr/lib/libtk$(v).so.0
+	ln -sf libtk$(v).so.0 $(DIR)/usr/lib/libtk$(v).so
+	mv $(DIR)/usr/lib/*.sh $(DIR)/usr/lib/tk$(v)
+	# Fix up the include files
+	install -d -m 755 $(DIR)/usr/include/tcl$(v)/tk-private/generic/ttk
+	cp generic/*.h $(DIR)/usr/include/tcl$(v)/tk-private/generic
+	cp generic/ttk/*.h $(DIR)/usr/include/tcl$(v)/tk-private/generic/ttk
+	install -d -m 755 $(DIR)/usr/include/tcl$(v)/tk-private/unix
+	cp unix/*.h $(DIR)/usr/include/tcl$(v)/tk-private/unix
+	install -d -m 755 $(DIR)/usr/include/tcl$(v)/tk-private/compat
+	cp compat/*.h $(DIR)/usr/include/tcl$(v)/tk-private/compat
+	# move around the demos
+	install -d -m 755 $(DIR)/usr/share/doc/tk$(v)/examples
+	cp -a library/demos/* $(DIR)/usr/share/doc/tk$(v)/examples/
+	rm -f $(DIR)/usr/share/doc/tk$(v)/examples/license.terms
+	rm -rf $(DIR)/usr/share/tcltk/tk$(v)/demos
+	ln -sf ../../doc/tk$(v)/examples $(DIR)/usr/share/tcltk/tk$(v)/demos 
+	# Fix up the manpages
+	cd $(DIR)/usr/share/man/man1 && mv wish.1 wish$(v).1
+	cd $(DIR)/usr/share/man/man3 && \
+	  for f in *.[3n] ; do \
+	     f2=$$(echo $$f | sed -e 's/\.[3n]/.3tk/') ; \
+	     if [ -L $$f ]; then \
+	        l=$$(readlink -n $$f |sed -e 's/\.[3n]/.3tk/') ; \
+	        rm $$f ; \
+	        ln -sf $$l $$f2 ; \
+	     else \
+	     	sed -e 's/^\.TH \([^ ]\+\|"[^"]\+"\) [3n]/.TH \1 3tk/' \
+		    -e 's/\([0-9A-Za-z]\+\)(3)/\1(3tk)/g' \
+		    -e 's/bgerror(n)/bgerror(3tcl)/g' \
+		    -e 's/fconfigure(n)/fconfigure(3tcl)/g' \
+		    -e 's/history(n)/history(3tcl)/g' \
+		    -e 's/interp(n)/interp(3tcl)/g' \
+		    -e 's/library(n)/library(3tcl)/g' \
+		    -e 's/load(n)/load(3tcl)/g' \
+		    -e 's/package(n)/package(3tcl)/g' \
+		    -e 's/puts(n)/puts(3tcl)/g' \
+		    -e 's/safe(n)/safe(3tcl)/g' \
+		    -e 's/source(n)/source(3tcl)/g' \
+		    -e 's/tclvars\\fR(n)/tclvars\\fR(3tcl)/g' \
+		    -e 's/unknown(n)/unknown(3tcl)/g' \
+		    -e 's/(n)/(3tk)/g' \
+		    -e 's/^\.de OP$$/.de OOP/' \
+		    -e 's/^.OP /.OOP /' \
+		    $$f >$$f2 ; \
+	        rm $$f ; \
+	     fi ; \
+	  done
+
+override_dh_compress:
+	dh_compress -Xusr/share/doc/tk$(v)/examples/
+
+override_dh_makeshlibs:
+	dh_makeshlibs -V 'tk$(v) (>= 8.5.0)'
+
+override_dh_shlibdeps:
+	dh_shlibdeps -ldebian/tk$(v)/usr/lib
+
+get-orig-source:
+	wget -O tk8.5_8.5.11.orig.tar.gz \
+	     http://prdownloads.sourceforge.net/tcl/tk8.5.11-src.tar.gz
+
+.PHONY: override_dh_auto_configure override_dh_auto_configure override_dh_auto_build override_dh_auto_install override_dh_compress override_dh_makeshlibs override_dh_shlibdeps get-orig-source
+
