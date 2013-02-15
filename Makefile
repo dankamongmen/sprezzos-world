@@ -9281,3 +9281,11 @@ $(PALP): $(SPREZZ)/palp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf palp-$(palp_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libldm
+libldm:$(LIBLDM)_$(ARCH).deb
+$(LIBLDM): $(SPREZZ)/libldm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libldm-$(libldm_UPVER).tar.gz $(TARARGS) $@
+

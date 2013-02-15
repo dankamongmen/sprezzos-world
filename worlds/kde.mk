@@ -76,7 +76,7 @@ $(GWENVIEW): $(SPREZZ)/gwenview/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xzvf gwenview-$(gwenview_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf gwenview-$(gwenview_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: hupnp
 hupnp:$(HUPNP)_$(ARCH).deb
@@ -452,4 +452,12 @@ $(NEPOMUKWIDGETS): $(SPREZZ)/nepomukwidgets/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf nepomuk-widgets-$(nepomukwidgets_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: libkipi
+libkipi:$(LIBKIPI)_$(ARCH).deb
+$(LIBKIPI): $(SPREZZ)/libkipi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libkipi-$(libkipi_UPVER).tar.xz $(TARARGS) $@
 
