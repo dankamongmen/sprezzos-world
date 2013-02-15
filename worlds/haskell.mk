@@ -4414,3 +4414,11 @@ $(HASKELLTHREADS): $(SPREZZ)/haskell-threads/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf threads-$(haskell-threads_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-time-compat
+haskell-time-compat:$(HASKELLTIMECOMPAT)_$(ARCH).deb
+$(HASKELLTIMECOMPAT): $(SPREZZ)/haskell-time-compat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf time-compat-$(haskell-time-compat_UPVER).tar.gz $(TARARGS) $@
+
