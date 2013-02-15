@@ -445,3 +445,11 @@ $(QJSON): $(SPREZZ)/qjson/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf qjson-$(qjson_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: nepomukwidgets
+nepomukwidgets:$(NEPOMUKWIDGETS)_$(ARCH).deb
+$(NEPOMUKWIDGETS): $(SPREZZ)/nepomukwidgets/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf nepomuk-widgets-$(nepomukwidgets_UPVER).tar.xz $(TARARGS) $@
+
