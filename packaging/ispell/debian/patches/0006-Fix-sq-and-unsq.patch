@@ -1,0 +1,240 @@
+From: Dr. Werner Fink <werner@suse.de>
+Date: Thu, 31 May 2007 00:00:00 +0200
+Subject: 0006 Fix sq and unsq
+
+Fix sq/unsq, hint from Thomas Rachel
+
+The patch is taken from ispell-3.3.02-102.1.src.rpm from OpenSUSE.
+---
+ Makefile |    9 +++++++--
+ sq.1     |    4 ++--
+ sq.c     |   32 ++++++++++++++++++++------------
+ unsq.c   |   29 ++++++++++++++++++-----------
+ 4 files changed, 47 insertions(+), 27 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 0f7f16a..007b6d7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -262,6 +262,7 @@ all:	all-languages
+ programs: buildhash findaffix tryaffix ispell
+ programs: icombine ijoin munchlist
+ programs: subset zapdups
++programs: sq unsq
+ 
+ defmt-programs:
+ 	cd deformatters; $(MAKE) all
+@@ -320,11 +321,15 @@ install-basic:
+ 	@. ./config.sh; \
+ 	  set -x; \
+ 	  $$INSTALL ispell.1 $$MAN1DIR/ispell$$MAN1EXT; \
+-	  $$INSTALL ispell.5 $$MAN45DIR/ispell$$MAN45EXT
++	  $$INSTALL ispell.5 $$MAN45DIR/ispell$$MAN45EXT; \
++	  $$INSTALL sq.1     $$MAN1DIR/sq$$MAN1EXT; \
++	  echo .so man1/sq.1 > $$MAN1DIR/unsq$$MAN1EXT
+ 	@. ./config.sh; \
+ 	  set -x; \
+ 	  cd $$MAN1DIR; \
+ 	  chmod 644 ispell$$MAN1EXT; \
++	  chmod 644 sq$$MAN1EXT; \
++	  chmod 644 unsq$$MAN1EXT; \
+ 	  cd $$MAN45DIR; \
+ 	  chmod 644 ispell$$MAN45EXT
+ 
+@@ -357,7 +362,7 @@ install-dictbuild:
+ 	@. ./config.sh; \
+ 	  set -x; \
+ 	  $$INSTALL buildhash icombine ijoin munchlist findaffix \
+-	      tryaffix \
++	      tryaffix sq unsq \
+ 	    $$BINDIR
+ 	@. ./config.sh; \
+ 	  set -x; \
+diff --git a/sq.1 b/sq.1
+index 99442a2..31c24bd 100644
+--- a/sq.1
++++ b/sq.1
+@@ -73,7 +73,7 @@ sq, unsq \- squeeze or unsqueeze a sorted word list
+ compresses a sorted list of words (a dictionary). 
+ For example:
+ .RS
+-sort -u /usr/dict/words | sq | gzip -9 > words.sq.Z
++sort \-u /usr/share/dict/words | sq | gzip \-9 > words.sq.gz
+ .RE
+ will compress dict by about a factor of 5.
+ .PP
+@@ -82,7 +82,7 @@ uncompress the output of
+ .I sq.
+ For example:
+ .RS
+-gunzip < words.sq.gz | unsq | sort -f -o words
++gunzip < words.sq.gz | unsq | sort \-f \-o words
+ .RE
+ will uncompress a dictionary compressed with
+ .I sq.
+diff --git a/sq.c b/sq.c
+index c931421..85ebf63 100644
+--- a/sq.c
++++ b/sq.c
+@@ -59,6 +59,7 @@ static char Rcs_Id[] =
+  */
+ 
+ #include <stdio.h>
++#include <string.h>
+ 
+ #ifdef __STDC__
+ #define P(x)	x
+@@ -67,7 +68,7 @@ static char Rcs_Id[] =
+ #endif /* __STDC__ */
+ 
+ int		main P ((int argc, char * argv[]));
+-static void	trunc P ((char * word, char * prev));
++static void	sqtrunc P ((const char * word, char * prev));
+ 
+ /*
+  * The following table encodes prefix sizes as a single character.  A
+@@ -84,27 +85,34 @@ static char size_encodings[] =
+     'y', 'z'						/* 60-61 */
+     };
+ 
+-#define MAX_PREFIX	(sizeof (size_encodings) - 1)
++#define MAX_PREFIX	((sizeof(size_encodings)/sizeof(char)) - 1)
++#define UNSEQBUFSIZE	257
+ 
+ int main (argc, argv)
+     int		argc;
+     char *	argv[];
+     {
+-    char	word[257];
+-    static char	prev[257] = "";
++    char	word[UNSEQBUFSIZE];
++    char *	nl;
++    static char	prev[UNSEQBUFSIZE] = "";
+ 
+-    while (gets (word) != NULL)
+-	trunc (word, prev);
++    while (fgets (word, UNSEQBUFSIZE, stdin) != NULL) {
++	if ((nl = strrchr(word, '\n')))
++	    *nl = '\0';
++	else
++	    word[UNSEQBUFSIZE - 1] = '\0';
++	sqtrunc (word, prev);
++    }
+     return 0;
+     }
+ 
+-static void trunc (word, prev) 
+-    char *		word;
++static void sqtrunc (word, prev)
++    const char *	word;
+     char *		prev;
+     {
+-    register char *	wordp;
+-    register char *	prevp;
+-    register int	same_count;
++    const register char *	wordp;
++    const register char *	prevp;
++    register int		same_count;
+ 
+     wordp = word;
+     prevp = prev;
+@@ -113,7 +121,7 @@ static void trunc (word, prev)
+     if (same_count>MAX_PREFIX)
+ 	same_count = MAX_PREFIX;
+     (void) putchar (size_encodings[same_count]);
+-    (void) puts (wordp);
++    (void) puts (&word[same_count]);
+     (void) strcpy (prev, word);
+     }
+ 
+diff --git a/unsq.c b/unsq.c
+index 125f654..b14bcf3 100644
+--- a/unsq.c
++++ b/unsq.c
+@@ -58,7 +58,9 @@ static char Rcs_Id[] =
+  *
+  */
+ 
++#include <stdlib.h>
+ #include <stdio.h>
++#include <string.h>
+ #include "msgs.h"
+ 
+ #ifdef __STDC__
+@@ -68,7 +70,7 @@ static char Rcs_Id[] =
+ #endif /* __STDC__ */
+ 
+ int		main P ((int argc, char * argv[]));
+-static int	expand P ((char * word, char * prev));
++static int	sqexpand P ((char * word, char * prev));
+ 
+ /*
+  * The following table encodes prefix sizes as a single character.  A
+@@ -85,39 +87,40 @@ static char size_encodings[] =
+     'y', 'z'						/* 60-61 */
+     };
+ 
+-#define MAX_PREFIX	(sizeof (size_encodings) - 1)
+-
+-extern void	exit P ((int status));
++#define MAX_PREFIX	((sizeof(size_encodings)/sizeof(char)) - 1)
++#define UNSEQBUFSIZE	257
+ 
+ int main (argc, argv)
+     int			argc;
+     char *		argv[];
+     {
+-    char		word[257];
+-    static char		prev[257] = "";
++    char		word[UNSEQBUFSIZE];
++    static char		prev[UNSEQBUFSIZE] = "";
+ 
+-    while (!expand (word, prev))
++    while (!sqexpand (word, prev))
+         puts (word);
+     return 0;
+     }
+ 
+-static int expand (word, prev) 
++static int sqexpand (word, prev)
+     char *		word;
+     char *		prev;
+     {
+     register char *	wordp;
+     register char *	prevp;
++    register char *	nl;
+     register int	same_count;
+     register int	count_char;
++    register off_t	size;
+ 
+     count_char = getchar ();
+     if (count_char == EOF)
+ 	return(1);
+     for (same_count = 0;
+-      same_count < MAX_PREFIX  &&  size_encodings[same_count] != count_char;
++      same_count <= MAX_PREFIX  &&  size_encodings[same_count] != count_char;
+       same_count++)
+ 	;
+-    if (same_count == MAX_PREFIX)
++    if (same_count > MAX_PREFIX)
+ 	{
+ 	(void) fprintf (stderr, UNSQ_C_BAD_COUNT, (unsigned int) count_char);
+ 	exit (1);
+@@ -126,11 +129,15 @@ static int expand (word, prev)
+     wordp = word;
+     while (same_count--)
+ 	*wordp++ = (*prevp++);
+-    if (gets (wordp) == NULL)
++    size = UNSEQBUFSIZE - (wordp - word);
++    if (fgets(wordp, size <= UNSEQBUFSIZE ? size : 0, stdin) == NULL)
+ 	{
+ 	(void) fprintf (stderr, UNSQ_C_SURPRISE_EOF);
+ 	exit (1);
+ 	}
++    word[UNSEQBUFSIZE - 1] = '\0';	/* In case of no newline */
++    if ((nl = strrchr(wordp, '\n')))
++	*nl = '\0';
+     (void) strcpy (prev, word);
+     return 0 ;
+     }
+-- 

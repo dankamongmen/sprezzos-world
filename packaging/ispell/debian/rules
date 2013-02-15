@@ -1,0 +1,122 @@
+#!/usr/bin/make -f
+
+SHELL                   := sh -e
+CFLAGS                  := $(shell dpkg-buildflags --get CFLAGS) -Wall
+LDFLAGS                 := $(shell dpkg-buildflags --get LDFLAGS)
+DH_AUTO_OPTIONS         := -v -Smakefile
+GEN_DH_FILES            := debian/packages.d/gen_debhelper_files.pl
+export DESTDIR          := $(CURDIR)/debian/tmp
+
+
+build: export MISSING_BUILD_DEPS := $(shell dpkg-checkbuilddeps 2>&1)
+binary binary-arch binary-indep build build-arch build-indep: debian/packages.stamp
+	dh ${@}
+
+clean:
+	dh ${@}
+
+
+ifneq ($(shell dh_listpackages),$(shell dh_listpackages -i))  # arch:any packages are built
+override_dh_auto_build:   debian/build-arch.stamp
+
+override_dh_auto_install: install-arch
+endif
+
+ifneq ($(shell dh_listpackages),$(shell dh_listpackages -a)) # arch:all packages are built
+  ifneq (,$(MISSING_BUILD_DEPS))
+    $(warning $(MISSING_BUILD_DEPS))
+    $(warning Postponing build of architecture independent files until binary or binary-indep target is called)
+  else
+override_dh_auto_build:   debian/build-indep.stamp
+  endif
+override_dh_auto_install: install-indep
+endif
+
+override_dh_auto_clean:
+	rm -f debian/*.stamp debian/*.config debian/*.templates *.mwl*
+	
+	for dir in . languages/*; do                                    \
+	        [ ! -d $$dir ] || $(MAKE) -C $$dir clean dictclean;     \
+	done
+	
+	
+	[ ! -f Makefile ] || $(MAKE) realclean
+	-find . -name "*~" | xargs rm -f
+	
+	rm -f local.h defhash.h languages/english/english.5
+	
+	$(GEN_DH_FILES) clean
+
+override_dh_installdocs:
+	dh_installdocs -a
+	dh_installdocs -i  --link-doc=ienglish-common
+	
+
+debian/packages.stamp: $(wildcard debian/packages.d/*.in) $(GEN_DH_FILES) debian/rules debian/control
+	perl $(GEN_DH_FILES) generate
+	touch "$@"
+
+
+debian/build-common.stamp: debian/packages.stamp
+	@echo "*** Building common files"
+	
+	ln -sf local.h.linux local.h
+	
+	dh_auto_build $(DH_AUTO_OPTIONS) -- CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"     \
+	                config.sh                                                       \
+	                programs defmt-programs showversion ispell.1 ispell.5           
+	touch "$@"
+
+debian/build-arch.stamp: debian/build-common.stamp
+	touch "$@"
+	        
+debian/build-indep.stamp: debian/build-common.stamp
+	@echo "*** Building arch:all files"
+	dh_auto_build $(DH_AUTO_OPTIONS) -- CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" all-languages
+	
+	$(MAKE) -f debian/rules american.xxl+.mwl british.xxl+.mwl
+	touch "$@"
+
+
+install-arch: debian/build-arch.stamp
+	@echo "*** Installing data into arch:any packages"
+	
+	$(MAKE) CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"  \
+	        DESTDIR="$(DESTDIR)" install-basic install-deformatters install-dictbuild
+	
+install-indep: debian/build-indep.stamp
+	@echo "*** Installing data into arch:all packages"
+	
+	$(MAKE) CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"  \
+	        DESTDIR="$(DESTDIR)" install-languages
+	
+	mv $(DESTDIR)/usr/lib/ispell/english.aff $(DESTDIR)/usr/share/ispell/english.aff
+	
+	set -e; \
+	for lang in american british ; do \
+	   cp -a $$lang.xxl+.mwl $(DESTDIR)/usr/share/ispell/$$lang.xxl+.mwl; \
+	   gzip -9f $(DESTDIR)/usr/share/ispell/$$lang.xxl+.mwl; \
+	done
+	
+	set -e; \
+	for infofile in debian/*.info-ispell; do \
+	        installdeb-ispell --package=`basename $$infofile .info-ispell`; \
+	done
+	
+
+
+american.xxl+.mwl british.xxl+.mwl  : languages/english/english.aff
+american.xxl+.mwl  : languages/american/american.xlg+ /usr/share/dict/american-english-insane
+british.xxl+.mwl   : languages/british/british.xlg+   /usr/share/dict/british-english-insane
+
+%.mwl:
+	# Note: assumes that affix file is the first prerequisite
+	./munchlist -v -T utf8 -l   $^ > $@.tmp
+	mv -f $@.tmp $@
+
+
+.PHONY: binary binary_arch binary_indep build build_arch build_indep clean     \
+	override_dh_auto_build override_dh_auto_install override_dh_auto_clean \
+	override_dh_installdocs                                                \
+	install-arch install-indep
+	
