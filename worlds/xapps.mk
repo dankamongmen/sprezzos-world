@@ -22,3 +22,20 @@ $(MODELBUILDER): $(SPREZZ)/model-builder/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Model-Builder-$(model-builder_UPVER).tar.gz $(TARARGS) $@
 
+#.PHONY: xbmc
+#xbmc:$(XBMC)_$(ARCH).deb
+#$(XBMC): $(SPREZZ)/xbmc/debian/changelog
+#	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+#	git clone git://github.com/xbmc/xbmc.git $@
+#	tar cJf xbmc-$(xbmc_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf xbmc-$(xbmc_UPVER).tar.xz xbmc_$(xbmc_UPVER).orig.tar.xz
+#	cp -r $(<D) $@/
+
+.PHONY: xbmc
+xbmc:$(XBMC)_$(ARCH).deb
+$(XBMC): $(SPREZZ)/xbmc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xbmc_$(xbmc_UPVER).orig.tar.gz $(TARARGS) $@
+
