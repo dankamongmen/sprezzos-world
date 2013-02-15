@@ -652,7 +652,7 @@ $(LENSFUN): $(SPREZZ)/lensfun/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf lensfun-$(lensfun_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf lensfun-$(lensfun_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: less
 less:$(LESS)_$(ARCH).deb
