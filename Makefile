@@ -9273,3 +9273,11 @@ $(NFSWATCH): $(SPREZZ)/nfswatch/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf nfswatch-$(nfswatch_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: palp
+palp:$(PALP)_$(ARCH).deb
+$(PALP): $(SPREZZ)/palp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf palp-$(palp_UPVER).tar.gz $(TARARGS) $@
+
