@@ -9266,3 +9266,11 @@ $(BZR): $(SPREZZ)/bzr/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bzr-$(bzr_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: mercurial
+mercurial:$(MERCURIAL)_$(ARCH).deb
+$(MERCURIAL): $(SPREZZ)/mercurial/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mercurial-$(mercurial_UPVER).tar.gz $(TARARGS) $@
+
