@@ -4422,3 +4422,11 @@ $(HASKELLTIMECOMPAT): $(SPREZZ)/haskell-time-compat/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf time-compat-$(haskell-time-compat_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-monoid-extras
+haskell-monoid-extras:$(HASKELLMONOIDEXTRAS)_$(ARCH).deb
+$(HASKELLMONOIDEXTRAS): $(SPREZZ)/haskell-monoid-extras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf monoid-extras-$(haskell-monoid-extras_UPVER).tar.gz $(TARARGS) $@
+
