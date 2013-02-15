@@ -1,0 +1,70 @@
+#!/usr/bin/make -f
+
+# nostrip option implies noopt
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+   TYPE=Release
+else
+   TYPE=Debug
+endif
+
+DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+# For multiarch
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+CFLAGS = -Wall $(shell dpkg-buildflags --get CPPFLAGS 2>/dev/null) $(shell dpkg-buildflags --get CFLAGS 2>/dev/null | sed -e 's/-g\|-O2//g')
+
+# Use this variable to allow options passed to cmake to be overridable
+DEB_CMAKE_OPTIONS ?= -DCMAKE_VERBOSE_MAKEFILE=ON \
+		-DCMAKE_BUILD_TYPE=$(TYPE) \
+		-DCMAKE_INSTALL_PREFIX="/usr" \
+		-DCMAKE_C_FLAGS="$(CFLAGS)" \
+		-DALSOFT_CONFIG=ON \
+		-DLIB_SUFFIX="/$(DEB_HOST_MULTIARCH)" \
+		..
+
+BUILD_TREE=$(CURDIR)/build-tree
+
+DLOPENED_RECOMMENDS_LIBS = -lpulse
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+DLOPENED_RECOMMENDS_LIBS += -lasound
+endif
+DLOPENED_SUGGESTS_LIBS = -lsndio -lportaudio
+
+.PHONY: build
+%:
+	dh $@ --parallel
+
+build:
+	dh $@ --parallel
+
+override_dh_auto_clean:
+	rm -rf $(BUILD_TREE)
+
+override_dh_auto_configure:
+	mkdir -p $(BUILD_TREE)
+	cd $(BUILD_TREE) && \
+		cmake $(DEB_CMAKE_OPTIONS)
+
+override_dh_auto_build:
+	$(MAKE) --directory=$(BUILD_TREE)
+
+override_dh_auto_install:
+	$(MAKE) --directory=$(BUILD_TREE) install DESTDIR=$(CURDIR)/debian/tmp
+
+override_dh_shlibdeps: debian/tmp/openal-soft-Recommends-dummy.so debian/tmp/openal-soft-Suggests-dummy.so
+	dh_shlibdeps -O--parallel
+	# Need to manually add dependencies for dlopened libs.
+	dpkg-shlibdeps -dRecommends -edebian/tmp/openal-soft-Recommends-dummy.so -xlibc6 -O >>debian/libopenal1.substvars
+	dpkg-shlibdeps -dSuggests -edebian/tmp/openal-soft-Suggests-dummy.so -xlibc6 -O >>debian/libopenal1.substvars
+
+debian/tmp/openal-soft-Recommends-dummy.so:
+	mkdir -p debian/tmp
+	cc -xc -shared -Wl,--no-as-needed -o $@ /dev/null $(DLOPENED_RECOMMENDS_LIBS)
+
+debian/tmp/openal-soft-Suggests-dummy.so:
+	mkdir -p debian/tmp
+	cc -xc -shared -Wl,--no-as-needed -o $@ /dev/null $(DLOPENED_SUGGESTS_LIBS)
+
+get-orig-source:
+	$(dir $_)openal-soft-get-orig-source
