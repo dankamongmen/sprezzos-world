@@ -4398,3 +4398,11 @@ $(HASKELLOBJECTNAME): $(SPREZZ)/haskell-objectname/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ObjectName-$(haskell-objectname_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: hscolour
+hscolour:$(HSCOLOUR)_$(ARCH).deb
+$(HSCOLOUR): $(SPREZZ)/hscolour/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hscolour-$(hscolour_UPVER).tar.gz $(TARARGS) $@
+
