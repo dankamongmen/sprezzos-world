@@ -4382,3 +4382,11 @@ $(HASKELLSTRINGQQ): $(SPREZZ)/haskell-string-qq/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf string-qq-$(haskell-string-qq_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-tensor
+haskell-tensor:$(HASKELLTENSOR)_$(ARCH).deb
+$(HASKELLTENSOR): $(SPREZZ)/haskell-tensor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tensor-$(haskell-tensor_UPVER).tar.gz $(TARARGS) $@
+
