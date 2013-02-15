@@ -782,8 +782,8 @@ $(LIBSUBNAMEPERL): $(SPREZZ)/libsub-name-perl/debian/changelog
 	tar xzvf Sub-Name-$(libsub-name-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libsndfile
-libsndfile:$(libsndfile)_$(ARCH).deb
-$(libsndfile): $(SPREZZ)/libsndfile/debian/changelog
+libsndfile:$(LIBSNDFILE)_$(ARCH).deb
+$(LIBSNDFILE): $(SPREZZ)/libsndfile/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
@@ -9219,4 +9219,12 @@ $(SHELLTESTRUNNER): $(SPREZZ)/shelltestrunner/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf shelltestrunner-$(shelltestrunner_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: openal-soft
+openal-soft:$(OPENALSOFT)_$(ARCH).deb
+$(OPENALSOFT): $(SPREZZ)/openal-soft/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf openal-soft-$(openal-soft_UPVER).tar.bz2 $(TARARGS) $@
 
