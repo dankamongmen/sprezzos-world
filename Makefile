@@ -21,6 +21,7 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 -include $(subst $(SPREZZ),sprezzos-world/,$(PACKAGES))
 
 include worlds/kde.mk
+include worlds/java.mk
 include worlds/perl.mk
 include worlds/lxde.mk
 include worlds/xfce.mk
