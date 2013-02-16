@@ -30,6 +30,16 @@ $(APT): $(SPREZZ)/apt/debian/changelog
 	tar cJvf apt_$(apt_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: apt-setup
+apt-setup:$(APTSETUP)_$(ARCH).deb
+$(APTSETUP): $(SPREZZ)/apt-setup/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf apt-setup-$(apt-setup_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf apt-setup-$(apt-setup_UPVER).tar.xz $(APTSETUP).orig.tar.xz
+	cp -r $(<D) $@
+
 .PHONY: aptitude
 aptitude:$(APTITUDE)_$(ARCH).deb
 $(APTITUDE): $(SPREZZ)/aptitude/debian/changelog
