@@ -303,6 +303,13 @@ $(UNITY): $(SPREZZ)/unity/debian/changelog
 #	cd $@ && uscan --force-download --download-current-version
 #	tar xzvf nux-$(nux_UPVER).tar.gz $(TARARGS) $@
 
+nux3:$(NUX3)_$(ARCH).deb
+$(NUX3): $(SPREZZ)/nux3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nux-$(nux3_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: usb-creator
 usb-creator:$(USBCREATOR)_$(ARCH).deb
 $(USBCREATOR): $(SPREZZ)/usb-creator/debian/changelog
