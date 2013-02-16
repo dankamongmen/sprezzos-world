@@ -6,14 +6,13 @@ $(APPMENUQT): $(SPREZZ)/appmenu-qt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf appmenu-qt-$(appmenu-qt_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: bamf
-bamf:$(BAMF)_$(ARCH).deb
-$(BAMF): $(SPREZZ)/bamf/debian/changelog
+.PHONY: bamf3
+bamf3:$(BAMF3)_$(ARCH).deb
+$(BAMF3): $(SPREZZ)/bamf3/debian/changelog
 	bzr branch lp:bamf $@
 	rm -rf $@/debian
-	tar cJf bamf-$(bamf_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf bamf-$(bamf_UPVER).tar.xz \
-		$(BAMF).orig.tar.xz
+	tar cJf bamf-$(bamf3_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf bamf-$(bamf3_UPVER).tar.xz $(BAMF3).orig.tar.xz
 	cp -r $(<D) $@/
 
 #.PHONY: bamf

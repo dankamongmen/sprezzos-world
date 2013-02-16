@@ -2772,7 +2772,7 @@ $(HASKELLGLUT): $(SPREZZ)/haskell-glut/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf glut-$(haskell-glut_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf GLUT-$(haskell-glut_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-gtk
 haskell-gtk:$(HASKELLGTK)_$(ARCH).deb
@@ -4445,4 +4445,12 @@ $(HASKELLMONADLOGGER): $(SPREZZ)/haskell-monad-logger/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf monad-logger-$(haskell-monad-logger_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-gnutls
+haskell-gnutls:$(HASKELLGNUTLS)_$(ARCH).deb
+$(HASKELLGNUTLS): $(SPREZZ)/haskell-gnutls/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnutls-$(haskell-gnutls_UPVER).tar.gz $(TARARGS) $@
 
