@@ -3396,7 +3396,7 @@ $(HASKELLNCURSES): $(SPREZZ)/haskell-ncurses/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ncurses-$(haskell-ncurses_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf haskell-ncurses_$(haskell-ncurses_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: haskell-netwire
 haskell-netwire:$(HASKELLNETWIRE)_$(ARCH).deb
