@@ -1,0 +1,99 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+	confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+CFLAGS = -Wall -g
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+
+config.status:
+	dh_testdir
+	dh_autoreconf -X .hg
+	CFLAGS="$(CFLAGS)" ./configure $(confflags) \
+				       --prefix=/usr \
+				       --mandir=\$${prefix}/share/man \
+				       --infodir=\$${prefix}/share/info \
+				       --sysconfdir=/etc \
+				       --enable-libplotter \
+				       --enable-libxmi
+
+build: build-arch build-indep
+
+build-arch: build-arch-stamp
+build-arch-stamp:  config.status
+	$(MAKE) 
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp:  config.status
+	# Empty
+
+clean:
+	dh_testdir
+	dh_testroot
+	[ ! -f Makefile ] || $(MAKE) clean
+	dh_autoreconf_clean
+	dh_clean 
+	find . -name Makefile -delete
+	find . \( -name '*.Po' -o -name '*.Plo' \) -delete
+	rm -f *-stamp config.log config.status config.h libtool stamp-h1
+
+
+install: install-indep install-arch
+install-indep: build-indep
+	# Empty
+
+install-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_clean -k -a
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+
+# Must not depend on anything. This is to be called by
+# binary-arch/binary-indep
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_install --list-missing --exclude=.la
+	dh_installchangelogs #ChangeLog		# upstream is empty
+	dh_installdocs
+	dh_installinfo
+	dh_installman
+	dh_strip
+	dh_compress 
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-indep: install-indep
+	# Empty
+
+binary-arch: install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary \
+          install install-indep install-arch autogen test

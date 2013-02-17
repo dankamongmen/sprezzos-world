@@ -47,3 +47,11 @@ $(AGG): $(SPREZZ)/agg/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf agg-$(agg_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: plotutils
+plotutils:$(PLOTUTILS)_$(ARCH).deb
+$(PLOTUTILS): $(SPREZZ)/plotutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf plotutils-$(plotutils_UPVER).tar.gz $(TARARGS) $@
+
