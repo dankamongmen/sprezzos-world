@@ -4454,3 +4454,11 @@ $(HASKELLGNUTLS): $(SPREZZ)/haskell-gnutls/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnutls-$(haskell-gnutls_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-abstract-deque
+haskell-abstract-deque:$(HASKELLABSTRACTDEQUE)_$(ARCH).deb
+$(HASKELLABSTRACTDEQUE): $(SPREZZ)/haskell-abstract-deque/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf abstract-deque-$(haskell-abstract-deque_UPVER).tar.gz $(TARARGS) $@
+
