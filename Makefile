@@ -1297,6 +1297,14 @@ $(AT): $(SPREZZ)/at/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf at_$(at_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: atk
+atk:$(ATK)_$(ARCH).deb
+$(ATK): $(SPREZZ)/atk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf atk-$(atk_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: atk-bridge
 atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
 $(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog
@@ -8942,20 +8950,6 @@ $(FBI): $(SPREZZ)/fbi/debian/changelog $(FBIUP).tar.gz
 FETCHED:=$(FETCHED) sudo-1.8.5p3.tar.gz
 sudo-1.8.5p3.tar.gz:
 	wget -nc -O$@ http://www.gratisoft.us/sudo/dist/sudo-1.8.5p3.tar.gz
-
-FETCHED:=$(FETCHED) $(ATKUP).tar.xz
-$(ATKUP).tar.xz:
-	wget -nc -O$@ http://ftp.gnome.org/pub/GNOME/sources/atk/2.6/$@
-
-$(ATKORIG): $(ATKUP).tar.xz
-	ln -sf $< $@
-
-.PHONY: atk
-atk:$(ATK)_$(ARCH).deb
-$(ATK): $(SPREZZ)/atk/debian/changelog $(ATKORIG)
-	mkdir -p $@
-	tar xJvf $(ATKORIG) $(TARARGS) $@
-	cp -r $(<D) $@/
 
 .PHONY: pandoc
 pandoc:$(PANDOC)_$(ARCH).deb
