@@ -9289,3 +9289,11 @@ $(LIBLDM): $(SPREZZ)/libldm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libldm-$(libldm_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: rfkill
+rfkill:$(RFKILL)_$(ARCH).deb
+$(RFKILL): $(SPREZZ)/rfkill/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rfkill-$(rfkill_UPVER).tar.gz $(TARARGS) $@
+
