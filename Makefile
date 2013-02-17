@@ -9298,3 +9298,11 @@ $(PPP): $(SPREZZ)/ppp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ppp-$(ppp_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: apg
+apg:$(APG)_$(ARCH).deb
+$(APG): $(SPREZZ)/apg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf apg-$(apg_UPVER).tar.gz $(TARARGS) $@
+
