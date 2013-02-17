@@ -9306,3 +9306,11 @@ $(APG): $(SPREZZ)/apg/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf apg-$(apg_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libgusb
+libgusb:$(LIBGUSB)_$(ARCH).deb
+$(LIBGUSB): $(SPREZZ)/libgusb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libgusb-$(libgusb_UPVER).tar.gz $(TARARGS) $@
+
