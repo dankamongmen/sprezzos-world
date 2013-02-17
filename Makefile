@@ -9295,5 +9295,5 @@ $(RFKILL): $(SPREZZ)/rfkill/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf rfkill-$(rfkill_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf rfkill-$(rfkill_UPVER).tar.bz2 $(TARARGS) $@
 
