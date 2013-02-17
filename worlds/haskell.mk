@@ -4470,3 +4470,11 @@ $(HASKELLMONADPAREXTRAS): $(SPREZZ)/haskell-monad-par-extras/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf monad-par-extras-$(haskell-monad-par-extras_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-abstract-par
+haskell-abstract-par:$(HASKELLABSTRACTPAR)_$(ARCH).deb
+$(HASKELLABSTRACTPAR): $(SPREZZ)/haskell-abstract-par/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf abstract-par-$(haskell-abstract-par_UPVER).tar.gz $(TARARGS) $@
+
