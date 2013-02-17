@@ -9312,5 +9312,5 @@ $(LIBGUSB): $(SPREZZ)/libgusb/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libgusb-$(libgusb_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf libgusb-$(libgusb_UPVER).tar.xz $(TARARGS) $@
 
