@@ -4462,3 +4462,11 @@ $(HASKELLABSTRACTDEQUE): $(SPREZZ)/haskell-abstract-deque/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf abstract-deque-$(haskell-abstract-deque_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-monad-par-extras
+haskell-monad-par-extras:$(HASKELLMONADPAREXTRAS)_$(ARCH).deb
+$(HASKELLMONADPAREXTRAS): $(SPREZZ)/haskell-monad-par-extras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf monad-par-extras-$(haskell-monad-par-extras_UPVER).tar.gz $(TARARGS) $@
+
