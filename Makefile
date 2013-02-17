@@ -9300,8 +9300,7 @@ $(RFKILL): $(SPREZZ)/rfkill/debian/changelog
 .PHONY: ppp
 ppp:$(PPP)_$(ARCH).deb
 $(PPP): $(SPREZZ)/ppp/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
+	cp -r $(SPREZZ)/ppp $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ppp-$(ppp_UPVER).tar.gz $(TARARGS) $@
 

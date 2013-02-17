@@ -1,0 +1,129 @@
+this patch is broken
+
+diff -ur ppp.orig/pppd/main.c ppp/pppd/main.c
+--- ppp.orig/pppd/main.c	Tue Sep 23 12:15:22 2003
++++ ppp/pppd/main.c	Thu Jan 15 12:04:28 2004
+@@ -624,7 +624,7 @@
+     }
+ 
+     /* Wait for scripts to finish */
+-    /* XXX should have a timeout here */
++    /* timeout is handled by "reap_kids(1)" */
+     while (n_children > 0) {
+ 	if (debug) {
+ 	    struct subprocess *chp;
+@@ -1710,40 +1710,95 @@
+ reap_kids(waitfor)
+     int waitfor;
+ {
+-    int pid, status;
++    int pid, status, signal_cnt, signal_num;
+     struct subprocess *chp, **prevp;
+ 
++    signal_cnt = 0;
++
+     if (n_children == 0)
+-	return 0;
+-    while ((pid = waitpid(-1, &status, (waitfor? 0: WNOHANG))) != -1
+-	   && pid != 0) {
+-	for (prevp = &children; (chp = *prevp) != NULL; prevp = &chp->next) {
++      return 0; /* there is no kid active */
++
++    while (1) {
++
++      pid = waitpid(-1, &status, WNOHANG);
++      if (pid == -1) {
++	/* waitpid error */
++	if (errno == ECHILD)
++	  return -1;
++	if (errno != EINTR)
++	  error("Error waiting for child process: %m");
++	break; /* exit while loop */
++
++      } else {
++	/* waitpid success */
++
++	if (pid == 0) {
++	  /* kids are running */
++	  if (waitfor == 0)
++	    /* we do not want to wait for kids... */
++	    break; /* exit while loop */
++
++	  /* send kids a signal */
++	  signal_num = 0;
++	  signal_cnt++;
++	  switch (signal_cnt) {
++	  case 1:
++	    signal_num = SIGTERM;
++	    break;
++	  case 2:
++	    signal_num = SIGQUIT;
++	    break;
++	  default:
++	    signal_num = SIGKILL;
++	    signal_cnt--;
++	    break;
++	  }
++	  for (prevp = &children; (chp = *prevp) != NULL; prevp = &chp->next) {
++	    if (debug) {
++	      dbglog("  Sending signal %d to pid %d", signal_num, chp->pid);
++	    }
++	    kill(chp->pid,signal_num);
++	  }
++	  if (signal_num != SIGKILL) {
++	    if (debug)
++	      dbglog("  Waiting 2 seconds for children to finish");
++	    sleep(2);
++	  }
++
++	} else {
++	  
++	  /* a kid has finished */
++
++	  /* update number of active kids */
++	  for (prevp = &children; (chp = *prevp) != NULL; prevp = &chp->next) {
+ 	    if (chp->pid == pid) {
+-		--n_children;
+-		*prevp = chp->next;
+-		break;
++	      --n_children;
++	      *prevp = chp->next;
++	      break;
+ 	    }
+-	}
+-	if (WIFSIGNALED(status)) {
++	  }
++	  
++	  if (WIFSIGNALED(status)) {
+ 	    warn("Child process %s (pid %d) terminated with signal %d",
+ 		 (chp? chp->prog: "??"), pid, WTERMSIG(status));
+-	} else if (debug)
++	  } else if (debug)
+ 	    dbglog("Script %s finished (pid %d), status = 0x%x",
+ 		   (chp? chp->prog: "??"), pid,
+ 		   WIFEXITED(status) ? WEXITSTATUS(status) : status);
+-	if (chp && chp->done)
++	  if (chp && chp->done)
+ 	    (*chp->done)(chp->arg);
+-	if (chp)
++	  if (chp)
+ 	    free(chp);
++
++	  break; /* exit while loop */
++	}
++	
++      }
+     }
+-    if (pid == -1) {
+-	if (errno == ECHILD)
+-	    return -1;
+-	if (errno != EINTR)
+-	    error("Error waiting for child process: %m");
+-    }
++
+     return 0;
+ }
++    
+ 
+ /*
+  * add_notifier - add a new function to be called when something happens.
