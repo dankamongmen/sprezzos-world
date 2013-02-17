@@ -1,0 +1,170 @@
+#!/usr/bin/make -f
+SHELL+= -e
+
+BUILD_UDEB := 1
+
+
+
+QUILT_STAMPFN := .stamp-patched
+include /usr/share/quilt/quilt.make
+
+D := $(CURDIR)/debian/ppp
+
+# plugin ABI version, part of the directory name
+PPPDDIR := 2.4.5
+
+
+ifdef BUILD_UDEB
+BUILD_UDEB_TARGET := .stamp-build-udeb
+else
+NO_PACKAGE := --no-package=ppp-udeb
+endif
+
+##############################################################################
+clean: unpatch
+	rm -rf .stamp-* pppd-udeb changelog-from-README
+	[ ! -f Makefile ] || $(MAKE) dist-clean
+	dh_clean
+
+configure: .stamp-configure
+.stamp-configure: $(QUILT_STAMPFN)
+	dh_testdir
+	./configure --prefix=/usr
+	touch $@
+
+udebdir: .stamp-udebdir
+.stamp-udebdir: .stamp-configure
+	if [ ! -d pppd-udeb/ ]; then \
+		mkdir pppd-udeb/ && \
+		cp -ldpR pppd/* pppd-udeb/; \
+	fi
+	cd pppd-udeb/ && make clean
+	cd pppd-udeb/plugins/ && make clean
+	perl -i -pe 's/ -DIPX_CHANGE\b//' pppd-udeb/Makefile
+	touch $@
+
+build: .stamp-build
+.stamp-build: .stamp-configure
+	dh_testdir
+	$(MAKE)
+	touch $@
+
+build-udeb: .stamp-build-udeb
+.stamp-build-udeb: .stamp-udebdir
+	dh_testdir
+	cd pppd-udeb/ && \
+	$(MAKE) CFLAGS="$(CFLAGS) -Os -fomit-frame-pointer" \
+		CHAPMS= USE_CRYPT= NO_CRYPT_HACK=1 MPPE= \
+		FILTER= HAVE_MULTILINK= USE_TDB= \
+		HAS_SHADOW= USE_PAM= HAVE_INET6= \
+		CBCP= USE_SRP= MAXOCTETS= USE_BUILTIN_CRYPTO=1 \
+	&& \
+	cd plugins/ && \
+	$(MAKE) CFLAGS="$(CFLAGS) -Os -fomit-frame-pointer" \
+		SUBDIRS='rp-pppoe pppoatm' PLUGINS=
+	touch $@
+
+install: .stamp-build $(BUILD_UDEB_TARGET) checkroot
+	dh_testdir
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) install DESTDIR=$D/usr/
+
+	{ \
+	  sed -e "/^What's new in ppp-/,/^. New hooks have been added./!d" README ; \
+	  echo ; \
+	  echo ; \
+	  cat Changes-2.3 ; \
+	} > changelog-from-README
+
+binary-arch: install
+	rm -rf $D/etc/ppp/*-secrets
+	mv $D/usr/include/ $D-dev/usr/
+
+	install -m755 extra/pon extra/plog extra/poff $D/usr/bin/
+	cp extra/pon.completion $D/etc/bash_completion.d/pon
+
+	cp extra/options $D/etc/ppp/
+	install -m755 extra/ip-up extra/ip-down extra/ipv6-up extra/ipv6-down \
+		$D/etc/ppp/
+	install -m755 extra/0000usepeerdns-up $D/etc/ppp/ip-up.d/0000usepeerdns
+	install -m755 extra/0000usepeerdns-down \
+		$D/etc/ppp/ip-down.d/0000usepeerdns
+
+	install -m644 extra/pap-secrets extra/chap-secrets \
+		extra/provider.peer extra/provider.chatscript \
+		$D/usr/share/ppp/
+	install -m644 extra/chatscript.pap $D/etc/chatscripts/pap
+	install -m644 extra/chatscript.gprs $D/etc/chatscripts/gprs
+
+	dh_installchangelogs -a changelog-from-README
+	dh_installdocs
+	dh_installexamples scripts/ extra/autopppd extra/userscripts-* \
+		extra/popp extra/filters extra/options.ttyXX \
+		extra/peers-* extra/interfaces extra/per-linkname
+	# use our own version, not the upstream one
+	mv $D/usr/share/doc/ppp/examples/autopppd \
+		$D/usr/share/doc/ppp/examples/scripts/
+	dh_installman extra/pon.1 extra/pppoe-discovery.8
+	dh_link
+	dh_installlogrotate
+	dh_installinit --init-script=pppd-dns --no-start \
+		--update-rcd-params='start 38 S .'
+	dh_installpam
+
+ifdef BUILD_UDEB
+	grep '^[a-zA-Z0-9]' extra/options | grep -v '^noipx' \
+		> $D-udeb/etc/ppp/options
+#	cp chat/chat $D-udeb/usr/sbin/
+	cp pppd-udeb/pppd $D-udeb/usr/sbin/
+	cp pppd-udeb/pppd pppd-udeb/plugins/rp-pppoe/pppoe-discovery \
+		$D-udeb/usr/sbin/
+	mkdir -p $D-udeb/usr/lib/pppd/$(PPPDDIR)/
+	cp pppd-udeb/plugins/rp-pppoe/rp-pppoe.so \
+		pppd-udeb/plugins/pppoatm/pppoatm.so \
+		$D-udeb/usr/lib/pppd/$(PPPDDIR)/
+	install -m755 extra/ppp-udeb.ip-up $D-udeb/etc/ppp/ip-up
+	install -m755 extra/ppp-udeb-postbaseinst \
+		$D-udeb/usr/lib/post-base-installer.d/30ppp
+	dh_installdebconf
+endif
+
+	dh_strip		-a
+	dh_compress		-a
+	dh_fixperms		-a
+
+	chown root:dip $D/usr/sbin/pppd \
+		$D/etc/ppp/ $D/etc/ppp/peers/ $D/etc/chatscripts/
+	chmod 4754 $D/usr/sbin/pppd
+	chmod 2750 $D/etc/ppp/peers/ $D/etc/chatscripts/
+
+	dh_md5sums		-a
+	dh_shlibdeps		-a
+	dh_installdeb		-a
+
+	dh_gencontrol		-a $(NO_PACKAGE)
+	dh_builddeb		-a $(NO_PACKAGE)
+
+binary-indep: install
+	dh_installchangelogs	-i changelog-from-README
+	dh_installdocs		-i
+
+	dh_compress		-i
+	dh_fixperms		-i
+
+	dh_md5sums		-i
+	dh_installdeb		-i
+	dh_gencontrol		-i 
+	dh_builddeb		-i
+
+
+binary:	binary-arch binary-indep
+
+checkroot:
+	test root = "`whoami`"
+
+get-orig-source:
+	cd $(dir $(firstword $(MAKEFILE_LIST)))../ && \
+	uscan --rename --force-download --watchfile debian/watch --destdir $(CURDIR)
+
+.PHONY: binary binary-arch binary-indep unpack configure build clean checkroot

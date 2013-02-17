@@ -1,0 +1,153 @@
+radius plugin enhancements
+
+http://ppp.samba.org/cgi-bin/ppp-bugs/incoming?id=1466
+
+From: z0termann@mail.ru
+To: ppp-bugs@ppp.samba.org
+Subject: radius plugin enhancements
+Date: Fri, 11 Aug 2006 08:06:24 +0000 (GMT)
+
+Full_Name: Vadim Zotov
+Version: 2.4.3
+OS: centos4
+Submission from: (NULL) (194.186.83.193)
+
+
+The patch below allows radius plugin to handle
+additional radius attributes:
+
+- Filter-ID (sets RADIUS_FILTER_ID env. var.)
+- Framed-Route (sets RADIUS_FRAMED_ROUTE env. var.)
+- Idle-Timeout
+- NAS-IP-Address
+- MS-Primary-DNS-Server
+- MS-Secondary-DNS-Server
+- MS-Primary-NBNS-Server
+- MS-Secondary-NBNS-Server
+
+--------------------------------------------
+--- a/pppd/plugins/radius/radius.c
++++ b/pppd/plugins/radius/radius.c
+@@ -48,6 +48,8 @@ static char const RCSID[] =
+ 
+ #define MD5_HASH_SIZE	16
+ 
++#define MSDNS 1
++
+ static char *config_file = NULL;
+ static int add_avp(char **);
+ static struct avpopt {
+@@ -544,6 +546,15 @@ radius_setparams(VALUE_PAIR *vp, char *m
+     int mppe_enc_types = 0;
+ #endif
+ 
++#ifdef MSDNS
++    ipcp_options *wo = &ipcp_wantoptions[0];
++    ipcp_options *ao = &ipcp_allowoptions[0];
++    int got_msdns_1 = 0;
++    int got_msdns_2 = 0;
++    int got_wins_1 = 0;
++    int got_wins_2 = 0;
++#endif
++
+     /* Send RADIUS attributes to anyone else who might be interested */
+     if (radius_attributes_hook) {
+ 	(*radius_attributes_hook)(vp);
+@@ -581,6 +592,21 @@ radius_setparams(VALUE_PAIR *vp, char *m
+ 		/* Session timeout */
+ 		maxconnect = vp->lvalue;
+ 		break;
++/* -- additional parameters */
++	    case PW_FILTER_ID:
++		/* packet filter, will be handled via ip-(up|down) script */
++		script_setenv("RADIUS_FILTER_ID",vp->strvalue,1);
++		break;
++	    case PW_FRAMED_ROUTE:
++		/* route, will be handled via ip-(up|down) script */
++		script_setenv("RADIUS_FRAMED_ROUTE",vp->strvalue,1);
++		break;
++	    case PW_IDLE_TIMEOUT:
++		/* idle parameter */
++		idle_time_limit = vp->lvalue;
++		slprintf(msg, BUF_LEN, "setting idle tmo to %ld",vp->lvalue);
++		break;
++/* -- end of additional parameters */
+ #ifdef MAXOCTETS
+ 	    case PW_SESSION_OCTETS_LIMIT:
+ 		/* Session traffic limit */
+@@ -619,6 +645,11 @@ radius_setparams(VALUE_PAIR *vp, char *m
+ 		    rstate.ip_addr = remote;
+ 		}
+ 		break;
++/* --- additional parameters ---*/
++	    case PW_NAS_IP_ADDRESS:
++		wo->ouraddr = htonl(vp->lvalue);
++		break;
++/* --- end additional parameters --- */
+ 	    case PW_CLASS:
+ 		/* Save Class attribute to pass it in accounting request */
+ 		if (vp->lvalue <= MAXCLASSLEN) {
+@@ -629,8 +660,8 @@ radius_setparams(VALUE_PAIR *vp, char *m
+ 	    }
+ 
+ 
+-#ifdef CHAPMS
+ 	} else if (vp->vendorcode == VENDOR_MICROSOFT) {
++#ifdef CHAPMS
+ 	    switch (vp->attribute) {
+ 	    case PW_MS_CHAP2_SUCCESS:
+ 		if ((vp->lvalue != 43) || strncmp(vp->strvalue + 1, "S=", 2)) {
+@@ -673,19 +704,38 @@ radius_setparams(VALUE_PAIR *vp, char *m
+ 		break;
+ 
+ #endif /* MPPE */
+-#if 0
++#ifdef MSDNS
+ 	    case PW_MS_PRIMARY_DNS_SERVER:
++		ao->dnsaddr[0] = htonl(vp->lvalue);
++		got_msdns_1 = 1;
++		break;
+ 	    case PW_MS_SECONDARY_DNS_SERVER:
++		ao->dnsaddr[1] = htonl(vp->lvalue);
++		got_msdns_2 = 1;
++		break;
+ 	    case PW_MS_PRIMARY_NBNS_SERVER:
++		ao->winsaddr[0] = htonl(vp->lvalue);
++		got_wins_1 = 1;
++		break;
+ 	    case PW_MS_SECONDARY_NBNS_SERVER:
++		ao->winsaddr[1] = htonl(vp->lvalue);
++		got_wins_2 = 1;
+ 		break;
+-#endif
++#endif /* MSDNS */
+ 	    }
+ #endif /* CHAPMS */
+ 	}
+ 	vp = vp->next;
+     }
+ 
++#ifdef MSDNS
++    /* override the ms-dns & ms-wins options */
++    if      (got_msdns_1 == 1 && got_msdns_2 == 0 ) ao->dnsaddr[1]  = ao->dnsaddr[0];
++    else if (got_msdns_1 == 0 && got_msdns_2 == 1 ) ao->dnsaddr[0]  = ao->dnsaddr[1];
++    if      (got_wins_1  == 1 && got_wins_2  == 0 ) ao->winsaddr[1] = ao->winsaddr[0];
++    else if (got_wins_1  == 0 && got_wins_2  == 1 ) ao->winsaddr[0] = ao->winsaddr[1];
++#endif
++
+     /* Require a valid MS-CHAP2-SUCCESS for MS-CHAPv2 auth */
+     if (digest && (digest->code == CHAP_MICROSOFT_V2) && !ms_chap2_success)
+ 	return -1;
+--- a/pppd/plugins/radius/radiusclient.h
++++ b/pppd/plugins/radius/radiusclient.h
+@@ -152,6 +152,10 @@ typedef struct pw_auth_hdr
+ #define PW_MS_CHAP_MPPE_KEYS		12	/* string */
+ #define PW_MS_MPPE_SEND_KEY		16	/* string */
+ #define PW_MS_MPPE_RECV_KEY		17	/* string */
++#define PW_MS_PRIMARY_DNS_SERVER	28	/* ipaddr */
++#define PW_MS_SECONDARY_DNS_SERVER	29	/* ipaddr */
++#define PW_MS_PRIMARY_NBNS_SERVER	30	/* ipaddr */
++#define PW_MS_SECONDARY_NBNS_SERVER	31	/* ipaddr */
+ 
+ /*	Accounting */
+ 

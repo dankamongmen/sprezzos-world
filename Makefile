@@ -9297,3 +9297,11 @@ $(RFKILL): $(SPREZZ)/rfkill/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf rfkill-$(rfkill_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: ppp
+ppp:$(PPP)_$(ARCH).deb
+$(PPP): $(SPREZZ)/ppp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ppp-$(ppp_UPVER).tar.gz $(TARARGS) $@
+
