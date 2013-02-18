@@ -318,3 +318,11 @@ $(USBCREATOR): $(SPREZZ)/usb-creator/debian/changelog
 	ln -sf usb-creator-$(usb-creator_UPVER).tar.xz $(USBCREATOR).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: docky
+docky:$(DOCKY)_$(ARCH).deb
+$(DOCKY): $(SPREZZ)/docky/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf docky-$(docky_UPVER).tar.xz $(TARARGS) $@
+
