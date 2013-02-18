@@ -9322,3 +9322,11 @@ $(FOLKS): $(SPREZZ)/folks/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf folks-$(folks_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libavc1394
+libavc1394:$(LIBAVC1394)_$(ARCH).deb
+$(LIBAVC1394): $(SPREZZ)/libavc1394/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libavc1394-$(libavc1394_UPVER).tar.gz $(TARARGS) $@
+
