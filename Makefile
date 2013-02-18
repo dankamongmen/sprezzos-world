@@ -9314,3 +9314,11 @@ $(LIBGUSB): $(SPREZZ)/libgusb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgusb-$(libgusb_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: folks
+folks:$(FOLKS)_$(ARCH).deb
+$(FOLKS): $(SPREZZ)/folks/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf folks-$(folks_UPVER).tar.xz $(TARARGS) $@
+
