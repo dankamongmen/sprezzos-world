@@ -1132,7 +1132,7 @@ $(HASKELLCONFIGFILE): $(SPREZZ)/haskell-configfile/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf configfile-$(haskell-configfile_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf ConfigFile-$(haskell-configfile_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-arrows
 haskell-arrows:$(HASKELLARROWS)_$(ARCH).deb
