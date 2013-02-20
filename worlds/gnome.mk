@@ -653,3 +653,11 @@ $(GTKMM2.4): $(SPREZZ)/gtkmm2.4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gtkmm-$(gtkmm2.4_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: librest
+librest:$(LIBREST)_$(ARCH).deb
+$(LIBREST): $(SPREZZ)/librest/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf librest-$(librest_UPVER).tar.bz2 $(TARARGS) $@
+
