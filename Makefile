@@ -26,6 +26,7 @@ include worlds/perl.mk
 include worlds/lxde.mk
 include worlds/xfce.mk
 include worlds/mint.mk
+include worlds/core.mk
 include worlds/gnome.mk
 include worlds/xapps.mk
 include worlds/debian.mk
