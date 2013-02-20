@@ -269,3 +269,11 @@ $(I2CTOOLS): $(SPREZZ)/i2c-tools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf i2c-tools-$(i2c-tools_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: djvulibre
+djvulibre:$(DJVULIBRE)_$(ARCH).deb
+$(DJVULIBRE): $(SPREZZ)/djvulibre/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf djvulibre-$(djvulibre_UPVER).tar.gz $(TARARGS) $@
+

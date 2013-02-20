@@ -661,3 +661,11 @@ $(LIBREST): $(SPREZZ)/librest/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf librest-$(librest_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libgxps
+libgxps:$(LIBGXPS)_$(ARCH).deb
+$(LIBGXPS): $(SPREZZ)/libgxps/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libgxps-$(libgxps_UPVER).tar.xz $(TARARGS) $@
+
