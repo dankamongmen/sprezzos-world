@@ -276,4 +276,6 @@ $(DJVULIBRE): $(SPREZZ)/djvulibre/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf djvulibre-$(djvulibre_UPVER).tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@
 
