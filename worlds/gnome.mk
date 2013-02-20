@@ -637,3 +637,11 @@ $(VTE3): $(SPREZZ)/vte3/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vte_$(vte3_UPVER).orig.tar.xz $(TARARGS) $@
+.PHONY: gtkspell
+gtkspell:$(GTKSPELL)_$(ARCH).deb
+$(GTKSPELL): $(SPREZZ)/gtkspell/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtkspell-$(gtkspell_UPVER).tar.gz $(TARARGS) $@
+
