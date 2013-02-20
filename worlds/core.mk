@@ -261,3 +261,11 @@ $(LIBAVC1394): $(SPREZZ)/libavc1394/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libavc1394-$(libavc1394_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: i2c-tools
+i2c-tools:$(I2CTOOLS)_$(ARCH).deb
+$(I2CTOOLS): $(SPREZZ)/i2c-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf i2c-tools-$(i2c-tools_UPVER).tar.gz $(TARARGS) $@
+
