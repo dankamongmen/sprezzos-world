@@ -4478,3 +4478,11 @@ $(HASKELLABSTRACTPAR): $(SPREZZ)/haskell-abstract-par/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf abstract-par-$(haskell-abstract-par_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-blaze-builder-conduit
+haskell-blaze-builder-conduit:$(HASKELLBLAZEBUILDERCONDUIT)_$(ARCH).deb
+$(HASKELLBLAZEBUILDERCONDUIT): $(SPREZZ)/haskell-blaze-builder-conduit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blaze-builder-conduit-$(haskell-blaze-builder-conduit_UPVER).tar.gz $(TARARGS) $@
+
