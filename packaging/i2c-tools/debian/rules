@@ -1,0 +1,116 @@
+#!/usr/bin/make -f
+
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_SYSTEM ?= $(shell dpkg-architecture -qDEB_HOST_GNU_SYSTEM)
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+        CFLAGS += -g
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+        INSTALL_PROGRAM += -s
+endif
+
+PYVERS = $(shell pyversions -v -r debian/control)
+
+clean:
+	dh_testdir
+	dh_testroot
+	
+	$(MAKE) clean
+
+	rm -rf py-smbus/build
+	rm -f *-stamp*
+	dh_clean 
+
+
+# Build everything that goes into the Debian package.  Use recursive make
+# invocations to build all of the interesting components.
+build: build-arch build-indep
+build-arch: build-stamp-binaries $(PYVERS:%=build-stamp-python-%)
+build-indep: build-stamp-binaries
+
+build-stamp-binaries:
+	dh_testdir
+	$(MAKE) CFLAGS="$(CFLAGS)"
+	touch $@
+
+build-stamp-python-%:
+	dh_testdir
+	cd py-smbus && \
+		CFLAGS="$(CFLAGS) -I../include" python$* setup.py build
+	touch $@
+
+install: install-stamp-binaries $(PYVERS:%=install-stamp-python-%)
+
+install-stamp-binaries: build-stamp-binaries
+	dh_testdir 
+	dh_testroot 
+	dh_clean -k 
+	dh_installdirs
+
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr
+
+	dh_install --sourcedir=debian/tmp
+
+	touch $@
+
+install-stamp-python-%: build-stamp-python-%
+	dh_testdir 
+	dh_testroot 
+	dh_installdirs
+
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp prefix=/usr
+	cd py-smbus && \
+		CFLAGS="$(CFLAGS) -I../include" python$* setup.py install --install-layout=deb --root=$(CURDIR)/debian/python-smbus
+
+	touch $@
+
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir 
+	dh_testroot
+	dh_installchangelogs -i CHANGES
+	dh_installdocs -i
+	dh_installman -i
+	dh_link -i
+	dh_strip -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependant files that arn't kernel modules here.
+binary-arch: build install
+	dh_testdir 
+	dh_testroot
+	dh_installchangelogs -a CHANGES
+	dh_installdocs -a
+	dh_installman -a
+	dh_installudev -a
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_perl -a
+	dh_makeshlibs -a
+	dh_python2 -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-arch binary-indep
+.PHONY: clean build build-arch build-indep install binary-indep binary-arch binary
