@@ -267,5 +267,5 @@ $(I2CTOOLS): $(SPREZZ)/i2c-tools/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf i2c-tools-$(i2c-tools_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf i2c-tools-$(i2c-tools_UPVER).tar.bz2 $(TARARGS) $@
 
