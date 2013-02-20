@@ -677,3 +677,11 @@ $(GNOMEGAMES): $(SPREZZ)/gnome-games/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-games-$(gnome-games_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: conduit
+conduit:$(CONDUIT)_$(ARCH).deb
+$(CONDUIT): $(SPREZZ)/conduit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf conduit-$(conduit_UPVER).tar.gz $(TARARGS) $@
+
