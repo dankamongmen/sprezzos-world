@@ -651,5 +651,5 @@ $(GTKMM2.4): $(SPREZZ)/gtkmm2.4/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gtkmm2.4-$(gtkmm2.4_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf gtkmm-$(gtkmm2.4_UPVER).tar.bz2 $(TARARGS) $@
 
