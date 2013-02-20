@@ -645,3 +645,11 @@ $(GTKSPELL): $(SPREZZ)/gtkspell/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gtkspell-$(gtkspell_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gtkmm2.4
+gtkmm2.4:$(GTKMM2.4)_$(ARCH).deb
+$(GTKMM2.4): $(SPREZZ)/gtkmm2.4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtkmm2.4-$(gtkmm2.4_UPVER).tar.gz $(TARARGS) $@
+
