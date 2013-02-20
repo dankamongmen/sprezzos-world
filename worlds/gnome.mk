@@ -669,3 +669,11 @@ $(LIBGXPS): $(SPREZZ)/libgxps/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgxps-$(libgxps_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gnome-games
+gnome-games:$(GNOMEGAMES)_$(ARCH).deb
+$(GNOMEGAMES): $(SPREZZ)/gnome-games/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-games-$(gnome-games_UPVER).tar.xz $(TARARGS) $@
+
