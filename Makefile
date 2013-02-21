@@ -1963,6 +1963,16 @@ $(CHECK): $(SPREZZ)/check/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf check-$(check_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: muffin
+muffin:$(MUFFIN)_$(ARCH).deb
+$(MUFFIN): $(SPREZZ)/muffin/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf muffin_$(muffin_UPVER).orig.tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
+
 .PHONY: cinnamon
 cinnamon:$(CINNAMON)_$(ARCH).deb
 $(CINNAMON): $(SPREZZ)/cinnamon/debian/changelog
@@ -1970,6 +1980,8 @@ $(CINNAMON): $(SPREZZ)/cinnamon/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cinnamon_$(cinnamon_UPVER).orig.tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: cmake
 cmake:$(CMAKE)_$(ARCH).deb
@@ -6106,14 +6118,6 @@ $(LIBMTP): $(SPREZZ)/libmtp/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmtp-$(libmtp_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: muffin
-muffin:$(MUFFIN)_$(ARCH).deb
-$(MUFFIN): $(SPREZZ)/muffin/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf muffin_$(muffin_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: mutt
 mutt:$(MUTT)_$(ARCH).deb
