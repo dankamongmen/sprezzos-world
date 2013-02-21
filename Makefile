@@ -9084,7 +9084,7 @@ clean:
 
 update:
 	for i in $(wildcard packaging/*) ; do \
-		[ ! -d $$i ] || cd $$i && { uscan --verbose ; cd - ; } || true ; \
+		[ ! -d $$i ] || { cd $$i && { uscan --verbose ; cd - ; } } || true ; \
 	done
 
 clobber:
