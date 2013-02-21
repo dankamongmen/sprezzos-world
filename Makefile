@@ -49,7 +49,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) #-j8
+	cd $< && debuild -k$(DEBKEY) -j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -235,6 +235,23 @@ $(EMAP): $(SPREZZ)/emap/debian/changelog
 	tar cJf emap-$(emap_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf emap-$(emap_UPVER).tar.xz emap_$(emap_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
+
+.PHONY: webkit
+webkit:$(WEBKIT)_$(ARCH).deb
+$(WEBKIT): $(SPREZZ)/webkit/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	svn checkout https://svn.webkit.org/repository/webkit/trunk $@
+	tar cJf webkit-$(webkit_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf webkit-$(webkit_UPVER).tar.xz webkit_$(webkit_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+#.PHONY: webkit
+#webkit:$(WEBKIT)_$(ARCH).deb
+#$(WEBKIT): $(SPREZZ)/webkit/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@/
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xJvf webkit_$(webkit_UPVER).orig.tar.xz $(TARARGS) $@
 
 #.PHONY: gtk-theme-config
 #gtk-theme-config:$(GTKTHEMECONFIG)_$(ARCH).deb
@@ -8241,14 +8258,6 @@ $(W3M): $(SPREZZ)/w3m/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf w3m-$(w3m_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: webkit
-webkit:$(WEBKIT)_$(ARCH).deb
-$(WEBKIT): $(SPREZZ)/webkit/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf webkit_$(webkit_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: libwebp
 libwebp:$(LIBWEBP)_$(ARCH).deb
