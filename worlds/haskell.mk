@@ -2380,7 +2380,7 @@ $(HASKELLAMI): $(SPREZZ)/haskell-ami/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ami-$(haskell-ami_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf AMi-$(haskell-ami_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-augeas
 haskell-augeas:$(HASKELLAUGEAS)_$(ARCH).deb
