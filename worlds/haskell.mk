@@ -1356,7 +1356,7 @@ $(HASKELLEDISONAPI): $(SPREZZ)/haskell-edison-api/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf edison-api-$(haskell-edison-api_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf EdisonAPI-$(haskell-edison-api_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-edison-core
 haskell-edison-core:$(HASKELLEDISONCORE)_$(ARCH).deb
@@ -1364,7 +1364,7 @@ $(HASKELLEDISONCORE): $(SPREZZ)/haskell-edison-core/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf edison-core-$(haskell-edison-core_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf EdisonCore-$(haskell-edison-core_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-editline
 haskell-editline:$(HASKELLEDITLINE)_$(ARCH).deb
