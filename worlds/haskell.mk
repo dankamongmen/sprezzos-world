@@ -4492,5 +4492,5 @@ $(HASKELLSIMPLEREFLECT): $(SPREZZ)/haskell-simple-reflect/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf haskell-simple-reflect-$(haskell-simple-reflect_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf simple-reflect-$(haskell-simple-reflect_UPVER).tar.gz $(TARARGS) $@
 

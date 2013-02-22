@@ -1,0 +1,204 @@
+#!/usr/bin/make -f 
+# -*- makefile -*-
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+export CFLAGS = -Wall -g -Wno-unused-variable -fpermissive -Wno-format-security 
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+export CPPFLAGS=$(CFLAGS)
+
+SOVERSION=1.4
+BALL_INSTALL_PATH=build
+PYTHON_VERSION=2.6
+PYTHON_SITE_PATH=$(shell python -c "import distutils.sysconfig; print distutils.sysconfig.get_python_lib(0,0)[4:];")
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	#bash debian/debian-ball-install configure
+	mkdir build
+	cd build && CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" cmake .. -DCMAKE_SOURCE_DIR=$(CURDIR) -DCMAKE_INSTALL_PREFIX=./usr -DBALL_PATH=/usr -DBALL_DATA_PATH=/usr/share/BALL-$(SOVERSION)/data
+	touch $@
+
+#build: build-stamp 
+#build-stamp: build-arch-stamp build-indep-stamp
+#	touch $@
+
+build:
+	echo "Please call either build-arch or build-indep"
+
+build-arch: build-arch-stamp
+build-arch-stamp: configure-stamp
+	dh_testdir
+	#bash debian/debian-ball-install build-arch
+	make -C build BALL VIEW BALLView install
+	touch $@
+
+# The arch dependent bits need to be uilt also for the independent bits
+build-indep: build-arch-stamp build-indep-stamp
+build-indep-stamp: configure-stamp
+	dh_testdir
+	#bash debian/debian-ball-install build-arch
+	make -C build doc doc_tutorial install
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	#bash debian/debian-ball-install clean
+	[ -d source ] && cd source ; \
+	if [ -f Makefile ] ; \
+	then  \
+		make clean ; \
+		cd PYTHON/EXTENSIONS; \
+		make clean; \
+		rm -rf ../lib/Linux*; \
+		rm -rf ../doc/doxygen/latex/*; \
+		rm -f $(CURDIR)/source/config.status 2>/dev/null; \
+	fi
+	rm -f data/BALLView/translations/BALLView.de_DE.qm
+	rm -f data/BALLView/translations/BALLView.zh_TW.qm
+	rm -f doc/TUTORIAL/*.aux
+	rm -rf $(BALL_INSTALL_PATH)
+	find . -name "*.o" | xargs -r rm
+	find . -type l | xargs -r rm
+	find doc/TUTORIAL/ -name "tutorial.*" | egrep -v ".(tex|bib)$$" |xargs -r rm 
+	find . -name "*.doc" -delete
+
+	dh_clean build-stamp configure-stamp build-arch-stamp build-indep-stamp
+
+install-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_clean -k 
+	dh_installdirs
+
+	mkdir -p debian/libball$(SOVERSION)/usr/lib \
+		debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION) \
+		debian/libballview$(SOVERSION)/usr/lib \
+		debian/python-ball/usr/share/BALL-$(SOVERSION) \
+		debian/python-ball/usr/$(PYTHON_SITE_PATH) \
+		debian/python-ballview/usr/$(PYTHON_SITE_PATH)
+
+	mkdir -p debian/ballview/usr/share/BALL-$(SOVERSION)/data/graphics
+
+	cp -r $(BALL_INSTALL_PATH)/usr/share/BALL/doc/BALLView/* debian/ballview/usr/share/doc/ballview/html
+	cp    $(BALL_INSTALL_PATH)/usr/bin/BALLView		 debian/ballview/usr/bin/
+
+	find $(BALL_INSTALL_PATH)/usr/lib/ -name libBALL*.so.* | xargs -r cp --target-directory debian/libball$(SOVERSION)/usr/lib/
+	find $(BALL_INSTALL_PATH)/usr/lib/ -name libVIEW*.so.* | xargs -r cp --target-directory debian/libballview$(SOVERSION)/usr/lib/
+
+	# debian needs the logo in the ballview - package, not in the libball
+	cp $(BALL_INSTALL_PATH)/usr/share/BALL/data/graphics/ballview*.xpm debian/ballview/usr/share/pixmaps/
+
+	cp -r source/EXAMPLES/PYTHON    debian/python-ball/usr/share/BALL-$(SOVERSION)
+	cp $(BALL_INSTALL_PATH)/usr/lib/BALL.py       debian/python-ball/usr/$(PYTHON_SITE_PATH)
+	cp $(BALL_INSTALL_PATH)/usr/lib/BALLCore.so   debian/python-ball/usr/$(PYTHON_SITE_PATH)
+	cp $(BALL_INSTALL_PATH)/usr/lib/VIEW.so       debian/python-ballview/usr/$(PYTHON_SITE_PATH)
+
+	chmod ugo-x debian/python-ball/usr/share/BALL-$(SOVERSION)/PYTHON/UTILITIES/*.py
+	chmod ugo-x debian/python-ball/usr/share/BALL-$(SOVERSION)/PYTHON/BALLView/*.py
+	chmod ugo-x debian/python-ball/usr/share/BALL-$(SOVERSION)/PYTHON/howtos/*.py
+
+	# -dev packages are arch dependent
+	mkdir -p debian/libball$(SOVERSION)-dev/usr/lib \
+		debian/libballview$(SOVERSION)-dev/usr/include/BALL \
+		debian/libballview$(SOVERSION)-dev/usr/lib \
+		debian/libball$(SOVERSION)-dev/usr/include
+	# move the cmake configuration files to their final location
+	cp -R $(BALL_INSTALL_PATH)/usr/lib/cmake/ debian/libball$(SOVERSION)-dev/usr/lib
+
+	cp -r $(BALL_INSTALL_PATH)/usr/include/BALL       debian/libball$(SOVERSION)-dev/usr/include
+	cp -r $(BALL_INSTALL_PATH)/usr/include/BALL/VIEW  debian/libballview$(SOVERSION)-dev/usr/include/BALL
+
+	# get rid of the VIEW includes in libball-dev
+	rm -rf debian/libball$(SOVERSION)-dev/usr/include/BALL/VIEW
+
+	# eliminating chrpath settings
+	chmod 755 debian/ballview/usr/bin/BALLView
+	chrpath -d debian/ballview/usr/bin/BALLView
+	find debian -name "*.so" | xargs -r chrpath -d 
+
+	dh_pysupport -s
+	dh_sip -s
+
+install-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_clean -k 
+	dh_installdirs
+
+	mkdir -p debian/libball$(SOVERSION)-doc/usr/share/doc/libball$(SOVERSION)/html \
+		debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/doc
+
+	cp    $(BALL_INSTALL_PATH)/usr/share/BALL/doc/TUTORIAL/tutorial.pdf   debian/libball$(SOVERSION)-doc/usr/share/doc/libball$(SOVERSION)/
+	cp -r $(BALL_INSTALL_PATH)/usr/share/BALL/doc/classes                 debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/doc
+	cp -r $(BALL_INSTALL_PATH)/usr/share/BALL/doc/internal                debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/doc
+	# we need the BALLView documentation in the data path as well... sorry for that
+	cp -r $(BALL_INSTALL_PATH)/usr/share/BALL/doc/BALLView debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/doc
+	cp -r $(BALL_INSTALL_PATH)/usr/share/BALL/doc/BALL     debian/libball$(SOVERSION)-doc/usr/share/doc/libball$(SOVERSION)/html
+
+	cp -r $(BALL_INSTALL_PATH)/usr/share/BALL/data    debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION) 
+
+
+	# This should already be fixed, by the debian permcheck
+	#chmod ugo-x debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/data/QSAR/*
+	#chmod ugo-x debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/data/CHARMM/charmm*
+	#chmod ugo-x debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/data/graphics/*
+	##chmod 755   debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/data/graphics/QuEasy/
+	#chmod 755   debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/data/graphics/icons/
+	#chmod ugo-x debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/data/structures/*
+	#chmod 755   debian/libball$(SOVERSION)-data/usr/share/BALL-$(SOVERSION)/data/structures/DB/
+
+
+	# links shoulds become relative
+	# FIXME investigate how to achieve that properly 
+	#ln -s ${LIBBALL_TARGET} libball$(SOVERSION)-dev/usr/lib/libBALL.so
+	#ln -s ${LIBVIEW_TARGET} libballview$(SOVERSION)-dev/usr/lib/libVIEW.so
+
+	dh_pysupport -i
+	dh_sip -i
+
+
+binary-common: 
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs 
+	dh_installdocs
+	dh_installexamples
+	dh_install
+	dh_installmenu
+#	dh_python
+	dh_installman
+	dh_link
+	dh_strip --dbg-package=ballview-dbg
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: build-indep install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build-arch install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+get-orig-source:
+	if [ -x /usr/bin/uscan ]; then \
+	  uscan --verbose --force-download ; \
+	else \
+	  echo "uscan is not installed to perform the download." ; \
+	fi
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure build-arch build-indep
