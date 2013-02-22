@@ -2284,7 +2284,7 @@ $(HASKELLX11): $(SPREZZ)/haskell-x11/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf x11-$(haskell-x11_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf X11-$(haskell-x11_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-x11-xft
 haskell-x11-xft:$(HASKELLX11XFT)_$(ARCH).deb
@@ -4501,4 +4501,12 @@ $(HASKELLGNUIDN): $(SPREZZ)/haskell-gnuidn/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnuidn-$(haskell-gnuidn_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: xmonad
+xmonad:$(XMONAD)_$(ARCH).deb
+$(XMONAD): $(SPREZZ)/xmonad/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xmonad-$(xmonad_UPVER).tar.gz $(TARARGS) $@
 
