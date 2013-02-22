@@ -49,7 +49,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -9120,4 +9120,12 @@ $(CLOOGPPL): $(SPREZZ)/cloog-ppl/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cloog-ppl-$(cloog-ppl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: iso-codes
+iso-codes:$(ISOCODES)_$(ARCH).deb
+$(ISOCODES): $(SPREZZ)/iso-codes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf iso-codes-$(iso-codes_UPVER).tar.xz $(TARARGS) $@
 
