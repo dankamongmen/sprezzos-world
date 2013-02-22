@@ -9089,3 +9089,19 @@ update:
 
 clobber:
 	rm -rf -- $(FETCHED)
+.PHONY: gsl
+gsl:$(GSL)_$(ARCH).deb
+$(GSL): $(SPREZZ)/gsl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gsl-$(gsl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: asio
+asio:$(ASIO)_$(ARCH).deb
+$(ASIO): $(SPREZZ)/asio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf asio-$(asio_UPVER).tar.gz $(TARARGS) $@
+
