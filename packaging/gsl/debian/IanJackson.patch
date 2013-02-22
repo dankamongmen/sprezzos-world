@@ -1,0 +1,145 @@
+diff -u orig/gsl-1.8/multimin/fminimizer.c gsl-1.8/multimin/fminimizer.c
+--- orig/gsl-1.8/multimin/fminimizer.c	2005-06-26 14:25:35.000000000 +0100
++++ gsl-1.8/multimin/fminimizer.c	2008-09-29 02:07:29.000000000 +0100
+@@ -90,7 +90,9 @@
+ 
+   gsl_vector_memcpy (s->x,x);
+ 
+-  return (s->type->set) (s->state, s->f, s->x, &(s->size), step_size);
++  s->simplex_size_valid = 0;
++
++  return (s->type->set) (s->state, s->f, s->x, step_size);
+ }
+ 
+ void
+@@ -105,7 +107,9 @@
+ int
+ gsl_multimin_fminimizer_iterate (gsl_multimin_fminimizer * s)
+ {
+-  return (s->type->iterate) (s->state, s->f, s->x, &(s->size), &(s->fval));
++  s->simplex_size_valid = 0;
++
++  return (s->type->iterate) (s->state, s->f, s->x, &(s->fval));
+ }
+ 
+ const char * 
+@@ -128,7 +132,12 @@
+ }
+ 
+ double
+-gsl_multimin_fminimizer_size (const gsl_multimin_fminimizer * s)
++gsl_multimin_fminimizer_size (gsl_multimin_fminimizer * s)
+ {
+-  return s->size;
++  if (!s->simplex_size_valid)
++    {
++      s->simplex_size = (s->type->get_size) (s->state);
++      s->simplex_size_valid = 1;
++    }
++  return s->simplex_size;
+ }
+Only in gsl-1.8/multimin: fminimizer.c~
+diff -u orig/gsl-1.8/multimin/gsl_multimin.h gsl-1.8/multimin/gsl_multimin.h
+--- orig/gsl-1.8/multimin/gsl_multimin.h	2005-06-26 14:25:35.000000000 +0100
++++ gsl-1.8/multimin/gsl_multimin.h	2008-09-29 02:08:17.000000000 +0100
+@@ -84,13 +84,12 @@
+   int (*alloc) (void *state, size_t n);
+   int (*set) (void *state, gsl_multimin_function * f,
+               const gsl_vector * x, 
+-              double * size,
+               const gsl_vector * step_size);
+   int (*iterate) (void *state, gsl_multimin_function * f, 
+                   gsl_vector * x, 
+-                  double * size,
+                   double * fval);
+   void (*free) (void *state);
++  double (*get_size) (void *state);
+ }
+ gsl_multimin_fminimizer_type;
+ 
+@@ -103,7 +102,8 @@
+   double fval;
+   gsl_vector * x;
+   
+-  double size;
++  int simplex_size_valid;
++  double simplex_size;
+ 
+   void *state;
+ }
+@@ -135,7 +135,7 @@
+ gsl_multimin_fminimizer_minimum (const gsl_multimin_fminimizer * s);
+ 
+ double
+-gsl_multimin_fminimizer_size (const gsl_multimin_fminimizer * s);
++gsl_multimin_fminimizer_size (gsl_multimin_fminimizer * s);
+ 
+ /* Convergence test functions */
+ 
+Only in gsl-1.8/multimin: gsl_multimin.h~
+diff -u orig/gsl-1.8/multimin/simplex.c gsl-1.8/multimin/simplex.c
+--- orig/gsl-1.8/multimin/simplex.c	2005-06-26 14:25:35.000000000 +0100
++++ gsl-1.8/multimin/simplex.c	2008-09-29 02:01:18.000000000 +0100
+@@ -150,8 +150,10 @@
+ }
+ 
+ static double
+-nmsimplex_size (nmsimplex_state_t * state)
++nmsimplex_get_size (void *vstate)
+ {
++  nmsimplex_state_t *state = (nmsimplex_state_t *) vstate;
++
+   /* calculates simplex size as average sum of length of vectors 
+      from simplex center to corner points:     
+ 
+@@ -218,7 +220,7 @@
+ static int
+ nmsimplex_set (void *vstate, gsl_multimin_function * f,
+                const gsl_vector * x,
+-               double *size, const gsl_vector * step_size)
++               const gsl_vector * step_size)
+ {
+   int status;
+   size_t i;
+@@ -252,10 +254,6 @@
+       gsl_vector_set (state->y1, i + 1, val);
+     }
+ 
+-  /* Initialize simplex size */
+-
+-  *size = nmsimplex_size (state);
+-
+   return GSL_SUCCESS;
+ }
+ 
+@@ -272,7 +270,7 @@
+ 
+ static int
+ nmsimplex_iterate (void *vstate, gsl_multimin_function * f,
+-                   gsl_vector * x, double *size, double *fval)
++                   gsl_vector * x, double *fval)
+ {
+ 
+   /* Simplex iteration tries to minimize function f value */
+@@ -395,10 +393,6 @@
+   gsl_matrix_get_row (x, x1, lo);
+   *fval = gsl_vector_get (y1, lo);
+ 
+-  /* Update simplex size */
+-
+-  *size = nmsimplex_size (state);
+-
+   return GSL_SUCCESS;
+ }
+ 
+@@ -408,7 +402,8 @@
+   &nmsimplex_alloc,
+   &nmsimplex_set,
+   &nmsimplex_iterate,
+-  &nmsimplex_free
++  &nmsimplex_free,
++  &nmsimplex_get_size
+ };
+ 
+ const gsl_multimin_fminimizer_type
+Only in gsl-1.8/multimin: simplex.c~

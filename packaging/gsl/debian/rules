@@ -1,0 +1,293 @@
+#!/usr/bin/make -f
+#                                                       -*- makefile -*-
+# debian/rules file for the Debian/GNU Linux gsl package
+# Copyright (C) 1999 - 2012 by Dirk Eddelbuettel <edd@debian.org>
+
+source  := $(shell head -1 debian/changelog | awk '{print $$1}')
+sonum   := 0
+libpack := libgsl$(sonum)ldbl
+#devpack := $(libpack)-dev
+devpack := libgsl$(sonum)-dev
+dbgpack := libgsl$(sonum)-dbg
+binpack := $(source)-bin
+profpack := libgsl$(sonum)-prof
+#docpack := $(source)-doc-pdf
+#debtmp	:= $(CURDIR)/debian/$(libpack)
+debtmp	:= $(CURDIR)/debian/tmp
+#debdoc	:= $(CURDIR)/debian/$(docpack)
+debprof := $(CURDIR)/debian/$(profpack)
+arch 	:= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+
+#export DH_VERBOSE=1
+
+## needed for texi2pdf / tetex as document has larger-than-normal indices
+export pool_size=250000
+
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+# FOR AUTOCONF 2.52 AND NEWER ONLY
+CONFFLAGS =
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  CONFFLAGS += --build $(DEB_HOST_GNU_TYPE)
+else
+  CONFFLAGS += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+DEBUGFLAGS=-g
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	DEBUGFLAGS += -O0
+else
+	DEBUGFLAGS += -O3
+ifeq ($(arch),m68k)
+	DEBUGFLAGS += -O0
+endif
+endif
+# edd 12 Sep 2007  alpha fails with -O3
+ifeq ($(arch),alpha)
+	DEBUGFLAGS += -O2
+endif
+
+# edd 18 Nov 2006:  add -fexceptions, but don't use -O3 as 
+#                   'make check' as gcc hangs in cblas/ after test_ger.c
+CFLAGS	   :=-Wall -pipe -fexceptions -D_REENTRANT $(DEBUGFLAGS)
+CFLAGSnog  :=-Wall -pipe -fexceptions -D_REENTRANT -O2 
+# edd 29 Sep 2005   alpha needs -mieee with gcc 4.0
+ifeq ($(arch),alpha)
+CFLAGS	+= -mieee
+endif
+
+#setting DEB_BUILD_OPTIONS=buildprof means we build a package
+#consisting of static libraries (renamed to libfoo_p.a) with 
+#profiling information in.
+ifneq (,$(findstring buildprof,$(DEB_BUILD_OPTIONS)))
+CONFIGTARGET = configure-prof-stamp
+INSTALLTARGET = install-prof-stamp
+BINARYTARGET = binary-prof
+CFLAGS += -pg
+export DH_OPTIONS =-N$(libpack) -N$(devpack) -N$(binpack) -N$(dbgpack) -p$(profpack)
+else
+CONFIGTARGET = configure-stamp
+INSTALLTARGET = install-stamp
+BINARYTARGET = binary-arch binary-indep
+export DH_OPTIONS =-N$(profpack)
+endif
+
+upstream: get-orig-source
+get-orig-source: 
+        #lynx ftp://sources.redhat.com/pub/gsl
+        #lynx http://mirrors.rcn.net/pub/sourceware/gsl
+	lynx http://www.network-theory.co.uk/download/gsl
+
+
+configure: $(CONFIGTARGET)
+
+configure-stamp:
+	dh_testdir
+	dh_testdir
+
+	ln -sf /usr/share/misc/config.sub .
+	ln -sf /usr/share/misc/config.guess .
+	rm -f config.cache
+
+	[ -d doc ] || mkdir doc
+	cp -vax debian/Makefile.in.doc doc/Makefile.in
+
+	./configure 	CFLAGS="$(CFLAGS)" 		\
+			--prefix=/usr 			\
+			--enable-shared 		\
+			--enable-static 		\
+			--with-gnu-ld 			\
+			$(CONFFLAGS) 			
+
+        # patch libtool re rpath (see lintian docu)
+	sed < libtool > libtool-2 \
+			-e 's/^hardcode_libdir_flag_spec.*$$/hardcode_libdir_flag_spec=" -D__LIBTOOL_IS_A_FOOL__ "/' \
+			-e '/^archive_cmds="/s/"$$/ \\$$deplibs"/'
+	mv libtool-2 libtool
+	chmod 755 libtool            
+        # end libtool rpath patch
+	touch configure-stamp
+
+configure-prof-stamp:
+	dh_testdir
+
+	ln -sf /usr/share/misc/config.sub .
+	ln -sf /usr/share/misc/config.guess .
+	rm -f config.cache
+
+	[ -d doc ] || mkdir doc
+	cp -vax debian/Makefile.in.doc doc/Makefile.in
+
+	./configure 	CFLAGS="$(CFLAGS)" 		\
+			--prefix=/usr 			\
+			--disable-shared 		\
+			--enable-static 		\
+			--with-gnu-ld 			\
+			$(CONFFLAGS) 			
+	touch configure-prof-stamp
+
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE)	
+	touch build-stamp
+
+build-doc: build-doc-stamp
+build-doc-stamp: configure-stamp
+	dh_testdir
+	touch build-doc-stamp
+
+deprecated-non-free-doc:
+        # make ps files -- skip as we ship the upstream one in gsl-ref-psdoc
+        #cd doc && $(MAKE) ps
+        # make pdf
+        ## edd 10 Apr 2005  added patch by Guiseppe Bonacci for #303757 
+	cd doc && \
+	   cp -p randist.texi randist.texi.orig && \
+	   sed 's/^.*\\input \(rand.*\)\.tex.*$$/@end tex\n@center @image{\1}\n@tex/' \
+	     randist.texi.orig > randist.texi && \
+	   for i in rand-*.tex random-walk.tex ; do \
+	     echo Converting $$i to eps; \
+	     j=`basename $$i .tex`; \
+	     tex "\batchmode\nopagenumbers\input $$j\bye"; \
+	     dvips $$j; \
+	     ps2eps -f $$j.ps; \
+	   done && \
+	   for i in *.eps; do \
+	     echo Converting $$i to pdf... && epstopdf $$i ; \
+	   done && $(MAKE) ps && ps2pdf gsl-ref.ps
+        # edd 23 Mar 2006  'make pdf' is now inactive upstream
+	touch build-doc-stamp
+
+test:	build test-stamp
+test-stamp: 
+	-$(MAKE) check CFLAGS="$(CFLAGSnog)" | grep -C5 -v '^PASS:'
+	touch test-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp install-stamp test-stamp build-doc-stamp \
+		configure-stamp install-doc-stamp configure-prof-stamp \
+		install-prof-stamp
+	rm -rf debian/static/
+	-rm -f doc/*.pdf doc/*.dvi doc/*.log doc/*.ps
+	dh_clean lib/*so* build/*.so*
+	[ ! -f Makefile ] || $(MAKE) distclean || true
+	rm -vf config.sub config.guess
+	rm -rf doc/
+	rm -rf $(debtmp) $(debprof)
+
+install: test $(INSTALLTARGET)
+install-stamp: 
+	$(MAKE) -f debian/rules DH_OPTIONS= install-work
+install-work:
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	$(MAKE) prefix=$(debtmp)/usr	 		\
+		libdir=$(debtmp)/usr/lib		\
+		infodir=$(debtmp)/usr/share/info	\
+		includedir=$(debtmp)/usr/include	\
+		mandir=$(debtmp)/usr/share/man		install
+        # deal with automake / install-info issue #215538
+	rm -vf	$(debtmp)/usr/share/info/dir 		\
+		$(debtmp)/usr/share/info/dir.old 	
+        # purify for DFSG compliance and delete (!!) documentation
+	rm -rvf	$(debtmp)/usr/share/info
+        # deal with libtool leftover .la files (#245556)
+	rm -vf $(debtmp)/usr/lib/libgsl*.la
+        #
+	dh_installdirs		-p$(binpack)	usr/share/man/man1
+        #dh_installman		-p$(binpack)	debian/gsl-histogram.1 \
+        #					debian/gsl-randist.1
+        # move static libs into dev-package  and binaries into bin package
+	dh_install --sourcedir=debian/tmp -p$(binpack) -p$(devpack) -p$(libpack)
+
+        # lintian silencer for the 'ldbl' transition package
+	dh_installdirs -p$(libpack) usr/share/lintian/overrides
+	install -m0644 debian/$(libpack).overrides \
+		$(CURDIR)/debian/$(libpack)/usr/share/lintian/overrides/$(libpack)
+
+	touch install-stamp
+
+install-prof-stamp: test-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	$(MAKE) prefix=$(debtmp)/usr	 		\
+		libdir=$(debtmp)/usr/lib		\
+		infodir=$(debtmp)/usr/share/info	\
+		includedir=$(debtmp)/usr/include	\
+		mandir=$(debtmp)/usr/share/man		install
+	#rename the profiling libraries
+	for lib in $(debtmp)/usr/lib/*.a ;\
+		do mv "$$lib" "$${lib%%.a}_p.a"; done
+	dh_install --sourcedir=$(debtmp)
+	touch install-prof-stamp
+
+
+install-doc: install-doc-stamp
+install-doc-stamp: build-doc
+	dh_testdir
+	dh_testroot
+	touch install-doc-stamp
+
+deprecated-non-free-doc:
+	mkdir -p -m 0755 $(debdoc)/usr/share/doc/$(docpack)
+	install -m 0644 doc/gsl-ref.pdf  $(debdoc)/usr/share/doc/$(docpack)
+
+# This single target is used to build all the packages, all at once, or
+# one at a time. So keep in mind: any options passed to commands here will
+# affect _all_ packages. Anything you want to only affect one package
+# should be put in another target, such as the install target.
+binary-common: build test install 
+        #dh_testversion 2.0
+	dh_testdir
+	dh_testroot
+        #dh_installdebconf
+	dh_link
+	dh_installdocs
+        #dh_installexamples
+        #dh_installmenu
+        #dh_installemacsen
+        #dh_installpam
+        #dh_installinit
+        #dh_installcron
+        #dh_installinfo		-p$(devpack)
+        #dh_undocumented	-p$(binpack)	gsl-histogram.1 gsl-randist.1
+	dh_installchangelogs			ChangeLog
+	dh_compress
+	dh_fixperms
+#	dh_strip		-N$(devpack)
+	dh_strip -X_p.a	--sourcedir=debian/tmp	--dbg-package=$(dbgpack)
+        #dh_suidregister
+	dh_makeshlibs
+	dh_installdeb
+        #dh_perl
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: build-doc install-doc
+	$(MAKE) -f debian/rules DH_OPTIONS="-i -N$(profpack)" binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build install
+	$(MAKE) -f debian/rules DH_OPTIONS="-a -N$(profpack)" binary-common
+
+binary-prof: binary-common
+# Any other binary targets build just one binary package at a time.
+#binary-%: build install
+#	make -f debian/rules binary-common DH_OPTIONS=-p$*
+
+binary: $(BINARYTARGET)
+.PHONY: build build-doc clean binary-indep binary-arch binary install install-doc 

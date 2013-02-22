@@ -1,0 +1,232 @@
+diff -ruN unchanged/gsl-1.11+dfsg/debian/control gsl-1.11+dfsg/debian/control
+--- unchanged/gsl-1.11+dfsg/debian/control	2008-10-29 11:35:22.000000000 +0000
++++ gsl-1.11+dfsg/debian/control	2008-10-29 10:28:07.000000000 +0000
+@@ -73,3 +73,20 @@
+  This package contains debugging symbol tables for the static  GSL libraries
+  libgsl and libgslcblas from the libgsl0-dev package, and the binaries 
+  gsl-randist and gsl-histogram from the gsl-bin package.
++
++
++Package: libgsl0-prof
++Section: libdevel
++Priority: extra
++Architecture: any
++Depends: libgsl0ldbl (= ${binary:Version})
++Description: GNU Scientific Library (GSL) -- Profiling Libraries
++ The GNU Scientific Library (GSL) is a collection of routines for
++ numerical analysis.  The routines are written from scratch by the GSL
++ team in C, and present a modern API for C programmers, while allowing
++ wrappers to be written for very high level languages.
++ .
++ This package contains static libraries compiled with profiling info (-pg)
++ suitable for use with gprof.
++ .
++ URL: http://www.gnu.org/software/gsl/
+diff -ruN unchanged/gsl-1.11+dfsg/debian/libgsl0ldbl.docs gsl-1.11+dfsg/debian/libgsl0ldbl.docs
+--- unchanged/gsl-1.11+dfsg/debian/libgsl0ldbl.docs	1970-01-01 01:00:00.000000000 +0100
++++ gsl-1.11+dfsg/debian/libgsl0ldbl.docs	2008-10-29 10:30:27.000000000 +0000
+@@ -0,0 +1,7 @@
++AUTHORS
++NEWS
++README
++TODO
++BUGS
++THANKS
++SUPPORT
+diff -ruN unchanged/gsl-1.11+dfsg/debian/libgsl0-prof.install gsl-1.11+dfsg/debian/libgsl0-prof.install
+--- unchanged/gsl-1.11+dfsg/debian/libgsl0-prof.install	1970-01-01 01:00:00.000000000 +0100
++++ gsl-1.11+dfsg/debian/libgsl0-prof.install	2008-10-29 10:31:12.000000000 +0000
+@@ -0,0 +1 @@
++usr/lib/libgsl*p.a
+diff -ruN unchanged/gsl-1.11+dfsg/debian/README.Debian gsl-1.11+dfsg/debian/README.Debian
+--- unchanged/gsl-1.11+dfsg/debian/README.Debian	2008-10-29 11:35:22.000000000 +0000
++++ gsl-1.11+dfsg/debian/README.Debian	2008-10-29 10:32:59.000000000 +0000
+@@ -1,3 +1,4 @@
++			    Documentation
+ 
+ Documentation (in info or pdf format) is no longer provided by the
+ standard GNU GSL packages. Debian takes a hard stand on the
+@@ -10,3 +11,25 @@
+ apt-get and other tools can download from it.
+ 
+  -- Dirk Eddelbuettel <edd@debian.org>, Tue, 26 Aug 2008 18:21:00 -0500
++
++			    Profiling GSL
++
++Sometimes when writing complex code, you may want to profile it using
++gprof. In this case, having libraries with profiling information
++compiled in is invaluable. It is possible to build your own .deb
++containing profiling libraries, that may be installed on your system
++in parallel to the usual libraries. To do this, follow these simple
++instructions: 
++
++i) download the gsl source (and the build dependancies if necessary):
++apt-get source libgsl0
++apt-get build-dep libgsl0
++ii) build a binary profiling package:
++DEB_BUILD_OPTIONS=buildprof dpkg-buildpackage -b -rfakeroot -us -uc
++iii) install the resulting .deb
++dpkg -i ../libgsl0-prof_[version]_[arch].deb
++
++Finally, you need to specify -lgsl_p and -lgslcblas_p to link your
++program against the profiling libraries.
++
++ -- Matthew Vernon <matthew@debian.org>, Wed, 29 Oct 2008 10:34:19 +0000
+diff -ruN unchanged/gsl-1.11+dfsg/debian/rules gsl-1.11+dfsg/debian/rules
+--- unchanged/gsl-1.11+dfsg/debian/rules	2008-10-29 11:35:22.000000000 +0000
++++ gsl-1.11+dfsg/debian/rules	2008-10-29 11:32:48.000000000 +0000
+@@ -10,10 +10,12 @@
+ devpack := libgsl$(sonum)-dev
+ dbgpack := libgsl$(sonum)-dbg
+ binpack := $(source)-bin
++profpack := libgsl$(sonum)-prof
+ #docpack := $(source)-doc-pdf
+ #debtmp	:= $(CURDIR)/debian/$(libpack)
+ debtmp	:= $(CURDIR)/debian/tmp
+ #debdoc	:= $(CURDIR)/debian/$(docpack)
++debprof := $(CURDIR)/debian/$(profpack)
+ arch 	:= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+ 
+ 
+@@ -56,13 +58,31 @@
+ CFLAGS	+= -mieee
+ endif
+ 
++#setting DEB_BUILD_OPTIONS=buildprof means we build a package
++#consisting of static libraries (renamed to libfoo_p.a) with 
++#profiling information in.
++ifneq (,$(findstring buildprof,$(DEB_BUILD_OPTIONS)))
++CONFIGTARGET = configure-prof-stamp
++INSTALLTARGET = install-prof-stamp
++BINARYTARGET = binary-prof
++CFLAGS += -pg
++export DH_OPTIONS =-N$(libpack) -N$(devpack) -N$(binpack) -N$(dbgpack) -p$(profpack)
++else
++CONFIGTARGET = configure-stamp
++INSTALLTARGET = install-stamp
++BINARYTARGET = binary-arch binary-indep
++export DH_OPTIONS =-N$(profpack)
++endif
++
+ upstream: get-orig-source
+ get-orig-source: 
+         #lynx ftp://sources.redhat.com/pub/gsl
+         #lynx http://mirrors.rcn.net/pub/sourceware/gsl
+ 	lynx http://www.network-theory.co.uk/download/gsl
+ 
+-configure: configure-stamp
++
++configure: $(CONFIGTARGET)
++
+ configure-stamp:
+ 	dh_testdir
+ 	dh_testdir
+@@ -90,6 +110,25 @@
+         # end libtool rpath patch
+ 	touch configure-stamp
+ 
++configure-prof-stamp:
++	dh_testdir
++
++	ln -sf /usr/share/misc/config.sub .
++	ln -sf /usr/share/misc/config.guess .
++	rm -f config.cache
++
++	[ -d doc ] || mkdir doc
++	cp -vax debian/Makefile.in.doc doc/Makefile.in
++
++	./configure 	CFLAGS="$(CFLAGS)" 		\
++			--prefix=/usr 			\
++			--disable-shared 		\
++			--enable-static 		\
++			--with-gnu-ld 			\
++			$(CONFFLAGS) 			
++	touch configure-prof-stamp
++
++
+ build: configure build-stamp
+ build-stamp:
+ 	dh_testdir
+@@ -132,15 +171,17 @@
+ 	dh_testdir
+ 	dh_testroot
+ 	rm -f build-stamp install-stamp test-stamp build-doc-stamp \
+-		configure-stamp install-doc-stamp
++		configure-stamp install-doc-stamp configure-prof-stamp \
++		install-prof-stamp
+ 	rm -rf debian/static/
+ 	-rm -f doc/*.pdf doc/*.dvi doc/*.log doc/*.ps
+ 	dh_clean lib/*so* build/*.so*
+-	[ ! -f Makefile ] || $(MAKE) distclean	
++	[ ! -f Makefile ] || $(MAKE) distclean || true
+ 	rm -vf config.sub config.guess
+ 	rm -rf doc/
++	rm -rf $(debtmp) $(debprof)
+ 
+-install: test install-stamp 
++install: test $(INSTALLTARGET)
+ install-stamp: 
+ 	$(MAKE) -f debian/rules DH_OPTIONS= install-work
+ install-work:
+@@ -174,6 +215,21 @@
+ 
+ 	touch install-stamp
+ 
++install-prof-stamp: test-stamp
++	dh_testdir
++	dh_testroot
++	dh_clean -k
++	$(MAKE) prefix=$(debtmp)/usr	 		\
++		libdir=$(debtmp)/usr/lib		\
++		infodir=$(debtmp)/usr/share/info	\
++		includedir=$(debtmp)/usr/include	\
++		mandir=$(debtmp)/usr/share/man		install
++	#rename the profiling libraries
++	for lib in $(debtmp)/usr/lib/*.a ;\
++		do mv "$$lib" "$${lib%%.a}_p.a"; done
++	dh_install --sourcedir=$(debtmp)
++	touch install-prof-stamp
++
+ 
+ install-doc: install-doc-stamp
+ install-doc-stamp: build-doc
+@@ -195,9 +251,7 @@
+ 	dh_testroot
+         #dh_installdebconf
+ 	dh_link
+-	dh_installdocs		-p$(libpack)	AUTHORS NEWS README TODO \
+-						BUGS THANKS SUPPORT \
+-						debian/README.Debian
++	dh_installdocs
+         #dh_installexamples
+         #dh_installmenu
+         #dh_installemacsen
+@@ -210,7 +264,7 @@
+ 	dh_compress
+ 	dh_fixperms
+ #	dh_strip		-N$(devpack)
+-	dh_strip	--sourcedir=debian/tmp	--dbg-package=libgsl0-dbg
++	dh_strip -X_p.a	--sourcedir=debian/tmp	--dbg-package=libgsl0-dbg
+         #dh_suidregister
+ 	dh_makeshlibs
+ 	dh_installdeb
+@@ -222,15 +276,16 @@
+ 
+ # Build architecture independant packages using the common target.
+ binary-indep: build-doc install-doc
+-	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
++	$(MAKE) -f debian/rules DH_OPTIONS="-i -N$(profpack)" binary-common
+ 
+ # Build architecture dependant packages using the common target.
+ binary-arch: build install
+-	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
++	$(MAKE) -f debian/rules DH_OPTIONS="-a -N$(profpack)" binary-common
+ 
++binary-prof: binary-common
+ # Any other binary targets build just one binary package at a time.
+ #binary-%: build install
+ #	make -f debian/rules binary-common DH_OPTIONS=-p$*
+ 
+-binary: binary-arch binary-indep 
++binary: $(BINARYTARGET)
+ .PHONY: build build-doc clean binary-indep binary-arch binary install install-doc 
