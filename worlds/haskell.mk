@@ -4486,3 +4486,11 @@ $(HASKELLBLAZEBUILDERCONDUIT): $(SPREZZ)/haskell-blaze-builder-conduit/debian/ch
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf blaze-builder-conduit-$(haskell-blaze-builder-conduit_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-simple-reflect
+haskell-simple-reflect:$(HASKELLSIMPLEREFLECT)_$(ARCH).deb
+$(HASKELLSIMPLEREFLECT): $(SPREZZ)/haskell-simple-reflect/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-simple-reflect-$(haskell-simple-reflect_UPVER).tar.gz $(TARARGS) $@
+
