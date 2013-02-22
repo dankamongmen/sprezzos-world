@@ -9113,3 +9113,11 @@ $(L2TPNS): $(SPREZZ)/l2tpns/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf l2tpns-$(l2tpns_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cloog-ppl
+cloog-ppl:$(CLOOGPPL)_$(ARCH).deb
+$(CLOOGPPL): $(SPREZZ)/cloog-ppl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cloog-ppl-$(cloog-ppl_UPVER).tar.gz $(TARARGS) $@
+

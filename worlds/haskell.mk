@@ -4494,3 +4494,11 @@ $(HASKELLSIMPLEREFLECT): $(SPREZZ)/haskell-simple-reflect/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf simple-reflect-$(haskell-simple-reflect_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-gnuidn
+haskell-gnuidn:$(HASKELLGNUIDN)_$(ARCH).deb
+$(HASKELLGNUIDN): $(SPREZZ)/haskell-gnuidn/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnuidn-$(haskell-gnuidn_UPVER).tar.gz $(TARARGS) $@
+
