@@ -61,5 +61,5 @@ $(BALL): $(SPREZZ)/ball/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ball-$(ball_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf ball_$(ball_UPVER).orig.tar.bz2 $(TARARGS) $@
 
