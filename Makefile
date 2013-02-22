@@ -9105,3 +9105,11 @@ $(ASIO): $(SPREZZ)/asio/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf asio-$(asio_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: l2tpns
+l2tpns:$(L2TPNS)_$(ARCH).deb
+$(L2TPNS): $(SPREZZ)/l2tpns/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf l2tpns-$(l2tpns_UPVER).tar.gz $(TARARGS) $@
+
