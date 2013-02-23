@@ -9129,3 +9129,11 @@ $(ISOCODES): $(SPREZZ)/iso-codes/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf iso-codes-$(iso-codes_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gsasl
+gsasl:$(GSASL)_$(ARCH).deb
+$(GSASL): $(SPREZZ)/gsasl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gsasl-$(gsasl_UPVER).tar.gz $(TARARGS) $@
+
