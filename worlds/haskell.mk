@@ -3612,7 +3612,7 @@ $(HASKELLPSQUEUE): $(SPREZZ)/haskell-psqueue/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf psqueue-$(haskell-psqueue_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf PSQueue-$(haskell-psqueue_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-puremd5
 haskell-puremd5:$(HASKELLPUREMD5)_$(ARCH).deb
@@ -3660,7 +3660,7 @@ $(HASKELLRANGEDSETS): $(SPREZZ)/haskell-ranged-sets/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ranged-sets-$(haskell-ranged-sets_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Ranged-sets-$(haskell-ranged-sets_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-ranges
 haskell-ranges:$(HASKELLRANGES)_$(ARCH).deb
@@ -4517,4 +4517,20 @@ $(TOKYOCABINETHASKELL): $(SPREZZ)/tokyocabinet-haskell/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tokyocabinet-haskell-$(tokyocabinet-haskell_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-hs3
+haskell-hs3:$(HASKELLHS3)_$(ARCH).deb
+$(HASKELLHS3): $(SPREZZ)/haskell-hs3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hS3-$(haskell-hs3_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-network-info
+haskell-network-info:$(HASKELLNETWORKINFO)_$(ARCH).deb
+$(HASKELLNETWORKINFO): $(SPREZZ)/haskell-network-info/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf network-info-$(haskell-network-info_UPVER).tar.gz $(TARARGS) $@
 
