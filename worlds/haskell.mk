@@ -1052,7 +1052,7 @@ $(HASKELLCHELL): $(SPREZZ)/haskell-chell/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf chell-$(haskell-chell_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf chell_$(haskell-chell_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: haskell-citeproc-hs
 haskell-citeproc-hs:$(HASKELLCITEPROCHS)_$(ARCH).deb
@@ -1900,7 +1900,7 @@ $(HASKELLMONADCATCHIOMTL): $(SPREZZ)/haskell-monadcatchio-mtl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf monadcatchio-mtl-$(haskell-monadcatchio-mtl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf MonadCatchIO-mtl-$(haskell-monadcatchio-mtl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-monoid-transformer
 haskell-monoid-transformer:$(HASKELLMONOIDTRANSFORMER)_$(ARCH).deb
@@ -2292,7 +2292,7 @@ $(HASKELLX11XFT): $(SPREZZ)/haskell-x11-xft/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf x11-xft-$(haskell-x11-xft_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf X11-xft-$(haskell-x11-xft_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-xhtml
 haskell-xhtml:$(HASKELLXHTML)_$(ARCH).deb
@@ -3340,7 +3340,7 @@ $(HASKELLMONADCATCHIOTRANSFORMERS): $(SPREZZ)/haskell-monadcatchio-transformers/
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf monadcatchio-transformers-$(haskell-monadcatchio-transformers_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf MonadCatchIO-transformers-$(haskell-monadcatchio-transformers_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-monadcryptorandom
 haskell-monadcryptorandom:$(HASKELLMONADCRYPTORANDOM)_$(ARCH).deb
@@ -3484,7 +3484,7 @@ $(HASKELLOPTIONS): $(SPREZZ)/haskell-options/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf options-$(haskell-options_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf haskell-options_$(haskell-options_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: haskell-pandoc
 haskell-pandoc:$(HASKELLPANDOC)_$(ARCH).deb
@@ -4509,4 +4509,12 @@ $(XMONAD): $(SPREZZ)/xmonad/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xmonad-$(xmonad_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: tokyocabinet-haskell
+tokyocabinet-haskell:$(TOKYOCABINETHASKELL)_$(ARCH).deb
+$(TOKYOCABINETHASKELL): $(SPREZZ)/tokyocabinet-haskell/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tokyocabinet-haskell-$(tokyocabinet-haskell_UPVER).tar.gz $(TARARGS) $@
 
