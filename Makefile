@@ -9145,3 +9145,11 @@ $(GUPNPIGD): $(SPREZZ)/gupnp-igd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gupnp-igd-$(gupnp-igd_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: libzen
+libzen:$(LIBZEN)_$(ARCH).deb
+$(LIBZEN): $(SPREZZ)/libzen/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libzen-$(libzen_UPVER).tar.gz $(TARARGS) $@
+
