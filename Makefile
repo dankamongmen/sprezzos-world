@@ -9137,3 +9137,11 @@ $(GSASL): $(SPREZZ)/gsasl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gsasl-$(gsasl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gupnp-igd
+gupnp-igd:$(GUPNPIGD)_$(ARCH).deb
+$(GUPNPIGD): $(SPREZZ)/gupnp-igd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gupnp-igd-$(gupnp-igd_UPVER).tar.xz $(TARARGS) $@
+
