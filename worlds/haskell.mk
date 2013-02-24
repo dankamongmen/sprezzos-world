@@ -4534,3 +4534,59 @@ $(HASKELLNETWORKINFO): $(SPREZZ)/haskell-network-info/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf network-info-$(haskell-network-info_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-fsnotify
+haskell-fsnotify:$(HASKELLFSNOTIFY)_$(ARCH).deb
+$(HASKELLFSNOTIFY): $(SPREZZ)/haskell-fsnotify/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fsnotify-$(haskell-fsnotify_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-http-reverse-proxy
+haskell-http-reverse-proxy:$(HASKELLHTTPREVERSEPROXY)_$(ARCH).deb
+$(HASKELLHTTPREVERSEPROXY): $(SPREZZ)/haskell-http-reverse-proxy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf http-reverse-proxy-$(haskell-http-reverse-proxy_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-classy-prelude-conduit
+haskell-classy-prelude-conduit:$(HASKELLCLASSYPRELUDECONDUIT)_$(ARCH).deb
+$(HASKELLCLASSYPRELUDECONDUIT): $(SPREZZ)/haskell-classy-prelude-conduit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf classy-prelude-conduit-$(haskell-classy-prelude-conduit_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-classy-prelude
+haskell-classy-prelude:$(HASKELLCLASSYPRELUDE)_$(ARCH).deb
+$(HASKELLCLASSYPRELUDE): $(SPREZZ)/haskell-classy-prelude/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf classy-prelude-$(haskell-classy-prelude_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-basic-prelude
+haskell-basic-prelude:$(HASKELLBASICPRELUDE)_$(ARCH).deb
+$(HASKELLBASICPRELUDE): $(SPREZZ)/haskell-basic-prelude/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf basic-prelude-$(haskell-basic-prelude_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-readargs
+haskell-readargs:$(HASKELLREADARGS)_$(ARCH).deb
+$(HASKELLREADARGS): $(SPREZZ)/haskell-readargs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ReadArgs-$(haskell-readargs_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-word8
+haskell-word8:$(HASKELLWORD8)_$(ARCH).deb
+$(HASKELLWORD8): $(SPREZZ)/haskell-word8/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf word8-$(haskell-word8_UPVER).tar.gz $(TARARGS) $@
+
