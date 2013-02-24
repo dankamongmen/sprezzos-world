@@ -6023,6 +6023,8 @@ $(LIBMEDIAINFO): $(SPREZZ)/libmediainfo/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmediainfo_$(libmediainfo_UPVER).tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: libmemcached
 libmemcached:$(LIBMEMCACHED)_$(ARCH).deb
@@ -9151,5 +9153,7 @@ $(LIBZEN): $(SPREZZ)/libzen/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libzen-$(libzen_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libzen_$(libzen_UPVER).tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@
 
