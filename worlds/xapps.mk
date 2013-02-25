@@ -103,3 +103,11 @@ $(XAW3D): $(SPREZZ)/xaw3d/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libXaw3d-$(xaw3d_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: ufraw
+ufraw:$(UFRAW)_$(ARCH).deb
+$(UFRAW): $(SPREZZ)/ufraw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ufraw-$(ufraw_UPVER).tar.gz $(TARARGS) $@
+

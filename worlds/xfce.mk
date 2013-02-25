@@ -156,5 +156,13 @@ $(XFCE4APPFINDER): $(SPREZZ)/xfce4-appfinder/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xfce4-appfinder-$(xfce4-appfinder_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf xfce4-appfinder-$(xfce4-appfinder_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xfburn
+xfburn:$(XFBURN)_$(ARCH).deb
+$(XFBURN): $(SPREZZ)/xfburn/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xfburn-$(xfburn_UPVER).tar.bz2 $(TARARGS) $@
 

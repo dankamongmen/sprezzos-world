@@ -9197,3 +9197,11 @@ $(LEPTONLIB): $(SPREZZ)/leptonlib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf leptonica-$(leptonlib_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libmusicbrainz5
+libmusicbrainz5:$(LIBMUSICBRAINZ5)_$(ARCH).deb
+$(LIBMUSICBRAINZ5): $(SPREZZ)/libmusicbrainz5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmusicbrainz-$(libmusicbrainz5_UPVER).tar.gz $(TARARGS) $@
+
