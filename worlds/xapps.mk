@@ -87,3 +87,19 @@ $(GEEQIE): $(SPREZZ)/geeqie/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf geeqie-$(geeqie_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xpaint
+xpaint:$(XPAINT)_$(ARCH).deb
+$(XPAINT): $(SPREZZ)/xpaint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xpaint-$(xpaint_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xaw3d
+xaw3d:$(XAW3D)_$(ARCH).deb
+$(XAW3D): $(SPREZZ)/xaw3d/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xaw3d-$(xaw3d_UPVER).tar.gz $(TARARGS) $@
+
