@@ -9181,3 +9181,11 @@ $(DNSSECTOOLS): $(SPREZZ)/dnssec-tools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dnssec-tools-$(dnssec-tools_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: alsa-plugins
+alsa-plugins:$(ALSAPLUGINS)_$(ARCH).deb
+$(ALSAPLUGINS): $(SPREZZ)/alsa-plugins/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf alsa-plugins-$(alsa-plugins_UPVER).tar.gz $(TARARGS) $@
+
