@@ -685,3 +685,11 @@ $(CONDUIT): $(SPREZZ)/conduit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf conduit-$(conduit_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: murrine-themes
+murrine-themes:$(MURRINETHEMES)_$(ARCH).deb
+$(MURRINETHEMES): $(SPREZZ)/murrine-themes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf murrine-themes-$(murrine-themes_UPVER).tar.gz $(TARARGS) $@
+
