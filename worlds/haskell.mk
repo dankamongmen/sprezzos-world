@@ -4590,3 +4590,11 @@ $(HASKELLWORD8): $(SPREZZ)/haskell-word8/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf word8-$(haskell-word8_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-publicsuffixlist
+haskell-publicsuffixlist:$(HASKELLPUBLICSUFFIXLIST)_$(ARCH).deb
+$(HASKELLPUBLICSUFFIXLIST): $(SPREZZ)/haskell-publicsuffixlist/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf publicsuffixlist-$(haskell-publicsuffixlist_UPVER).tar.gz $(TARARGS) $@
+
