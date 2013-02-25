@@ -1,0 +1,53 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_BUILD_HARDENING=1
+
+CFLAGS=-Wall -Wextra -g $(if $(findstring noopt,$(DEB_BUILD_OPTIONS)),-O0,-O2)
+CPPFLAGS=-D_XOPEN_SOURCE=600 
+
+PERLINSTALLVENDOR=INSTALLDIRS=vendor INSTALLVENDORSCRIPT=/usr/sbin INSTALLVENDORBIN=/usr/sbin INSTALLVENDORARCH=/usr/share/perl5/ VENDORARCHEXP=/usr/share/perl5/ VENDORPREFIX=/usr
+
+srcpkg = $(shell dpkg-parsechangelog | sed -ne 's/Source: *//p')
+srcver = $(shell dpkg-parsechangelog | sed -ne 's/Version: *\(.*\)-.*/\1/p')
+#{{{ generic rules
+
+../$(srcpkg)_$(srcver).orig.tar.gz:
+	@! git rev-parse --git-dir >/dev/null 2>&1 || pristine-tar checkout $@
+
+check-tarball: ../$(srcpkg)_$(srcver).orig.tar.gz
+
+.PHONY: check-tarball
+
+#}}}
+
+%:
+	dh --with quilt $@
+
+override_dh_auto_configure:
+	autoreconf -fi
+	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" dh_auto_configure -- \
+		--without-validator \
+		--with-ipv6 \
+		--with-nsec3 \
+		--enable-bind-checks \
+		--sysconfdir=/etc \
+		--with-perl-build-args="$(PERLINSTALLVENDOR)" \
+                --localstatedir=/var
+
+override_dh_auto_install:
+	dh_auto_install
+	rmdir $(CURDIR)/debian/dnssec-tools/usr/lib \
+	      $(CURDIR)/debian/dnssec-tools/usr/bin \
+	      $(CURDIR)/debian/dnssec-tools/usr/include
+
+	install -m 640 $(CURDIR)/tools/etc/dnssec-tools/blinkenlights.conf $(CURDIR)/debian/dnssec-tools/etc/dnssec-tools/
+	install -m 640 $(CURDIR)/debian/dnssec-tools.conf $(CURDIR)/debian/dnssec-tools/etc/dnssec-tools/
+	install -m 640 $(CURDIR)/debian/dnssec-tools.rollrec $(CURDIR)/debian/dnssec-tools/etc/dnssec-tools/
+	pod2man --section 5 $(CURDIR)/tools/etc/dnssec-tools/blinkenlights.conf.pod > $(CURDIR)/debian/dnssec-tools/usr/share/man/man5/blinkenlights.conf.5
+	pod2man --section 5 $(CURDIR)/tools/etc/dnssec-tools/dnssec-tools.conf.pod > $(CURDIR)/debian/dnssec-tools/usr/share/man/man5/dnssec-tools.conf.5
+
+override_dh_installinit:
+	dh_installinit --name=rollerd

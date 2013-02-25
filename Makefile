@@ -9173,3 +9173,11 @@ $(DEE): $(SPREZZ)/dee/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dee-$(dee_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: dnssec-tools
+dnssec-tools:$(DNSSECTOOLS)_$(ARCH).deb
+$(DNSSECTOOLS): $(SPREZZ)/dnssec-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dnssec-tools-$(dnssec-tools_UPVER).tar.gz $(TARARGS) $@
+
