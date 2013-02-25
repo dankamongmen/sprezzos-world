@@ -1,0 +1,94 @@
+#!/usr/bin/make -f
+
+# Based on debhelper sample rules file by Joey Hess
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# shared library versions, option 1
+version=2.0.5
+major=2
+# option 2, assuming the library is created as src/.libs/libfoo.so.2.0.5 or so
+#version=`ls src/.libs/lib*.so.* | \
+# awk '{if (match($$0,/[0-9]+\.[0-9]+\.[0-9]+$$/)) print substr($$0,RSTART)}'`
+#major=`ls src/.libs/lib*.so.* | \
+# awk '{if (match($$0,/\.so\.[0-9]+$$/)) print substr($$0,RSTART+4)}'`
+
+DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+build: build-arch
+build-indep:
+build-arch: build-stamp
+build-stamp:
+	dh_testdir
+
+	mkdir -p build-udeb
+	(cd build-udeb ; ln -sf ../* .)
+	rm -f build-udeb/Makefile
+	sed -e 's/-O2/-Os/' < Makefile > build-udeb/Makefile
+
+	$(MAKE) -C build-udeb depend
+	$(MAKE) -C build-udeb
+
+	mkdir -p build
+	(cd build ; ln -sf ../* .)
+
+	$(MAKE) -C build depend
+	DEB_BUILD_HARDENING=1 $(MAKE) -C build
+
+	touch build-stamp
+
+clean:
+	dh_testdir
+	rm -f build-stamp configure-stamp
+
+	rm -fr build build-udeb
+	$(MAKE) clean
+
+	dh_clean
+
+# Build architecture-independent files here.
+binary-indep:
+	@echo No architecture-independent packages.
+
+# Build architecture-dependent files here.
+binary-arch: build
+	dh_testdir
+	dh_testroot
+
+	$(MAKE) -C build install DESTDIR=$(CURDIR)/debian/tmp
+ifeq ($(DEB_HOST_ARCH_OS), linux)
+	mkdir $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+	mv $(CURDIR)/debian/tmp/usr/lib/lib* $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+endif
+
+	dh_movefiles
+
+ifeq ($(DEB_HOST_ARCH_OS), linux)
+	install -d debian/bogl-bterm-udeb/usr/bin
+	install -m 755 build-udeb/bterm debian/bogl-bterm-udeb/usr/bin/bterm
+	install -d debian/bogl-bterm-udeb/usr/share/terminfo/b
+	install -m 644 /usr/share/terminfo/b/bterm debian/bogl-bterm-udeb/usr/share/terminfo/b/bterm
+endif
+
+	dh_installdocs
+	dh_installexamples
+	dh_installman
+	dh_installinfo
+	dh_installchangelogs
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build build-indep build-arch clean binary-indep binary-arch binary configure
