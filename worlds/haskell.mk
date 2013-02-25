@@ -4654,3 +4654,11 @@ $(HASKELLSAFESEMAPHORE): $(SPREZZ)/haskell-safesemaphore/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf SafeSemaphore-$(haskell-safesemaphore_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: drift
+drift:$(DRIFT)_$(ARCH).deb
+$(DRIFT): $(SPREZZ)/drift/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf DrIFT-$(drift_UPVER).tar.gz $(TARARGS) $@
+
