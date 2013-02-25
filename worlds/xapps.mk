@@ -101,5 +101,5 @@ $(XAW3D): $(SPREZZ)/xaw3d/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xaw3d-$(xaw3d_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf libXaw3d-$(xaw3d_UPVER).tar.bz2 $(TARARGS) $@
 
