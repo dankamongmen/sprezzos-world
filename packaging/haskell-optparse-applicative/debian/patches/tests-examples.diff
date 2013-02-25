@@ -1,0 +1,270 @@
+Index: optparse-applicative-0.4.1/tests/Examples/Alternatives.hs
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/Examples/Alternatives.hs	2012-11-17 18:24:59.173793442 +0000
+@@ -0,0 +1,18 @@
++module Examples.Alternatives where
++
++import Options.Applicative
++
++data Value = A | B
++  deriving (Eq, Show)
++
++values :: Parser [Value]
++values = many $ a <|> b
++
++a :: Parser Value
++a = flag' A (short 'a')
++
++b :: Parser Value
++b = flag' B (short 'b')
++
++opts :: ParserInfo [Value]
++opts = info values idm
+Index: optparse-applicative-0.4.1/tests/Examples/Cabal.hs
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/Examples/Cabal.hs	2012-11-17 18:25:10.345787777 +0000
+@@ -0,0 +1,116 @@
++{-# LANGUAGE Arrows #-}
++module Examples.Cabal where
++
++import Options.Applicative
++import Options.Applicative.Arrows
++
++data Args = Args CommonOpts Command
++  deriving Show
++
++data CommonOpts = CommonOpts
++  { optVerbosity :: Int }
++  deriving Show
++
++data Command
++  = Install ConfigureOpts InstallOpts
++  | Update
++  | Configure ConfigureOpts
++  | Build BuildOpts
++  deriving Show
++
++data InstallOpts = InstallOpts
++  { instReinstall :: Bool
++  , instForce :: Bool }
++  deriving Show
++
++data ConfigureOpts = ConfigureOpts
++  { configTests :: Bool
++  , configFlags :: [String] }
++  deriving Show
++
++data BuildOpts = BuildOpts
++  { buildDir :: FilePath }
++  deriving Show
++
++parser :: Parser Args
++parser = runA $ proc () -> do
++  opts <- asA commonOpts -< ()
++  cmds <- (asA . subparser)
++            ( command "install"
++              (info installParser
++                    (progDesc "Installs a list of packages"))
++            & command "update"
++              (info updateParser
++                    (progDesc "Updates list of known packages"))
++            & command "configure"
++              (info configureParser
++                    (progDesc "Prepare to build the package"))
++            & command "build"
++              (info buildParser
++                    (progDesc "Make this package ready for installation")) ) -< ()
++  A helper -< Args opts cmds
++
++commonOpts :: Parser CommonOpts
++commonOpts = CommonOpts
++  <$> option
++      ( short 'v'
++      & long "verbose"
++      & metavar "LEVEL"
++      & help "Set verbosity to LEVEL"
++      & value 0 )
++
++installParser :: Parser Command
++installParser = runA $ proc () -> do
++  config <- asA configureOpts -< ()
++  inst <- asA installOpts -< ()
++  A helper -< Install config inst
++
++installOpts :: Parser InstallOpts
++installOpts = runA $ proc () -> do
++  reinst <- asA (switch (long "reinstall")) -< ()
++  force <- asA (switch (long "force-reinstall")) -< ()
++  returnA -< InstallOpts
++             { instReinstall = reinst
++             , instForce = force }
++
++updateParser :: Parser Command
++updateParser = runA $ proc () ->
++  A helper -< Update
++
++configureParser :: Parser Command
++configureParser = runA $ proc () -> do
++  config <- asA configureOpts -< ()
++  A helper -< Configure config
++
++configureOpts :: Parser ConfigureOpts
++configureOpts = runA $ proc () -> do
++  tests <- (asA . switch)
++             ( long "enable-tests"
++             & help "Enable compilation of test suites" ) -< ()
++  flags <- (asA . many . strOption)
++             ( short 'f'
++             & long "flags"
++             & metavar "FLAGS"
++             & help "Enable the given flag" ) -< ()
++  returnA -< ConfigureOpts tests flags
++
++buildParser :: Parser Command
++buildParser = runA $ proc () -> do
++  opts <- asA buildOpts -< ()
++  A helper -< Build opts
++
++buildOpts :: Parser BuildOpts
++buildOpts = runA $ proc () -> do
++  bdir <- (asA . strOption)
++            ( long "builddir"
++            & metavar "DIR"
++            & value "dist" ) -< ()
++  returnA -< BuildOpts bdir
++
++pinfo :: ParserInfo Args
++pinfo = info parser idm
++
++main :: IO ()
++main = do
++  r <- execParser pinfo
++  print r
+Index: optparse-applicative-0.4.1/tests/Examples/Commands.hs
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/Examples/Commands.hs	2012-11-17 18:25:21.445782141 +0000
+@@ -0,0 +1,32 @@
++module Examples.Commands where
++
++import Data.List
++import Options.Applicative
++
++data Sample
++  = Hello [String]
++  | Goodbye
++  deriving Show
++
++hello :: Parser Sample
++hello = Hello <$> arguments str (metavar "TARGET...")
++
++sample :: Parser Sample
++sample = subparser
++       ( command "hello"
++         (info hello
++               (progDesc "Print greeting"))
++       & command "goodbye"
++         (info (pure Goodbye)
++               (progDesc "Say goodbye"))
++       )
++
++run :: Sample -> IO ()
++run (Hello targets) = putStrLn $ "Hello, " ++ intercalate ", " targets ++ "!"
++run Goodbye = putStrLn "Goodbye."
++
++opts :: ParserInfo Sample
++opts = info sample idm
++
++main :: IO ()
++main = execParser opts >>= run
+Index: optparse-applicative-0.4.1/tests/Examples/Hello.hs
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/Examples/Hello.hs	2012-11-17 18:25:31.689776931 +0000
+@@ -0,0 +1,31 @@
++module Examples.Hello where
++
++import Options.Applicative
++
++data Sample = Sample
++  { hello :: String
++  , quiet :: Bool }
++  deriving Show
++
++sample :: Parser Sample
++sample = Sample
++     <$> strOption
++         ( long "hello"
++         & metavar "TARGET"
++         & help "Target for the greeting" )
++     <*> switch
++         ( long "quiet"
++         & help "Whether to be quiet" )
++
++greet :: Sample -> IO ()
++greet (Sample h False) = putStrLn $ "Hello, " ++ h
++greet _ = return ()
++
++main :: IO ()
++main = execParser opts >>= greet
++
++opts :: ParserInfo Sample
++opts = info (sample <**> helper)
++  ( fullDesc
++  & progDesc "Print a greeting for TARGET"
++  & header "hello - a test for optparse-applicative" )
+Index: optparse-applicative-0.4.1/tests/alt.err.txt
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/alt.err.txt	2012-11-17 18:32:22.725494500 +0000
+@@ -0,0 +1,6 @@
++Usage: alt (--virtual-machine VM | --cloud-service CS | --dry-run)
++
++Available options:
++  --virtual-machine VM     Virtual machine name
++  --cloud-service CS       Cloud service name
++  -h,--help                Show this help text
+Index: optparse-applicative-0.4.1/tests/cabal.err.txt
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/cabal.err.txt	2012-11-17 18:32:33.225486762 +0000
+@@ -0,0 +1,7 @@
++Usage: cabal configure [--enable-tests] [-f|--flags FLAGS]
++  Prepare to build the package
++
++Available options:
++  --enable-tests           Enable compilation of test suites
++  -f,--flags FLAGS         Enable the given flag
++  -h,--help                Show this help text
+Index: optparse-applicative-0.4.1/tests/commands.err.txt
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/commands.err.txt	2012-11-17 18:32:46.337477097 +0000
+@@ -0,0 +1,5 @@
++Usage: commands COMMAND
++
++Available commands:
++  hello                    Print greeting
++  goodbye                  Say goodbye
+Index: optparse-applicative-0.4.1/tests/hello.err.txt
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/hello.err.txt	2012-11-17 18:32:55.161470593 +0000
+@@ -0,0 +1,9 @@
++hello - a test for optparse-applicative
++
++Usage: hello --hello TARGET [--quiet]
++  Print a greeting for TARGET
++
++Available options:
++  --hello TARGET           Target for the greeting
++  --quiet                  Whether to be quiet
++  -h,--help                Show this help text
+Index: optparse-applicative-0.4.1/tests/nested.err.txt
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ optparse-applicative-0.4.1/tests/nested.err.txt	2012-11-17 18:33:14.957455997 +0000
+@@ -0,0 +1 @@
++Usage: nested c b -a A
