@@ -63,3 +63,11 @@ $(BALL): $(SPREZZ)/ball/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf ball_$(ball_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: bogl
+bogl:$(BOGL)_$(ARCH).deb
+$(BOGL): $(SPREZZ)/bogl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bogl-$(bogl_UPVER).tar.gz $(TARARGS) $@
+
