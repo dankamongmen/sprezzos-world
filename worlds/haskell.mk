@@ -1044,7 +1044,7 @@ $(HASKELLCHART): $(SPREZZ)/haskell-chart/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf chart-$(haskell-chart_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Chart-$(haskell-chart_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-chell
 haskell-chell:$(HASKELLCHELL)_$(ARCH).deb
@@ -3236,7 +3236,7 @@ $(HASKELLLIBZIP): $(SPREZZ)/haskell-libzip/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libzip-$(haskell-libzip_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf LibZip-$(haskell-libzip_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-listlike
 haskell-listlike:$(HASKELLLISTLIKE)_$(ARCH).deb
@@ -4597,4 +4597,60 @@ $(HASKELLPUBLICSUFFIXLIST): $(SPREZZ)/haskell-publicsuffixlist/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf publicsuffixlist-$(haskell-publicsuffixlist_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-optparse-applicative
+haskell-optparse-applicative:$(HASKELLOPTPARSEAPPLICATIVE)_$(ARCH).deb
+$(HASKELLOPTPARSEAPPLICATIVE): $(SPREZZ)/haskell-optparse-applicative/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf optparse-applicative-$(haskell-optparse-applicative_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-project-template
+haskell-project-template:$(HASKELLPROJECTTEMPLATE)_$(ARCH).deb
+$(HASKELLPROJECTTEMPLATE): $(SPREZZ)/haskell-project-template/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf project-template-$(haskell-project-template_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-base64-conduit
+haskell-base64-conduit:$(HASKELLBASE64CONDUIT)_$(ARCH).deb
+$(HASKELLBASE64CONDUIT): $(SPREZZ)/haskell-base64-conduit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf base64-conduit-$(haskell-base64-conduit_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-ifelse
+haskell-ifelse:$(HASKELLIFELSE)_$(ARCH).deb
+$(HASKELLIFELSE): $(SPREZZ)/haskell-ifelse/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf IfElse-$(haskell-ifelse_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-network-multicast
+haskell-network-multicast:$(HASKELLNETWORKMULTICAST)_$(ARCH).deb
+$(HASKELLNETWORKMULTICAST): $(SPREZZ)/haskell-network-multicast/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf network-multicast-$(haskell-network-multicast_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-dav
+haskell-dav:$(HASKELLDAV)_$(ARCH).deb
+$(HASKELLDAV): $(SPREZZ)/haskell-dav/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf DAV-$(haskell-dav_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: haskell-safesemaphore
+haskell-safesemaphore:$(HASKELLSAFESEMAPHORE)_$(ARCH).deb
+$(HASKELLSAFESEMAPHORE): $(SPREZZ)/haskell-safesemaphore/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf SafeSemaphore-$(haskell-safesemaphore_UPVER).tar.gz $(TARARGS) $@
 
