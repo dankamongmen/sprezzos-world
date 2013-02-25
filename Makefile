@@ -9165,3 +9165,11 @@ $(CHMLIB): $(SPREZZ)/chmlib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf chmlib-$(chmlib_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: dee
+dee:$(DEE)_$(ARCH).deb
+$(DEE): $(SPREZZ)/dee/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dee-$(dee_UPVER).tar.gz $(TARARGS) $@
+
