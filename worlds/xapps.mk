@@ -79,3 +79,11 @@ $(TESSERACT): $(SPREZZ)/tesseract/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tesseract-ocr-$(tesseract_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: geeqie
+geeqie:$(GEEQIE)_$(ARCH).deb
+$(GEEQIE): $(SPREZZ)/geeqie/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf geeqie-$(geeqie_UPVER).tar.gz $(TARARGS) $@
+

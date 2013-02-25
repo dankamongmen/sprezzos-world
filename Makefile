@@ -9195,5 +9195,5 @@ $(LEPTONLIB): $(SPREZZ)/leptonlib/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf leptonlib-$(leptonlib_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf leptonica-$(leptonlib_UPVER).tar.bz2 $(TARARGS) $@
 
