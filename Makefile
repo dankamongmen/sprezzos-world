@@ -9187,5 +9187,5 @@ $(ALSAPLUGINS): $(SPREZZ)/alsa-plugins/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf alsa-plugins-$(alsa-plugins_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf alsa-plugins-$(alsa-plugins_UPVER).tar.bz2 $(TARARGS) $@
 
