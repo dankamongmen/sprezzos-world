@@ -9157,3 +9157,11 @@ $(LIBZEN): $(SPREZZ)/libzen/debian/changelog
 	rm -rf $@/debian
 	cp -r $(<D) $@
 
+.PHONY: chmlib
+chmlib:$(CHMLIB)_$(ARCH).deb
+$(CHMLIB): $(SPREZZ)/chmlib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf chmlib-$(chmlib_UPVER).tar.gz $(TARARGS) $@
+
