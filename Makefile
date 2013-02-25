@@ -9189,3 +9189,11 @@ $(ALSAPLUGINS): $(SPREZZ)/alsa-plugins/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf alsa-plugins-$(alsa-plugins_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: leptonlib
+leptonlib:$(LEPTONLIB)_$(ARCH).deb
+$(LEPTONLIB): $(SPREZZ)/leptonlib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf leptonlib-$(leptonlib_UPVER).tar.gz $(TARARGS) $@
+

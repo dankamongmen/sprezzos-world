@@ -71,3 +71,11 @@ $(BOGL): $(SPREZZ)/bogl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bogl-$(bogl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: tesseract
+tesseract:$(TESSERACT)_$(ARCH).deb
+$(TESSERACT): $(SPREZZ)/tesseract/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tesseract-ocr-$(tesseract_UPVER).tar.gz $(TARARGS) $@
+
