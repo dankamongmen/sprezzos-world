@@ -142,3 +142,19 @@ $(XFCE4MIXER): $(SPREZZ)/xfce4-mixer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfce4-mixer-$(xfce4-mixer_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: libxfce4menu
+libxfce4menu:$(LIBXFCE4MENU)_$(ARCH).deb
+$(LIBXFCE4MENU): $(SPREZZ)/libxfce4menu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libxfce4menu-$(libxfce4menu_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: xfce4-appfinder
+xfce4-appfinder:$(XFCE4APPFINDER)_$(ARCH).deb
+$(XFCE4APPFINDER): $(SPREZZ)/xfce4-appfinder/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xfce4-appfinder-$(xfce4-appfinder_UPVER).tar.gz $(TARARGS) $@
+
