@@ -4662,3 +4662,11 @@ $(DRIFT): $(SPREZZ)/drift/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf DrIFT-$(drift_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: haskell-rosezipper
+haskell-rosezipper:$(HASKELLROSEZIPPER)_$(ARCH).deb
+$(HASKELLROSEZIPPER): $(SPREZZ)/haskell-rosezipper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rosezipper-$(haskell-rosezipper_UPVER).tar.gz $(TARARGS) $@
+
