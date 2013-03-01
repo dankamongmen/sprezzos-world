@@ -9230,3 +9230,11 @@ $(PPSTOOLS): $(SPREZZ)/pps-tools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pps-tools-$(pps-tools_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: safecopy
+safecopy:$(SAFECOPY)_$(ARCH).deb
+$(SAFECOPY): $(SPREZZ)/safecopy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf safecopy-$(safecopy_UPVER).tar.gz $(TARARGS) $@
+
