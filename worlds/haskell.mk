@@ -4676,5 +4676,5 @@ $(GHCTESTSUITE): $(SPREZZ)/ghc-testsuite/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ghc-testsuite-$(ghc-testsuite_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf ghc-$(ghc-testsuite_UPVER)-testsuite.tar.bz2 $(TARARGS) $@
 

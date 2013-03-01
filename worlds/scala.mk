@@ -4,5 +4,5 @@ $(SCALA): $(SPREZZ)/scala/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf scala-$(scala_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf scala-sources-$(scala_UPVER).tgz $(TARARGS) $@
 
