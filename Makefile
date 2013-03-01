@@ -9222,3 +9222,11 @@ $(GENGETOPT): $(SPREZZ)/gengetopt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gengetopt-$(gengetopt_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pps-tools
+pps-tools:$(PPSTOOLS)_$(ARCH).deb
+$(PPSTOOLS): $(SPREZZ)/pps-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pps-tools-$(pps-tools_UPVER).tar.gz $(TARARGS) $@
+
