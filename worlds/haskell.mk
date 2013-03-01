@@ -4670,3 +4670,11 @@ $(HASKELLROSEZIPPER): $(SPREZZ)/haskell-rosezipper/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rosezipper-$(haskell-rosezipper_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ghc-testsuite
+ghc-testsuite:$(GHCTESTSUITE)_$(ARCH).deb
+$(GHCTESTSUITE): $(SPREZZ)/ghc-testsuite/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ghc-testsuite-$(ghc-testsuite_UPVER).tar.gz $(TARARGS) $@
+
