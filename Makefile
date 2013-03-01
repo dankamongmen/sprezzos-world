@@ -9238,3 +9238,11 @@ $(SAFECOPY): $(SPREZZ)/safecopy/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf safecopy-$(safecopy_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ragel
+ragel:$(RAGEL)_$(ARCH).deb
+$(RAGEL): $(SPREZZ)/ragel/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ragel-$(ragel_UPVER).tar.gz $(TARARGS) $@
+
