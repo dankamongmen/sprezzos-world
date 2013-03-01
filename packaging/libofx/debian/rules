@@ -1,0 +1,91 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# Name of the shared library package
+PACKNAME=libofx4
+
+# Allow our shared data (DTDs, etc) to coexist among multiple installations
+# of different soname revisions of the same library
+CONFIG_VARS=--datadir=/usr/share/$(PACKNAME) LDFLAGS=-Wl,--as-needed
+
+%:
+	dh $@
+
+## Back up generated files to keep the debdiffs clean
+BACKUP_FILES= \
+	ofxdump/ofxdump.1 \
+	ofxdump/cmdline.c \
+	ofxconnect/ofxconnect.1 \
+	libofx.pc \
+	inc/libofx.h \
+	libofx.lsm \
+	libofx.pc \
+	libofx.spec \
+	ofxconnect/cmdline.c \
+	ofxconnect/cmdline.h \
+	ofxdump/cmdline.c \
+	ofxdump/cmdline.h \
+	aclocal.m4 \
+	configure \
+	config.h.in \
+	config/ltmain.sh \
+	libcurl.m4 \
+	$(shell find . -name Makefile.in | grep -v debian/backup)
+
+backup: backup-stamp
+backup-stamp:
+	mkdir -p debian/backup
+	for file in $(BACKUP_FILES); do \
+		mkdir -p debian/backup/`dirname $$file`; \
+		mv $$file debian/backup/$$file; \
+	done
+	touch backup-stamp
+	
+override_dh_auto_configure: backup-stamp
+	## Update libcurl.m4 to suppress autoconf warning
+	ln -sf /usr/share/aclocal/libcurl.m4 libcurl.m4
+	## Apply our Makefile.am changes
+	autoreconf -i -v -s
+	dh_auto_configure -- $(CONFIG_VARS)
+
+
+## Upstream ships some javascript files in their HTML docs, make sure it's
+## not compressed as this will break the references from the HTML
+override_dh_compress:
+	dh_compress -X.js
+
+
+## Restore backed-up files on clean
+override_dh_clean:
+	if [ -d debian/backup ]; then \
+		for file in $(shell find debian/backup -type f | sed 's|^debian/backup/||'); do \
+			mv debian/backup/$$file $$file -fv; \
+		done; \
+		find debian/backup -type d -delete; \
+	fi
+	rm -f backup-stamp
+	rm -f m4/lt*.m4 m4/libtool.m4
+	# Must run last, to ensure backup-stamp isn't removed early
+	dh_clean
+
+
+# For some reason, dh_installchangelogs doesn't notice the upstream changelog
+# without this hint. While we're at it, install NEWS, AUTHORS, README, and
+# totest.txt
+override_dh_installchangelogs:
+	dh_installchangelogs ChangeLog NEWS AUTHORS README totest.txt
+
+override_dh_installman:
+	## Generate the ofx2qif manual page now
+	pod2man debian/ofx2qif.pod --section=1 --center="User Commands" > debian/ofx2qif.1
+	dh_installman
+
+# Generate a debug symbols package
+override_dh_strip:
+	dh_strip --dbg-package=libofx4-dbg
+
+.PHONY: backup override_dh_strip \
+	override_dh_installchangelogs override_dh_clean override_dh_compress \
+	override_dh_auto_configure
