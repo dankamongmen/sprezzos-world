@@ -9206,3 +9206,19 @@ $(LIBMUSICBRAINZ5): $(SPREZZ)/libmusicbrainz5/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmusicbrainz-$(libmusicbrainz5_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libofx
+libofx:$(LIBOFX)_$(ARCH).deb
+$(LIBOFX): $(SPREZZ)/libofx/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libofx-$(libofx_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: gengetopt
+gengetopt:$(GENGETOPT)_$(ARCH).deb
+$(GENGETOPT): $(SPREZZ)/gengetopt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gengetopt-$(gengetopt_UPVER).tar.gz $(TARARGS) $@
+
