@@ -143,3 +143,19 @@ $(GNOKII): $(SPREZZ)/gnokii/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gnokii-$(gnokii_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: makehuman
+makehuman:$(MAKEHUMAN)_$(ARCH).deb
+$(MAKEHUMAN): $(SPREZZ)/makehuman/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf makehuman-$(makehuman_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: k3d
+k3d:$(K3D)_$(ARCH).deb
+$(K3D): $(SPREZZ)/k3d/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf k3d-source-$(k3d_UPVER).tar.bz2 $(TARARGS) $@
+
