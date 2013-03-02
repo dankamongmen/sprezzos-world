@@ -340,24 +340,24 @@ $(MCELOG): $(SPREZZ)/mcelog/debian/changelog
 	tar cJf $(MCELOGORIG) $@ --exclude-vcs
 	cp -r $(<D) $@/
 
-.PHONY: gtkpod
-gtkpod:$(GTKPOD)_$(ARCH).deb
-$(GTKPOD): $(SPREZZ)/gtkpod/debian/changelog
-	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
-	git clone git@github.com:Sprezzatech/gtkpod.git $@
-	echo $(gtkpod_UPVER) > $@/version
-	tar cJf gtkpod-$(gtkpod_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf gtkpod-$(gtkpod_UPVER).tar.xz gtkpod_$(gtkpod_UPVER).orig.tar.xz
-	cp -r $(<D) $@/
-
 #.PHONY: gtkpod
 #gtkpod:$(GTKPOD)_$(ARCH).deb
 #$(GTKPOD): $(SPREZZ)/gtkpod/debian/changelog
-#	mkdir $@
+#	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+#	git clone git@github.com:Sprezzatech/gtkpod.git $@
+#	echo $(gtkpod_UPVER) > $@/version
+#	tar cJf gtkpod-$(gtkpod_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf gtkpod-$(gtkpod_UPVER).tar.xz gtkpod_$(gtkpod_UPVER).orig.tar.xz
 #	cp -r $(<D) $@/
-#	cd $@ && uscan --force-download --download-current-version
-#	tar xzvf gtkpod-$(gtkpod_UPVER).tar.gz $(TARARGS) $@
-#
+
+.PHONY: gtkpod
+gtkpod:$(GTKPOD)_$(ARCH).deb
+$(GTKPOD): $(SPREZZ)/gtkpod/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtkpod-$(gtkpod_UPVER).tar.gz $(TARARGS) $@
+
 #.PHONY: miro
 #miro:$(MIRO)_$(ARCH).deb
 #$(MIRO): $(SPREZZ)/miro/debian/changelog
@@ -9256,4 +9256,12 @@ $(JAM): $(SPREZZ)/jam/debian/changelog
 	gzip jam-$(jam_UPVER).tar
 	ln -s jam-$(jam_UPVER).tar.gz jam_$(jam_UPVER).orig.tar.gz
 	tar xzvf jam-$(jam_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libmusicbrainz3
+libmusicbrainz3:$(LIBMUSICBRAINZ3)_$(ARCH).deb
+$(LIBMUSICBRAINZ3): $(SPREZZ)/libmusicbrainz3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmusicbrainz-$(libmusicbrainz3_UPVER).tar.gz $(TARARGS) $@
 
