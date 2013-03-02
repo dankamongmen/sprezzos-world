@@ -111,3 +111,19 @@ $(UFRAW): $(SPREZZ)/ufraw/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ufraw-$(ufraw_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libxcm
+libxcm:$(LIBXCM)_$(ARCH).deb
+$(LIBXCM): $(SPREZZ)/libxcm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libXcm-$(libxcm_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: oyranos
+oyranos:$(OYRANOS)_$(ARCH).deb
+$(OYRANOS): $(SPREZZ)/oyranos/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf oyranos-$(oyranos_UPVER).tar.bz2 $(TARARGS) $@
+
