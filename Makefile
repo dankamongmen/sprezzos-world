@@ -9265,3 +9265,11 @@ $(LIBMUSICBRAINZ3): $(SPREZZ)/libmusicbrainz3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmusicbrainz-$(libmusicbrainz3_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: fonts-googleweb
+fonts-googleweb:$(FONTSGOOGLEWEB)_$(ARCH).deb
+$(FONTSGOOGLEWEB): $(SPREZZ)/fonts-googleweb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fonts-googleweb-$(fonts-googleweb_UPVER).tar.gz $(TARARGS) $@
+
