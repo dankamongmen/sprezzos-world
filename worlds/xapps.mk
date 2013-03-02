@@ -127,3 +127,11 @@ $(OYRANOS): $(SPREZZ)/oyranos/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf oyranos-$(oyranos_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: cinepaint
+cinepaint:$(CINEPAINT)_$(ARCH).deb
+$(CINEPAINT): $(SPREZZ)/cinepaint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cinepaint-$(cinepaint_UPVER).tar.gz $(TARARGS) $@
+
