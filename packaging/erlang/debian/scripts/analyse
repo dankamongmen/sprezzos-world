@@ -1,0 +1,107 @@
+#!/bin/sh
+
+echo "Determining which files goes where through \
+the magic of regular expressions."
+
+# Pretty dead simple.  The pattern files include
+# regular expression that match some files.  Files that
+# match patterns in binary.patterns go into the base
+# package.  Same goes for the X11 package.  Files
+# that don't match anything go into the NO-X package etc.
+
+# Files that match here might also go into
+# erlang-base-hipe.install.
+
+DIR=$1
+
+echo "erlang-base"
+find debian/erlang-stnd -type f | \
+    grep -E -f debian/patterns/erlang-base.patterns | \
+    cut -c 20- > debian/erlang-base.install
+
+echo "erlang-base-hipe"
+find debian/erlang-hipe -type f | \
+    grep -E -f debian/patterns/erlang-base-hipe.patterns | \
+    cut -c 20- > debian/erlang-base-hipe.install
+
+# Here, files that matched above shouldn't
+# be looked at.
+
+echo "erlang-examples"
+find $DIR -type f | \
+    grep -v -E -f debian/patterns/erlang-base.patterns | \
+    grep -v -E -f debian/patterns/erlang-base-hipe.patterns | \
+    grep -E -f debian/patterns/erlang-examples.patterns | \
+    cut -c 20- > debian/erlang-examples.install
+
+echo "erlang-src"
+find $DIR -type f | \
+    grep -v -E -f debian/patterns/erlang-base.patterns | \
+    grep -v -E -f debian/patterns/erlang-base-hipe.patterns | \
+    grep -v -E -f debian/patterns/erlang-examples.patterns | \
+    grep -E -f debian/patterns/erlang-src.patterns | \
+    cut -c 20- > debian/erlang-src.install
+
+echo "erlang-dev"
+find $DIR -type f | \
+    grep -E -e './usr/lib/erlang/usr/include' | \
+    cut -c 20- | sed -e 's!$! usr/lib/erlang/usr/include!' > debian/erlang-dev.install
+
+find $DIR -type f | \
+    grep -v -E -f debian/patterns/erlang-base.patterns | \
+    grep -v -E -f debian/patterns/erlang-base-hipe.patterns | \
+    grep -v -E -f debian/patterns/erlang-examples.patterns | \
+    grep -v -E -f debian/patterns/erlang-src.patterns | \
+    grep -E -f debian/patterns/erlang-dev.patterns | \
+    cut -c 20- >> debian/erlang-dev.install
+
+PACKAGES='appmon asn1 common-test corba crypto debugger dialyzer diameter
+	  edoc eldap erl-docgen et eunit gs ic-java ic inets inviso jinterface megaco mnesia
+	  observer odbc os-mon parsetools percept pman public-key reltool
+	  runtime-tools snmp ssh ssl syntax-tools test-server toolbar tools tv
+	  typer webtool wx xmerl'
+
+CMD='grep -v -E -e ./usr/lib/erlang/usr/include |
+     grep -v -E -f debian/patterns/erlang-base.patterns |
+     grep -v -E -f debian/patterns/erlang-base-hipe.patterns |
+     grep -v -E -f debian/patterns/erlang-examples.patterns |
+     grep -v -E -f debian/patterns/erlang-src.patterns |
+     grep -v -E -f debian/patterns/erlang-dev.patterns'
+
+CMD1=$CMD
+MODULES=""
+for fn in $(awk -- '/\.beam$/ {system("basename " $1 " .beam")}' debian/erlang-base.install)
+do
+    MODULES="$MODULES{\"$fn\", \"erlang-base\"},\n"
+done
+PACKAGES2="\"dev\", \"nox\", \"x11\""
+for pkg in $PACKAGES ; do
+    echo erlang-$pkg
+
+    find $DIR -type f | eval $CMD | \
+	grep -E -f debian/patterns/erlang-$pkg.patterns | \
+	cut -c 20- | sort > debian/erlang-$pkg.install
+
+    CMD1="$CMD1 | grep -v -E -f debian/patterns/erlang-$pkg.patterns"
+    for fn in $(awk -- '/\.beam$/ {system("basename " $1 " .beam")}' debian/erlang-$pkg.install)
+    do
+	MODULES="$MODULES{\"$fn\", \"erlang-$pkg\"},\n"
+    done
+    PACKAGES2="$PACKAGES2, \"$pkg\""
+done
+
+sed -i -e "s/@PACKAGES@/$PACKAGES2/" -e "s/@MODULES@/$MODULES/" debian/scripts/erlang-depends
+
+echo "FILES WHICH HAVEN'T REACHED ANY PACKAGE"
+find $DIR -type f | eval $CMD1
+
+echo "PACKAGES INTERSECTIONS"
+for pkg1 in $PACKAGES ; do
+    for pkg2 in $PACKAGES ; do
+	if [ $pkg1 != $pkg2 ] ; then
+	    comm -1 -2 debian/erlang-$pkg1.install debian/erlang-$pkg2.install
+	fi
+    done
+done
+echo "---------------------------------------"
+

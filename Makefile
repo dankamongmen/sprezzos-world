@@ -31,6 +31,7 @@ include worlds/scala.mk
 include worlds/gnome.mk
 include worlds/xapps.mk
 include worlds/python.mk
+include worlds/erlang.mk
 include worlds/debian.mk
 include worlds/ubuntu.mk
 include worlds/kernels.mk

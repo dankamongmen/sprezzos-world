@@ -1,0 +1,780 @@
+#! /usr/bin/env escript
+%% -*- erlang -*-
+%%! -smp disable
+
+-include_lib("kernel/include/file.hrl").
+
+% The current Erlang version
+-define(VERSION, "@SOURCE_VERSION@").
+-define(ABI_VERSION, "@ABI_VERSION@").
+
+% The list of HiPE enabled architectures (with added 'all' architecture),
+% isn't used yet
+-define(HIPE_ARCHES, split("@HIPE_ARCHES@ all", $\ )).
+
+% Since all packages required built application to run may be unavailable
+% on build stage it's necessary to list all module-package relationships
+% explicitly:
+-define(MODULES, [@MODULES@ {"erlang", "erlang-base"}]).
+
+% The erlang packages list (suffixes only)
+-define(PACKAGES, [@PACKAGES@]).
+
+% main/1 --
+%
+%	Generate debhelper substitution variables for Erlang-dependent
+%	packages.
+%
+% Arguments:
+%	Options		List of debhelper options (-v, -a, -i, -p*, -N*) or -h.
+%
+% Result:
+%	None.
+%
+% Side effects:
+%	For each of the selected packages the corresponding file
+%	debian/package.substvars is created (if necessary) and filled by erlang
+%	dependencies. If -h or --help is among arguments then the usage info is
+%	printed instead and script is halted.
+
+main(Options) ->
+    {Verbosity, TmpDir, Exclude, NewOptions} =
+	lists:foldl(fun(Opt, {Sum, Dir, Ex, Opts}) ->
+			case Opt of
+			    "-h" ->
+				usage(),
+				halt(2);
+			    "--help" ->
+				usage(),
+				halt(2);
+			    "-v" ->
+				{Sum + 1, Dir, Ex, Opts};
+			    "--verbose" ->
+				{Sum + 1, Dir, Ex, Opts};
+			    "--ignore=" ++ File ->
+				{Sum, Dir, Ex ++ [File], Opts};
+			    "-P" ++ D ->
+				{Sum, D, Ex, Opts};
+			    "--tmpdir=" ++ D ->
+				{Sum, D, Ex, Opts};
+			    _ ->
+				{Sum, Dir, Ex, Opts ++ [Opt]}
+			end
+		    end, {0, [], [], []}, Options),
+    lists:foreach(
+      fun({Package, Variables}) ->
+	    PkgDir = case TmpDir of
+			 [] ->
+		    	     filename:join("debian", Package);
+			 _ ->
+		    	     TmpDir
+		     end,
+	    delsubstvar(Verbosity, Package, "erlang:Depends"),
+	    Variables2 = Variables ++
+		case lists:member("erlang:Depends", Variables) of
+		    true ->
+			Deps = ordsets:to_list(
+				 lists:foldl(
+				   fun(M, Acc) ->
+					case lists:keysearch(M, 1, ?MODULES) of
+					    {value, {_, P}} ->
+						ordsets:add_element(P, Acc);
+					    _ ->
+						io:format("WARNING: Module ~s not found~n", [M]),
+						Acc
+					end
+				   end, ordsets:new(),
+				   get_remote_modules(Verbosity, PkgDir, Exclude))),
+			Dep = join(lists:map(
+				     fun(D) ->
+					    "${" ++ D ++ ":Depends}"
+				     end, Deps), ", "),
+			addsubstvar(Verbosity, Package, "erlang:Depends", Dep),
+			lists:map(fun(D) ->
+					D ++ ":Depends"
+				  end, Deps);
+		    _ ->
+			[]
+		end,
+	    deladdsubstvar(Verbosity, Package, Variables2, "erlang-abi:Depends",
+			   "erlang-abi-" ++ ?ABI_VERSION),
+	    deladdsubstvar(Verbosity, Package, Variables2, "erlang-base:Depends",
+			   "erlang-base (>= " ++ ?VERSION ++
+			   ") | erlang-base-hipe (>= " ++ ?VERSION ++ ")"),
+	    lists:foreach(
+	      fun(Pkg) ->
+		    deladdsubstvar(Verbosity, Package, Variables2, "erlang-" ++ Pkg ++ ":Depends",
+				   "erlang-" ++ Pkg ++ " (>= " ++ ?VERSION ++ ")")
+	      end, ?PACKAGES)
+      end, get_packages(NewOptions)).
+
+% usage/0 --
+%
+%	Print a short usage info.
+%
+% Arguments:
+%	None.
+%
+% Result:
+%	ok.
+%
+% Side effects:
+%	Usage is printed to stdout.
+
+usage() ->
+    io:format("Usage: erlang-depends [options]~n"
+	      "Options:~n"
+	      "    -h, --help       Show this help message~n"
+	      "    -v, --verbose    Verbose mode~n"
+	      "    -a, --arch       Act on architecture dependent packages~n"
+	      "    -i, --indep      Act on architecture independent packages~n"
+	      "    -ppackage, --package=package~n"
+	      "                     Act on package \"package\"~n"
+	      "    -Npackage, --no-package=package~n"
+	      "                     Do not act on package \"package\"~n"
+	      "    -Ptmpdir, --tmpdir=tmpdir~n"
+	      "                     Use \"tmpdir\" for package build directory~n").
+
+% get_remote_modules/3 --
+%
+%	Return a difference between all modules used in the application and
+%	the local modules which dependencies are satisfied automagically.
+%
+% Arguments:
+%	Verbosity   Verbosity level (0 - silence, 1 - print action).
+%	Dir	    Directory where the local BEAM files are to be searched.
+%	Exclude	    Don't take into account files in this list.
+%
+% Result:
+%	The list of remote modules.
+%
+% Side effects:
+%	Application files are taken from filesystem.
+
+get_remote_modules(Verbosity, Dir, Exclude) ->
+    Mods = ordsets:to_list(ordsets:subtract(get_modules(Dir, Exclude),
+					    get_local_modules(Dir, Exclude))),
+    if  Verbosity >= 1 ->
+	    lists:foreach(fun(M) ->
+				io:format("Remote module: ~s~n", [M])
+			  end, Mods);
+	true ->
+	    ok
+    end,
+    Mods.
+
+% get_modules/2 --
+%
+%	Return an ordset of all modules found in the application.
+%
+% Arguments:
+%	Dir	    Directory where the app BEAM files are to be searched.
+%	Exclude	    Don't take into account files in this list.
+%
+% Result:
+%	The ordset of all used modules.
+%
+% Side effects:
+%	Application files are taken from filesystem.
+
+get_modules(Dir, Exclude) ->
+    Modules = lists:map(fun({M, _F, _A}) ->
+			    atom_to_list(M)
+			end, get_imports(Dir, Exclude)),
+    ordsets:from_list(Modules).
+
+% get_local_modules/2 --
+%
+%	Return an ordset of local modules found in the application (it is
+%	constructed from BEAM filenames).
+%
+% Arguments:
+%	Dir	    Directory where the app BEAM files are to be searched.
+%	Exclude	    Don't take into account files in this list.
+%
+% Result:
+%	The ordset of all local modules.
+%
+% Side effects:
+%	Files are taken from filesystem.
+
+get_local_modules(Dir, Exclude) ->
+    Files = lists:filter(fun(File) ->
+				case lists:member(File, Exclude) of
+				    true ->
+					false;
+				    _ ->
+					true
+				end
+			 end, files(Dir, ".*\\.beam$", true)),
+    Basenames = lists:map(fun(File) ->
+				filename:basename(File, ".beam")
+			  end, Files),
+    ordsets:from_list(Basenames).
+
+% get_imports/2 --
+%
+%	Get imports from all BEAM files in the specified directory and below.
+%
+% Arguments:
+%	Dir	    Directory where to search for BEAM files
+%	Exclude	    Don't take into account files in this list.
+%
+% Results:
+%	A list of imports from all found BEAM files.
+%
+% Side effects:
+%	Files are taken from filesystem.
+
+get_imports(Dir, Exclude) ->
+    Files = lists:filter(fun(File) ->
+				case lists:member(File, Exclude) of
+				    true ->
+					false;
+				    _ ->
+					true
+				end
+			 end, files(Dir, ".*\\.beam$", true)),
+    lists:foldl(fun(File, Acc) ->
+			case beam_lib:chunks(File, [imports]) of
+			    {ok, {_, [{imports, List}]}} ->
+				Acc ++ List;
+			    _ ->
+				Acc
+			end
+		end, [], Files).
+
+% split/2 --
+%
+%	Split string into a list of tokens using the specified delimiter
+%
+% Arguments:
+%	String	    String to split
+%	Delimiter   Character (delimiter)
+%
+% Results:
+%	A list of strings.
+%
+% Side effects:
+%	None.
+
+split(String, Delimiter) ->
+    split(String, Delimiter, none, []).
+
+split([], _Delimiter, Current, Res) ->
+    case Current of
+	none ->
+	    lists:reverse(Res);
+	_ ->
+	    lists:reverse([lists:reverse(Current) | Res])
+    end;
+
+split([Delimiter | Tail], Delimiter, Current, Res) ->
+    case Current of
+	none ->
+	    split(Tail, Delimiter, [], [[] | Res]);
+	_ ->
+	    split(Tail, Delimiter, [], [lists:reverse(Current) | Res])
+    end;
+
+split([Char | Tail], Delimiter, Current, Res) ->
+    case Current of
+	none ->
+	    split(Tail, Delimiter, [Char], Res);
+	_ ->
+	    split(Tail, Delimiter, [Char | Current], Res)
+    end.
+
+% join/2 --
+%
+%	Join string list into a single string using the specified delimiter
+%
+% Arguments:
+%	List	    List of strings to join
+%	Delimiter   Character or character list (delimiter)
+%
+% Results:
+%	A string.
+%
+% Side effects:
+%	None.
+
+join(List, Delimiter) ->
+    join(List, Delimiter, []).
+
+join([], _Delimiter, Res) ->
+    lists:flatten(lists:reverse(Res));
+
+join([String | Tail], Delimiter, []) ->
+    join(Tail, Delimiter, [String]);
+
+join([String | Tail], Delimiter, Res) ->
+    join(Tail, Delimiter, [String, Delimiter | Res]).
+
+% delsubstvar/3 --
+%
+%	Removes substitution variable from a substvar file for a given
+%	package in debian/ directory.
+%
+% Arguments:
+%	Verbosity   Verbosity level (0 - silence, 1 - print action)
+%	Package	    Name of a package (file Package ++ ".substvars" is used).
+%	Substvar    Name of a substitution variable to delete.
+%
+% Results:
+%	ok or halt.
+%
+% Side effects:
+%	File "debian/" ++ Package ++ ".substvars" is overwritten. The
+%	specified variable is deleted. Program is halted in case of error.
+
+delsubstvar(Verbosity, Package, Substvar) ->
+    SubstvarFile = filename:join("debian", Package ++ ".substvars"),
+    if  Verbosity >= 1 ->
+	    io:format("Deleting substvar ~s from file ~s~n", [Substvar, SubstvarFile]);
+	true ->
+	    ok
+    end,
+    case file:read_file(SubstvarFile) of
+	{ok, BinData} ->
+	    StrData = binary_to_list(BinData),
+
+	    % Remove the trailing newline if any
+
+	    Len = string:len(StrData),
+	    StrData2 = case Len - string:rstr(StrData, "\n") of
+			    0 ->
+				string:left(StrData, Len - 1);
+			    _ ->
+				StrData
+		       end,
+	    Tokens = split(StrData2, $\n),
+	    NewTokens = lists:filter(
+			    fun(S) ->
+				    case string:str(S, Substvar ++ "=") of
+					1 ->
+					    false;
+					_ ->
+					    true
+				    end
+			    end, Tokens),
+	    case file:write_file(SubstvarFile, join(NewTokens, $\n) ++ "\n") of
+		ok ->
+		    ok;
+		{error, Error} ->
+		    io:format("ERROR: Can't write ~s: ~s~n", [SubstvarFile, Error]),
+		    halt(1)
+	    end;
+	{error, enoent} ->
+	    ok;
+	{error, Error} ->
+	    io:format("ERROR: Can't read ~s: ~s~n", [SubstvarFile, Error]),
+	    halt(1)
+    end.
+
+% addsubstvar/4 --
+%
+%	Adds a dependency to a substitution variable in a substvar file
+%	for a given package in debian/ directory.
+%
+% Arguments:
+%	Verbosity   Verbosity level (0 - silence, 1 - print action)
+%	Package	    Name of a package (file Package ++ ".substvars" is used).
+%	Substvar    Name of a substitution variable to add/change.
+%	Dependency  An added substitution dependency string.
+%
+% Results:
+%	ok or halt.
+%
+% Side effects:
+%	File "debian/" ++ Package ++ ".substvars" is overwritten. The specified
+%	depandency string is added to the variable. Program is halted in case
+%	of error.
+
+addsubstvar(Verbosity, Package, Substvar, Dependency) ->
+    SubstvarFile = filename:join("debian", Package ++ ".substvars"),
+    if  Verbosity >= 1 ->
+	    io:format("Adding value ~s to substvar ~s in file ~s~n",
+		      [Substvar, Dependency, SubstvarFile]);
+	true ->
+	    ok
+    end,
+    case file:read_file(SubstvarFile) of
+	{ok, BinData} ->
+	    StrData = binary_to_list(BinData),
+
+	    % Remove the trailing newline if any
+
+	    Len = string:len(StrData),
+	    StrData2 = case Len - string:rstr(StrData, "\n") of
+			    0 ->
+				string:left(StrData, Len - 1);
+			    _ ->
+				StrData
+		       end,
+	    Tokens = split(StrData2, $\n),
+	    {NewTokens, Found} = lists:mapfoldl(
+				    fun(S, F) ->
+					    case string:str(S, Substvar ++ "=") of
+						1 ->
+						    {S ++ ", " ++ Dependency, true};
+						_ ->
+						    {S, F}
+					    end
+				    end, false, Tokens),
+	    NewTokens2 = if Found ->
+				NewTokens;
+			    true ->
+				[Substvar ++ "=" ++ Dependency | NewTokens]
+			 end,
+	    case file:write_file(SubstvarFile, join(NewTokens2, $\n) ++ "\n") of
+		ok ->
+		    ok;
+		{error, Error} ->
+		    io:format("Can't write ~s: ~s~n", [SubstvarFile, Error]),
+		    halt(1)
+	    end;
+	{error, enoent} ->
+	    case file:write_file(SubstvarFile, [Substvar, "=", Dependency, "\n"]) of
+		ok ->
+		    ok;
+		{error, Error} ->
+		    io:format("Can't write ~s: ~s~n", [SubstvarFile, Error]),
+		    halt(1)
+	    end;
+	{error, Error} ->
+	    io:format("Can't read ~s: ~s~n", [SubstvarFile, Error]),
+	    halt(1)
+    end.
+
+% deladdsubstvar/5 --
+%
+%	Delete a substitution variable from a substvar file and add a
+%	dependency to it if this substvar is present in a specified list of
+%	variables for a given package in debian/ directory.
+%
+% Arguments:
+%	Verbosity   Verbosity level (0 - silence, 1 - print action)
+%	Package	    Name of a package (file Package ++ ".substvars" is used).
+%	Variables   List of requested variables for the package.
+%	Substvar    Name of a substitution variable to add/change.
+%	Dependency  An added substitution dependency string.
+%
+% Results:
+%	ok or halt.
+%
+% Side effects:
+%	File "debian/" ++ Package ++ ".substvars" is overwritten. The specified
+%	dependency string is either deleted or replaced. Program is halted in
+%	case of error.
+
+deladdsubstvar(Verbosity, Package, Variables, Substvar, Dependency) ->
+    delsubstvar(Verbosity, Package, Substvar),
+    case lists:member(Substvar, Variables) of
+	true ->
+	    addsubstvar(Verbosity, Package, Substvar, Dependency);
+	_ ->
+	    ok
+    end.
+
+% get_packages/1 --
+%
+%	Parses debhelper command line options and debian/control file and
+%	returns packages with requested substvars to act on.
+%
+% Arguments:
+%	ArgList	    Dephelper options (only -a, -i, -p, -N options are
+%		    recognised).
+%
+% Results:
+%	{ok, [{Package,Vars}]} to work on or error message and halt if
+%	debian/control is unreadable or unknown option is specified.
+%
+% Side effects:
+%	Program is halted in case of error, packages info is taken from
+%	an external file.
+
+get_packages(ArgList) ->
+    ControlFile = filename:join("debian", "control"),
+    case file:read_file(ControlFile) of
+	{ok, BinData} ->
+	    {Arches, Excluded, Explicit} =
+		lists:foldl(fun(Arg, {A1, E1, E2}) ->
+				case Arg of
+				    % Only the last -a or -i option takes
+				    % effect
+
+				    "-a" ->
+					{arch, E1, E2};
+				    "--arch" ->
+					{arch, E1, E2};
+				    "-i" ->
+					{indep, E1, E2};
+				    "--indep" ->
+					{indep, E1, E2};
+				    "-s" ->
+					io:format("Options -s and --same-arch aren't supported yet~n"),
+					halt(1);
+				    "--same-arch" ->
+					io:format("Options -s and --same-arch aren't supported yet~n"),
+					halt(1);
+				    "-p" ++ Package ->
+					{A1, E1, E2 ++ [Package]};
+				    "--package=" ++ Package ->
+					{A1, E1, E2 ++ [Package]};
+				    "-N" ++ Package ->
+					{A1, E1 ++ [Package], E2};
+				    "--no-package=" ++ Package ->
+					{A1, E1 ++ [Package], E2};
+				    _ ->
+					io:format("Unknown option ~s~n", [Arg]),
+					halt(1)
+				end
+			    end, {all, [], []}, ArgList),
+
+	    % Join up continuation lines
+
+	    StrData = re:replace(BinData, "\\n( |\\t)", "\\1", [global, {return, list}]),
+
+	    % Add an extra empty line for the case if debian/config doesn't have a trailing LF
+
+	    Tokens = split(StrData, $\n) ++ [[]],
+	    {_Arch, _Package, _Vars, Packages, AllPackages} =
+		lists:foldl(fun(Line, {A, P, Vs, Ps, APs}) ->
+				case Line of
+				    "Package: " ++ Pkg ->
+					{A, string:strip(Pkg), Vs, Ps, APs};
+				    "Architecture: " ++ Arc ->
+					{string:strip(Arc), P, Vs, Ps, APs};
+				    "Pre-Depends: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "Depends: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "Recommends: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "Suggests: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "Enhances: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "Breaks: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "Conflicts: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "Provides: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "Replaces: " ++ Deps ->
+					{A, P, Vs ++ find_vars(Deps), Ps, APs};
+				    "" ->
+					case P of
+					    "" ->
+						% Two LF in a row or the end of a source package
+
+						{"", "", [], Ps, APs};
+					    _ ->
+						case lists:member(P, Excluded) of
+						    true ->
+							% The package is excluded by -Npackage
+
+							{"", "", [], Ps, APs};
+						    _ ->
+							case lists:member(P, Explicit) of
+							    true ->
+								% The package is explicitly required
+
+								{"", "", [], Ps ++ [{P, Vs}], APs};
+							    _ ->
+								case A of
+								    "all" ->
+									case Arches of
+									    indep ->
+										% Arch independent packages
+										% are requested
+
+										{"", "", [], Ps ++ [{P, Vs}], APs};
+									    all ->
+										{"", "", [], Ps, APs ++ [{P, Vs}]};
+									    _ ->
+										{"", "", [], Ps, APs}
+									end;
+								    _ ->
+									case Arches of
+									    arch ->
+										% Arch dependent packages
+										% are requested
+
+										{"", "", [], Ps ++ [{P, Vs}], APs};
+									    all ->
+										{"", "", [], Ps, APs ++ [{P, Vs}]};
+									    _ ->
+										{"", "", [], Ps, APs}
+									end
+								end
+							end
+						end
+					end;
+				    _ ->
+					{A, P, Vs, Ps, APs}
+				end
+			    end, {"", "", [], [], []}, Tokens),
+	    case {Arches, Packages} of
+		{all, []} ->
+		    % There aren't explicitly requested packages
+
+		    AllPackages;
+		_ ->
+		    Packages
+	    end;
+	{error, Error} ->
+	    io:format("Can't read ~s: ~s~n", [ControlFile, Error]),
+	    halt(1)
+    end.
+
+% find_vars/1 --
+%
+%	Find substitution variables in dependencies line and return list of
+%	their names.
+%
+% Arguments:
+%	Dependencies	Dependencies line from debian/control
+%
+% Result:
+%	List of substvars names (inside ${}).
+%
+% Side effects:
+%	None.
+
+find_vars(Dependencies) ->
+    case re:run(Dependencies, "\\$\\{(\\S*)\\}", [global, {capture, all_but_first, list}]) of
+	{match, Captured} ->
+	    lists:foldl(fun(M, Acc) ->
+			    Acc ++ M
+			end, [], Captured);
+	_ ->
+	    []
+    end.
+
+% files/3 --
+%
+%	Return all files in a directory which names match a given expression.
+%	(This procedure is borrowed from http://erlang.org/examples/examples-2.0.html
+%	and a bit modified.)
+%
+% Arguments:
+%	Dir	    Directory from which to search
+%	Re	    Regular expression for filename matching
+%	Recursive   Whether to search for files recursively
+%
+% Result:
+%	A list of filenames.
+%
+% Side effects:
+%	File and directory names are taken from filesystem.
+
+files(Dir, Re, Recursive) ->
+    find_files(Dir, Re, Recursive, []).
+
+% find_files/4 --
+%
+%	Find all files in a directory which names match a given expression,
+%	prepend them to a given list of files and return the total files list.
+%	(This procedure is borrowed from http://erlang.org/examples/examples-2.0.html
+%	and a bit modified.)
+%
+% Arguments:
+%	Dir	    Directory from which to search
+%	Re	    Regular expression for filename matching
+%	Recursive   Whether to search for files recursively
+%	L	    List of already found files
+%
+% Result:
+%	A list of filenames.
+%
+% Side effects:
+%	File and directory names are taken from filesystem.
+
+find_files(Dir, Re, Recursive, L) ->
+    case file:list_dir(Dir) of
+	{ok, Files} ->
+	    find_files(Files, Dir, Re, Recursive, L);
+	{error, _} ->
+	    L
+    end.
+
+% find_files/5 --
+%
+%	Check all specified filenames if they match a given expressions and
+%	prepend matched ones to a given list of filenames. If the file type is
+%	directory and search is recursive then descend into it and add found
+%	filenames to the result too. Return the total files list.
+%	(This procedure is borrowed from http://erlang.org/examples/examples-2.0.html
+%	and a bit modified.)
+%
+% Arguments:
+%	_FL	    List of files in directory Dir
+%	Dir	    Directory from which to search
+%	Re	    Regular expression for filename matching
+%	Recursive   Whether to search for files recursively
+%	L	    List of already found files
+%
+% Result:
+%	A list of filenames.
+%
+% Side effects:
+%	File and directory names are taken from filesystem.
+
+find_files(_FL = [File | T], Dir, Re, Recursive, L) ->
+    FullName = filename:join(Dir, File),
+    case file_type(FullName) of
+	regular ->
+	    case re:run(FullName, Re) of
+		{match, _}  ->
+		    find_files(T, Dir, Re, Recursive, [FullName | L]);
+		_ ->
+		    find_files(T, Dir, Re, Recursive, L)
+	    end;
+	directory ->
+	    case Recursive of
+		true ->
+		    L1 = find_files(FullName, Re, Recursive, L),
+		    find_files(T, Dir, Re, Recursive, L1);
+		false ->
+		    find_files(T, Dir, Re, Recursive, L)
+	    end;
+	error ->
+	    find_files(T, Dir, Re, Recursive, L)
+    end;
+
+find_files([], _, _, _, L) ->
+    L.
+
+% file_type/1 --
+%
+%	Return file type (regular, directory, or error) for a given filename.
+%	(This procedure is borrowed from http://erlang.org/examples/examples-2.0.html
+%	and a bit modified.)
+%
+% Arguments:
+%	File	    Filename to get type.
+%
+% Result:
+%	A file type.
+%
+% Side effects:
+%	File info is taken from the filesystem.
+
+file_type(File) ->
+    case file:read_file_info(File) of
+	{ok, FileInfo} ->
+	    case FileInfo#file_info.type of
+		regular ->
+		    regular;
+		directory ->
+		    directory;
+		_ ->
+		    error
+	    end;
+	_ ->
+	    error
+    end.
+
+% vim:ft=erlang

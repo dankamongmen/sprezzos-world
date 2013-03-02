@@ -1,0 +1,513 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+DEB_HOST_ARCH := $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export QUILT_PATCHES := debian/patches
+
+ROOT_DIR=$(shell pwd)
+MAN_DIR = $(ROOT_DIR)/debian/erlang-docs/usr/lib/erlang/man
+
+export HOME := $(ROOT_DIR)/debian
+
+-include ${ROOT_DIR}/erts/vsn.mk
+-include ${ROOT_DIR}/lib/diameter/vsn.mk
+-include ${ROOT_DIR}/lib/erl_interface/vsn.mk
+-include ${ROOT_DIR}/lib/jinterface/vsn.mk
+-include ${ROOT_DIR}/lib/ic/vsn.mk
+-include ${ROOT_DIR}/lib/tools/vsn.mk
+-include ${ROOT_DIR}/lib/webtool/vsn.mk
+-include ${ROOT_DIR}/lib/common_test/vsn.mk
+-include ${ROOT_DIR}/lib/snmp/vsn.mk
+-include ${ROOT_DIR}/lib/hipe/vsn.mk
+SOURCE_VERSION=$(shell dpkg-parsechangelog | sed -ne's!^Version: \(.*\)-.*!\1!p')
+ABI_VERSION=$(shell cat debian/control | sed -ne's!^Provides: erlang-abi-\(.*\)!\1!p' | head -1)
+HIPE_ARCHES=$(shell cat debian/control | grep '^Architecture:' | egrep -v '(all|any)' | sed -e 's/^Architecture: *//')
+
+ifeq ($(findstring debug,$(DEB_BUILD_OPTIONS)),debug)
+BUILD_HIPE := no
+else
+BUILD_HIPE := $(shell echo ' $(HIPE_ARCHES) ' | grep -c ' ${DEB_HOST_ARCH} ' | sed -es/1/yes/ -es/0/no/)
+endif
+ifeq ($(BUILD_HIPE), no)
+BINARY_TARGETS=binary-erlang-base
+INSTALL_RULE=install-stnd-stamp
+TMPINSTALL_DIR=debian/erlang-stnd
+ERLANGBASE=erlang-base (= $${binary:Version})
+else
+BINARY_TARGETS=binary-erlang-base binary-erlang-base-hipe
+INSTALL_RULE=install-stnd-stamp install-hipe-stamp
+TMPINSTALL_DIR=debian/erlang-hipe
+ERLANGBASE=erlang-base (= $${binary:Version}) | erlang-base-hipe (= $${binary:Version})
+endif
+
+USE_KERNEL_POLL := $(shell echo ${DEB_HOST_ARCH} | egrep -c "hurd" | sed -es/1/no/ -es/0/yes/)
+ifeq ($(USE_KERNEL_POLL), no)
+KERNEL_POLL_OPT=--disable-kernel-poll
+else
+KERNEL_POLL_OPT=--enable-kernel-poll
+endif
+
+USE_CLOCK_GETTIME := $(shell echo ${DEB_HOST_ARCH} | egrep -c "bsd|hurd" | sed -es/1/no/ -es/0/yes/)
+ifeq ($(USE_CLOCK_GETTIME), no)
+CLOCK_GETTIME_OPT=
+else
+CLOCK_GETTIME_OPT=--enable-clock-gettime
+endif
+
+# Temporary (until #475459 is fixed) disabling threads for sparc architecture
+ifeq ($(DEB_HOST_ARCH), sparc)
+THREAD_OPTS=--disable-threads --disable-smp-support
+else
+THREAD_OPTS=--enable-threads --enable-smp-support
+endif
+
+LIBSCTP=$(shell grep-status -s Depends -PX libsctp-dev |sed -e 's!.*\(libsctp[0-9]*\).*!\1!')
+LIBSCTPDEP=$(shell grep-status -s Version -PX $(LIBSCTP) | sed -e's!^Version: \(.*\)-[^-]*!$(LIBSCTP) (>= \1)!')
+
+ifeq ($(findstring debug,$(DEB_BUILD_OPTIONS)),debug)
+CFLAGS=-g -O2 -fno-strict-aliasing
+GEN_OPT_FLGS=-O2 -fno-strict-aliasing
+TYPE=debug
+else
+CFLAGS=-g -O2 -fno-strict-aliasing
+GEN_OPT_FLGS=-O2 -fno-strict-aliasing
+TYPE=
+endif
+
+unpatch: patch-stamp
+	dh_testdir
+	quilt pop -a || test $$? = 2
+	rm -rf .pc
+	rm -f patch-stamp
+
+patch: patch-stamp
+patch-stamp:
+	dh_testdir
+	quilt push -a || test $$? = 2
+	touch patch-stamp
+
+clean: clean-patched unpatch
+	dh_testdir
+	dh_testroot
+	dh_clean -Xtest.erl.orig
+
+clean-patched: patch-stamp
+	dh_testdir
+	dh_testroot
+	#
+	[ ! -f Makefile ] || ${MAKE} -j clean
+	rm -f lib/dialyzer/SKIP
+	#
+	# Remove installed erlang from debian/
+	rm -rf debian/erlang-docs
+	rm -rf debian/erlang-stnd
+	rm -rf debian/erlang-hipe
+	#
+	# Restore replaced configure, config.guess, and config.sub files
+	for i in `find ${ROOT_DIR} -name 'configure.backup'` ; do \
+	    mv $$i $${i%%.backup} ; \
+	done
+	for i in `find ${ROOT_DIR} -name 'config.guess~'` ; do \
+	    mv $$i $${i%%\~} ; \
+	done
+	for i in `find ${ROOT_DIR} -name 'config.sub~'` ; do \
+	    mv $$i $${i%%\~} ; \
+	done
+	#
+	# Remove files, which were generated from templates
+	for i in debian/*.in debian/scripts/*.in ; do \
+	     rm -f $${i%%.in} ; \
+	done
+	#
+	# *.install were also generated on-the-fly
+	rm -f debian/*.install
+	rm -f debian/erlang-doc.links
+	rm -f debian/erlang-doc.doc-base.erlang-erts
+	#
+	rm -f debian/AUTHORS
+	#
+	# Don't remove patch-stamp
+	rm -f [!p]*-stamp
+
+automake: automake-stamp
+automake-stamp: patch-stamp
+	dh_testdir
+	#
+	# Return error if there are prebuilt binaries in upstream tarball
+	err=0 ; \
+	if [ -f prebuilt.files ] ; then \
+	    err=1 ; \
+	    echo Found prebuilt binaries in upstream. Please remove them. ; \
+	fi ; \
+	#
+	# Preserve configure scripts
+	for i in `find ${ROOT_DIR} -not \( -wholename '*/.pc' -prune \) \
+				    -a -name 'configure'` ; do \
+	    cp -f $$i $$i.backup ; \
+	done
+	#
+	# Replace config.guess and config.sub by installed in /usr/share/misc.
+	# Also add suffix -gnu to ibm-linux in config.guess to fix FTBFS
+	# on s390 architecture
+	for i in `find ${ROOT_DIR} -not \( -wholename '*/.pc' -prune \) \
+				    -a -name 'config.guess'` ; do \
+	    cp -fb /usr/share/misc/config.guess $$i ; \
+	    sed -i 's/-ibm-linux$$/-ibm-linux-gnu/g' $$i ; \
+	done
+	for i in `find ${ROOT_DIR} -not \( -wholename '*/.pc' -prune \) \
+				    -a -name 'config.sub'` ; do \
+	    cp -fb /usr/share/misc/config.sub $$i ; \
+	done
+	#
+	# Regenerate configure scripts using autoconf
+	for i in `find ${ROOT_DIR} -not \( -wholename '*/.pc' -prune \) \
+				    -a -name 'configure.in' -printf "%h\n"`; do \
+	    echo "autoconf'ing $${i}"; \
+	    (cd $${i} && autoconf) \
+	done
+	touch automake-stamp
+
+configure-hipe: configure-hipe-stamp
+configure-hipe-stamp: automake-stamp
+	dh_testdir
+	#
+	echo "BUILDING HIPE VERSION (BUILD_HIPE: $(BUILD_HIPE))"
+	#
+	[ ! -f Makefile ] || ${MAKE} -j clean
+	rm -f lib/dialyzer/SKIP
+	#
+	CFLAGS="$(CFLAGS)" \
+	./configure --host=$(DEB_HOST_GNU_TYPE) \
+		    --build=$(DEB_BUILD_GNU_TYPE) \
+		    --prefix=/usr \
+		    --libexecdir=/usr/bin \
+		    --infodir=/usr/share/info \
+		    --mandir=/usr/share/man \
+		    --enable-hybrid-heap \
+		    $(THREAD_OPTS) \
+		    --enable-hipe \
+		    $(KERNEL_POLL_OPT) \
+		    --enable-sctp \
+		    $(CLOCK_GETTIME_OPT) \
+		    --enable-dynamic-ssl-lib \
+		    --enable-ethread-pre-pentium4-compatibility \
+		    --enable-shared-zlib \
+		    --without-ssl-zlib
+	#
+	touch configure-hipe-stamp
+
+configure-stnd: configure-stnd-stamp
+configure-stnd-stamp: automake-stamp
+	dh_testdir
+	#
+	echo "BUILDING STANDARD VERSION (BUILD_HIPE: $(BUILD_HIPE))"
+	#
+	[ ! -f Makefile ] || ${MAKE} -j clean
+	rm -f lib/dialyzer/SKIP
+	#
+	CFLAGS="$(CFLAGS)" \
+	./configure --host=$(DEB_HOST_GNU_TYPE) \
+		    --build=$(DEB_BUILD_GNU_TYPE) \
+		    --prefix=/usr \
+		    --libexecdir=/usr/bin \
+		    --infodir=/usr/share/info \
+		    --mandir=/usr/share/man \
+		    --enable-hybrid-heap \
+		    $(THREAD_OPTS) \
+		    --disable-hipe \
+		    $(KERNEL_POLL_OPT) \
+		    --enable-sctp \
+		    $(CLOCK_GETTIME_OPT) \
+		    --enable-dynamic-ssl-lib \
+		    --enable-ethread-pre-pentium4-compatibility \
+		    --enable-shared-zlib \
+		    --without-ssl-zlib
+	#
+	touch configure-stnd-stamp
+
+define do-install
+	echo "*** do-install called for $(INSTALL_DIR)."
+
+	# Calls make install.
+	${MAKE} -j DESTDIR=$(INSTALL_DIR) TYPE=$(TYPE) install
+
+	# Replace ROOTDIR in "erl" and "start" scripts for real rootdir
+	# If there's no erl or start then it's better to fail than silently continue
+	for dir in $(INSTALL_DIR)/usr/lib/erlang/erts-$(VSN)/bin		\
+		   $(INSTALL_DIR)/usr/lib/erlang/bin; do			\
+	    for val in erl start; do						\
+		sed -i 's!ROOTDIR=.*!ROOTDIR=/usr/lib/erlang!' $${dir}/$${val}; \
+	    done;								\
+	done
+
+	# Correct ERL_ROOT in RELEASES file
+	sed 's!%ERL_ROOT%!/usr/lib/erlang!' \
+	    $(INSTALL_DIR)/usr/lib/erlang/releases/RELEASES.src \
+	    >$(INSTALL_DIR)/usr/lib/erlang/releases/RELEASES
+
+	# Get rid of windows cruft
+	find $(INSTALL_DIR) -name *.bat -exec rm -v {} \;
+
+	# Fix permissions
+	cp $(INSTALL_DIR)/usr/lib/erlang/erts-$(VSN)/bin/start_erl.src \
+	   $(INSTALL_DIR)/usr/lib/erlang/erts-$(VSN)/bin/start_erl
+	chmod 755 $(INSTALL_DIR)/usr/lib/erlang/erts-$(VSN)/bin/start_erl
+	chmod 755 $(INSTALL_DIR)/usr/lib/erlang/erts-$(VSN)/bin/*.src
+	chmod 644 $(INSTALL_DIR)/usr/lib/erlang/bin/start.script
+	chmod 644 $(INSTALL_DIR)/usr/lib/erlang/lib/wx-*/examples/*/*.beam
+	chmod 644 $(INSTALL_DIR)/usr/lib/erlang/lib/wx-*/examples/*/*.xpm
+
+	# Remove useless crypto object files
+	rm -rv $(INSTALL_DIR)/usr/lib/erlang/lib/crypto-*/priv/obj
+
+	# Remove some files which should be rather in erlang-doc-html package
+	find $(INSTALL_DIR)/usr/lib/erlang/lib -name info -exec rm -v {} \;
+	rm -rv $(INSTALL_DIR)/usr/lib/erlang/erts-$(VSN)/doc
+
+	# Remove useless Install and manpage formatting scripts
+	rm -v $(INSTALL_DIR)/usr/lib/erlang/Install
+	rm -rv $(INSTALL_DIR)/usr/lib/erlang/misc
+
+	# Copy forgotten HiPE sources to make sure they'll end up in the
+	# erlang-src package
+	for file in lib/hipe/*/*.erl lib/hipe/*/*.hrl lib/hipe/*/*.inc ; do \
+	    fname=$$(basename $${file}) ; \
+	    subdir=$$(basename $$(dirname $${file})) ; \
+	    if [ ! -f $(INSTALL_DIR)/usr/lib/erlang/lib/hipe-$(HIPE_VSN)/$${subdir}/$${fname} ] ; then \
+		install -m 755 -d $(INSTALL_DIR)/usr/lib/erlang/lib/hipe-$(HIPE_VSN)/$${subdir} ; \
+		install -m 644 $${file} \
+		    $(INSTALL_DIR)/usr/lib/erlang/lib/hipe-$(HIPE_VSN)/$${subdir} ; \
+	    fi ; \
+	done
+endef
+
+# manpages builds section 1 manual pages
+manpages: manpages-stamp
+manpages-stamp: $(INSTALL_RULE)
+	dh_testdir
+	target=$$(basename $$(find make -type d |grep /)) ; \
+	PATH=$(ROOT_DIR)/bin:$$PATH ; \
+	for m in lib/diameter lib/snmp lib/dialyzer lib/erl_interface lib/common_test lib/webtool erts ; do \
+	    ${MAKE} -j -C $$m/doc/src man ERL_TOP=$(ROOT_DIR) TARGET=$$target ; \
+	done
+	#
+	install -d $(MAN_DIR)/man1 $(MAN_DIR)/man3 ; \
+	install lib/dialyzer/doc/man3/*.3 $(MAN_DIR)/man3 ; \
+	for m in lib/diameter lib/snmp lib/erl_interface lib/common_test lib/webtool erts ; do \
+	    install $$m/doc/man1/*.1 $(MAN_DIR)/man1 ; \
+	done
+	#
+	sh debian/scripts/fixmanpages $(MAN_DIR) 1
+	#
+	touch manpages-stamp
+
+# CC_R_FLAG and LD_R_FLAG are empty because Debian doesn't recommend
+# RPATH definition in binaries
+# CC_R_OPT is used in percept
+build-hipe: build-hipe-stamp
+build-hipe-stamp: configure-hipe-stamp
+	dh_testdir
+	touch build-hipe-stamp
+ifeq ($(findstring debug,$(DEB_BUILD_OPTIONS)),debug)
+	${MAKE} -j TYPE=$(TYPE) FLAVOR=smp GEN_OPT_FLGS="$(GEN_OPT_FLGS)" emulator
+	${MAKE} -j TYPE=$(TYPE) FLAVOR=plain GEN_OPT_FLGS="$(GEN_OPT_FLGS)" emulator
+endif
+	${MAKE} -j TYPE=$(TYPE) GEN_OPT_FLGS="$(GEN_OPT_FLGS)"
+
+build-stnd: build-stnd-stamp
+build-stnd-stamp: configure-stnd-stamp
+	dh_testdir
+ifeq ($(findstring debug,$(DEB_BUILD_OPTIONS)),debug)
+	${MAKE} -j TYPE=$(TYPE) FLAVOR=smp GEN_OPT_FLGS="$(GEN_OPT_FLGS)" emulator
+	${MAKE} -j TYPE=$(TYPE) FLAVOR=plain GEN_OPT_FLGS="$(GEN_OPT_FLGS)" emulator
+endif
+	${MAKE} -j TYPE=$(TYPE) GEN_OPT_FLGS="$(GEN_OPT_FLGS)"
+	touch build-stnd-stamp
+
+docs: docs-stamp
+docs-stamp: $(INSTALL_RULE)
+	dh_testdir
+	PATH=$(ROOT_DIR)/bin:$$PATH $(MAKE) -j docs
+	$(MAKE) -j DESTDIR=$(ROOT_DIR)/debian/erlang-docs install-docs
+	#
+	sh debian/scripts/fixmanpages $(MAN_DIR) 2
+	#
+	(cd $(ROOT_DIR)/debian/erlang-docs/usr/lib/erlang/lib ; \
+	 perl $(ROOT_DIR)/debian/scripts/genindex >index.html ; \
+	 perl $(ROOT_DIR)/debian/scripts/genlinks $(VSN) >$(ROOT_DIR)/debian/erlang-doc.links)
+	touch docs-stamp
+
+install-hipe: install-hipe-stamp
+install-hipe-stamp: INSTALL_DIR=$(ROOT_DIR)/debian/erlang-hipe
+install-hipe-stamp: build-hipe-stamp
+	dh_testdir
+	$(do-install)
+	touch install-hipe-stamp
+
+install-stnd: install-stnd-stamp
+install-stnd-stamp: INSTALL_DIR=$(ROOT_DIR)/debian/erlang-stnd
+install-stnd-stamp: build-stnd-stamp
+	dh_testdir
+	$(do-install)
+	touch install-stnd-stamp
+
+build: build-arch build-indep
+build-arch: build-stamp manpages-stamp
+build-indep: build-stamp
+build-stamp: $(INSTALL_RULE)
+	dh_testdir
+	#
+	for i in debian/*.in debian/scripts/*.in ; do \
+	    sed -e's/@VERSION@/$(VSN)/g' \
+	     	-e's/@SOURCE_VERSION@/$(SOURCE_VERSION)/g' \
+	     	-e's/@HIPE_ARCHES@/$(HIPE_ARCHES)/g' \
+	     	-e's/@ABI_VERSION@/$(ABI_VERSION)/g' \
+	     	-e's/@EI_VSN@/$(EI_VSN)/g' \
+	     	-e's/@JINTERFACE_VSN@/$(JINTERFACE_VSN)/g' \
+	     	-e's/@IC_VSN@/$(IC_VSN)/g' \
+		-e's/@WEBTOOL_VSN@/$(WEBTOOL_VSN)/g' \
+		-e's/@COMMON_TEST_VSN@/$(COMMON_TEST_VSN)/g' \
+		-e's/@SNMP_VSN@/$(SNMP_VSN)/g' \
+		-e's/@DIAMETER_VSN@/$(DIAMETER_VSN)/g' \
+		-e's/@TOOLS_VSN@/$(TOOLS_VSN)/g' <$$i >$${i%%.in} ; \
+	done
+	sed -e's/@VERSION@/$(VSN)/g' <debian/in.erlang-doc.doc-base.erlang-erts \
+	    >debian/erlang-doc.doc-base.erlang-erts
+	#
+	# Place each installed file into the proper package.
+	# See this script and the debian/patterns/* files for more informations.
+	sh debian/scripts/analyse $(TMPINSTALL_DIR)
+	#
+	# Add all author lists to debian/AUTHORS
+	f=1 ; \
+	for i in `find $(ROOT_DIR) -name AUTHORS | sort` ; do \
+	    echo $$i ; \
+	    if [ $$f = 1 ] ; then \
+	    	f=0 ; \
+	    else \
+	    	echo >>debian/AUTHORS ; \
+		echo "------------------------------------------------------------------------" >>debian/AUTHORS ; \
+	        dirname=`dirname $$i` ; \
+	        echo `basename $$dirname` >>debian/AUTHORS ; \
+		echo >>debian/AUTHORS ; \
+	    fi ; \
+	    cat $$i >>debian/AUTHORS ; \
+	done
+	#
+	touch build-stamp
+
+binary-indep: build-stamp docs-stamp
+	dh_testdir
+	dh_testroot
+	dh_installdirs -i
+	dh_install -i --sourcedir=$(TMPINSTALL_DIR)
+	#
+	for pkg in examples ; do \
+	    install -D -m 644 debian/lintian/erlang-$$pkg.lintian-overrides \
+		$(ROOT_DIR)/debian/erlang-$$pkg/usr/share/lintian/overrides/erlang-$$pkg ; \
+	done
+	#
+	dh_installdocs -i -A debian/README.Debian debian/TODO.Debian debian/AUTHORS
+	dh_installemacsen -i
+	dh_installexamples -i
+	dh_installchangelogs -i
+	dh_installman -i
+	dh_installmenu -i
+	dh_link -i
+	dh_strip -i
+	dh_compress -i -X.txt -X.erl -X.hrl -X.c -X.js -X.kwc -X.pdf -X.eix -X.src -X.beam
+	dh_fixperms -i
+	dh_makeshlibs -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i -- -Z xz
+
+binary-arch: $(BINARY_TARGETS)
+
+binary-erlang-base: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_installdirs -a -Nerlang-base-hipe
+	dh_install -perlang-base --sourcedir=debian/erlang-stnd
+	dh_install -a -Nerlang-base -Nerlang-base-hipe --sourcedir=$(TMPINSTALL_DIR)
+	#
+	install -D -m 755 $(ROOT_DIR)/debian/scripts/erlang-depends \
+		$(ROOT_DIR)/debian/erlang-dev/usr/bin/erlang-depends
+	install -D -m 644 $(ROOT_DIR)/debian/erlang.xpm \
+		$(ROOT_DIR)/debian/erlang-base/usr/share/pixmaps/erlang.xpm
+	install -D -m 644 $(ROOT_DIR)/debian/erlang-base.desktop \
+		$(ROOT_DIR)/debian/erlang-base/usr/share/apps/konsole/erlang.desktop
+	#
+	for pkg in base appmon common-test debugger edoc erl-docgen gs observer percept pman tv wx ; do \
+	    install -D -m 644 debian/lintian/erlang-$$pkg.lintian-overrides \
+		$(ROOT_DIR)/debian/erlang-$$pkg/usr/share/lintian/overrides/erlang-$$pkg ; \
+	done
+	#
+	dh_installdocs -a -Nerlang-base-hipe -A debian/README.Debian debian/TODO.Debian debian/AUTHORS
+	dh_installchangelogs -a -Nerlang-base-hipe
+	dh_installemacsen -a -Nerlang-base-hipe
+	dh_installexamples -a -Nerlang-base-hipe
+	dh_installman -a -Nerlang-base-hipe
+	dh_installmenu -a -Nerlang-base-hipe
+	dh_link -a -Nerlang-base-hipe
+	dh_strip -a -Nerlang-base-hipe
+	dh_compress -a -Nerlang-base-hipe
+	dh_fixperms -a -Nerlang-base-hipe
+	dh_makeshlibs -a -Nerlang-base-hipe
+	dh_installdeb -a -Nerlang-base-hipe
+	dh_shlibdeps -a -Nerlang-base-hipe
+	dh_gencontrol -perlang-base -- \
+		-Vlibsctp:Version='$(LIBSCTPDEP)'
+	dh_gencontrol -a -Nerlang-base -Nerlang-base-hipe -- \
+		-Verlang-base='$(ERLANGBASE)'
+	dh_md5sums -a -Nerlang-base-hipe
+	dh_builddeb -a -Nerlang-base-hipe -- -Z xz
+
+binary-erlang-base-hipe: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_installdirs -perlang-base-hipe
+	dh_install -perlang-base-hipe --sourcedir=debian/erlang-hipe
+	install -D -m 644 $(ROOT_DIR)/debian/erlang.xpm \
+		$(ROOT_DIR)/debian/erlang-base-hipe/usr/share/pixmaps/erlang.xpm
+	install -D -m 644 $(ROOT_DIR)/debian/erlang-base-hipe.desktop \
+		$(ROOT_DIR)/debian/erlang-base-hipe/usr/share/apps/konsole/erlang.desktop
+	#
+	for pkg in base-hipe ; do \
+	    install -D -m 644 debian/lintian/erlang-$$pkg.lintian-overrides \
+		$(ROOT_DIR)/debian/erlang-$$pkg/usr/share/lintian/overrides/erlang-$$pkg ; \
+	done
+	#
+	dh_installdocs -perlang-base-hipe debian/README.Debian debian/TODO.Debian debian/AUTHORS
+	dh_installchangelogs -perlang-base-hipe
+	dh_installemacsen -perlang-base-hipe
+	dh_installexamples -perlang-base-hipe
+	dh_installman -perlang-base-hipe
+	dh_installmenu -perlang-base-hipe
+	dh_link -perlang-base-hipe
+	dh_strip -perlang-base-hipe
+	dh_compress -perlang-base-hipe
+	dh_fixperms -perlang-base-hipe
+	dh_makeshlibs -perlang-base-hipe
+	dh_installdeb -perlang-base-hipe
+	dh_shlibdeps -perlang-base-hipe
+	dh_gencontrol -perlang-base-hipe -- \
+		-Vlibsctp:Version='$(LIBSCTPDEP)'
+	dh_md5sums -perlang-base-hipe
+	dh_builddeb -perlang-base-hipe -- -Z xz
+
+binary: binary-indep binary-arch
+
+REL=R16B
+RELDIR=R16B
+DEB_REL=16.b
+
+.PHONY: patch unpatch clean-patched clean automake install build build-arch build-indep
+.PHONY: binary binary-arch binary-indep get-orig-source
+.PHONY: configure-stnd build-stnd install-stnd docs manpages
+.PHONY: configure-hipe build-hipe install-hipe
+.PHONY: binary-erlang-base binary-erlang-base-hipe
