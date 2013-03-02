@@ -135,3 +135,11 @@ $(CINEPAINT): $(SPREZZ)/cinepaint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cinepaint-$(cinepaint_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gnokii
+gnokii:$(GNOKII)_$(ARCH).deb
+$(GNOKII): $(SPREZZ)/gnokii/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gnokii-$(gnokii_UPVER).tar.bz2 $(TARARGS) $@
+
