@@ -9246,3 +9246,13 @@ $(RAGEL): $(SPREZZ)/ragel/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ragel-$(ragel_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: jam
+jam:$(JAM)_$(ARCH).deb
+$(JAM): $(SPREZZ)/jam/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	gzip jam-$(jam_UPVER).tar
+	ln -s jam-$(jam_UPVER).tar.gz jam_$(jam_UPVER).orig.tar.gz
+	tar xzvf jam-$(jam_UPVER).tar.gz $(TARARGS) $@
+
