@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_BUILD_MAINT_OPTIONS := hardening=+pie,+bindnow
+export DEB_CFLAGS_MAINT_APPEND := -pipe -Wall
+export DEB_CXXFLAGS_MAINT_APPEND := -pipe -Wall
+export DEB_LDFLAGS_MAINT_APPEND := -Wl,-z,defs -Wl,-Bsymbolic -Wl,--as-needed
+
+
+%:
+	dh $@ --buildsystem=cmake --parallel
+
+override_dh_auto_configure:
+        # inotify in multiarch system -- K3DFindInotify.cmake script tries to
+        # find 'sys/inotify.h' under '/usr/include' exclusively, by default, so
+        # it fails to find and thus disables building of the k3d-inotify.module
+ifeq (linux,$(DEB_BUILD_ARCH_OS))
+	dh_auto_configure -- \
+		-DK3D_INOTIFY_INCLUDE_DIR="/usr/include/$(DEB_BUILD_MULTIARCH)"
+else
+	dh_auto_configure
+endif
+
+override_dh_auto_install:
+	dh_auto_install
+
+#	Strip plugins and libraries, dh_link doesn't work with all of them
+	find debian/tmp/usr/lib -name \*.module -exec strip --strip-unneeded --remove-section=.comment --remove-section=.note {} \;
+
+#	Remove files, we're not going to ship them because it would be only
+#	useful for plugin developers and upstream discourages it
+	rm -fr debian/tmp/usr/include
+	rm -f debian/tmp/usr/lib/*.so
+
+#	Quell lintian warning "duplicate-font-file" by removing the files and
+#	symlinking to the ones in the package tff-bitstream-vera.  Use dh_link,
+#	since paths must be relative when elements in the path are common
+#	(e.g. /usr/)
+	rm -f debian/tmp/usr/share/k3d/fonts/Vera*.ttf
+
+override_dh_shlibdeps:
+	dh_shlibdeps -- debian/k3d/usr/lib/k3d/plugins/*.module
