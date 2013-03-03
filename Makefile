@@ -9423,3 +9423,11 @@ $(RTKIT): $(SPREZZ)/rtkit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rtkit-$(rtkit_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: smart
+smart:$(SMART)_$(ARCH).deb
+$(SMART): $(SPREZZ)/smart/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf smart-$(smart_UPVER).tar.gz $(TARARGS) $@
+
