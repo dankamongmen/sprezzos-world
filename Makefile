@@ -9291,3 +9291,11 @@ $(JANSSON): $(SPREZZ)/jansson/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf jansson-$(jansson_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gprolog
+gprolog:$(GPROLOG)_$(ARCH).deb
+$(GPROLOG): $(SPREZZ)/gprolog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gprolog-$(gprolog_UPVER).tar.gz $(TARARGS) $@
+

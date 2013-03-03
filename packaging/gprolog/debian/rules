@@ -1,0 +1,262 @@
+#! /usr/bin/make -f
+# $Id: rules,v 1.9 2003/03/22 10:12:21 spa Exp $
+# =============================================================================
+# debian/rules for the GNU Prolog packages:
+#   architecture-dependant package (gprolog-doc),
+#   architecture-independent package (gprolog).
+#
+# Written by Salvador Abreu <spa@debian.org> based on the template in
+# /usr/share/doc/debhelper/examples/rules.multi, with the following header:
+# =============================================================================
+#
+# Sample debian/rules that uses debhelper. 
+# This file is public domain software, originally written by Joey Hess.
+#
+
+SHELL=/bin/sh
+
+# may be iso, cx...
+variant=iso
+
+LIBDIR=/usr/lib/gprolog-$(variant)
+ifeq ($(variant),iso)
+	PACKAGE = gprolog
+	DOCDIR = /usr/share/doc/gprolog-doc
+else
+	PACKAGE = gprolog-$(variant)
+	DOCDIR = /usr/share/doc/gprolog-$(variant)-doc
+endif
+
+version=$(shell pwd | sed -e 's;.*/;;' -e 's;gprolog-;;')
+
+SRCDIR=src
+DBGFLAGS=-g
+DBGFLAGS=-O3 -fomit-frame-pointer
+BCFLAGS=-funsigned-char
+
+# =============================================================================
+
+CPPFLAGS = \
+	-DDEBIAN
+
+CONFOPTIONS =								\
+	--prefix=/usr							\
+	--bindir=$(LIBDIR)/bin						\
+	--libdir=$(LIBDIR)						\
+	--includedir=$(LIBDIR)/include					\
+	--with-doc-dir=$(DOCDIR)					\
+	--with-html-dir=$(DOCDIR)/gprolog.html				\
+	--with-examples-dir=$(DOCDIR)/examples				\
+	--with-c-flags="$(DBGFLAGS) $(BCFLAGS) -Wall $(CPPFLAGS)"	\
+	--without-links							\
+	--without-ebp							\
+	--disable-regs							\
+	--enable-watermark
+
+INSTALLDIRS =								\
+	INSTALL_DIR=$(CURDIR)/debian/$(PACKAGE)$(LIBDIR)		\
+	INSTALL_BIN=$(CURDIR)/debian/$(PACKAGE)$(LIBDIR)/bin		\
+	INSTALL_LIB=$(CURDIR)/debian/$(PACKAGE)$(LIBDIR)		\
+	INSTALL_INC=$(CURDIR)/debian/$(PACKAGE)$(LIBDIR)/include	\
+	DOC_DIR=$(CURDIR)/debian/$(PACKAGE)-doc$(DOCDIR)		\
+	HTML_DIR=$(CURDIR)/debian/$(PACKAGE)-doc$(DOCDIR)/gprolog.html	\
+	EXAMPLES_DIR=$(CURDIR)/debian/$(PACKAGE)-doc$(DOCDIR)/examples
+
+ROOT = $(shell pwd)
+SRCPATH = $(ROOT)/src
+SRCXDIRS = TopComp EnginePl Pl2Wam Wam2Ma Ma2Asm Fd2C DevUtils
+SRCXPATH := $(foreach dir,$(SRCXDIRS),$(SRCPATH)/$(dir):)
+SRCXPATH := $(shell echo $(SRCXPATH) | tr -d ' ')
+PATH = $(SRCXPATH):/usr/bin:/bin
+PL_PATH = ${CURDIR}/src
+
+CC = gcc
+
+# == build binaries and documentation =========================================
+
+build: build-indep build-arch
+
+stamp-config: config
+config:
+	dh_testdir
+# -----------------------------------------------------------------------------
+	( PATH=${PATH};							     \
+	  if [ ! -f $(SRCDIR)/Makefile -o				     \
+	       ! -f $(SRCDIR)/configure -o				     \
+	       $(SRCDIR)/Makefile.in -nt $(SRCDIR)/Makefile ]; then	     \
+	    cd $(SRCDIR);						     \
+	    rm -f config.sub config.guess;				     \
+	    cp /usr/share/misc/config.sub .;				     \
+	    cp /usr/share/misc/config.guess .;				     \
+	    autoconf &&							     \
+	    CC=$(CC) CPPFLAGS="${CPPFLAGS}" ./configure $(CONFOPTIONS); fi )
+# -----------------------------------------------------------------------------
+	touch stamp-config
+
+build-indep: stamp-build-indep
+stamp-build-indep: stamp-config
+	dh_testdir
+# -- commands to configure and build the package ------------------------------
+	PATH=${PATH} make -C doc pdf html
+# -----------------------------------------------------------------------------
+	touch stamp-build-indep
+
+build-arch: stamp-build-arch
+stamp-build-arch: stamp-config
+	dh_testdir
+# -- commands to configure and build the package ------------------------------
+	# fix up the time stamp on generated files in the Debian diff,
+	# which can't be regenerated during build w/o a tool that depends
+	# on them!
+	if [ -f src/BipsPl/arith_inl.wam ]; then	\
+		touch src/BipsPl/arith_inl.wam;	\
+	fi
+	PATH=${PATH} PL_PATH=${PL_PATH} make -C $(SRCDIR)
+# -----------------------------------------------------------------------------
+	touch stamp-build-arch
+
+
+# == clean up everything ======================================================
+
+clean:
+clean: stamp-config
+	dh_testdir
+	dh_testroot
+	rm -f stamp-build-arch stamp-build-indep stamp-config
+# -- commands to clean up after the build process -----------------------------
+	set -e; PATH=${PATH} make -C $(SRCDIR) distclean
+	rm -rf $(SRCDIR)/autom4te.cache
+	rm -f $(SRCDIR)/config.sub $(SRCDIR)/config.guess
+# -- now, get rid of some more generated files --------------------------------
+	set -e;								\
+	  find -name Makefile -o -name configure |			\
+	    while read FILE; do						\
+	      if [ -f "$$FILE.in" ]; then rm -f "$$FILE"; fi; done
+	find src -name VERSION | xargs -r rm -f
+	rm -rf src/autom4te.cache
+# -- make sure all *.wam files are more recent than *.pl ----------------------
+	find src -name \*.wam | xargs touch
+# -- clean up docs ------------------------------------------------------------
+	make -C doc clean-full
+	find doc -name \*.pdf | xargs -r rm -f
+	find doc -name \*.hh[ck] | xargs -r rm -f
+	find doc -name \*.hrf | xargs -r rm -f
+	find doc -name \*.fp | xargs -r rm -f
+	find doc -name manual\*.html | xargs -r rm -f
+# -- clean up examples --------------------------------------------------------
+	ls -d src/Examples* | while read DIR; do	\
+	  if [ -f $$DIR/Makefile ]; then		\
+	    make -C "$$DIR" clean;			\
+	  fi;						\
+	done
+# -----------------------------------------------------------------------------
+	dh_clean
+
+
+# == arch-dependent installation ==============================================
+
+install-arch:
+install-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs -A
+# -- install the package into the staging area --------------------------------
+	make -C $(SRCDIR) $(INSTALLDIRS) install-system
+# -- create gprolog-$(variant) etc, links in /usr/bin -------------------------
+	mkdir -p debian/$(PACKAGE)/usr/bin/
+	for PROG in gplc gprolog hexgplc; do			\
+	  ln -sf ../lib/gprolog-$(variant)/bin/$$PROG		\
+		debian/$(PACKAGE)/usr/bin/$$PROG-$(variant);	\
+	done
+# -- Install manpages ---------------------------------------------------------
+	mkdir -p debian/$(PACKAGE)/usr/share/man/man1/
+	cat debian/manpage |						 \
+	  sed -e "s/@PACKAGE@/$(PACKAGE)/g" |				 \
+	  gzip -9 > debian/$(PACKAGE)/usr/share/man/man1/$(PACKAGE).1.gz
+	for CMD in gplc hexgplc pl2wam wam2ma ma2asm fd2c; do		\
+	  ln -sf $(PACKAGE).1.gz					\
+		 debian/$(PACKAGE)/usr/share/man/man1/$$CMD.1.gz;	\
+	done
+	for CMD in gplc gprolog hexgplc; do				     \
+	  ln -sf $(PACKAGE).1.gz					     \
+		 debian/$(PACKAGE)/usr/share/man/man1/$$CMD-$(variant).1.gz; \
+	done
+# -- Install auxiliary stuff --------------------------------------------------
+	mkdir -p debian/$(PACKAGE)/usr/share/icons/
+	install -c -m 444 debian/$(PACKAGE).xpm	\
+		debian/$(PACKAGE)/usr/share/icons/
+# -----------------------------------------------------------------------------
+#	dh_movefiles
+
+
+# == arch-independent installation ============================================
+
+install-indep:
+install-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs -A
+# -- commands to install the package into the staging area --------------------
+	make -C $(SRCDIR) $(INSTALLDIRS) \
+	  install-doc install-html install-examples
+# -- remove stray PDFs --------------------------------------------------------
+	find debian/$(PACKAGE)-doc -name compil-scheme.pdf\* | xargs -r rm -f
+	find debian/$(PACKAGE)-doc -name debug-box.pdf\* | xargs -r rm -f
+# -----------------------------------------------------------------------------
+#	dh_movefiles
+
+
+# == build architecture-independent files =====================================
+
+binary-indep: build-indep install-indep
+	dh_testdir -i
+	dh_testroot -i
+#	dh_installdebconf -i
+	dh_installdocs -i # -pgprolog-doc
+	dh_installexamples -i
+#	dh_installmenu -i
+	dh_installemacsen -i
+#	dh_installman -i
+	dh_installinfo -i
+	dh_installchangelogs -i
+	dh_link -i
+	dh_compress -i -X.pdf
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build-arch install-arch
+	dh_testdir -a
+	dh_testroot -a
+#	dh_installdebconf -a
+	dh_installdocs -a
+#	dh_installexamples -a
+#	dh_installmenu -a
+	dh_installman -a
+#	dh_installinfo -a
+	dh_installchangelogs ChangeLog
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+#	dh_makeshlibs -a
+	for CTLFILE in postinst prerm; do			\
+	  ( echo "# -- Prolog variant ---------";		\
+	    echo LIB=/usr/lib/gprolog-${variant};		\
+	    echo VARIANT=${variant};				\
+	    echo "# ---------------------------" )		\
+		>> debian/$(PACKAGE).$$CTLFILE.debhelper;	\
+	done
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install
