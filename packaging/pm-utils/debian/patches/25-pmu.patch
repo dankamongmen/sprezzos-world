@@ -1,0 +1,61 @@
+# Description: Replace the usage of the compiled pm-pmu program with a call
+# to perl, so that pm-utils can stay Architecture: all
+
+Index: pm-utils/pm/pm-functions.in
+===================================================================
+--- pm-utils.orig/pm/pm-functions.in	2010-07-05 18:41:41.000000000 +0200
++++ pm-utils/pm/pm-functions.in	2010-07-05 18:51:36.958324785 +0200
+@@ -278,6 +278,28 @@
+ check_hibernate() { [ -n "$HIBERNATE_MODULE" ]; }
+ check_suspend_hybrid() { [ -n "$SUSPEND_HYBRID_MODULE" ]; }
+ 
++
++check_suspend_pmu()
++{
++	perl << EOF
++sub PMU_IOC_CAN_SLEEP { 0x40044205; }
++open PMU, '/dev/pmu' or die "open /dev/pmu: \$!";
++\$p = pack 'l', 0;
++ioctl PMU, &PMU_IOC_CAN_SLEEP, \$p or die "ioctl: \$!";
++(\$v) = unpack 'l', \$p;
++exit (\$v ? 0 : 1);
++EOF
++}
++
++do_suspend_pmu()
++{
++	perl << EOF
++sub PMU_IOC_SLEEP { 0x20004200; }
++open PMU, "/dev/pmu" or die "open /dev/pmu: \$!";
++ioctl PMU, &PMU_IOC_SLEEP, 0;
++EOF
++}
++
+ # allow autodetection of sleep methods
+ if [ "$SLEEP_MODULE" = "auto" ]; then
+     SLEEP_MODULE="tuxonice uswsusp"
+@@ -295,9 +317,9 @@
+ 	if grep -q mem /sys/power/state; then
+ 		SUSPEND_MODULE="kernel"
+ 		do_suspend() { echo -n "mem" >/sys/power/state; }
+-	elif [ -c /dev/pmu ] && pm-pmu --check; then
++	elif [ -c /dev/pmu ] && check_suspend_pmu; then
+ 		SUSPEND_MODULE="kernel"
+-		do_suspend() { pm-pmu --suspend; }
++		do_suspend() { do_suspend_pmu; }
+ 	elif grep -q standby /sys/power/state; then
+ 		SUSPEND_MODULE="kernel"
+ 		do_suspend() { echo -n "standby" >/sys/power/state; }
+Index: pm-utils/pm/module.d/uswsusp
+===================================================================
+--- pm-utils.orig/pm/module.d/uswsusp	2010-07-04 16:42:51.000000000 +0200
++++ pm-utils/pm/module.d/uswsusp	2010-07-05 18:51:36.958324785 +0200
+@@ -66,7 +66,7 @@
+ # ended up claiming ownership of a given sleep method.
+ if [ -z "$SUSPEND_MODULE" ] && command_exists s2ram && \
+ 	( grep -q mem /sys/power/state || \
+-		( [ -c /dev/pmu ] && pm-pmu --check; ); ); then
++		( [ -c /dev/pmu ] && check_suspend_pmu; ); ); then
+ 	SUSPEND_MODULE="uswsusp"
+ 	do_suspend()
+ 	{
