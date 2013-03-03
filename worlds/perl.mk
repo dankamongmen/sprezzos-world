@@ -453,3 +453,11 @@ $(LIBNETLIBIDNPERL): $(SPREZZ)/libnet-libidn-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Net-LibIDN-$(libnet-libidn-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libtie-ixhash-perl
+libtie-ixhash-perl:$(LIBTIEIXHASHPERL)_$(ARCH).deb
+$(LIBTIEIXHASHPERL): $(SPREZZ)/libtie-ixhash-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Tie-IxHash-$(libtie-ixhash-perl_UPVER).tar.gz $(TARARGS) $@
+
