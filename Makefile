@@ -9349,3 +9349,19 @@ $(CLISP): $(SPREZZ)/clisp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf clisp-$(clisp_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cjk
+cjk:$(CJK)_$(ARCH).deb
+$(CJK): $(SPREZZ)/cjk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cjk-$(cjk_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: texlive-base
+texlive-base:$(TEXLIVEBASE)_$(ARCH).deb
+$(TEXLIVEBASE): $(SPREZZ)/texlive-base/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf texlive-base-$(texlive-base_UPVER).tar.gz $(TARARGS) $@
+
