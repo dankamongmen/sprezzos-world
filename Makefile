@@ -9389,3 +9389,11 @@ $(TIPA): $(SPREZZ)/tipa/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tipa-$(tipa_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libraw1394
+libraw1394:$(LIBRAW1394)_$(ARCH).deb
+$(LIBRAW1394): $(SPREZZ)/libraw1394/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libraw1394-$(libraw1394_UPVER).tar.gz $(TARARGS) $@
+
