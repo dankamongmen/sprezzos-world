@@ -9397,3 +9397,11 @@ $(LIBRAW1394): $(SPREZZ)/libraw1394/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libraw1394-$(libraw1394_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: sg3-utils
+sg3-utils:$(SG3UTILS)_$(ARCH).deb
+$(SG3UTILS): $(SPREZZ)/sg3-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sg3-utils-$(sg3-utils_UPVER).tar.gz $(TARARGS) $@
+
