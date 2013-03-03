@@ -9333,3 +9333,11 @@ $(RLWRAP): $(SPREZZ)/rlwrap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rlwrap-$(rlwrap_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: camlp5
+camlp5:$(CAMLP5)_$(ARCH).deb
+$(CAMLP5): $(SPREZZ)/camlp5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf camlp5-$(camlp5_UPVER).tar.gz $(TARARGS) $@
+

@@ -165,5 +165,5 @@ $(LEDIT): $(SPREZZ)/ledit/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ledit-$(ledit_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf ledit-$(ledit_UPVER).tgz $(TARARGS) $@
 
