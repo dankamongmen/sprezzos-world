@@ -9313,5 +9313,15 @@ $(OCAML): $(SPREZZ)/ocaml/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ocaml-$(ocaml_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf ocaml-$(ocaml_UPVER).tar.bz2 $(TARARGS) $@
+
+.PHONY: libiodbc2
+libiodbc2:$(LIBIODBC2)_$(ARCH).deb
+$(LIBIODBC2): $(SPREZZ)/libiodbc2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libiodbc-$(libiodbc2_UPVER).tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@
 
