@@ -9365,3 +9365,11 @@ $(TEXLIVEBASE): $(SPREZZ)/texlive-base/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf texlive-base-$(texlive-base_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: eperl
+eperl:$(EPERL)_$(ARCH).deb
+$(EPERL): $(SPREZZ)/eperl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf eperl-$(eperl_UPVER).tar.gz $(TARARGS) $@
+
