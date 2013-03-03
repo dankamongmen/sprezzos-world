@@ -1,0 +1,177 @@
+#!/bin/sh -e
+# created 2010 by Frank Küster frank@debian.org
+# The code may be freely copied, distributed and/or modified
+
+# The plan: 
+# 1. Analyze the current situation and compare with the libpaper setting:
+#    a) Get the settings for dvips, xdvi, pdftex and dvipdfmx from 
+#       their respective conffiles - use texconfig-sys for that
+#    b) Get the libpaper setting
+#    c) Check whether all 4 binaries have the same current setting.
+# 2. Depending on the comparison, act differently
+#    a) if Yes, check whether current setting and libpaper setting are the same
+#        i. if Yes, we are done
+#        ii. if no, call "texconfig-sys paper $libpaper-default" and check the return value
+#            A. If the return value is 1, give a debconf warning that nothing has been changed
+#            In any case we are done
+#    b) if No, 
+#       i.  print a debconf multiselect window that lists the current settings and 
+#           lets the admin select which binaries should get the new, changed configuration
+#       ii. next, call "texconfig-sys $binary paper $libpaper-default" for each selected binary,
+#           and check the return value
+#            A. If the return value is 1, give a debconf warning that nothing has been changed
+# Done.
+
+# If texlive-base is removed, just  do nothing. 
+test -x /usr/share/texlive/texmf/texconfig/tcfmgr || exit 0
+
+. /usr/share/debconf/confmodule
+db_version 2.0
+
+
+#####################################
+#
+# code from dh_installtex postinst-tex snippet
+#
+####################################
+dhit_libkpathsea_configured ()
+{
+    kpsewhich --version >/dev/null 2>&1
+}
+dhit_update_lsr_files ()
+{
+    tempfile=$(mktemp -p /tmp mktexlsr.XXXXXXXX)
+    printf "Running mktexlsr. This may take some time... "
+    if mktexlsr $* > $tempfile 2>&1 ; then
+        rm -f $tempfile
+        echo "done."
+    else
+        exec >&2
+        echo
+        echo "mktexlsr $* failed. Output has been stored in"
+        echo "$tempfile"
+        echo "Please include this file if you report a bug."
+        echo
+        exit 1
+    fi
+}
+dhit_build_format ()
+{
+
+    tempfile=$(mktemp -p /tmp fmtutil.XXXXXXXX)
+    printf "Building format(s) $*.\n\tThis may take some time... "
+    if fmtutil-sys "$@" > $tempfile 2>&1 ; then
+        rm -f $tempfile
+        echo "done."
+    else
+        exec >&2
+        echo
+        echo "fmtutil-sys failed. Output has been stored in"
+        echo "$tempfile"
+        echo "Please include this file if you report a bug."
+        echo
+        exit 1
+    fi
+}
+#####################################
+#
+# end code from dh_installtex postinst-tex snippet
+#
+####################################
+
+
+dvips=$(tl-paper get dvips)
+xdvi=$(tl-paper get xdvi)
+pdftex=$(tl-paper get pdftex)
+dvipdfmx=$(tl-paper get dvipdfmx)
+
+LibpaperPaper=$(paperconf)
+
+FourPapersAllSame=false
+
+if [ "$dvips" = "$xdvi" ] && \
+   [ "$dvips" = "$pdftex" ] && \
+   [ "$dvips" = "$dvipdfmx" ]; then
+  FourPapersAllSame=true
+fi
+
+if [ $FourPapersAllSame = true ]; then
+  if [ "$dvips" = $LibpaperPaper ]; then
+    exit 0
+  else
+    if tl-paper set all $LibpaperPaper; then
+      if dhit_libkpathsea_configured; then
+        if which mktexlsr >/dev/null; then
+          dhit_update_lsr_files /var/lib/texmf
+        fi
+        dhit_build_format --refresh
+      fi
+      # finished now
+      exit 0
+    else
+      # texconfig-sys didn't understand the paper name
+      db_subst texlive-base/texconfig_ignorant libpaperPaper $LibpaperPaper
+      db_subst texlive-base/texconfig_ignorant binary "all programs"
+      db_subst texlive-base/texconfig_ignorant binary_commandline ""
+      # the priority will be treated as critical anyway for all error templates.
+      db_input critical texlive-base/texconfig_ignorant || true
+      db_go || true
+    fi
+  fi
+else
+#    b) if No, 
+#       i.  print a debconf multiselect window that lists the current settings and 
+#           lets the admin select which binaries should get the new, changed configuration
+#       ii. next, call "texconfig-sys $binary paper $libpaper-default" for each selected binary,
+#           and check the return value
+#            A. If the return value is 1, give a debconf warning that nothing has been changed
+# Done.
+  # the four Papers are not all the same. Ask the user.  
+  db_subst texlive-base/binary_chooser libpaperPaper $LibpaperPaper
+  db_fset texlive-base/binary_chooser seen false
+  db_input high texlive-base/binary_chooser || true
+  db_go || true
+
+  db_get texlive-base/binary_chooser
+  ListOfBinariesToUseLibpaper="$RET"
+
+  # now get rid of the commas by assigning to the positional parameters
+  OLD_IFS="$IFS"
+  IFS=', '
+  set $ListOfBinariesToUseLibpaper
+  # IFS needs to be restored before talking to debconf
+  IFS=$OLD_IFS
+
+  for binary in "$@"; do
+    if tl-paper list $binary | grep "^$LibpaperPaper\$"; then
+      # use this instead once set has a proper return code
+      # if tl-paper set $binary $LibpaperPaper; then 
+
+      # all is well
+      tl-paper set $binary $LibpaperPaper
+      if dhit_libkpathsea_configured; then
+        if which mktexlsr >/dev/null; then
+          dhit_update_lsr_files /var/lib/texmf
+        fi
+        # only rebuild when pdftex has changed, all others are
+        # run time files
+        if [ "$binary" = "pdftex" ] ; then
+          dhit_build_format --refresh
+        fi
+      fi
+      :
+    else
+      db_subst texlive-base/texconfig_ignorant binary "$binary"
+      db_subst texlive-base/texconfig_ignorant binary_commandline "$binary"
+      db_subst texlive-base/texconfig_ignorant libpaperPaper "$LibpaperPaper"
+      db_input high texlive-base/texconfig_ignorant || true
+
+      db_go || true
+    fi
+  done
+
+fi
+
+
+# Let vim know that we don't want tabs
+# vim:set expandtab tabstop=2 autoindent: #

@@ -1,0 +1,429 @@
+# This file, debianize-fmtutil, is meant to be sourced by fmtutil and
+# enhance the --enable and --disable options with the functionality
+# needed to deal with Debian's generated fmtutil.cnf.
+# $Id$
+
+# This is the planned scheme how it works
+# 
+# A for disablefmt:
+#   1. create a list of files to act on (either in sysconfdir only, or in user dirs too)
+#   2. grep for not-commented lines in these files that contain $fmt
+#   3. if in syswide-mode, for each of these files, run configReplace appropriately;
+#      if not in syswide mode, for each of these files,
+#             test whether it is in the syswide dir
+#   3.a if not, run configReplace appropriately
+#   3b. if yes, create copy in user dir and run configReplace appropriately
+#
+# B for enableMap:
+#   1. create a list of files to act on (either in sysconfdir only, or in user dirs too)
+#   2. grep for commented lines in these files that contain $map
+#   2.1. if any are found, check whether it is only one
+#   2.1.1 if there is only one, run configReplace on that file appropriately
+#   2.1.2 if there is more than one, the precedence is 
+#         20tetex-extra.cfg > XX*local*.cfg > 10tetex-base.cfg > any
+#	  (extra has maximum priority because 
+#   2.1.2.1 if it's clear on which file to act, run configReplace on that file
+#           appropriately
+#   2.1.2.2 if unclear (i.e. only "any"), exit with an error
+#   2.2 if none are found, act on 10local.cfg (could be made configurable)
+#       - if 10local.cfg does not exist, create it (with an explanatory comment)
+#       - run configReplace on it appropriately
+#
+# C for syncwithtrees (and even more?)
+# ?
+#
+# After that, update-fmtutil must be run (in the appropriate mode!), and then fmtutil
+# must reexecute itself.  Since disableMap is called by enableMap, we need a wrapper
+# for it.  
+
+###############################################################################
+# verboseMsg(msg)
+#   print `msg' to stderr is $verbose is true
+###############################################################################
+verboseMsg() {
+  $verboseFlag && verbose echo ${1+"$@"} >&2
+}
+
+###############################################################################
+#  enablefmt(format)
+#    enables format in configuration file
+###############################################################################
+enablefmt()
+{
+  enableFmtInner $1
+  runUpdate
+}
+
+###############################################################################
+# disablefmt(format)
+#   disables format in configuration file
+###############################################################################
+disablefmt()
+{
+  disableFmtInner $1
+  runUpdate
+}
+
+###############################################################################
+# debianEditWarnAndShow()
+#   warn that this won't work
+###############################################################################
+debianEditWarnAndShow(){
+  echo "Warning!"
+  echo ""
+  echo "In Debian, fmtutil.cnf, the format configuration file, is a generated file."
+  echo "The actual configuration files are in /etc/texmf/fmt.d."
+  echo "Please read the update-fmtutil(1) manpage and edit those files."
+  echo ""
+  echo "Instead of editing, you will now be shown fmtutil.cnf in a pager."
+  echo ""
+  echo "Press enter to continue."
+  read dummy
+  
+  sensible-pager $cnf_file
+
+}
+
+###############################################################################
+# DebianSyswideMode ()
+#   determine whether we are running in syswide mode (or user-specific)
+###############################################################################
+DebianSyswideMode(){
+  test "$(id -u)" -eq 0 && return 0 || return 1
+}
+
+###############################################################################
+# FindDebianUserdir ()
+#   find the directory containing user-specific fmt.d snippets
+###############################################################################
+FindDebianUserdir(){
+#  verboseMsg "entering FindDebianUserdir"
+
+  texmfconfig=$(kpsewhich --expand-path '$TEXMFCONFIG')
+  OLDIFS="$IFS"
+  IFS=:
+  count=0
+  for d in "$texmfconfig"; do
+    count=$(($count+1))
+    : ${cnfdir:=$d}
+    if [ -d "$d/fmt.d" ]; then
+      defaultuserdir="$d/fmt.d"
+      break
+    fi
+  done
+  IFS="$OLDIFS"
+  # still empty?  Pick one
+  if [ -z "$defaultuserdir" ]; then
+    if [ $count -eq 1 ]; then
+      defaultuserdir="$cnfdir/fmt.d"
+    else
+      echo "TEXMFCONFIG contains more than one directory, and none of them" >&2
+      echo "already contains a fmt.d/ subdirectory." >&2
+      echo "I don't know how to proceed here, stopping." >&2
+      return 
+    fi
+  fi
+
+  /usr/share/texmf/web2c/mktexdir $defaultuserdir
+  if [ -d $defaultuserdir ]; then
+    echo $defaultuserdir
+  fi
+}
+
+###############################################################################
+# createDebianConffilelist
+#   create a list of configuration files containing fmtutil snippets;
+#   we are going to act on these
+###############################################################################
+createDebianConffilelist(){
+#  verboseMsg "entering createDebianConffilelist"
+
+  userFiles=""
+  local DebianConffilelist=""
+  syswideFiles=`find /etc/texmf/fmt.d -maxdepth 1 -type f -name '*.cnf'`
+  if ! DebianSyswideMode; then
+    debianuserdir=`FindDebianUserdir`
+    if [ -n "$debianuserdir" ]; then
+      userFiles=`find "$debianuserdir" -maxdepth 1 -type f -name '*.cnf'`
+    fi
+  fi
+  if [ -n "$userFiles" ]; then
+    for sysfile in $syswideFiles; do
+      for userfile in $userFiles; do
+	if [ ! "`basename $userfile`" = "`basename $sysfile`" ]; then
+	  DebianConffilelist="$DebianConffilelist $sysfile"
+	fi
+      done
+    done
+    DebianConffilelist="$DebianConffilelist $userFiles"
+  else
+    DebianConffilelist="$syswideFiles"
+  fi
+  echo $DebianConffilelist
+}
+
+###############################################################################
+# snippetFileIsWritable (debCnfFile)
+#   checks whether we are (supposed to be) able to write to a file
+###############################################################################
+snippetFileIsWritable(){
+  local file=$1
+
+  if DebianSyswideMode; then
+    return 0
+  else
+    # /etc/texmf/fmt.d shouldn't be hardcoded
+    if [ "${file#/etc/texmf}" = "${file}" ]; then
+      # file is not in systemwide dir
+      return 0
+    else
+      return 1
+    fi
+  fi
+}
+
+###############################################################################
+# makeUserCopy (filename)
+#   create a copy in the user dir
+###############################################################################
+makeUserCopy(){
+  local debCnfFile="$1"
+
+  # create a copy of that file in the user dir
+  debianuserdir=`FindDebianUserdir`
+  newdebCnfFile="$debianuserdir/`basename $debCnfFile`"
+  verboseMsg "I'm not allowed to handle $fmt in $debCnfFile." >&2
+  verboseMsg "Creating copy in $debianuserdir instead." >&2
+  cp $debCnfFile $newdebCnfFile
+  echo "$newdebCnfFile"
+}
+
+###############################################################################
+# findUserfiles (filelist)
+#   pick user-specific files out of a filelist of configuration files
+###############################################################################
+findUserfiles(){
+  userfiles=""
+  while [ $# -gt 0 ]; do
+    file="$1"
+    if [ "$file" = "${file#/etc/texmf/}" ]; then
+      # doesn't start with /etc/texmf/: must be user-specific
+      userfiles="$userfiles $file"
+    fi
+    shift;
+  done
+  echo $userfiles
+}
+
+###############################################################################
+# findRightMatchfile (format,filelist)
+#   find the right file from filelist to enable mapname 
+###############################################################################
+findRightMatchfile(){
+  fmt=$1; shift
+  matchfiles="$@"
+  local debCnfFile=""
+
+  if [ $# -eq 1 ]; then
+    # it is only one, enable map in it.  May we write it?
+    debCnfFile=$matchfiles
+    if ! snippetFileIsWritable $debCnfFile; then
+      debCnfFile=`makeUserCopy $debCnfFile`
+    fi
+    echo $debCnfFile
+    verboseMsg "Enabling format in $debCnfFile."
+    return 0
+  else
+    # there are more than one; 
+    if ! DebianSyswideMode; then
+      # can only change files in the user's dir
+      usermatchfiles=`findUserfiles $matchfiles`
+      if [ `(set $usermatchfiles; echo $#)` -eq 1 ]; then
+        # exactly one of them is a user-specific file
+	echo $usermatchfiles
+	verboseMsg "Enabling format in user-specific file $usermatchfiles."
+	return 0
+      else
+        # two files in the user directory (as bad as two in the site-wide
+        # dir), or no user-specific files.  If there are two user-specific
+	# files, report about them:
+	test -n "$usermatchfiles" && matchfiles="$usermatchfiles" || true
+      fi
+    fi
+    # for now, we exit with an error.  Any sensible choice would have to 
+    # check whether teTeX or texlive is installed, and I want to save me
+    # that hazzle.
+    cat >&2 <<EOF
+Entries for format $fmt found in several files:
+$matchfiles
+
+Since fmtutil.cnf is a generated file in Debian, I don't know how to proceed.
+Please refer to the manpage of update-fmtutil(1)
+
+EOF
+  fi
+}
+
+###############################################################################
+# pickLocalFile (mapname,directory)
+#   pick the right local file in directory
+###############################################################################
+pickLocalFile(){
+  fmt=$1
+  debDirname=$2
+  debDirname=${debDirname%/}
+  # Is there a file with "local" in the name?
+  localfile="`ls $debDirname/*local*cfg 2>/dev/null`"
+  if [ -n "$localfile" ]; then
+    # there is at least one
+    if [ `(set $localfile; echo $#)` -eq 1 ]; then
+      # exactly one
+      verboseMsg "Using local configuration file $localfile"
+      echo $localfile
+      return 0
+    else
+      # more than one local file? Brrrr.
+      cat >&2 <<EOF
+While trying to enable $fmt locally, I found several user-specific config files:
+$localfile
+
+I don't know how to proceed here. Please refer to the manpage of update-fmtutil(1)
+
+EOF
+    fi
+  else
+    # no user config file yet
+    echo $debDirname/10local.cfg
+    return 0
+  fi
+}
+
+###############################################################################
+# findRightLocalfile (fmt)
+#   find the right file to enable fmt, site-wide or user-specific
+###############################################################################
+findRightLocalfile(){
+  fmt=$1
+  # Do we know about a user-specific directory?
+  if DebianSyswideMode; then
+    DebCnfFile=`pickLocalFile $fmt /etc/texmf/fmt.d`
+  else
+    debianuserdir=`FindDebianUserdir`
+    test -w $debianuserdir || (
+      echo "Target directory $debianuserdir not writable." >&2
+      echo "Exiting" >&2
+      exit 0
+    )
+    DebCnfFile=`pickLocalFile $fmt $debianuserdir`
+  fi
+#   # configReplace will try to grep in the file: touch it to prevent a error message
+#   touch $DebCnfFile
+  verboseMsg "Using local configuration file $DebCnfFile"
+  echo $DebCnfFile
+}
+
+###############################################################################
+# runUpdate
+#   run update-fmtutil
+###############################################################################
+runUpdate(){
+  updOptions=""
+  if [ -n "$cfgparam" ]; then
+    # --conffile option was given on the command line
+      updOptions="--output-file $orig"
+  fi
+  # here we could check for an alternative user dir, or output file
+  # but as long as FindDebianUserdir only reports the default location, 
+  # it doesn't make sense
+
+  verboseMsg "Running update-fmtutil to merge the changed files"
+  update-fmtutil --quiet $updOptions
+}
+
+###############################################################################
+# disableFmtInner (map)
+#   disables fmt in config file (any type) (real command)
+###############################################################################
+disableFmtInner()
+{
+  fmt=$1
+  noverbose="$2"
+
+  local debCnfFile
+
+  oldverbose="$verbose"
+  if [ -n "$noverbose" ]; then
+    # don't confuse users with disable messages when they called --enable
+#     verboseMsg "disabling verbosity"
+    verbose=false
+  fi
+
+
+  if [ -z "$DebianConffilelist" ]; then
+    DebianConffilelist=`createDebianConffilelist`
+  fi
+
+  # create list of all files that contain an entry
+  for debCnfFile in $DebianConffilelist; do
+    if grep -q "^$fmt" $debCnfFile; then
+      if ! snippetFileIsWritable $debCnfFile; then
+	debCnfFile=`makeUserCopy $debCnfFile`
+      fi
+      verboseMsg "Disabling $fmt in $debCnfFile."
+      ed $debCnfFile >/dev/null 2>&1 <<-eof
+	g/^$fmt[ 	]/s/^/#! /
+	w
+	q
+eof
+    fi
+  done
+  
+  verbose="$oldverbose"
+  return 0
+}
+
+###############################################################################
+# enableFmtInner (fmt)
+#   enables fmt in config file (any type) (real command)
+###############################################################################
+enableFmtInner(){
+  fmt=$1
+  local debCnfFile=""
+
+  if [ -z "$DebianConffilelist" ]; then
+    DebianConffilelist=`createDebianConffilelist`
+  fi
+
+  # a format should only be defined once, so we carefully disable
+  # everything about it here:
+  disableFmtInner "$fmt" noverbose
+
+  # now enable with the right type.
+  # But we have to determine where to enable.
+  # is there already a file that contains a (commented) entry?
+  matchfiles=""
+  for file in $DebianConffilelist; do
+    if grep -q "^#![ 	]*$fmt[ 	]" "$file"; then
+      matchfiles="$matchfiles $file"
+    fi
+  done
+  if [ -n "$matchfiles" ]; then
+    # there is already (at least) one file that has a commented entry for our map
+    debCnfFile=`findRightMatchfile $fmt $matchfiles`
+    test -w "$debCnfFile" || debCnfFile=""
+  fi
+  if [ -z "$debCnfFile" ]; then
+    # still none, there is no (commented) entry in any writable file yet. 
+    debCnfFile=`findRightLocalfile $fmt`
+    test -n "$debCnfFile" || abort "Cannot proceed. Exiting"
+    verboseMsg "Creating new entry for format $fmt in $debCnfFile"
+  fi
+
+  ed $debCnfFile >/dev/null 2>&1 <<-eof
+	g/^#![ 	]*$fmt[ 	]/s/..[ 	]*//
+	w
+	q
+eof
+}
+
+
