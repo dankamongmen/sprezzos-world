@@ -22,3 +22,19 @@ $(JUNIT): $(SPREZZ)/junit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf junit-$(junit_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ant
+ant:$(ANT)_$(ARCH).deb
+$(ANT): $(SPREZZ)/ant/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf apache-ant-$(ant_UPVER)-src.tar.gz $(TARARGS) $@
+
+.PHONY: fastjar
+fastjar:$(FASTJAR)_$(ARCH).deb
+$(FASTJAR): $(SPREZZ)/fastjar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fastjar-$(fastjar_UPVER).tar.gz $(TARARGS) $@
+

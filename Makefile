@@ -9431,3 +9431,11 @@ $(SMART): $(SPREZZ)/smart/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf smart-$(smart_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pm-utils
+pm-utils:$(PMUTILS)_$(ARCH).deb
+$(PMUTILS): $(SPREZZ)/pm-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pm-utils-$(pm-utils_UPVER).tar.gz $(TARARGS) $@
+
