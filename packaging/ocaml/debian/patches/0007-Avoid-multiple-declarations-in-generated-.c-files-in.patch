@@ -1,0 +1,101 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Thu, 21 Apr 2011 18:39:31 +0200
+Subject: Avoid multiple declarations in generated .c files in -output-obj
+
+In -output-obj mode, <caml/mlvalues.h> (which contains some
+primitives) is included in the generated .c file, leading to errors
+when compiling with g++ (multiple declarations).
+
+There are probably better implementations (in particular, in this one,
+care must be taken when changing the list of primitives available in
+mlvalues.h), but this is a small and (not too) intrusive patch.
+
+Bug: http://caml.inria.fr/mantis/view.php?id=5254
+Signed-off-by: Stephane Glondu <steph@glondu.net>
+---
+ bytecomp/bytelink.ml  |   17 +++++++++++++++--
+ bytecomp/symtable.ml  |    8 +++++---
+ bytecomp/symtable.mli |    2 +-
+ 3 files changed, 21 insertions(+), 6 deletions(-)
+
+diff --git a/bytecomp/bytelink.ml b/bytecomp/bytelink.ml
+index f40e425..bb14de6 100644
+--- a/bytecomp/bytelink.ml
++++ b/bytecomp/bytelink.ml
+@@ -408,6 +408,19 @@ let output_cds_file outfile =
+     remove_file outfile;
+     raise x
+ 
++(* List of primitives declared in caml/mlvalues.h, to avoid duplicate
++   declarations in generated .c files *)
++
++let mlvalues_primitives = [
++  "caml_get_public_method";
++  "caml_hash_variant";
++  "caml_string_length";
++  "caml_Double_val";
++  "caml_Store_double_val";
++  "caml_Int64_val";
++  "caml_atom_table";
++]
++
+ (* Output a bytecode executable as a C file *)
+ 
+ let link_bytecode_as_c ppf tolink outfile =
+@@ -450,7 +463,7 @@ let link_bytecode_as_c ppf tolink outfile =
+       (Marshal.to_string sections []);
+     output_string outchan "\n};\n\n";
+     (* The table of primitives *)
+-    Symtable.output_primitive_table outchan;
++    Symtable.output_primitive_table outchan mlvalues_primitives;
+     (* The entry point *)
+     output_string outchan "\
+ \nvoid caml_startup(char ** argv)\
+@@ -530,7 +543,7 @@ let link ppf objfiles output_name =
+         #else\n\
+         typedef long value;\n\
+         #endif\n";
+-      Symtable.output_primitive_table poc;
++      Symtable.output_primitive_table poc [];
+       output_string poc "\
+         #ifdef __cplusplus\n\
+         }\n\
+diff --git a/bytecomp/symtable.ml b/bytecomp/symtable.ml
+index 7ab4bfd..3f4495e 100644
+--- a/bytecomp/symtable.ml
++++ b/bytecomp/symtable.ml
+@@ -115,15 +115,17 @@ let output_primitive_names outchan =
+ 
+ open Printf
+ 
+-let output_primitive_table outchan =
++let output_primitive_table outchan blacklist =
+   let prim = all_primitives() in
+   for i = 0 to Array.length prim - 1 do
+-    fprintf outchan "extern value %s();\n" prim.(i)
++    let p = prim.(i) in
++    if not (List.mem p blacklist) then
++      fprintf outchan "extern value %s();\n" p
+   done;
+   fprintf outchan "typedef value (*primitive)();\n";
+   fprintf outchan "primitive caml_builtin_cprim[] = {\n";
+   for i = 0 to Array.length prim - 1 do
+-    fprintf outchan "  %s,\n" prim.(i)
++    fprintf outchan "  (primitive)%s,\n" prim.(i)
+   done;
+   fprintf outchan "  (primitive) 0 };\n";
+   fprintf outchan "const char * caml_names_of_builtin_cprim[] = {\n";
+diff --git a/bytecomp/symtable.mli b/bytecomp/symtable.mli
+index b4268f4..22dfebc 100644
+--- a/bytecomp/symtable.mli
++++ b/bytecomp/symtable.mli
+@@ -24,7 +24,7 @@ val require_primitive: string -> unit
+ val initial_global_table: unit -> Obj.t array
+ val output_global_map: out_channel -> unit
+ val output_primitive_names: out_channel -> unit
+-val output_primitive_table: out_channel -> unit
++val output_primitive_table: out_channel -> string list -> unit
+ val data_global_map: unit -> Obj.t
+ val data_primitive_names: unit -> string
+ 
+-- 

@@ -1,0 +1,322 @@
+#!/usr/bin/make -f
+
+PACKAGE := ocaml
+ALL_PACKAGES := $(shell dh_listpackages)
+OCAMLMAJOR := 4.00
+OCAMLMINOR := 1
+
+# Build cache (for Debian debugging)
+BUILDCACHE := $(wildcard ../ocaml.cache)
+
+# These are defined here to avoid definition of them in ocamlvars.mk
+OCAML_ABI := $(OCAMLMAJOR).$(OCAMLMINOR)
+OCAML_STDLIB_DIR := /usr/lib/ocaml
+OCAML_NATIVE_ARCHS := $(shell cat debian/native-archs)
+OCAML_NATDYNLINK_ARCHS := $(shell cat debian/natdynlink-archs)
+DEB_BUILD_ARCH ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+OCAML_OPT_ARCH := $(findstring $(DEB_BUILD_ARCH),$(OCAML_NATIVE_ARCHS))
+OCAML_HAVE_OCAMLOPT := $(if $(OCAML_OPT_ARCH),yes,no)
+OCAML_OCAMLDOC_DESTDIR_HTML =
+
+ifneq (,$(findstring $(DEB_BUILD_ARCH),$(OCAML_NATDYNLINK_ARCHS)))
+  OCAML_NATDYNLINK := yes
+else
+  OCAML_NATDYNLINK := no
+endif
+
+# dh_ocamlinit cannot be used for ocaml itself
+include debian/ocamlinit.mk
+
+MD5SUMSDIR = /var/lib/ocaml/md5sums
+INSTDIR = $(CURDIR)/debian/tmp/usr
+DISTDIR = $(PACKAGE)-$(OCAML_ABI)
+UPSTREAM_VERSION = $(shell dpkg-parsechangelog | awk '/^Version:/{print $$2}' | { read u; echo $${u%-*}; })
+UPSTREAM_TARBALL = ../$(PACKAGE)_$(UPSTREAM_VERSION).orig.tar.bz2
+SRCTARBALL = $(PACKAGE)-source-$(OCAML_ABI).tar
+
+TESTDIR := debian/test-build
+TESTRULES := debian/rules DEB_TEST_BUILD_PREFIX=$(CURDIR)/$(TESTDIR)
+
+ifeq (,$(DEB_TEST_BUILD_PREFIX))
+ifneq (,$(findstring ocaml-source,$(ALL_PACKAGES)))
+  TARBALL_TARGET = debian/$(SRCTARBALL)
+endif
+endif
+
+# Environment variable for dh_ocaml
+export OCAMLOBJINFO = OCAMLLIB=tools boot/ocamlrun tools/objinfo
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DH_OPTIONS
+ifeq ($(OCAML_OPT_ARCH),)
+  DH_OPTIONS += -Nocaml-native-compilers
+endif
+
+# This has to be exported to make gen_modules work
+export OCAML_OPT_ARCH
+export OCAML_STDLIB_DIR
+
+CONFIGURE_OPTS := \
+  --host $(DEB_BUILD_GNU_TYPE)\
+  --with-pthread -prefix $(DEB_TEST_BUILD_PREFIX)/usr \
+  -libdir $(DEB_TEST_BUILD_PREFIX)$(OCAML_STDLIB_DIR) \
+  -x11lib "$(shell pkg-config --variable=libdir x11)" \
+  -mandir $(DEB_TEST_BUILD_PREFIX)/usr/share/man \
+  -tkdefs "-I/usr/include/tcl8.5" \
+  -tklibs "-L/usr/lib -ltk8.5 -ltcl8.5"
+
+CONFIGURE_SED := \
+  -e "/LIBBFD_LINK/s%-lbfd%-Wl,-Bstatic -lbfd -Wl,-Bdynamic%" \
+  -e "s%MANDIR=.*$$%MANDIR=\$$(PREFIX)/share/man%g" \
+  -e "s%LIBDIR=.*$$%LIBDIR=\$$(PREFIX)/lib/ocaml%g" \
+  -e "s%STUBLIBDIR=.*$$%STUBLIBDIR=\$$(PREFIX)/lib/ocaml/stublibs%g"
+
+%:
+	dh $@
+
+# Needed because there is a "build" in the upstream tarball
+.PHONY: build
+build:
+	dh $@
+
+ocamlinit-stamp: $(TARBALL_TARGET)
+
+# Generate ocaml-native-compilers' Architecture field.
+# Should never be called automatically.
+.PHONY: debian/control
+debian/control:
+	sed -e 's/@OCamlNativeArchs@/$(OCAML_NATIVE_ARCHS)/g' debian/control.in > $@
+
+pre-config-stamp: $(TARBALL_TARGET)
+	chmod +x debian/gen_modules.pl
+# Backup upstream config.{sub,guess}, and use most up-to-date ones
+	for ext in sub guess; do \
+	  if [ -f /usr/share/misc/config.$$ext ] && \
+	    ! [ -f debian/config.orig.$$ext ]; then \
+	    mv config/gnu/config.$$ext debian/config.orig.$$ext; \
+	    cp -f /usr/share/misc/config.$$ext config/gnu/config.$$ext; \
+	  fi; \
+	done
+# Create empty directory present in upstream tarball
+	mkdir -p compilerlibs
+	touch $@
+
+ifneq (,$(TARBALL_TARGET))
+$(TARBALL_TARGET): $(UPSTREAM_TARBALL)
+	mkdir debian/$(DISTDIR)
+# Copy upstream tarball
+	cp $< debian/$(DISTDIR)
+# Copy debian/patches
+	cp -a debian/patches debian/$(DISTDIR)/debian-patches
+# Create the tarball and cleanup
+	tar -C debian -cf $@ $(DISTDIR)
+	rm -Rf debian/$(DISTDIR)
+endif
+
+.PHONY: override_dh_auto_configure
+override_dh_auto_configure: config-stamp
+
+config-stamp: pre-config-stamp ocamlinit-stamp
+	./configure $(CONFIGURE_OPTS)
+	sed -i $(CONFIGURE_SED) config/Makefile
+	if test -z "`grep "OTHERLIBRARIES.*labltk" config/Makefile`"; then \
+	  echo "Error, labltk library was not detected"; \
+	  echo "Check your tcl/tk development packages"; \
+	  echo "Aborting."; \
+	  exit 1; \
+	fi
+	touch $@
+
+.PHONY: override_dh_auto_build
+override_dh_auto_build: build-stamp
+
+build-stamp: config-stamp
+	if test ! -d boot.debian; then \
+	  cp -xa boot boot.debian; \
+	fi
+	rm -Rf debian/examples && mkdir debian/examples
+	cp -a otherlibs/labltk/examples_labltk debian/examples/labltk
+	find debian/examples/labltk -name .cvsignore -delete
+ifeq ($(BUILDCACHE),)
+	$(MAKE) world
+	$(MAKE) bootstrap
+	$(MAKE) -C tools dumpobj
+ifeq (,$(OCAML_OPT_ARCH))
+# As of 3.11.0, manpages are made only in `make opt.opt'
+	make -C ocamldoc manpages \
+	  OCAMLDOC_RUN="../boot/ocamlrun -I ../otherlibs/unix -I ../otherlibs/str ./ocamldoc"
+else
+	@echo "Building native compilers"
+	$(MAKE) opt opt.opt
+	touch opt-built-stamp
+endif
+else
+	@echo "===> WARNING: $(BUILDCACHE) detected, compilation skipped! <==="
+	rsync -a --exclude=debian --exclude=.git $(BUILDCACHE)/ .
+	rm -f build-stamp install-stamp
+endif
+	touch $@
+
+.PHONY: override_dh_auto_clean
+override_dh_auto_clean: ocamlinit-clean
+ifneq ($(wildcard $(CURDIR)/config/Makefile),)
+	$(MAKE) clean
+	$(MAKE) -C emacs clean
+endif
+# Restore files altered by the build process
+	if test -d boot.debian; then \
+	  rm -Rf boot; \
+	  mv boot.debian boot; \
+	fi
+	for ext in sub guess; do \
+	  if [ -f debian/config.orig.$$ext ] ; then \
+	    mv -f debian/config.orig.$$ext config/gnu/config.$$ext; \
+	  fi; \
+	done
+	if head -n 1 emacs/ocamltags.in | grep -q '^#!/bin/sh'; then \
+		sed -i 1d emacs/ocamltags.in; \
+	fi
+# Remaining stuff
+	-rm -Rf debian/$(SRCTARBALL) debian/examples $(TESTDIR)
+
+.PHONY: override_dh_auto_install
+override_dh_auto_install: install-stamp
+
+install-stamp:
+ifneq (,$(findstring ocaml-mode,$(ALL_PACKAGES)))
+# Install Emacs files
+	$(MAKE) -C emacs \
+	  EMACSDIR=$(CURDIR)/debian/ocaml-mode/usr/share/emacs/site-lisp/ocaml-mode \
+	  NOCOMPILE=true simple-install
+	if ! head -n 1 emacs/ocamltags.in | grep -q '^#!/bin/sh'; then \
+	  sed -i -e '1 i #!/bin/sh' emacs/ocamltags.in; \
+	fi
+	$(MAKE) -C emacs SCRIPTDIR=$(CURDIR)/debian/ocaml-mode/usr/bin install-ocamltags
+endif
+# Install OCaml
+	sed -e 's|PREFIX=\"/.*\"|PREFIX=\"$(INSTDIR)"|' < config/config.sh > config/config.debian.install.sh
+	$(MAKE) install PREFIX=$(INSTDIR)
+ifeq (,$(DEB_TEST_BUILD_PREFIX))
+# Remove empty directory
+	rmdir $(CURDIR)/debian/tmp$(OCAML_STDLIB_DIR)/ocamldoc/custom
+# Remove uninstalled files
+	rm -f \
+	  $(INSTDIR)/share/man/man1/ocamlopt.opt.1 \
+	  $(INSTDIR)/share/man/man1/ocamlc.opt.1 \
+	  $(INSTDIR)/bin/camlp4boot
+ifeq ($(OCAML_HAVE_OCAMLOPT),no)
+# Remove files that make no sense without ocamlopt
+	rm -f \
+	  $(INSTDIR)/share/man/man1/ocamloptp.1 \
+	  $(INSTDIR)/share/man/man1/ocamlopt.1 \
+	  $(INSTDIR)/bin/ocamloptp
+endif
+# Dispatch files with dh_install
+	cd debian && \
+	for u in ocaml ocaml-nox; do \
+	  DESTDIR=tmp ./gen_modules.pl $$u.install > $$u.install.new; \
+	  mv $$u.install.new $$u.install; \
+	done
+	if ! dh_install --fail-missing; then \
+	  echo "===> dh_install has failed <==="; \
+	  find debian/tmp; \
+	  exit 1; \
+	fi
+# Install additional files not handled by dh_install
+# Beware: dh_install does not handle renamings, please pay attention
+	cp otherlibs/labltk/README debian/ocaml/usr/share/doc/ocaml/README.labltk
+	for u in dumpobj; do \
+	  if [ -f tools/$$u ]; then \
+	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
+	  fi \
+	done
+	for mli in `find camlp4 -name '*.mli'` ; do \
+	  cp --parents $$mli debian/camlp4$(OCAML_STDLIB_DIR); \
+	done
+	for pkg in ocaml ocaml-nox ocaml-base; do ( \
+	  cd debian/$$pkg/usr/share/doc/$$pkg && \
+	  ln -sf ../ocaml-base-nox/README.gz . && \
+	  ln -sf ../ocaml-base-nox/README.Debian .; \
+	); done
+endif
+# Remaining stuff
+	touch $@
+
+.PHONY: override_dh_compress
+override_dh_compress:
+	dh_compress -Xexamples/labltk
+
+.PHONY: override_dh_gencontrol
+override_dh_gencontrol:
+	for u in $(ALL_PACKAGES); do \
+	  echo 'F:OCamlABI=$(OCAML_ABI)' >> debian/$$u.substvars; \
+	done
+ifeq (,$(OCAML_OPT_ARCH))
+	echo 'F:BestProvides=ocaml-best-compilers' >> debian/ocaml-nox.substvars
+else
+	echo 'F:BestProvides=' >> debian/ocaml-nox.substvars
+endif
+# Create .md5sums files and compute dependencies. Use $(OCAML_ABI)
+# because we know that OCaml ABI represents best dependencies for
+# OCaml package.
+	dh_ocaml -Xcompiler-libs -Xcamlp4-extra \
+	 --runtime-map ocaml-nox:ocaml-base-nox,ocaml:ocaml-base,camlp4 \
+	 --checksum $(OCAML_ABI)
+	dh_gencontrol
+# Check that OCAML_ABI is correct
+	if [ "$(OCAML_ABI)" != "$(shell boot/ocamlrun ./ocamlc -version | { read a && echo $${a%%_*}; })" ]; then \
+	  echo "Please adjust OCAML_ABI in debian/rules"; \
+	  exit 2; \
+	fi
+
+.PHONY: regenerate
+regenerate: debian/control
+	git ls-tree --name-only -r HEAD debian \
+	  | grep -v '^debian/\(patches/\|source/local-\)' \
+	> debian/MANIFEST
+
+# Architectures where running the test suite completely makes the
+# whole build last more than one hour on buildds. Originally, because
+# some tests do not even finish on mips.
+SLOW_ARCHITECTURES := hurd-i386 mips mipsel powerpc sparc armel
+
+.PHONY: override_dh_auto_test
+override_dh_auto_test:
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+# The test suite needs the just-compiled ocaml to be installed, so we
+# rebuild a version with a local prefix and install it to run the
+# tests; see:
+#   http://caml.inria.fr/mantis/view.php?id=5483
+ifeq (,$(DEB_TEST_BUILD_PREFIX))
+	rm -rf $(TESTDIR)
+	mkdir $(TESTDIR)
+	tar -C $(TESTDIR) -xf $(UPSTREAM_TARBALL)
+	tar -c --files-from=debian/MANIFEST | tar -C $(TESTDIR)/ocaml-* -x
+	cp -a debian/patches $(TESTDIR)/ocaml-*/debian
+	cd $(TESTDIR)/ocaml-* \
+	  && QUILT_PATCHES=debian/patches quilt push -a \
+	  && $(TESTRULES) build \
+	  && dh_installdirs \
+	  && $(TESTRULES) install-stamp \
+	  && cp -a debian/tmp/* ..
+# Broken test (see http://caml.inria.fr/mantis/view.php?id=5648)
+	rm -f $(TESTDIR)/ocaml-*/testsuite/tests/lib-threads/test4.ml
+# Thread tests seem to hang on buildds, but cannot reproduce elsewhere
+ifneq (,$(findstring kfreebsd,$(DEB_BUILD_ARCH)))
+	rm -rf $(TESTDIR)/ocaml-*/testsuite/tests/lib-threads
+endif
+# Tests that take too much time
+ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
+	for t in \
+	  misc/nucleic.ml \
+	  misc-unsafe/almabench.ml \
+	  misc-unsafe/fft.ml \
+	; do rm -rf $(TESTDIR)/ocaml-*/testsuite/tests/$$t; done
+endif
+	cd $(TESTDIR)/ocaml-*/testsuite \
+	  && make all
+endif
+endif
