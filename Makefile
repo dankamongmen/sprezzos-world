@@ -9273,3 +9273,11 @@ $(FONTSGOOGLEWEB): $(SPREZZ)/fonts-googleweb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fonts-googleweb-$(fonts-googleweb_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: hunspell
+hunspell:$(HUNSPELL)_$(ARCH).deb
+$(HUNSPELL): $(SPREZZ)/hunspell/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hunspell-$(hunspell_UPVER).tar.gz $(TARARGS) $@
+
