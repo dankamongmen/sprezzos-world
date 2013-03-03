@@ -9283,3 +9283,11 @@ $(HUNSPELL): $(SPREZZ)/hunspell/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hunspell-$(hunspell_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: jansson
+jansson:$(JANSSON)_$(ARCH).deb
+$(JANSSON): $(SPREZZ)/jansson/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf jansson-$(jansson_UPVER).tar.gz $(TARARGS) $@
+
