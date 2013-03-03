@@ -1,0 +1,118 @@
+#!/usr/bin/make -f
+# debian/rules file for ant (uses cdbs)
+
+#export DH_VERBOSE=1
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+include /usr/share/gcj/debian_defaults
+ifneq (,$(filter $(DEB_HOST_ARCH), $(gcj_native_archs)))
+  with_gcj_native := yes
+endif
+
+# needs to be exported for direct ant call
+export JAVA_HOME := /usr/lib/jvm/default-java
+# needed for bootstrap.sh
+export JAVAC=$(JAVA_HOME)/bin/javac
+# needed for bootstrap
+export BOOTJAVAC_OPTS=-source 1.3 -target 1.3 -nowarn
+# needed for building with bootstrap ant
+export ANT_HOME := bootstrap
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+    export ANT_OPTS=-Dcompile.debug=true -Dcompile.optimize=false
+else
+    export ANT_OPTS=-Dcompile.debug=true -Dcompile.optimize=true
+endif
+
+PACKAGE              := $(DEB_SOURCE_PACKAGE)
+VERSION              := $(DEB_UPSTREAM_VERSION)
+JAR_PATH := /usr/share/java
+CLASSPATH := ${JAR_PATH}/activation.jar:${JAR_PATH}/antlr.jar:${JAR_PATH}/bcel.jar:${JAR_PATH}/bsf.jar:${JAR_PATH}/commons-logging.jar:${JAR_PATH}/gnumail.jar:${JAR_PATH}/inetlib.jar:${JAR_PATH}/jdepend.jar:${JAR_PATH}/junit.jar:${JAR_PATH}/log4j-1.2.jar:${JAR_PATH}/oro.jar:${JAR_PATH}/regexp.jar:${JAR_PATH}/xalan2.jar:${JAR_PATH}/xml-resolver-1.2.jar:${JAR_PATH}/commons-net.jar:${JAR_PATH}/jsch.jar:${JAR_PATH}/junit4.jar
+
+build-ant: stamp-build-ant
+stamp-build-ant:
+	# doing bootstrapping
+	install -d bootstrap/lib
+	ln -sf /usr/share/java/xml-apis.jar $(DEB_BUILDDIR)/bootstrap/lib/xml-apis.jar
+	ln -sf /usr/share/java/xercesImpl.jar $(DEB_BUILDDIR)/bootstrap/lib/xercesImpl.jar
+	/bin/sh bootstrap.sh
+	# remove -SNAPSHOT from the versions in the Maven poms
+	perl -p -i -e 's/-SNAPSHOT//g' `find src/etc/poms/ -name pom.xml`
+	# the rest
+	/bin/sh bootstrap/bin/ant -Dant.build.javac.source=1.4 -Dant.build.javac.target=1.4 -Dbuild.classpath=${CLASSPATH} -propertyfile debian/ant.properties jars test-jar
+	ln -sf /usr/share/java/xml-apis.jar $(DEB_BUILDDIR)/lib/xml-apis.jar
+	ln -sf /usr/share/java/xercesImpl.jar $(DEB_BUILDDIR)/lib/xercesImpl.jar
+	touch stamp-build-ant
+
+build-ant-doc: stamp-build-ant-doc
+stamp-build-ant-doc:
+	/bin/sh bootstrap/bin/ant -Dant.build.javac.source=1.4 -Dant.build.javac.target=1.4 -Dbuild.classpath=${CLASSPATH} -propertyfile debian/ant.properties javadocs
+	touch $@
+
+install/ant-doc:: build-ant-doc
+	-rm -f docs/manual/LICENSE
+
+install/ant:: build-ant
+	dh_install -pant
+	mh_installpoms -pant --set-version=$(VERSION)
+	mh_installjar -pant -l src/etc/poms/ant/pom.xml build/lib/ant.jar /usr/share/ant/lib/ant.jar
+	mh_installjar -pant -l src/etc/poms/ant-launcher/pom.xml build/lib/ant-launcher.jar /usr/share/ant/lib/ant-launcher.jar
+	dh_install -pant build/lib/ant-bootstrap.jar /usr/share/ant/etc/
+	# Installing these files does not work with dh_install because of
+	# the file permissions
+	mkdir -p debian/ant/usr/share/ant/bin
+	install -m 755 src/script/ant     debian/ant/usr/share/ant/bin
+	install -m 755 src/script/antRun  debian/ant/usr/share/ant/bin
+	install -m 755 src/script/*.pl    debian/ant/usr/share/ant/bin
+
+install/ant-optional:: build-ant
+	dh_install -pant-optional src/etc/ant-update.xsl /usr/share/ant/etc/
+	dh_install -pant-optional src/etc/checkstyle     /usr/share/ant/etc/
+	mh_installpoms -pant-optional --set-version=$(VERSION)
+	mh_installjar -pant-optional -l src/etc/poms/ant-antlr/pom.xml build/lib/ant-antlr.jar /usr/share/ant/lib/ant-antlr.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-apache-bcel/pom.xml build/lib/ant-apache-bcel.jar /usr/share/ant/lib/ant-apache-bcel.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-apache-bsf/pom.xml build/lib/ant-apache-bsf.jar /usr/share/ant/lib/ant-apache-bsf.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-apache-log4j/pom.xml build/lib/ant-apache-log4j.jar /usr/share/ant/lib/ant-apache-log4j.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-apache-oro/pom.xml build/lib/ant-apache-oro.jar /usr/share/ant/lib/ant-apache-oro.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-apache-regexp/pom.xml build/lib/ant-apache-regexp.jar /usr/share/ant/lib/ant-apache-regexp.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-apache-resolver/pom.xml build/lib/ant-apache-resolver.jar /usr/share/ant/lib/ant-apache-resolver.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-apache-xalan2/pom.xml build/lib/ant-apache-xalan2.jar /usr/share/ant/lib/ant-apache-xalan2.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-commons-logging/pom.xml build/lib/ant-commons-logging.jar /usr/share/ant/lib/ant-commons-logging.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-commons-net/pom.xml build/lib/ant-commons-net.jar /usr/share/ant/lib/ant-commons-net.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-javamail/pom.xml build/lib/ant-javamail.jar /usr/share/ant/lib/ant-javamail.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-jdepend/pom.xml build/lib/ant-jdepend.jar /usr/share/ant/lib/ant-jdepend.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-jmf/pom.xml build/lib/ant-jmf.jar /usr/share/ant/lib/ant-jmf.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-jsch/pom.xml build/lib/ant-jsch.jar /usr/share/ant/lib/ant-jsch.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-junit/pom.xml build/lib/ant-junit.jar /usr/share/ant/lib/ant-junit.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-swing/pom.xml build/lib/ant-swing.jar /usr/share/ant/lib/ant-swing.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-testutil/pom.xml build/lib/ant-testutil.jar /usr/share/ant/lib/ant-testutil.jar
+	mh_installjar -pant-optional -l src/etc/poms/ant-junit4/pom.xml build/lib/ant-junit4.jar /usr/share/ant/lib/ant-junit4.jar
+	#mh_installjar -pant-optional src/etc/poms/ant-jai/pom.xml ant-jai/build/ant-jai-$(VERSION).jar
+	#mh_installjar -pant-optional src/etc/poms/ant-netrexx/pom.xml ant-netrexx/build/ant-netrexx-$(VERSION).jar
+	#mh_installjar -pant-optional src/etc/poms/ant-starteam/pom.xml ant-starteam/build/ant-starteam-$(VERSION).jar
+	#mh_installjar -pant-optional src/etc/poms/ant-weblogic/pom.xml ant-weblogic/build/ant-weblogic-$(VERSION).jar
+
+ifeq ($(with_gcj_native),yes)
+install/ant-gcj:: install/ant
+	dh_install -pant
+	dh_nativejava -pant-gcj
+endif
+
+ifeq ($(with_gcj_native),yes)
+install/ant-optional-gcj:: install/ant-optional
+	dh_install -pant-optional
+	dh_nativejava -pant-optional-gcj
+endif
+
+clean::
+	-rm -f gjdoc_rawcomment.cache
+	-rm -rf bin bootstrap build lib/*.jar
+	-rm -f stamp-build-ant
+	-rm -rf debian/tmp
+	mh_clean
+
+get-orig-source: 
+	-uscan --download-version $(DEB_UPSTREAM_VERSION) --force-download --rename --repack
+
+
