@@ -9403,5 +9403,23 @@ $(SG3UTILS): $(SPREZZ)/sg3-utils/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf sg3-utils-$(sg3-utils_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf sg3_utils-$(sg3-utils_UPVER).tgz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@
+
+.PHONY: media-player-info
+media-player-info:$(MEDIAPLAYERINFO)_$(ARCH).deb
+$(MEDIAPLAYERINFO): $(SPREZZ)/media-player-info/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf media-player-info-$(media-player-info_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: rtkit
+rtkit:$(RTKIT)_$(ARCH).deb
+$(RTKIT): $(SPREZZ)/rtkit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rtkit-$(rtkit_UPVER).tar.gz $(TARARGS) $@
 
