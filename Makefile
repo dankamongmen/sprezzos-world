@@ -9299,3 +9299,19 @@ $(GPROLOG): $(SPREZZ)/gprolog/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gprolog-$(gprolog_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: hevea
+hevea:$(HEVEA)_$(ARCH).deb
+$(HEVEA): $(SPREZZ)/hevea/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hevea-$(hevea_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: ocaml
+ocaml:$(OCAML)_$(ARCH).deb
+$(OCAML): $(SPREZZ)/ocaml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocaml-$(ocaml_UPVER).tar.gz $(TARARGS) $@
+
