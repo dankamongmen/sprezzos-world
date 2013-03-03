@@ -1893,6 +1893,8 @@ $(LIBCEC): $(SPREZZ)/libcec/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libcec-$(libcec_UPVER).tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: libchamplain
 libchamplain:$(LIBCHAMPLAIN)_$(ARCH).deb
