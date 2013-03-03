@@ -14,3 +14,11 @@ $(JANSI): $(SPREZZ)/jansi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf jansi-$(jansi_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: junit
+junit:$(JUNIT)_$(ARCH).deb
+$(JUNIT): $(SPREZZ)/junit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf junit-$(junit_UPVER).tar.gz $(TARARGS) $@
+

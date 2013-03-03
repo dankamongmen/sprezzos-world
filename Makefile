@@ -9339,5 +9339,5 @@ $(CAMLP5): $(SPREZZ)/camlp5/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf camlp5-$(camlp5_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf camlp5-$(camlp5_UPVER).tgz $(TARARGS) $@
 
