@@ -159,3 +159,11 @@ $(K3D): $(SPREZZ)/k3d/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf k3d-source-$(k3d_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: ledit
+ledit:$(LEDIT)_$(ARCH).deb
+$(LEDIT): $(SPREZZ)/ledit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ledit-$(ledit_UPVER).tar.gz $(TARARGS) $@
+
