@@ -9325,3 +9325,11 @@ $(LIBIODBC2): $(SPREZZ)/libiodbc2/debian/changelog
 	rm -rf $@/debian
 	cp -r $(<D) $@
 
+.PHONY: rlwrap
+rlwrap:$(RLWRAP)_$(ARCH).deb
+$(RLWRAP): $(SPREZZ)/rlwrap/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rlwrap-$(rlwrap_UPVER).tar.gz $(TARARGS) $@
+
