@@ -9381,3 +9381,11 @@ $(TEXLIVEBIN): $(SPREZZ)/texlive-bin/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf texlive-bin-$(texlive-bin_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: tipa
+tipa:$(TIPA)_$(ARCH).deb
+$(TIPA): $(SPREZZ)/tipa/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tipa-$(tipa_UPVER).tar.gz $(TARARGS) $@
+

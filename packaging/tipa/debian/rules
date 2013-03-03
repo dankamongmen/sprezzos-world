@@ -1,0 +1,105 @@
+#!/usr/bin/make -f
+# debian/rules file for Debian package tipa
+# GNU Copyright Rafael Laboissiere (C) 1998-2009
+# $Id$
+
+debdir   := $(CURDIR)/debian
+debtmp   := $(debdir)/tipa
+debetc   := $(debdir)/etc
+debtexmf := $(debtmp)/usr/share/texmf
+
+debxfnt  := $(CURDIR)/debian/xfonts-tipa/usr/share/fonts/X11
+debxt1   := $(debxfnt)/Type1
+debscdir := $(CURDIR)/debian/xfonts-tipa/etc/X11/fonts/Type1
+
+CHANGELOG = $(dir $(firstword $(MAKEFILE_LIST)))/changelog
+UPSTREAM_VERSION = \
+	$(shell perl -ne '/([\d.]+)-/; print $$1; exit' < $(CHANGELOG))
+ORIG_TARBALL = tipa_$(UPSTREAM_VERSION).orig.tar.gz
+UPSTREAM_DIR = tipa-$(UPSTREAM_VERSION)
+
+export GZIP = -9n
+export TAR_OPTIONS = --owner root --group root --mode a+rX,g-w
+
+get-orig-source: $(ORIG_TARBALL)
+$(ORIG_TARBALL):
+	set -e -x; \
+	tmpdir=$$(mktemp -d); \
+	cd "$$tmpdir"; \
+	wget ftp://tug.ctan.org/pub/tex-archive/fonts/tipa.zip;	\
+	unzip -x tipa.zip; \
+	mv tipa/$(UPSTREAM_DIR) .; \
+	mv tipa/tipaface.pdf $(UPSTREAM_DIR)/doc; \
+	tar  -czf $(ORIG_TARBALL) $(UPSTREAM_DIR); \
+	mv $(ORIG_TARBALL) $(CURDIR)/; \
+	cd /; \
+	rm -rf "$$tmpdir"
+
+# The following pattern rules is necessary for building the TIPA
+# documentation and the example
+%.dvi: %.tex
+	export TEXINPUTS=../sty: TEXFONTS=../tfm: && \
+	  latex $< && latex $<
+
+docs: tipaman.dvi vowel.dvi
+
+build build-indep: build-stamp
+build-arch: ;
+build-stamp:
+	dh_testdir
+	set -e; cd type1 ; \
+	  echo Building afm files... ; \
+	  for i in *.pfb ; do \
+	    pf2afm $$i > /dev/null ; \
+	    echo `basename $$i .pfb`.afm ; \
+	  done
+	# This will build the documentation
+	cd doc && $(MAKE) -f ../debian/rules docs
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	$(MAKE) clean
+	dh_clean
+
+binary-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs --package=xfonts-tipa		\
+		usr/share/fonts/X11/Type1		\
+		etc/X11/fonts/Type1
+
+	$(MAKE) install PREFIX=$(debtexmf) MAPDIR=$(debtexmf)/fonts/map/dvips
+        # Fixes bug reported by lintian
+	chmod +x $(debtexmf)/fonts/source/fkr/tipa/*.sh
+	cp 00README changelog
+
+	perl debian/gen-fonts-dir.pl \
+	  ../../../texmf/fonts/type1/fkr/tipa \
+	  $(debxt1) \
+	  $(debscdir)/xfonts-tipa.scale \
+	  debian/xfonts-tipa.defoma-hints
+
+	#install --mode=644 debian/tipa.updmap $(debupdm)/10tipa.cfg
+	dh_installtex -p tipa map=MixedMap,tipa.map
+
+	dh_installxfonts -p xfonts-tipa
+
+	dh_installdocs
+	dh_link
+	dh_installchangelogs
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-arch: ;
+
+binary: binary-indep
+
+.PHONY: build-arch build-indep build clean binary-indep binary-arch binary
