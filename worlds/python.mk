@@ -22,3 +22,11 @@ $(MARKUPSAFE): $(SPREZZ)/markupsafe/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf MarkupSafe-$(markupsafe_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: pythoncard
+pythoncard:$(PYTHONCARD)_$(ARCH).deb
+$(PYTHONCARD): $(SPREZZ)/pythoncard/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf PythonCard-$(pythoncard_UPVER).tar.gz $(TARARGS) $@
+
