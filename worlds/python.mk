@@ -14,3 +14,11 @@ $(PYTHONGREENLET): $(SPREZZ)/python-greenlet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf python-greenlet_$(python-greenlet_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: markupsafe
+markupsafe:$(MARKUPSAFE)_$(ARCH).deb
+$(MARKUPSAFE): $(SPREZZ)/markupsafe/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf MarkupSafe-$(markupsafe_UPVER).tar.gz $(TARARGS) $@
+
