@@ -1,0 +1,154 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+# check if we need to use DEBUG:
+DEBUG_FLAGS:=$(if $(findstring debug,$(DEB_BUILD_OPTIONS)),--with-debug,)
+
+#standard C flags:
+CFLAGS:=-falign-functions=4
+export CFLAGS
+
+# change the CFLAGS depending on the architecture
+DEB_BUILD_ARCH := $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+
+ifneq (,$(filter m68k alpha hppa powerpc,$(DEB_BUILD_ARCH)))
+	CFLAGS:=-D SAFETY=3 -D NO_MULTIMAP_SHM -D NO_MULTIMAP_FILE -D NO_SINGLEMAP -D NO_TRIVIALMAP ${CFLAGS}
+endif
+
+ifneq (,$(filter ia64 ,$(DEB_BUILD_ARCH)))
+	CFLAGS:=-D NO_MULTIMAP_SHM -D NO_MULTIMAP_FILE -D NO_SINGLEMAP -D NO_TRIVIALMAP ${CFLAGS}
+endif
+
+ifneq (,$(filter sparc ,$(DEB_BUILD_ARCH)))
+	 CFLAGS:=-mcpu=v9 -fno-gcse -DSAFETY=3 -D SAFETY=3 -D NO_MULTIMAP_SHM -D NO_MULTIMAP_FILE -D NO_SINGLEMAP -D NO_TRIVIALMAP ${CFLAGS}
+endif
+
+ifneq (,$(filter armel hppa ia64 m68k s390 mipsel powerpc,$(DEB_BUILD_ARCH)))
+        # Disable FFI
+        FFI:=--without-dynamic-ffi
+        MODULES:=--with-module=gdbm --with-module=berkeley-db --with-module=pcre --with-module=rawsock --with-module=clx/new-clx
+else ifneq (,$(filter sparc ,$(DEB_BUILD_ARCH)))
+        # Disable FFI and the dynamic modules
+        # this will only build a base and full package:
+        FFI:=--without-dynamic-ffi --without-dynamic-modules
+	MODULES:=--with-module=gdbm --with-module=berkeley-db --with-module=pcre --with-module=rawsock --with-module=clx/new-clx
+else
+        # Enable FFI on all other platforms
+        FFI:=--with-dynamic-ffi --with-dynamic-modules
+        MODULES:=--with-module=bindings/glibc --with-module=gdbm --with-module=berkeley-db --with-module=postgresql --with-module=pcre --with-module=wildcard --with-module=zlib --with-module=rawsock --with-module=dbus --with-module=clx/new-clx
+endif
+
+configure: configure-stamp
+configure-stamp:
+	echo we have no configure step
+	touch configure-stamp
+
+build: build-stamp
+build-stamp: 
+	dh_testdir
+
+	# on systems without FFI we cannot make multiple packages
+	./configure debian/build ${DEBUG_FLAGS} --prefix=/usr --fsstnd=debian ${FFI} CFLAGS="${CFLAGS}" ${MODULES} || { cat debian/build/config.log; touch foo.h; cpp -dM foo.h ; exit 1; }
+
+	# remove the -O2 from the makefile
+ifneq (,$(filter sparc mipsel ia64 ,$(DEB_BUILD_ARCH)))
+	sed 's/ -O2 / /' < debian/build/Makefile > debian/build/Makefile-new && \
+		mv debian/build/Makefile debian/build/Makefile-old && \
+		mv debian/build/Makefile-new debian/build/Makefile
+endif # filter mipsel ia64 ,$(DEB_BUILD_ARCH) remove the -O2 from the makefile
+
+	# build the package
+	$(MAKE) -C debian/build
+
+	touch build-stamp
+
+clean: 
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+
+	rm -rf debian/build 
+
+	chmod a+x configure 
+	dh_clean
+
+install: build
+	# echo doing install
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs -A
+
+	# install the package
+
+	$(MAKE) -C debian/build DESTDIR=$(shell pwd)/debian/tmp install
+	mkdir -p debian/tmp/usr/share/doc debian/tmp/usr/share/man debian/tmp/usr/lib/common-lisp debian/tmp/usr/sbin debian/tmp/usr/bin 
+
+	# remove unwanted upstream doc/ files
+	rm debian/tmp/usr/share/doc/clisp/doc/clisp.1 \
+		debian/tmp/usr/share/doc/clisp/doc/clisp-link.1 \
+		debian/tmp/usr/share/doc/clisp/COPYRIGHT \
+		debian/tmp/usr/share/doc/clisp/GNU-GPL || true
+
+	# Install CLC files
+	install -o root -g root -m 0644 debian/install-clc.lisp \
+		debian/tmp/usr/lib/clisp-2.49
+
+	dh_install --sourcedir=debian/tmp
+	# remove docs  from the clx package:
+	if [ -d debian/clisp-module-clx/usr/lib/clisp-2.49/clx/new-clx/demos ] ; then rm -rf debian/clisp-module-clx/usr/lib/clisp-2.49/clx/new-clx/demos ; fi 
+	# handle full image if  it exists, normally we do not build it
+	if [ -d debian/tmp/usr/lib/clisp-2.49/full ] ; then mkdir -p debian/clisp-dev/usr/lib/clisp-2.49/full/ ; fi
+	if [ -d debian/tmp/usr/lib/clisp-2.49/full ] ; then mkdir -p debian/clisp/usr/lib/clisp-2.49/full/ ; fi
+	if [ -d debian/tmp/usr/lib/clisp-2.49/full ] ; then install --owner=root --group=root --mode=0644  debian/tmp/usr/lib/clisp-2.49/full/*.a debian/clisp-dev/usr/lib/clisp-2.49/full/ ; fi
+	if [ -d debian/tmp/usr/lib/clisp-2.49/full ] ; then install --owner=root --group=root --mode=0644  debian/tmp/usr/lib/clisp-2.49/full/*.h debian/clisp-dev/usr/lib/clisp-2.49/full/ ; fi
+	if [ -d debian/tmp/usr/lib/clisp-2.49/full ] ; then install --owner=root --group=root --mode=0644  debian/tmp/usr/lib/clisp-2.49/full/makevars debian/clisp-dev/usr/lib/clisp-2.49/full/ ; fi
+	if [ -d debian/tmp/usr/lib/clisp-2.49/full ] ; then install --owner=root --group=root --mode=0644  debian/tmp/usr/lib/clisp-2.49/full/lispinit.mem debian/clisp/usr/lib/clisp-2.49/full/ ; fi
+	if [ -d debian/tmp/usr/lib/clisp-2.49/full ] ; then install --owner=root --group=root --mode=0755  debian/tmp/usr/lib/clisp-2.49/full/lisp.run debian/clisp/usr/lib/clisp-2.49/full/ ; fi
+	if [ -d debian/tmp/usr/lib/clisp-2.49/full ] ; then install --owner=root --group=root --mode=0644  debian/tmp/usr/lib/clisp-2.49/full/*.o debian/clisp/usr/lib/clisp-2.49/full/ ; fi
+
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir  -i
+	dh_testroot  -i
+	dh_installdocs  -i
+	dh_installexamples  -i
+	dh_installchangelogs -a -i src/ChangeLog -i
+	dh_strip  -i
+	dh_link  -i
+	dh_compress  -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums  -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir  -a
+	dh_testroot  -a
+	dh_installdocs  -a
+	dh_installexamples  -a
+	dh_installman  -a
+	dh_installchangelogs -a -i src/ChangeLog -a
+	dh_lisp clisp -a
+	dh_strip  -a
+	dh_link  -a
+	dh_compress  -a
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+
+#	add FAS file format version to substvars
+	debian/clisp/usr/bin/clisp -Efile utf-8 -B debian/clisp/usr/lib/clisp-2.49 -M debian/clisp/usr/lib/clisp-2.49/base/lispinit.mem debian/fasl-version.lisp
+
+	dh_gencontrol -a
+	dh_md5sums  -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure

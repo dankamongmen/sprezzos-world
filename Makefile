@@ -9341,3 +9341,11 @@ $(CAMLP5): $(SPREZZ)/camlp5/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf camlp5-$(camlp5_UPVER).tgz $(TARARGS) $@
 
+.PHONY: clisp
+clisp:$(CLISP)_$(ARCH).deb
+$(CLISP): $(SPREZZ)/clisp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf clisp-$(clisp_UPVER).tar.gz $(TARARGS) $@
+
