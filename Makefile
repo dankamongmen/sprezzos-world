@@ -9471,3 +9471,11 @@ $(QPIDTOOLS): $(SPREZZ)/qpid-tools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf qpid-tools-$(qpid-tools_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: hwdata
+hwdata:$(HWDATA)_$(ARCH).deb
+$(HWDATA): $(SPREZZ)/hwdata/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hwdata-$(hwdata_UPVER).tar.gz $(TARARGS) $@
+
