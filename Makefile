@@ -9447,3 +9447,11 @@ $(VBETOOL): $(SPREZZ)/vbetool/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vbetool-$(vbetool_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libphonenumber
+libphonenumber:$(LIBPHONENUMBER)_$(ARCH).deb
+$(LIBPHONENUMBER): $(SPREZZ)/libphonenumber/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libphonenumber-$(libphonenumber_UPVER).tar.gz $(TARARGS) $@
+

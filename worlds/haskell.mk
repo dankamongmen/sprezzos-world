@@ -3044,7 +3044,7 @@ $(HASKELLHSSYCK): $(SPREZZ)/haskell-hssyck/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hssyck-$(haskell-hssyck_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf HsSyck-$(haskell-hssyck_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-html-conduit
 haskell-html-conduit:$(HASKELLHTMLCONDUIT)_$(ARCH).deb
@@ -3148,7 +3148,7 @@ $(HASKELLIOSPEC): $(SPREZZ)/haskell-iospec/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf iospec-$(haskell-iospec_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf IOSpec-$(haskell-iospec_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-io-storage
 haskell-io-storage:$(HASKELLIOSTORAGE)_$(ARCH).deb
@@ -4677,4 +4677,12 @@ $(GHCTESTSUITE): $(SPREZZ)/ghc-testsuite/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf ghc-$(ghc-testsuite_UPVER)-testsuite.tar.bz2 $(TARARGS) $@
+
+.PHONY: hlint
+hlint:$(HLINT)_$(ARCH).deb
+$(HLINT): $(SPREZZ)/hlint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hlint-$(hlint_UPVER).tar.gz $(TARARGS) $@
 
