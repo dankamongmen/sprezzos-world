@@ -51,7 +51,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -9446,4 +9446,28 @@ $(VBETOOL): $(SPREZZ)/vbetool/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vbetool-$(vbetool_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: qpid-cpp
+qpid-cpp:$(QPIDCPP)_$(ARCH).deb
+$(QPIDCPP): $(SPREZZ)/qpid-cpp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qpid-cpp-$(qpid-cpp_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: redhat-cluster
+redhat-cluster:$(REDHATCLUSTER)_$(ARCH).deb
+$(REDHATCLUSTER): $(SPREZZ)/redhat-cluster/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cluster-$(redhat-cluster_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: qpid-tools
+qpid-tools:$(QPIDTOOLS)_$(ARCH).deb
+$(QPIDTOOLS): $(SPREZZ)/qpid-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qpid-tools-$(qpid-tools_UPVER).tar.gz $(TARARGS) $@
 

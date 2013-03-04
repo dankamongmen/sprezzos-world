@@ -1,0 +1,85 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+# enable hardened building
+export DEB_BUILD_HARDENING=1
+
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+BUILDROOT := $(shell pwd)
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_testdir
+
+	./configure --sbindir=/usr/sbin \
+		    --libexecdir=/usr/lib \
+		    --disable_kernel_check
+
+override_dh_auto_build:
+	dh_testdir
+
+	$(MAKE) all
+
+override_dh_install:
+	dh_testdir
+	dh_testroot
+	dh_prep
+
+	$(MAKE) install DESTDIR=$(BUILDROOT)/debian/tmp/
+
+	cp $(BUILDROOT)/debian/tmp/etc/init.d/cman $(BUILDROOT)/debian/cman.init
+	cp $(BUILDROOT)/debian/tmp/etc/init.d/rgmanager $(BUILDROOT)/debian/rgmanager.init
+
+	# no need for upstream doc install
+	rm -rf $(BUILDROOT)/debian/tmp/usr/share/doc/cluster
+
+	# manual craft
+	install -d -m 0755 debian/tmp/etc/cluster
+
+	install -d -m 0755 debian/tmp/lib/udev/rules.d
+	mv debian/tmp/lib/udev/rules.d/51-dlm.rules debian/tmp/lib/udev/rules.d/45-dlm.rules
+
+	dh_install --sourcedir=debian/tmp --list-missing
+
+	dh_installdirs
+	dh_link
+	dh_installlogrotate
+	dh_installdocs
+	dh_installchangelogs
+	dh_installdebconf
+	dh_installinit -p cman --no-start --no-restart-on-upgrade -- start 61 S . start 5 0 6 .
+	dh_installinit -p cman --name=qdiskd --no-start --no-restart-on-upgrade -- start 62 S . start 4 0 6 .
+	dh_installinit -p cman --name=scsi_reserve --no-start --no-restart-on-upgrade -- start 63 S . start 3 0 6 .
+	dh_installinit -p rgmanager --no-start --no-restart-on-upgrade -- start 65 S . start 1 0 6 .
+
+override_dh_auto_clean:
+	dh_testdir
+	dh_testroot
+	dh_clean
+
+	[ ! -f make/defines.mk ] || $(MAKE) distclean
+
+	rm -rf debian/*.init
+	rm -rf *-stamp
+	rm -rf debian/patched
+	debconf-updatepo
+
+override_dh_strip:
+	dh_strip -a
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	strip --remove-section=.comment --remove-section=.note --strip-unneeded debian/cman/usr/lib/lcrso/*.lcrso
+endif
+
+override_dh_makeshlibs:
+	dh_makeshlibs -a -V
+
+override_dh_shlibdeps:
+	dh_shlibdeps -a -v -- debian/cman/usr/lib/lcrso/*.lcrso
+
+override_dh_installinit: 
+	true
