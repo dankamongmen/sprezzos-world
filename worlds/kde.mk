@@ -461,11 +461,20 @@ $(LIBKIPI): $(SPREZZ)/libkipi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libkipi-$(libkipi_UPVER).tar.xz $(TARARGS) $@
 
+#.PHONY: qmf
+#qmf:$(QMF)_$(ARCH).deb
+#$(QMF): $(SPREZZ)/qmf/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xzvf qmf-$(qmf_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: qmf
 qmf:$(QMF)_$(ARCH).deb
 $(QMF): $(SPREZZ)/qmf/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf qmf-$(qmf_UPVER).tar.gz $(TARARGS) $@
+	git clone git://gitorious.org/qt-labs/messagingframework.git $@
+	rm -rf $@/debian
+	tar cJf qmf-$(qmf_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf qmf-$(qmf_UPVER).tar.xz qmf_$(qmf_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
 
