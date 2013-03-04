@@ -1,0 +1,76 @@
+#!/bin/sh
+# postinst script for qpidd
+#
+# see: dh_installdeb(1)
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+
+is_initial_configuration() {
+    # Plain installation
+    if [ "$1" = configure ] && [ -z "$2" ]; then
+        return 0
+    fi
+    # Configuration via dpkg-reconfigure
+    if [ "$1" = reconfigure ] || [ "$DEBCONF_RECONFIGURE" ]; then
+        return 0
+    fi
+    return 1
+}
+
+set_admin_pass() {
+        db_get qpidd/password1
+        if [ -z "$RET" ]; then
+                RET=`od -vAn -N4 -tu4 < /dev/random | base64`
+        fi
+
+	echo -n "$RET" | saslpasswd2 -cpf /etc/qpid/qpidd.sasldb -u QPID admin
+        chown root:qpidd /etc/qpid/qpidd.sasldb
+	chmod 640 /etc/qpid/qpidd.sasldb
+
+        # Purge data
+        db_set qpidd/password1 ""
+        db_set qpidd/password2 ""
+}
+
+
+case "$1" in
+    configure)
+
+        # Create a user if missing
+        if ! getent passwd qpidd > /dev/null ; then
+            echo 'Adding system-user for qpidd' 1>&2
+            adduser --system --home /var/run/qpid --group --no-create-home --disabled-password qpidd
+        fi
+
+        # Create directories
+        install -d -oqpidd -gadm -m2750 /var/log/qpid 2> /dev/null || true
+        install -d -oqpidd -gqpidd -m750 /var/spool/qpid 2> /dev/null || true
+
+        # Make sure that the sasl config permissions are set correctly
+        chown qpidd:qpidd /etc/sasl2/qpidd.conf 2>/dev/null
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+# Configuration
+if is_initial_configuration "$@"; then
+    set_admin_pass    
+fi
+
+db_stop || true
+
+#DEBHELPER#
+
+exit 0
+
+
