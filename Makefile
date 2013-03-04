@@ -9439,3 +9439,11 @@ $(PMUTILS): $(SPREZZ)/pm-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pm-utils-$(pm-utils_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: vbetool
+vbetool:$(VBETOOL)_$(ARCH).deb
+$(VBETOOL): $(SPREZZ)/vbetool/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vbetool-$(vbetool_UPVER).tar.gz $(TARARGS) $@
+

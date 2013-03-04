@@ -3732,7 +3732,7 @@ $(HASKELLRSA): $(SPREZZ)/haskell-rsa/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf rsa-$(haskell-rsa_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf RSA-$(haskell-rsa_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-safecopy
 haskell-safecopy:$(HASKELLSAFECOPY)_$(ARCH).deb
