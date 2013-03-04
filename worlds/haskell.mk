@@ -1684,7 +1684,7 @@ $(HASKELLHJAVASCRIPT): $(SPREZZ)/haskell-hjavascript/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hjavascript-$(haskell-hjavascript_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf HJavaScript-$(haskell-hjavascript_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hjscript
 haskell-hjscript:$(HASKELLHJSCRIPT)_$(ARCH).deb
@@ -2044,7 +2044,7 @@ $(HASKELLSDLGFX): $(SPREZZ)/haskell-sdl-gfx/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf sdl-gfx-$(haskell-sdl-gfx_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf SDL-gfx-$(haskell-sdl-gfx_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-sdl-image
 haskell-sdl-image:$(HASKELLSDLIMAGE)_$(ARCH).deb
@@ -2052,7 +2052,7 @@ $(HASKELLSDLIMAGE): $(SPREZZ)/haskell-sdl-image/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf sdl-image-$(haskell-sdl-image_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf SDL-image-$(haskell-sdl-image_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-sdl-mixer
 haskell-sdl-mixer:$(HASKELLSDLMIXER)_$(ARCH).deb
@@ -2060,7 +2060,7 @@ $(HASKELLSDLMIXER): $(SPREZZ)/haskell-sdl-mixer/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf sdl-mixer-$(haskell-sdl-mixer_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf SDL-mixer-$(haskell-sdl-mixer_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-sdl-ttf
 haskell-sdl-ttf:$(HASKELLSDLTTF)_$(ARCH).deb
@@ -2948,7 +2948,7 @@ $(HASKELLHFUSE): $(SPREZZ)/haskell-hfuse/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hfuse-$(haskell-hfuse_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf HFuse-$(haskell-hfuse_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: highlighting-kate
 highlighting-kate:$(HIGHLIGHTINGKATE)_$(ARCH).deb
@@ -3188,7 +3188,7 @@ $(HASKELLKNOB): $(SPREZZ)/haskell-knob/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf knob-$(haskell-knob_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf knob-$(haskell-knob_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: haskell-lambdabot-utils
 haskell-lambdabot-utils:$(HASKELLLAMBDABOTUTILS)_$(ARCH).deb
@@ -3956,7 +3956,7 @@ $(HASKELLTINYURL): $(SPREZZ)/haskell-tinyurl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf tinyurl-$(haskell-tinyurl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf TinyURL-$(haskell-tinyurl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-tokyocabinet
 haskell-tokyocabinet:$(HASKELLTOKYOCABINET)_$(ARCH).deb

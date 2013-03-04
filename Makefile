@@ -9479,3 +9479,11 @@ $(HWDATA): $(SPREZZ)/hwdata/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hwdata-$(hwdata_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libmikmod
+libmikmod:$(LIBMIKMOD)_$(ARCH).deb
+$(LIBMIKMOD): $(SPREZZ)/libmikmod/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmikmod-$(libmikmod_UPVER).tar.gz $(TARARGS) $@
+
