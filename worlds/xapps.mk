@@ -167,3 +167,19 @@ $(LEDIT): $(SPREZZ)/ledit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ledit-$(ledit_UPVER).tgz $(TARARGS) $@
 
+.PHONY: smuxi
+smuxi:$(SMUXI)_$(ARCH).deb
+$(SMUXI): $(SPREZZ)/smuxi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf smuxi-$(smuxi_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: nini
+nini:$(NINI)_$(ARCH).deb
+$(NINI): $(SPREZZ)/nini/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nini-$(nini_UPVER).tar.gz $(TARARGS) $@
+
