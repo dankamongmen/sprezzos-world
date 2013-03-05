@@ -9487,3 +9487,11 @@ $(LIBMIKMOD): $(SPREZZ)/libmikmod/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mikmod-$(libmikmod_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: rdflib
+rdflib:$(RDFLIB)_$(ARCH).deb
+$(RDFLIB): $(SPREZZ)/rdflib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rdflib-$(rdflib_UPVER).tar.gz $(TARARGS) $@
+
