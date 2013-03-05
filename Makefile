@@ -9475,3 +9475,19 @@ $(LIBEE): $(SPREZZ)/libee/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libee-$(libee_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: liblognorm
+liblognorm:$(LIBLOGNORM)_$(ARCH).deb
+$(LIBLOGNORM): $(SPREZZ)/liblognorm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liblognorm-$(liblognorm_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libmongo-client
+libmongo-client:$(LIBMONGOCLIENT)_$(ARCH).deb
+$(LIBMONGOCLIENT): $(SPREZZ)/libmongo-client/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmongo-client-$(libmongo-client_UPVER).tar.gz $(TARARGS) $@
+
