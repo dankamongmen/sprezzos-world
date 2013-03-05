@@ -51,7 +51,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -9530,4 +9530,20 @@ $(SERF): $(SPREZZ)/serf/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf serf-$(serf_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: stfl
+stfl:$(STFL)_$(ARCH).deb
+$(STFL): $(SPREZZ)/stfl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf stfl-$(stfl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: log4net
+log4net:$(LOG4NET)_$(ARCH).deb
+$(LOG4NET): $(SPREZZ)/log4net/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf log4net_$(log4net_UPVER).orig.tar.gz $(TARARGS) $@
 
