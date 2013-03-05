@@ -1,0 +1,106 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+# Copyright © 2011 Jonas Smedegaard <dr@jones.dk>
+# Description: Main Debian packaging script for GNU uCommon C++
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This needs to run (and thus be declared) before CDBS includes
+debian/control:: debian/control.in
+DEB_PHONY_RULES += debian/control.in
+debian/control.in::
+	sed -e 's/__LIBPKGNAME__/$(libpkgname)/g' <debian/control.in.in >debian/control.in
+
+DEB_AUTO_UPDATE_LIBTOOL = pre
+DEB_AUTO_UPDATE_AUTOCONF = 2.68
+DEB_AUTO_UPDATE_AUTOHEADER = 2.68
+DEB_AUTO_UPDATE_ACLOCAL = 1.11
+DEB_AUTO_UPDATE_AUTOMAKE = 1.11
+include /usr/share/cdbs/1/rules/upstream-tarball.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/class/autotools.mk
+#include /usr/share/cdbs/1/class/cmake.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+stem = ucommon
+major = $(firstword $(subst .,$(space),$(DEB_UPSTREAM_VERSION)))
+libname = lib$(stem)
+libpkgname = lib$(stem)$(major)
+extralibnames = libusecure
+pkgconfigstems = $(stem)
+
+DEB_UPSTREAM_URL = http://ftp.gnu.org/gnu/commoncpp
+DEB_UPSTREAM_TARBALL_MD5 = c6025b339417e817b6d5ac21b5334823
+
+CDBS_BUILD_DEPENDS += , pkg-config, libgnutls-dev, d-shlibs (>= 0.45~), graphviz
+
+DEB_MAKE_CHECK_TARGET = check
+
+devutils = ucommon-config
+utils = args scrub-files mdsum zerofill car sockaddr pdetach
+
+# Transitional compatibility wrapper for Common C++
+extralibnames += libcommoncpp
+pkgconfigstems += commoncpp
+devutils += commoncpp-config
+#DEB_CONFIGURE_EXTRA_FLAGS += --disable-commoncpp --disable-stdcpp
+
+# Apparently atomic intrinsics was introduced in GCC 4.4
+CDBS_BUILD_DEPENDS += , gcc (>= 4:4.4)
+DEB_CONFIGURE_EXTRA_FLAGS += --enable-atomics
+
+DEB_INSTALL_DOCS_$(stem)-doc += doc/html
+DEB_INSTALL_MANPAGES_$(libname)-dev = $(patsubst %,debian/tmp/usr/share/man/man1/%.1,$(devutils))
+DEB_INSTALL_MANPAGES_$(stem)-utils = $(patsubst %,debian/tmp/usr/share/man/man1/%.1,$(utils))
+DEB_DH_INSTALL_ARGS_$(libname)-dev = --autodest $(patsubst %,usr/bin/%,$(devutils))
+DEB_DH_INSTALL_ARGS_$(stem)-utils = --autodest $(patsubst %,usr/bin/%,$(utils))
+
+# put aside upstream-shipped temp files during build but after copyright-check
+upstreamtmpfiles = Makefile.in $(patsubst %,%/Makefile.in,commoncpp corelib gnutls inc inc/commoncpp inc/ucommon nossl openssl test utils)
+upstreamtmpfiles += aclocal.m4 autoconf/ltmain.sh configure ucommon.spec
+pre-build:: debian/stamp-upstreamtmpstuff
+debian/stamp-upstreamtmpstuff: debian/stamp-copyright-check
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file ] || [ -e $$file.upstream ] || cp -a $$file $$file.upstream; \
+	done
+	touch $@
+clean::
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file.upstream ] || mv -f $$file.upstream $$file; \
+	done
+	rm -f debian/stamp-upstreamtmpstuff
+
+# Build documentation only if doxy is available. See bug#632343
+common-build-indep:: debian/stamp-docs
+debian/stamp-docs:
+	[ ! -d /usr/share/doc/doxygen-latex ]  ||  $(DEB_MAKE_INVOKE) doxy
+	touch $@
+clean::
+	rm -f debian/stamp-docs
+
+# Let d-shlibs calculate development package dependencies
+#  and handle shared library install
+binary-post-install/$(libpkgname):: debian/stamp-local-shlibs-$(libname)
+debian/stamp-local-shlibs-$(libname): binary-install/$(libpkgname)
+	d-shlibmove --commit \
+		--devunversioned \
+		--exclude-la \
+		--override  s/$(libname)$(major)-dev/$(libname)-dev/ \
+		--movedev "debian/tmp/usr/include/*" usr/include/ \
+		$(patsubst %,--movedev debian/tmp/usr/lib/pkgconfig/%.pc usr/lib/pkgconfig,$(pkgconfigstems)) \
+		$(patsubst %,--extralib debian/tmp/usr/lib/%.so,$(extralibnames)) \
+		debian/tmp/usr/lib/$(libname).so
+	touch $@
+clean::
+	rm -f debian/stamp-local-shlibs-$(libname)
