@@ -1,0 +1,101 @@
+#!/usr/bin/make -f
+
+#For debhelper debugging
+#export DH_VERBOSE=1
+
+#always exclude any data from version control systems
+DH_ALWAYS_EXCLUDE=.svn:.git:.bzr
+
+%:
+	dh $@ --with autoreconf
+
+autoreconf:
+	intltoolize -f
+	autoreconf -f -i
+
+override_dh_autoreconf:
+	dh_autoreconf debian/rules -- autoreconf
+
+override_dh_auto_clean:
+	rm -f $(CURDIR)/debian/modemmanager.upstart
+	dh_auto_clean
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--with-docs
+
+override_dh_makeshlibs:
+	dh_makeshlibs -X/usr/lib/ModemManager/ -X/usr/lib/pppd/
+
+override_dh_strip:
+	dh_strip --dbg-package=modemmanager-dbg
+
+override_dh_install:
+	if dpkg-vendor --is ubuntu; then \
+		cp $(CURDIR)/debian/ubuntu/modemmanager.upstart $(CURDIR)/debian; \
+	fi
+	find $(CURDIR)/debian/tmp/ -name \*.a -exec rm {} \;
+	find $(CURDIR)/debian/tmp/ -name \*.la -exec rm {} \;
+	dh_install
+
+override_dh_installdocs:
+	dh_installdocs -A README AUTHORS docs/spec.html
+
+DEB_SOURCE_PACKAGE := $(shell dpkg-parsechangelog | egrep '^Source:' | cut -f 2 -d ' ')
+DEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
+DEB_NOEPOCH_VERSION := $(shell echo $(DEB_VERSION) | cut -d: -f2-)
+DEB_UPSTREAM_VERSION := $(shell echo $(DEB_NOEPOCH_VERSION) | sed 's/-[^-]*$$//')
+DEB_MAJOR_VERSION := $(shell echo $(DEB_UPSTREAM_VERSION) | sed -e 's/git.*//')
+
+GIT_URL := git://anongit.freedesktop.org/ModemManager/ModemManager
+GIT_BRANCH := "MM_05"
+GIT_BRANCH_NAME := ModemManager
+
+ifneq (,$(LOCAL_BRANCH))
+LOCAL_REAL_BRANCH = $(realpath $(LOCAL_BRANCH))
+endif
+
+GET_SOURCE = \
+	set -e; \
+	tmpdir=`mktemp -d -t`; \
+	cd $$tmpdir; \
+		echo "cloning upstream repository ..."; \
+		git clone $(if $(LOCAL_BRANCH),$(call LOCAL_REAL_BRANCH)/$(GIT_BRANCH_NAME),$(GIT_URL)); \
+		echo "getting specific upstream revision/tag: $(1)"; \
+		cd `ls | head -n 1`; git checkout -b orig $(1); \
+		commit_id=`git log -n1 --abbrev-commit | grep '^commit ' | sed -e 's/commit //'`; \
+		raw=`date --utc --date="$$(git log --pretty=fuller -n1 --date=rfc | grep CommitDate: | sed -e 's/CommitDate:[^0-9]*//')" "+%Y%m%d%H%M"`; \
+		if echo $(1) | grep -c "orig" > /dev/null || echo $(DEB_VERSION) | grep -c "git" > /dev/null; \
+		then \
+			upstream_version=$(DEB_MAJOR_VERSION)git$$raw.$$commit_id; \
+		else \
+			upstream_version=$(DEB_UPSTREAM_VERSION); \
+		fi; \
+		cd ..; tar --exclude=.git -czf $(CURDIR)/$(DEB_SOURCE_PACKAGE)_$$upstream_version.orig.tar.gz `ls | head -n 1`; \
+		cd $(CURDIR); rm -rf $$tmpdir;
+
+get-current-source:: $(if $(LOCAL_BRANCH), update-local-branch)
+	set -e; if echo $(DEB_VERSION) | grep -c "git" > /dev/null; \
+	then \
+		git_version=`echo $(DEB_VERSION) | sed -e 's/^.*git\.*\([0-9t]*\)\.\(.*\)-.*$$/\2/g'`; \
+	else \
+		git_version=$(DEB_UPSTREAM_VERSION); \
+	fi; \
+	$(call GET_SOURCE, $$git_version, "current")
+
+get-orig-source:: $(if $(LOCAL_BRANCH), update-local-branch)
+	$(call GET_SOURCE, $(GIT_BRANCH), "orig")
+
+update-local-branch::
+	@echo "updating local branch: $(LOCAL_BRANCH) ..."
+	@set -e; if ! test -d $(LOCAL_BRANCH); then mkdir -p $(LOCAL_BRANCH); fi
+	@set -e; if ! test -d $(LOCAL_BRANCH)/$(GIT_BRANCH_NAME); then git clone $(GIT_URL) $(LOCAL_BRANCH)/$(GIT_BRANCH_NAME); fi
+	@set -e; cd $(LOCAL_BRANCH)/$(GIT_BRANCH_NAME); git pull -f
+	@echo "updated local branch: $(LOCAL_BRANCH)."
+
+get-snapshot-info:: $(if $(LOCAL_BRANCH),update-local-branch)
+	@set -e; \
+	git_version=`echo $(DEB_VERSION) | sed -e 's/^.*git\.*\([0-9t]*\)\.\(.*\)-.*$$/\2/g'`; \
+	cd $(LOCAL_BRANCH)/$(GIT_BRANCH_NAME); \
+	raw=`date --utc --date="$$(git log --pretty=fuller -n1 --date=rfc $$git_version | grep CommitDate: | sed -e 's/CommitDate:[^0-9]*//')" "+%Y-%m-%d %H:%M:%S (GMT)"`; \
+	git log -n1 $$git_version --format="%n%s%n%n  * upstream snapshot $$raw%n    + %H%n";
