@@ -30,3 +30,11 @@ $(PYTHONCARD): $(SPREZZ)/pythoncard/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf PythonCard-$(pythoncard_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: rdflib
+rdflib:$(RDFLIB)_$(ARCH).deb
+$(RDFLIB): $(SPREZZ)/rdflib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rdflib_$(rdflib_UPVER).orig.tar.gz $(TARARGS) $@
+
