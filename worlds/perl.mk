@@ -467,5 +467,29 @@ $(LIBDATETIMETIMEZONEPERL): $(SPREZZ)/libdatetime-timezone-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libdatetime-timezone-perl-$(libdatetime-timezone-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf DateTime-TimeZone-$(libdatetime-timezone-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libtest-output-perl
+libtest-output-perl:$(LIBTESTOUTPUTPERL)_$(ARCH).deb
+$(LIBTESTOUTPUTPERL): $(SPREZZ)/libtest-output-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Test-Output-$(libtest-output-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libsub-exporter-perl
+libsub-exporter-perl:$(LIBSUBEXPORTERPERL)_$(ARCH).deb
+$(LIBSUBEXPORTERPERL): $(SPREZZ)/libsub-exporter-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Sub-Exporter-$(libsub-exporter-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libtest-tester-perl
+libtest-tester-perl:$(LIBTESTTESTERPERL)_$(ARCH).deb
+$(LIBTESTTESTERPERL): $(SPREZZ)/libtest-tester-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Test-Tester-$(libtest-tester-perl_UPVER).tar.gz $(TARARGS) $@
 
