@@ -9491,3 +9491,11 @@ $(LIBMONGOCLIENT): $(SPREZZ)/libmongo-client/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmongo-client-$(libmongo-client_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: byacc
+byacc:$(BYACC)_$(ARCH).deb
+$(BYACC): $(SPREZZ)/byacc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf byacc-$(byacc_UPVER).tgz $(TARARGS) $@
+
