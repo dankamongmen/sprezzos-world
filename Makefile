@@ -9507,3 +9507,11 @@ $(ASPELL): $(SPREZZ)/aspell/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf aspell-$(aspell_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ucommon
+ucommon:$(UCOMMON)_$(ARCH).deb
+$(UCOMMON): $(SPREZZ)/ucommon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ucommon-$(ucommon_UPVER).tar.gz $(TARARGS) $@
+
