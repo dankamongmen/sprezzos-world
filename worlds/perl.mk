@@ -461,3 +461,11 @@ $(LIBTIEIXHASHPERL): $(SPREZZ)/libtie-ixhash-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Tie-IxHash-$(libtie-ixhash-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libdatetime-timezone-perl
+libdatetime-timezone-perl:$(LIBDATETIMETIMEZONEPERL)_$(ARCH).deb
+$(LIBDATETIMETIMEZONEPERL): $(SPREZZ)/libdatetime-timezone-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdatetime-timezone-perl-$(libdatetime-timezone-perl_UPVER).tar.gz $(TARARGS) $@
+
