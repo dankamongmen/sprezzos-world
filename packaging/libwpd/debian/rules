@@ -1,0 +1,114 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+CFLAGS = `dpkg-buildflags --get CFLAGS`
+CFLAGS += -Wall
+CXXFLAGS = `dpkg-buildflags --get CXXFLAGS`
+CXXFLAGS += -Wall
+LDFLAGS = `dpkg-buildflags --get LDFLAGS`
+CPPFLAGS = `dpkg-buildflags --get CPPFLAGS`
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+# shared library versions, option 1
+#version=0.0.0
+#major=0
+# option 2, assuming the library is created as src/.libs/libfoo.so.2.0.5 or so
+# using stream here because when using libwpd* we would get two identical matches...
+version=`ls src/lib/.libs/libwpd-stream*.so.* | \
+ awk '{if (match($$0,/[0-9]+\.[0-9]+\.[0-9]+$$/)) print substr($$0,RSTART)}'`
+major=`ls src/lib/.libs/libwpd-stream*.so.* | \
+ awk '{if (match($$0,/\.so\.[0-9]+$$/)) print substr($$0,RSTART+4)}'`
+
+#DEBHELPER_OPTIONS = -N libwpd-tools
+
+config.status:
+	dh_testdir
+	# Add here commands to configure the package.
+	dh_autoreconf $(CURDIR)/autogen.sh && \
+	./configure CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" CXXFLAGS="$(CXXFLAGS)" LDFLAGS="$(LDFLAGS)" --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info \
+	--enable-static
+
+
+build: build-stamp
+build-stamp:  config.status
+	dh_testdir
+
+	$(MAKE) V=1
+	cd src/test; $(MAKE) V=1 check
+
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp 
+
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_autoreconf_clean
+
+	rm -rf $(CURDIR)/docs/doxygen/html
+	rm -f config.log
+	rm -f debian/shlibs.local
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	# fix path and remove unwanted files
+	cd debian/tmp/usr/share/doc && \
+		mv libwpd libwpd-doc
+	dh_install --sourcedir=debian/tmp
+
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs ChangeLog -i
+	dh_installdocs NEWS -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog -a $(DEBHELPER_OPTIONS)
+	dh_installdocs NEWS -a $(DEBHELPER_OPTIONS)
+	dh_installexamples -a $(DEBHELPER_OPTIONS)
+	dh_installman -a $(DEBHELPER_OPTIONS)
+	dh_link -a $(DEBHELPER_OPTIONS)
+	dh_strip -a $(DEBHELPER_OPTIONS)
+	dh_compress -a $(DEBHELPER_OPTIONS)
+	dh_fixperms -a $(DEBHELPER_OPTIONS)
+	dh_makeshlibs
+	cat debian/libwpd-0.9-9/DEBIAN/shlibs > debian/shlibs.local
+	dh_shlibdeps -a l debian/libwpd-0.9-9/usr/lib \
+		$(DEBHELPER_OPTIONS)
+	rm debian/shlibs.local
+	dh_installdeb -a $(DEBHELPER_OPTIONS)
+	dh_gencontrol -a $(DEBHELPER_OPTIONS)
+	dh_md5sums -a $(DEBHELPER_OPTIONS)
+	dh_builddeb -a $(DEBHELPER_OPTIONS)
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install 
