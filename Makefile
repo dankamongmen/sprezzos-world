@@ -51,7 +51,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -1983,26 +1983,6 @@ $(CHECK): $(SPREZZ)/check/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf check-$(check_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: muffin
-muffin:$(MUFFIN)_$(ARCH).deb
-$(MUFFIN): $(SPREZZ)/muffin/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf muffin_$(muffin_UPVER).orig.tar.gz $(TARARGS) $@
-	rm -rf $@/debian
-	cp -r $(<D) $@/
-
-.PHONY: cinnamon
-cinnamon:$(CINNAMON)_$(ARCH).deb
-$(CINNAMON): $(SPREZZ)/cinnamon/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf cinnamon_$(cinnamon_UPVER).orig.tar.gz $(TARARGS) $@
-	rm -rf $@/debian
-	cp -r $(<D) $@/
 
 .PHONY: cmake
 cmake:$(CMAKE)_$(ARCH).deb
@@ -9486,12 +9466,4 @@ $(LIBMIKMOD): $(SPREZZ)/libmikmod/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mikmod-$(libmikmod_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: rdflib
-rdflib:$(RDFLIB)_$(ARCH).deb
-$(RDFLIB): $(SPREZZ)/rdflib/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf rdflib-$(rdflib_UPVER).tar.gz $(TARARGS) $@
 
