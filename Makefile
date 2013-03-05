@@ -9499,3 +9499,11 @@ $(BYACC): $(SPREZZ)/byacc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf byacc-$(byacc_UPVER).tgz $(TARARGS) $@
 
+.PHONY: aspell
+aspell:$(ASPELL)_$(ARCH).deb
+$(ASPELL): $(SPREZZ)/aspell/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf aspell-$(aspell_UPVER).tar.gz $(TARARGS) $@
+

@@ -1,0 +1,163 @@
+## 01_debctrl_filter.diff by Brian Nelson <pyro@debian.org>
+##
+## 
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -163,6 +163,7 @@
+ 
+ ### Add the .info file your filter comes with
+ optfiles = \
++  modules/filter/debctrl-filter.info\
+   modules/filter/email-filter.info\
+   modules/filter/tex-filter.info\
+   modules/filter/sgml-filter.info\
+@@ -176,6 +177,7 @@
+   modules/filter/modes/html.amf \
+   modules/filter/modes/sgml.amf \
+   modules/filter/modes/tex.amf \
++  modules/filter/modes/debctrl.amf \
+   modules/filter/modes/email.amf \
+   modules/filter/modes/ccpp.amf \
+   modules/filter/modes/none.amf \
+@@ -193,6 +195,7 @@
+ ### starting with file containing filter class definition followed by
+ ### file containing filter member implementation.
+ libaspell_la_SOURCES +=\
++  modules/filter/debctrl.cpp\
+   modules/filter/email.cpp\
+   modules/filter/tex.cpp\
+   modules/filter/sgml.cpp\
+@@ -207,10 +210,14 @@
+ 
+ ### Add name of filter library containing your filter. Name always
+ ### must look like lib<filtername>-filter.la see development manual
+-filter_LTLIBRARIES = email-filter.la tex-filter.la\
++filter_LTLIBRARIES = debctrl-filter.la email-filter.la tex-filter.la\
+ 	             sgml-filter.la context-filter.la\
+                      nroff-filter.la texinfo-filter.la
+ 
++debctrl_filter_la_SOURCES = modules/filter/debctrl.cpp
++debctrl_filter_la_LIBADD = libaspell.la 
++debctrl_filter_la_LDFLAGS  = ${filter_ldflags}
++
+ email_filter_la_SOURCES = modules/filter/email.cpp
+ email_filter_la_LIBADD = libaspell.la 
+ email_filter_la_LDFLAGS  = ${filter_ldflags}
+--- /dev/null
++++ b/modules/filter/debctrl-filter.info
+@@ -0,0 +1,9 @@
++# debctrl filter option file
++
++#This Filter is usable with the following version(s) of Aspell
++ASPELL >=0.51
++
++#This line will be printed when typing `Aspell help debctrl
++DESCRIPTION filter for Debian packaging control files
++
++STATIC filter
+--- /dev/null
++++ b/modules/filter/debctrl.cpp
+@@ -0,0 +1,76 @@
++// This file is part of The New Aspell
++//
++// Copyright (C) 2005 by Brian Nelson, based on the email filter,
++// Copyright (C) 2001 by Kevin Atkinson under the GNU LGPL license
++// version 2.0 or 2.1.  You should have received a copy of the LGPL
++// license along with this library if you did not you can find it at
++// http://www.gnu.org/.
++
++#include "settings.h"
++
++#include "indiv_filter.hpp"
++#include "convert.hpp"
++#include "config.hpp"
++#include "indiv_filter.hpp"
++
++namespace {
++
++  using namespace acommon;
++
++  class DebctrlFilter : public IndividualFilter 
++  {
++    bool prev_newline;
++    bool in_field;
++
++  public:
++    PosibErr<bool> setup(Config *);
++    void reset();
++    void process(FilterChar * &, FilterChar * &);
++  };
++
++  PosibErr<bool> DebctrlFilter::setup(Config * opts) 
++  {
++    name_ = "debctrl-filter";
++    order_num_ = 0.90;
++    reset();
++    return true;
++  }
++  
++  void DebctrlFilter::reset() 
++  {
++    prev_newline = true;
++    in_field = false;
++  }
++
++  void DebctrlFilter::process(FilterChar * & str, FilterChar * & end)
++  {
++    FilterChar * line_begin = str;
++    FilterChar * cur = str;
++
++    while (cur < end) {
++      if (prev_newline && *cur != ' ')
++        in_field = true;
++
++      if (*cur == '\n') {
++	if (in_field) {
++	  for (FilterChar * i = line_begin; i != cur; ++i)
++	    *i = ' ';
++	}
++	line_begin = cur;
++	in_field = false;
++	prev_newline = true;
++      } else {
++	prev_newline = false;
++      }
++      ++cur;
++    }
++    if (in_field)
++      for (FilterChar * i = line_begin; i != cur; ++i)
++	*i = ' ';
++  }
++}
++
++C_EXPORT 
++IndividualFilter * new_aspell_debctrl_filter() {
++  return new DebctrlFilter;                                
++}
+--- /dev/null
++++ b/modules/filter/modes/debctrl.amf
+@@ -0,0 +1,8 @@
++MODE debctrl
++
++ASPELL >=0.60
++
++DESCRIPTION mode for Debian packaging control files
++
++FILTER url
++FILTER debctrl
+--- a/prog/aspell.cpp
++++ b/prog/aspell.cpp
+@@ -203,10 +203,11 @@
+   {'e', "mode=email", N_("enter Email mode.")},
+   {'H', "mode=html",  N_("enter HTML mode.")},
+   {'t', "mode=tex",   N_("enter TeX mode.")},
+-  {'n', "mode=nroff", N_("enter Nroff mode.")}
++  {'n', "mode=nroff", N_("enter Nroff mode.")},
++  {'D', "mode=debctrl", N_("enter Debctrl mode.")}
+ };
+ 
+-static const ModeAbrv *  mode_abrvs_end = mode_abrvs + 4;
++static const ModeAbrv *  mode_abrvs_end = mode_abrvs + 5;
+ 
+ const PossibleOption * find_option(char c) {
+   const PossibleOption * i = possible_options;
