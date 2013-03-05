@@ -701,3 +701,11 @@ $(MURRINETHEMES): $(SPREZZ)/murrine-themes/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf murrine-themes-$(murrine-themes_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: modemmanager
+modemmanager:$(MODEMMANAGER)_$(ARCH).deb
+$(MODEMMANAGER): $(SPREZZ)/modemmanager/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf ModemManager-$(modemmanager_UPVER).tar.xz $(TARARGS) $@
+
