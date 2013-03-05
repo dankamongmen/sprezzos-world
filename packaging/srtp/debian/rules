@@ -1,0 +1,95 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+# Copyright © 2007-2008,2010 Jonas Smedegaard <dr@jones.dk>
+# Description: Main Debian packaging script for libSRTP
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/rules/upstream-tarball.mk
+include /usr/share/hardening-includes/hardening.make
+
+# Update this checksum when new releases occur, to catch silent server side file content forges
+DEB_UPSTREAM_TARBALL_MD5 = 9b449edb011c934ca97009e7e0566d22
+
+DEB_UPSTREAM_URL = http://switch.dl.sourceforge.net/sourceforge/srtp
+DEB_UPSTREAM_TARBALL_EXTENSION = tgz
+DEB_UPSTREAM_TARBALL_SRCDIR = $(DEB_UPSTREAM_PACKAGE)
+
+DEB_UPSTREAM_REPACKAGE_EXCLUDES = ./CVS .cvsignore ./doc/rfc*.txt ./doc/draft*.txt ./doc/*.pdf
+
+# Needed by upstream build tests
+CDBS_BUILD_DEPENDS += , procps, psmisc, miscfiles
+
+DEB_CONFIGURE_EXTRA_FLAGS = --disable-stdout --enable-syslog
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+DEB_CONFIGURE_EXTRA_FLAGS += --enable-debug
+else
+DEB_CONFIGURE_EXTRA_FLAGS += --disable-debug
+endif
+
+CFLAGS += -D_REENTRANT
+
+# Tighten security - more info at http://wiki.debian.org/Hardening
+CDBS_BUILD_DEPENDS += , hardening-includes
+CFLAGS += $(HARDENING_CFLAGS)
+LDFLAGS += $(HARDENING_LDFLAGS)
+
+# ...except this, causing "relocation [...]; recompile with -fPIC" failure
+DEB_BUILD_HARDENING_PIE:=0
+
+# Reapply default strong optimizations unless noopt in DEB_BUILD_OPTIONS
+CFLAGS += $(if $(filter noopt,$(DEB_BUILD_OPTIONS))-O0,-O4 -fexpensive-optimizations -funroll-loops)
+
+DEB_MAKE_CLEAN_TARGET = superclean
+DEB_MAKE_CHECK_TARGET = runtest
+
+# preserve (and restore) upstream-shipped files tampered with
+upstreamtmpfiles = doc/Makefile crypto/Makefile doc/Doxyfile
+pre-build:: debian/stamp-upstreamtmpstuff
+debian/stamp-upstreamtmpstuff: debian/stamp-copyright-check
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file ] || cp -np $$file $$file.upstream; \
+	done
+	touch $@
+clean::
+	for file in $(upstreamtmpfiles); do \
+		[ ! -e $$file.upstream ] || mv -f $$file.upstream $$file; \
+	done
+	rm -f debian/stamp-upstreamtmpstuff
+
+# generate (and cleanup) documentation
+CDBS_BUILD_DEPENDS += , doxygen-latex | doxygen, doxygen-latex | texlive-latex-recommended, texlive-fonts-recommended
+DEB_INSTALL_DOCS_srtp-docs += doc/*.txt doc/*.pdf
+DEB_COMPRESS_EXCLUDE += .pdf
+build/srtp-docs::
+	[ -f debian/stamp-make-docs ] || $(DEB_MAKE_INVOKE) libsrtpdoc
+	touch debian/stamp-make-docs
+clean::
+	rm -f doc/*.pdf
+	rm -f debian/stamp-make-docs
+
+# Ensure test script is executable
+post-patches::
+	chmod +x test/rtpw_test.sh
+
+# Let d-shlibs calculate development package dependencies
+#  and handle shared library install
+CDBS_BUILD_DEPENDS += , d-shlibs
+binary-post-install/libsrtp0::
+	d-shlibmove --commit \
+		--movedev "debian/tmp/usr/include/srtp/*" usr/include/srtp/ \
+		debian/tmp/usr/lib/libsrtp.so
