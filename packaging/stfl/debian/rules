@@ -1,0 +1,101 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+include /usr/share/python/python.mk
+
+#export DH_PYCENTRAL=nomove
+
+RUBY_VERSIONS = 1.8 1.9.1
+#PYTHON_VERSIONS = 2.4 2.5
+#PYVERS=$(shell pyversions -vr)
+PYTHON_VERSIONS = $(shell pyversions -vr)
+MAKE_DESTDIR        := $(CURDIR)/debian/tmp
+MAKE_PYTHON_DESTDIR := $(MAKE_DESTDIR)/usr/lib/python
+MAKE_FOUND_INTERPR  := FOUND_PERL5=0 FOUND_SWIG=1 FOUND_SPL=1 FOUND_RUBY=0 FOUND_PYTHON=0
+MAKE_INSTALL_TARGET := DESTDIR=$(MAKE_DESTDIR) prefix=/usr
+CFLAGS += -fPIC
+
+build: build-stamp $(addprefix build-stamp-ruby-, $(RUBY_VERSIONS)) $(addprefix build-stamp-python-, $(PYTHON_VERSIONS))
+build-stamp:
+	dh_testdir
+	
+	$(MAKE) $(MAKE_FOUND_INTERPR)
+	# perl
+	test ! -f perl5/Makefile || $(MAKE) -C perl5 clean
+	cd perl5 && swig -perl5 stfl.i && perl Makefile.PL INSTALLDIRS=vendor
+	$(MAKE) -C perl5
+	
+	touch $@
+
+build-stamp-ruby-%:
+	cp -a ruby ruby$*
+	cd ruby$* && swig -ruby stfl.i && ruby$* extconf.rb
+	$(MAKE) -C ruby$* clean && $(MAKE) -C ruby$* LIBS+="../libstfl.a -lncursesw" CFLAGS+="-I.. -fPIC"
+	
+	touch $@
+
+build-stamp-python-%:
+	cp -a python python$*
+	cd python$* && swig -python stfl.i
+	gcc -shared -fPIC python$*/stfl_wrap.c -I/usr/include/python$*	-I. libstfl.a -lncursesw -o python$*/_stfl.so
+	cd python$* && python$* -c 'import stfl'
+	
+	touch $@
+
+install: build $(addprefix install-ruby-, $(RUBY_VERSIONS)) $(addprefix install-python-, $(PYTHON_VERSIONS))
+	dh_testdir
+	dh_testroot
+	$(MAKE) $(MAKE_INSTALL_TARGET) $(MAKE_FOUND_INTERPR)  install
+	# perl
+	$(MAKE) -C perl5 install DESTDIR=$(MAKE_DESTDIR) PREFIX=/usr 
+
+install-ruby-%:
+	$(MAKE) -C ruby$* $(MAKE_INSTALL_TARGET) sitedir=$(MAKE_DESTDIR)/usr/lib/ruby install
+
+install-python-%:
+	mkdir -p $(MAKE_PYTHON_DESTDIR)$*/$(call py_sitename, $*)/
+	cp python$*/_stfl.so $(MAKE_PYTHON_DESTDIR)$*/$(call py_sitename, $*)/
+	#cp python$*/stfl.pyc $(MAKE_PYTHON_DESTDIR)$*/site-packages/
+	cp python$*/stfl.py $(MAKE_PYTHON_DESTDIR)$*/$(call py_sitename, $*)/
+
+clean: $(addprefix clean-ruby-, $(RUBY_VERSIONS)) $(addprefix clean-python-, $(PYTHON_VERSIONS))
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp* 
+	
+	# Add here commands to clean up after the build process.
+	[ ! -f Makefile ] || $(MAKE) clean
+	rm -rf debian/tmp
+	
+	dh_clean
+
+clean-ruby-%:
+	rm -rf ruby$*
+
+clean-python-%:
+	rm -rf python$*
+
+binary-indep: build install
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_installexamples -plibstfl-dev example.c example.stfl
+	dh_install
+	dh_installman
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_perl
+	dh_python2
+	#dh_pycentral $(CURDIR)/debian/usr/lib/python*/site-packages
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
