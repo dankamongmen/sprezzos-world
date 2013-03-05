@@ -47,3 +47,11 @@ $(PYTHONFEEDVALIDATOR): $(SPREZZ)/python-feedvalidator/debian/changelog
 	ln -sf python-feedvalidator-$(python-feedvalidator_UPVER).tar.xz python-feedvalidator_$(python-feedvalidator_UPVER).orig.tar.xz
 	cp -r $(<D) $@
 
+.PHONY: pyatspi
+pyatspi:$(PYATSPI)_$(ARCH).deb
+$(PYATSPI): $(SPREZZ)/pyatspi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf pyatspi-$(pyatspi_UPVER).tar.xz $(TARARGS) $@
+
