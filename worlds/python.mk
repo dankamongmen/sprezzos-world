@@ -38,3 +38,12 @@ $(RDFLIB): $(SPREZZ)/rdflib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rdflib_$(rdflib_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-feedvalidator
+python-feedvalidator:$(PYTHONFEEDVALIDATOR)_$(ARCH).deb
+$(PYTHONFEEDVALIDATOR): $(SPREZZ)/python-feedvalidator/debian/changelog
+	svn checkout http://feedvalidator.googlecode.com/svn/trunk/feedvalidator $@
+	rm -rf $@/python
+	tar cJf python-feedvalidator-$(python-feedvalidator_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf python-feedvalidator-$(python-feedvalidator_UPVER).tar.xz python-feedvalidator_$(python-feedvalidator_UPVER).orig.tar.xz
+	cp -r $(<D) $@
+
