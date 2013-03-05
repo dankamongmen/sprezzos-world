@@ -478,3 +478,11 @@ $(QMF): $(SPREZZ)/qmf/debian/changelog
 	ln -sf qmf-$(qmf_UPVER).tar.xz qmf_$(qmf_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: polkit-qt-1
+polkit-qt-1:$(POLKITQT1)_$(ARCH).deb
+$(POLKITQT1): $(SPREZZ)/polkit-qt-1/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf polkit-qt-1-$(polkit-qt-1_UPVER).tar.bz2 $(TARARGS) $@
+
