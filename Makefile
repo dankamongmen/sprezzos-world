@@ -9467,3 +9467,11 @@ $(LIBMIKMOD): $(SPREZZ)/libmikmod/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mikmod-$(libmikmod_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libee
+libee:$(LIBEE)_$(ARCH).deb
+$(LIBEE): $(SPREZZ)/libee/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libee-$(libee_UPVER).tar.gz $(TARARGS) $@
+
