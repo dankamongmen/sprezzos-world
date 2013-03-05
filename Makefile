@@ -9547,3 +9547,11 @@ $(LOG4NET): $(SPREZZ)/log4net/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf log4net_$(log4net_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libqmi
+libqmi:$(LIBQMI)_$(ARCH).deb
+$(LIBQMI): $(SPREZZ)/libqmi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libqmi-$(libqmi_UPVER).tar.xz $(TARARGS) $@
+
