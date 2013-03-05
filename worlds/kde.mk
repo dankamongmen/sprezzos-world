@@ -486,3 +486,11 @@ $(POLKITQT1): $(SPREZZ)/polkit-qt-1/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf polkit-qt-1-$(polkit-qt-1_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: srtp
+srtp:$(SRTP)_$(ARCH).deb
+$(SRTP): $(SPREZZ)/srtp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf srtp-$(srtp_UPVER).tar.gz $(TARARGS) $@
+
