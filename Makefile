@@ -51,7 +51,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) #-j8
+	cd $< && debuild -k$(DEBKEY) -j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -9521,7 +9521,7 @@ $(LIBCCRTP): $(SPREZZ)/libccrtp/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libccrtp-$(libccrtp_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf ccrtp-$(libccrtp_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: serf
 serf:$(SERF)_$(ARCH).deb
@@ -9561,5 +9561,7 @@ $(OPENISCSI): $(SPREZZ)/open-iscsi/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf open-iscsi-$(open-iscsi_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf open-iscsi_$(open-iscsi_UPVER).orig.tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@
 
