@@ -9555,3 +9555,11 @@ $(LIBQMI): $(SPREZZ)/libqmi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libqmi-$(libqmi_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: open-iscsi
+open-iscsi:$(OPENISCSI)_$(ARCH).deb
+$(OPENISCSI): $(SPREZZ)/open-iscsi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf open-iscsi-$(open-iscsi_UPVER).tar.gz $(TARARGS) $@
+

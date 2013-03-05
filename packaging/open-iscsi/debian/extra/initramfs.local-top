@@ -1,0 +1,131 @@
+#!/bin/sh
+
+PREREQ=""
+
+prereqs()
+{
+	echo "$PREREQ"
+}
+
+case $1 in
+# get pre-requisites
+prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+do_iscsi_login ()
+{
+	# Bring in the main config
+	. /conf/initramfs.conf
+	for conf in conf/conf.d/*; do
+		[ -f ${conf} ] && . ${conf}
+	done
+	. /scripts/functions
+
+	configure_networking
+
+	modprobe iscsi_tcp
+	modprobe crc32c
+
+	if [ -z $ISCSI_AUTO ]; then
+		if [ -z $ISCSI_INITIATOR ]; then
+			. /etc/initiatorname.iscsi
+			ISCSI_INITIATOR=$InitiatorName
+		fi
+
+		if [ -z $ISCSI_TARGET_PORT ]; then
+			ISCSI_TARGET_PORT=3260
+		fi
+
+		if [ -z $ISCSI_TARGET_GROUP ]; then
+			ISCSI_TARGET_GROUP=1
+		fi
+
+		iscsistart -i $ISCSI_INITIATOR -t $ISCSI_TARGET_NAME	\
+			   -g $ISCSI_TARGET_GROUP -a $ISCSI_TARGET_IP	\
+			   -p $ISCSI_TARGET_PORT \
+			   ${ISCSI_USERNAME:+-u "$ISCSI_USERNAME"}	\
+			   ${ISCSI_PASSWORD:+-w "$ISCSI_PASSWORD"}	\
+			   ${ISCSI_IN_USERNAME:+-U "$ISCSI_IN_USERNAME"}\
+			   ${ISCSI_IN_PASSWORD:+-W "$ISCSI_IN_PASSWORD"}
+	else
+		modprobe iscsi_ibft
+		iscsistart -b
+	fi
+
+	if [ -z $ISCSI_TARGET_PORT ]; then
+		ISCSI_TARGET_PORT=3260
+	fi
+
+	if [ -z $ISCSI_TARGET_GROUP ]; then
+		ISCSI_TARGET_GROUP=1
+	fi
+
+	for i in $ISCSI_TARGET_IP; do
+	iscsistart -i $ISCSI_INITIATOR -t $ISCSI_TARGET_NAME	\
+		   -g $ISCSI_TARGET_GROUP -a $i \
+		   -p $ISCSI_TARGET_PORT \
+		   ${ISCSI_USERNAME:+-u "$ISCSI_USERNAME"}	\
+		   ${ISCSI_PASSWORD:+-w "$ISCSI_PASSWORD"}	\
+		   ${ISCSI_IN_USERNAME:+-U "$ISCSI_IN_USERNAME"}\
+		   ${ISCSI_IN_PASSWORD:+-W "$ISCSI_IN_PASSWORD"}
+	done
+}
+
+parse_iscsi_ops ()
+{
+	. /etc/iscsi.initramfs
+
+	for x in $(cat /proc/cmdline); do
+		case ${x} in
+		iscsi_auto)
+			ISCSI_AUTO=true
+			;;
+        	iscsi_initiator=*)
+                	ISCSI_INITIATOR="${x#iscsi_initiator=}"
+                	;;
+        	iscsi_target_name=*)
+                	ISCSI_TARGET_NAME="${x#iscsi_target_name=}"
+                	;;
+        	iscsi_target_ip=*)
+                	ISCSI_TARGET_IP="${x#iscsi_target_ip=}"
+                	;;
+        	iscsi_target_port=*)
+                	ISCSI_TARGET_PORT="${x#iscsi_target_port=}"
+                	;;
+		iscsi_target_group=*)
+			ISCSI_TARGET_GROUP="${x#iscsi_target_group=}"
+			;;
+		iscsi_username=*)
+			ISCSI_USERNAME="${x#iscsi_username=}"
+			;;
+		iscsi_password=*)
+			ISCSI_PASSWORD="${x#iscsi_password=}"
+			;;
+		iscsi_in_username=*)
+			ISCSI_IN_USERNAME="${x#iscsi_in_username=}"
+			;;
+		iscsi_in_password=*)
+			ISCSI_IN_PASSWORD="${x#iscsi_in_password=}"
+			;;
+		esac
+	done
+}
+
+if [ ! -x /sbin/iscsistart ]; then
+	exit 0
+fi
+
+parse_iscsi_ops
+
+if ( [ -z $ISCSI_TARGET_NAME ] || [ -z $ISCSI_TARGET_IP ] ) && [ -z $ISCSI_AUTO ]; then
+	exit 0
+fi
+
+do_iscsi_login
+
+udevadm settle
+
+exit 0
