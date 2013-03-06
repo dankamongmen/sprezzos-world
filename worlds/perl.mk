@@ -517,5 +517,5 @@ $(LIBSGMLSPERL): $(SPREZZ)/libsgmls-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libsgmls-perl-$(libsgmls-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf SGMLSpm-$(libsgmls-perl_UPVER).tar.gz $(TARARGS) $@
 
