@@ -9579,5 +9579,5 @@ $(EDITLINE): $(SPREZZ)/editline/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf editline-$(editline_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf editline_$(editline_UPVER).orig.tar.gz $(TARARGS) $@
 
