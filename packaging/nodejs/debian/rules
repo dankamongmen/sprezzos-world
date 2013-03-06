@@ -1,0 +1,108 @@
+#!/usr/bin/make -f
+
+-include /usr/share/cdbs/1/rules/upstream-tarball.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+DEB_UPSTREAM_URL = http://nodejs.org/dist/v$(DEB_UPSTREAM_TARBALL_VERSION)/
+DEB_UPSTREAM_TARBALL_BASENAME = node-v$(DEB_UPSTREAM_TARBALL_VERSION)
+
+DEB_UPSTREAM_WGET_OPTS += --no-check-certificate
+# ./deps/npm contains some non-DFSG files, repackaging is needed.
+# Conveniently, remove unused software to ease debian/copyright maintenance.
+DEB_UPSTREAM_REPACKAGE_EXCLUDES += \
+./deps/npm/ \
+./deps/openssl/ \
+./deps/zlib/ \
+./deps/uv/src/ares/ \
+./deps/uv/src/unix/ev/ \
+./deps/uv/include/ares*.h \
+./deps/uv/include/uv-private/ev.h \
+./deps/uv/include/uv-private/tree.h \
+./tools/scons/ \
+./tools/gyp/ \
+./tools/closure_linter/
+
+DEB_UPSTREAM_REPACKAGE_TAG = $(shell echo $(DEB_UPSTREAM_VERSION) | egrep -o "dfsg[0-9]+")
+
+# Needed by upstream build
+bdeps = binutils, openssl (>= 1.0.0g), pkg-config, bash-completion
+bdeps += , curl, procps, zlib1g-dev
+
+# Needed by upstream build and binary development package
+deps = python,\
+ libv8-dev (>= 3.7),\
+ libssl-dev (>= 1.0.0g),\
+ libev-dev (>= 1:4.11),\
+ libc-ares-dev (>= 1.7.5)
+
+CDBS_BUILD_DEPENDS += , $(bdeps), $(deps)
+CDBS_DEPENDS_nodejs-dev = $(deps)
+
+CDBS_BREAKS_nodejs =\
+ buddycloud-server (<< 0.3.1-2),\
+ carto (<< 0.4.6+ds1-2~),\
+ coffeescript (<< 1.3.3-3~),\
+ node-bones (<< 2.0.1+ds1-3~),\
+ node-cli (<< 0.4.4~20120516-1~),\
+ node-express (<< 2.5.9-2~),\
+ node-get (<< 1.1.5+ds1-2~),\
+ node-jake (<< 0.2.32-2~),\
+ node-less (<< 1.3.0~20120310-3~),\
+ node-mapnik (<< 0.6.7-3~),\
+ node-mbtiles (<< 0.2.3-2~),\
+ node-optimist (<< 0.3.1-2~),\
+ node-semver (<< 1.0.13-2~),\
+ node-tilelive (<< 4.2.1-4~),\
+ node-uglify (<< 1.2.6-2~),\
+ node-vows (<< 0.6.3-2~),\
+ npm (<< 1.1.4~dfsg-2~)
+
+# suppress checking binary files, to not upset dpkg-source
+DEB_COPYRIGHT_CHECK_IGNORE_REGEX = ^(doc/trademark-policy\.pdf|doc/mac_osx_nodejs_installer_logo\.png|doc/.*-white-stripe\.jpg|favicon\.ico|debian/(changelog|copyright(|_hints|_newhints)))$
+
+DEB_CONFIGURE_NORMAL_ARGS = ""
+DEB_CONFIGURE_EXTRA_FLAGS = --debug --without-npm --shared-v8 --shared-cares --shared-libev --shared-zlib --no-ssl2
+DEB_CONFIGURE_SCRIPT_ENV += PREFIX="/usr"
+DEB_DESTDIR = $(CURDIR)/debian/tmp
+DEB_MAKE_CLEAN_TARGET = clean
+#  * relax regression tests when targeted experimental suite
+exp-relax-check := $(if $(shell dpkg-parsechangelog | grep -x 'Distribution: \(experimental\|UNRELEASED\)'),-i)
+DEB_MAKE_CHECK_TARGET = $(exp-relax-check) test
+
+# properly clean files from build, waf, test, python
+clean::
+	rm -f node
+	rm -f node_g
+	rm -f .lock-wscript
+	rm -rf build
+	rm -f test/fixtures/hello.txt
+	rm -rf test/tmp
+	find . -name "*.pyc" -delete
+	rm -rf out
+
+binary-post-install/nodejs::
+	mv debian/nodejs/usr/bin/node debian/nodejs/usr/bin/nodejs
+	mv debian/nodejs/usr/share/man/man1/node.1 debian/nodejs/usr/share/man/man1/nodejs.1
+
+# remove *.json files from documentation, remove google-analytics calls
+# TODO: when doc will be generated from markdown, remove it from doc/template.html
+binary-install/nodejs::
+	find debian/nodejs/usr/share/doc/nodejs -name *.json -delete
+	sed -i -e '/document\.write/d' -e '/pageTracker/d' debian/nodejs/usr/share/doc/nodejs/api/*.html
+
+# we have completion for nodejs-waf
+install/nodejs-dev::
+	dh_bash-completion
+
+# Work around upstream shipping docs in wrong subdir
+pre-build:: debian/replace-items
+debian/replace-items: debian/stamp-copyright-check
+	cp -at doc/api doc/api/api/*
+	touch $@
+binary-post-install/nodejs::
+	rm -rf debian/nodejs/usr/share/doc/nodejs/api/api
+clean::
+	rm -rf $(patsubst doc/api/api/%,doc/api/%,$(wildcard doc/api/api/*))
+	rm -f debian/replace-items
