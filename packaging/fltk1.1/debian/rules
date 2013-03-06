@@ -1,0 +1,88 @@
+#!/usr/bin/make -f
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+
+CFLAGS   := $(shell dpkg-buildflags --get CFLAGS)
+CPPFLAGS := $(shell dpkg-buildflags --get CPPFLAGS)
+CXXFLAGS := $(shell dpkg-buildflags --get CXXFLAGS)
+LDFLAGS  := $(shell dpkg-buildflags --get LDFLAGS)
+
+export CFLAGS CPPFLAGS CXXFLAGS LDFLAGS
+
+XCFLAGS = -Wall -Wunused -Wno-format-y2k -fPIE -fno-strict-aliasing
+
+DEB_HOST_ARCH := $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+libdir = /usr/lib/$(DEB_HOST_MULTIARCH)
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- CC="$(CC)" CXX="$(CXX)" \
+	    --enable-shared --enable-threads --enable-xft \
+	    --enable-xinerama --libdir=$(libdir) \
+	    $(shell DEB_BUILD_MAINT_OPTIONS=hardening=-all \
+	        dpkg-buildflags --export=configure)
+	mv fltk-config fltk-config.unhardened
+	dh_auto_configure -- CC="$(CC)" CXX="$(CXX)" \
+            DSOFLAGS="$(filter-out -fPIE -pie,$(LDFLAGS))" \
+	    --enable-shared --enable-threads --enable-xft \
+	    --enable-xinerama --without-links --libdir=$(libdir)
+
+override_dh_auto_build:
+	dh_auto_build     -- OPTIM="$(CFLAGS) $(XCFLAGS)" STRIP=@:
+# documentation/Makefile ignores errors from htmldoc, so this command
+# should be safe to run unconditionally.
+	$(MAKE) -C documentation fltk.pdf fltk.ps
+
+override_dh_clean:
+	dh_clean debian/libfltk1.1.symbols.$(DEB_HOST_ARCH) \
+	    fltk-config.unhardened
+
+override_dh_auto_install:
+	dh_auto_install
+	mkdir -p debian/tmp/usr/games
+	mkdir -p debian/tmp/usr/lib/fltk
+	mkdir -p debian/tmp/usr/share/applications
+	mkdir -p debian/tmp/usr/share/icons/hicolor/32x32/apps
+	mkdir -p debian/tmp/usr/share/icons/hicolor/128x128/apps
+	mkdir -p debian/tmp/usr/share/man/man6
+	mkdir -p debian/tmp/usr/share/pixmaps
+## fltk1.1-games (installed by hand to be able to add fl prefixes.)
+	for game in blocks checkers sudoku; do \
+	    cp test/$$game debian/tmp/usr/games/fl$$game && \
+	    sed -e 's,Exec=,&/usr/games/fl,; s,Icon=,&fl,; s,Name=,&FLTK ,' \
+	      test/desktop/$$game.desktop \
+	      >debian/tmp/usr/share/applications/fl$$game.desktop && \
+	    cp test/desktop/$$game-32.png \
+	      debian/tmp/usr/share/icons/hicolor/32x32/apps/fl$$game.png && \
+	    cp test/desktop/$$game-128.png \
+	      debian/tmp/usr/share/icons/hicolor/128x128/apps/fl$$game.png && \
+	    sed -e '1s,^\.TH ,&fl,; 3s,^,fl,' documentation/$$game.man \
+	      >debian/tmp/usr/share/man/man6/fl$$game.6 && \
+	    convert test/desktop/$$game-32.png \
+	      debian/tmp/usr/share/pixmaps/fl$$game-32.xpm \
+	    || exit 1; \
+	done
+## libfltk1.1-dev
+	cp CMake/FLTKUse.cmake debian/CMakeCache.txt debian/tmp/usr/lib/fltk
+	sed 's,@libdir@,$(libdir),' debian/FLTKConfig.cmake.in \
+	    >debian/tmp/usr/lib/fltk/FLTKConfig.cmake
+	install fltk-config.unhardened debian/tmp/usr/bin/fltk-config
+
+override_dh_installdocs:
+	dh_installdocs -A CREDITS README
+
+override_dh_makeshlibs:
+# On most Debian architectures, 1.1.9-3 was the first version to build
+# with GCC 4.3, which proceeded to introduce a few new symbols.  On
+# alpha, however, 4.2 remained the default through lenny's release.
+ifeq ($(DEB_HOST_ARCH),alpha)
+	sed -e 's/1\.1\.9-3~/1.1.10~rc2/' debian/libfltk1.1.symbols \
+	  > debian/libfltk1.1.symbols.$(DEB_HOST_ARCH)
+endif
+	dh_makeshlibs  -V
+
+override_dh_strip:
+	dh_strip -Nfltk1.1-games --dbg-package=libfltk1.1-dbg
+	dh_strip -pfltk1.1-games
