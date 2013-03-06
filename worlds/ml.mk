@@ -30,3 +30,11 @@ $(CAIROOCAML): $(SPREZZ)/cairo-ocaml/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cairo-ocaml-$(cairo-ocaml_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: mlpost
+mlpost:$(MLPOST)_$(ARCH).deb
+$(MLPOST): $(SPREZZ)/mlpost/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mlpost-$(mlpost_UPVER).tar.gz $(TARARGS) $@
+
