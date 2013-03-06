@@ -55,3 +55,11 @@ $(PYATSPI): $(SPREZZ)/pyatspi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf pyatspi-$(pyatspi_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: mygpoclient
+mygpoclient:$(MYGPOCLIENT)_$(ARCH).deb
+$(MYGPOCLIENT): $(SPREZZ)/mygpoclient/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mygpoclient-$(mygpoclient_UPVER).tar.gz $(TARARGS) $@
+
