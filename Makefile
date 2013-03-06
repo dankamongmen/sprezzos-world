@@ -9663,3 +9663,11 @@ $(LUATEX): $(SPREZZ)/luatex/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf luatex_$(luatex_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: dnprogs
+dnprogs:$(DNPROGS)_$(ARCH).deb
+$(DNPROGS): $(SPREZZ)/dnprogs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dnprogs-$(dnprogs_UPVER).tar.gz $(TARARGS) $@
+
