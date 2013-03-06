@@ -9581,3 +9581,11 @@ $(EDITLINE): $(SPREZZ)/editline/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf editline_$(editline_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: svn2cl
+svn2cl:$(SVN2CL)_$(ARCH).deb
+$(SVN2CL): $(SPREZZ)/svn2cl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf svn2cl-$(svn2cl_UPVER).tar.gz $(TARARGS) $@
+
