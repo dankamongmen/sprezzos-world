@@ -535,3 +535,11 @@ $(LIBDATECALCXSPERL): $(SPREZZ)/libdate-calc-xs-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Date-Calc-XS-$(libdate-calc-xs-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: perl-tk
+perl-tk:$(PERLTK)_$(ARCH).deb
+$(PERLTK): $(SPREZZ)/perl-tk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf perl-tk-$(perl-tk_UPVER).tar.gz $(TARARGS) $@
+
