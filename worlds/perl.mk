@@ -525,5 +525,13 @@ $(LIBCLASSC3XSPERL): $(SPREZZ)/libclass-c3-xs-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libclass-c3-xs-perl-$(libclass-c3-xs-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Class-C3-XS-$(libclass-c3-xs-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libdate-calc-xs-perl
+libdate-calc-xs-perl:$(LIBDATECALCXSPERL)_$(ARCH).deb
+$(LIBDATECALCXSPERL): $(SPREZZ)/libdate-calc-xs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf Date-Calc-XS-$(libdate-calc-xs-perl_UPVER).tar.gz $(TARARGS) $@
 
