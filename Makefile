@@ -8910,7 +8910,7 @@ $(ZIP): $(SPREZZ)/zip/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf zip-$(zip_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf zip_$(zip_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: zlib
 zlib:$(ZLIB)_$(ARCH).deb
