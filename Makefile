@@ -9619,5 +9619,5 @@ $(USBMODESWITCHDATA): $(SPREZZ)/usb-modeswitch-data/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf usb-modeswitch-data-$(usb-modeswitch-data_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf usb-modeswitch-data-$(usb-modeswitch-data_UPVER).tar.bz2 $(TARARGS) $@
 
