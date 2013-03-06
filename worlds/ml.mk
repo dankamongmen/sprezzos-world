@@ -22,3 +22,11 @@ $(OCAMLVIZ): $(SPREZZ)/ocamlviz/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocamlviz-$(ocamlviz_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: cairo-ocaml
+cairo-ocaml:$(CAIROOCAML)_$(ARCH).deb
+$(CAIROOCAML): $(SPREZZ)/cairo-ocaml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cairo-ocaml-$(cairo-ocaml_UPVER).tar.gz $(TARARGS) $@
+
