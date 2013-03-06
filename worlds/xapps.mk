@@ -191,3 +191,11 @@ $(LIBVNCSERVER): $(SPREZZ)/libvncserver/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf LibVNCServer-$(libvncserver_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: desktop-file-utils
+desktop-file-utils:$(DESKTOPFILEUTILS)_$(ARCH).deb
+$(DESKTOPFILEUTILS): $(SPREZZ)/desktop-file-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf desktop-file-utils-$(desktop-file-utils_UPVER).tar.gz $(TARARGS) $@
+
