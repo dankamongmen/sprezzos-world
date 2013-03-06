@@ -385,6 +385,15 @@ $(SIMPLECDD): $(SPREZZ)/simple-cdd/debian/changelog
 	tar cJvf simple-cdd_$(simple-cdd_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: tex-common
+tex-common:$(TEXCOMMON)_$(ARCH).deb
+$(TEXCOMMON): $(SPREZZ)/tex-common/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf tex-common_$(tex-common_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: tasksel
 tasksel:$(TASKSEL)_$(ARCH).deb
 $(TASKSEL): $(SPREZZ)/tasksel/debian/changelog

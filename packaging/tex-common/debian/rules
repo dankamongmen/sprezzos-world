@@ -1,0 +1,121 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+INSTDIR=$(CURDIR)/debian/tex-common
+
+bin_scripts=dh_installtex
+sbin_scripts=update-fmtlang update-texmf-config update-updmap update-texmf
+nonbin_scripts=
+
+sbin_installfiles=$(foreach script,$(sbin_scripts), scripts/$(script))
+sbin_manpages=$(foreach script,$(sbin_scripts), scripts/$(script).8) 
+
+bin_installfiles=$(foreach script,$(bin_scripts), scripts/$(script))
+bin_manpages=$(foreach script,$(bin_scripts), scripts/$(script).1) 
+
+nonbin_installfiles=$(foreach script,$(nonbin_scripts), scripts/$(script)) \
+	texmf/web2c/mktex.cnf 
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+
+build-stamp: $(EPERL_FILES) debian/po/templates.pot
+	dh_testdir
+	$(check-svn)
+
+        # Add here commands to compile the package.
+	cd doc; $(MAKE)
+	cd scripts; pod2man dh_installtex > dh_installtex.1
+
+	touch build-stamp
+
+debian/po/templates.pot: debian/templates
+	debconf-updatepo
+	grep "Last-Translator" debian/po/*.po | \
+	  sed -e 's/.*\(<.*@.*>\).*/\1, /g' | \
+	  tr "\n" " " | sed -e 's/,  $$/\n/' \
+	  > debian/recent-translators
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+
+        # Add here commands to clean up after the build process.
+	cd doc; $(MAKE) clean
+	-rm -f scripts/dh_installtex.1
+	-rm -f $(EPERL_FILES)
+	debconf-updatepo
+
+	dh_clean 
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k 
+	dh_installdirs
+
+        # Add here commands to install the package into debian/tex-common.
+	cd doc; $(MAKE) install DESTDIR=$(INSTDIR)/usr/share/doc/tex-common
+	cp conf/fmt.d/00tex.cnf $(INSTDIR)/etc/texmf/fmt.d/
+	cp conf/hyphen.d/00tex.cnf $(INSTDIR)/etc/texmf/hyphen.d/
+	cp conf/texmf.d/00debian.cnf $(INSTDIR)/etc/texmf/texmf.d/
+	cp $(sbin_installfiles) $(INSTDIR)/usr/sbin/
+	cp $(bin_installfiles) $(INSTDIR)/usr/bin/
+	cp $(nonbin_installfiles) $(INSTDIR)/usr/share/tex-common/
+
+        # debhelper stuff
+        # dh_installtex(.1) is already installed via the bin_scripts
+	grep -v '^[ \t]*# ' scripts/postrm-tex > $(INSTDIR)/usr/share/debhelper/autoscripts/postrm-tex
+	grep -v '^[ \t]*# ' scripts/postinst-tex > $(INSTDIR)/usr/share/debhelper/autoscripts/postinst-tex
+	cp scripts/tex.pm $(INSTDIR)/usr/share/perl5/Debian/Debhelper/Sequence/
+
+        # fontcache stuff with proper permissions
+	install -d $(INSTDIR)/etc/texmf/web2c/
+	install -m 644 texmf/web2c/mktex.cnf $(INSTDIR)/etc/texmf/web2c/
+
+        # Remove the out-of-date ls-R file from /usr/share/texmf and create a
+        # link to one in /var/lib/texmf that we can update without violating
+        # the FHS (symlink created by dh_link)
+	rm -f debian/$(package)/usr/share/texmf/ls-R
+
+        # Debian-specific stuff
+	install -m 644 debian/reportbug-control $(INSTDIR)/usr/share/bug/tex-common/control
+	install -m 644 debian/lintian-overrides $(INSTDIR)/usr/share/lintian/overrides/tex-common
+
+
+# Build architecture-dependent files here.
+binary-arch: build install
+# We have nothing to do by default.
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir
+	$(check-svn)
+	dh_testroot
+	dh_installdebconf 
+	dh_installchangelogs 
+	dh_installdocs
+	dh_installexamples
+	dh_installman $(sbin_manpages) $(bin_manpages)
+	dh_link
+	dh_compress
+	dh_fixperms --exclude=var/cache/fonts
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure
+
+define check-svn
+	@if test -d debian/.svn; then \
+		echo "Please clean subversion directories."; \
+		exit 1; \
+	fi
+endef

@@ -9661,5 +9661,5 @@ $(LUATEX): $(SPREZZ)/luatex/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf luatex-$(luatex_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf luatex_$(luatex_UPVER).orig.tar.bz2 $(TARARGS) $@
 

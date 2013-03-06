@@ -495,3 +495,11 @@ $(LIBTESTTESTERPERL): $(SPREZZ)/libtest-tester-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Test-Tester-$(libtest-tester-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libroman-perl
+libroman-perl:$(LIBROMANPERL)_$(ARCH).deb
+$(LIBROMANPERL): $(SPREZZ)/libroman-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libroman-perl-$(libroman-perl_UPVER).tar.gz $(TARARGS) $@
+
