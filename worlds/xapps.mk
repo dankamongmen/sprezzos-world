@@ -215,3 +215,11 @@ $(XSCREENSAVER): $(SPREZZ)/xscreensaver/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xscreensaver-$(xscreensaver_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gle
+gle:$(GLE)_$(ARCH).deb
+$(GLE): $(SPREZZ)/gle/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gle-$(gle_UPVER).tar.gz $(TARARGS) $@
+
