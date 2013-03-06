@@ -245,5 +245,5 @@ $(FLTK1.1): $(SPREZZ)/fltk1.1/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf fltk1.1-$(fltk1.1_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf fltk1.1_$(fltk1.1_UPVER).orig.tar.gz $(TARARGS) $@
 
