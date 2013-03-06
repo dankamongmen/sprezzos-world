@@ -199,3 +199,11 @@ $(DESKTOPFILEUTILS): $(SPREZZ)/desktop-file-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf desktop-file-utils-$(desktop-file-utils_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: freqtweak
+freqtweak:$(FREQTWEAK)_$(ARCH).deb
+$(FREQTWEAK): $(SPREZZ)/freqtweak/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf freqtweak-$(freqtweak_UPVER).tar.gz $(TARARGS) $@
+

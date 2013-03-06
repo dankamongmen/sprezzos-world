@@ -541,5 +541,5 @@ $(PERLTK): $(SPREZZ)/perl-tk/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf perl-tk-$(perl-tk_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Tk-$(perl-tk_UPVER).tar.gz $(TARARGS) $@
 
