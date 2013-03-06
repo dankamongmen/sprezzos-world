@@ -9672,3 +9672,11 @@ $(DNPROGS): $(SPREZZ)/dnprogs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dnprogs-$(dnprogs_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: srf
+srf:$(SRF)_$(ARCH).deb
+$(SRF): $(SPREZZ)/srf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf srf-$(srf_UPVER).tar.gz $(TARARGS) $@
+
