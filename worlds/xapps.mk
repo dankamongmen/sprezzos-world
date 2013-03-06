@@ -207,3 +207,11 @@ $(FREQTWEAK): $(SPREZZ)/freqtweak/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf freqtweak-$(freqtweak_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xscreensaver
+xscreensaver:$(XSCREENSAVER)_$(ARCH).deb
+$(XSCREENSAVER): $(SPREZZ)/xscreensaver/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xscreensaver-$(xscreensaver_UPVER).tar.gz $(TARARGS) $@
+
