@@ -9621,3 +9621,19 @@ $(USBMODESWITCHDATA): $(SPREZZ)/usb-modeswitch-data/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf usb-modeswitch-data-$(usb-modeswitch-data_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: underscore
+underscore:$(UNDERSCORE)_$(ARCH).deb
+$(UNDERSCORE): $(SPREZZ)/underscore/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf underscore_$(underscore_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: uglifyjs
+uglifyjs:$(UGLIFYJS)_$(ARCH).deb
+$(UGLIFYJS): $(SPREZZ)/uglifyjs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf uglifyjs_$(uglifyjs_UPVER).orig.tar.gz $(TARARGS) $@
+
