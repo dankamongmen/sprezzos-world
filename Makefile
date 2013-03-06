@@ -9680,3 +9680,11 @@ $(SRF): $(SPREZZ)/srf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf srf_$(srf_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: context
+context:$(CONTEXT)_$(ARCH).deb
+$(CONTEXT): $(SPREZZ)/context/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf context-$(context_UPVER).tar.gz $(TARARGS) $@
+
