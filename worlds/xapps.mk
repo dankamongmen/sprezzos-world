@@ -223,3 +223,11 @@ $(GLE): $(SPREZZ)/gle/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gle-$(gle_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xloadimage
+xloadimage:$(XLOADIMAGE)_$(ARCH).deb
+$(XLOADIMAGE): $(SPREZZ)/xloadimage/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xloadimage_$(xloadimage_UPVER).orig.tar.gz $(TARARGS) $@
+
