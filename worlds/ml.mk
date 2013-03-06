@@ -44,5 +44,13 @@ $(LABLGTK2): $(SPREZZ)/lablgtk2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf lablgtk2-$(lablgtk2_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf lablgtk-$(lablgtk2_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: lablgl
+lablgl:$(LABLGL)_$(ARCH).deb
+$(LABLGL): $(SPREZZ)/lablgl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lablgl-$(lablgl_UPVER).tar.gz $(TARARGS) $@
 
