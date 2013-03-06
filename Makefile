@@ -9688,3 +9688,11 @@ $(CONTEXT): $(SPREZZ)/context/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf context-$(context_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xmltoman
+xmltoman:$(XMLTOMAN)_$(ARCH).deb
+$(XMLTOMAN): $(SPREZZ)/xmltoman/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xmltoman-$(xmltoman_UPVER).tar.gz $(TARARGS) $@
+

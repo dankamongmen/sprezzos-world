@@ -231,3 +231,11 @@ $(XLOADIMAGE): $(SPREZZ)/xloadimage/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xloadimage_$(xloadimage_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libxaw3dxft
+libxaw3dxft:$(LIBXAW3DXFT)_$(ARCH).deb
+$(LIBXAW3DXFT): $(SPREZZ)/libxaw3dxft/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libxaw3dxft_$(libxaw3dxft_UPVER).orig.tar.bz2 $(TARARGS) $@
+
