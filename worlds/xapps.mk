@@ -183,3 +183,11 @@ $(NINI): $(SPREZZ)/nini/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf nini-$(nini_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libvncserver
+libvncserver:$(LIBVNCSERVER)_$(ARCH).deb
+$(LIBVNCSERVER): $(SPREZZ)/libvncserver/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf LibVNCServer-$(libvncserver_UPVER).tar.gz $(TARARGS) $@
+

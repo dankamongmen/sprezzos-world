@@ -9573,3 +9573,11 @@ $(LIBWPD): $(SPREZZ)/libwpd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libwpd-$(libwpd_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: editline
+editline:$(EDITLINE)_$(ARCH).deb
+$(EDITLINE): $(SPREZZ)/editline/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf editline-$(editline_UPVER).tar.gz $(TARARGS) $@
+
