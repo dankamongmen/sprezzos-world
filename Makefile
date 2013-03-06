@@ -9637,3 +9637,11 @@ $(UGLIFYJS): $(SPREZZ)/uglifyjs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf uglifyjs_$(uglifyjs_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: nodejs
+nodejs:$(NODEJS)_$(ARCH).deb
+$(NODEJS): $(SPREZZ)/nodejs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nodejs-$(nodejs_UPVER).tar.gz $(TARARGS) $@
+
