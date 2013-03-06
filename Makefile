@@ -9605,3 +9605,11 @@ $(FREETDS): $(SPREZZ)/freetds/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf freetds-$(freetds_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: usb-modeswitch
+usb-modeswitch:$(USBMODESWITCH)_$(ARCH).deb
+$(USBMODESWITCH): $(SPREZZ)/usb-modeswitch/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf usb-modeswitch-$(usb-modeswitch_UPVER).tar.gz $(TARARGS) $@
+
