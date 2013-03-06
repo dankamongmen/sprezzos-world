@@ -1,0 +1,58 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include /usr/share/ocaml/ocamlvars.mk
+
+%:
+	dh $@ --with ocaml
+
+.PHONY: override_dh_auto_configure
+override_dh_auto_configure:
+	./configure \
+		-config /etc/ocamlfind.conf \
+		-bindir /usr/bin \
+		-sitelib $(OCAML_STDLIB_DIR) \
+		-mandir /usr/share/man \
+		-with-toolbox
+
+.PHONY: override_dh_auto_build
+override_dh_auto_build:
+	$(MAKE)
+ifeq ($(OCAML_HAVE_OCAMLOPT),yes)
+	$(MAKE) opt
+endif
+
+.PHONY: override_dh_auto_install
+override_dh_auto_install:
+	$(MAKE) install prefix=$(CURDIR)/debian/tmp
+# rm ocamlc.opt and similar settings, they're not avail everywhere in debian
+	grep -v \\.opt debian/tmp/etc/ocamlfind.conf > debian/ocamlfind.conf.new
+	sed -i -e 's/@OCamlABI@/$(OCAML_ABI)/g' debian/ocamlfind.conf.new
+	mv debian/ocamlfind.conf.new debian/tmp/etc/ocamlfind.conf
+# mv METAs from empty directories to the /META directory
+	mkdir -p $(CURDIR)/debian/tmp$(OCAML_STDLIB_DIR)/METAS
+	for p in `ls site-lib-src/`; do \
+	  mv $(CURDIR)/debian/tmp$(OCAML_STDLIB_DIR)/$$p/META \
+	    $(CURDIR)/debian/tmp$(OCAML_STDLIB_DIR)/METAS/META.$$p; \
+	  rmdir $(CURDIR)/debian/tmp$(OCAML_STDLIB_DIR)/$$p/; \
+	done
+# rm empty man3 dir
+	test -d $(CURDIR)/debian/tmp/usr/share/man/man3 && \
+		rmdir $(CURDIR)/debian/tmp/usr/share/man/man3
+
+# do not strip executables on bytecode executables (is this still needed?)
+ifneq ($(OCAML_HAVE_OCAMLOPT),yes)
+.PHONY: override_dh_strip
+override_dh_strip:
+endif
+
+.PHONY: override_dh_auto_clean
+override_dh_auto_clean:
+	if [ -f Makefile.config ]; then $(MAKE) clean; fi
+	-find . -name META -delete
+	-rm -f src/findlib/depend src/findlib/fl_metascanner.ml
+	-rm -f Makefile.config ocargs.log src/findlib/ocaml_args.ml
+	-rm -Rf site-lib-src/camlp4/

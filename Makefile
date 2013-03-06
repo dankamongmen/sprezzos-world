@@ -20,6 +20,7 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 
 -include $(subst $(SPREZZ),sprezzos-world/,$(PACKAGES))
 
+include worlds/ml.mk
 include worlds/kde.mk
 include worlds/java.mk
 include worlds/perl.mk
