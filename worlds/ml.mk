@@ -38,3 +38,11 @@ $(MLPOST): $(SPREZZ)/mlpost/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mlpost-$(mlpost_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: lablgtk2
+lablgtk2:$(LABLGTK2)_$(ARCH).deb
+$(LABLGTK2): $(SPREZZ)/lablgtk2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lablgtk2-$(lablgtk2_UPVER).tar.gz $(TARARGS) $@
+
