@@ -9678,5 +9678,5 @@ $(SRF): $(SPREZZ)/srf/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf srf-$(srf_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf srf_$(srf_UPVER).orig.tar.gz $(TARARGS) $@
 

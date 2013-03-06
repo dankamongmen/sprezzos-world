@@ -14,3 +14,11 @@ $(OCAMLOGG): $(SPREZZ)/ocaml-ogg/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocaml-ogg-$(ocaml-ogg_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ocamlviz
+ocamlviz:$(OCAMLVIZ)_$(ARCH).deb
+$(OCAMLVIZ): $(SPREZZ)/ocamlviz/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocamlviz-$(ocamlviz_UPVER).tar.gz $(TARARGS) $@
+
