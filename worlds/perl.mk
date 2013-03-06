@@ -500,6 +500,22 @@ libroman-perl:$(LIBROMANPERL)_$(ARCH).deb
 $(LIBROMANPERL): $(SPREZZ)/libroman-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libroman-perl_$(libroman-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libtext-format-perl
+libtext-format-perl:$(LIBTEXTFORMATPERL)_$(ARCH).deb
+$(LIBTEXTFORMATPERL): $(SPREZZ)/libtext-format-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libroman-perl-$(libroman-perl_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Text-Format-$(libtext-format-perl_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: libsgmls-perl
+libsgmls-perl:$(LIBSGMLSPERL)_$(ARCH).deb
+$(LIBSGMLSPERL): $(SPREZZ)/libsgmls-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsgmls-perl-$(libsgmls-perl_UPVER).tar.gz $(TARARGS) $@
 
