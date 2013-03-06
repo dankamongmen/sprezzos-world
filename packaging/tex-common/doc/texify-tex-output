@@ -1,0 +1,479 @@
+#! /usr/bin/python
+#
+# texify-tex-output --- Enhance the LaTeX output of DebianDoc tools
+# Copyright (c) 2007 Florent Rougon
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 dated June, 1991.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; see the file COPYING. If not, write to the
+# Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+# Boston, MA  02110-1301 USA.
+#
+# $Id$
+
+import sys, os, re, getopt
+
+# Call with option --algorithm for a precise explanation of how the script
+# works (or look for the definition of 'algorithm_doc' below).
+#
+#
+# ****************************************************************************
+# *                     Simple customization starts here                     *
+# ****************************************************************************
+
+# Document preamble
+# ~~~~~~~~~~~~~~~~~
+# List of (regexp, replacement text) tuples describing customize the preamble.
+#
+# For the regexp syntax, see:
+#
+#   file:///usr/share/doc/python2.5-doc/html/lib/re-syntax.html
+#
+# The replacement text is expanded by match_object.expand(), therefore you can
+# reference groups from the matching regexp with backreferences such as \1,
+# \2, etc. (even by group name with the \g<name> syntax). Similarly, escape
+# sequences such as \n are processed in the replacement text, therefore we
+# have to use two backslashes there to insert one backslash, even when using
+# raw strings (cf.
+# file:///usr/share/doc/python2.5-doc/html/lib/match-objects.html).
+#
+# For a substitution to happen on a given line, the regexp must match at
+# the beginning of that line. The replacement text can generate several lines
+# if needed, include the original line (using a group), etc.
+preamble_substitutions = [
+    (r"^(?P<input_line>\s*\\usepackage(\[[^][]*\])?\{fontenc\}.*)$",
+     r"\g<input_line>\n\\usepackage{mflogo}\n")]
+
+# How to recognize the end of the preamble
+begin_doc_re = r"^\s*\\begin\{document\}"
+
+# Document body
+# ~~~~~~~~~~~~~
+# List of (regexp, replacement text) tuples describing which substitutions are
+# to be performed on each chunk of the body text.
+#
+# The same comments as for 'preamble_substitutions' apply here (in particular,
+# a replacement text can make use of groups from the corresponding regexp),
+# except that here, we don't check if given regexp *matches* at the beginning
+# of a chunk; instead, we *search* (using regexp.search()) for the first match
+# of that regexp in the chunk.
+body_substitutions = [(r"\bTeX\b", r"\\TeX{}"),
+                      (r"\bpdfTeX\b", r"pdf\\TeX{}"),
+                      (r"\bMetafont\b", r"\\MF{}"),
+                      (r"\bLaTeX\b", r"\\LaTeX{}"),
+                      (r"\bConTeXt\b", r"Con\\TeX{}t"),
+                      (r"\bteTeX\b", r"te\\TeX{}"),
+                      (r"\bMiKTeX\b", r"MiK\\TeX{}")]
+
+# List of (command_name, number_of_args) tuples for LaTeX commands which
+# should not be subject to the regexp substitution (neither the command name,
+# nor its arguments) .
+#
+# If the LaTeX output from DebianDoc tools starts using an \envvar command for
+# typesetting the names of environment variables (that would be nice), it
+# should be added to this list.
+skipped_commands = [("file", 1)]
+
+# When processing the body of the document, if a line matches one of the
+# regexps in 'no_subst', it will not be suject to substitution at all.
+no_subst = [r"^.*\bgenerated from \\\$Id:[ \t]+.+[ \t]+\\\$"]
+
+# ****************************************************************************
+# *                      Simple customization ends here                      *
+# ****************************************************************************
+
+progname = os.path.basename(sys.argv[0])
+progversion_base = "0.2"
+
+# Append an SVN revision part to the program version
+svn_revision_string = "$LastChangedRevision$"
+svn_revision_rec = re.compile(r"^\$LastChangedRevision: ([0-9]+) \$$")
+svn_revision_mo = svn_revision_rec.match(svn_revision_string)
+
+if svn_revision_mo is not None:
+    svn_revision = svn_revision_mo.group(1)
+else:
+    svn_revision = "unknown.svn.revision"
+
+del svn_revision_string, svn_revision_rec, svn_revision_mo
+progversion = "%s.%s" % (progversion_base, svn_revision)
+
+
+usage = """Usage: %(progname)s [option ...] input_file output_file
+Enhance the LaTeX output of DebianDoc tools.
+
+The document preamble is customized; in the document body, TeX is replaced
+with \\TeX{}, LaTeX with \\LaTeX{}, etc., except where it doesn't make sense
+(as in the argument of \\file, and in the SVN Id).
+
+The calling syntax allows this script to be specified as the argument to the
+-s option of commands such as debiandoc2latexpdf.
+
+Options:
+      --algorithm              explain the algorithm used
+      --help                   display this message and exit
+      --version                output version information and exit""" \
+  % {"progname": progname}
+
+
+algorithm_doc = """\
+The algorithm used in %(progname)s is the following. First, read the
+preamble and customize it (e.g., to add '\\usepackage{mflogo}' after
+the line loading 'fontenc'). This is done the following way:
+
+  Each line of the preamble is read separately. If it matches one of the
+  regular expressions in 'preamble_substitutions', the corresponding
+  replacement text is substituted, and no other substitution is done on that
+  line (i.e., the first regexp that matches 'wins').
+
+  Lines that don't match any regexp in 'preamble_substitutions' are output
+  verbatim.
+
+  Note: 'preamble_substitutions' is a list of tuples; the first element of
+        each tuple is a regexp, and the second element is its corresponding
+        replacement text.
+
+  The end of the preamble is detected when a line matches the regexp
+  in 'begin_doc_re'.
+
+Then, process the body of the document line by line. If a line matches at
+least one of the regular expressions in 'no_subst', it is dumped verbatim.
+Currently, this is used to avoid changing 'Debian-TeX-Policy.sgml' into
+'Debian-\\TeX{}-Policy.sgml' in the Id generated by subversion:
+
+  $Id$
+
+Other lines in the document body go through the following filter:
+
+  1. Split the line into chunks separated by LaTeX commands listed in
+     'skipped_commands' (currently, only \\file).
+
+  2. Such commands and their arguments are dumped verbatim. This avoids
+     mangling file names that contain the string 'TeX', such as
+     '/etc/texmf/texmf.d/05TeXMF.cnf'.
+
+     For each of these commands, the number of arguments is supposed to be
+     fixed, as specified in %(progname)s. But it is possible to specify
+     that e.g., \\file takes one argument, and \\othercommand takes two
+     arguments.
+
+  3. The remaining chunks of text each go through the substitution process,
+     which works as follows:
+
+     Initialisation:
+
+       index = 0  --- which means, start at the beginning of the chunk
+
+     Loop:
+
+     (a) Look for the first match of each regular expression in
+         'body_substitutions' (the regexp is the first element of each tuple),
+         starting at 'index' in the chunk. If no regexp matches, it means
+         there is nothing left to replace in the chunk, therefore we break the
+         loop.
+
+     (b) Choose the regexp that matched earliest in the chunk, dump the text
+         from 'index' to the beginning of the regexp match, and write the
+         replacement text for the regexp (which is given in the second element
+         of the tuple in 'body_substitutions' that contains the regexp, and
+         can make use of groups that matched in the regexp---specified as \\1,
+         \\2, or even by group name).
+
+     (c) Let 'index' point right after the end of the regexp match and start a
+         new loop iteration, provided 'index' doesn't point to the end of the
+         chunk yet.
+
+     The idea behind this loop is to proceed as a human would do, instead of
+     the simpler way, which would be: successively replace all occurrences of
+     each regexp in 'body_substitutions' in the chunk. This simpler way would
+     cause problems, because a replacement text for a given regexp could be
+     later matched by another regexp, and be subject to a second (recursive)
+     replacement, which is generally not wanted and forces one to be very
+     careful about the order in which the regexps are listed.
+
+Currently, the arguments of LaTeX commands in step 2 are supposed to all fit
+on the same line as the command, and they are recognized based on brace
+matching, with escaped braces \\{ and \\} properly handled (they are not
+confused with braces which delimit arguments). Due to this single-line
+limitation, the arguments cannot contain TeX comments. Currently, this is
+sufficient for the \\file commmand calls produced by DebianDoc, which is why
+this relatively simple design was chosen.""" \
+% {"progname": progname}
+
+
+class error(Exception):
+    pass
+
+class ParseError(error):
+    pass
+
+class ProgramError(error):
+    "Exception raised for obvious bugs (when an assertion is false)."
+
+
+def compile_regexps(seq):
+    res = []
+
+    for e in seq:
+        res.append((re.compile(e[0]), e[1]))
+
+    return res
+
+
+def process_preamble(input_stream, output_stream, preamble_substitutions,
+                     begin_doc_re, lineno):
+    begin_doc_rec = re.compile(begin_doc_re)
+    subs = compile_regexps(preamble_substitutions)
+
+    for line in input_stream:
+        obuf = [line]                   # output buffer
+        
+        for regexp, repl in subs:
+            mo = regexp.match(line)
+            if mo is not None:
+                # Replacement text
+                obuf = [mo.expand(repl)]
+                break
+
+        output_stream.write(''.join(obuf))
+        lineno += 1
+    
+        if begin_doc_rec.match(line):
+            break
+
+    return lineno
+
+
+def find_earliest_match(l):
+    """Return the index in sequence l of the smallest element that is not -1.
+
+    If all elements are equal to -1, return None."""
+
+    # Smallest number found so far, among those that are different from -1
+    min_so_far = None
+    # Index of this number in 'l'
+    index_of_min_so_far = None
+
+    for i in range(len(l)):
+        if l[i] != -1:
+            if (min_so_far is None) or (l[i] < min_so_far):
+                index_of_min_so_far = i
+                min_so_far = l[i]
+
+    return index_of_min_so_far
+
+
+def skip_cmd_and_args(obuf, line, cmd_start, command, nargs, lineno):
+    """Skip a LaTeX command and its arguments.
+
+    The command 'command' is supposed to start at position 'cmd_start' in
+    'line', and accept 'nargs' mandatory arguments.
+
+    """
+    start_of_cmd_call_rec = re.compile(r"\\%s[ \t]*\{" % command)
+
+    mo = start_of_cmd_call_rec.match(line, pos=cmd_start)
+    if mo is None:
+        raise ParseError("Parse error at line %u: cannot find the command "
+                         "\\%s followed by an opening brace, starting at "
+                         "column %u (column counted from 0)."
+                         % (lineno, command, cmd_start))
+
+    # Start parsing after the opening brace following the command name
+    index = mo.end(0)
+    # Nesting level of the braces parsed so far
+    brace_level = 1
+
+    args_to_gobble = nargs
+
+    while args_to_gobble > 0:
+        while brace_level > 0:
+            if index >= len(line):
+                raise ParseError("""\
+Runaway argument in line %u (unmatched braces), or too few arguments for
+command \\%s. Maybe the arguments end on the next lines, but this case is
+not handled currently.""" % (lineno, command))
+
+            if line[index] == '\\':
+                index += 2
+            else:
+                if line[index] == '{':
+                    brace_level += 1
+                elif line[index] == '}':
+                    brace_level -= 1
+
+                index += 1
+
+        args_to_gobble -= 1
+
+    obuf.append(line[cmd_start:index])
+    return index
+
+
+def match_object_start_as_number(mo):
+    if mo is not None:
+        res = mo.start(0)
+    else:
+        res = -1
+
+    return res
+
+
+def process_chunk(obuf, str, subs):
+    """Perform the substitutions in 'subs' on string 's'."""
+    index = 0
+
+    while index < len(str):
+        match_objects = []
+
+        for regexp, repl in subs:
+            match_objects.append(regexp.search(str, pos=index))
+
+        match_indices = map(match_object_start_as_number, match_objects)
+
+        # Did any of the regexps in subs match?
+        no_match = True
+        for i in match_indices:
+            if i != -1:
+                no_match = False
+                break
+
+        if no_match:
+            break
+        else:
+            i = find_earliest_match(match_indices)
+            mo = match_objects[i]
+            match_start, match_end = mo.span(0)
+            obuf.append(str[index:match_start])
+            # Replacement text
+            obuf.append(mo.expand(subs[i][1]))
+            # Continue searching and replacing after the match in the next
+            # loop iteration
+            index = match_end
+
+    obuf.append(str[index:])
+
+
+def process_body_line(output_stream, line, subs, lineno):
+    """Perform replacement on a body line.
+
+    'subs' should be a list of tuples (compiled regexp, replacement string).
+
+    """
+    index = 0
+    obuf = []
+
+    while True:
+        cmd_starts_at = []
+
+        for cmd, nargs in skipped_commands:
+            cmd_starts_at.append(line.find("\\" + cmd, index))
+
+        # Did we find at least one of the skipped_commands in 'line'?
+        no_match = True
+        for i in cmd_starts_at:
+            if i != -1:
+                no_match = False
+                break
+
+        if no_match:
+            process_chunk(obuf, line[index:len(line)], subs)
+            break
+        else:
+            # Find the command that matches first in 'line'
+            i = find_earliest_match(cmd_starts_at)
+            process_chunk(obuf, line[index:cmd_starts_at[i]], subs)
+            index = skip_cmd_and_args(obuf, line, cmd_starts_at[i],
+                                      command=skipped_commands[i][0],
+                                      nargs=skipped_commands[i][1],
+                                      lineno=lineno)
+    
+    output_stream.write(''.join(obuf))
+
+
+def process_body(input_stream, output_stream, substitutions, no_subst,
+                 lineno):
+    subs = compile_regexps(substitutions)
+    no_subs = map(re.compile, no_subst)
+
+    for line in input_stream:
+        # print "Processing line %u..." % lineno
+        no_processing_on_this_line = False
+
+        for regexp in no_subs:
+            if regexp.match(line):
+                no_processing_on_this_line = True
+                break
+
+        if not no_processing_on_this_line:
+            process_body_line(output_stream, line, subs, lineno)
+        else:
+           output_stream.write(line)
+
+        lineno += 1
+                
+
+def process_command_line():
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "",
+                                   ["algorithm",
+                                    "help",
+                                    "version"])
+    except getopt.GetoptError, message:
+        sys.stderr.write(usage + "\n")
+        return ("exit", 1)
+
+    params = {}
+
+    for option, value in opts:
+        if option == "--algorithm":
+            print algorithm_doc
+            return ("exit", 0)
+        elif option == "--help":
+            print usage
+            return ("exit", 0)
+        elif option == "--version":
+            print "%s version %s" % (progname, progversion)
+            return ("exit", 0)
+        else:
+            raise ProgramError("unexpected option received from the "
+                               "getopt module: '%s'" % option)
+
+    if len(args) != 2:
+        sys.stderr.write(usage + '\n')
+        return ("exit", 1)
+
+    params["input file"] = args[0]
+    params["output file"] = args[1]
+
+    return ("continue", params)
+
+
+def main():
+    action, p = process_command_line()
+    if action == "exit":
+        sys.exit(p)
+
+    input_stream = file(p["input file"], "rb")
+    output_stream = file(p["output file"], "wb")
+
+    # Number of the input line that will be read next, starting from 1
+    lineno = 1
+    
+    lineno = process_preamble(input_stream, output_stream,
+                              preamble_substitutions, begin_doc_re,
+                              lineno)
+    process_body(input_stream, output_stream, body_substitutions, no_subst,
+                 lineno)
+
+    sys.exit(0)
+
+if __name__ == "__main__": main()

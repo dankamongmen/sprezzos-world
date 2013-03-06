@@ -1,0 +1,859 @@
+#!/bin/bash -e
+#
+# update-fmtlang --- Generate updmap.cfg, language.dat, fmtutil.cnf etc
+#                     from a set of files
+# Copyright (C) 2002 Atsuhito Kohda
+# Copyright (C) 2004, 2005, 2006, 2007 Florent Rougon
+# Copyright (C) 2005, 2006, 2009, 2010, 2011, 2012 Norbert Preining
+# Copyright (C) 2007 Frank Küster
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 dated June, 1991.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; see the file COPYING. If not, write to the
+# Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+# Boston, MA  02110-1301 USA.
+
+version="1.0"
+progname=$(basename "$0")
+
+SYSPATH_BASE=/var/lib/texmf
+
+HYPHENMODE=nohyphen
+HEADFILE=/not/a/real/file/we/ever/will/see/on/a/system
+
+if [ "$progname" = "update-language" ] ; then
+    update-language-dat
+    update-language-def
+    update-language-lua
+    exit 0
+elif [ "$progname" = "update-language-lua" ] ; then
+    CNFDIR=hyphen.d
+    HEADFILE=/usr/share/texlive/texmf/tex/generic/config/language.us.lua
+    HYPHENMODE=luatex
+    # System-wide configuration directory
+    SYSWIDE_CONFDIR=/etc/texmf/$CNFDIR
+    CHECKFILE="$SYSWIDE_CONFDIR/00tex.cnf"
+    EXT="cnf"
+    MEMORY_DIR=/var/lib/tex-common/hyphen-cnf
+    PATH_COMPONENT=tex/generic/config
+    SYSWIDE_VARD="$SYSPATH_BASE/$PATH_COMPONENT"
+    DEFAULT_OUTPUTFILE_BASENAME=language.dat.lua
+    SYSWIDE_DEFAULT_OUTPUTFILE="$SYSWIDE_VARD/$DEFAULT_OUTPUTFILE_BASENAME"
+    READCC="%"                      # for COMMENTCHAR
+    WRITECC="--"
+    # in printf, %% is one %
+    PCC="\055\055"                    # for printfCOMMENTCHAR
+    SHORT_DESC="Generate language.dat.lua, the hyphenation configuration file for luaTeX and friends"
+elif [ "$progname" = "update-language-def" ] ; then
+    CNFDIR=hyphen.d
+    HEADFILE=/usr/share/texlive/texmf/tex/generic/config/language.us.def
+    HYPHENMODE=etex
+    # System-wide configuration directory
+    SYSWIDE_CONFDIR=/etc/texmf/$CNFDIR
+    CHECKFILE="$SYSWIDE_CONFDIR/00tex.cnf"
+    EXT="cnf"
+    MEMORY_DIR=/var/lib/tex-common/hyphen-cnf
+    PATH_COMPONENT=tex/generic/config
+    SYSWIDE_VARD="$SYSPATH_BASE/$PATH_COMPONENT"
+    DEFAULT_OUTPUTFILE_BASENAME=language.def
+    SYSWIDE_DEFAULT_OUTPUTFILE="$SYSWIDE_VARD/$DEFAULT_OUTPUTFILE_BASENAME"
+    READCC="%"                      # for COMMENTCHAR
+    WRITECC="%"
+    # in printf, %% is one %
+    PCC="%%"                    # for printfCOMMENTCHAR
+    SHORT_DESC="Generate language.def, the hyphenation configuration file for eTeX and friends"
+elif [ "$progname" = "update-language-dat" ] ; then
+    CNFDIR=hyphen.d
+    HEADFILE=/usr/share/texlive/texmf/tex/generic/config/language.us
+    HYPHENMODE=latex
+    # System-wide configuration directory
+    SYSWIDE_CONFDIR=/etc/texmf/$CNFDIR
+    CHECKFILE="$SYSWIDE_CONFDIR/00tex.cnf"
+    EXT="cnf"
+    MEMORY_DIR=/var/lib/tex-common/hyphen-cnf
+    PATH_COMPONENT=tex/generic/config
+    SYSWIDE_VARD="$SYSPATH_BASE/$PATH_COMPONENT"
+    DEFAULT_OUTPUTFILE_BASENAME=language.dat
+    SYSWIDE_DEFAULT_OUTPUTFILE="$SYSWIDE_VARD/$DEFAULT_OUTPUTFILE_BASENAME"
+    READCC="%"                      # for COMMENTCHAR
+    WRITECC="%"
+    # in printf, %% is one %
+    PCC="%%"                    # for printfCOMMENTCHAR
+    SHORT_DESC="Generate language.dat, the hyphenation configuration file for LaTeX"
+elif [ "$progname" = "update-updmap" ] ; then
+    echo "I should NOT be called this way, there is something wrong!!! ... good bye!" >&2
+    exit 1
+    CNFDIR=updmap.d
+    # System-wide configuration directory
+    SYSWIDE_CONFDIR=/etc/texmf/$CNFDIR
+    CHECKFILE="$SYSWIDE_CONFDIR/00updmap.cfg"
+    EXT="cfg"
+    MEMORY_DIR=/var/lib/tex-common/fontmap-cfg
+    PATH_COMPONENT=web2c
+    SYSWIDE_VARD="$SYSPATH_BASE/$PATH_COMPONENT"
+    DEFAULT_OUTPUTFILE_BASENAME=updmap.cfg
+    SYSWIDE_DEFAULT_OUTPUTFILE="$SYSWIDE_VARD/$DEFAULT_OUTPUTFILE_BASENAME"
+    READCC="#"
+    WRITECC="#"
+    PCC="#"                     # for printfCOMMENTCHAR
+    SHORT_DESC="Generate an updmap configuration file"
+elif [ "$progname" = "update-fmtutil" ] ; then
+    CNFDIR=fmt.d
+    # System-wide configuration directory
+    SYSWIDE_CONFDIR=/etc/texmf/$CNFDIR
+    CHECKFILE="$SYSWIDE_CONFDIR/00tex.cnf"
+    EXT="cnf"
+    MEMORY_DIR=/var/lib/tex-common/fmtutil-cnf
+    PATH_COMPONENT=web2c
+    SYSWIDE_VARD="$SYSPATH_BASE/$PATH_COMPONENT"
+    DEFAULT_OUTPUTFILE_BASENAME=fmtutil.cnf
+    SYSWIDE_DEFAULT_OUTPUTFILE="$SYSWIDE_VARD/$DEFAULT_OUTPUTFILE_BASENAME"
+    READCC="#"
+    WRITECC="#"
+    PCC="#"                     # for printfCOMMENTCHAR
+    SHORT_DESC="Generate an fmtutil configuration file"
+else
+    echo "Please call me either as update-updmap, update-language, or update-fmtutil!"
+    exit 1
+fi
+
+usage="Usage: $progname [OPTION...]
+${SHORT_DESC}.
+
+Options:
+  -c, --conf-dir=DIR     directory where the user-specific configuration is
+                         looked for in user-specific mode
+  -o, --output-file=FILE file to write the output to (default is
+                         $SYSWIDE_DEFAULT_OUTPUTFILE in system-wide-mode,
+                         and depends on your Kpathsea settings in
+                         user-specific mode)
+      --checks           perform sanity checks on the generated config file
+      --quiet            don't write anything to the standard output during
+                         normal operation
+      --help             display this help message and exit
+      --version          output version information and exit"
+
+
+DebPkgProvidedMaps_magic_comment="^[#%] -_- DebPkgProvidedMaps -_-"
+
+# This ensures that if $tempfile is in the *environment*, we won't erase
+# the file it could point to in case the script is killed by a signal before
+# it has had a chance to even create its temporary file.
+tempfile=""
+
+
+cleanup()
+{
+    rc=$?
+    [ -n "$tempfile" ] && rm -f "$tempfile"
+    exit $rc
+}
+
+do_one_hyphen_line()
+{
+    line="$1"
+    case "$line" in
+        ${READCC}*) echo "$line" | sed -e "s!^$READCC!$WRITECC !" >> "$tempfile" ; return ;;
+    esac
+    set -- $line
+    name=""
+    lhm=""
+    rhm=""
+    synonyms=""
+    f=""
+    while [ ! "$1" = "" ] ; do
+        case "$1" in
+            name=*) name="${1#name=}" ;;
+            lefthyphenmin=*) lhm="${1#lefthyphenmin=}" ;;
+            righthyphenmin=*) rhm="${1#righthyphenmin=}" ;;
+            patterns=*) patterns="${1#patterns=}" ;;
+            synonyms=*) synonyms="${1#synonyms=}" ;;
+            exceptions=*) exceptions="${1#exceptions=}" ;;
+            file=*) f="${1#file=}" ;;
+            *) echo "Unknown AddHypen directive $1 in line: ==$line==!" >&2 ; return ;;
+        esac
+        shift
+    done
+    if [ "$name$lhm$rhm$synonyms$f$exceptions$patterns" = "" ] ; then
+        return
+    fi
+    if [ ! "$lhm$rhm$synonyms$f$exceptions$patterns" = "" ] ; then
+        if [ "$name" = "" ] ; then
+            echo "the line $line does not contain a name= directive, ignored!" >&2
+            return
+        fi
+    fi
+    if [ ! "$name$lhm$rhm$synonyms$exceptions$patterns" = "" ] ; then
+        if [ "$f" = "" ] ; then
+            echo "the line $line does not contain a file= directive, ignored!" >&2
+            return
+        fi
+    fi
+    if [ "$HYPHENMODE" = "etex" ] ; then
+        printf '\\'"addlanguage{$name}{$f}{}{$lhm}{$rhm}\n" >> "$tempfile"
+    elif [ "$HYPHENMODE" = "latex" ] ; then
+        echo "$name $f" >> "$tempfile"
+    elif [ "$HYPHENMODE" = "luatex" ] ; then
+       printf "\t[\' $name \'] = {\n\t\tloader = \'$f\',\n\t\tlefthyphenmin = $lhm,\n\t\trighthyphenmin = $rhm,\n\t\tpatterns = \'$patterns\',\n\t\thyphenation = \'$exceptions\',\n\t\tsynonyms = { " >> "$tempfile"
+    fi
+    if [ ! "$synonyms" = "" ] ; then
+        {
+            first=1
+            OLDIFS="$IFS"
+            IFS=",$IFS"
+            for s in $synonyms ; do
+                if [ "$HYPHENMODE" = "etex" ] ; then
+                    printf '\\'"addlanguage{$s}{$f}{}{$lhm}{$rhm}\n" >> "$tempfile"
+                elif [ "$HYPHENMODE" = "latex" ] ; then
+                    echo "=$s" >> "$tempfile"
+                elif [ "$HYPHENMODE" = "luatex" ] ; then
+                    if [ $first = 0 ] ; then
+                        printf ", " >> "$tempfile"
+                    else 
+                        first=0
+                    fi
+                    printf "\'$s\'" >> "$tempfile"
+                fi
+            done
+            IFS="$OLDIFS"
+        }
+    fi
+    if [ "$HYPHENMODE" = "luatex" ] ; then
+        printf " }\n\t},\n"  >> "$tempfile"
+    fi
+}
+
+include_hyphen_file_core()
+{
+    file="$1"
+    cat "$1" | while read line ; do
+        do_one_hyphen_line "$line"
+    done
+}
+
+# include_file <file path>
+include_file()
+{
+    file="$1"
+
+    printf "\n${PCC} ${PCC}${PCC} From file: $file\n" >>"$tempfile"
+    if [ $HYPHENMODE = "nohyphen" ] ; then
+        cat "$file" >>"$tempfile"
+    else
+        include_hyphen_file_core "$file"
+    fi
+    echo "${WRITECC} End of file: $file" >>"$tempfile"
+    case "$file" in
+      */10texlive-latex-base.cnf)
+	seen_latex=1
+	;;
+    esac
+}
+
+# do_not_include_file <file path>
+do_not_include_file()
+{
+    file="$1"
+
+    cat >>"$tempfile" <<EOF
+
+$WRITECC
+$WRITECC $file not included because either it wasn't
+$WRITECC up-to-date (conffile update pending) or the package shipping it was
+$WRITECC apparently removed (no corresponding .list file in
+$WRITECC $MEMORY_DIR/).
+$WRITECC
+EOF
+}
+
+# do_not_include_snippet_that_depends_on_a_not_included_snippet <file path>
+do_not_include_snippet_that_depends_on_a_not_included_snippet()
+{
+    file="$1"
+
+    cat >>"$tempfile" <<EOF
+
+$WRITECC
+$WRITECC $file not included because it depends
+$WRITECC on another file that is not included here. For instance, jadetex and
+$WRITECC xmltex snippets are not included in fmtutil.cnf when the snippet for
+$WRITECC LaTeX isn't included itself. This is because the jadetex and xmltex
+$WRITECC formats need the LaTeX format when being built (see bug #427562).
+$WRITECC
+EOF
+}
+
+# swap_basename_and_dirname
+#
+# This function expects a file path on every line of stdin and will write
+# on stdout the same lines with the file basename and dirname swapped.
+# This is useful because we want to sort the files from several directories
+# based on their basenames only (the directory they are stored into mustn't
+# influence the order).
+swap_basename_and_dirname()
+{
+    # Use a slash as the separator between basename and dirname so that
+    # files or directories with e.g. spaces in their names are supported.
+    while read file; do
+        echo "$(basename "$file")$(dirname "$file")"
+    done
+}
+
+# check_special_jadetex_xmltex <file path>
+#
+# Special case for jadetex and xmltex: If no latex format information is
+# included so far ($seen_latex is still 0), then we cannot generate the jadetex
+# or xmltex formats, and may not include them in fmtutil.cnf. Even if both
+# packages depend on tl-latex-base, this is still needed, because if
+# tl-base-bin and tl-latex-base are upgraded at the same time, the latex
+# information is not included while tl-base-bin is configured and runs
+# "fmtutil --all" (see bug #427562).
+#
+# Return value:
+#
+#   - 0 if:
+#       * we are being called as update-fmtutil;
+#       * and <file path> points to 40jadetex.cnf or 40xmltex.cnf;
+#       * and $seen_latex=0.
+#
+#   - 1 in all other cases.
+check_special_jadetex_xmltex()
+{
+  [ "$progname" = update-fmtutil ] || return 1
+  
+  file="$1"
+
+  case "$file" in
+    */40jadetex.cnf|*/40xmltex.cnf)
+      if [ $seen_latex = 0 ]; then
+          return 0
+      fi
+      ;;
+  esac
+
+  return 1
+}
+
+# handle_file <file path>
+#
+# <file path> must point to an update-fontlang configuration file (such as
+# /etc/texmf/updmap.d/20lmodern.cfg). The function decides whether the file
+# should be included in $output_file and outputs the corresponding snippet if
+# yes, or a comment explaining why if no.
+handle_file()
+{
+    file="$1"
+
+    # Does the file have a dpkg-new sister?
+    if [ -f "${file}.dpkg-new" ]; then
+      do_not_include_file "$file"
+    else
+      # Does the file have the magic comment?
+      if grep -E "$DebPkgProvidedMaps_magic_comment" "$file" >/dev/null; then
+        # Is the package "$file" comes from still installed?
+        if [ -d "$MEMORY_DIR" ] \
+            && find "$MEMORY_DIR" -type f -name '*.list' -print0 \
+            | xargs -0r cat \
+            | grep -E "^$(basename "$file" ".$EXT")\$" >/dev/null;
+	then
+	  if check_special_jadetex_xmltex "$file"; then
+              do_not_include_snippet_that_depends_on_a_not_included_snippet \
+                "$file"
+          else
+            include_file "$file"
+	  fi
+        else
+            do_not_include_file "$file"
+        fi
+      else
+        include_file "$file"
+      fi
+    fi
+}
+
+# merge_files
+#
+# This function expects on the standard input a sorted list of update-updmap
+# configuration files (such as /etc/texmf/updmap.d/20lmodern.cfg). Each of
+# them should be listed on a line by itself with the basename being the
+# *first* component of the path, e.g.:
+#
+#   20lmodern.cfg/etc/texmf/updmap.d
+#
+# (where 20 should be at the beginning of the line, with no leading spaces, of
+# course). This is so because the sort operation presumably performed by the
+# caller of this function should sort on the basenames of the files,
+# regardless of the directories they come from.
+#
+# Since the list is expected to be sorted, if several files have the same
+# basename, they will be found on consecutive lines.
+#
+# The function calls handle_file() for every file in the list, but only once
+# for a single basename. If several files with the same basename are listed
+# from several directories, only the one in $conf_dir will be passed to
+# handle_file. This allows user-defined .cfg files to override system .cfg
+# files (those in /etc). The order of the files is preserved:
+# handle_file() will receive them as they came on stdin, except that it will
+# be called only once for each basename.
+#
+# handle_file receives the file path in the usual order (directory/basename).
+merge_files()
+{
+    # We will procede the list focusing on the last two elements in order to
+    # handle the case of several files in a row having the same basename.
+    lastfile=""
+    lastdir=""
+    # Overloaded files are files with the same basename that were found in
+    # several directories.
+    overloaded=0
+    # In case we are being called as update-fmtutil, seen_latex tells whether
+    # we have included the snippet for the LaTeX format so far. This is
+    # useful, because the snippets for formats that depend on LaTeX such
+    # jadetex and xmltex should only be included along with the snippet for
+    # the LaTeX format (see bug #427562).
+    seen_latex=0
+
+    while read line; do
+        filename="${line%%/*}"
+        dirname="/${line#*/}"
+        if [ -n "$lastfile" ]; then
+            if [ "$lastfile" != "$filename" ]; then
+                # For overloaded files, use the one in $conf_dir.
+                if [ $overloaded = 1 ]; then
+                    overloaded=0
+                    dir="$conf_dir"
+                else
+                    dir="$lastdir"
+                fi
+                handle_file "$dir/$lastfile"
+            else
+                overloaded=1
+            fi
+        fi
+        lastdir="$dirname"
+        lastfile="$filename"
+    done
+
+    # Test whether there was at least one line to read from stdin
+    if [ -n "$lastdir" ]; then
+        # The last file is still in the pipe; get it out.
+        if [ $overloaded = 1 ]; then
+            dir="$conf_dir"
+        else
+            dir="$lastdir"
+        fi
+        handle_file "$dir/$lastfile"
+    fi
+}
+
+perform_sanity_checks()
+{
+    if [ -L "$output_file" ]; then
+        # This might cause errors, so do not skip this echo when quiet.
+        echo "$progname: $output_file is a symbolic link; won't do anything" >&2
+        exit 0
+    fi
+
+    if ! [ -r "$CHECKFILE" ] ; then
+        echo "$progname: cannot read $CHECKFILE" >&2
+        echo "$progname: if it was removed by accident, it has to be reinstalled with" >&2
+        # the following command does not work due to a IMNSHO stupid 
+        # apt* behaviour, it seems that Apt first wants to configure the
+        # broken package, but that will not work, so it breaks.
+        # Instead it should *first* unpack and reinstall new conffiles,
+        # and then try to configure ... so what, let everyone feel the pain!
+        # echo "$progname:   apt-get install --reinstall -o DPkg::Options::=\"--force-confmiss\" tex-common" >&2
+        echo "$progname:   t=\$(mktemp -d); cd "\$t"; apt-get download tex-common ; dpkg -i --force-confmiss tex-common*.deb" >&2
+        # this is what I want to ship out to the terminal, though ...
+        # echo "$progname: (sorry, but due to Apt stupidity there is no simple way to do that!)" >&2
+        exit 1
+    fi
+
+    # Check for $DEFAULT_OUTPUTFILE_BASENAME in wrong places (currently,
+    # only enabled for update-updmap), if running in system-wide mode.
+    if [ $syswide_mode = 1 ] && [ "$progname" = "update-updmap" ]; then
+        badly_located_cfg_file="/etc/texmf/web2c/$DEFAULT_OUTPUTFILE_BASENAME"
+        badly_used_prg=updmap-sys
+        bad_options="--edit, --syncwithtrees, etc."
+
+        if [ -e "$badly_located_cfg_file" ]; then
+            printf "\
+Error: '$badly_located_cfg_file' should not exist when using the
+       Debian TeX Live packages. Presumably, you used ${badly_used_prg} 
+       in maintainance mode (options ${bad_options}).
+       This shouldn't be done with the Debian TeX Live packages.
+       Instead, you should edit the files in ${SYSWIDE_CONFDIR}/ and run
+       ${progname}, mktexlsr and ${badly_used_prg}.
+       Please remove '$badly_located_cfg_file' and try again.\n" >&2
+            exit 1
+        fi
+    fi
+
+    # It could be that there is a DEFAULT_OUTPUTFILE_BASENAME file 
+    # in TEXMFCONFIG, which would be found by kpathsea instead of the
+    # output_file. So we check for this and give a warning in case
+    # the created file would be shadowed.
+    if [ $syswide_mode = 0 ] && [ $output_file_specified = 0 ]; then
+        OLDIFS="$IFS"
+        IFS=:
+        for d in "$texmfconfig"; do
+            if [ ! "$d/$PATH_COMPONENT/$DEFAULT_OUTPUTFILE_BASENAME" \
+                 = "$output_file" ] \
+                && [ -f "$d/$PATH_COMPONENT/$DEFAULT_OUTPUTFILE_BASENAME" ];
+                then
+                printf "\
+You are about to generate the file 
+        $output_file
+but at the same time you have a file
+        $d/$PATH_COMPONENT/$DEFAULT_OUTPUTFILE_BASENAME
+which will shadow the former. We'll continue generating the first
+file, but to allow TeX and friends to find it, you'll have to remove the
+second one.\n"
+                # Don't break out as we want to warn the user for *every*
+                # shadowing file!
+            fi
+        done
+        IFS="$OLDIFS"
+    fi
+}
+
+# perform_contents_check
+#
+# This function *TRIES* to check wether the installed files are correct in
+# the sense that every file occurring in it is present. This can help to
+# find typing errors
+perform_contents_check ()
+{
+    #
+    # performing contents checking only works when kpsewhich is present
+    # and configured, this can be done in one step:
+    if kpsewhich --version  >/dev/null 2>&1 ; then
+        if [ "$progname" = "update-language" ] ; then
+            perform_contents_check_language "$1"
+        elif [ "$progname" = "update-updmap" ] ; then
+            perform_contents_check_map "$1"
+        elif [ "$progname" = "update-fmtutil" ] ; then
+            perform_contents_check_format "$1"
+        fi
+    fi
+}
+
+perform_contents_check_language ()
+{
+    fn="$1"
+    grep -v '^\W*\(%\|=\|$\)' "$fn" | while read lang hyph comm ; do
+        # now check the existence of the hyphenation file
+        if [ -z $(kpsewhich -format=tex $hyph) ] ; then
+           cat >&2 <<EOF
+The config file $fn references a file not in the kpathsea database:
+    $hyph
+This may be ok, but it could also be a typing error.
+EOF
+        fi
+    done
+}
+        
+perform_contents_check_map ()
+{
+    fn="$1"
+    grep -i '^\W*\(Mixed\)\?Map' "$fn" | while read foo map ; do
+        # now check the existence of the hyphenation file
+        if [ -z $(kpsewhich -format=map $map) ] ; then
+           cat >&2 <<EOF
+The config file $fn references a file not in the kpathsea database:
+    $map
+Calling updmap(-sys) will break!
+This may be ok, but it could also be a typing error.
+EOF
+        fi
+    done
+}
+
+perform_contents_check_format ()
+{
+    fn="$1"
+    grep -v '^\W*\(#\|$\)' "$fn" | while read format engine hyphenation args ; do
+        # this is stolen from fmtutil
+        set -- $args
+        pool=; tcx=
+        texargs="$@"
+        eval lastarg=\$$#
+        inifile=$(echo $lastarg | sed 's%^\*%%')
+        case "$engine" in
+            mpost)  kpsefmt=mpost;;
+            mf|mfw|mf-nowin) kpsefmt=mf;;
+            *)      kpsefmt=tex;;
+        esac
+        # now check the existence of the hyphenation file
+        if [ -z $(kpsewhich -progname=$format -format=$kpsefmt $inifile) ] ; then
+           cat >&2 <<EOF
+The config file $fn references a file not in the kpathsea database:
+    $inifile
+This may be ok, but it could also be a typing error.
+EOF
+        fi
+    done
+}
+
+
+# The list of signals to trap is taken from teTeX 3's updmap script, but they
+# have been converted to signal names because we can only rely on these on
+# POSIX systems.
+trap 'cleanup' HUP INT QUIT BUS PIPE TERM
+
+
+# -v (verbose) is here for backward compatibility only.
+TEMP=$(getopt -o +vc:o: --longoptions \
+    conf-dir:,output-file:,check,quiet,help,version \
+    -n "$progname" -- "$@")
+
+case $? in
+    0) : ;;
+    1) echo "$usage" >&2; exit 1 ;;
+    *) exit 1 ;;
+esac
+
+# Don't remove the quotes around $TEMP!
+eval set -- "$TEMP"
+
+# Determine whether we will run in system-wide mode or in user-specific mode
+if [ "$(id -u)" -eq 0 ]; then
+    syswide_mode=1
+else
+    syswide_mode=0
+fi
+
+
+# ****************************************************************************
+# *                                 Defaults                                 *
+# ****************************************************************************
+quiet=1
+dochecks=0
+output_file_specified=0
+
+if [ $syswide_mode = 1 ]; then
+    output_file="$SYSWIDE_DEFAULT_OUTPUTFILE"
+else
+    # If texlive-binaries is not installed, kpsewhich is not available, 
+    # and we cannot do anything
+    if ! which kpsewhich >/dev/null; then
+	echo "kpsewhich isn't available. Cannot create" \
+             "$DEFAULT_OUTPUTFILE_BASENAME in user-specific mode." >&2
+	exit 1
+    fi
+    # Is there an updmap.d/language.d directory somewhere in the expansion of
+    # $TEXMFCONFIG?
+    conf_dir=""
+    texmfconfig=$(kpsewhich --expand-path '$TEXMFCONFIG')
+    OLDIFS="$IFS"
+    IFS=:
+    for d in "$texmfconfig"; do
+        if [ -d "$d/$CNFDIR" ]; then
+            conf_dir="$d/$CNFDIR"
+            break
+        fi
+    done
+    IFS="$OLDIFS"
+
+    # Does $TEXMFVAR expand to a single directory?
+    texmfvar=$(kpsewhich --var-value 'TEXMFVAR')
+    if ! echo "$texmfvar" | grep -e '[,:]'; then 
+        output_file="$texmfvar/$PATH_COMPONENT/$DEFAULT_OUTPUTFILE_BASENAME"
+    else
+        # We don't know what to do in this case, therefore: do nothing unless
+        # the output file is specified with the correponding option.
+        output_file=""
+    fi
+fi
+
+
+# ****************************************************************************
+# *                             Options handling                             *
+# ****************************************************************************
+while true; do
+    case "$1" in
+        -c|--conf-dir) conf_dir="$2"; shift 2 ;;
+        -o|--output-file) 
+            output_file="$2"
+            output_file_specified=1
+            shift 2 ;;
+        --quiet) quiet=1; shift ;;
+        --check) dochecks=1; shift ;;
+        -v) printf "\
+${progname}'s -v option is deprecated. The default mode of operation will
+be verbose as soon as enough packages use the --quiet option. Please update
+your scripts accordingly.\n\n" >&2; quiet=0; shift ;;
+        --help) echo "$usage"; exit 0 ;;
+        --version) echo "$progname $version"; exit 0 ;;
+        --) shift; break ;;
+	*) echo "$progname: unexpected option '$1'; please report a bug." >&2
+            exit 1 ;;
+    esac
+done
+
+# Non-option arguments are not allowed.
+if [ $# -ne 0 ]; then
+    echo "$usage" >&2
+    exit 1
+fi
+
+# In user-specific mode, $conf_dir is required; let's check that.
+if [ $syswide_mode = 0 ]; then
+    if [ -z "$conf_dir" ]; then
+        printf "$progname: "
+        cat >&2 <<EOF
+unable to determine the configuration directory; you can
+specify it with --conf-dir
+EOF
+        exit 1
+    fi
+
+    # Make sure $conf_dir is an absolute path
+    if echo "$conf_dir" | grep -e '^[^/]' >/dev/null; then
+        conf_dir="${PWD}/${conf_dir}"
+    fi
+fi
+
+if [ -z "$output_file" ]; then
+    printf "$progname: "
+    cat >&2 <<EOF
+unable to determine where to write the output; you can specify
+that with --output-file
+EOF
+    exit 1
+fi
+
+perform_sanity_checks
+
+# Make sure the output directory exists (creating it if not) when running
+# in user-specific mode.
+if [ $syswide_mode = 0 ]; then
+    output_dir=$(dirname "$output_file")
+    if [ ! -d "$output_dir" ]; then
+        [ $quiet = 0 ] && printf "Creating directory '${output_dir}'... "
+        if ! mkdir -p "$output_dir"; then
+            echo "$progname: unable to create directory '$output_dir'" >&2
+            exit 1
+        fi
+        [ $quiet = 0 ] && echo "done."
+    fi
+fi
+
+# ****************************************************************************
+# *                               Actual work                                *
+# ****************************************************************************
+if [ $quiet = 0 ]; then
+    if [ -f "$output_file" ]; then
+	printf "Regenerating '${output_file}'... "
+    else
+	printf "Generating '${output_file}'... "
+    fi
+fi
+
+# Creating the temporary file in the output directory gives it automatically
+# the default permissions appropriate for that directory, according to the
+# user's umask. When it is complete, we'll be able to rename it atomically to
+# the desired output file, which will therefore have the right permissions.
+tempfile="${output_file}.new"
+
+confdirs="${SYSWIDE_CONFDIR}/"
+[ $syswide_mode = 0 ] && confdirs="${confdirs}\n#    ${conf_dir}/"
+
+if ! printf "" > "$tempfile" ; then
+    echo "$progname: cannot write to the temporary file '$tempfile'" >&2
+    exit 1
+fi
+
+#
+# we have to make sure that language.def starts out the right way!
+if [ "$HYPHENMODE" = "etex" ] ; then
+    printf "\
+${PCC}${PCC} e-TeX V2.0;2
+
+${PCC} Note: the first line of this file must match the corresponding line
+${PCC} in \"etex.src\" and \"etexdefs.lib\", otherwise fallback will be used.
+\n" >> "$tempfile"
+fi
+
+printf "\
+${PCC} ${PCC}${PCC} This file was automatically generated by ${progname}.
+${PCC}
+${PCC} Please do not edit it directly. If you want to add or change
+${PCC} anything here, please have a look at the files in:
+${PCC}
+${PCC}    $confdirs
+${PCC}
+${PCC} and invoke ${progname}.
+${PCC}
+${PCC} ${PCC}${PCC}\n" >> "$tempfile"
+
+#
+# include the necessary files
+if [ ! "$HYPHENMODE" = "nohyphen" ] ; then
+    # we are creating a hyphenation file, include the head file
+    if [ -r "$HEADFILE" ] ; then
+        cat "$HEADFILE" >> "$tempfile"
+    else
+        echo "${WRITECC} HEADFILE $deffile not found" >> "$tempfile"
+    fi
+fi
+
+# From now on, $tempfile must be deleted on exit; therefore, cleanup() should
+# be used.
+
+if [ $syswide_mode = 1 ]; then
+    find "$SYSWIDE_CONFDIR"             -maxdepth 1 -type f -name '*.'${EXT}
+else
+    find "$SYSWIDE_CONFDIR" "$conf_dir" -maxdepth 1 -type f -name '*.'${EXT}
+fi | swap_basename_and_dirname | LC_COLLATE=C sort | merge_files
+
+#
+# for language.def we have to select the right language at the end
+if [ "$HYPHENMODE" = "etex" ] ; then
+    printf "
+${PCC} ${PCC}${PCC} No changes may be made beyond this point.
+
+\\\\uselanguage {USenglish}             ${PCC} This MUST be the last line of the file.
+" >> "$tempfile"
+elif [ "$HYPHENMODE" = "luatex" ] ; then
+    # for luatex we need the closing brace!
+    echo "}" >> "$tempfile"
+fi
+
+# This is atomic.
+mv "$tempfile" "$output_file"
+
+# Check wether the generated file is decent, if all necessary files are
+# installed, etc.
+if [ "$dochecks" = 1 ] ; then
+    perform_contents_check "$output_file"
+fi
+
+if [ $quiet = 0 ]; then
+    printf "done.\n\n"
+    echo "$progname has updated '$output_file'. If you want to"
+
+    if [ "$progname" = "update-language" ]; then
+        echo "enable the new patterns, you should run fmtutil-sys or fmtutil"
+        echo "(with option --all, or with a particular format specified)."
+    elif [ "$progname" = "update-updmap" ]; then
+	echo "enable the map files with this new file, you should run" \
+             "updmap-sys or updmap."
+    elif [ "$progname" = "update-fmtutil" ]; then
+        echo "enable the new formats,  you should run fmtutil-sys or fmtutil"
+        echo "(with option --all or --missing)."
+    else
+        echo "Unexpected \$progname: '$progname'" >&2
+        exit 1
+    fi
+fi
+
+# vim:set expandtab tabstop=4 autoindent: #

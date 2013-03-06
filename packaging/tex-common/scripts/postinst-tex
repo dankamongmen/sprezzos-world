@@ -1,0 +1,158 @@
+##
+## postinst-tex
+##
+## postinst snippets for everything TeX related (mktlsr, hyphenation
+## patterns, formats, font maps)
+##
+## Authors:
+##       Florent Rougon <f.rougon@free.fr>
+##       Norbert Preining <preining@logic.at>
+##
+# Please note that comments in this file are stripped before installation
+# by calling a grep -v '^[ \t]*# '
+# Thus, first lines containing ## are preserved!
+# So please be careful if you add stuff here!
+#
+
+TEXMFTREES="/usr/share/texmf /var/lib/texmf"
+FULLTEXMFTREES="$TEXMFTREES /usr/share/texlive/texmf /usr/share/texlive/texmf-dist"
+
+# Tell if kpsewhich works. If this is the case:
+#
+#   1. kpsewhich is installed and;
+#
+#   2. libkpathsea is configured.
+dhit_libkpathsea_configured ()
+{
+    kpsewhich --version >/dev/null 2>&1
+}
+
+dhit_update_lsr_files ()
+{
+    tempfile=$(mktemp -p /tmp mktexlsr.XXXXXXXX)
+    printf "Running mktexlsr. This may take some time... "
+    if mktexlsr $* > $tempfile 2>&1 ; then
+        rm -f $tempfile
+        echo "done."
+    else
+        exec >&2
+        echo
+        echo "mktexlsr $* failed. Output has been stored in"
+        echo "$tempfile"
+        echo "Please include this file if you report a bug."
+        echo
+        exit 1
+    fi
+}
+
+
+dhit_build_hyphen_format_if_format_exists ()
+{
+    v=$(kpsewhich -var-value TEXMFSYSVAR)
+    c=$(kpsewhich -var-value TEXMFSYSCONFIG)
+    TEXMFVAR="$v"
+    TEXMFCONFIG="$c"
+    export TEXMFVAR TEXMFCONFIG
+    fmtcnffile=$(kpsewhich --format='web2c files' fmtutil.cnf)
+    # this is slow, and since we hope/assure that all ini files
+    # are installed if the format is active, we don't need the
+    # extra check fmtutil does when called with catcfg
+    # X=$(fmtutil-sys --catcfg | grep "^$1[[:space:]]" || true)
+    X=$(grep "^[[:space:]]*$1[[:space:]]" $fmtcnffile || true)
+    if [ -n "$X" ] ; then
+        dhit_build_format --byhyphen "$2"
+    fi
+}
+
+dhit_build_format ()
+{
+
+    tempfile=$(mktemp -p /tmp fmtutil.XXXXXXXX)
+    printf "Building format(s) $*.\n\tThis may take some time... "
+    if fmtutil-sys "$@" > $tempfile 2>&1 ; then
+        rm -f $tempfile
+        echo "done."
+    else
+        exec >&2
+        echo
+        echo "fmtutil-sys failed. Output has been stored in"
+        echo "$tempfile"
+        echo "Please include this file if you report a bug."
+        echo
+        exit 1
+    fi
+}
+
+
+case "$1" in
+    configure|abort-upgrade|abort-remove|abort-deconfigure)
+        # These programs are all in tex-common and can be run immediately.
+        # In fact it *does* hurt not calling them since we might
+        # have formats installed and we call with --all, so not the
+        # trigger action is done, but the postinst runs the fmtutil-sys call
+        update-updmap --quiet
+        update-language
+        update-fmtutil
+        # All of the following needs an installed and configured
+        # basic TeX system, so check this.
+        if dhit_libkpathsea_configured; then
+            #
+            # if we are doing something with formats we have to update
+            # the lsr database first
+            do_lsr=0
+            for i in #WHATTODO# ; do
+                if [ "$i" = lsrfull ] ; then
+                    TEXMFTREES=$FULLTEXMFTREES
+                fi
+                if [ "$i" = allformats ] ; then
+                    do_lsr=1
+                fi
+                if [ "$i" = format ] ; then
+                    do_lsr=1
+                fi
+            done
+            if [ $do_lsr = 1 ] ; then
+                # mktexlsr may not be present
+                if which mktexlsr >/dev/null; then
+                    dhit_update_lsr_files $TEXMFTREES
+                    # can we "close" or "delete" a trigger, i.e. say
+                    # that it has been dealt with?
+                fi
+            fi
+            for i in #WHATTODO# ; do
+                if [ "$i" = lsr ] ; then
+                    if [ $do_lsr = 0 ] ; then
+                        update-texmf-config lsr
+                    fi
+                fi
+                if [ "$i" = lsrfull ] ; then
+                    if [ $do_lsr = 0 ] ; then
+                        update-texmf-config lsrfull
+                    fi
+                fi
+                if [ "$i" = map ] ; then
+                    update-texmf-config map
+                fi
+                if [ "$i" = allformats ] ; then
+                    dhit_build_format --all
+                fi
+                if [ "$i" = format ] ; then
+                    for fmt in #FORMATSFILES# ; do
+                        if [ -r "/etc/texmf/fmt.d/$fmt.cnf" ] ; then
+                            dhit_build_format --all --cnffile "/etc/texmf/fmt.d/$fmt.cnf"
+                        else
+                            echo "config file /etc/texmf/fmt.d/$fmt.cnf not available"
+                        fi
+                    done
+                fi
+                if [ "$i" = hyphen ] ; then
+                    update-texmf-config hyphen
+                fi
+            done
+        fi
+    ;;
+
+esac
+
+# Let vim know that we don't want tabs
+# vim:set expandtab tabstop=4: #

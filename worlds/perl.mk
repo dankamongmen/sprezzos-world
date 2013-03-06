@@ -519,3 +519,11 @@ $(LIBSGMLSPERL): $(SPREZZ)/libsgmls-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf SGMLSpm-$(libsgmls-perl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libclass-c3-xs-perl
+libclass-c3-xs-perl:$(LIBCLASSC3XSPERL)_$(ARCH).deb
+$(LIBCLASSC3XSPERL): $(SPREZZ)/libclass-c3-xs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libclass-c3-xs-perl-$(libclass-c3-xs-perl_UPVER).tar.gz $(TARARGS) $@
+
