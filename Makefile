@@ -9589,3 +9589,19 @@ $(SVN2CL): $(SPREZZ)/svn2cl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf svn2cl-$(svn2cl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: snappy
+snappy:$(SNAPPY)_$(ARCH).deb
+$(SNAPPY): $(SPREZZ)/snappy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf snappy-$(snappy_UPVER).tar.gz $(TARARGS) $@
+
+.PHONY: freetds
+freetds:$(FREETDS)_$(ARCH).deb
+$(FREETDS): $(SPREZZ)/freetds/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf freetds-$(freetds_UPVER).tar.gz $(TARARGS) $@
+
