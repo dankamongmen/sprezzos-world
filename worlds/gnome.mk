@@ -709,3 +709,11 @@ $(MODEMMANAGER): $(SPREZZ)/modemmanager/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf ModemManager-$(modemmanager_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gtkgl2
+gtkgl2:$(GTKGL2)_$(ARCH).deb
+$(GTKGL2): $(SPREZZ)/gtkgl2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtkgl2-$(gtkgl2_UPVER).tar.gz $(TARARGS) $@
+

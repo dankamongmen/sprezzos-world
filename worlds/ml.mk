@@ -54,3 +54,11 @@ $(LABLGL): $(SPREZZ)/lablgl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lablgl-$(lablgl_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: ocaml-bitstring
+ocaml-bitstring:$(OCAMLBITSTRING)_$(ARCH).deb
+$(OCAMLBITSTRING): $(SPREZZ)/ocaml-bitstring/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocaml-bitstring-$(ocaml-bitstring_UPVER).tar.gz $(TARARGS) $@
+
