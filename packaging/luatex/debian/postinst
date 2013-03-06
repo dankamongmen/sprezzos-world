@@ -1,0 +1,122 @@
+#!/bin/sh
+#
+# postinst for luatex
+
+set -e
+
+# Authors:
+#       Florent Rougon <f.rougon@free.fr>
+#       Norbert Preining <preining@logic.at>
+#
+
+case "$1" in
+    configure|abort-upgrade|abort-remove|abort-deconfigure)
+        if kpsewhich --version >/dev/null 2>&1; then
+            stat=$(dpkg-query -W -f='${Status}' texlive-base)
+            case "$stat" in
+                "install ok installed")
+                     do_it=1
+                     ;;
+                *)
+                     do_it=0
+                     ;;
+            esac
+            if [ "$do_it" = 0 ] ; then
+                echo "texlive-base is not ready, cannot create formats" >&2
+            else
+                tempfile=$(mktemp -p /tmp fmtutil.XXXXXXXX)
+                echo "Building format(s) --byengine luatex."
+                printf "\tThis may take some time... "
+                if fmtutil-sys --byengine luatex > $tempfile 2>&1 ; then
+                    rm -f $tempfile
+                    echo "done."
+                else
+                    # fmtutil might have failed with
+                    #   No format depends on ...
+                    # we have to catch this error
+                    firstline=`head -1 $tempfile`
+                    case "$firstline" in
+                    "fmtutil: no format depends on engine"*)
+                        printf "\n\tNo format is based on luatex ... done.\n"
+                        rm -f $tempfile
+                        ;;
+                    *)
+                        exec >&2
+                        echo
+                        echo "fmtutil-sys failed. Output has been stored in"
+                        echo "$tempfile"
+                        echo "Please include this file if you report a bug."
+                        echo
+                        exit 1
+                    esac
+                fi
+            fi
+        fi
+    ;;
+
+    *)
+        echo "postinst called with unknown argument '$1'" >&2
+        exit 1
+    ;;
+esac
+
+
+case "$1" in
+    configure)
+        # removing diversions is a pain, due to the fact that dpkg in 
+        # lenny ships a dpkg-divert that automatically adds --rename
+        # to the --remove which breaks upgrades from lenny, we move
+        # the whole dpkg-divert remove code here.
+        # we have to ensure we do not die here (set -e above) because
+        # grep returns false if no match was found
+        set +e
+        DIVERSIONS=`env LC_ALL=C /usr/sbin/dpkg-divert --list | grep -E 'by luatex$'`
+        if [ -n "$DIVERSIONS" ] ; then
+            # first try with --rename 
+            echo "$DIVERSIONS" | while read diversion of FILE to DIVERTED by PACKAGE; do
+                dpkg-divert --test --package "$PACKAGE" --remove --rename "$FILE" >/dev/null 2>&1
+                if ! [ $? = 0 ] ; then
+                    # try to remove diversion without --rename
+                    dpkg-divert --package "$PACKAGE" --remove "$FILE"
+                else
+                    dpkg-divert --package "$PACKAGE" --remove --rename "$FILE"
+                fi
+            done
+        fi
+        set -e
+        texdoc_check_passed=0
+        if [ -L /usr/bin/texdoc ] ; then
+            texdoctarget=`readlink /usr/bin/texdoc`
+            if [ ! -r "$texdoctarget" ] && 
+               [ "$texdoctarget" = "texdoclua" ] ; then
+                texdoc_check_passed=1
+            fi
+        else
+            if ! [ -e /usr/bin/texdoc ] ; then
+                texdoc_check_passed=1
+            fi
+        fi
+        if [ $texdoc_check_passed = 1 ] ; then
+            if [ -L /usr/bin/texdoc.notluatex ] ; then
+                texdocnotluatextarget=`readlink /usr/bin/texdoc.notluatex`
+                if  [ -r "/usr/bin/$texdocnotluatextarget" ] &&
+                    [ "$texdocnotluatextarget" = "../share/texmf-texlive/scripts/texdoc/texdoc.tlu" ] ; then
+                    # new luatex installed,
+                    # new texlive-base >= 2009 installed
+                    # diversion have been removed above
+                    echo "Cleaning up luatex diversion mess:"
+                    echo " - remove old dead /usr/bin/texdoc link"
+                    rm -f /usr/bin/texdoc
+                    echo " - reinstantiate from forgotten diversion texdoc.notluatex"
+                    mv /usr/bin/texdoc.notluatex /usr/bin/texdoc
+                fi
+            fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+
+# Let vim know that we don't want tabs
+# vim:set expandtab tabstop=4: #
