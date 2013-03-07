@@ -723,5 +723,5 @@ $(GUILE1.8): $(SPREZZ)/guile-1.8/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf guile-1.8-$(guile-1.8_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf guile-$(guile-1.8_UPVER).tar.gz $(TARARGS) $@
 

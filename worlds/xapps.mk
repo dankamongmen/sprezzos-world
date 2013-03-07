@@ -247,3 +247,11 @@ $(FLTK1.1): $(SPREZZ)/fltk1.1/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fltk1.1_$(fltk1.1_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: openms
+openms:$(OPENMS)_$(ARCH).deb
+$(OPENMS): $(SPREZZ)/openms/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openms-$(openms_UPVER).tar.gz $(TARARGS) $@
+
