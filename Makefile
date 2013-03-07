@@ -9704,3 +9704,19 @@ $(LIBSVM): $(SPREZZ)/libsvm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf $(libsvm_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: seqan
+seqan:$(SEQAN)_$(ARCH).deb
+$(SEQAN): $(SPREZZ)/seqan/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf seqan_$(seqan_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: samtools
+samtools:$(SAMTOOLS)_$(ARCH).deb
+$(SAMTOOLS): $(SPREZZ)/samtools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf samtools_$(samtools_UPVER).orig.tar.gz $(TARARGS) $@
+
