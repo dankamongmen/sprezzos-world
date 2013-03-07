@@ -9696,3 +9696,11 @@ $(XMLTOMAN): $(SPREZZ)/xmltoman/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xmltoman-$(xmltoman_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libsvm
+libsvm:$(LIBSVM)_$(ARCH).deb
+$(LIBSVM): $(SPREZZ)/libsvm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf $(libsvm_UPVER).orig.tar.gz $(TARARGS) $@
+

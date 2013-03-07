@@ -253,5 +253,5 @@ $(OPENMS): $(SPREZZ)/openms/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf openms-$(openms_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf openms_$(openms_UPVER).orig.tar.gz $(TARARGS) $@
 
