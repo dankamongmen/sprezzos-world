@@ -9718,5 +9718,5 @@ $(SAMTOOLS): $(SPREZZ)/samtools/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf samtools_$(samtools_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf samtools_$(samtools_UPVER).orig.tar.bz2 $(TARARGS) $@
 
