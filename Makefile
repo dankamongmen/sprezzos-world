@@ -9720,3 +9720,11 @@ $(SAMTOOLS): $(SPREZZ)/samtools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf samtools_$(samtools_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: docbook-utils
+docbook-utils:$(DOCBOOKUTILS)_$(ARCH).deb
+$(DOCBOOKUTILS): $(SPREZZ)/docbook-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf docbook-utils_$(docbook-utils_UPVER).orig.tar.gz $(TARARGS) $@
+
