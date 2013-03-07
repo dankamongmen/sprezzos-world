@@ -255,3 +255,11 @@ $(OPENMS): $(SPREZZ)/openms/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openms_$(openms_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: glpk
+glpk:$(GLPK)_$(ARCH).deb
+$(GLPK): $(SPREZZ)/glpk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf glpk_$(glpk_UPVER).orig.tar.gz $(TARARGS) $@
+
