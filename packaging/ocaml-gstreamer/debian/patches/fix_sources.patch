@@ -1,0 +1,171 @@
+Index: ocaml-gstreamer/src/gstreamer_idl.idl
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ ocaml-gstreamer/src/gstreamer_idl.idl	2011-10-16 19:38:42.325213756 +0200
+@@ -0,0 +1,166 @@
++// include gst headers
++quote(C,"#include \"gstreamer_inc.h\"");
++
++// glib types
++
++typedef unsigned int guint;
++typedef int gint;
++typedef char gchar;
++typedef boolean gboolean;
++
++// General functions
++
++quote(C,"void ocaml_gst_init (int argc, char **argv) { gst_init(&argc, &argv); }")
++void ocaml_gst_init(int argc, [string*, null_terminated, unique]char **argv);
++
++void gst_version ([out]guint *major, [out]guint *minor, [out]guint *micro, [out]guint *nano);
++[string] gchar *gst_version_string ();
++
++// General types
++// Note : use pGstElement instead of GstElement*, etc.
++
++quote(C,"void check_null_pointer(void *p) { if (p == NULL) caml_raise_constant(*caml_named_value(\"gst_exn_null_pointer\"));  }");
++
++quote(C,"void gst_finalize_element(pGstElement *o) { gst_object_unref(*o); }")
++quote(C,"void gst_finalize_bin(pGstBin *o) { gst_object_unref(*o); }")
++quote(C,"void gst_finalize_caps(pGstCaps *o) { gst_object_unref(*o); }")
++
++typedef [abstract,ptr,finalize(gst_finalize_element),errorcheck(check_null_pointer)] void *pGstElement;
++typedef [abstract,ptr,finalize(gst_finalize_bin),errorcheck(check_null_pointer)] void *pGstBin;
++typedef [abstract,ptr,finalize(gst_finalize_caps),errorcheck(check_null_pointer)] void *pGstCaps;
++
++// Element
++
++quote(C,"void set_element_property_string (pGstElement e, char *n, char *v) { g_object_set (e, n, v, NULL); }")
++void set_element_property_string (pGstElement e, [string]char *n, [string]char *v);
++
++quote(C,"void set_element_property_bool (pGstElement e, char *n, gboolean v) { g_object_set (e, n, v, NULL); }")
++void set_element_property_bool (pGstElement e, [string]char *n, gboolean v);
++
++quote(C,"void set_element_property_int (pGstElement e, char *n, gint v) { g_object_set (e, n, v, NULL); }")
++void set_element_property_int (pGstElement e, [string]char *n, gint v);
++
++quote(C,"void set_element_caps (pGstElement e, pGstCaps c) { g_object_set (e, \"caps\", c, NULL); }")
++void set_element_caps (pGstElement e, pGstCaps c);
++
++gboolean gst_element_link (pGstElement src, pGstElement dest);
++
++typedef enum {
++  GST_STATE_VOID_PENDING        = 0,
++  GST_STATE_NULL                = 1,
++  GST_STATE_READY               = 2,
++  GST_STATE_PAUSED              = 3,
++  GST_STATE_PLAYING             = 4
++} GstState;
++
++typedef enum {
++  GST_STATE_CHANGE_FAILURE             = 0,
++  GST_STATE_CHANGE_SUCCESS             = 1,
++  GST_STATE_CHANGE_ASYNC               = 2,
++  GST_STATE_CHANGE_NO_PREROLL          = 3
++} GstStateChangeReturn;
++
++GstStateChangeReturn gst_element_set_state (pGstElement element, GstState state);
++
++// Element factory
++
++pGstElement gst_element_factory_make ([string]const gchar *factoryname, [string]const gchar *name);
++
++// Pipeline
++
++pGstElement gst_pipeline_new ([string]const gchar *name);
++
++// Bin
++
++quote(C,"pGstBin gst_bin_of_element(pGstElement e) { gst_object_ref(e); return (pGstBin)e; };");
++pGstBin gst_bin_of_element(pGstElement e);
++
++gboolean gst_bin_add (pGstBin bin, pGstElement element);
++
++pGstElement gst_bin_get_by_name (pGstBin bin, [string]const gchar *name);
++
++// Caps
++
++[string] gchar * gst_caps_to_string (pGstCaps caps);
++pGstCaps gst_caps_from_string ([string]const gchar *string);
++
++// Parse
++quote(C,"\
++GstElement* parse_launch(const gchar *pipeline_description) { \
++GError *err = NULL; \
++GstElement *e; \
++e = gst_parse_launch(pipeline_description, &err); \
++if (err != NULL) { \
++value s = caml_copy_string(err->message); \
++if (e) { gst_object_unref(e); } \
++g_error_free(err); \
++caml_raise_with_arg(*caml_named_value(\"gst_exn_gerror\"), s);  \
++} \
++return e; \
++};");
++pGstElement parse_launch ([string]const gchar *pipeline_description);
++
++// App_sink
++quote(C," \
++value caml_app_sink_pull_buffer(value as){ \
++GstBuffer *gstbuf; \
++GstElement *e; \
++struct camlidl_ctx_struct _ctxs = { CAMLIDL_TRANSIENT, NULL }; \
++camlidl_ctx _ctx = &_ctxs; \
++camlidl_ml2c_gstreamer_idl_pGstElement(as, &e, _ctx); \
++caml_enter_blocking_section(); \
++gstbuf = gst_app_sink_pull_buffer(GST_APP_SINK(e)); \
++if (!gstbuf) { \
++caml_leave_blocking_section(); \
++caml_raise_constant(*caml_named_value(\"gst_exn_failure\")); \
++} \
++intnat len = gstbuf->size; \
++char *data = malloc(len); \
++memcpy(data, gstbuf->data, len); \
++gst_buffer_unref (gstbuf); \
++caml_leave_blocking_section(); \
++value ba = caml_ba_alloc(CAML_BA_MANAGED | CAML_BA_C_LAYOUT | CAML_BA_UINT8, 1, data, &len); \
++return ba; \
++}");
++
++quote(C," \
++value caml_app_sink_pull_buffer_string(value as){ \
++GstBuffer *gstbuf; \
++GstElement *e; \
++struct camlidl_ctx_struct _ctxs = { CAMLIDL_TRANSIENT, NULL }; \
++camlidl_ctx _ctx = &_ctxs; \
++camlidl_ml2c_gstreamer_idl_pGstElement(as, &e, _ctx); \
++caml_enter_blocking_section(); \
++gstbuf = gst_app_sink_pull_buffer(GST_APP_SINK(e)); \
++if (!gstbuf) { \
++caml_leave_blocking_section(); \
++caml_raise_constant(*caml_named_value(\"gst_exn_failure\")); \
++} \
++intnat len = gstbuf->size; \
++caml_leave_blocking_section(); \
++value s = caml_alloc_string(len); \
++memcpy(String_val(s), gstbuf->data, len); \
++gst_buffer_unref (gstbuf); \
++return s; \
++}");
++
++quote(C," \
++value caml_app_src_push_buffer_string(value as, value buf){ \
++int buflen = caml_string_length(buf); \
++GstBuffer *gstbuf = gst_buffer_new_and_alloc(buflen); \
++memcpy(GST_BUFFER_DATA(gstbuf), String_val(buf), buflen); \
++GstFlowReturn ret; \
++GstElement *e; \
++struct camlidl_ctx_struct _ctxs = { CAMLIDL_TRANSIENT, NULL }; \
++camlidl_ctx _ctx = &_ctxs; \
++camlidl_ml2c_gstreamer_idl_pGstElement(as, &e, _ctx); \
++caml_enter_blocking_section(); \
++ret = gst_app_src_push_buffer(GST_APP_SRC(e), gstbuf); \
++if (ret != GST_FLOW_OK) { \
++caml_leave_blocking_section(); \
++caml_raise_constant(*caml_named_value(\"gst_exn_failure\")); \
++} \
++caml_leave_blocking_section(); \
++return Val_unit; \
++}");
++
