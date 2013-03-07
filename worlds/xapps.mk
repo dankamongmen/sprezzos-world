@@ -263,3 +263,11 @@ $(GLPK): $(SPREZZ)/glpk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf glpk_$(glpk_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: tuxpaint
+tuxpaint:$(TUXPAINT)_$(ARCH).deb
+$(TUXPAINT): $(SPREZZ)/tuxpaint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tuxpaint_$(tuxpaint_UPVER).orig.tar.gz $(TARARGS) $@
+
