@@ -725,3 +725,11 @@ $(GUILE1.8): $(SPREZZ)/guile-1.8/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf guile-$(guile-1.8_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gnome-tweak-tool
+gnome-tweak-tool:$(GNOMETWEAKTOOL)_$(ARCH).deb
+$(GNOMETWEAKTOOL): $(SPREZZ)/gnome-tweak-tool/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-tweak-tool_$(gnome-tweak-tool_UPVER).orig.tar.xz $(TARARGS) $@
+
