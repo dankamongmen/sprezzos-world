@@ -1,0 +1,170 @@
+#!/usr/bin/make -f
+
+# New stable upstream release TODO:
+#   s/A.B/C.D/go in debian/control.
+#   Adjust debian/changelog.
+#   Adjust "ver" variables below.
+#   Adjust debian/guile-libs.lintian.
+
+SHELL := /bin/bash
+
+# Make sure the build process doesn't touch the real HOME.
+export HOME := $(CURDIR)/no-trespassing
+
+# Uncomment this to turn on verbose mode. 
+#export DH_VERBOSE := 1
+
+deb_src_maj_ver := 1
+deb_src_min_ver := 8
+deb_src_mic_ver := 8
+deb_src_rev := 1
+
+upstream_ver := $(deb_src_maj_ver).$(deb_src_min_ver).$(deb_src_mic_ver)
+deb_src_ver := $(upstream_ver)+$(deb_src_rev)
+deb_src_eff_ver := $(deb_src_maj_ver).$(deb_src_min_ver)
+deb_pkg_basename := guile-$(deb_src_eff_ver)
+deb_guile_bin_path := /usr/bin/guile-$(deb_src_eff_ver)
+
+define deb_sub
+  perl -p \
+    -e "s|\@UPSTREAM_VER\@|$(upstream_ver)|go;" \
+    -e "s|\@DEB_SRC_VER\@|$(deb_src_ver)|go;" \
+    -e "s|\@DEB_SRC_MAJ_VER\@|$(deb_src_maj_ver)|go;" \
+    -e "s|\@DEB_SRC_MIN_VER\@|$(deb_src_min_ver)|go;" \
+    -e "s|\@DEB_SRC_MIC_VER\@|$(deb_src_mic_ver)|go;" \
+    -e "s|\@DEB_SRC_EFF_VER\@|$(deb_src_eff_ver)|go;" \
+    -e "s|\@DEB_PKG_BASENAME\@|$(deb_pkg_basename)|go;" \
+      < $(1) > $(2)
+endef
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifeq (alpha,$(shell dpkg-architecture -qDEB_HOST_ARCH))
+  # The -O2 option breaks make check on alpha right now.
+  deb_cflags := -Os -g
+else ifeq (sh4,$(shell dpkg-architecture -qDEB_HOST_ARCH))
+  # Renesas SH(sh4) needs -mieee.  Without it, test-conversion fails.
+  # (Bug: 531378)
+  deb_cflags := -O2 -g -mieee
+else
+  deb_cflags := -O2 -g
+endif
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+configure_args = \
+  --host=$(DEB_HOST_GNU_TYPE) \
+  --build=$(DEB_BUILD_GNU_TYPE) \
+  --with-threads=no \
+  --disable-error-on-warning \
+  --prefix=/usr
+
+define checkdir
+  dh_testdir debian/guile.postinst
+endef
+
+%:
+	dh $@ --parallel --with autoreconf
+
+.PHONY: buildpackage
+buildpackage:
+	$(checkdir)
+	dpkg-buildpackage -D -us -uc -rfakeroot -i'\.git|\.pc'
+
+.PHONY: check-vars
+check-vars:
+	@echo UPSTREAM_VER: $(upstream_ver)
+	@echo DEB_SRC_VER: $(deb_src_ver)
+	@echo DEB_SRC_MAJ_VER: $(deb_src_maj_ver)
+	@echo DEB_SRC_MIN_VER: $(deb_src_min_ver)
+	@echo DEB_SRC_MIC_VER: $(deb_src_mic_ver)
+	@echo DEB_SRC_EFF_VER: $(deb_src_eff_ver)
+	@echo DEB_PKG_BASENAME: $(deb_pkg_basename)
+	@echo
+	@echo deb_src_ver: $(deb_src_ver)
+	@echo deb_src_maj_ver: $(deb_src_maj_ver)
+	@echo deb_src_min_ver: $(deb_src_min_ver)
+	@echo deb_src_mic_ver: $(deb_src_mic_ver)
+	@echo deb_pkg_basenmae: $(deb_pkg_basename)
+
+autogen_install_files := $(addprefix debian/, \
+  guile-$(deb_src_eff_ver).install \
+  guile-$(deb_src_eff_ver).menu \
+  guile-$(deb_src_eff_ver).postinst \
+  guile-$(deb_src_eff_ver).prerm \
+  guile-$(deb_src_eff_ver).undocumented \
+  guile-$(deb_src_eff_ver)-dev.install \
+  guile-$(deb_src_eff_ver)-dev.lintian-overrides \
+  guile-$(deb_src_eff_ver)-doc.info \
+  guile-$(deb_src_eff_ver)-doc.install \
+  guile-$(deb_src_eff_ver)-libs.README.Debian \
+  guile-$(deb_src_eff_ver)-libs.install \
+  guile-$(deb_src_eff_ver)-libs.lintian-overrides \
+  guile-$(deb_src_eff_ver)-libs.postinst \
+  guile-$(deb_src_eff_ver)-libs.prerm \
+  guile-$(deb_src_eff_ver)-libs.triggers)
+
+$(autogen_install_files): debian/rules
+
+debian/guile-$(deb_src_eff_ver).%: debian/guile.%
+	$(call deb_sub,$<,$@)
+debian/guile-$(deb_src_eff_ver)-dev.%: debian/guile-dev.%
+	$(call deb_sub,$<,$@)
+debian/guile-$(deb_src_eff_ver)-doc.%: debian/guile-doc.%
+	$(call deb_sub,$<,$@)
+debian/guile-$(deb_src_eff_ver)-libs.%: debian/guile-libs.%
+	$(call deb_sub,$<,$@)
+
+override_dh_testdir:
+	$(checkdir)
+
+override_dh_autoreconf:
+	cd doc/tutorial && \
+	  ln -sf guile-tut.texi guile-tut-$(deb_src_eff_ver).texi
+	dh_autoreconf ./autogen.sh
+
+override_dh_auto_configure:
+	CFLAGS="$(deb_cflags)" ./configure ${configure_args}
+
+override_dh_clean:
+	dh_clean $(autogen_install_files) \
+	  doc/tutorial/guile-tut-$(deb_src_eff_ver).texi
+
+override_dh_auto_install: $(autogen_install_files)
+	dh_auto_install
+
+override_dh_install: $(autogen_install_files)
+	rm -f debian/tmp/usr/lib/libguile*.la
+	if test -e debian/tmp/usr/share/man/man1/guile.1; then \
+	  mv debian/tmp/usr/share/man/man1/guile.1 \
+	    debian/tmp/usr/share/man/man1/guile-$(deb_src_eff_ver).1; \
+	fi
+        # Ignore gds files for the moment.
+	dh_install --fail-missing \
+	  -Xusr/share/info/dir \
+	  -Xusr/share/info/r5rs.info \
+	  -Xusr/share/emacs/site-lisp/gds-server.el \
+	  -Xusr/share/emacs/site-lisp/gds.el \
+	  -Xusr/share/emacs/site-lisp/gds-scheme.el
+
+	perl -pi \
+	  -e "s|^#!\s*/usr/bin/guile([^-])|#!$(deb_guile_bin_path)\$$1|o" \
+	  -e ' if $$. == 1;' \
+	  debian/$(deb_pkg_basename)-dev/usr/bin/guile-config \
+	  debian/$(deb_pkg_basename)-dev/usr/bin/guile-snarf \
+	  debian/$(deb_pkg_basename)-dev/usr/bin/guile-tools
+
+	mkdir -p debian/$(deb_pkg_basename)-libs/usr/lib/$(deb_pkg_basename)/bin
+	cp -a debian/$(deb_pkg_basename)/usr/bin/guile \
+	  debian/$(deb_pkg_basename)-libs/usr/lib/$(deb_pkg_basename)/bin
+
+	cd debian/$(deb_pkg_basename)/usr/bin/ \
+	  && mv guile guile-$(deb_src_eff_ver)

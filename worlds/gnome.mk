@@ -717,3 +717,11 @@ $(GTKGL2): $(SPREZZ)/gtkgl2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gtkgl2-$(gtkgl2_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: guile-1.8
+guile-1.8:$(GUILE1.8)_$(ARCH).deb
+$(GUILE1.8): $(SPREZZ)/guile-1.8/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf guile-1.8-$(guile-1.8_UPVER).tar.gz $(TARARGS) $@
+
