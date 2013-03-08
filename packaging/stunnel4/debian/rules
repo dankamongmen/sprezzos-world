@@ -1,0 +1,113 @@
+#!/usr/bin/make -f
+#                                                       -*- makefile -*-
+# debian/rules file for the Debian/GNU Linux stunnel package
+# Copyright 2003 by Julien LEMOINE <speedblue@debian.org>
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+    SYSTEM = --build $(DEB_HOST_GNU_TYPE)
+else
+    SYSTEM = --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND=-Wall
+
+build: build-arch build-indep
+
+build-arch: build-stamp
+
+build-indep: build-stamp
+
+build-stamp:
+	dh_testdir
+
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	cp -f /usr/share/misc/config.sub config.sub
+endif
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	cp -f /usr/share/misc/config.guess config.guess
+endif
+
+	./configure --prefix=/usr $(SYSTEM)           \
+	  $(shell dpkg-buildflags --export=configure) \
+	  --localstatedir=/var --sysconfdir=/etc      \
+	  --enable-ipv6 --with-threads=pthread
+	$(MAKE) -C src
+	$(MAKE) -C doc
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	dh_clean build-stamp debian/stunnel4.init doc/stunnel4.8 doc/stunnel4.fr.8 doc/stunnel4.pl.8
+
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f config.guess config.sub
+
+install: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	$(MAKE) -C src install prefix=$(CURDIR)/debian/stunnel4/usr
+	$(MAKE) -C doc install prefix=$(CURDIR)/debian/stunnel4/usr
+
+	# .la file is useless
+	rm $(CURDIR)/debian/stunnel4/usr/lib/stunnel/libstunnel.la
+
+	ln doc/stunnel.8 doc/stunnel4.8
+	ln doc/stunnel.fr.8 doc/stunnel4.fr.8
+	ln doc/stunnel.pl.8 doc/stunnel4.pl.8
+
+	# Manpages will be installed by dh_installman
+	rm -rf $(CURDIR)/debian/stunnel4/usr/share/man
+
+	# Rename binary
+	mv $(CURDIR)/debian/stunnel4/usr/bin/stunnel 			\
+	  $(CURDIR)/debian/stunnel4/usr/bin/stunnel4
+
+	# Move docs into propper dir
+	mv $(CURDIR)/debian/stunnel4/usr/share/doc/stunnel		\
+	  $(CURDIR)/debian/stunnel4/usr/share/doc/stunnel4
+
+	# Copy sample init script into place for dh_installinit
+	cp $(CURDIR)/tools/stunnel.init $(CURDIR)/debian/stunnel4.init
+
+	# Basic docs for the user on how to create an initial configuration
+	install -p -m 0644 $(CURDIR)/debian/stunnel4.conf.README \
+	  $(CURDIR)/debian/stunnel4/etc/stunnel/README
+
+	[ ! -s debian/lintian.overrides ] || \
+	  install -p -m 0644 -D $(CURDIR)/debian/lintian.overrides	\
+	    $(CURDIR)/debian/stunnel4/usr/share/lintian/overrides/stunnel4
+
+binary-indep:
+	# There are no binary independent packages
+
+binary-arch: install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -a
+	dh_installexamples -a
+	dh_installman -a
+	dh_installchangelogs -a ChangeLog
+	dh_installinit -a --restart-after-upgrade -- defaults
+	dh_installppp -a --name=0stunnel4
+	dh_installlogrotate -a
+	dh_install -a debian/StunnelConf-0.1.pl usr/share/doc/stunnel4/contrib
+	dh_link -a
+	dh_strip -a
+	dh_compress -a --exclude=StunnelConf-0.1.pl
+	dh_fixperms -a
+	dh_makeshlibs -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
