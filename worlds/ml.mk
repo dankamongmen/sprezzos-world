@@ -334,3 +334,11 @@ $(CAMLMIX): $(SPREZZ)/camlmix/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf camlmix_$(camlmix_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xmlm
+xmlm:$(XMLM)_$(ARCH).deb
+$(XMLM): $(SPREZZ)/xmlm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xmlm_$(xmlm_UPVER).orig.tar.bz2 $(TARARGS) $@
+
