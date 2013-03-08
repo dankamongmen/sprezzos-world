@@ -1,0 +1,118 @@
+#!/usr/bin/make -f
+
+v = 8.6
+DIR = $(shell pwd)/debian/tmp
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+export LDFLAGS
+
+ifeq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+# See bug #446335 for -fno-unit-at-a-time
+ifeq ($(DEB_HOST_ARCH), hppa)
+# Disable stack checking for hppa (it doesn't work properly yet)
+CFLAGS += -fno-unit-at-a-time -DTCL_NO_STACK_CHECK=1
+else
+CFLAGS += -fno-unit-at-a-time
+endif
+endif
+
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# So so ugly but it works...
+	touch generic/tclStubInit.c
+	TCL_LIBRARY="/usr/share/tcltk/tcl$(v)" \
+	TCL_PACKAGE_PATH="/usr/local/lib/tcltk /usr/local/share/tcltk /usr/lib/tcltk /usr/share/tcltk /usr/lib/tcltk/tcl$(v) /usr/lib" \
+	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" \
+	dh_auto_configure -Dunix -- \
+		      --includedir=/usr/include/tcl$(v) \
+		      --enable-shared \
+		      --enable-threads \
+		      --enable-dll-unloading \
+		      --disable-rpath \
+		      --enable-man-symlinks
+
+override_dh_auto_build:
+	touch generic/tclStubInit.c && \
+	$(MAKE) -C unix
+	# Build the static library
+	cd unix && \
+	  ar cr libtcl$(v).a *.o && \
+	  ar d libtcl$(v).a tclAppInit.o && \
+	  ranlib libtcl$(v).a
+
+override_dh_auto_install:
+	GZIP=-9 \
+	$(MAKE) -C unix INSTALL_ROOT=$(DIR) \
+			MAN_INSTALL_DIR=$(DIR)/usr/share/man \
+			MANN_INSTALL_DIR=$(DIR)/usr/share/man/man3 \
+			TCL_MODULE_PATH="/usr/lib/tcltk /usr/share/tcltk" \
+		install
+	# Fix up the modules
+	sed -i -e's:variable paths {}:variable paths {/usr/share/tcltk/tcl$(v)/tcl8}:' \
+	    $(DIR)/usr/share/tcltk/tcl$(v)/tm.tcl
+	install -d -m 755 $(DIR)/usr/share/tcltk/tcl$(v)/tcl8
+	mv $(DIR)/usr/share/tcltk/tcl8/*/* $(DIR)/usr/share/tcltk/tcl$(v)/tcl8
+	# Fix up the libraries
+	cp unix/libtcl$(v).a $(DIR)/usr/lib
+	#mv $(DIR)/usr/lib/libtcl$(v).so $(DIR)/usr/lib/libtcl$(v).so.0
+	#ln -sf libtcl$(v).so.0 $(DIR)/usr/lib/libtcl$(v).so
+	install -d -m 755 $(DIR)/usr/lib/tcl$(v)
+	mv $(DIR)/usr/lib/*.sh $(DIR)/usr/lib/tcl$(v)
+	sh debian/filterconfig $(DIR)/usr/lib/tcl$(v)/tclConfig.sh
+	install -d -m 755 $(DIR)/usr/share/aclocal
+	cp unix/tcl.m4 $(DIR)/usr/share/aclocal/tcl$(v).m4
+	rm -f $(DIR)/usr/share/tcltk/tcl$(v)/ldAix
+	# Fix up the include files
+	install -d $(DIR)/usr/include/tcl$(v)/tcl-private/generic
+	cp generic/*.h $(DIR)/usr/include/tcl$(v)/tcl-private/generic
+	install -d $(DIR)/usr/include/tcl$(v)/tcl-private/unix
+	cp unix/*.h $(DIR)/usr/include/tcl$(v)/tcl-private/unix
+	install -d $(DIR)/usr/include/tcl$(v)/tcl-private/compat
+	cp compat/*.h $(DIR)/usr/include/tcl$(v)/tcl-private/compat
+	install -d $(DIR)/usr/include/tcl$(v)/tcl-private/libtommath
+	cp libtommath/*.h $(DIR)/usr/include/tcl$(v)/tcl-private/libtommath
+	#
+	# Fix up the manpages.
+	cd $(DIR)/usr/share/man/man1 && \
+	  cat tclsh.1 | sed -e 's/(n)/(3tcl)/g' > tclsh$(v).1 && \
+	  rm tclsh.1
+	cd $(DIR)/usr/share/man/man3 && \
+	  for f in *.[3n] ; do \
+	     f2=$$(echo $$f | sed -e 's/\.[3n]/.3tcl/') ; \
+	     if [ -L $$f ]; then \
+		l=$$(readlink -n $$f | sed -e 's/\.[3n]/.3tcl/') ; \
+		rm $$f ; \
+		ln -sf $$l $$f2 ; \
+	     else \
+		cat $$f | sed -e 's/^\.TH \([^ ]\+\|"[^"]\+"\) [3n]/.TH \1 3tcl/' \
+			       -e 's/\(Tk_[0-9A-Za-z]*\)(3)/\1(3tk)/g' \
+			       -e 's/\([A-Z][0-9A-Za-z_]*\)(3)/\1(3tcl)/g' \
+			       -e 's/send(n)/send(3tk)/g' \
+			       -e 's/text(n)/text(3tk)/g' \
+			       -e 's/tk(n)/tk(3tk)/g' \
+			       -e 's/winfo(n)/winfo(3tk)/g' \
+			       -e 's/(n)/(3tcl)/g' \
+			       -e "s/\\N'244'/\\[^o]/g" \
+			 >$$f2 ; \
+		rm $$f ; \
+	     fi ; \
+	  done
+
+override_dh_makeshlibs:
+	dh_makeshlibs -a -V 'tcl$(v) (>= $(v).0)' -XTcltest
+
+override_dh_shlibdeps:
+	dh_shlibdeps -a -ldebian/tcl$(v)/usr/lib
+
+get-orig-source:
+	wget -O tcl$(v)_$(v).0.orig.tar.gz \
+	     http://prdownloads.sourceforge.net/tcl/tcl-core$(v).0-src.tar.gz
+
+.PHONY: override_dh_auto_configure override_dh_auto_install override_dh_makeshlibs override_dh_shlibdeps get-orig-source
+

@@ -9808,3 +9808,19 @@ $(SYSTEMTAP): $(SPREZZ)/systemtap/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf systemtap_$(systemtap_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: tk8.6
+tk8.6:$(TK8.6)_$(ARCH).deb
+$(TK8.6): $(SPREZZ)/tk8.6/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tk8.6_$(tk8.6_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: tcl8.6
+tcl8.6:$(TCL8.6)_$(ARCH).deb
+$(TCL8.6): $(SPREZZ)/tcl8.6/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tcl8.6_$(tcl8.6_UPVER).orig.tar.gz $(TARARGS) $@
+
