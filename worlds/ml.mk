@@ -422,3 +422,11 @@ $(CRYPTGPS): $(SPREZZ)/cryptgps/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cryptgps_$(cryptgps_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: syslog-ocaml
+syslog-ocaml:$(SYSLOGOCAML)_$(ARCH).deb
+$(SYSLOGOCAML): $(SPREZZ)/syslog-ocaml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf syslog-ocaml_$(syslog-ocaml_UPVER).orig.tar.gz $(TARARGS) $@
+

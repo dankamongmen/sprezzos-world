@@ -1,0 +1,92 @@
+From: Eric Cooper <ecc@cmu.edu>
+Date: Thu, 24 Feb 2011 22:41:33 -0500
+Subject: add wrapper for send with flags
+
+allow send(2) to be called with flags such as MSG_NOSIGNAL
+
+Signed-off-by: Eric Cooper <ecc@cmu.edu>
+---
+ Makefile    |    2 +-
+ aux.ml      |   10 ++++++++++
+ aux.mli     |    3 +++
+ aux_stubs.c |   31 +++++++++++++++++++++++++++++++
+ 4 files changed, 45 insertions(+), 1 deletions(-)
+ create mode 100644 aux.ml
+ create mode 100644 aux.mli
+ create mode 100644 aux_stubs.c
+
+diff --git a/Makefile b/Makefile
+index 948bed5..1facb86 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,6 +1,6 @@
+ OCAMLMAKEFILE = /usr/share/ocamlmakefile/OCamlMakefile
+ 
+-SOURCES=syslog.mli syslog.ml
++SOURCES=aux.mli aux.ml aux_stubs.c syslog.mli syslog.ml
+ RESULT=syslog
+ PACKS=unix
+ 
+diff --git a/aux.ml b/aux.ml
+new file mode 100644
+index 0000000..6aa8b95
+--- /dev/null
++++ b/aux.ml
+@@ -0,0 +1,10 @@
++type msg_flag = MSG_OOB | MSG_DONTROUTE | MSG_PEEK | MSG_NOSIGNAL
++
++external unsafe_send :
++  Unix.file_descr -> string -> int -> int -> msg_flag list -> int
++                                  = "aux_send"
++
++let send fd buf ofs len flags =
++  if ofs < 0 || len < 0 || ofs > String.length buf - len
++  then invalid_arg "Unix.send"
++  else unsafe_send fd buf ofs len flags
+diff --git a/aux.mli b/aux.mli
+new file mode 100644
+index 0000000..d36bcbf
+--- /dev/null
++++ b/aux.mli
+@@ -0,0 +1,3 @@
++type msg_flag = MSG_OOB | MSG_DONTROUTE | MSG_PEEK | MSG_NOSIGNAL
++
++val send : Unix.file_descr -> string -> int -> int -> msg_flag list -> int
+diff --git a/aux_stubs.c b/aux_stubs.c
+new file mode 100644
+index 0000000..118ce22
+--- /dev/null
++++ b/aux_stubs.c
+@@ -0,0 +1,31 @@
++#include <string.h>
++#include <sys/socket.h>
++#include <caml/mlvalues.h>
++#include <caml/alloc.h>
++#include <caml/signals.h>
++
++// These are from .../otherlibs/unix/unixsupport.h
++#define UNIX_BUFFER_SIZE 16384
++extern void uerror (char * cmdname, value arg) Noreturn;
++
++static int msg_flag_table[] = {
++  MSG_OOB, MSG_DONTROUTE, MSG_PEEK, MSG_NOSIGNAL
++};
++
++CAMLprim value aux_send(value sock, value buff, value ofs, value len,
++                        value flags)
++{
++  int ret, cv_flags;
++  long numbytes;
++  char iobuf[UNIX_BUFFER_SIZE];
++
++  cv_flags = convert_flag_list(flags, msg_flag_table);
++  numbytes = Long_val(len);
++  if (numbytes > UNIX_BUFFER_SIZE) numbytes = UNIX_BUFFER_SIZE;
++  memmove(iobuf, &Byte(buff, Long_val(ofs)), numbytes);
++  enter_blocking_section();
++  ret = send(Int_val(sock), iobuf, (int) numbytes, cv_flags);
++  leave_blocking_section();
++  if (ret == -1) uerror("send", (value) 0);
++  return Val_int(ret);
++}
+-- 
