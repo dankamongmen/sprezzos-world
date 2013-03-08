@@ -1692,7 +1692,7 @@ $(HASKELLHJSCRIPT): $(SPREZZ)/haskell-hjscript/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hjscript-$(haskell-hjscript_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf HJScript-$(haskell-hjscript_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hoauth
 haskell-hoauth:$(HASKELLHOAUTH)_$(ARCH).deb
