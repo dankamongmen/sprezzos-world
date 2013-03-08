@@ -318,3 +318,11 @@ $(EASYFORMAT): $(SPREZZ)/easy-format/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf easy-format_$(easy-format_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: caml2html
+caml2html:$(CAML2HTML)_$(ARCH).deb
+$(CAML2HTML): $(SPREZZ)/caml2html/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf caml2html_$(caml2html_UPVER).orig.tar.gz $(TARARGS) $@
+
