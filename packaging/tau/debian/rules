@@ -1,0 +1,271 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ALL_PY_VERS := $(shell pyversions -vr debian/control)
+
+export DH_OPTIONS
+include /usr/share/python/python.mk
+
+PRCS_PRJ=tau
+
+builddir=${CURDIR}/debian/BUILD
+taudir=${builddir}/usr/lib/tau
+
+CFLAGS = -g
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+CPU=$(shell dpkg-architecture -l | grep DEB_HOST_ARCH_CPU= | cut -d= -f2)
+
+CONFIGFLAGS= -pthread
+ifeq ($(CPU),i386)
+CONFIGFLAGS+= -LINUXTIMERS
+endif
+ifeq ($(CPU),ia64)
+CONFIGFLAGS+= -LINUXTIMERS
+endif
+ifeq ($(CPU),amd64)
+CONFIGFLAGS+= -LINUXTIMERS
+endif
+
+build: stamps/build-arch stamps/build-indep
+stamps/build-arch:
+	dh_testdir
+
+	./configure -prefix=${taudir} -arch=$(CPU) $(CONFIGFLAGS)
+ # Fix permissions
+	chmod -x ${taudir}/include/Profile/TulipThreadLayer.h
+
+	$(MAKE) install USER_OPT="${CFLAGS}"
+ # Remove empty junk files
+	rm -f debian/BUILD/usr/lib/tau/*/lib/libjogl*
+ # Fix the installed scripts not to hardcode tempdir
+	FILES=$$(file $$(grep -lr ${CURDIR} ${builddir}) | grep -vE '(ELF|ar archive|symbolic link)' | cut -d: -f1) ;\
+	  if test -n "$$FILES"; then \
+	    perl -pi -e 's!${taudir}!/usr/lib/tau!g' $$FILES ; \
+	    perl -pi -e 's!${builddir}!/usr/lib/tau!g' $$FILES ; \
+	    perl -pi -e 's!${CURDIR}/usr/lib/tau!/usr/lib/tau!g' $$FILES ; \
+	    perl -pi -e 's!${CURDIR}!/usr/lib/tau!g' $$FILES ; \
+	  fi
+
+ # build python modules
+	debian/rules $(patsubst %,python%,${ALL_PY_VERS})
+
+	mkdir -p stamps
+	touch stamps/build-arch
+
+stamps/build-indep:
+	dh_testdir
+ # Nothing to do for now
+
+python%:
+ # Build python module as a separate object
+ # FIXME: this is suboptimal for successive builds but who cares
+	mkdir -p ${builddir}/usr/lib/python$*/$(call py_sitename, $*)
+	${MAKE} -C ${builddir}/usr/lib/python$*/$(call py_sitename, $*)/ \
+		-f ${CURDIR}/src/Profile/Makefile VPATH=${CURDIR}/src/Profile \
+		USER_OPT="${CFLAGS} -I/usr/include/python$*" \
+		$(subst .cpp,.o,$(notdir $(wildcard src/Profile/Py*.cpp)))
+	libpath=$$(cd debian/BUILD && echo usr/lib/tau/*/lib) && \
+	  if test `echo $$libpath|wc -w` != 1; then \
+	    printf "too many dirs: "; echo usr/lib/tau/*; false; fi && \
+	  cd ${builddir}/usr/lib/python$*/$(call py_sitename, $*)/ && g++ -shared Py*.o \
+		-L${CURDIR}/debian/BUILD/$$libpath -Wl,-rpath=/$$libpath -lTAU \
+		-lpthread \
+		-o pytau.so
+	rm ${builddir}/usr/lib/python$*/$(call py_sitename, $*)/*.o
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -rf stamps
+
+	./configure -arch=default
+	-$(MAKE) clean
+	rm -rf ${builddir} default
+ # forgotten files
+	rm -f src/Profile/*.o \
+		src/Profile/*.so \
+		src/Profile/*.a \
+		include/tauarch.h \
+		include/tauroot.h \
+		.last_config \
+		etc/* \
+		tools/src/TauIL/Makefile.inc \
+		tools/src/perfexplorer/configure \
+		utils/sedexamples.out
+	dh_clean
+
+install: DH_OPTIONS=
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	rm -rf debian/tmp
+	mkdir debian/tmp
+	cp -a ${builddir}/* debian/tmp/
+
+ # remove java-related stuff
+	find debian/tmp -name '*.jar' -o -name 'perfdmf_*' | xargs rm -f
+	cd debian/tmp/usr/lib/tau/*/bin && rm jracy paraprof
+	rm -f debian/tmp/usr/lib/tau/*/lib/libjogl.so
+
+ # remove extra files
+	cd debian/tmp/usr/lib/tau && rm README CREDITS LICENSE
+
+ # move binaries to /usr/bin, keep symlinks just in case
+	mkdir -p debian/tmp/usr/bin/
+	set -e; for f in $$(cd debian/tmp/usr/lib/tau/*/bin && echo *); do \
+	  case "$$f" in \
+	  *.sh) mv debian/tmp/usr/lib/tau/*/bin/$$f debian/tmp/usr/bin/$${f%.sh} ;\
+		ln -s ../../../../bin/$${f%.sh} debian/tmp/usr/lib/tau/*/bin/ ;\
+		(cd debian/tmp/usr/lib/tau/*/bin && mv $${f%.sh} $$f) ;;\
+	  *.pl) mv debian/tmp/usr/lib/tau/*/bin/$$f debian/tmp/usr/bin/$${f%.pl} ;\
+		ln -s ../../../../bin/$${f%.pl} debian/tmp/usr/lib/tau/*/bin/ ;\
+		(cd debian/tmp/usr/lib/tau/*/bin && mv $${f%.pl} $$f) ;;\
+	  *)    mv debian/tmp/usr/lib/tau/*/bin/$$f debian/tmp/usr/bin/ ;\
+		ln -s ../../../../bin/$$f debian/tmp/usr/lib/tau/*/bin/ ;;\
+	  esac ;\
+	done
+
+ # put symlinks for arch-indep scripts
+	mkdir -p debian/tmp/usr/lib/tau/unknown/bin
+	cd debian/tmp/usr/lib/tau/unknown/bin && ln -s ../../../../bin/taud .
+	cd debian/tmp/usr/lib/tau/unknown/bin && ln -s ../../../../bin/pprof .
+
+ # move manpages
+	mkdir -p debian/tmp/usr/share
+	mv debian/tmp/usr/lib/tau/man debian/tmp/usr/share/
+ # move examples
+	mkdir -p debian/tmp/usr/share/doc/tau-examples
+	mv debian/tmp/usr/lib/tau/examples debian/tmp/usr/share/doc/tau-examples
+
+ # fix permissions
+	chmod -R -x debian/tmp/usr/lib/tau/include
+
+ # complete python installation
+	cp -p src/Profile/tau.py debian/tmp/usr/lib/tau/*/lib/
+	for v in ${ALL_PY_VERS}; do (\
+	  cd debian/tmp/usr/lib/python$${v}/$(call py_sitename_sh, v)/ && \
+	    ln -s ../../lib/tau/*/lib/tau.py . \
+	); done
+
+	dh_movefiles
+
+ # missing racy files
+	mkdir -p debian/tau-racy/usr/share/tau debian/tau-racy/usr/lib/tau
+	cd debian/tau-racy/usr/share/tau && mkdir -p tools/src tools/help utils
+	ln -s ../../share/tau/tools ../../share/tau/utils \
+	  debian/tau-racy/usr/lib/tau/
+	cp -a tools/inc tools/xbm \
+	  debian/tau-racy/usr/share/tau/tools/
+	cp -a tools/src/racy.tcl tools/src/taud.tcl \
+	  debian/tau-racy/usr/share/tau/tools/src/
+	cp -a tools/help/racy tools/help/general \
+	  debian/tau-racy/usr/share/tau/tools/help/
+	cp -a utils/archfind* \
+	  debian/tau-racy/usr/share/tau/utils/
+
+
+# Build architecture-independent files here.
+binary-indep: DH_OPTIONS=-i
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+
+ # symlink to master docdir
+	set -e; for i in tau-racy; do \
+		mkdir -p debian/$$i/usr/share/doc;\
+		ln -s tau debian/$$i/usr/share/doc/$$i;\
+	done
+
+#	dh_installdebconf	
+	dh_installdocs
+	dh_buildinfo
+	dh_installchangelogs Changes
+
+	mkdir -p debian/tau-examples/usr/share/doc/tau
+	ln -s ../tau-examples/examples debian/tau-examples/usr/share/doc/tau/
+	mkdir -p debian/python-tau/usr/share/doc/tau-examples/examples/python
+	mkdir -p debian/python-tau/usr/share/doc/python-tau
+	ln -s ../tau-examples/examples/python debian/python-tau/usr/share/doc/python-tau/examples
+
+#	dh_installexamples
+ # This is already in python-tau
+	rm -rf debian/tau-examples/usr/share/doc/*/examples/python
+
+ # Adjust TAUROOTDIR for installed version
+	perl -pi -e 's!^TAUROOTDIR\t.*!TAUROOTDIR = /usr/lib/tau!' \
+	  `find debian/tau-examples/usr/share/doc/tau-examples/examples/ -name Makefile`
+ # Remove examples that depend on PDT
+	rm -rf debian/tau/usr/share/doc/tau/examples/pdt*
+	for i in `find debian/tau-examples/usr/share/doc/tau-examples/examples/ -name Makefile | xargs grep -l PDTDIR`; do \
+		rm -rf `dirname $$i`; \
+	done
+ # Remove examples that depend on Java
+	rm -rf debian/tau-examples/usr/share/doc/tau-examples/examples/java
+ # Remove huge example that depend on MPI
+	rm -rf debian/tau-examples/usr/share/doc/tau-examples/examples/NPB2.3 
+ # Fix perms on example files
+	cd debian/tau-examples/usr/share/doc/tau-examples/examples && \
+	  chmod -x fork/fork.cpp fork/fork.cpp \
+		cthreads/hello.c 
+    # NPB2.3/sys/print_*
+
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-dependent files here.
+binary-arch: DH_OPTIONS=-a
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+#	dh_installdebconf	
+#	dh_installexamples
+	dh_installdocs
+	dh_buildinfo
+
+	dh_installmenu
+#	dh_installlogrotate
+#	dh_installemacsen
+#	dh_installpam
+#	dh_installmime
+#	dh_installinit
+#	dh_installcron
+#	dh_installman
+#	dh_installinfo
+#	dh_undocumented
+	dh_installchangelogs Changes
+#	dh_link
+	dh_strip
+	dh_compress
+	DH_PYCENTRAL=nomove DH_OPTIONS= dh_pycentral -ppython-tau
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+#	dh_perl
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install 

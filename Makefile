@@ -9832,3 +9832,11 @@ $(CMSUPER): $(SPREZZ)/cm-super/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cm-super_$(cm-super_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: tau
+tau:$(TAU)_$(ARCH).deb
+$(TAU): $(SPREZZ)/tau/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tau_$(tau_UPVER).orig.tar.gz $(TARARGS) $@
+
