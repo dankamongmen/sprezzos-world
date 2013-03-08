@@ -9744,3 +9744,19 @@ $(LIBLO): $(SPREZZ)/liblo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf liblo_$(liblo_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: lmodern
+lmodern:$(LMODERN)_$(ARCH).deb
+$(LMODERN): $(SPREZZ)/lmodern/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lmodern_$(lmodern_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: gd4o
+gd4o:$(GD4O)_$(ARCH).deb
+$(GD4O): $(SPREZZ)/gd4o/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gd4o_$(gd4o_UPVER).orig.tar.gz $(TARARGS) $@
+

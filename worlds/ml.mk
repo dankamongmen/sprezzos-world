@@ -414,3 +414,11 @@ $(OCAMLSSL): $(SPREZZ)/ocaml-ssl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocaml-ssl_$(ocaml-ssl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cryptgps
+cryptgps:$(CRYPTGPS)_$(ARCH).deb
+$(CRYPTGPS): $(SPREZZ)/cryptgps/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cryptgps_$(cryptgps_UPVER).orig.tar.gz $(TARARGS) $@
+
