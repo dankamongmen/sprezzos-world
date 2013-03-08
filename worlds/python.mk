@@ -63,3 +63,11 @@ $(MYGPOCLIENT): $(SPREZZ)/mygpoclient/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mygpoclient-$(mygpoclient_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: seascope
+seascope:$(SEASCOPE)_$(ARCH).deb
+$(SEASCOPE): $(SPREZZ)/seascope/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf seascope_$(seascope_UPVER).orig.tar.gz $(TARARGS) $@
+

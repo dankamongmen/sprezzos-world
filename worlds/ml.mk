@@ -430,3 +430,11 @@ $(SYSLOGOCAML): $(SPREZZ)/syslog-ocaml/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf syslog-ocaml_$(syslog-ocaml_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ocamlmakefile
+ocamlmakefile:$(OCAMLMAKEFILE)_$(ARCH).deb
+$(OCAMLMAKEFILE): $(SPREZZ)/ocamlmakefile/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocamlmakefile_$(ocamlmakefile_UPVER).orig.tar.gz $(TARARGS) $@
+
