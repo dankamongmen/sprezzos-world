@@ -310,3 +310,11 @@ $(YOJSON): $(SPREZZ)/yojson/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf yojson_$(yojson_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: easy-format
+easy-format:$(EASYFORMAT)_$(ARCH).deb
+$(EASYFORMAT): $(SPREZZ)/easy-format/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf easy-format_$(easy-format_UPVER).orig.tar.gz $(TARARGS) $@
+
