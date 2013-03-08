@@ -342,3 +342,27 @@ $(XMLM): $(SPREZZ)/xmlm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xmlm_$(xmlm_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: ocaml-lame
+ocaml-lame:$(OCAMLLAME)_$(ARCH).deb
+$(OCAMLLAME): $(SPREZZ)/ocaml-lame/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocaml-lame_$(ocaml-lame_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: cppo
+cppo:$(CPPO)_$(ARCH).deb
+$(CPPO): $(SPREZZ)/cppo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cppo_$(cppo_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: biniou
+biniou:$(BINIOU)_$(ARCH).deb
+$(BINIOU): $(SPREZZ)/biniou/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf biniou_$(biniou_UPVER).orig.tar.gz $(TARARGS) $@
+
