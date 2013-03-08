@@ -366,3 +366,35 @@ $(BINIOU): $(SPREZZ)/biniou/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf biniou_$(biniou_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ocamlsdl
+ocamlsdl:$(OCAMLSDL)_$(ARCH).deb
+$(OCAMLSDL): $(SPREZZ)/ocamlsdl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocamlsdl_$(ocamlsdl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ocamlnet
+ocamlnet:$(OCAMLNET)_$(ARCH).deb
+$(OCAMLNET): $(SPREZZ)/ocamlnet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocamlnet_$(ocamlnet_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: camlimages
+camlimages:$(CAMLIMAGES)_$(ARCH).deb
+$(CAMLIMAGES): $(SPREZZ)/camlimages/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf camlimages_$(camlimages_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: omake
+omake:$(OMAKE)_$(ARCH).deb
+$(OMAKE): $(SPREZZ)/omake/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf omake_$(omake_UPVER).orig.tar.gz $(TARARGS) $@
+
