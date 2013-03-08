@@ -302,3 +302,11 @@ $(OCAMLPULSEAUDIO): $(SPREZZ)/ocaml-pulseaudio/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocaml-pulseaudio_$(ocaml-pulseaudio_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: yojson
+yojson:$(YOJSON)_$(ARCH).deb
+$(YOJSON): $(SPREZZ)/yojson/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf yojson_$(yojson_UPVER).orig.tar.gz $(TARARGS) $@
+
