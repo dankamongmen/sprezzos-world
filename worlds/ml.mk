@@ -398,3 +398,19 @@ $(OMAKE): $(SPREZZ)/omake/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf omake_$(omake_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: camomile
+camomile:$(CAMOMILE)_$(ARCH).deb
+$(CAMOMILE): $(SPREZZ)/camomile/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf camomile_$(camomile_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: ocaml-ssl
+ocaml-ssl:$(OCAMLSSL)_$(ARCH).deb
+$(OCAMLSSL): $(SPREZZ)/ocaml-ssl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocaml-ssl_$(ocaml-ssl_UPVER).orig.tar.gz $(TARARGS) $@
+
