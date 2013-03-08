@@ -9784,3 +9784,11 @@ $(FOX1.6): $(SPREZZ)/fox1.6/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fox1.6_$(fox1.6_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: zziplib
+zziplib:$(ZZIPLIB)_$(ARCH).deb
+$(ZZIPLIB): $(SPREZZ)/zziplib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf zziplib_$(zziplib_UPVER).orig.tar.gz $(TARARGS) $@
+
