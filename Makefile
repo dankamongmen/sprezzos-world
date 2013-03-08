@@ -9768,3 +9768,11 @@ $(STUNNEL4): $(SPREZZ)/stunnel4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf stunnel4_$(stunnel4_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: sdf
+sdf:$(SDF)_$(ARCH).deb
+$(SDF): $(SPREZZ)/sdf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sdf_$(sdf_UPVER).orig.tar.gz $(TARARGS) $@
+
