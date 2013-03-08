@@ -438,3 +438,11 @@ $(OCAMLMAKEFILE): $(SPREZZ)/ocamlmakefile/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocamlmakefile_$(ocamlmakefile_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ocamlweb
+ocamlweb:$(OCAMLWEB)_$(ARCH).deb
+$(OCAMLWEB): $(SPREZZ)/ocamlweb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocamlweb_$(ocamlweb_UPVER).orig.tar.gz $(TARARGS) $@
+
