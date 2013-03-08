@@ -1,0 +1,90 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+# get-orig-source target
+DEB_UPSTREAM_VERSION=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([^-]+).*,\1,p')
+
+get-orig-source:
+	uscan --force-download --rename --repack --download-version=$(DEB_UPSTREAM_VERSION) --destdir=.
+
+DEB_CFLAGS_MAINT_APPEND=-Wall -D_GNU_SOURCE
+DEB_CXXFLAGS_MAINT_APPEND=-Wall -D_GNU_SOURCE
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+VIM_ADIR = $(CURDIR)/debian/tmp/usr/share/vim/addons
+VIM_RDIR = $(CURDIR)/debian/tmp/usr/share/vim/registry
+
+CONF_FLAGS = --enable-sqlite --disable-crash --enable-docs --disable-pie \
+	     --enable-server --enable-grapher --without-rpm \
+	     --enable-translator --disable-publican
+
+# Building of man pages takes A LOT of time
+ifeq (,$(filter stap_disable_refdocs,$(DEB_BUILD_OPTIONS)))
+	CONF_FLAGS += --enable-refdocs
+else
+	CONF_FLAGS += --disable-refdocs
+endif
+
+# dh does it wrong...
+CONF_FLAGS += --libexecdir=/usr/lib $(shell dpkg-buildflags --export=configure)
+
+DH = dh
+
+# plus is to enable parallel build
+binary binary-arch binary-indep build clean install patch build-arch build-indep:
+	+$(DH) $@
+
+
+override_dh_auto_test:
+	# Tests cannot be run during build, see #526957
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CONF_FLAGS)
+
+override_dh_auto_install:
+	dh_auto_install
+	[ ! -d debian/tmp/usr/share/systemtap/tapset/test ] || rm -rf debian/tmp/usr/share/systemtap/tapset/test
+
+	# Those files do not realy belong there
+	rm debian/tmp/usr/share/doc/systemtap/examples/README
+	rm debian/tmp/usr/share/doc/systemtap/examples/html/*.tmpl
+
+	# Remove empty file to make lintian happy
+	rm debian/tmp/usr/share/doc/systemtap/tapsets/tapsets.proc
+
+	# make sure that all examples are executable (except tutorial)
+	find debian/tmp/usr/share/doc/systemtap/examples/ -name \*.stp \! -executable -print -exec chmod +x "{}" \;
+
+	# Install vim files
+	install -d $(VIM_ADIR)/ftdetect
+	install -d $(VIM_ADIR)/syntax
+	install -d $(VIM_ADIR)/indent
+	install -d $(VIM_ADIR)/ftplugin
+	test -f vim/filetype.vim && cp vim/filetype.vim $(VIM_ADIR)/ftdetect/stap.vim
+	test -f vim/syntax/stap.vim && cp vim/syntax/stap.vim $(VIM_ADIR)/syntax/stap.vim
+	test -f vim/indent/stap.vim && cp vim/indent/stap.vim $(VIM_ADIR)/indent/stap.vim
+	test -f vim/ftplugin/stap.vim && cp vim/ftplugin/stap.vim $(VIM_ADIR)/ftplugin/stap.vim
+	test -f $(CURDIR)/debian/systemtap.yaml && install -d $(VIM_RDIR) && cp $(CURDIR)/debian/systemtap.yaml $(VIM_RDIR)/
+
+override_dh_auto_clean:
+	dh_auto_clean
+	[ ! -d doc/beginners/build ] || rm -rf doc/beginners/build
+	[ ! -d doc/beginners/en-US ] || rm -rf doc/beginners/en-US
+
+override_dh_compress:
+	dh_compress -X.stp -X.wav -Xsocktop -Xsyscalltimes -X.pdf
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 4754 debian/systemtap-runtime/usr/bin/staprun
+
+.PHONY: build clean binary-indep binary-arch binary install patch get-orig-source
+.PHONY: build-arch build-indep
+.PHONY: override_dh_auto_configure override_dh_auto_test override_dh_auto_install
+.PHONY: override_dh_auto_clean override_dh_compress override_dh_fixperms
