@@ -9790,5 +9790,5 @@ $(ZZIPLIB): $(SPREZZ)/zziplib/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf zziplib_$(zziplib_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf zziplib_$(zziplib_UPVER).orig.tar.bz2 $(TARARGS) $@
 
