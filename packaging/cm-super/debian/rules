@@ -1,0 +1,183 @@
+#!/usr/bin/make -f
+#
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+package=cm-super
+minpackage=cm-super-minimal
+x11package=cm-super-x11
+
+SHELL = /bin/bash
+
+MAPLOCATION=usr/share/texmf/fonts/map/dvips/cm-super
+ENCLOCATION=usr/share/texmf/fonts/enc/dvips/cm-super
+CONFIGLOCATION=usr/share/texmf/dvips/config
+
+MINFONTS=$(shell cat debian/fonts.cm-super-minimal)
+ENCODINGS=t1 t2a t2b t2c ts1 x2
+MINFILES=$(patsubst %,cm-super-minimal-%.map,$(ENCODINGS)) config.cm-super-minimal
+EXTFILES=$(patsubst %,cm-super-extended-%.map,$(ENCODINGS)) config.cm-super-extended
+comma:= ,
+
+###################
+#
+# Sub targets
+#
+###################
+cm-super.t1c:
+	touch cm-super.t1c
+	(cd pfb ; for pfb in *.pfb ; do \
+		bn=`basename $$pfb .pfb` ; \
+		if ! grep -q "^$$bn$$" ../debian/fonts.cm-super-minimal ; then \
+			echo "$$pfb" >&2; pfb2t1c "$$pfb"; \
+		fi ; \
+	done) >$@
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp:
+	dh_testdir
+	$(MAKE) -f debian/rules cm-super.t1c
+	# first generate the map files for the 10pt variants
+	cd dvips ; rm -f config.cm-super-minimal ; \
+	for e in $(ENCODINGS) ; do \
+		for f in $(MINFONTS) ; do \
+			grep $$f.pfb cm-super-$$e.map ; \
+		done > cm-super-minimal-$$e.map ; \
+		echo "p +cm-super-minimal-$$e.map" >>config.cm-super-minimal; \
+	done
+	# now generate those for all but the 10pt
+	# this is a stupid filtering, maybe someone knows a better way
+	cd dvips ; rm -f config.cm-super-extended ; \
+	for e in $(ENCODINGS) ; do \
+		cp cm-super-$$e.map cm-super-extended-$$e.map ; \
+		for f in $(MINFONTS) ; do \
+			grep -v $$f.pfb cm-super-extended-$$e.map > tmp ; \
+			mv tmp cm-super-extended-$$e.map ; \
+		done ; \
+		echo "p +cm-super-extended-$$e.map" >>config.cm-super-extended;\
+	done
+	# for security do a check
+	cd dvips ; for e in $(ENCODINGS) ; do \
+		cat cm-super-extended-$$e.map cm-super-minimal-$$e.map | sort > tmpA ; \
+		sort cm-super-$$e.map > tmpB ; \
+		diff -u tmpA tmpB ; \
+		rm tmpA tmpB ; \
+	done
+	touch build-stamp
+
+clean: debian/control
+	dh_testdir
+	dh_testroot
+	-rm -f build-stamp
+	-rm -f install-stamp 
+	-rm -f install-stamp-cmsuper 
+	-rm -f install-stamp-cmsuper-minimal
+	-rm -f install-stamp-cmsuperx11
+	-(cd dvips ; rm -f $(MINFILES) $(EXTFILES) tmp* )
+	-rm -f debian/$(x11package).links debian/$(package).links
+	-rm -f cm-super.t1c
+	dh_clean
+
+install: install-stamp
+install-stamp: install-stamp-cmsuper install-stamp-cmsuperx11 install-stamp-cmsuper-minimal
+	touch install-stamp
+
+install-stamp-cmsuperx11: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_installdirs	--package=$(x11package)			\
+		usr/share/texmf/fonts/afm/public/cm-super	\
+		usr/share/fonts/X11/Type1
+	for bn in $(MINFONTS) ; do \
+		echo "usr/share/texmf/fonts/type1/public/cm-super/$$bn.pfb usr/share/fonts/X11/Type1/$$bn.pfb" >> debian/$(x11package).links ; \
+		gunzip -c afm/$$bn.afm.gz > debian/$(x11package)/usr/share/texmf/fonts/afm/public/cm-super/$$bn.afm ; \
+		echo "usr/share/texmf/fonts/afm/public/cm-super/$$bn.afm usr/share/fonts/X11/Type1/$$bn.afm" >> debian/$(x11package).links ; \
+	done
+	# 
+	dh_installdirs  --package=$(x11package)  etc/X11/fonts/Type1
+	cp debian/fonts.scale debian/$(x11package)/etc/X11/fonts/Type1/cm-super-x11.scale
+	touch install-stamp-cmsuperx11
+
+
+install-stamp-cmsuper-minimal: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_installdirs  --package=$(minpackage)		\
+		usr/share/texmf/fonts/type1/public/cm-super	\
+		usr/share/texmf/fonts/enc/dvips/cm-super	\
+		usr/share/texmf/fonts/map/dvips/cm-super	\
+		usr/share/texmf/dvips/config			\
+		usr/share/texmf/tex/latex/cm-super
+	for pfb in $(MINFONTS) ; do	\
+		cp pfb/$$pfb.pfb debian/$(minpackage)/usr/share/texmf/fonts/type1/public/cm-super/ ; \
+	done
+	cp type1ec.sty debian/$(minpackage)/usr/share/texmf/tex/latex/cm-super
+	cp dvips/cm-super-minimal-*.map debian/$(minpackage)/$(MAPLOCATION)/
+	cp dvips/*.enc debian/$(minpackage)/$(ENCLOCATION)/
+	cp dvips/config.cm-super-minimal debian/$(minpackage)/$(CONFIGLOCATION)/
+	dh_installtex --package=$(minpackage) --priority=50     \
+		$(subst XXXXX,$(comma),$(patsubst %,map=MixedMapXXXXXcm-super-minimal-%.map,$(ENCODINGS)))
+	touch install-stamp-cmsuper-minimal
+
+
+install-stamp-cmsuper: build-stamp
+	dh_testdir 
+	dh_testroot
+	dh_installdirs	--package=$(package)			\
+		usr/share/texmf/fonts/type1/public/cm-super	\
+		usr/share/texmf/fonts/map/dvips/cm-super	\
+		usr/share/texmf/dvips/config			\
+		usr/share/lintian/overrides			\
+		usr/share/cm-super
+	cd pfb ; for pfb in *.pfb ; do \
+		bn=`basename $$pfb .pfb` ; \
+		if ! grep -q "^$$bn$$" ../debian/fonts.cm-super-minimal ; then \
+			touch ../debian/$(package)/usr/share/texmf/fonts/type1/public/cm-super/$$pfb ; \
+		fi ; \
+	done
+	# ln occupies less space on disk
+	ln cm-super.t1c debian/$(package)/usr/share/cm-super/cm-super.t1c
+	chown 0.0 cm-super.t1c
+	cp dvips/cm-super-extended-*.map debian/$(package)/$(MAPLOCATION)/
+	cp dvips/config.cm-super-extended debian/$(package)/$(CONFIGLOCATION)/
+	dh_installtex --package=$(package) --priority=50	\
+		$(subst XXXXX,$(comma),$(patsubst %,map=MixedMapXXXXXcm-super-extended-%.map,$(ENCODINGS)))
+	cp debian/$(package).override debian/$(package)/usr/share/lintian/overrides/$(package)
+	touch install-stamp-cmsuper
+
+
+
+binary-arch:
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -p $(minpackage) FAQ README TODO debian/README.teTeX2
+	dh_installchangelogs -p $(minpackage) ChangeLog
+	dh_link -p $(package) usr/share/doc/$(minpackage) usr/share/doc/$(package)
+	dh_link -p $(x11package) usr/share/doc/$(minpackage) usr/share/doc/$(x11package)
+	dh_link -p $(minpackage) usr/share/doc/$(minpackage) usr/share/texmf/doc/fonts/cm-super
+	dh_installxfonts --package=$(x11package)
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	# make md5sums for all but the pfb files and the t1c file
+	dh_md5sums -p cm-super-minimal
+	dh_md5sums -p cm-super-x11
+	dh_md5sums -p cm-super -X usr/share/texmf/fonts/type1/public/cm-super -X usr/share/cm-super
+	# create the correct md5sums for the files generated on postinst
+	(cd pfb ; for pfb in *.pfb ; do \
+		bn=`basename $$pfb .pfb` ; \
+		if ! grep -q "^$$bn$$" ../debian/fonts.cm-super-minimal ; then \
+			cat $$pfb | md5sum - | sed -e "s|-|usr/share/texmf/fonts/type1/public/cm-super/$$pfb|" ; \
+		fi ; \
+	done) >> debian/cm-super/DEBIAN/md5sums
+	# add the md5sum of the empty file (t1c will be emptied on postinst)
+	echo "d41d8cd98f00b204e9800998ecf8427e  usr/share/cm-super/cm-super.t1c" >> debian/$(package)/DEBIAN/md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+
+.PHONY: build clean binary-indep binary-arch binary install

@@ -9824,3 +9824,11 @@ $(TCL8.6): $(SPREZZ)/tcl8.6/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tcl8.6_$(tcl8.6_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cm-super
+cm-super:$(CMSUPER)_$(ARCH).deb
+$(CMSUPER): $(SPREZZ)/cm-super/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cm-super_$(cm-super_UPVER).orig.tar.gz $(TARARGS) $@
+
