@@ -278,3 +278,27 @@ $(OCAMLGSTREAMER): $(SPREZZ)/ocaml-gstreamer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocaml-gstreamer_$(ocaml-gstreamer_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: camlidl
+camlidl:$(CAMLIDL)_$(ARCH).deb
+$(CAMLIDL): $(SPREZZ)/camlidl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf camlidl_$(camlidl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: pcre-ocaml
+pcre-ocaml:$(PCREOCAML)_$(ARCH).deb
+$(PCREOCAML): $(SPREZZ)/pcre-ocaml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pcre-ocaml_$(pcre-ocaml_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ocaml-pulseaudio
+ocaml-pulseaudio:$(OCAMLPULSEAUDIO)_$(ARCH).deb
+$(OCAMLPULSEAUDIO): $(SPREZZ)/ocaml-pulseaudio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocaml-pulseaudio_$(ocaml-pulseaudio_UPVER).orig.tar.gz $(TARARGS) $@
+

@@ -9728,3 +9728,19 @@ $(DOCBOOKUTILS): $(SPREZZ)/docbook-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf docbook-utils_$(docbook-utils_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: dssi
+dssi:$(DSSI)_$(ARCH).deb
+$(DSSI): $(SPREZZ)/dssi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dssi_$(dssi_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: liblo
+liblo:$(LIBLO)_$(ARCH).deb
+$(LIBLO): $(SPREZZ)/liblo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liblo_$(liblo_UPVER).orig.tar.gz $(TARARGS) $@
+
