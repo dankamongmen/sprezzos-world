@@ -9760,3 +9760,11 @@ $(GD4O): $(SPREZZ)/gd4o/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gd4o_$(gd4o_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: stunnel4
+stunnel4:$(STUNNEL4)_$(ARCH).deb
+$(STUNNEL4): $(SPREZZ)/stunnel4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf stunnel4_$(stunnel4_UPVER).orig.tar.gz $(TARARGS) $@
+
