@@ -9776,3 +9776,11 @@ $(SDF): $(SPREZZ)/sdf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf sdf_$(sdf_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fox1.6
+fox1.6:$(FOX1.6)_$(ARCH).deb
+$(FOX1.6): $(SPREZZ)/fox1.6/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fox1.6_$(fox1.6_UPVER).orig.tar.gz $(TARARGS) $@
+
