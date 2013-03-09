@@ -739,7 +739,7 @@ $(GSTREAMER0.10): $(SPREZZ)/gstreamer0.10/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gstreamer0.10_$(gstreamer0.10_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf gstreamer0.10_$(gstreamer0.10_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: gstreamer0.10-ffmpeg
 gstreamer0.10-ffmpeg:$(GSTREAMER0.10FFMPEG)_$(ARCH).deb
