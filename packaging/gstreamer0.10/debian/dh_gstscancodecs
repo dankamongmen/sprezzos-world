@@ -1,0 +1,132 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+dh_gstscancodecs - enumerate and classify gstreamer codecs
+
+=cut
+
+use strict;
+use Debian::Debhelper::Dh_Lib;
+use File::Temp;
+
+=head1 SYNOPSIS
+
+  dh_gstscancodecs [debhelper options]
+
+=head1 DESCRIPTION
+
+This program is meant to assist in building a package that provides
+codecs, demultiplexers and other media-handling components for
+gstreamer-based applications.
+
+dh_gstscancodecs generates substitution variable for debian/control,
+by scanning libraries /usr/lib/gstreamer-0.10/*.so and
+/usr/lib/$DEB_HOST_MULTIARCH/gstreamer-0.10/*.so.
+
+The generated substitution variables are
+
+=over 4
+
+=item gstreamer:Version
+
+Should be added to XB-GStreamer-Version
+
+=item gstreamer:Elements
+
+Should be added to XB-GStreamer-Elements
+
+=item gstreamer:Provides
+
+Should be added to Provides
+
+=item gstreamer:URISources
+
+Should be added to XB-GStreamer-URI-Sources
+
+=item gstreamer:URISinks
+
+Should be added to XB-GStreamer-URI-Sinks
+
+=item gstreamer:Encoders
+
+Should be added to XB-GStreamer-Encoders
+
+=item gstreamer:Decoders
+
+Should be added to XB-GStreamer-Decoders
+
+=back
+
+This control fields will be used by the /usr/bin/gstreamer-codec-install
+helper to install required missing GStreamer elements.
+
+=head1 OPTIONS
+
+The standard debhelper options are supported.
+
+=cut
+
+init();
+
+my $deb_host_multiarch = `dpkg-architecture -qDEB_HOST_MULTIARCH`;
+chop $deb_host_multiarch;
+$::pluginlibdirprefix = '/usr/lib/'.$deb_host_multiarch.'/gstreamer-';
+$::pluginlibdirlegacy = '/usr/lib/gstreamer-';
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+  my $tmp = tmpdir($package);
+
+  delsubstvar($package, "gstreamer:Version");
+  delsubstvar($package, "gstreamer:URISinks");
+  delsubstvar($package, "gstreamer:URISources");
+  delsubstvar($package, "gstreamer:Encoders");
+  delsubstvar($package, "gstreamer:Decoders");
+
+  foreach my $sodir (glob "$tmp$::pluginlibdirprefix* $tmp$::pluginlibdirlegacy*") {
+    my $gstversion = $sodir;
+    $gstversion =~ s/^$tmp$::pluginlibdirprefix//;
+    $gstversion =~ s/^$tmp$::pluginlibdirlegacy//;
+    verbose_print("# gstreamer version $gstversion");
+
+    my (undef, $tmpfile) = File::Temp::tempfile("/tmp/".basename($0).".XXXX", UNLINK => 1);
+    my (undef, $registryfile) = File::Temp::tempfile("/tmp/".basename($0).".XXXX", UNLINK => 1);
+
+    my $command="GST_REGISTRY=$registryfile GST_PLUGIN_SYSTEM_PATH= GST_PLUGIN_PATH=$sodir gst-codec-info-$gstversion " . join(' ', (glob "$sodir/*.so")) . " > $tmpfile";
+
+    system($command);
+    if ($?) {
+      my $output;
+      {
+          local *F;
+          open(F, $tmpfile);
+          local $/;
+          $output = <F>;
+          close(F);
+      }
+      die("gst-codec-info-$gstversion call failed: '".$command."' rc: $? output: $output");
+    }
+
+    local *F;
+    open(F, $tmpfile);
+    my ($variable, $value);
+    while(<F>) {
+      $variable = $1 if /([a-zA-Z]*:[a-zA-Z]*)=/;
+      $value = $2 if /([a-zA-Z]*:[a-zA-Z]*)=(.*)\n/;
+      addsubstvar($package, $variable, $value);
+    }
+  }
+}
+
+=head1 SEE ALSO
+
+L<debhelper(1)>
+
+This program is an extension to debhelper.
+
+=head1 AUTHOR
+
+Ian Jackson <iwj@ubuntu.com>
+Sebastian Dröge <sebastian.droege@collabora.co.uk>
+
+=cut

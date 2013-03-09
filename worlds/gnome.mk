@@ -733,3 +733,19 @@ $(GNOMETWEAKTOOL): $(SPREZZ)/gnome-tweak-tool/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-tweak-tool_$(gnome-tweak-tool_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: gstreamer0.10
+gstreamer0.10:$(GSTREAMER0.10)_$(ARCH).deb
+$(GSTREAMER0.10): $(SPREZZ)/gstreamer0.10/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gstreamer0.10_$(gstreamer0.10_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: gstreamer0.10-ffmpeg
+gstreamer0.10-ffmpeg:$(GSTREAMER0.10FFMPEG)_$(ARCH).deb
+$(GSTREAMER0.10FFMPEG): $(SPREZZ)/gstreamer0.10-ffmpeg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gstreamer0.10-ffmpeg_$(gstreamer0.10-ffmpeg_UPVER).orig.tar.gz $(TARARGS) $@
+
