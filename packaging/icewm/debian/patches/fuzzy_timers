@@ -1,0 +1,285 @@
+Index: icewm-1.3.7/doc/icewm.sgml
+===================================================================
+--- icewm-1.3.7.orig/doc/icewm.sgml	2010-10-31 15:09:37.000000000 +0100
++++ icewm-1.3.7/doc/icewm.sgml	2012-01-16 13:59:40.853890737 +0100
+@@ -424,6 +424,7 @@
+ 
+ <sect1>Timings<p>
+ <descrip>
++<tag/DelayFuzziness = 10/ Percentage of delay/timeout fuzziness to allow for merging of timer timeouts
+ <tag/ClickMotionDistance = 5/ Movement before click is interpreted as drag.
+ <tag/MultiClickTime = 400/ Time (ms) to recognize for double click.
+ <tag/AutoRaiseDelay = 400/ Time to auto raise (must enable first with AutoRaise)
+Index: icewm-1.3.7/src/aclock.cc
+===================================================================
+--- icewm-1.3.7.orig/src/aclock.cc	2010-10-31 15:09:36.000000000 +0100
++++ icewm-1.3.7/src/aclock.cc	2012-01-16 13:59:40.853890737 +0100
+@@ -58,6 +58,7 @@
+     transparent = -1;
+ 
+     clockTimer = new YTimer(1000);
++    clockTimer->setFixed();
+     clockTimer->setTimerListener(this);
+     clockTimer->startTimer();
+     autoSize();
+Index: icewm-1.3.7/src/default.h
+===================================================================
+--- icewm-1.3.7.orig/src/default.h	2012-01-16 13:58:25.753732189 +0100
++++ icewm-1.3.7/src/default.h	2012-01-16 14:00:36.927012918 +0100
+@@ -331,6 +331,7 @@
+ #endif
+     OBV("DoubleBuffer",                         &doubleBuffer,                  "Use double buffering when redrawing the display"),
+     OBV("XRRDisable",                           &xrrDisable,                    "Disable use of new XRANDR API for dual head (nvidia workaround)"),
++    OIV("DelayFuzziness",                       &DelayFuzziness, 0, 100,        "Delay fuzziness, to allow merging of multiple timer timeouts into one (notebook power saving)"),
+     OIV("ClickMotionDistance",                  &ClickMotionDistance, 0, 32,    "Pointer motion distance before click gets interpreted as drag"),
+     OIV("ClickMotionDelay",                     &ClickMotionDelay, 0, 2000,     "Delay before click gets interpreted as drag"),
+     OIV("MultiClickTime",                       &MultiClickTime, 0, 5000,       "Multiple click time"),
+Index: icewm-1.3.7/src/yapp.cc
+===================================================================
+--- icewm-1.3.7.orig/src/yapp.cc	2012-01-16 13:58:25.117764656 +0100
++++ icewm-1.3.7/src/yapp.cc	2012-01-16 13:59:40.857890532 +0100
+@@ -117,10 +117,78 @@
+     t->fPrev = t->fNext = 0;
+ }
+ 
++void YApplication::nextTimeout(struct timeval *timeout) {
++    bool fFirst = true;
++    const YTimer *t;
++
++    t = fFirstTimer;
++
++    while (t) {
++        if (t->isRunning() && (fFirst || timercmp(timeout, &t->timeout, >))) {
++            *timeout = t->timeout;
++            fFirst = false;
++        }
++        t = t->fNext;
++    }
++}
++
++void YApplication::nextTimeoutWithFuzziness(struct timeval *timeout) {
++    const YTimer *t;
++    struct timeval timeout_min, timeout_fuzzy, timeout_fixed, timeout_max;
++    bool fFixedExists = false, fFuzzyExists = false; // are there any timers with strict/fuzzy timeout?
++
++    timeout_min = timeout_fuzzy = timeout_fixed = timeout_max = *timeout;
++
++    t = fFirstTimer;
++
++    while (t) {
++        if (t->isRunning()) {
++	    if (!t->isFixed()) {
++	        if (fFuzzyExists) {
++		    if (timercmp(&t->timeout, &timeout_fuzzy, <)) {
++			// this fuzzy timer is earlier than previous one, update
++			if (timercmp(&t->timeout, &timeout_min, <))
++			    timeout_min = t->timeout; // don't use new min value, to avoid moving out of area of later timers and thus not catching them with the calculated result timeout
++			timeout_fuzzy = t->timeout; // update desired timeout spot
++			if (timercmp(&t->timeout_max, &timeout_max, <))
++			    timeout_max = t->timeout_max;
++		    }
++		} else {
++		    // encountered first fuzzy timer, register everything
++		    timeout_min = t->timeout_min;
++		    timeout_fuzzy = t->timeout;
++		    timeout_max = t->timeout_max;
++		    fFuzzyExists = true;
++		}
++	    } else {
++		// update if no fixed timer yet or current is earlier than previously registered one
++		if ((!fFixedExists) || timercmp(&t->timeout, &timeout_fixed, <)) {
++		    timeout_fixed = t->timeout;
++		    fFixedExists = true;
++		}
++	    }
++        }
++        t = t->fNext;
++    }
++    // ok, now that we walked over all timers and calculated border values,
++    // let's figure out which timeout actually to choose
++    if (fFixedExists) {
++        *timeout = timeout_fixed;
++	if (fFuzzyExists) {
++	    if (timercmp(&timeout_max, &timeout_fixed, <))
++	        // ok, the maximum timeout of our fuzzy timer(s) is less
++		// than the first fixed timer's accurate timeout
++		// --> we need to give up the fixed timer in this round
++	        *timeout = timeout_max;
++	}
++    } else {
++        // we choose the max timeout to try to catch as many fuzzy timers as possible
++        *timeout = timeout_max;
++    }
++}
++
+ void YApplication::getTimeout(struct timeval *timeout) {
+-    YTimer *t;
+     struct timeval curtime;
+-    bool fFirst = true;
+ 
+     if (fFirstTimer == 0)
+         return;
+@@ -133,14 +201,11 @@
+         timeout->tv_sec++;
+     }
+ 
+-    t = fFirstTimer;
+-    while (t) {
+-        if (t->isRunning() && (fFirst || timercmp(timeout, &t->timeout, >))) {
+-            *timeout = t->timeout;
+-            fFirst = false;
+-        }
+-        t = t->fNext;
+-    }
++    if (DelayFuzziness > 0)
++        nextTimeoutWithFuzziness(timeout);
++    else
++        nextTimeout(timeout);
++
+     if ((curtime.tv_sec == timeout->tv_sec &&
+          curtime.tv_usec == timeout->tv_usec)
+         || timercmp(&curtime, timeout, >))
+@@ -167,7 +232,7 @@
+     t = fFirstTimer;
+     while (t) {
+         n = t->fNext;
+-        if (t->isRunning() && timercmp(&curtime, &t->timeout, >)) {
++        if (t->isRunning() && timercmp(&curtime, &t->timeout_min, >)) {
+             YTimerListener *l = t->getTimerListener();
+             t->stopTimer();
+             if (l && l->handleTimer(t))
+Index: icewm-1.3.7/src/yapp.h
+===================================================================
+--- icewm-1.3.7.orig/src/yapp.h	2010-10-31 15:09:36.000000000 +0100
++++ icewm-1.3.7/src/yapp.h	2012-01-16 14:01:04.845577038 +0100
+@@ -81,6 +81,8 @@
+ 
+     void registerTimer(YTimer *t);
+     void unregisterTimer(YTimer *t);
++    void nextTimeout(struct timeval *timeout);
++    void nextTimeoutWithFuzziness(struct timeval *timeout);
+     void registerPoll(YPollBase *t);
+     void unregisterPoll(YPollBase *t);
+ 
+Index: icewm-1.3.7/src/yprefs.h
+===================================================================
+--- icewm-1.3.7.orig/src/yprefs.h	2012-01-16 13:58:25.757731985 +0100
++++ icewm-1.3.7/src/yprefs.h	2012-01-16 13:59:40.861890328 +0100
+@@ -17,6 +17,7 @@
+ XIV(int, xineramaPrimaryScreen,                 0)
+ XIV(int, MenuActivateDelay,                     40)
+ XIV(int, SubmenuActivateDelay,                  300)
++XIV(int, DelayFuzziness,                        10)
+ XIV(int, ClickMotionDistance,                   4)
+ XIV(int, ClickMotionDelay,                      200)
+ XIV(int, MultiClickTime,                        400)
+Index: icewm-1.3.7/src/ytimer.cc
+===================================================================
+--- icewm-1.3.7.orig/src/ytimer.cc	2010-10-31 15:09:36.000000000 +0100
++++ icewm-1.3.7/src/ytimer.cc	2012-01-16 13:59:40.861890328 +0100
+@@ -6,9 +6,11 @@
+ #include "config.h"
+ #include "ytimer.h"
+ #include "yapp.h"
++#include "yprefs.h"
+ 
+ YTimer::YTimer(long ms) {
+     fRunning = false;
++    fFixed = false;
+     fPrev = fNext = 0;
+     fInterval = ms;
+     fListener = 0;
+@@ -21,18 +23,52 @@
+     }
+ }
+ 
++void YTimer::setFixed() {
++    fFixed = true;
++}
++
+ void YTimer::startTimer(long ms) {
+     setInterval(ms);
+     startTimer();
+ }
+ 
+ void YTimer::startTimer() {
++    long offs = fInterval * 1000;
++
+     gettimeofday(&timeout, 0);
+-    timeout.tv_usec += fInterval * 1000;
++
++    timeout.tv_usec += offs;
+     while (timeout.tv_usec >= 1000000) {
+         timeout.tv_usec -= 1000000;
+         timeout.tv_sec++;
+     }
++
++    timeout_min = timeout;
++    timeout_max = timeout;
++
++    if ((!fFixed) && (DelayFuzziness)) {
++        // non-fixed timer: configure fuzzy timeout range
++	// to allow for merging of several timers
++	struct timeval diff;
++
++	offs = (offs * DelayFuzziness) / 100;
++
++	timerclear(&diff);
++	diff.tv_usec = offs ;
++
++	timersub(&timeout_min, &diff, &timeout_min);
++        while (timeout_min.tv_usec >= 1000000) {
++            timeout_min.tv_usec -= 1000000;
++            timeout_min.tv_sec++;
++        }
++
++	timeradd(&timeout_max, &diff, &timeout_max);
++        while (timeout_max.tv_usec >= 1000000) {
++            timeout_max.tv_usec -= 1000000;
++            timeout_max.tv_sec++;
++        }
++    }
++
+     if (fRunning == false) {
+         fRunning = true;
+         app->registerTimer(this);
+@@ -40,6 +76,8 @@
+ }
+ 
+ void YTimer::runTimer() {
++    // might need to handle fuzziness just like startTimer,
++    // but so far runTimer() is called by one fixed timer only (taskbar clock)
+     gettimeofday(&timeout, 0);
+     if (fRunning == false) {
+         fRunning = true;
+Index: icewm-1.3.7/src/ytimer.h
+===================================================================
+--- icewm-1.3.7.orig/src/ytimer.h	2010-10-31 15:09:36.000000000 +0100
++++ icewm-1.3.7/src/ytimer.h	2012-01-16 13:59:40.861890328 +0100
+@@ -24,20 +24,24 @@
+     void setInterval(long ms) { fInterval = ms; }
+     long getInterval() const { return fInterval; }
+ 
++    void setFixed();
++
+     void startTimer();
+     void startTimer(long ms);
+     void stopTimer();
+-    void runTimer(); // run timer handler immediatelly
++    void runTimer(); // run timer handler immediately
+     bool isRunning() const { return fRunning; }
++    bool isFixed() const { return (!memcmp(&timeout_min, &timeout_max, sizeof(timeout_min))); }
+ 
+ private:
+     YTimerListener *fListener;
+     long fInterval;
+     bool fRunning;
++    bool fFixed;
+     YTimer *fPrev;
+     YTimer *fNext;
+ 
+-    struct timeval timeout;
++    struct timeval timeout_min, timeout, timeout_max;
+ 
+     friend class YApplication;
+ };

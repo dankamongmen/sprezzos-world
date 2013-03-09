@@ -1,0 +1,187 @@
+#!/bin/sh -e
+## misc_fixes.dpatch by Eduard Bloch <blade@debian.org> and others
+##
+## DP: Various semi-urgent fixes added by myself or Debian BTS contributors.
+
+if [ $# -ne 1 ]; then
+    echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+    exit 1
+fi
+
+[ -f debian/patches/00patch-opts ] && . debian/patches/00patch-opts
+patch_opts="${patch_opts:--f --no-backup-if-mismatch}"
+
+case "$1" in
+       -patch) patch $patch_opts -p1 < $0;;
+       -unpatch) patch $patch_opts -p1 -R < $0;;
+        *)
+                echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+                exit 1;;
+esac
+
+exit 0
+
+@DPATCH@
+diff -urNad icewm-1.3.5~/src/aapm.cc icewm-1.3.5/src/aapm.cc
+--- icewm-1.3.5~/src/aapm.cc	2009-11-08 20:25:14.000000000 +0100
++++ icewm-1.3.5/src/aapm.cc	2009-12-20 19:33:25.326131434 +0100
+@@ -967,7 +967,7 @@
+             acpiBatteries[i] = 0;
+         }
+         batteryNum = 0;
+-        delete acpiACName; acpiACName = 0;
++        free(acpiACName); acpiACName = 0;
+     }
+ }
+ 
+diff -urNad icewm-1.3.5~/src/mstring.cc icewm-1.3.5/src/mstring.cc
+--- icewm-1.3.5~/src/mstring.cc	2009-11-08 20:25:14.000000000 +0100
++++ icewm-1.3.5/src/mstring.cc	2009-12-20 19:33:25.326131434 +0100
+@@ -213,6 +213,7 @@
+ }
+ 
+ int mstring::compareTo(const mstring &s) const {
++#if upstream_comp
+     if (s.length() > length()) {
+         return -1;
+     } else if (s.length() == length()) {
+@@ -223,6 +224,14 @@
+     } else {
+         return 1;
+     }
++#else
++    int res=memcmp(data(), s.data(), min(s.length(), length()));
++    if (s.length() == length())
++       return res;
++    if(res) // different length, left part already not equal
++       return res;
++    return length()-s.length();
++#endif
+ }
+ 
+ bool mstring::copy(char *dst, size_t len) const {
+diff -urNad icewm-1.3.5~/src/themes.cc icewm-1.3.5/src/themes.cc
+--- icewm-1.3.5~/src/themes.cc	2009-11-08 20:25:14.000000000 +0100
++++ icewm-1.3.5/src/themes.cc	2009-12-20 19:33:25.327131084 +0100
+@@ -103,6 +103,9 @@
+            // assume that OS caches this. Otherwise, construct a new
+            // object to just store the string and an YArrayList of them,
+            // read the entries once and work with List contents later
++
++           if(de->d_name[0] == '.')
++              continue;
+            ret++;
+         }
+         closedir(dir);
+@@ -130,7 +133,6 @@
+ 
+ void ThemesMenu::findThemes(const char *path, YMenu *container) {
+     char const *const tname("/default.theme");
+-    bool isFirst(true);
+ 
+     int dplen(strlen(path));
+     char *npath = NULL, *dpath = NULL;
+@@ -142,50 +144,47 @@
+         dpath = newstr(path);
+     }
+ 
++    bool bNesting=nestedThemeMenuMinNumber && themeCount>nestedThemeMenuMinNumber;
++
+     DIR *dir(opendir(path));
+ 
+     if (dir != NULL) {
+         struct dirent *de;
+         while ((de = readdir(dir)) != NULL) {
++
++           if(de->d_name[0] == '.')
++              continue;
++
+             YMenuItem *im(NULL);
+             npath = cstrJoin(dpath, de->d_name, tname, NULL);
+ 
+             if (npath && access(npath, R_OK) == 0) {
+-                if (isFirst) {
+-                    isFirst = false;
+-//              if (itemCount())
+-//                        addSeparator();
+-                    //addLabel(path);
+-                    //addSeparator();
+-                }
+                 char *relThemeName = cstrJoin(de->d_name, tname, NULL);
+                 im = newThemeItem(de->d_name, npath, relThemeName);
+                 if (im) {
+-                    if (nestedThemeMenuMinNumber && themeCount>nestedThemeMenuMinNumber) {
+-                        int targetItem = container->findFirstLetRef(de->d_name[0], 0, 1);
+-                        char *smname = strdup("....");
+-                        *smname = ASCII::toUpper(de->d_name[0]);
+-                        if (targetItem >= 0) {
+-                            ustring smn = smname;
+-                            YMenuItem *oldSibling = container->getItem(targetItem);
+-                            // we have something with this letter
+-                            if (smn.equals(oldSibling->getName())) {
+-                                // is our submenu
+-                                (oldSibling->getSubmenu())->addSorted(im, true);
+-                            } else {
+-                                // menu a new item, a menu under it, move
+-                                // the theme item to the submenu and assign
+-                                // oldSibling reference to it
++                    if (bNesting) 
++                    {
++                       char fLetter = ASCII::toUpper(de->d_name[0]);
++
++                        int targetItem = container->findFirstLetRef(fLetter, 0, 1);
++                        
++                        if(targetItem<0) // no submenu for us yet, create one
++                        {
++                                char *smname = strdup("....");
++                                smname[0] = fLetter;
++
+                                 YMenu *smenu = new YMenu();
+                                 YMenuItem *smItem = new YMenuItem(smname, 0, null, NULL, smenu);
+-                                if(smItem && smenu) {
+-                                   smenu->addSorted(oldSibling, false);
+-                                   smenu->addSorted(im, false);
+-                                   container->setItem(targetItem, smItem);
++                                if(smItem && smenu)
++                                   container->addSorted(smItem, false);
++                                targetItem = container->findFirstLetRef(fLetter, 0, 1);
++                                if(targetItem<0)
++                                {
++                                   warn("Failed to add submenu");
++                                   return;
+                                 }
+-                            }
+-                        } else //no sibling, add a plain icon
+-                            container->addSorted(im, false);
++                        }
++                        container->getItem(targetItem)->getSubmenu()->addSorted(im, false);
+                     } else //the default method without Extra SubMenues
+                         container->addSorted(im, false);
+                 }
+diff -urNad icewm-1.3.5~/src/wmclient.cc icewm-1.3.5/src/wmclient.cc
+--- icewm-1.3.5~/src/wmclient.cc	2009-11-08 20:25:14.000000000 +0100
++++ icewm-1.3.5/src/wmclient.cc	2009-12-20 19:33:25.330131156 +0100
+@@ -1037,6 +1046,14 @@
+         {
+             if (r_format == itemSize1 && nitems > 0) {
+                 data = realloc(data, (itemCount + nitems) * itemSize / 8);
++
++                // access to memory beyound 256MiB causes crashes! But anyhow, size
++                // >>2MiB looks suspicious. Detect this case ASAP. However, if
++                // the usable icon is somewhere in the beginning, it's okay to
++                // return truncated data.
++                if(itemCount * itemSize / 8 >= 2097152)
++                   break;
++
+                 memcpy((char *)data + itemCount * itemSize / 8, prop, nitems * itemSize / 8);
+                 itemCount += nitems;
+                 XFree(prop);
+@@ -1064,7 +1081,7 @@
+     *elem = (long *)GetFullWindowProperty(xapp->display(), handle(),
+                                           _XA_NET_WM_ICON, *count, 32);
+ 
+-    if (elem != NULL)
++    if (elem && count && *count>0)
+         return true;
+ 
+ #if 0

@@ -1,0 +1,254 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# debian/rules for icewm
+
+SHELL=/bin/bash
+
+CFLAGS = -Wall -g
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+ICEWM_COMMON=$(CURDIR)/debian/icewm-common
+ICEWM=$(CURDIR)/debian/icewm
+ICEWM_GNOME_SUPP=$(CURDIR)/debian/icewm-gnome-support
+ICEWM_LITE=$(CURDIR)/debian/icewm-lite
+ICEWM_EXP=$(CURDIR)/debian/icewm-experimental
+DOCDIR=/usr/share/doc/icewm-common
+BDIR=builddir
+
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+# FOR AUTOCONF 2.52 AND NEWER ONLY
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+ICONS=$(CURDIR)/debian/icons
+FDO=$(CURDIR)/debian/fdo
+CUSTOM=$(CURDIR)/debian/custom
+MP=icewm-common.7
+
+build-exp: stamp-build-exp
+stamp-build-exp: autofoo-update-stamp
+	mkdir -p $(BDIR)-exp
+	cd $(BDIR)-exp && ../configure $(confflags) \
+		--disable-menus-gnome1 --disable-menus-gnome2 \
+		--prefix=/usr --with-cfgdir=/etc/X11/icewm \
+		--datadir=/usr/share --disable-debug \
+		--enable-i18n --enable-nls \
+		--enable-antialiasing  --enable-shaped-decorations \
+		--enable-gradients \
+		--with-mkfontdir=/usr/X11R6/bin/mkfontdir \
+		--docdir=$(DOCDIR) --htmldir=$(DOCDIR)/html \
+		--enable-guievents --with--esd-config=/usr/bin/esd-config \
+		&& $(MAKE) EXEEXT=-experimental
+	touch stamp-build-exp
+
+build-lite: stamp-build-lite
+stamp-build-lite: autofoo-update-stamp
+	mkdir -p $(BDIR)-lite
+	cd $(BDIR)-lite && PATH="$(CURDIR)/debian:$(PATH)" ../configure $(confflags) --with-xpm --prefix=/usr \
+		--disable-menus-gnome1 --disable-menus-gnome2 \
+		--with-cfgdir=/etc/X11/icewm --datadir=/usr/share --disable-debug \
+		--enable-i18n --enable-nls --enable-lite --disable-xfreetype \
+		--enable-corefonts --with-mkfontdir=/usr/X11R6/bin/mkfontdir \
+		--docdir=$(DOCDIR) --htmldir=$(DOCDIR)/html \
+		--disable-taskbar  --disable-xrandr \
+		&& $(MAKE) EXEEXT=-lite
+	touch stamp-build-lite
+
+build-normal: stamp-normal
+stamp-normal: autofoo-update-stamp
+	mkdir -p $(BDIR)-normal
+	cd $(BDIR)-normal && PATH="$(CURDIR)/debian:$(PATH)" ../configure $(confflags) \
+		--prefix=/usr --with-cfgdir=/etc/X11/icewm \
+		--enable-menus-gnome2 \
+		--datadir=/usr/share --disable-debug \
+		--enable-i18n --enable-nls \
+		--enable-antialiasing  --enable-shaped-decorations \
+		--enable-gradients \
+		--with-mkfontdir=/usr/X11R6/bin/mkfontdir \
+		--docdir=$(DOCDIR) --htmldir=$(DOCDIR)/html \
+		--enable-guievents --with--esd-config=/usr/bin/esd-config \
+		&& $(MAKE)
+	touch $@
+
+autofoo-update-stamp:
+	dh_testdir
+	chmod +x debian/kde-config
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	cp -f /usr/share/misc/config.sub config.sub
+endif
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	cp -f /usr/share/misc/config.guess config.guess
+endif
+	touch $@
+
+build: build-arch build-indep
+
+build-arch: build-stamp
+build-indep: build-stamp
+
+build-stamp: build-normal build-lite
+	#hm... best place to run that?!
+	# cp -a po pod && cd pod && make merge && for x in *.po ; do cp $${x}x $$x ; done
+	$(MAKE) -C doc
+	# Generate the most exhaustive preference file, i.e. the one
+	# from the experimental version.
+	# $(BDIR)-exp/src/genpref-experimental > lib/preferences
+	$(BDIR)-normal/src/genpref > lib/preferences
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -rf $(BDIR)*
+	-$(MAKE) -C po clean 
+	rm -f stamp* *stamp `find . -name "*~"` Makefile icewm.lsm icewm.spec src/icesound-* config.log src/config.h
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	# Install everything but documentation
+	cd $(BDIR)-normal && $(MAKE) install-base install-nls install-desktop DESTDIR=$(ICEWM_COMMON)
+	# Do not provide a programs files, it is added by the menu system
+	rm -f $(ICEWM_COMMON)/etc/X11/icewm/programs
+
+	# Install Debian custom files
+	install -m 644 $(ICONS)/{mutt,mozilla,icewm}*.xpm \
+		$(ICEWM_COMMON)/usr/share/icewm/icons
+	-mv $(ICEWM_COMMON)/usr/share/icewm/taskbar/icewm.xpm  $(ICEWM_COMMON)/usr/share/icewm/taskbar/icewm.orig.xpm
+	install -m 644 $(ICONS)/debian.xpm $(ICEWM_COMMON)/usr/share/icewm/taskbar/icewm.xpm
+	#install -m 644 $(CUSTOM)/{menu,toolbar} $(ICEWM_COMMON)/etc/X11/icewm
+	install -m 644 $(CUSTOM)/toolbar $(CUSTOM)/menu $(ICEWM_COMMON)/etc/X11/icewm
+
+	# Add some links
+	dh_link -picewm-common
+
+	# Move files in the right package directory
+	mv $(ICEWM_COMMON)/usr/bin/icewm-set-gnomewm $(ICEWM_COMMON)/usr/share/icewm/
+	mv $(ICEWM_COMMON)/usr/bin/* $(ICEWM)/usr/bin
+	rm -rf $(ICEWM_COMMON)/usr/bin
+
+	# Install documentation
+	install -m 644 doc/*.html $(ICEWM_COMMON)/usr/share/doc/icewm-common/html
+	install -m 644 doc/*.sgml $(ICEWM_COMMON)/usr/share/doc/icewm-common/sgml
+	dh_installdocs -X.svn
+	mv $(ICEWM_COMMON)/usr/share/doc/icewm-common/FAQ/source/* $(ICEWM_COMMON)/usr/share/doc/icewm-common/sgml && rm -rf $(ICEWM_COMMON)/usr/share/doc/icewm-common/FAQ/source
+
+	# and add our bits to fix the font insanity with xft2
+	dh_installexamples -picewm-common $(CURDIR)/debian/examples/preferences.fonts $(CURDIR)/debian/examples/preferences.noClickToFocus $(CURDIR)/debian/examples/focus_mode.noClickToFocus
+
+	## icewm #####################################################
+
+	# Install the fd.o X Sessions file
+	install -m 644 $(FDO)/IceWM.desktop $(ICEWM)/usr/share/xsessions
+
+	# new, made by upstream, not decided yet how to port to other flavors
+	mv $(ICEWM_COMMON)/usr/share/xsessions/icewm-session.desktop $(ICEWM)/usr/share/xsessions
+	# we already have one...
+	-rm $(ICEWM_COMMON)/usr/share/applications/*desktop
+
+	# Remove doc directories since we will add links
+	# to icewm-common instead.
+	rm -rf $(ICEWM)/usr/share/doc/icewm
+
+	## icewm-gnome-support #######################################
+
+	mv $(ICEWM)/usr/bin/icewm-menu-gnome2 $(ICEWM_GNOME_SUPP)/usr/bin
+	install -m 755 -d $(ICEWM_GNOME_SUPP)/usr/share/icewm/contrib
+	install -m 755 debian/icewm-config-fix.pl $(ICEWM_GNOME_SUPP)/usr/share/icewm/contrib/config-fix.pl
+	install -m 755 debian/icewm-gnome $(ICEWM_GNOME_SUPP)/usr/bin/icewm-gnome
+	mv $(ICEWM_COMMON)/usr/share/applications $(ICEWM_GNOME_SUPP)/usr/share
+
+	# Remove doc directories since we will add links
+	# to icewm-common instead.
+	rm -rf $(ICEWM_GNOME_SUPP)/usr/share/doc/icewm-gnome-support
+
+	## icewm-lite ################################################
+	install -m 755 $(BDIR)-lite/src/ice*-lite $(ICEWM_LITE)/usr/bin
+	install -m 644 $(FDO)/IceWM-Lite.desktop $(ICEWM_LITE)/usr/share/xsessions
+
+	# Remove doc directories since we will add links
+	# to icewm-common instead.
+	rm -rf $(ICEWM_LITE)/usr/share/doc/icewm-lite
+
+	## icewm-experimental ########################################
+	#cp -a $(BDIR)-exp/src/ice*-experimental $(ICEWM_EXP)/usr/bin
+# making -experimental compat symlinks
+	cd  $(ICEWM_EXP)/usr/bin && for x in icewm-session icewm icewmhint icehelp icewmtray icewmbg icesh icesound genpref ; do ln -sf $$x $$x-experimental ; done ; ln -sf genpref genpref-experimental
+	install -m 644 $(FDO)/IceWM-Experimental.desktop $(ICEWM_EXP)/usr/share/xsessions
+
+	# Remove doc directories since we will add links
+	# to icewm-common instead.
+	rm -rf $(ICEWM_EXP)/usr/share/doc/icewm-experimental
+
+	cd debian ; for x in icewm icewm-lite icewm-experimental ; do mkdir -p $$x/usr/share/lintian/overrides ; cp $$x.lintian $$x/usr/share/lintian/overrides/$$x ; done
+
+binary-indep: build install
+# There are no architecture-independent files to be uploaded
+# generated by this package.  If there were any they would be
+# made here.
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+
+	dh_link -picewm usr/share/doc/icewm-common usr/share/doc/icewm
+	dh_link -picewm-gnome-support usr/share/doc/icewm-common usr/share/doc/icewm-gnome-support
+	dh_link -picewm-lite usr/share/doc/icewm-common usr/share/doc/icewm-lite
+	dh_link -picewm-experimental usr/share/doc/icewm-common usr/share/doc/icewm-experimental
+
+	dh_installmenu
+	dh_icons
+
+	dh_installchangelogs -picewm-common CHANGES
+
+	# Stop using dh_installwm until bug #85963 is fixed.
+	#dh_installwm -picewm --priority=50 icewm
+	#dh_installwm -picewm-lite --priority=40 icewm-lite
+	#dh_installwm -picewm-experimental --priority=40 icewm-experimental
+
+	dh_installman -picewm-common debian/$(MP)
+
+	dh_strip
+	dh_compress
+
+	# Install undocumented manpages
+	for v in "" -experimental -lite ; do \
+		mkdir -p debian/icewm$$v/usr/share/man/man1 ; \
+			for f in icewm icehelp icewmbg icewmhint icesh icewmtray icewm-session icesound; do \
+				ln -sf ../man7/$(MP).gz debian/icewm$$v/usr/share/man/man1/$$f$$v.1x.gz ; \
+		done ; \
+	done
+	
+	mkdir -p debian/icewm-gnome-support/usr/share/man/man1
+	ln -sf ../man7/$(MP).gz debian/icewm-gnome-support/usr/share/man/man1/icewm-gnome.1x.gz
+	ln -sf ../man7/$(MP).gz debian/icewm-gnome-support/usr/share/man/man1/icewm-menu-gnome2.1x.gz
+	ln -sf ../man7/$(MP).gz debian/icewm-experimental/usr/share/man/man1/icesound-experimental.1x.gz
+
+	dh_fixperms -Xfix-config.pl
+	cd debian ; for x in -lite -experimental ; do cp icewm.postinst icewm$$x.postinst ; cp icewm.prerm icewm$$x.prerm ; done
+
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -v -- -Zxz -z9
+
+binary:	binary-indep binary-arch
+
+.PHONY: binary binary-arch binary-indep clean install

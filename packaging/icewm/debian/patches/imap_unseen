@@ -1,0 +1,69 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## imap_unseen.dpatch by Alexander Galanin <al@galanin.nnov.ru>
+##
+## DP: Debian Bug report logs - #539956
+## DP: [icewm] support for unseen messages on IMAP
+## DP: with minor changes by Eduard Bloch <blade@debian.org>
+
+@DPATCH@
+Index: icewm-1.3.7~pre2/src/amailbox.cc
+===================================================================
+--- icewm-1.3.7~pre2.orig/src/amailbox.cc	2010-04-28 21:00:30.000000000 +0200
++++ icewm-1.3.7~pre2/src/amailbox.cc	2010-04-29 22:11:16.950092518 +0200
+@@ -278,14 +278,27 @@
+             state = WAIT_STAT;
+             delete[] status;
+         } else if (state == WAIT_STAT) {
+-            MSG(("imap: logout"));
+-            char logout[] = "0002 LOGOUT\r\n", folder[128];
++            MSG(("imap: unseen"));
++            char * unseen(cstrJoin("0002 STATUS ",
++                                   (fURL->path() == null || fURL->path().equals("/")) ? "INBOX" : cstring(fURL->path()).c_str() + 1,
++                                   " (UNSEEN)\r\n", NULL));
++            char folder[128] = "";
+             if (sscanf(bf, "* STATUS %127s (MESSAGES %lu)",
+                        folder, &fCurCount) != 2) {
+                 fCurCount = 0;
+             }
+             fCurUnseen = 0;
+-            sk.write(logout, strlen(logout));
++            sk.write(unseen, strlen(unseen));
++            state = WAIT_UNSEEN;
++            delete [] unseen;
++        } else if (state == WAIT_UNSEEN) {
++            MSG(("imap: logout"));
++            const char logout[] = "0003 LOGOUT\r\n", folder[128] = "";
++            if (sscanf(bf, "* STATUS %127s (UNSEEN %lu)",
++                       folder, &fCurUnseen) != 2) {
++                fCurUnseen = 0;
++            }
++            sk.write(logout, sizeof(logout)/sizeof(char)-1);
+             state = WAIT_QUIT;
+         } else if (state == WAIT_QUIT) {
+             MSG(("imap: done"));
+@@ -294,10 +307,11 @@
+             state = SUCCESS;
+             if (fCurCount == 0)
+                 fMbx->mailChecked(MailBoxStatus::mbxNoMail, fCurCount);
+-            else if (fCurCount > fLastCount && fLastCount != -1)
+-                fMbx->mailChecked(MailBoxStatus::mbxHasNewMail, fCurCount);
++            // A.Galanin: I think that 'has unseen' flag has priority higher that 'has new' flag
+             else if (fCurUnseen != 0)
+                 fMbx->mailChecked(MailBoxStatus::mbxHasUnreadMail, fCurCount);
++            else if (fCurCount > fLastCount && fLastCount != -1)
++                fMbx->mailChecked(MailBoxStatus::mbxHasNewMail, fCurCount);
+             else
+                 fMbx->mailChecked(MailBoxStatus::mbxHasMail, fCurCount);
+             fLastUnseen = fCurUnseen;
+Index: icewm-1.3.7~pre2/src/amailbox.h
+===================================================================
+--- icewm-1.3.7~pre2.orig/src/amailbox.h	2010-04-28 21:00:30.000000000 +0200
++++ icewm-1.3.7~pre2/src/amailbox.h	2010-04-29 22:11:16.950092518 +0200
+@@ -25,6 +25,7 @@
+         WAIT_USER,
+         WAIT_PASS,
+         WAIT_STAT,
++        WAIT_UNSEEN,
+         WAIT_QUIT,
+         ERROR,
+         SUCCESS
