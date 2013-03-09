@@ -279,3 +279,11 @@ $(ICEWM): $(SPREZZ)/icewm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf icewm_$(icewm_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: blackbox
+blackbox:$(BLACKBOX)_$(ARCH).deb
+$(BLACKBOX): $(SPREZZ)/blackbox/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blackbox_$(blackbox_UPVER).orig.tar.gz $(TARARGS) $@
+
