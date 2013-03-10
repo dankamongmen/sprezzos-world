@@ -543,3 +543,11 @@ $(PERLTK): $(SPREZZ)/perl-tk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf Tk-$(perl-tk_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: libfile-pushd-perl
+libfile-pushd-perl:$(LIBFILEPUSHDPERL)_$(ARCH).deb
+$(LIBFILEPUSHDPERL): $(SPREZZ)/libfile-pushd-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libfile-pushd-perl_$(libfile-pushd-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
