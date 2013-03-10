@@ -1,0 +1,640 @@
+#!/bin/sh -e
+#-----------------------------------------------------------------------------
+#
+# $Sendmail: update_db,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Update Sendmail databases for Debian
+#
+# Copyright (c) 1998-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes (to all):
+#	* assumes makemap dbtype /etc/mail/database < /etc/mail/database
+#
+# Notes (to self):
+#	* changes made herein *must* be reflected in
+#		parse_mc,update_mk,update_db,debian.m4
+#	* multiple db options not supported
+#	* userdb can also have multiple databases and then a forward!
+#	* need sendmail stop/start
+#
+#-----------------------------------------------------------------------------
+set -e;
+
+# List of db files/features/etc
+db_files="databases Makefile crontab QUEUE_GROUP sendmail.cf submit.cf \
+		confCR_FILE confCT_FILE confCW_FILE confUSERDB_SPEC \
+		access_db authinfo bitdomain domaintable \
+		genericstable mailertable uucpdomain \
+		use_cw_file use_ct_file virtusertable ALIAS_FILE";
+
+# Path to other sendmail helpers
+if [ -x ./update_sendmail ]; then
+	sm_path='.';
+elif [ -x $(dirname $0)/update_sendmail ]; then
+	sm_path=$(dirname $0);
+else
+	sm_path=@datadir@/sendmail;
+	fi;
+# Bring in sendmail.conf for the network definitions
+if [ ! -f @sysconfdir@/mail/sendmail.conf ]; then
+	if [ -x $sm_path/update_conf ]; then
+		$sm_path/update_conf;
+		fi;
+	fi; 
+if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+	. @sysconfdir@/mail/sendmail.conf;
+	fi;
+if [ "$HANDS_OFF" != 'No' ]; then
+	exit 0;
+	fi;
+
+# control amount of output
+verbosity=0;
+
+# flag used to ensure only one newaliases command is run
+newaliases_run=0;
+
+# flag used to indicate a dataset has been moved, may need another update
+changed=0;
+
+# max return code
+max_rc=0;
+missing_rqd=0;
+missing_opt=0;
+missing_cre=0;
+m4_errors=0;
+
+#-------------------------------------------------------------
+# Initial update of sendmail.mc/databases
+#-------------------------------------------------------------
+initial () {
+	if [ $verbosity -gt 1 ]; then
+		echo "initial()";
+		fi;
+	# Sigh... I wish this was in Perl...
+	$sm_path/parse_mc || true;
+	};
+
+#-------------------------------------------------------------
+# Handle found databases
+#-------------------------------------------------------------
+is_found () {
+	if [ $verbosity -gt 1 ]; then
+		echo "is_found: $dbfeat - $dbname";
+		fi;
+	process=1;
+
+	case "$dbfeat" in
+		ALIAS_FILE)
+			if [ -f @sysconfdir@/mail/aliases ] & [ ! -f /etc/aliases ]; then
+				echo "Moving @sysconfdir@/mail/aliases to /etc/aliases";
+				mv @sysconfdir@/mail/aliases /etc/aliases;
+				ln -sf ../aliases @sysconfdir@/mail/aliases;
+				fi;
+			;;
+		submit.cf)
+			if [ ! -f @datadir@/sendmail/cf/feature/msp.m4 ]; then
+				rm -f @sysconfdir@/mail/submit.cf 2>/dev/null;
+				rm -f @sysconfdir@/mail/submit.cf.errors 2>/dev/null;
+				process=0;
+				fi;
+			;;
+		*)
+			;;
+		esac;
+	};
+
+#-------------------------------------------------------------
+# Handle missing databases:
+#	 moving  /etc/xxx to /etc/mail/xxx
+#	 rename  /etc/mail/xxx to /etc/mail/yyy
+#-------------------------------------------------------------
+move_file () {
+	if [ -f $1 ]; then
+		if [ ! -L $1 ]; then
+			echo "Moving $1 to $dbname.";
+			mv $1 $dbname;
+			chown root:smmsp $dbname;
+			chmod 0644 $dbname;
+			if [ -f $1.db ]; then
+				mv -f /etc/$1.db  $dbname.db;
+				fi;
+			if [ -f $1.pag ]; then
+				mv -f /etc/$1.pag $dbname.pag;
+				fi;
+			if [ -f $1.dir ]; then
+				mv -f /etc/$1.dir $dbname.dir;
+				fi;
+			changed=1;
+			process=1;
+		else
+			echo "$1 is a link, move it to $dbname";
+			if [ "$dbopts" = "-o" ]; then
+				missing_opt=`expr $missing_opt + 1`;
+			else
+				missing_rqd=`expr $missing_rqd + 1`;
+				fi;
+			fi;
+		true;
+	else
+		false;
+		fi;
+	};
+
+rename_file () {
+	if [ -f @sysconfdir@/mail/$1 ]; then
+		echo "Renaming @sysconfdir@/mail/$1 to $dbname.";
+		mv @sysconfdir@/mail/$1 $dbname;
+		chown root:smmsp $dbname;
+		chmod 0644 $dbname;
+		changed=1;
+		process=1;
+		true;
+	else
+		false;
+		fi;
+	};
+
+is_not_found () {
+	if [ $verbosity -gt 1 ]; then
+		echo "is_not_found: $dbfeat - $dbname";
+		fi;
+
+	case "$dbfeat" in
+		databases|Makefile)
+			:;
+			;;
+		use_cw_file|confCW_FILE)
+			if move_file /etc/local-host-names; then
+				:;
+			elif rename_file sendmail.cw; then
+				:;
+			elif move_file /etc/sendmail.cw; then
+				:;
+			else
+				missing_cre=`expr $missing_cre + 1`;
+				echo "Warning: $dbfeat source" \
+					"file not found: $dbname";
+				echo " it was created";
+				echo "localhost" > $dbname;
+				echo `hostname -f` >> $dbname;
+				chown root:smmsp $dbname;
+				chmod 0644 $dbname;
+				fi;
+			;;
+		use_ct_file|confCT_FILE)
+			if move_file /etc/trusted-users; then
+				:;
+			elif rename_file sendmail.ct; then
+				:;
+			elif move_file /etc/sendmail.ct; then
+				:;
+			else
+				missing_cre=`expr $missing_cre + 1`;
+				echo "Warning: $dbfeat source" \
+					"file not found: $dbname";
+				echo " it was created";
+				touch $dbname;
+				chown root:smmsp $dbname;
+				chmod 0644 $dbname;
+				fi;
+			;;
+		HELP_FILE)
+			if move_file /etc/sendmail.hf; then
+				:;
+			elif rename_file sendmail.hf; then
+				:;
+			else
+				echo "Error: $dbfeat source file not found: $dbname";
+				missing_rqd=`expr $missing_rqd + 1`;
+				process=0;
+				fi;
+			;;
+		ALIAS_FILE)
+			if [ -e /etc/$dbsname ]; then
+				echo "Linking /etc/$dbsname to $dbname";
+				ln -sf ../$dbsname $dbname;
+				if [ -f /etc/$dbsname.db ]; then
+					mv /etc/$dbsname.db @sysconfdir@/mail;
+					fi;
+				if [ -f /etc/$dbsname.pag ]; then
+					mv /etc/$dbsname.pag @sysconfdir@/mail;
+					fi;
+				if [ -f /etc/$dbsname.dir ]; then
+					mv /etc/$dbsname.dir @sysconfdir@/mail;
+					fi;
+			elif [ "$dbopts" = "-o" ]; then
+				echo "Informational: $dbfeat source" \
+					"file not found: $dbname";
+				missing_opt=`expr $missing_opt + 1`;
+				process=0;
+			else
+				echo "Error: $dbfeat source file not found: $dbname";
+				missing_rqd=`expr $missing_rqd + 1`;
+				process=0;
+				fi;
+			;;
+		*.cf)
+			mcfile=$(echo "$dbsname" | sed -e 's/\..*//')
+			if move_file /etc/$dbsname; then
+				  if [ -f @sysconfdir@/${mcfile}.cf ]; then
+					  mv -f @sysconfdir@/${mcfile}.cf  @sysconfdir@/mail/;
+					  fi;
+			elif [ "$mcfile" = "sendmail" ]; then
+				cp @datadir@/sendmail/cf/debian/sendmail.mc \
+					$dbname;
+				chown root:smmsp $dbname;
+				chmod 0644 $dbname;
+			elif [ "$mcfile" = "submit" ]; then
+				cp @datadir@/sendmail/cf/debian/submit.mc \
+					$dbname;
+				chown root:smmsp $dbname;
+				chmod 0644 $dbname;
+			elif [ "$dbopts" = "-o" ]; then
+				echo "Informational: $dbfeat source" \
+					"file not found: $dbname";
+				missing_opt=`expr $missing_opt + 1`;
+				process=0;
+			else
+				echo "Error: $dbfeat source file not found: $dbname";
+				missing_rqd=`expr $missing_rqd + 1`;
+				process=0;
+				fi;
+			;;
+		QUEUE_GROUP)
+			echo "Warning: $dbfeat source" \
+					"file not found: $dbname";
+				echo " it was created";
+			mkdir -p $dbname;
+			chown root:smmsp $dbname;
+			chmod 02750 $dbname;
+			;;
+		crontab)
+			if [ -x $sm_path/update_conf ]; then
+				$sm_path/update_conf;
+				fi;
+			;;
+		access_db)
+			missing_cre=`expr $missing_cre + 1`;
+			echo "Warning: $dbfeat source" \
+				"file not found: $dbname";
+			echo " it was created";
+			cp @datadir@/sendmail/examples/db/access \
+				@sysconfdir@/mail/;
+			chown root:root $dbname;
+			chmod 0644 $dbname;
+			;;
+		*)
+			if move_file /etc/$dbsname; then
+				:;
+			elif [ "$dbopts" = "-o" ]; then
+				:;
+			else
+				missing_cre=`expr $missing_cre + 1`;
+				echo "Warning: $dbfeat source" \
+					"file not found: $dbname";
+				echo " it was created";
+				touch $dbname;
+				chown root:smmsp $dbname;
+				chmod 0644 $dbname;
+				fi;
+			;;
+		esac;
+	};
+
+#-------------------------------------------------------------
+# Handle empty databases
+#-------------------------------------------------------------
+is_empty () {
+	if [ $verbosity -gt 1 ]; then
+		echo "is_empty: $dbfeat - $dbname";
+		fi;
+	if [ $process -eq 1 ]; then
+		if [ "$dbtype" != "-" ]; then
+			rm -f $dbname.db;
+			rm -f $dbname.pag;
+			rm -f $dbname.dir;
+			fi;
+		case "$dbfeat" in
+			databases|Makefile)
+				:;
+				;;
+			access_db)
+				cp @datadir@/sendmail/examples/db/access \
+					@sysconfdir@/mail/;
+				chown root:root $dbname;
+				chmod 0644 $dbname;
+				;;
+			*)
+				echo "Informational: $dbfeat file empty: $dbname";
+				if [ "$dbopts" = "-o" ]; then
+					process=0;
+					fi;
+				;;
+			esac;
+		fi;
+	};
+
+#-------------------------------------------------------------
+# Handle no data (exists, but is only comments) databases
+#-------------------------------------------------------------
+is_comments () {
+	if [ $verbosity -gt 1 ]; then
+		echo "is_comments: $dbfeat - $dbname";
+		fi;
+	if [ $process -eq 1 ] && [ -s "$dbname" ]; then
+		if [ "$dbtype" != "-" ]; then
+			rm -f $dbname.db;
+			rm -f $dbname.pag;
+			rm -f $dbname.dir;
+			fi;
+		case "$dbfeat" in
+			databases|Makefile)
+				:;
+				;;
+			*)
+				echo "Informational: $dbfeat no data: $dbname";
+				if [ "$dbopts" = "-o" ]; then
+					process=0;
+					fi;
+				;;
+			esac;
+		fi;
+	};
+
+#-------------------------------------------------------------
+# Handle normal databases (exists, has data)
+#-------------------------------------------------------------
+is_normal () {
+	if [ $verbosity -gt 1 ]; then
+		echo "is_normal: $dbfeat - $dbname";
+		fi;
+
+	# Make sure sensitive databases are *not* generally readable
+	if [ "$dbsname" = "authinfo" ] \
+	|| [ "$dbsname" = "access" ]; then
+		chmod go-rwx $dbname;
+		fi;
+
+	if [ $process -eq 1 ] && [ $max_rc -eq 0 ]; then
+		case "$dbtype" in
+			'-'|text|ldap)
+				:;
+				;;
+			parse_mc)
+				$sm_path/parse_mc || true;
+				;;
+			update_conf)
+				$sm_path/update_conf || true;
+				;;
+			update_mk)
+				$sm_path/update_mk || true;
+				;;
+			btree)
+				echo "Updating $dbname...";
+				@sbindir@/makemap -d $dbtype $dbname.new.db < $dbname;
+				chown root:smmsp $dbname.new.db;
+				chmod 0644 $dbname.new.db;
+				mv -f $dbname.new.db $dbname.db;
+				;;
+			dbm | btree | hash)
+				echo "Updating $dbname...";
+				@sbindir@/makemap $dbtype $dbname.new.db < $dbname;
+				if [ "$dbsname" = "authinfo" ] \
+				|| [ "$dbsname" = "access" ]; then
+					chown smmta:smmsp $dbname.new.db;
+					chmod 0640 $dbname.new.db;
+				else
+					chown root:smmsp $dbname.new.db;
+					chmod 0640 $dbname.new.db;
+					fi;
+				mv -f $dbname.new.db $dbname.db;
+				;;
+			newaliases)
+				echo "Updating $dbname...";
+				if [ $newaliases_run -eq 0 ]; then
+					newaliases_run=1;
+					@libexecdir@/newaliases || true;
+					fi;
+				if [ -f $dbname.db ]; then
+					chown smmta:smmsp $dbname.db;
+					chmod 0640 $dbname.db;
+					fi;
+				;;
+			m4)
+				mcfile=$(echo "$dbsname" | sed -e 's/\..*//');
+				echo "Creating @sysconfdir@/mail/${mcfile}.cf...";
+				rm -f @sysconfdir@/mail/${mcfile}.cf.errors;
+				m4 @sysconfdir@/mail/${mcfile}.mc \
+				   > @sysconfdir@/mail/${mcfile}.cf.new \
+				   2> @sysconfdir@/mail/${mcfile}.cf.errors || true;
+				echo "### @sysconfdir@/mail/${mcfile}.mc ###" \
+					>> @sysconfdir@/mail/${mcfile}.cf.new;
+				sed -e 's/^/# /' @sysconfdir@/mail/${mcfile}.mc \
+					>> @sysconfdir@/mail/${mcfile}.cf.new;
+				chown root:smmsp @sysconfdir@/mail/${mcfile}.cf.new;
+				chmod 0644 @sysconfdir@/mail/${mcfile}.cf.new;
+				if [ ! -s @sysconfdir@/mail/${mcfile}.cf.errors ]; then
+					rm -f @sysconfdir@/mail/${mcfile}.cf.errors;
+				else
+					chown root:smmsp @sysconfdir@/mail/${mcfile}.cf.errors;
+					cat @sysconfdir@/mail/${mcfile}.cf.errors;
+					echo " ";
+					m4_errors=1;
+					fi;
+				# Can't tell if the errors are fatal or not ;-{
+				mv -f @sysconfdir@/mail/${mcfile}.cf.new \
+					@sysconfdir@/mail/${mcfile}.cf;
+				;;
+			*)
+				echo "$dbtype map not done herein";
+				;;
+			esac;
+		fi;
+	};
+
+#-------------------------------------------------------------
+# Handle completion
+#-------------------------------------------------------------
+final () {
+	if [ $verbosity -gt 1 ]; then
+		echo "final()";
+		fi;
+	};
+
+
+# status report if not for single database
+if [ -z "$1" ]; then
+	echo "Checking {sendmail,submit}.mc and related databases...";
+else
+	db_files="$1";
+	fi;
+
+initial;
+
+for file in $db_files; do \
+	line=$(grep -Ee "^[[:space:]]*$file" \
+		@sysconfdir@/mail/databases || true);
+	while ([ "$line" != "" ]); do
+		str=$(echo "$line" | cut -d "
+" -f 1);
+		line=$(echo "$line" | cut -d "
+" -f 2-);
+
+		# Strip line back into four pieces: feature, type, opts, name
+		dbfeat=$(echo "$str" | cut -d ":" -f 1);
+		dbtype=$(echo "$str" | cut -d ":" -f 2);
+		dbopts=$(echo "$str" | cut -d ":" -f 3);
+		dbname=$(echo "$str" | cut -d ":" -f 4);
+		dbregx=$(echo "$str" | cut -d ":" -f 5);
+		if [ $(dirname "$dbname") = "@sysconfdir@/mail" ]; then
+			dbsname=$(basename "$dbname");
+		elif [ $(dirname "$dbname") = "@sysconfdir@" ]; then
+			dbsname=$(basename "$dbname");
+		else
+			dbsname="$dbname";
+			fi;
+		if [ "$dbopts" = "-" ]; then
+			dbopts="";
+			fi;
+		if [ "$dbregx" = "-" ]; then
+			dbregx="";
+			fi;
+
+		# Check to see if we're doing one, or all
+		if [ ! -z "$1" ]; then
+			if [ "$1" = "$dbfeat" ] \
+			|| [ "$1" = "$dbname" ] \
+			|| [ "$1" = "$dbsname" ]; then
+				:;
+			else
+				continue;
+				fi;
+			fi;
+
+		# Check for special database types
+		case "$dbtype" in
+			ldap)
+				if [ $verbosity -gt 0 ]; then
+					echo "Skipping $dbname...";
+					fi;
+				continue
+				;;
+			dbm | btree | hash)
+				if [ ! -x @libexecdir@/makemap ]; then
+					echo "Delaying $dbname...";
+					continue;
+					fi;
+				;;
+			newaliases)
+				if [ ! -x @libexecdir@/newaliases ]; then
+					echo "Delaying $dbname...";
+					continue;
+					fi;
+				;;
+			*)
+				;;
+			esac;
+
+		# Kluge for aliases...
+		if [ "$dbname" = "ldap" ]; then
+			continue;
+			fi;
+
+		if [ "$dbname" = "null" ]; then
+			continue;
+			fi;
+
+		process=1;
+		if [ $verbosity -gt 0 ]; then
+			echo "Processing $dbname...";
+			fi;
+
+		# Check for database existance
+		if [ -f "$dbname" ] || [ -d "$dbname" ]; then
+			is_found;
+		else
+			is_not_found;
+			fi;
+
+		# Skip the rest for directories
+		if [ ! -d "$dbname" ]; then
+
+			# Check for something in database
+			if [ ! -s "$dbname" ]; then
+				is_empty;
+				fi;
+
+			# Check for real data (not just comments)
+			if [ $process -eq 1 ]; then
+				if ! grep -qEe "^[[:space:]]*[^$\#]" $dbname; then
+					is_comments;
+					fi;
+				fi;
+
+			# Finally, assume a normal file...
+			is_normal;
+			fi;
+
+		done;
+	done;
+
+final;
+
+# Final notices...
+if [ $changed -ne 0 ]; then
+	echo " ";
+	echo "Informational: Some changes were made to file locations";
+	echo "	Make sure sendmail.cf is rebuilt";
+	if [ $max_rc -lt 1 ]; then
+		max_rc=1;
+		fi;
+	fi;
+if [ $missing_opt -ne 0 ]; then
+	echo " ";
+	echo "Informational: $missing_opt optional database(s) sources";
+	echo "	were not found, please investigate.";  
+	fi;
+if [ $missing_cre -ne 0 ]; then
+	echo " ";
+	echo "Warning: $missing_cre database(s) sources";
+	echo "	were not found, (but were created)";
+	echo "	please investigate.";
+	fi;
+if [ $missing_rqd -ne 0 ]; then
+	echo " ";
+	echo "Error: $missing_rqd required database(s) sources";
+	echo "	were not found, correct this before starting sendmail!";
+	if [ $max_rc -lt 2 ]; then
+		max_rc=2;
+		fi;
+	fi;
+if [ $missing_opt -ne 0 ] || [ $missing_rqd -ne 0 ]; then
+	echo " ";
+	echo "$0 assumes that databases, and their source datasets";
+	echo "have the same base name (not counting the .db).  If this is not";
+	echo "true, $0 can not rebuild your databases to make sure";
+	echo "they will work with the newer sendmail.  You will have to do this";
+	echo "yourself - before starting sendmail.";
+	echo " ";
+	fi;
+if [ $m4_errors -ne 0 ]; then
+	echo " ";
+	echo "Warning: These messages were issued while creating sendmail.cf";
+	echo "	make sure they are benign before starting sendmail!";
+	echo " ";
+	if [ -f @sysconfdir@/mail/sendmail.cf.errors ]; then
+		echo "Errors in generating sendmail.cf";
+		cat @sysconfdir@/mail/sendmail.cf.errors;
+		fi;
+	if [ -f @sysconfdir@/mail/submit.cf.errors ]; then
+		echo "Errors in generating submit.cf";
+		cat @sysconfdir@/mail/submit.cf.errors;
+		fi;
+	echo " "
+	if [ $max_rc -lt 2 ]; then
+		max_rc=2;
+		fi;
+	fi;
+exit $max_rc;
+

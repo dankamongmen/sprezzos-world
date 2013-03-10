@@ -1,0 +1,116 @@
+#!/bin/sh -e
+#
+# Debian post installation script
+#
+# Install of already installed package:
+#	1) old-prerm upgrade new-version
+#		*) new-prerm failed-upgrade old-version
+#			*) old-postinst abort-upgrade new-version
+#
+# If a `conflicting' package is being removed at the same time:
+#	1) forall packages depending on conflicting package and --auto-deconfigure
+#		deconfigured's-prerm deconfigure \
+#			in-favour package-being-installed version \
+#			removing conflicting-package version
+#		*) deconfigured's-postinst abort-deconfigure \
+#				in-favour package-being-installed-but-failed version \
+#				removing conflicting-package version
+#	2) To prepare for removal of the conflicting package
+#		conflictor's-prerm remove \
+#			in-favour package new-version
+#		*) conflictor's-postinst abort-remove \
+#				in-favour package new-version
+#
+# Configuration of package:
+# postinst configure most-recently-configured-version
+#
+set -e;
+
+PACKAGE=sendmail-base;
+
+# do we have debconf?
+if [ -f /usr/share/debconf/confmodule ]; then
+	DEBCONF=true;
+	#. /usr/share/debconf/confmodule;
+	#db_stop; # For testing
+else
+	DEBCONF='';
+	fi;
+
+case "$1" in
+	configure)
+		#-----------------------------------------------------------
+		if [ "$2" = "" ]; then
+			:;
+			#echo " ";
+			#echo "A new sendmail user, welcome!";
+			fi;
+
+		#-----------------------------------------------------------
+		# Tell users about new and interesting things...
+		if [ -x @datadir@/sendmail/update_notices ]; then
+		    @datadir@/sendmail/update_notices $2;
+		    fi;
+
+		#-----------------------------------------------------------
+		# Create group/user smmta/smmsp iff needed
+		touch @sysconfdir@/mail/tsmmta;
+        if ! chown root:smmta @sysconfdir@/mail/tsmmta 2>/dev/null; then
+            addgroup --system --quiet smmta;
+            fi;
+        if ! chown smmta:smmta @sysconfdir@/mail/tsmmta 2>/dev/null; then
+            adduser --system --ingroup smmta --home "/var/lib/sendmail" \
+                --disabled-password \
+                --quiet --gecos 'Mail Transfer Agent' smmta;
+            fi;
+        rm @sysconfdir@/mail/tsmmta;	
+		touch @sysconfdir@/mail/tsmmsp;
+		if ! chown root:smmsp @sysconfdir@/mail/tsmmsp 2>/dev/null; then
+			addgroup --system --quiet smmsp;
+			fi;
+		if ! chown smmsp:smmsp @sysconfdir@/mail/tsmmsp 2>/dev/null; then
+			adduser --system --ingroup smmsp --home "/var/lib/sendmail" \
+				--disabled-password \
+				--quiet --gecos 'Mail Submission Program' smmsp;
+			fi;
+		rm @sysconfdir@/mail/tsmmsp;
+
+		#-----------------------------------------------------------
+		# With a dynamic uid/gid, have to set appropriate ownership herein
+		chown root:smmsp @sysconfdir@/mail/sasl;
+		chown root:smmsp @sysconfdir@/mail/tls;
+
+		#-----------------------------------------------------------
+		# Save the current configuration files in safe place...
+		if [ -x @sysconfdir@/cron.daily/sendmail ]; then
+			echo "Saving current /etc/mail/sendmail.mc,cf to /var/backups";
+			@sysconfdir@/cron.daily/sendmail || true;
+			fi;
+
+		#-----------------------------------------------------------
+		# Make sure inetd.conf has sendmail in it (but disabled)
+		if [ -x /usr/sbin/update-inetd ]; then
+			update-inetd --remove "^587";
+			update-inetd --group MAIL --add \
+				"smtp\tstream\ttcp\tnowait\troot\t@sbindir@/sendmail sendmail -Am -bs";
+			update-inetd --group MAIL --add \
+				"submission\tstream\ttcp\tnowait\troot\t@sbindir@/sendmail sendmail -Am -bs";
+			update-inetd --group MAIL --add \
+				"smtps\tstream\ttcp\tnowait\troot\t@sbindir@/sendmail sendmail -Am -bs";
+			update-inetd --group MAIL --multi --disable smtp,smtps,submission;
+			fi;	
+
+		;;
+
+	abort-upgrade|abort-remove|abort-deconfigure)
+		exit 0;
+		;;
+
+	*)
+		echo "$PACKAGE postinst called with unknown argument \`$1'" >&2;
+		exit 1;
+		;;
+	esac;
+
+#DEBHELPER#
+exit 0;

@@ -1,0 +1,1086 @@
+#!/usr/bin/perl -w
+#------------------------------------------------------------------------
+#
+# $Sendmail: Parse_mc.pm,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Parse Sendmail config for databases
+#
+# Copyright (c) 2001-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes (to all):
+#	* for "define(xxx,...)"; "define(xxx," must be on same line, but the
+#	  rest may be split across multiple lines
+#	* assumes makemap dbtype /etc/mail/database < /etc/mail/database
+#
+# Notes (to self):
+#	* changes made herein *must* be reflected in
+#		parse_mc,update_mk,update_db,debian.m4
+#	* userdb can also have multiple databases and then a forward!
+#	* undefine support
+#	* include support (also for OSTYPE, DOMAIN, SITE, etc)
+#	* F and K lines
+#
+#------------------------------------------------------------------------
+#
+# Package/Module declaration
+package		Parse_mc;
+require		Exporter;
+@ISA		= qw(Exporter);
+#@EXPORT	= qw(read_mc write_dbs read_dbs);
+@EXPORT_OK	= qw(read_mc write_dbs read_dbs
+				names_dbs restart_dbs entry_dbs format_dbs);
+$VERSION = '2.0002';
+#
+# Initialization of the perl environment
+use strict;			# be kosher
+#use warnings;		# Not needed here
+use Cwd;			# provide cwd()
+use Env;			# A few environmental references
+use integer;		# Peformance
+use Sys::Hostname;	# make sure we have a valid hostname
+use Getopt::Long;	# parameter handling
+use FileHandle;		# I/O
+
+# Version of this program
+#($main::MYNAME		= $main::0) =~ s|.*/||;
+#$main::Author		= "Richard Nelson";
+#$main::AuthorMail	= "cowboy\@debian.org";
+#$main::Version		= '$Revision: 2.00 $ ';
+$Parse_mc::program_name = 'Parse_mc.pm';
+$Parse_mc::program_version = '@sm_version@';
+$Parse_mc::program_date = '@sm_date@ @sm_time@ cowboy';
+$Parse_mc::debug = 0;
+
+my $interp_pgm = "$^X";
+my $interp_vrm = $];
+$interp_vrm = ("$^V" | '000') if (defined $^V);
+my $current_time = scalar localtime;
+my $user = getlogin || (getpwuid($<))[$[] || "Unknown!!";
+my $hostname = hostname();
+my $directory = getcwd();
+
+$Parse_mc::Conffile      = "@sysconfdir@/mail/databases";
+$Parse_mc::input_files	 = "@sysconfdir@/mail/sendmail.mc";
+$Parse_mc::database_file = "@sysconfdir@/mail/databases";
+
+my $debug;
+
+#
+# List of FEATURE()s, and their default file names (in path ${smdb_loc})
+my %smdb_features = (
+	 access_db		=> 'access'
+	,authinfo		=> 'authinfo'
+	,bitdomain		=> 'bitdomain'
+	,domaintable	=> 'domaintable'
+	,genericstable	=> 'genericstable'
+	,mailertable	=> 'mailertable'
+	,use_cw_file	=> 'use_cw_file'
+	,use_ct_file	=> 'use_ct_file'
+	,uucpdomain		=> 'uudomain'
+	,virtusertable	=> 'virtusertable'
+	);
+
+# List of classes, and a flag to note if it is reasonable to parse it
+my %smdb_classes = (
+	 ''			=> 1	# Default, no class
+	,'-'		=> 1	# ditto
+	,bestmx		=> 0	# Lookup best MX record for host
+	,btree		=> 1	# NEWDB
+	,dbm		=> 1	# NDBM
+	,dequote	=> 0	# Remove quotes
+	,dnsmap		=> 0	# DNSMAP
+	,hash		=> 1	# NEWDB
+	,hesiod		=> 1	# HESIOD
+	,host		=> 0	# Internal hostname lookup
+	,implicit	=> 0	# Search for alias database
+	,ldap		=> 0	# LDAPMAP
+	,nis		=> 1	# NIS
+	,nisplus	=> 1	# NISPLUS
+	,null		=> 0	# Always returns false
+	,program	=> 1	# Run an external program
+	,sequence	=> 0	# Search a series of maps
+	,stab		=> 0	# Internal alias
+	,switch		=> 0	# Internal alias auto-build
+	,text		=> 1	# Lookup in flat text file
+	,userdb		=> 1	# Lookup in userdb
+	,user		=> 1	# lookup passwd
+	,newaliases	=> 1	# for internal usage (of this script)
+	);
+
+#
+#------------------------------------------------------------------------------
+# Prefill entries based upon Sendmail/Debian defaults
+# Yeah, this is long winded, but it needs to be said...
+#------------------------------------------------------------------------------
+my $smdb_loc  = "@sysconfdir@/mail/";
+my $smdb_type = 'hash';
+my %smdb_hash = (
+# -----------  Database defaults
+	 'MAIL_SETTINGS_DIR' =>
+			['-','-',["${smdb_loc}"],'-']
+	,'DATABASE_MAP_TYPE' =>
+			["${smdb_type}",'-',['-'],'-']
+# -----------  General stuff
+	,'sendmail.cf' =>
+			['m4','-',["${smdb_loc}sendmail.mc"],'-']
+
+	,'ALIAS_FILE' =>
+			['newaliases','-',["${smdb_loc}aliases"],'-']
+#	,'CANONIFY_DOMAIN_FILE' =>
+#			['-','-',["${smdb_loc}canonify_domains"],'%[^\\#]']
+#	,'EXPOSED_USER_FILE' =>
+#			['-','-',["${smdb_loc}exposed_users"],'%[^\\#]']
+	,'HELP_FILE'		 =>
+			['-','-',["${smdb_loc}helpfile"],'-']
+#	,'GENERICS_DOMAIN_FILE' =>
+#			['-','-',["${smdb_loc}generic-domains"],'%[^\\#]']
+#	,'MASQUERADE_DOMAIN_FILE' =>
+#			['-,'-',["${smdb_loc}masquerade-domains"],'%[^\\#]']
+	,'MSP_STATUS_FILE' =>
+			['-','-',["@localstatedir@/lib/sendmail/sm-client.st"],'-']
+	,'MSP_QUEUE_DIR' =>
+			['-','-',["@localstatedir@/spool/mqueue-client"],'-']
+	,'QUEUE_DIR' =>
+			['-','-',["@localstatedir@/spool/mqueue"],'-']
+#	,'RELAY_DOMAIN_FILE' =>
+#			['-','-',["${smdb_loc}relay-domains"],'%[^\\#]']
+	,'STATUS_FILE' =>
+			['-','-',["@localstatedir@/lib/sendmail/sendmail.st"],'-']
+#	,'VIRTUSER_DOMAIN_FILE' =>
+#			['-','-',["${smdb_loc}virtual-domains"],'%[^\\#]']
+	,'confCONTROL_SOCKET_NAME' =>
+			['-','-',["@localstatedir@/run/sendmail/smcontrol"],'-']
+	,'confCR_FILE' =>
+			['-','-o',["${smdb_loc}relay-domains"],'%[^\\#]']
+	,'confCT_FILE' =>
+			['-','-',["${smdb_loc}trusted-users"],'%[^\\#]']
+	,'confCW_FILE' =>
+			['-','-',["${smdb_loc}local-host-names"],'%[^\\#]']
+	,'confDEAD_LETTER_DROP' =>
+			['-','-',["@localstatedir@/lib/sendmail/dead.letter"],'-']
+#	,'confDEF_AUTH_INFO' =>  # Deprecated, use authinfo rules instead
+#			['-','-',["${smdb_loc}default-auth-info"],'-']
+	,'confEBINDIR' =>
+			['-','-',["@libexecdir@"],'-']
+#	,'confERROR_MESSAGE' =>			# No default
+#			['-','-',["${smdb_loc}error-header"],'-']
+	,'confHOSTS_FILE' =>
+			['-','-',["@sysconfdir@/hosts"],'-']
+	,'confHOST_STATUS_DIRECTORY' =>
+			['-','-',["@localstatedir@/lib/sendmail/host_status"],'-']
+	,'confPID_FILE' =>
+			['-','-',["@localstatedir@/run/sendmail/mta/sendmail.pid"],'-']
+	,'confSERVICE_SWITCH_FILE' =>
+			['-','-',["${smdb_loc}service.switch"],'-']
+#	,'confUSERDB_SPEC' =>
+#			['btree','-o',["${smdb_loc}userdb"],'-']
+# -----------  STARTTLS
+	,'confTO_STARTTLS' =>
+			['-','-',["2m"],'-']
+	,'confCACERT' =>
+			['-','-',["${smdb_loc}tls/sendmail-server.crt"],'-']
+	,'confCACERT_PATH' =>
+            ['-','-',["@sysconfdir@/ssl/certs"],'-']
+	,'confCRL' =>
+			['-','-',[""],'-']
+	,'confCLIENT_CERT' =>
+            ['-','-',["${smdb_loc}tls/sendmail-client.crt"],'-']
+	,'confCLIENT_KEY' =>
+            ['-','-',["${smdb_loc}tls/sendmail-common.key"],'-']
+	,'confSERVER_CERT' =>
+            ['-','-',["${smdb_loc}tls/sendmail-server.crt"],'-']
+    ,'confSERVER_KEY' =>
+            ['-','-',["${smdb_loc}tls/sendmail-common.key"],'-']
+    ,'confDH_PARAMETERS' =>
+            ['-','-',["${smdb_loc}tls/sendmail-common.prm"],'-']
+	,'confTLS_SRV_OPTIONS' =>
+            ['-','-',["V"],'-']
+# -----------  SMTP AUTH (SASL)
+	,'confTO_AUTH' =>
+			['-','-',["2m"],'-']
+	,'confAUTH_MECHANISMS' =>
+			['-','-',["DIGEST-MD5 CRAM-MD5 NTLM LOGIN PLAIN"],"-"]
+	,'TRUST_AUTH_MECH' =>
+			['-','-',["DIGEST-MD5 CRAM-MD5 NTLM LOGIN PLAIN"],"-"]
+	,'confAUTH_REALM' =>
+			['-','-',[""],'-']
+	,
+	);
+#
+#
+# Private entries
+$smdb_hash{'databases'} = ['parse_mc','-',["${smdb_loc}sendmail.mc"],'-'];
+$smdb_hash{'Makefile'}	= ['update_mk','-',["${smdb_loc}databases"],'-'];
+$smdb_hash{'crontab'}	= ['update_conf','-',["${smdb_loc}sendmail.conf"],'-'];
+$smdb_hash{'auth'} = ['update_auth','-',["${smdb_loc}sasl/sasl.m4"],'-'];
+$smdb_hash{'tls'}  = ['update_tls','-',["${smdb_loc}tls/starttls.m4"],'-'];
+$smdb_hash{'include'} = ['-','-',[""],'-'];
+#
+# Conditional entries
+if ( -s "${smdb_loc}submit.mc" ) {
+	$smdb_hash{'submit.cf'} = ['m4','-',["${smdb_loc}submit.mc"],'-'];
+	};
+
+#
+# Databases/files that require a sendmail restart when modified:
+my %smdb_restart = (
+	 'EXPOSED_USER_FILE'		 => 1
+	,'LOCAL_USER_FILE'			 => 1
+	,'CANONIFY_DOMAIN_FILE'		 => 1
+	,'GENERICS_DOMAIN_FILE'		 => 1
+	,'RELAY_DOMAIN_FILE'		 => 1
+	,'VIRTUSER_DOMAIN_FILE'		 => 1
+	,'LDAPROUTE_DOMAIN_FILE'	 => 1
+	,'LDAPROUTE_EQUIVALENT_FILE' => 1
+	,'MASQUERADE_DOMAIN_FILE'	 => 1
+	,'MASQUERADE_EXCEPTION_FILE' => 1
+	,'confCR_FILE'				 => 1
+	,'use_ct_file'				 => 1
+	,'use_cw_file'				 => 1
+	,'crontab'                   => 1
+	);
+
+$smdb_restart{'sendmail.cf'} = 1;
+if ( -s "${smdb_loc}submit.mc" ) {
+	$smdb_restart{'submit.cf'} = 1; };
+
+# Variables used in parsing lines
+my $smdb_state_looking = 0;
+my $smdb_state_start   = 1;
+my $smdb_state_done    = 2;
+my $smdb_state		   = $smdb_state_looking;
+my $smdb_string		   = '';
+my @smdb_entry		   = ();
+my $smdb_name		   = '';
+my $smdb_class		   = '';
+my @smdb_file		   = ();
+my $smdb_flags		   = '';
+my $smdb_options	   = '';
+my $smdb_default	   = '';
+
+my $QUEUE_GROUPS = 0;
+my $INCLUDES = 0;
+
+#------------------------------------------------------------------------------
+# Finally, some code (almost)
+#------------------------------------------------------------------------------
+1; # return (true);
+
+#
+#------------------------------------------------------------------------------
+# Read *.mc/*.m4 files
+#------------------------------------------------------------------------------
+sub read_mc {
+	my ($input_files) = @_;
+	my $ifh = new FileHandle;
+
+	$input_files = $input_files || $Parse_mc::input_files;
+	$Parse_mc::input_files = $input_files;
+	$debug = $main::debug || '';
+
+	unless ( open($ifh, "<$input_files") ) {
+		warn("Could not open $input_files($!)\n");
+		return;
+		};
+#print "Reading files:",$input_files,"\n";
+
+	#------------------------------------------------------------------
+	# Main loop, iterate over all input lines
+	#------------------------------------------------------------------
+	line: while (<$ifh>) {
+		next line if /^#/;	# skip comments
+		next line if /^$/;	# skip empty lines
+		chomp;				# drop tailing \n
+		if (s/\\$//) {
+			$_ .= <>;
+			redo unless eof();
+			};
+#print "=>",$_,"\n";
+
+		#--------------------------------------------------------------
+		# Look for default database location
+		# define(MAIL_SETTINGS_DIR, @sysconfdir@/mail/)dnl # comment
+		#--------------------------------------------------------------
+		if (/^\s*`?define\(\s*`?MAIL_SETTINGS_DIR/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, 'define');
+			next line if ($smdb_state != $smdb_state_done);
+
+			&get_flags_name_opts;
+			$smdb_loc	= $smdb_file[$[];
+			$smdb_class = '-';
+
+			&put_entry($ARGV, 'define');
+			}
+
+		#--------------------------------------------------------------
+		# Look for default database type
+		# define(DATABASE_MAP_TYPE, hash)dnl # comment
+		#--------------------------------------------------------------
+		elsif (/^\s*define\(\s*`?DATABASE_MAP_TYPE/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, 'define');
+			next line if ($smdb_state != $smdb_state_done);
+
+			&get_flags_name_opts;
+			$smdb_type	= $smdb_file[$[];
+			@smdb_file	= ( $smdb_loc );
+			$smdb_class = $smdb_type;
+
+			&put_entry($ARGV, 'define');
+			}
+
+		#
+		#--------------------------------------------------------------
+		# Look for define(confUSERDB specifications
+		# define(confUSERDB_SPEC, @sysconfdir@/mail/users.db)dnl # comment
+		#--------------------------------------------------------------
+		elsif (/^\s*`?define\(\s*`?confUSERDB_SPEC/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, 'define');
+			next line if ($smdb_state != $smdb_state_done);
+
+			&get_flags_name_opts;
+			$smdb_flags = '-o';
+			$smdb_class = 'btree';
+
+			&put_entry($ARGV, 'define');
+			}
+
+		#--------------------------------------------------------------
+		# Look for all define(confC._FILE specifications
+		# define(confCR_FILE, -o /etc/mail/relay-domains %[^\#])dnl
+		# define(confCT_FILE, -o /etc/mail/sendmail.ct	 %[^\#])dnl
+		# define(confCW_FILE, -o /etc/mail/sendmail.cw	 %[^\#])dnl
+		#--------------------------------------------------------------
+		elsif (/^\s*`?define\(\s*`?confC[RTW]_FILE/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, 'define');
+			next line if ($smdb_state != $smdb_state_done);
+
+			&get_flags_name_opts;
+
+			&put_entry($ARGV, 'define');
+			}
+
+		#--------------------------------------------------------------
+		# Look for all *_FILE( specifications
+		# EXPOSED_USER_FILE(/etc/mail/exposed-users %[^\#])dnl
+		# LOCAL_USER_FILE
+		# CANONIFY_DOMAIN_FILE
+		# GENERICS_DOMAIN_FILE(/etc/mail/generic-domains %[^\#])dnl
+		# RELAY_DOMAIN_FILE(/etc/mail/relay-domains %[^\#])dnl
+		# VIRTUSER_DOMAIN_FILE(/etc/mail/virtual-domains %[^\#])dnl
+		# LDAPROUTE_DOMAIN_FILE
+		# LDAPROUTE_EQUIVALENT_FILE
+		# MASQUERADE_DOMAIN_FILE(/etc/mail/masquerade-domains %[^\#])dnl
+		# MASQUERADE_EXCEPTION_FILE
+		#--------------------------------------------------------------
+		elsif (/^\s*`?((EXPOSED|LOCAL)_USER|(CANONIFY|GENERICS|RELAY|VIRTUSER)_DOMAIN|LDAPROUTE_(DOMAIN|EQUIVALENT)|MASQUERADE_(DOMAIN|EXCEPTION))_FILE\(/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, '(');
+			next line if ($smdb_state != $smdb_state_done);
+
+			&get_flags_name_opts;
+
+			&put_entry($ARGV, '');
+			}
+
+		#
+		#--------------------------------------------------------------
+		# Look for all define(conf* specifications
+		# define(confCONTROL_SOCKET_NAME,/var/run/sendmail/smcontrol)dnl
+		# define(confERROR_MESSAGE,   MAIL_SETTINGS_DIRerror-header)dnl
+		# define(confSERVICE_SWITCH_FILE,/etc/mail/service.switch)dnl
+		# define(confPID_FILE, /var/run/sendmail/sendmail.pid)dnl
+		# define(confHOSTS_FILE, /etc/hosts)dnl
+		# define(confDEF_AUTH_INFO, /etc/mail/auth-info)dnl
+		# define(confDEAD_LETTER_DROP,/var/lib/sendmail/dead.letter)dnl
+		# define(confHOST_STATUS_DIRECTORY,/var/lib/sendmail/host_status)dnl
+		#--------------------------------------------------------------
+		elsif (/^\s*`?define\(\s*`?conf(CONTROL_SOCKET_NAME|ERROR_MESSAGE|(SERVICE_SWITCH|PID|HOSTS)_FILE|DEF_AUTH_INFO|DEAD_LETTER_DROP|HOST_STATUS_DIRECTORY)/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, 'define');
+			next line if ($smdb_state != $smdb_state_done);
+
+			&get_flags_name_opts;
+
+			&put_entry($ARGV, 'define');
+			}
+
+		#--------------------------------------------------------------
+		# Look for all define(*_FILE specifications (No options here)
+		# define(ALIAS_FILE, @sysconfdir@/mail/aliases.private,...)dnl
+		# define(HELP_FILE,		   /etc/mail/helpfile)dnl
+		# define(STATUS_FILE,	   /var/lib/sendmail/sendmail.st)dnl
+		# define(QUEUE_DIR,		   /var/spool/mqueue/main*)dnl
+		# define(MSP_QUEUE_DIR,    /var/spool/mqueue-client)dnl
+		#--------------------------------------------------------------
+		elsif (/^\s*`?define\(\s*`?((ALIAS|HELP|STATUS)_FILE)|(MSP_)?QUEUE_DIR/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, 'define');
+			next line if ($smdb_state != $smdb_state_done);
+
+			&get_flags_name_opts;
+
+			&put_entry($ARGV, 'define');
+			}
+
+		#--------------------------------------------------------------
+		# Look for all queue definition specifications
+		# define(QUEUE_GROUP,				...)dnl
+		#--------------------------------------------------------------
+		elsif (/^\s*`?QUEUE_GROUP\(/ .. /[^\)]*\)/) {
+			&parse_string($_, '(');
+			next line if ($smdb_state != $smdb_state_done);
+
+			$smdb_string   =~ /\s*([\w_]+).*P[^=]*=([^\*,\)]*).*/;
+			$smdb_name	   = 'QUEUE_GROUP';
+			$smdb_class    = '-'; # $1
+			$smdb_flags    = '-';
+			@smdb_file	   = ($2);
+			$smdb_options  = '-'; # Pull out other options?
+
+			if ( $QUEUE_GROUPS == 0 ) {
+				&put_entry($ARGV, '', 0);
+				$QUEUE_GROUPS = 1;
+				}
+			else {
+				&put_entry($ARGV, '', 1);
+				};
+			}
+
+		#--------------------------------------------------------------
+		# Look for all AUTH specifications
+		# define(confAUTH_MECHANISMS       ...)dnl
+		# define(confAUTH_REALM            ...)dnl
+		# TRUST_AUTH_MECH(                 ...)dnl
+		#--------------------------------------------------------------
+		elsif (/^\s*`?define\(\s*`?confAUTH_(MECHANISMS|REALM)/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, 'define');
+			next line if ($smdb_state != $smdb_state_done);
+
+			next line if ($smdb_string =~ /.*defn\(/);
+
+			&get_flags_name_opts;
+
+			push(@smdb_file, split(' ',$smdb_options)) 
+				if ($smdb_options ne '-');
+			$smdb_options = '-';
+
+			&put_entry($ARGV, 'define');
+			}
+		elsif (/^\s*`?TRUST_AUTH_MECH\(/ ..
+			/[^\)]*\)/) {
+			&parse_string($_, '(');
+			next line if ($smdb_state != $smdb_state_done);
+
+			next line if ($smdb_string eq ' EXTERNAL');
+
+			&get_flags_name_opts;
+
+			push(@smdb_file, split(' ',$smdb_options));
+			$smdb_options = '-';
+
+			&put_entry($ARGV, '');
+			}
+
+		#--------------------------------------------------------------
+        # Look for all TLS specifications
+        # define(confCACERT,               ...)dnl
+        # define(confCACERT_PATH,          ...)dnl
+        # define(confCRL,                  ...)dnl		
+        # define(confCLIENT_CERT,          ...)dnl
+        # define(confCLIENT_KEY,           ...)dnl
+        # define(confSERVER_CERT,          ...)dnl
+        # define(confSERVER_KEY,           ...)dnl
+        # define(confTLS_SRV_OPTIONS,      ...)dnl
+        #--------------------------------------------------------------
+        elsif (/^\s*`?define\(\s*`?conf(TO_STARTTLS|CACERT|CRL|((SERVER|CLIENT)_(KEY|CERT))|TLS_SRV_OPTIONS)/ ..
+            /[^\)]*\)/) {
+            &parse_string($_, 'define');
+            next line if ($smdb_state != $smdb_state_done);
+
+			&get_flags_name_opts;
+
+            &put_entry($ARGV, 'define');
+            }
+
+		#
+		#--------------------------------------------------------------
+		# Locate all non-commented FEATURE macros
+		# FEATURE(name[, [type [flags] file][, ...]...])dnl #comment
+		#--------------------------------------------------------------
+		elsif (/^\s*`?FEATURE\(/ .. /[^\)]*\)/) {
+			&parse_string($_, 'FEATURE');
+			next line if ($smdb_state != $smdb_state_done);
+
+			# ignore non-db features
+			next line if ( ! exists($smdb_features{$smdb_name}) );
+
+			&get_flags_name_opts;
+
+			if ($smdb_name eq 'use_ct_file') {
+				&get_entry('confCT_FILE');
+				}
+			elsif ($smdb_name eq 'use_cw_file') {
+				&get_entry('confCW_FILE');
+				}
+			else {
+				@smdb_file	=
+					("${smdb_loc}$smdb_features{$smdb_name}")
+					if ($smdb_file[$[] eq '-'
+						and $smdb_class ne 'ldap');
+				$smdb_class = $smdb_type
+					if ($smdb_class eq '-');
+				};
+
+			&put_entry($ARGV, 'FEATURE');
+			}
+			
+		elsif (/^\s*`?(OSTYPE|DOMAIN|include)\(/ .. /[^\)]*/) {
+			&parse_string($_, '(');
+			next line if ($smdb_state != $smdb_state_done);
+
+			next line if  ($smdb_name eq 'include'
+				      and $smdb_string =~ /^\s*`?_CF_DIR/);
+			
+			$smdb_string   =~ /\s*`?([^'\)\s]+)/;
+            $smdb_string   = $1;
+			if ($smdb_name eq 'OSTYPE') {
+				$smdb_string  =
+					"@datadir@/sendmail/cf/ostype/$smdb_string.m4";
+				}
+			elsif ($smdb_name eq 'DOMAIN') {
+				$smdb_string  = 
+					"@datadir@/sendmail/cf/domain/$smdb_string.m4";
+				};
+
+			$smdb_name     = 'include';
+			$smdb_class    = '-'; # $1
+			$smdb_flags    = '-';
+			@smdb_file     = ($smdb_string);
+			$smdb_options  = '-'; # Pull out other options?
+
+			if ($INCLUDES == 0) {
+				&put_entry($ARGV, 'include', 0);
+				$INCLUDES = 1;
+				}
+			else {
+				&put_entry($ARGV, 'include', 1);
+				};
+			&read_mc("$smdb_string");
+			};
+		};
+	};
+
+#
+#------------------------------------------------------------------------------
+# Write out the accumulated information to a flat database file
+#------------------------------------------------------------------------------
+sub write_dbs {
+	my ($database_file, $input_files) = @_;
+	my $ofh = new FileHandle;
+
+	$database_file = $database_file || $Parse_mc::database_file;
+	$Parse_mc::database_file = $database_file;
+	my $caller = "$main::program_name" if ($main::program_name);
+	$caller .= " $main::program_version" if ($main::program_version);
+	$caller .= " $main::program_date" if ($main::program_date);
+	$debug = $main::debug || '';
+
+	$database_file = '&STDOUT' if ($database_file eq '-');
+	unless ( open($ofh, ">$database_file") ) {
+		warn("Could not open $database_file($!), using STDOUT.\n");
+		open($ofh, ">&STDOUT");
+		};
+	$database_file = '-' if ($database_file eq '&STDOUT');
+
+	print $ofh <<"EOT";
+####################################################################
+##### This file is automatically generated -- edit at your own risk
+#####
+##### Copyright (c) 2000-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#####
+##### file: ${database_file}
+##### generated via: (${interp_pgm} ${interp_vrm})
+#####		${caller}
+#####		${Parse_mc::program_name} ${Parse_mc::program_version} ${Parse_mc::program_date}
+##### by: ${user}\@${hostname}
+##### on: ${current_time}
+##### in: ${directory}
+##### input files:
+EOT
+	foreach my $file ( split(' ', $Parse_mc::input_files) ) {
+		print $ofh <<"EOT";
+#####	${file}
+EOT
+		}
+	print $ofh <<"EOT";
+#####
+##### Used by:
+#####	update_{db,mk}
+#####
+##### The following databases are used by Debian Sendmail
+#####
+##### Format:
+#####	<df>:<map>:<flags>:<file>:<opts>:
+##### Where:
+#####	<df>	= define or FEATURE name
+#####	<map>	= map type (-,text,btree,hash, etc.)
+#####	<flags> = map flags (-o for optional, etc.)
+#####	<file>	= file name
+#####	<opts>	= map options (%[^\\#] for sprintf, etc.)
+#####
+####################################################################
+EOT
+
+	#
+	# delete unneeded elements
+	#delete $smdb_hash{"MAIL_SETTINGS_DIR"};
+	#delete $smdb_hash{"DATABASE_MAP_TYPE"};
+	#delete $smdb_hash{"confCT_FILE"};
+	#delete $smdb_hash{"confCW_FILE"};
+
+	# print define(/FEATURE(/xxx( items
+	foreach $smdb_name (sort keys %smdb_hash) {
+		&get_entry($smdb_name);
+		foreach my $file ( @smdb_file ) {
+			print $ofh join(':',
+				 $smdb_name
+				,$smdb_class
+				,$smdb_flags
+				,$file
+				,$smdb_options
+				,''
+				), "\n";
+			};
+		};
+
+	close($ofh);
+	if ($database_file eq $Parse_mc::Conffile) {
+		chown '0', '0', "$database_file";
+		chmod 0644, "$database_file";
+		};
+	};
+
+#
+#------------------------------------------------------------------------------
+# Read in the accumulated information from a flat database file
+#------------------------------------------------------------------------------
+sub read_dbs {
+	my ($database_file, $input_files) = @_;
+	my $ifh = new FileHandle;
+	my $name = '';
+	my @entry;
+
+	$database_file = $database_file || $Parse_mc::database_file;
+	$Parse_mc::database_file = $database_file;
+	$debug = $main::debug || '';
+
+	unless ( open($ifh, "<$database_file") ) {
+		warn("Could not open $database_file($!), creating it.\n");
+		&read_mc($input_files);
+		&write_dbs($database_file, $input_files);
+		# At this point, we have the data, don't need to re-read it...
+		return;
+		};
+
+	#------------------------------------------------------------------
+	# Main loop, iterate over all input lines
+	#------------------------------------------------------------------
+	line: while (<$ifh>) {
+		next line if /^#/;	# skip comments
+		next line if /^$/;	# skip empty lines
+		chomp;				# drop tailing \n
+
+		@entry		  = split(':', $_);
+
+		# Accumulate file names and enter when complete
+		if ($name eq $entry[$[]) {
+			push @smdb_file, $entry[3];
+			}
+		else {
+			if ($name ne '') {
+				&put_entry('', '');
+				};
+			$name		  = $entry[$[];
+			$smdb_name	  = $entry[$[];
+			$smdb_class   = $entry[1];
+			$smdb_flags   = $entry[2];
+			@smdb_file	  = $entry[3];
+			$smdb_options = $entry[4];
+			};
+		};
+
+	# enter any remaining data
+	if ($name ne '') {
+		&put_entry('', '');
+		};
+
+	close($ifh);
+	};
+
+#
+#------------------------------------------------------------------------------
+# Obtain the list of names in smdb_hash (in an ordered manor)
+#------------------------------------------------------------------------------
+sub names_dbs {
+
+	# We need a partial ordering here (psuedo dependancies)
+	my @names;
+	my %dbs = ();
+	foreach my $entry ('databases', 'Makefile', 'crontab', 'QUEUE_GROUP',
+		'sendmail.cf', 'submit.cf') {
+		if (exists($smdb_hash{$entry})) {
+			$dbs{$entry} = '';
+			push @names, $entry;
+			};
+		};
+
+	# Now, add any remaining databases to the list (except aliases)
+	foreach my $entry (sort keys %smdb_hash) {
+		next if ($entry eq 'ALIAS_FILE');
+		push @names, $entry
+			if (! exists($dbs{$entry}));
+		$dbs{$entry} = '';
+		};
+
+	# Finally, add aliases...
+	my $entry = 'ALIAS_FILE';
+	if (exists($smdb_hash{$entry})) {
+		push @names, $entry
+			if (! exists($dbs{$entry}));
+		$dbs{$entry} = '';
+		};
+
+	return(@names);
+	};
+
+#------------------------------------------------------------------------------
+# Obtain the list of names that require a sendmail restart
+#------------------------------------------------------------------------------
+sub restart_dbs {
+	return(keys %smdb_restart);
+	};
+
+#------------------------------------------------------------------------------
+# Obtain an individual database entry (returning a copy)
+#------------------------------------------------------------------------------
+sub entry_dbs {
+	my ($name) = @_;
+	$smdb_name = $name;
+	&get_entry($smdb_name);
+
+	# Return a local copy - so they can't change *MY* data...
+	my @entry = @smdb_entry;
+	return (@entry);
+	};
+
+#
+#------------------------------------------------------------------------------
+# Save the results of the database entry and reset the state
+#------------------------------------------------------------------------------
+sub put_entry {
+	my ($file, $type, $multi_file) = @_;
+
+	# Create entry record from data pieces/parts
+	if ($multi_file and exists($smdb_hash{$smdb_name})) {
+		@smdb_entry = @{$smdb_hash{$smdb_name}};
+		}
+	else {
+		@smdb_entry = ('-', '-', [], '-');
+		};
+	$smdb_entry[$[]		  = $smdb_class;
+	$smdb_entry[1]		  = $smdb_flags;
+	push @{$smdb_entry[2]}, @smdb_file;
+	$smdb_entry[3]		  = $smdb_options;
+
+	# Save lastmost entry
+	@{$smdb_hash{$smdb_name}} = @smdb_entry;
+
+	# Minimal debugging
+	if ($debug) {
+		print STDERR "PUT: ";
+		if ($type ne '') { print STDERR "$type($smdb_name)" }
+		else { print STDERR "$smdb_name()" };
+		print STDERR " => ", join(':'
+			  , $smdb_class
+			  , join(',', @{$smdb_entry[2]})
+			  , $smdb_options
+			  , ''
+			  ), "\n";
+		};
+
+	# reset state
+	$smdb_state = $smdb_state_looking;
+	};
+
+#
+#------------------------------------------------------------------------------
+# Retrieve a database entry
+#------------------------------------------------------------------------------
+sub get_entry {
+	my ($name) = @_;
+
+	if (exists($smdb_hash{$name}) ) {
+		@smdb_entry = @{$smdb_hash{$name}};
+		}
+	else {
+		@smdb_entry = ('-', '-', ['-'], '-');
+		};
+
+	$smdb_class   = $smdb_entry[$[];
+	$smdb_flags   = $smdb_entry[1];
+	@smdb_file	  = @{$smdb_entry[2]};
+	$smdb_options = $smdb_entry[3];
+
+	# Minimal debugging
+	if ($debug) {
+		print STDERR "GET: ",
+			"$name",
+			" => ", join(':'
+			, $smdb_class
+			, join(',', @{$smdb_entry[2]})
+			, $smdb_options
+			, ''
+			), "\n";
+		};
+
+	};
+
+#
+#
+sub format_dbs {
+	my ($name) = @_;
+	my $string = '';
+
+	&get_entry($name);
+	$string .= " $smdb_class"
+		if ($smdb_class ne '-' and $smdb_class ne ' ');
+	$string .= " $smdb_flags"
+		if ($smdb_flags ne '-' and $smdb_flags ne ' ');
+	$string .= join(',', @smdb_file);
+	$string .= " $smdb_options"
+		if ($smdb_options ne '-' and $smdb_options ne ' ');
+
+	return $string;
+	};
+
+#
+#------------------------------------------------------------------------------
+# This function does most of the work in parsing a series of lines to
+# construct a database entry - it manages the state machine and assorted
+# global variables
+#------------------------------------------------------------------------------
+sub parse_string {
+	my ($str, $type) = @_;
+	my $count = -1;
+	my @entry = '';
+	my $pending_state = 0;
+
+	# Strip trailing '?\)(dnl)?.*$ from string
+	if ($str =~ /\s*'?\s*\)/) {
+		$str =~ s/\s*'?\s*\)\s*(dnl)?.*$//;
+		$pending_state = $smdb_state_done;
+		};
+
+	# Strip trailing 'dnl .*' from string
+	if ($str =~ /dnl(\s+.*)?$/) {
+		$str =~ s/dnl(\s+.*)?$//;
+		};
+
+	# Strip leading `?define\(\s*`? from string
+	if (($type eq 'define') and
+		($str =~ /^\s*`?define\(/)) {
+		$str =~ s/^\s*`?define\(\s*`?//;
+		$str =~ s/,/ /;
+		$smdb_state   = $pending_state || $smdb_state_start;
+		$smdb_string  = '';
+		$count = (@entry = split(' ', $str));
+		($smdb_name = $entry[$[]) =~ tr/'//d;
+		shift(@entry);
+		$str = join(' ', @entry);
+		}
+
+	# Strip leading `?FEATURE\(\s*`? from string
+	elsif (($type eq 'FEATURE') and
+		($str =~ /^\s*`?FEATURE\(/)) {
+		$str =~ s/^\s*`?FEATURE\(\s*`?//;
+		$str =~ s/,/ /;
+		$smdb_state   = $pending_state || $smdb_state_start;
+		$smdb_string  = '';
+		$count = (@entry = split(' ', $str));
+		($smdb_name = $entry[$[]) =~ tr/'//d;
+		shift(@entry);
+		$str = join(' ', @entry);
+		}
+
+	# Strip leading `?[\w_]+\(\s*`? from string
+	elsif (($type eq '(') and
+		($str =~ /^\s*`?[\w_]+\(/)) {
+		$str =~ s/\(/ /;
+		$smdb_state   = $pending_state || $smdb_state_start;
+		$smdb_string  = '';
+		$count = (@entry = split(' ', $str));
+		($smdb_name = $entry[$[]) =~ tr/`'//d;
+		shift(@entry);
+		$str = join(' ', @entry);
+		}
+	else {
+		$smdb_state = $pending_state || $smdb_state;
+		};
+
+	#
+	# Strip quotes (` and ') from string
+	$str =~ tr/`'//d;
+
+	# FEATURE( is the only one allowed to have only one argument
+	if ( ($type ne 'FEATURE' 
+			and $type ne '(')
+			and $count == 1) {
+		$str = '';
+		};
+
+	# Change imbedded MAIL_SETTINGS_DIR to $smdb_loc
+	if ($smdb_name ne 'MAIL_SETTINGS_DIR') {
+		$str =~ s/MAIL_SETTINGS_DIR/$smdb_loc/g
+		};
+
+	# Change imbedded DATABASE_MAP_TYPE to $smdb_type
+	if ($smdb_name ne 'DATABASE_MAP_TYPE') {
+		$str =~ s/DATABASE_MAP_TYPE/$smdb_type/g
+		};
+
+	# concatentate this string with any prior information
+	$smdb_string .= ' ' . $str unless($smdb_state == $smdb_state_looking);
+
+	# Return
+	return;
+	};
+
+#
+#------------------------------------------------------------------------------
+# This function parses a line into flags (-o, etc.), name, options
+#------------------------------------------------------------------------------
+sub get_flags_name_opts {
+	my @entry;
+	my $class = '';
+	my $rest = '';
+	my $multi_names = 0;
+
+	$smdb_class   = '';
+	$smdb_flags   = '';
+	@smdb_file	  = ();
+	$smdb_options = '';
+
+	@entry	= split(' ', $smdb_string);
+
+	# Pull off any leading flags (including database type/class)
+	# Class specification: "[mapkey]@mapclass:mapspec"
+	#	RELAY_DOMAIN_FILE(`@LDAP')dnl
+	#	VIRTUSER_DOMAIN_FILE(`@ldap:-k
+	#	  (&(objectClass=virtHosts)(host=*)) -v host')dnl
+	#	FEATURE(`genericstable', `LDAP')dnl
+	#	FEATURE(`genericstable', `nis:realnames.by2mail')dnl
+	#	define(`ALIAS_FILE', `ldap:')dnl
+	#	define(`ALIAS_FILE', `ldap:-k
+	#	  (&(objectClass=mailGroup)(mail=%0)) -v mgrpRFC822MailMember')dnl
+	# but only if there are flags *and* a name...
+	if (@entry) {
+		($class = lc($entry[$[])) =~ s/:.*//;
+		($rest	= $entry[$[]) =~ s/.*://;
+		$rest	= '' if (lc($rest) eq 'ldap');
+		if ($class =~ /^.*@/) {
+			$class =~ s/^.*@//;
+			if (exists($smdb_classes{$class})) {
+				$smdb_class = $class;
+				shift (@entry);
+				};
+			}
+		elsif (exists($smdb_classes{$class})) {
+			$smdb_class = $class;
+			$rest = '' if ($rest eq $class);
+			shift (@entry);
+			@entry = split(' ', join(' ',$rest,@entry) );
+			$#entry = -1 if ($smdb_class eq 'ldap');
+			};
+		FLAG_LOOP: while (@entry) {
+			if (substr($entry[$[], 0, 1) eq '-') {
+				if ($smdb_flags eq '') {
+					$smdb_flags = $entry[$[];
+					}
+				else {
+					$smdb_flags .= ' ' . $entry[$[];
+					};
+				shift (@entry);
+				}
+			else {
+				last FLAG_LOOP;
+				};
+			};
+		};
+#print STDERR "$class($rest) ::= ",scalar @entry,join(' ','',@entry,''),"\n";
+	$smdb_flags = $smdb_flags || '-';
+	$smdb_class = $smdb_class || '-';
+
+	#
+	# A few special cases...
+	if ($smdb_name eq 'ALIAS_FILE' and $smdb_class eq '-') {
+		$smdb_class = 'newaliases';
+		@entry = (join('',@entry));
+		$multi_names = 1;
+		}
+	elsif ($smdb_name eq 'confUSERDB_SPEC') {
+		@entry = (join('',@entry));
+		$multi_names = 1;
+		};
+
+	# Handle multi-files specially
+	if ( $multi_names == 1 ) {
+		@smdb_file = split(',', $entry[$[]);
+		$smdb_options = '-';
+		}
+	else {
+		# Whats left should be a filename (or somesuch) and options
+		if (@entry >= 1) {	# file name, possible options if /,/
+			if ($smdb_classes{$smdb_class} != 1) {
+				@smdb_file = '-';
+				}
+			else {
+				@smdb_file = $entry[$[];
+				shift(@entry);
+				};
+			if (@entry >= 1) {
+				$entry[$[] =~ s/^,//;
+				foreach my $ndx ($[ .. $#entry) {
+					$smdb_options .= ' '
+						if ($ndx != 0
+						and substr($entry[$ndx], 0, 1) ne ',');
+					$smdb_options .= $entry[$ndx];
+					}
+				}
+			$#entry = -1;
+			};
+
+		# Check for possible options caught in the filename slot
+		if (@smdb_file >= 1 and index($smdb_file[$[], ',') != -1) {
+			@entry = split(/,/, $smdb_file[$[]);
+			@smdb_file = ( $entry[$[] );
+			if (@entry >= 2) {
+				$smdb_options = join('', @entry[1..$#entry],
+							$smdb_options);
+				$#entry = -1;
+				};
+			};
+		$smdb_file[$[] = $smdb_file[$[] || '-';
+		$smdb_file[$[] =~ s/\.db//;
+		$smdb_options = $smdb_options || '-';
+		};
+
+	# Return
+	return;
+	};
+
+__END__

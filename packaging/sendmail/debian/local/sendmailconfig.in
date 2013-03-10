@@ -1,0 +1,688 @@
+#!/bin/sh -e
+#-----------------------------------------------------------------------------
+# $Sendmail: sendmailconfig,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Interactively configure Sendmail for Debian
+#
+# Copyright (c) 1998-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Robert Leslie <rob@mars.org>,
+# Rick Nelson <cowboy@debian.org>
+#
+#-----------------------------------------------------------------------------
+set -e;
+
+PATH='/usr/sbin:/usr/bin:/sbin:/bin';
+SENDMAIL_MC="@sysconfdir@/mail/sendmail.mc";
+SUBMIT_MC="@sysconfdir@/mail/submit.mc";
+
+# Path to other sendmail helpers
+if [ -x ./update_sendmail ]; then
+	sm_path='.';
+elif [ -x $(dirname $0)/update_sendmail ]; then
+	sm_path=$(dirname $0);
+else
+	sm_path=@datadir@/sendmail;
+	fi;
+# Bring in sendmail.conf for the network definitions
+if [ ! -f @sysconfdir@/mail/sendmail.conf ]; then
+	if [ -x $sm_path/update_conf ]; then
+		$sm_path/update_conf;
+		fi;
+	fi; 
+if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+	. @sysconfdir@/mail/sendmail.conf;
+	fi;
+
+set +e;
+reload="yes";
+umask 022;
+
+#------------------------------------------------------------------------------
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--no-reload)
+			reload="";
+			shift;
+			;;
+
+		*)
+			echo "Usage: $0 [--no-reload]" >&2;
+			exit 1;
+			;;
+		esac;
+	done;
+
+#------------------------------------------------------------------------------
+
+descrip() {
+	echo '';
+	echo "$1";
+	echo "$1" | sed -e 's/./-/g';
+	cat -;
+	echo '';
+	};
+
+yesno() {
+	local N='N' Y='Y';
+	local q="$1" def=$(eval "echo -n \$$2");
+
+	while :; do
+	echo -n "$q? [$def] ";
+	read REPLY;
+	REPLY=$(echo -n "$REPLY" | sed -e "s/^\ *//" -e "s/^\t*//");
+	test -n "$REPLY" || REPLY="$def";
+
+	case "$REPLY" in
+		[Yy]*)
+			echo yes > /dev/null;
+			eval "$2=\"Y\"";
+			return 0;
+			;;
+		[Nn]*)
+			echo no > /dev/null;
+			eval "$2=\"N\"";
+			return 1;
+			;;
+		esac;
+	done;
+	};
+
+input() {
+	local q="$1" def=$(eval "echo -n \$$2");
+
+	echo -n "$q? [$def] ";
+	read REPLY
+	REPLY=$(echo "$REPLY" | sed -e 's/^[	]*//' -e 's/[	]*$//' | cat);
+	test -n "$REPLY" || REPLY="$def";
+
+	if [ "NONE" = "$3" ]; then
+		case "$REPLY" in
+			[Nn][Oo][Nn][Ee]*)
+				REPLY='';
+				;;
+			esac;
+		fi;
+
+	eval "$2=\"$REPLY\"";
+	};
+
+testconfig() {
+	CONFIG=$(grep -Ee "^[[:space:]]*$1" $SENDMAIL_MC 2>/dev/null);
+	};
+
+makecf() {
+	if [ -x $sm_path/update_sendmail ]; then
+		echo "Updating sendmail environment ...";
+		$sm_path/update_sendmail || true;
+		fi;
+
+	if [ "$reload" ] &&  \
+		yesno \
+		"Reload the running sendmail now with the new configuration" Y
+		then
+		echo "Reloading sendmail ...";
+		@sysconfdir@/init.d/sendmail reload >/dev/null;
+		fi;
+}
+
+#------------------------------------------------------------------------------
+
+if [ -f $SENDMAIL_MC ]; then
+	if yesno "Configure sendmail with the existing @sysconfdir@/mail/sendmail.conf" Y
+	then
+		if ! $sm_path/update_conf; then
+			echo "Correct @sysconfdir@/mail/sendmail.conf before continuing.";
+			exit 1;
+			fi;
+	else
+		echo "Edit @sysconfdir@/mail/sendmail.conf and reissue $0.";
+		exit 0;
+		fi;
+	if yesno "Configure sendmail with the existing $SENDMAIL_MC" Y
+	then
+		makecf;
+		exit 0;
+		fi;
+	fi;
+
+###############################################################################
+
+exec 3>$SENDMAIL_MC.new;
+trap "rm -f $SENDMAIL_MC.new" 0;
+
+###############################################################################
+
+descrip "Sendmail Configuration" <<-EOT
+By answering the following questions, you can configure sendmail for your
+system. Default values are determined either by your existing configuration
+or from common usage.
+EOT
+
+echo -n "Press [ENTER] ";
+read REPLY;
+
+cat @datadir@/sendmail/cf/debian/sendmail.mc >&3;
+cp -a @datadir@/sendmail/cf/debian/submit.mc \
+	$SUBMIT_MC.new;
+echo "LOCAL_CONFIG" >&3;
+
+###############################################################################
+
+descrip "Mail Name" <<EOT
+Your \`mail name' is the hostname portion of the address to be shown on
+outgoing news and mail messages (following the username and @ sign). This
+name will be used by other programs besides sendmail; it should be the single,
+full domain name (FQDN) from which mail will appear to originate.
+EOT
+
+mailname=$(cat @sysconfdir@/mailname 2>/dev/null || hostname --fqdn);
+input "Mail name" mailname;
+
+echo "$mailname" >@sysconfdir@/mailname;
+
+###############################################################################
+
+descrip "Null Client" <<EOT
+A special configuration known as the "null client" can be created for this
+host if all mail should be forwarded to a central hub via a local SMTP-based
+network. This may be a suitable configuration if you want to forward all of
+your mail to your local Internet service provider (ISP) for delivery.
+
+To enable this option, give the name of the host to which all mail should be
+forwarded. Otherwise leave the option empty to disable it.
+To remove a prior name, use \`NONE'.
+EOT
+
+nullclient=""
+! testconfig "FEATURE\(\`?nullclient" ||
+	nullclient=$(echo -n "$CONFIG" | sed -e 's/[^,]*, *\([^)]*\).*/\1/');
+
+input "Null client forward host" nullclient NONE;
+
+if [ ! -z "$nullclient" ]; then
+	echo "EXPOSED_USER(root uucp)dnl # users exempt from masquerading" >&3;
+	echo "LOCAL_USER(root)dnl" >&3;
+	echo "MASQUERADE_AS(\`$mailname')dnl" >&3;
+	echo "FEATURE(\`allmasquerade')dnl" >&3;
+	echo "FEATURE(\`masquerade_envelope')dnl" >&3;
+	echo "FEATURE(\`nullclient', $nullclient)dnl" >&3;
+	fi;
+
+if [ -z "$nullclient" ]; then
+
+###############################################################################
+descrip "Smart Host" <<EOT
+A "Smart Host" is one that can deliver mail to external machines.  By using
+a "Smart Host", we don't need DNS, or good connectivity ourselves.	This is
+most likely what you want if you have a dialup link, or sit behind a firewall.
+
+To enable this option, give the name of the host to which all non-local mail
+should be forwarded.  Otherwise leave the option empty.
+To remove a prior name, use \`NONE'.
+EOT
+
+smarthost="";
+#if [ -n "$nullclient" ]; then
+#	smarthost="$nullclient"
+#	fi
+! testconfig "define\(\`?SMART_HOST" ||
+	 smarthost=$(echo -n "$CONFIG" | sed -e 's/[^:]*:*\([^)]*\).*/\1/');
+input "Smart Host:" smarthost NONE;
+
+if [ -n "$smarthost" ]; then
+	echo "define(\`SMART_HOST', $smarthost)dnl" >&3;
+	echo "MASQUERADE_AS(\`$mailname')dnl" >&3;
+	fi;
+#if [ -n "$nullclient" ] && [ ! -z "$smarthost" ]; then
+#	echo "undefine(\`ALIAS_FILE')dnl" >&3
+#	echo "define(\`confFORWARD_PATH', \`')dnl" >&3
+#	echo "define(\`MAIL_HUB', \`$smarthost')dnl" >&3
+#	echo "MASQUERADE_AS(\`$smarthost')dnl" >&3
+#	echo "FEATURE(\`allmasquerade')dnl" >&3
+#	echo "FEATURE(\`masquerade_envelope')dnl" >&3
+#	fi
+###############################################################################
+
+descrip "Address Canonification" <<EOT
+Usually sendmail will canonify all addresses by consulting a name server and
+resolving hosts to their fully qualified domain name (FQDN). Under special
+circumstances you may want to disable this feature, for example if this
+machine acts only as a mail gateway.
+EOT
+
+test -z "$nullclient" || cat <<EOT
+Since this host will be configured as a null client, this option controls
+whether addresses will be qualified with \`$mailname' when
+sent to the central hub via SMTP. Disabling this feature may cause mail to
+appear to come from (and be qualified by the domain for) the hub machine
+rather than this host.
+
+EOT
+
+nocanonify="N";
+! testconfig "FEATURE\(\`?nocanonify" || nocanonify="Y";
+
+! yesno "Disable address canonification" nocanonify || \
+	echo "FEATURE(\`nocanonify')dnl" >&3;
+
+###############################################################################
+
+#descrip "SMTP Mailer" <<EOT
+#If you plan to exchange mail with other computers, you should enable the
+#SMTP mailer. Even if you don't plan to exchange mail with other computers,
+#it is still a good idea to enable this so local programs can use it.
+#EOT
+
+smtp="Y";
+#if [ -f $SENDMAIL_MC ]; then
+#	testconfig "MAILER\(\`?smtp" || smtp="N";
+#fi;
+
+#yesno "Enable the SMTP mailer" smtp || true;
+
+###############################################################################
+
+descrip "Masquerade Envelope" <<EOT
+If you want mail envelopes (as well as mail headers) to appear to come from
+\`$mailname', you can enable this option.
+EOT
+
+masqenvelope="Y";
+if [ -f $SENDMAIL_MC ]; then
+	testconfig "FEATURE\(\`?masquerade_envelope" || masqenvelope="N";
+fi;
+
+! yesno "Masquerade envelopes" masqenvelope || \
+	echo "FEATURE(\`masquerade_envelope')dnl" >&3;
+
+###############################################################################
+
+descrip "All Masquerade" <<EOT
+If enabled, this feature will cause recipient addresses to also appear to come
+from \`$mailname'. Normally they get the local hostname.
+Although this may be right for ordinary users, it can break local aliases. For
+example, if you send to "localalias", the originating sendmail will find that
+alias and send to all members, but send the message with
+"To: localalias@$mailname". Since that alias likely does
+not exist, replies will fail. Use this feature ONLY if you can guarantee that
+the ENTIRE namespace of \`$mailname' supersets all the
+local entries. If in doubt, it is safe to leave this option disabled.
+EOT
+
+allmasquerade="N";
+! testconfig "FEATURE\(\`?allmasquerade" || allmasquerade="Y";
+
+! yesno "All masquerade" allmasquerade || \
+	echo "FEATURE(\`allmasquerade')dnl" >&3;
+
+###############################################################################
+
+descrip "Dont masquerade mail to local users" <<EOT
+Send mail to local recipients without masquerading.
+EOT
+
+local_no_masquerade="N";
+! testconfig "FEATURE\(\`?local_no_masquerade" || local_no_masquerade="Y";
+
+! yesno "Dont masquerade local" local_no_masquerade ||
+	echo "FEATURE(\`local_no_masquerade')dnl" >&3;
+
+###############################################################################
+
+descrip "Always Add Domain" <<EOT
+If enabled, the local host domain is included even on locally delivered mail.
+Normally it is not added unless it is already present.
+EOT
+
+alwaysdomain="N";
+! testconfig "FEATURE\(\`?always_add_domain" || alwaysdomain="Y";
+
+! yesno "Always add domain" alwaysdomain || \
+	echo "FEATURE(\`always_add_domain')dnl" >&3;
+
+###############################################################################
+
+descrip "Mail Acceptance" <<EOT
+Sendmail is usually configured to accept mail for your mail name
+($mailname). However, under special circumstances you
+may not wish sendmail to do this, particularly if (and disabling this option
+generally requires that) mail for \`$mailname' is MXed
+to another host. If in doubt, it is safe to leave this option enabled.
+EOT
+
+acceptmailname="Y";
+if [ -f $SENDMAIL_MC ]; then
+	testconfig "^Cw.*$mailname" || acceptmailname="N";
+fi;
+
+yesno "Accept mail for \`$mailname'" acceptmailname || true;
+test "N" = "$acceptmailname" || \
+	echo "LOCAL_CONFIG
+Cw$mailname" >&3;
+
+###############################################################################
+
+descrip "Alternate Names" <<EOT
+In addition to the canonical mail name \`$mailname', you can
+add any number of additional alternate names to recognize for receiving mail.
+If other hosts are MXed to you for local mail, this is where you should list
+them. This list is saved into the file @sysconfdir@/mail/local-host-names
+so it can be changed later as needed.
+
+To answer this question, separate each alternate name with a space, or answer
+\`NONE' to eliminate all alternate names.
+EOT
+
+cw_file="@sysconfdir@/mail/local-host-names";
+altnames=$(cat "$cw_file" 2>/dev/null | tr -s '\n \t' ' ' |
+		   sed -e 's/^ *//' -e 's/ *$//');
+input "Alternate names" altnames NONE;
+
+if [ -n "$altnames" ]; then
+	echo "$altnames" | tr -s ' \t' '\n' >$cw_file;
+else
+	echo "localhost" >$cw_file;
+fi;
+	chown root:smmsp $cw_file;
+	chmod 0644 $cw_file;
+
+echo "FEATURE(\`use_cw_file')dnl" >&3;
+
+###############################################################################
+
+descrip "Trusted Users" <<EOT
+Sendmail allows a special group of users to set their envelope "From" address
+using the -f option without generating a warning message. If you have
+software such as Majordomo installed, you will want to include the usernames
+from such software here. Note that "root", "daemon", and "uucp" are included
+automatically and do not need to be specified. This list is saved into the
+file @sysconfdir@/mail/trusted-users so it can be changed later as needed.
+
+To answer this question, separate each username with a space, or answer
+\`NONE' to eliminate all usernames.
+EOT
+
+ct_file="@sysconfdir@/mail/trusted-users";
+trusted=$(cat "$ct_file" 2>/dev/null | tr -s '\n \t' ' ' |
+		  sed -e 's/^ *//' -e 's/ *$//');
+input "Trusted users" trusted NONE;
+
+if [ -n "$trusted" ]; then
+	echo "$trusted" | tr -s ' \t' '\n' >$ct_file;
+	chown root:smmsp $ct_file;
+	chmod 0644 $ct_file;
+else
+	cat /dev/null >$ct_file;
+fi;
+
+echo "FEATURE(\`use_ct_file')dnl" >&3;
+echo "FEATURE(\`use_ct_file')dnl" >> $SUBMIT_MC.new;
+
+###############################################################################
+
+descrip "Redirect Feature" <<EOT
+If enabled, this feature will allow you to alias old names to
+<new-address>.REDIRECT, causing sendmail to return mail to the sender with
+an error but indicating the recipient's new address.
+EOT
+
+redirect="N";
+! testconfig "FEATURE\(\`?redirect" || redirect="Y";
+
+! yesno "Enable redirect option" redirect || \
+	echo "FEATURE(\`redirect')dnl" >&3;
+
+###############################################################################
+
+descrip "UUCP Addresses" <<EOT
+Sendmail can be configured to be smart about UUCP addresses, or it can do
+nothing special with UUCP addresses at all. If you care about UUCP, you will
+need to do some additional configuration, perhaps outside of this script.
+
+*** NOTE *** If you use a smart host or do any kind of forwarding (ie
+LUSER_RELAY and LOCAL_RELAY), it is important that you say "Yes"
+here to prevent a multi-level relay hole - unless you know for *SURE* that
+your smart-host does not deal with UUCP addresses.
+
+(Be safe and just say Y)
+EOT
+
+uucp="Y";
+if [ -f $SENDMAIL_MC ]; then
+	testconfig "FEATURE\(\`?nouucp" || uucp="Y";
+fi;
+
+yesno "Enable UUCP addressing" uucp || \
+	echo "FEATURE(\`nouucp', \`reject')dnl" >&3;
+
+###############################################################################
+
+descrip "Sticky Host" <<EOT
+If enabled, mail sent to \`user@$mailname' is marked as
+"sticky" -- that is, the local addresses aren't matched against UDB and don't
+go through ruleset 5. This is used if you want a setup where \`user' is not
+necessarily the same as \`user@$mailname', e.g., to make
+a distinct domain-wide namespace. If in doubt, it is safe to leave this
+option disabled.
+EOT
+
+sticky="N";
+! testconfig "FEATURE\(\`?stickyhost" || sticky="Y";
+
+! yesno "Enable sticky host option" sticky || \
+	echo "FEATURE(\`stickyhost')dnl" >&3;
+
+###############################################################################
+
+descrip "DNS" <<EOT
+If you are directly connected to the Internet and have access to a domain
+name server, you should enable this option.
+EOT
+
+dns="Y";
+! testconfig "FEATURE\(\`?nodns" || dns="N";
+! testconfig "HACK\(\`?nodns" || dns="N";
+
+yesno "Enable DNS" dns || \
+	echo "HACK(\`nodns')dnl" >&3;
+
+###############################################################################
+
+if [ Y = "$dns" ]; then
+
+###############################################################################
+
+descrip "Best MX is Local" <<EOT
+If enabled, this option will cause sendmail to accept mail as though locally
+addressed for any host that lists this machine as the best possible MX record.
+This generates additional DNS traffic, but should be OK for low-to-medium
+traffic hosts. N.B.: This feature is fundamentally incompatible with wildcard
+MX records. If you have a wildcard MX record that matches your domain, you
+cannot use this feature.
+EOT
+
+bestmxlocal="N";
+! testconfig "FEATURE\(\`?bestmx_is_local" || bestmxlocal="Y";
+
+! yesno "Assume best MX is local" bestmxlocal || \
+	echo "FEATURE(\`bestmx_is_local')dnl" >&3;
+
+###############################################################################
+
+fi;  # finished DNS configuration
+
+###############################################################################
+
+descrip "Mailertable" <<EOT
+If enabled, this option causes sendmail to read mail routing rules from
+the text file @sysconfdir@/mail/mailertable.  This is needed for unusual mailers like
+ifmail and fax programs.
+More information is in @docdir@/sendmail-doc/op/op.txt.gz.
+EOT
+
+mailertable="N";
+! testconfig "FEATURE\(\`?mailertable" || mailertable="Y";
+
+! yesno "Enable the mailertable feature" mailertable || \
+	echo "FEATURE(\`mailertable')dnl" >&3;
+
+###############################################################################
+
+descrip "Sendmail Restricted Shell" <<EOT
+If enabled, this option causes sendmail to use the sendmail restricted shell
+program (smrsh) instead of /bin/sh for mailing to programs. This improves your
+ability to control what gets run via email; only those programs which appear
+in a special directory can be run. If you enable this option, please carefully
+read the smrsh(8) man page for further information.
+EOT
+
+smrsh="Y";
+! testconfig "FEATURE\(\'?smrsh" || smrsh="Y";
+
+! yesno "Use the Sendmail Restricted Shell (smrsh)" smrsh || \
+	echo "FEATURE(\`smrsh', \`@libexecdir@/smrsh')dnl" >&3;
+
+###############################################################################
+
+#descrip "Mailer Name" <<EOT
+#You can change the name used for internally generated outgoing messages.
+#Usually this is \`MAILER-DAEMON' but it would not be unreasonable to change
+#it to something such as \`postmaster'.
+#EOT
+
+#daemon="MAILER-DAEMON";
+#! testconfig "define\(\`?confMAILER_NAME" ||
+#	daemon=$(echo -n "$CONFIG" | sed -e 's/[^,]*, *`\([^'"'"']*\).*/\1/');
+
+#input "Mailer name" daemon;
+
+#test "MAILER-DAEMON" = "$daemon" ||
+#	echo "define(\`confMAILER_NAME', \`$daemon')dnl" >&3;
+
+###############################################################################
+
+#descrip "Me Too" <<EOT
+#Sendmail normally excludes the sender address from group expansion. Enabling
+#this option will cause the sender to be included.
+#EOT
+
+#metoo="N";
+#! testconfig "define\(\`?confME_TOO.*True" || metoo="Y";
+
+#! yesno "Enable me too option" metoo ||
+#	echo "define(\`confME_TOO', True)dnl" >&3;
+
+###############################################################################
+
+descrip "Message Timeouts" <<EOT
+Sendmail will issue a warning message to the sender if it can't deliver a
+message within a reasonable amount of time. It will also send a failure
+notification and give up trying to deliver the message if it can't deliver it
+after an unreasonable amount of time.
+
+You can configure the message timeouts after which warning and failure
+notifications are sent. Sendmail's defaults are 4 hours and 5 days (4h/5d),
+respectively, but many people feel warnings after only 4 hours are premature.
+EOT
+
+qw="4h";
+! testconfig "define\(\`?confTO_QUEUEWARN" ||
+	qw=$(echo -n "$CONFIG" | sed -e 's/[^,]*, *`\([^'"'"']*\).*/\1/');
+
+qr="5d";
+! testconfig "define\(\`?confTO_QUEUERETURN" ||
+	qr=$(echo -n "$CONFIG" | sed -e 's/[^,]*, *`\([^'"'"']*\).*/\1/');
+
+timeouts="$qw/$qr";
+
+input "Message timeouts" timeouts;
+
+qw=$(expr "$timeouts" : '\([^/]*\)/');
+qr=$(expr "$timeouts" : '[^/]*/\(.*\)');
+
+test "4h" = "$qw" || echo "define(\`confTO_QUEUEWARN', \`$qw')dnl" >&3;
+test "5d" = "$qr" || echo "define(\`confTO_QUEUERETURN', \`$qr')dnl" >&3;
+
+###############################################################################
+# Support dialup configuration
+cat <<-EOT >&3
+dnl #
+dnl # Dialup/LAN connection overrides
+dnl #
+include(\`@sysconfdir@/mail/m4/dialup.m4')dnl
+include(\`@sysconfdir@/mail/m4/provider.m4')dnl
+dnl #
+EOT
+
+###############################################################################
+echo "MAILER_DEFINITIONS" >&3
+echo "MAILER(local)dnl" >&3
+
+test "N" = "$smtp" || echo "MAILER(smtp)dnl" >&3;
+
+###############################################################################
+
+if [ -e /etc/ifmail/config ] && \
+	[ -e @datadir@/sendmail/cf/mailer/ifmail.m4 ];
+then
+	echo "MAILER(ifmail)dnl" >&3;
+fi;
+
+###############################################################################
+
+fi;  # finished non-"null client" configuration
+
+
+###############################################################################
+
+echo "" >&3;
+echo "LOCAL_CONFIG" >&3;
+#if [ -z $nullclient ]; then
+#	echo "MASQUERADE_AS($mailname)dnl" >&3
+#	fi
+
+if [ -f $SENDMAIL_MC ]; then
+	sed -n -e '/^## Custom/,$p' $SENDMAIL_MC >&3;
+else
+	echo "## Custom configurations below (will be preserved)" >&3;
+fi;
+
+descrip "Configuration Complete" <<EOT
+Advanced configuration, such as alternate mailers, the use of mailertables,
+Bitnet domains, and UUCP domains can be accomplished by manually editing the
+$SENDMAIL_MC configuration file and rerunning
+\`$0' to generate the appropriate @sysconfdir@/mail/sendmail.cf
+file. (Local changes made at the end of $SENDMAIL_MC
+will be preserved by \`$0'.)
+
+The m4 library files for sendmail configuration are kept in the
+@datadir@/sendmail/cf directory. You may wish to review the
+documentation in @docdir@/sendmail to assist in further customization.
+
+You may wish to customize your alias database; see the aliases(5) man page
+for information on the format and use of the /etc/aliases file.
+EOT
+
+###############################################################################
+
+exec 3>&-;
+
+if [ -f $SENDMAIL_MC ];then
+	echo "Saving old $SENDMAIL_MC as $SENDMAIL_MC.old ...";
+	mv -f $SENDMAIL_MC $SENDMAIL_MC.old;
+	fi;
+
+chown root:smmsp $SENDMAIL_MC.new;
+chmod 0644 $SENDMAIL_MC.new;
+mv -f $SENDMAIL_MC.new $SENDMAIL_MC;
+if [ ! -f @datadir@/sendmail/cf/feature/msp.m4 ]; then
+	chown root:smmsp $SUBMIT_MC.new;
+	chmod 0644 $SUBMIT_MC.new;
+	mv -f $SUBMIT_MC.new $SUBMIT_MC;
+	fi;
+trap - 0;
+
+makecf;
+exit 0;

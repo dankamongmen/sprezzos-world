@@ -1,0 +1,577 @@
+#!/usr/bin/perl -w
+#------------------------------------------------------------------------
+#
+# $Sendmail: update_conf,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Parse and update /etc/mail/sendmail.conf and reflect its values in
+# /etc/cron.d/sendmail and /etc/inetd.conf.
+#
+# Copyright (c) 2001-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+#------------------------------------------------------------------------
+#
+use strict;			# be kosher
+use Cwd;			# provide cwd()
+use Env;			# A few environmental references
+use integer;		# Peformance
+use Sys::Hostname;	# make sure we have a valid hostname
+use Getopt::Long;	# parameter handling
+use FileHandle;		# I/O
+
+# Local libraries - for Debian Sendmail Perl helper functions
+# BEGIN { $main::my_path = substr($0,$[,rindex($0,'/')) };
+use lib ('.', substr($0,$[,rindex($0,'/')), "@datadir@/sendmail");
+require Parse_conf;
+require Parse_mc;
+
+$main::program_name = $0; #'update_conf';
+$main::program_version = '@sm_version@';
+$main::program_date = '@sm_date@ @sm_time@ cowboy';
+$main::debug = 0;
+
+my $interp_pgm = "$^X";
+my $interp_vrm = $];
+$interp_vrm = ("$^V" | '000') if (defined $^V);
+my $current_time = scalar localtime;
+my $user = getlogin || (getpwuid($<))[0] || "Unknown!!";
+my $hostname = hostname();
+my $directory = getcwd();
+
+my $Conffile = "@sysconfdir@/mail/sendmail.conf";
+my $output_file = '';
+my $ofh = new FileHandle;
+my $debug = 0;
+
+#
+#------------------------------------------------------------------------------
+# Global variables
+#------------------------------------------------------------------------------
+
+#
+#------------------------------------------------------------------------------
+# Finally, some code (almost)
+#------------------------------------------------------------------------------
+
+#
+# Argument handling...
+$main::opt_help='';
+$main::opt_output_file='';
+$main::opt_input_file='';
+$main::opt_debug='';
+$main::opt_test='';
+$main::opt_static='';
+my @options = qw(
+	help|h
+	output-file|output_file|o:s
+	input-file|input_file|i:s
+	debug!
+	test!
+	static!
+	);
+my $result = GetOptions(@options);
+if ( ! $result ) {
+	die "Terminating due to parameter error";
+	};
+if ( $main::opt_help ) {
+	warn "$main::program_name $main::program_version $main::program_date\n";
+	warn "$0 \n";
+	warn "	 -help\n" if $main::opt_help;
+	warn "	 -debug\n" if $main::opt_debug;
+	warn "	 -test\n" if $main::opt_debug;
+	warn "	 -static\n" if $main::opt_static;
+	warn "	 -o $main::opt_output_file\n" if $main::opt_output_file;
+	warn "	 -i $main::opt_input_file\n"  if $main::opt_input_file;
+	exit 0;
+	};
+
+if ( $main::opt_test ) {
+	&sm2cron_time("");
+	&sm2cron_time("6s");
+	&sm2cron_time("5m");
+	&sm2cron_time("4h");
+	&sm2cron_time("3d");
+	&sm2cron_time("2w");
+	&sm2cron_time("2w3d4h5m6s");
+	&sm2cron_time("89s");
+	&sm2cron_time("90m");
+	&sm2cron_time("150m");
+	&sm2cron_time("125");
+	&sm2cron_time("31d");
+	&sm2cron_time("35d");
+	&sm2cron_time("5w");
+	&sm2cron_time("9w");
+	exit 0;
+	};
+
+$output_file = $main::opt_output_file if ($main::opt_output_file);
+my $input_file = $main::opt_input_file || $Conffile;
+# $main::debug is used in Parse_mc !
+$main::debug = $main::opt_debug || $main::debug;
+
+# Read /etc/mail/sendmail.conf (if extant)
+&Parse_conf::read_config($Conffile);
+
+# [Re]write /etc/mail/sendmail.config
+&Parse_conf::write_config($Conffile);
+
+my ($ok, $value) = &Parse_conf::get_value('HANDS_OFF');
+if ($value ne '0') {
+	unlink "@sysconfdir@/cron.d/sendmail";
+	exit;
+	};
+
+# Reflect settings in /etc/cron.d/sendmail
+&write_crontab;
+if ( $output_file eq '' ) {
+	chown '0', '0', "@sysconfdir@/cron.d/sendmail";
+	chmod 0644, "@sysconfdir@/cron.d/sendmail";
+	};
+
+# Reflect settings in /etc/inetd.conf
+&update_inetd;
+
+# Create/Delete files
+&update_files;
+
+exit (0);
+
+#
+#------------------------------------------------------------------------
+# Check for nullclient mode in /etc/mail/sendmail.mc
+#------------------------------------------------------------------------
+sub check_nullclient {
+	my $nullclient = 0;
+	my $in_file = "@sysconfdir@/mail/sendmail.mc";
+	if ( -r $in_file ) {
+		my $ifh;
+		unless ( open($ifh, "<$in_file") ) {
+			warn("Could not open $in_file($!), ignoring it.\n");
+			};
+
+		line: while (<$ifh>) {
+			next line if /^$/;	   # skip empty lines
+			next line if /^#/;	   # skip comments
+			next line if /^dnl /;  # skip comments
+			chomp;				   # drop tailing \n
+
+			if (/^\s*FEATURE\(\s*`?nullclient/) {
+				$nullclient = 1;
+				last line;
+				};
+			};
+		};
+	return $nullclient;
+	};
+
+#
+#------------------------------------------------------------------------
+# Compute time setting for Crontab entry (simplistic)
+# NOTE:  It does the basics pretty darned well...  *BUT*
+#        It fails, miserably, on things that would multiple lines:
+#            90 minutes:  does it at 30 minutes (90-60)
+#        Or are just edge conditions:
+#            25 hours: treated as 24 hours
+#            35 days:  does it the 7rd of every month (35-28)
+#------------------------------------------------------------------------
+sub sm2cron_time {
+	my $month  = 0;
+	my $week   = 0;
+	my $day    = 0;
+	my $hour   = 0;
+	my $minute = 0;
+	my $second = 0;
+	my $tmp    = 0;
+	my $t	   = '';
+	my $cron   = '';
+
+	my ($sm)	= @_;
+	my $seconds = 0;
+	my $elapsed = 0;
+	my $randstart = '00';
+	if ($sm eq '') {
+		if ( $main::opt_test ) {
+			print "mm   hh  dom  mon dow = sm2cron_time($sm);\n";
+			};
+		return ($cron, $seconds);
+		};
+
+	# Convert sendmail time
+	#	1w2d3h4m5s
+	# to cron time
+	#	m h dom mon dow
+	$t = $sm;
+	if ( $t =~ /^\d+$/ ) {
+		$minute  = $sm; }
+	else {
+		($week   = $sm) =~ s/.*?(\d+)w.*/$1/ if ( $t =~ /w/ );
+		($day    = $sm) =~ s/.*?(\d+)d.*/$1/ if ( $t =~ /d/ );
+		($hour   = $sm) =~ s/.*?(\d+)h.*/$1/ if ( $t =~ /h/ );
+		($minute = $sm) =~ s/.*?(\d+)m.*/$1/ if ( $t =~ /m/ );
+		($second = $sm) =~ s/.*?(\d+)s.*/$1/ if ( $t =~ /s/ );
+		}
+	# Rationalize the time
+	$seconds = ($week   * 7 * 24 * 60 * 60)
+	         + ($day    * 24 * 60 * 60)
+	         + ($hour   * 60 * 60)
+	         + ($minute * 60)
+	         + $second;
+	$elapsed = $seconds;
+	$month   = $seconds / (4 * 7 * 24 * 60 * 60);
+	$seconds = $seconds % (4 * 7 * 24 * 60 * 60);
+	$week    = $seconds / (7 * 24 * 60 * 60);
+	$seconds = $seconds % (7 * 24 * 60 * 60);
+	$day     = $seconds / (24 * 60 * 60);
+	$seconds = $seconds % (24 * 60 * 60);
+	$hour    = $seconds / (60 * 60);
+	$seconds = $seconds % (60 * 60);
+	$minute  = $seconds / (60);
+	$seconds = $seconds % (60);
+	$second  = $seconds;
+
+	# Cron doesn't do seconds, round to minutes or ignore
+	$minute = $minute + 1 if ($second > 30);
+
+	# Minute of hour (0-59)
+	$minute = sprintf("%02d", $minute);
+	$randstart = sprintf("%02d", int(rand(60))) if (!$main::opt_static);
+	if (0 < $hour + $day + $week + $month) {
+		if (1 >= $minute) {
+			$cron = "$randstart  "; }
+		else {
+			$cron = "$minute  "; }
+		}
+	elsif (1 >= $minute) {
+		$cron = "*   ";
+		}
+	else {
+		$cron = "*/$minute";
+		};
+
+	# Hour of day (0-23)
+	$hour = sprintf("%02d", $hour);
+	$randstart = sprintf("%02d", int(rand(24))) if (!$main::opt_static);
+	if (0 < $day + $week + $month) {
+		if (1 >= $hour) {
+			$cron = "$cron $randstart  "; }
+		else {
+			$cron = "$cron $hour  "; }
+		}
+	elsif (1 >= $hour) {
+		$cron = "$cron *   ";
+		}
+	else {
+		$cron = "$cron */$hour";
+		};
+
+	# Day of month (1-31)
+	$day = $day + (7 * $week);
+	$day   = sprintf("%02d", $day);
+	$randstart = 1 + sprintf("%02d", int(rand(31))) if (!$main::opt_static);
+	if (0 < $month) {
+		if (1 >= $day) {
+			$cron = "$cron $randstart  "; }
+		else {
+			$cron = "$cron $day  "; }
+		}
+	elsif (1 >= $day) {
+		$cron = "$cron *   ";
+		}
+	else {
+		$cron = "$cron */$day";
+		};
+
+	# Month in year (1-12)
+	$month = sprintf("%02d", $month);
+	$randstart = 1 + sprintf("%02d", int(rand(12))) if (!$main::opt_static);
+	if (1 >= $month) {
+		$cron = "$cron *   ";
+		}
+	else {
+		$cron = "$cron */$month";
+		};
+
+	$cron = "$cron *";				# Day of week (0-7)
+
+	if ( $main::opt_test ) {
+		print "$cron = sm2cron_time($sm);\n";
+		};
+	return ($cron, $elapsed);	
+	};
+
+#
+#------------------------------------------------------------------------
+# Write updated cron file
+#------------------------------------------------------------------------
+sub write_crontab {
+	my $var;
+	my $interval = '';
+	my $cronint  = '';
+	my $test	 = "test -x @sysconfdir@/init.d/sendmail";
+	my $command  = '';
+	my $ok		 = '';
+	my $mailto	 = '';
+	my $mmode	 = '';
+	my $qmode	 = '';
+	my $msp_line = '';
+	my $mta_line = '';
+	my $age_line = '';
+
+	($ok, $mailto) = &Parse_conf::get_value('CRON_MAILTO');
+	if ( ! $ok ) {
+		return;
+		};
+
+	my $out_file = $output_file || "@sysconfdir@/cron.d/sendmail";
+	print STDOUT "Writing $out_file.\n";
+	$out_file = '&STDOUT' if ($out_file eq '-');
+	unless ( open($ofh, ">$out_file") ) {
+		warn("Could not open $out_file($!), using STDOUT\n");
+		open($ofh, ">&STDOUT");
+		};
+	$out_file = '-' if ($out_file eq '&STDOUT');
+
+	print $ofh <<"EOT";
+####################################################################
+##### This file is automagically generated -- edit at your own risk
+#####
+##### file: ${out_file}
+##### generated via: (${interp_pgm} ${interp_vrm})
+#####		${main::program_name}
+#####		version: ${main::program_version} ${main::program_date}
+##### by: ${user}\@${hostname}
+##### on: ${current_time}
+##### in: ${directory}
+##### input files:
+EOT
+	foreach my $file ( split(' ', $input_file) ) {
+		print $ofh <<"EOT";
+#####	${file}
+EOT
+		};
+	print $ofh <<"EOT";
+#####
+####################################################################
+#------------------------------------------------------------------------------
+#
+# $out_file
+#
+# Copyright (c) 2001-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+# Version:	  ${main::program_version}
+# Time-stamp: <${main::program_date}>
+#
+# Sendmail crontab - Call sendmail at various times to do the following:
+#	1) Age queues - move undelivered mail to a slower queue
+#	2) Retry any mail queued by the message submission process
+#	3) run the queues (deliver mail) if a standalone daemon is not desired
+#
+# Each processes is independant and guided by /etc/mail/sendmail.conf and
+# {sendmail,submit}.mc files.
+#
+# There isn't anything here that should need touching.
+#
+# Any requisite queue/misc parameters must be set in /etc/mail/sendmail.conf
+# and reflected herein via /usr/sbin/sendmailconfig (or more directly via
+# ${main::program_name}).
+#
+#------------------------------------------------------------------------------
+#
+# use default path, shell, home
+#SHELL=/bin/sh
+#PATH=
+#HOME=
+# send mail to this user, as `mail/smmsp` isn't real.
+MAILTO=$mailto
+#
+# format of entries:
+# m h dom mon dow	user	command
+#
+#------------------------------------------------------------------------------
+# Every so often, give sendmail a chance to run the MSP queues.
+#
+EOT
+	($ok, $interval) = &Parse_conf::get_value('MSP_INTERVAL');
+	($cronint, $ok) = &sm2cron_time($interval);
+	$command  = "$test && @datadir@/sendmail/sendmail cron-msp";
+	($ok, $mmode) = &Parse_conf::get_value('MSP_MODE');
+	($ok, $qmode) = &Parse_conf::get_value('QUEUE_MODE');
+	if ($mmode eq 'Cron'
+		and ($interval ne '')
+		#or ($mmode eq 'None' and $qmode eq 'Cron')
+		) {
+		$msp_line =
+			"$cronint\t\tsmmsp\t$command";
+		}
+	else {
+		$msp_line =
+			"#$cronint\t\tsmmsp\t$command";
+		};
+	print $ofh "$msp_line\n";
+
+	print $ofh <<"EOT";
+#
+#------------------------------------------------------------------------------
+# Every so often, give sendmail a chance to run the MTA queues.
+# Will also run MSP queues if enabled
+#
+EOT
+	($ok, $interval) = &Parse_conf::get_value('QUEUE_INTERVAL');
+	($cronint, $ok) = &sm2cron_time($interval);
+	$command  = "$test && @datadir@/sendmail/sendmail cron-mta";
+	if ($qmode eq 'Cron'
+		and ($interval ne '')
+		) {
+		$mta_line =
+			"$cronint\t\troot\t$command";
+		}
+	else {
+		$mta_line =
+			"#$cronint\t\troot\t$command";
+		};
+	print $ofh "$mta_line\n";
+
+	print $ofh <<"EOT";
+#
+#------------------------------------------------------------------------------
+# Every so often, give sendmail a chance to age the queues.
+#
+EOT
+	($ok, $var) = &Parse_conf::get_value('AGE_DATA');
+	my $tmpval = eval $var;
+	if ($@) {
+		warn $@;
+		}
+	else {
+		$var = $tmpval;
+		};
+	if (not ref $var) {
+		print $ofh "# No queue aging\n";
+		}
+	elsif (@{$var} == 0) {
+		print $ofh "# No queue aging\n";
+		}
+	else {
+		foreach my $entry (@{$var}) {
+			($interval, $ok) = &sm2cron_time(@$entry[0]);
+			my $criteria = @$entry[1] || join('','-s ',$ok);
+			my $to		 = @$entry[2];
+			my $from	 = @$entry[3];
+			$command	 = "$test && @datadir@/sendmail/qtool.pl";
+			$from		 = "@localstatedir@/spool/mqueue/$from"
+				if ($from !~ /^\//);
+			$to			 = "@localstatedir@/spool/mqueue/$to"
+				if ($to !~ /^\//);
+			$age_line	 =
+				"$interval\t\troot\t$command $criteria $to $from";
+			print $ofh "$age_line >/dev/null\n";
+			};
+		};
+	print $ofh <<"EOT";
+#
+EOT
+
+	close($ofh);
+	};
+
+#
+#------------------------------------------------------------------------
+# Update /etc/inetd.conf file
+#------------------------------------------------------------------------
+sub update_inetd {
+
+	# Don't try to write if we're debugging
+	if ($output_file ne '') {
+		return;
+		};
+
+	my ($ok, $mode) = &Parse_conf::get_value('DAEMON_MODE');
+	if ( $ok and -x '/usr/sbin/update-inetd' ) {
+		if ( $mode eq 'Inetd' ) {
+			system 'update-inetd --group MAIL --enable smtp,smtps,submission'
+			}
+		else {
+			system 'update-inetd --group MAIL --disable smtp,smtps,submission'
+			};
+		};
+
+	};
+
+#
+#------------------------------------------------------------------------
+# Update mail statistics information (create/delete files)
+#------------------------------------------------------------------------
+sub update_files {
+
+	# Don't try to write if we're debugging
+	if ($output_file ne '') {
+		return;
+		};
+
+	my ($class, $flags, $files, $options);
+	my ($ok, $stats);
+	my $file;
+
+	#
+	# Read the mc/m4 files
+	&Parse_mc::read_dbs('', '');
+
+	# Obtain entry for HOST_STATUS_DIRECTORY
+	($class, $flags, $files, $options) =
+		&Parse_mc::entry_dbs('confHOST_STATUS_DIRECTORY');
+	$file = @{$files}[0];
+	($ok, $stats) = &Parse_conf::get_value('DAEMON_HOSTSTATS');
+	if ( $ok and $file ne '-' ) {
+		if ( $stats and ! -d $file) {
+			print STDOUT "Enabling HOST statistics file($file).\n";
+			system "mkdir ${file}";
+			my $gid = getgrnam('smmsp');
+			chown '0', $gid, $file;
+			chmod 02755, $file;
+			}
+		elsif ( ! $stats and -d $file ) {
+			print STDOUT "Disabling HOST statistics file($file).\n";
+			system "rm -rf ${file}";
+			};
+		};
+
+	# Obtain entry for STATUS_FILE
+	($class, $flags, $files, $options) =
+		&Parse_mc::entry_dbs('STATUS_FILE');
+	$file = @{$files}[0];
+	($ok, $stats) = &Parse_conf::get_value('DAEMON_MAILSTATS');
+	if ( $ok and $file ne '-' ) {
+		if ( $stats and ! -e $file) {
+			print STDOUT "Enabling MTA statistics file($file).\n";
+			open  'STATS', ">$file";
+			close 'STATS';
+			my $gid = getgrnam('smmsp');
+			chown '0', $gid, $file;
+			chmod 0640, $file;
+			}
+		elsif ( ! $stats and -e $file ) {
+			print STDOUT "Disabling MTA statistics file($file).\n";
+			unlink $file;
+			};
+		};
+
+	# Obtain entry for MSP_STATUS_FILE
+	($class, $flags, $files, $options) =
+		&Parse_mc::entry_dbs('MSP_STATUS_FILE');
+	$file = @{$files}[0];
+	($ok, $stats) = &Parse_conf::get_value('MSP_MAILSTATS');
+	if ( $ok and $file ne '-') {
+		if ( $stats and ! -e $file ) {
+			print STDOUT "Enabling MSP statistics file($file).\n";
+			open  'STATS', ">$file";
+			close 'STATS';
+			my $gid = getgrnam('smmsp');
+			chown '0', $gid, $file;
+			chmod 0660, $file;
+			}
+		elsif ( ! $stats and -e $file ) {
+			print STDOUT "Disabling MSP statistics file($file).\n";
+			unlink $file;
+			};
+		};
+
+	};
+

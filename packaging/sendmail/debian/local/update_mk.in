@@ -1,0 +1,765 @@
+#!/usr/bin/perl -w
+#------------------------------------------------------------------------
+#
+# $Sendmail: update_mk,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Create /etc/mail/Makefile for Debian Sendmail databases
+#
+# Copyright 1998-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes (to all):
+#	*
+#
+# Notes (to self):
+#	* Should actually put data in some files (local-host-names, etc)
+#
+#------------------------------------------------------------------------
+#
+# Initialization of the perl environment
+use strict;			# be kosher
+use Cwd;			# provide cwd()
+use Env;			# A few environmental references
+use integer;		# Peformance
+use Sys::Hostname;	# make sure we have a valid hostname
+use Getopt::Long;	# parameter handling
+
+# Local libraries - for Debian Sendmail Perl helper functions
+# BEGIN { $main::my_path = substr($0,$[,rindex($0,'/')) };
+use lib ('.', substr($0,$[,rindex($0,'/')), "@datadir@/sendmail");
+require Parse_mc;
+require Parse_conf;
+
+# Version of this program
+#($main::MYNAME			= $main::0) =~ s|.*/||;
+#$main::Author			= "Richard Nelson";
+#$main::AuthorMail		= "cowboy\@debian.org";
+#$main::Version			= '$Revision: 2.00 $ ';
+$main::program_name    = $0;
+$main::program_version = '@sm_version@';
+$main::program_date    = '@sm_date@ @sm_time@ cowboy';
+$main::debug			= 0;
+
+my $interp_pgm = "$^X";
+my $interp_vrm = $];
+$interp_vrm = ("$^V" | '000') if (defined $^V);
+my $current_time = scalar localtime;
+my $user = getlogin || (getpwuid($<))[0] || "Unknown!!";
+my $hostname = hostname();
+my $directory = getcwd();
+
+my $Makefile_def = "@sysconfdir@/mail/Makefile";
+my $Conffile = "@sysconfdir@/mail/sendmail.conf";
+# List of database entries that will be created if not found
+my %created_dbs;
+my @created_dbs;
+# A few files (like exposed-users) can be listed >1 times !
+my %created_files = ();
+my $reload_stamp = "@localstatedir@/run/sendmail/stampdir/reload";
+
+#
+#------------------------------------------------------------------------------
+# Finally, some code (almost)
+#------------------------------------------------------------------------------
+#
+# Argument handling...
+$main::opt_help='';
+$main::opt_output_file='';
+$main::opt_input_file='';
+$main::opt_debug='';
+my @options = qw(
+	help|h
+	output-file|output_file|o:s
+	input-file|input_file|i:s
+	debug!
+	);
+my $result = GetOptions(@options);
+if ( ! $result ) {
+	die "Terminating due to parameter error";
+	};
+if ( $main::opt_help ) {
+	warn "$main::program_name $main::program_version $main::program_date\n";
+	warn "$0 \n";
+	warn "	 -help\n" if $main::opt_help;
+	warn "	 -debug\n" if $main::opt_debug;
+	warn "	 -o $main::opt_output_file\n" if $main::opt_output_file;
+	warn "	 -i $main::opt_input_file\n"  if $main::opt_input_file;
+	exit 0;
+	};
+
+my $Makefile = $main::opt_output_file || $Makefile_def;
+${Parse_mc::database_file} = $main::opt_input_file
+	if $main::opt_input_file;
+# $main::debug is used in Parse_mc !
+$main::debug = $main::opt_debug || $main::debug;
+
+# Pull in some configuration data
+&Parse_conf::read_conf("$Conffile");
+my ($ok, $value) = &Parse_conf::get_value('HANDS_OFF');
+if ($value ne '0') {
+	exit;
+	};
+
+# Let them know wtf is going on...
+print STDOUT "Creating ${Makefile}...\n";
+
+# Read the mc/m4 files
+&Parse_mc::read_dbs($Parse_mc::database_file, '');
+
+# Determine names with which we shall work
+my @databases = &get_names();
+
+# Write out the textual representation
+&write_make;
+
+#
+#------------------------------------------------------------------------------
+# Obtain list of candidate databases from sendmail.mc
+#------------------------------------------------------------------------------
+sub get_names {
+	my @names;
+
+	# Database types we know how to handle
+	my %make_types = (
+		 'btree'		=> 1
+		,'dbm'			=> 1
+		,'hash'			=> 1
+		,'m4'			=> 1
+		,'newaliases'	=> 1
+		,'parse_mc'		=> 1
+		,'update_conf'	=> 1
+		,'update_mk'	=> 1
+		,'update_auth'	=> 1
+		,'update_tls'	=> 1
+		,'QUEUE_GROUP'	=> 1
+		,'include'      => 1
+		);
+
+	# Add any qualified databases to the list
+	foreach my $entry (&Parse_mc::names_dbs()) {
+		my ($class, $flags, $files, $options) =
+			&Parse_mc::entry_dbs($entry);
+		if ( (exists($make_types{$entry}) or
+			exists($make_types{$class}))
+			and @{$files}[0] ne '-'
+			and ! exists($created_dbs{$entry})) {
+			push @names, $entry;
+			push @created_dbs, $entry;
+			$created_dbs{$entry} = '';
+			};
+		};
+
+	return @names;
+	};
+
+#
+#------------------------------------------------------------------------------
+# Create Makefile
+#------------------------------------------------------------------------------
+sub write_make {
+	my $ofh = new FileHandle;
+
+	$Makefile = '&STDOUT' if ($Makefile eq '-');
+	unless ( open($ofh, ">$Makefile") ) {
+		warn("Could not open $Makefile($!), using STDOUT.\n");
+		open($ofh, ">&STDOUT");
+		};
+	$Makefile = '-' if ($Makefile eq '&STDOUT');
+
+	&write_header($ofh);
+	&write_target_clean($ofh);
+	&write_target_restart($ofh);
+	&write_target_sendmail($ofh);
+	&write_targets($ofh);
+	&write_files($ofh);
+	&write_footer($ofh);
+
+	close $ofh;
+	if ($Makefile eq $Makefile_def) {
+		my $gid = getgrnam('smmsp');
+		chown '0', $gid, $Makefile;
+		chmod 0754, $Makefile;
+		};
+	};
+
+#
+#------------------------------------------------------------------------------
+# Write Makefile header
+#------------------------------------------------------------------------------
+sub write_header {
+	my ($ofh) = @_;
+
+	print $ofh <<"EOT";
+#!/usr/bin/make -f
+####################################################################
+##### This file is automagically generated -- edit at your own risk
+#####
+##### Copyright (c) 1998-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#####
+##### file: ${Makefile}		Makefile for Sendmail databases
+##### generated via: (${interp_pgm} ${interp_vrm})
+#####		${main::program_name}
+#####		version: ${main::program_version} ${main::program_date}
+##### by: ${user}\@${hostname}
+##### on: ${current_time}
+##### in: ${directory}
+##### input files: ${Parse_mc::database_file}
+#####
+##### Usage:
+#####	1) Make all targets upto date - use one of the following:
+#####		A) \`(cd @sysconfdir@/mail && make)\`
+#####		B) \`make -f ${Makefile}\`
+#####		C) \`${Makefile}\`
+#####	2) Force update of <target> - Add <target> to one of the
+#####	   prior commands ie, \`${Makefile} access\`.  Most
+#####	   any reasonable <target> value is accepted.
+#####
+####################################################################
+SHELL=/bin/sh
+
+#
+# targets that will be routed to the @sysconfdir@/init.d/sendmail script
+# NOTE: newaliases and clean removed due to extant rules
+#
+INIT = start stop restart restart-if-running \\
+       reload-if-running reload force-reload \\
+       hoststat purgestat mailstats mailq runq control \\
+       status debug 
+
+.SUFFIXES:
+.PRECIOUS: $Makefile
+
+#
+# all, the default target, will update everything
+#
+.PHONY: all
+all: sendmail $reload_stamp
+
+#
+# route to the @sysconfdir@/init.d/sendmail script
+#
+.PHONY: \$(INIT)
+\$(INIT): FORCE
+	@sysconfdir@/init.d/sendmail \$\@
+
+EOT
+	};
+
+#
+#------------------------------------------------------------------------------
+# Write Makefile 'CLEAN' target
+#------------------------------------------------------------------------------
+sub write_target_clean {
+	my ($ofh) = @_;
+	my @names;
+
+	%created_files = ();
+	foreach my $entry (@databases) {
+		next if ($entry eq 'QUEUE_GROUP'
+			or $entry eq 'Makefile'
+			or $entry eq 'auth'
+			or $entry eq 'tls'
+			or $entry eq 'include'
+			);
+		my ($class, $flags, $files, $options) =
+			&Parse_mc::entry_dbs($entry);
+		foreach my $file (@{$files}) {
+			next if ( $file eq '-' 
+				or exists($created_files{$file}) );
+			$created_files{$file} = '';
+			my $dbname;
+			if ($class eq 'parse_mc'
+				or $class eq 'update_mk'
+				or $class eq 'm4') {
+				$dbname = "@sysconfdir@/mail/$entry";
+				}
+			elsif ($class eq 'update_conf') {
+				$dbname = "@sysconfdir@/cron.d/sendmail";
+				}
+			elsif ($class eq 'btree'
+				or $class eq 'hash'
+				or $class eq 'newaliases') {
+				$dbname = "$file.db";
+				}
+			else {
+				$dbname = $file;
+				};
+			push @names, $dbname;
+			};
+		};
+
+	print $ofh <<"EOT";
+
+#
+# clean target, remove {sendmail,submit}.cf and generated databases
+#
+EOT
+	print $ofh
+		".PHONY: clean\n",
+		"clean: FORCE\n",
+		"\trm -f ",join(";\n\trm -f ", @names),";\n";
+	};
+
+#
+#------------------------------------------------------------------------------
+# Write Makefile 'RESTART' target
+#------------------------------------------------------------------------------
+sub write_target_restart {
+	my ($ofh) = @_;
+	my $file;
+
+	print $ofh <<"EOT";
+
+#
+# restart target, check to see if sendmail needs to be restarted
+#
+.PHONY: noreload norestart
+noreload norestart: FORCE
+	\@touch $reload_stamp;
+
+.PHONY: should_reload should_restart
+should_reload should_restart: FORCE
+	\@rm -f $reload_stamp;
+	\@\$(MAKE) -sf $Makefile $reload_stamp;
+
+EOT
+
+	# Spew secondary target of actual restart
+	%created_files = ();
+	my @right;
+	foreach my $entry (sort &Parse_mc::restart_dbs()) {
+		if (! exists($created_dbs{$entry})) {
+			push @created_dbs, $entry;
+			$created_dbs{$entry} = '';
+			};
+		my ($class, $flags, $files, $options) =
+			&Parse_mc::entry_dbs($entry);
+		foreach my $file (@{$files}) {
+			next if ( $file eq '-'
+				or exists($created_files{$file}) );
+			$created_files{$file} = '';
+			my $dbname = $file;
+			$dbname =~ s/\.mc$/\.cf/;
+			push @right, "$dbname";
+			};
+		};
+
+	print $ofh "$reload_stamp: \\\n\t",
+		join(" \\\n\t", @right), "\n",
+		"\t\@if [ ! -f \$\@ ]; then \\\n",
+		"\t\techo 'A forced reload...'; \\\n",
+		"\telse \\\n",
+		"\t\techo 'The following file(s) have changed:'; \\\n",
+		"\t\techo '  \$?'; \\\n",
+		"\t\tfi;\n",
+		"\t\@echo '** ** You should issue ",
+		"\`@sysconfdir@/init.d/sendmail reload\` ** **';\n";
+	};
+
+#
+#------------------------------------------------------------------------------
+# Write Sendmail dependancies
+#------------------------------------------------------------------------------
+sub write_target_sendmail {
+	my ($ofh) = @_;
+
+	print $ofh <<"EOT";
+
+#
+# sendmail targets, depend upon *ALL* relevant files/databases
+#
+.PHONY: sendmail
+sendmail: sendmail_files sendmail_dbs
+
+EOT
+	my (@smfiles, @smdbs);
+
+	%created_files = ();
+	foreach my $entry (@created_dbs) {
+		my ($class, $flags, $files, $options) =
+			&Parse_mc::entry_dbs($entry);
+		foreach my $file (@{$files}) {
+			next if $file eq '-';
+			next if $file eq 'ldap'; # ALIAS hack
+			if ($class eq 'parse_mc' or $class eq 'update_mk'
+				or $class eq 'm4') {
+				push @smfiles, "$file"
+					if (!exists($created_files{$file}));
+				$created_files{$file} = '';
+				push @smdbs, "@sysconfdir@/mail/$entry";
+				}
+			elsif ($class eq 'update_conf') {
+				push @smdbs, "@sysconfdir@/cron.d/sendmail";
+				}
+			elsif ($class eq 'btree' or $class eq 'hash'
+				or $class eq 'newaliases') {
+				push @smfiles, "$file"
+					if (!exists($created_files{$file}));
+				$created_files{$file} = '';
+				push @smdbs, "$file.db";
+				}
+			else {
+				push @smfiles, "$file"
+					if (!exists($created_files{$file}));
+				$created_files{$file} = '';
+				};
+			};
+		};
+
+	print $ofh ".PHONY: sendmail_files\n",
+		"sendmail_files: \\\n\t",
+		join(" \\\n\t", @smfiles), "\n\n";
+	print $ofh ".PHONY: sendmail_dbs\n",
+		"sendmail_dbs: \\\n\t",
+		join(" \\\n\t", @smdbs), "\n";
+	};
+
+#
+#------------------------------------------------------------------------------
+# Write Makefile individual targets
+#------------------------------------------------------------------------------
+sub write_targets {
+	my ($ofh) = @_;
+	my $file;
+
+	print $ofh <<"EOT";
+
+#
+# Individual database targets
+#
+
+#
+# Default db type is hash (Must be in /etc/mail, or
+# fully qualify the dataset for this target to work)
+#
+%.db: % FORCE
+	\@echo 'Updating \$\@...';
+	\@if [ -x @sbindir@/makemap ]; then \\
+		@sbindir@/makemap hash \$\@.new.db < \$<; \\
+		chown root:smmsp \$\@.new.db; \\
+		chmod 0640 \$\@.new.db; \\
+		mv -f \$\@.new.db \$\@; \\
+		fi;
+EOT
+
+	# Spew primary target of <target>
+	foreach my $entry (@databases) {
+		my ($class, $flags, $files, $options) =
+			&Parse_mc::entry_dbs($entry);
+		my @names;
+		my $left   = '';
+		my $right  = '';
+		my $sleft  = '';
+		my $dbname = '';
+		print $ofh "\n";
+
+		# Create short name(s) for database entries
+		$sleft	.= "$entry ";
+		if ($class eq 'newaliases'
+			or $class eq 'parse_mc'
+			or $class eq 'update_mk'
+			or $class eq 'update_conf'
+			or $class eq 'update_auth'
+			or $class eq 'update_tls'
+			) {
+			$sleft	 = 'makefile make ' if ($class eq 'update_mk');
+			$sleft	.= 'cron ' if ($class eq 'update_conf');
+			$sleft	.= "$class ";
+			};
+
+		foreach my $file (@{$files}) {
+			next if $file eq '-';
+			next if $file eq 'ldap'; # ALIAS hack
+			if ($entry eq 'QUEUE_GROUP' or $entry eq 'include') {
+				$dbname = '';
+				$sleft = lc "${entry}s";
+				$left = lc "${entry}s";
+				}
+			elsif ($class eq 'parse_mc' or $class eq 'update_mk'
+				or $class eq 'm4') {
+				$dbname = "@sysconfdir@/mail/$entry";
+				}
+			elsif ($class eq 'update_conf') {
+				$dbname = "@sysconfdir@/cron.d/sendmail";
+				}
+			elsif ($class eq 'btree' or $class eq 'hash'
+				or $class eq 'newaliases') {
+				$dbname = "$file.db";
+				}
+			else {
+				$dbname = $file;
+				$file = ""
+					 if ($class eq 'update_tls'
+					 or  $class eq 'update_auth');
+				};
+			$left  .= "$dbname ";
+			$right .= " $file";
+
+			# Create short name(s) for database entries
+			if ($class ne 'parse_mc'
+				and $class ne 'update_mk'
+				and $class ne 'update_conf'
+				and $class ne 'update_auth'
+				and $class ne 'update_tls'
+				and $entry ne 'QUEUE_GROUP'
+				and $entry ne 'include'
+				) {
+				my $dbsname = "$dbname";
+				$dbsname =~ s/\/etc\/mail\///;
+				$sleft .= "$dbsname " if ($entry ne $dbsname);
+				if ($file ne $dbname) {
+					$dbsname  =~ s/\.db//;
+					$sleft .= "$dbsname " if ($entry ne $dbsname);
+					};
+				};
+			};
+
+		# Spew out a phony entry suitable for FORCE
+		print $ofh '.PHONY: ', $sleft, "\n";
+		print $ofh $sleft,": FORCE\n"
+			if ($entry ne 'QUEUE_GROUP' and $entry ne 'include');
+		if ($class eq 'update_mk') {
+			print $ofh "\t\@touch $right;\n",
+				"\t\@\$(MAKE) -sf $Makefile $left;\n";
+				}
+		elsif ($entry ne 'QUEUE_GROUP' and $entry ne 'include') {
+			print $ofh "\t\@rm -f $left;\n",
+				"\t\@\$(MAKE) -sf $Makefile $left;\n";
+			};
+
+		#
+		# Spew out the whole enchilada for this database
+		if ($entry eq 'sendmail.cf' or $entry eq 'databases') {
+			my ($iclass, $iflags, $ifiles, $ioptions) =
+				&Parse_mc::entry_dbs('include');
+			$right .= ' ';
+			$right .= join(' ', @{$ifiles});
+			};
+		print $ofh $left, ':', $right, "\n";
+		next if ($entry eq 'QUEUE_GROUP' or $entry eq 'include');
+		print $ofh "\t\@echo 'Updating $entry ...';\n";
+		if ($class eq 'newaliases') {
+			print $ofh "\t\@if [ -x @sbindir@/sendmail ]; then \\\n";
+			print $ofh "\t\t@sbindir@/sendmail -bi || true; \\\n";
+			}
+		elsif ($class eq 'parse_mc'
+			or $class eq 'update_conf'
+			or $class eq 'update_mk'
+			or $class eq 'update_auth'
+			or $class eq 'update_tls'
+			) {
+			print $ofh "\t\@if [ -x @datadir@/sendmail/${class} ]; then \\\n";
+			print $ofh "\t\t@datadir@/sendmail/${class} || true; \\\n"
+			}
+		elsif ($class eq 'btree' or $class eq 'hash') {
+			print $ofh "\t\@if [ -x @sbindir@/makemap ]; then \\\n";
+			};
+		foreach my $file (@{$files}) {
+			next if ( $file eq 'ldap' ); # ALIAS hack
+			my $dbname	= $file;
+			my $newname = $file;
+			my $uid = 'root';
+			$uid = 'smmta' if ($entry eq 'authinfo'
+						   or $entry eq 'access_db'
+						   or $entry eq 'QUEUE_GROUP'
+						   or $class eq 'newaliases');
+			my $mode = '0644';
+			$mode = '0640'	if ($entry eq 'authinfo'
+							or	$entry eq 'access_db');
+			$mode = '0640'	if ($class eq 'btree' or $class eq 'hash');
+			$mode = '0644'	if ($class eq 'm4');
+			$mode = '0754'	if ($class eq 'update_mk');
+			$mode = '02750' if ($entry eq 'QUEUE_GROUP');
+			if ($class eq 'btree' or $class eq 'hash') {
+				$dbname  .= '.db';
+				$newname .= '.new.db';
+				if (index($flags, '-o') == -1) {
+					print $ofh "\t\t@sbindir@/makemap $class $newname \\\n",
+						"\t\t\t< $file; \\\n",
+						"\t\tchown $uid:smmsp $newname; \\\n",
+						"\t\tchmod $mode $newname; \\\n",
+						"\t\tmv -f $newname $dbname; \\\n";
+					}
+				else {
+					print $ofh
+						"\t\tif [ -s $file ]; then \\\n",
+						"\t\t@sbindir@/makemap $class $newname \\\n",
+						"\t\t\t< $file; \\\n",
+						"\t\tchown $uid:smmsp $newname; \\\n",
+						"\t\tchmod $mode $newname; \\\n",
+						"\t\tmv -f $newname $dbname; \\\n",
+						"\t\tfi; \\\n";
+					};
+				}
+			elsif ($class eq 'newaliases') {
+				$newname .= '.db';
+				print $ofh "\t\tif [ -f $newname ]; then \\\n",
+					"\t\t\tchown $uid:smmsp $newname; \\\n",
+					"\t\t\tchmod $mode $newname; \\\n",
+					"\t\t\tfi; \\\n";
+				}
+			elsif ($class eq 'parse_mc' or $class eq 'update_mk') {
+				$newname = "@sysconfdir@/mail/$entry";
+				print $ofh "\t\tchown $uid:smmsp $newname; \\\n",
+					"\t\tchmod $mode $newname; \\\n";
+				}
+			elsif ($class eq 'm4') {
+				my $oldname = $dbname;
+				$dbname  =~ s/\.mc$/\.cf/;
+				$newname =~ s/\.mc$/\.cf\.new/;
+				my $lead   = "\t";
+				my $leadh  = "\t\@";
+				my $lead2  = "\t\t";
+				my $trail  = "";
+				if ($entry eq 'submit.cf') {
+					$lead	= "\t\t";
+					$leadh	= "\t\t";
+					$lead2	= "\t\t\t";
+					$trail	= "\\";
+					};
+				print $ofh
+					"\t\@rm -f ${dbname}.errors\n";
+				print $ofh
+					"\t\@if [ -f @datadir@/sendmail/cf/feature/msp.m4 ]; ",
+					"then \\\n" if ($entry eq 'submit.cf');
+				print $ofh
+					"${leadh}m4 $file > $newname \\\n",
+					"${lead2}2> ${dbname}.errors || true; $trail\n",
+					"${leadh}echo \"### ${oldname} ###\" \\\n",
+					"${lead2}>> $newname; $trail\n",
+					"${leadh}sed -e 's/^/# /' $file \\\n",
+					"${lead2}>> $newname; $trail\n",
+					"${leadh}chown $uid:smmsp $newname; $trail\n",
+					"${leadh}chmod $mode $newname; $trail\n",
+					"${leadh}mv -f $newname $dbname; $trail\n",
+					"${leadh}if [ -s ${dbname}.errors ]; then \\\n",
+					"${lead2}chown $uid:smmsp ${dbname}.errors; \\\n",
+					"${lead2}cat ${dbname}.errors; \\\n",
+					"${lead}else \\\n",
+					"${lead2}rm -f ${dbname}.errors; \\\n",
+					"${lead2}fi; $trail\n";
+				print $ofh
+					"${lead}fi;\n" if ($entry eq 'submit.cf');
+				};
+			};
+		if ($class eq 'newaliases'
+			or $class eq 'parse_mc'
+			or $class eq 'update_conf'
+			or $class eq 'update_mk'
+			or $class eq 'update_auth'
+			or $class eq 'update_tls'
+			or $class eq 'btree' or $class eq 'hash'
+			) {	
+			print $ofh "\t\tfi;\n";
+			};
+		};
+	};
+
+#
+#------------------------------------------------------------------------------
+# Write Makefile file targets (create any missing files)
+#------------------------------------------------------------------------------
+sub write_files {
+	my ($ofh) = @_;
+
+	print $ofh <<"EOT";
+
+#
+# Individual file targets - create any requisite files
+#
+EOT
+
+	%created_files = ();
+	foreach my $entry (@created_dbs) {
+		my ($class, $flags, $files, $options) =
+			&Parse_mc::entry_dbs($entry);
+
+		# These are done above...
+		next if ($entry eq 'databases'
+			or	$entry eq 'auth'
+			or	$entry eq 'tls'
+			or	$entry eq 'Makefile'
+			or  $entry eq 'include'
+			);
+
+		foreach my $file (@{$files}) {
+			next if ( $file eq '-'
+				or exists($created_files{$file}) );
+			$created_files{$file} = '';
+			my $uid = 'root';
+			$uid = 'smmta' if ($entry eq 'authinfo'
+						   or $entry eq 'access_db'
+						   or $entry eq 'QUEUE_GROUP'
+						   or $class eq 'newaliases');
+			my $mode = '0644';
+			$mode = '0640'	if ($entry eq 'authinfo'
+							or	$entry eq 'access_db');
+			$mode = '0640'	if ($class eq 'btree' or $class eq 'hash');
+			$mode = '0644'	if ($class eq 'm4');
+			$mode = '0754'	if ($class eq 'update_mk');
+			$mode = '02750' if ($entry eq 'QUEUE_GROUP');
+			print $ofh "\n$file:\n",
+				"\t\@echo 'Creating $file';\n";
+			if ($entry eq 'QUEUE_GROUP') {
+				print $ofh "\t\@install -d",
+					" -o $uid -g smmsp -m $mode $file;\n",
+					"\t\@chown $uid:smmsp $file;\n",
+					"\t\@chmod $mode $file;\n";
+				}
+			elsif ($entry eq 'sendmail.cf') {
+				print $ofh "\t\@@sbindir@/sendmailconfig",
+					" --no-reload;\n";
+				}
+			elsif ($entry eq 'submit.cf') {
+				print $ofh "\t\@cp @datadir@/sendmail/",
+					"cf/debian/submit.mc \\\n",
+					"\t\t$file;\n",
+					"\t\@chown $uid:smmsp $file;\n",
+					"\t\@chmod $mode $file;\n";
+				}
+			elsif ($entry eq 'access_db') {
+				print $ofh "\t\@cp @datadir@/sendmail/",
+					"examples/db/access \\\n",
+					"\t\t$file;\n",
+					"\t\@chown $uid:smmsp $file;\n",
+					"\t\@chmod $mode $file;\n";
+				}
+			elsif ($file eq '@sysconfdir@/mail/aliases') {
+				print $ofh "\t\@ln -s ../aliases @sysconfdir@/mail/aliases\n";
+				}
+			elsif ($class eq 'update_conf'
+				or $class eq 'update_auth'
+				or $class eq 'update_tls') {
+				print $ofh "\t\@@datadir@/sendmail/${class};\n";
+				}
+			# FIXME: come back and create real data
+			#	where needed (local-host-names, etc)
+			elsif (index($flags, '-o') == -1) {
+				print $ofh "\t\@touch $file;\n",
+					"\t\@chown $uid:smmsp $file;\n",
+					"\t\@chmod $mode $file;\n";
+				}
+			elsif (index($flags, '-o') != -1) {
+				print $ofh "\t# Optional file...\n";
+				};
+			};
+		};
+	};
+
+#
+#------------------------------------------------------------------------------
+# Write Makefile footer
+#------------------------------------------------------------------------------
+sub write_footer {
+	my ($ofh) = @_;
+
+print $ofh <<"EOT";
+
+#
+# FORCE target, allow one to override dependancies
+#
+.PHONY: FORCE
+FORCE: ;
+
+EOT
+	};
+

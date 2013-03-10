@@ -1,0 +1,202 @@
+#!/bin/sh
+#-----------------------------------------------------------------------------
+# $Sendmail: update_chaos,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Copyright (c) 2001-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# @configure_input@
+#
+# Debian script to rationalize builds for Sendmail @sm_version@@sm_revision@(@sm_math@)
+#
+# Note: the .in file supports @SM_MINVERS@ - @SM_MAXVERS@, but the generated
+#	file is customized to the version noted above.
+#
+#-----------------------------------------------------------------------------
+set -e;
+
+#------------------------------------------------------------------
+# Exit, stage left, even... if not needed (private dir, or >= 8.10.0)
+#------------------------------------------------------------------
+BUILD_TREE='@srcdir@/../../build-tree/sendmail-@sm_version@';
+if [ ! -d ${BUILD_TREE} ]; then
+	exit 0;
+	fi;
+if [ -d ${BUILD_TREE}/devtools/bin ]; then
+	exit 0;
+	fi;
+
+echo "Rationalizing Sendmail-@sm_version@ setup...";
+
+#------------------------------------------------------------------
+# List of subdirectories to work on
+#------------------------------------------------------------------
+SUBDIRS="editmap libmilter mail.local mailstats
+	makemap praliases rmail sendmail smrsh vacation";
+
+#------------------------------------------------------------------
+# Match Sendmail's build directory conventions
+#------------------------------------------------------------------
+os=`uname -s | sed -e 's/\//-/g' -e 's/ //g'`;
+rel=`uname -r | sed -e 's/(/-/g' -e 's/)//g'`;
+arch=`uname -m | sed -e 's/ //g'`;
+OBJ_DIR="obj.${os}.${rel}.${arch}";
+
+#------------------------------------------------------------------
+# Function to escape quotes (to survive subsequent sed)
+#------------------------------------------------------------------
+esq () {
+	result=$(echo "${1}" | sed -e 's?\"?\\\\\\\"?g');
+	};
+
+#------------------------------------------------------------------
+# Prior to 8.10.0, sendmail source was in the src directory
+# Prior to 8.10.0, devtools was called BuildTools
+#	Create compatibility links (to look like 8.10.0+)
+#------------------------------------------------------------------
+if [ ! -d ${BUILD_TREE}/sendmail ]; then
+	echo "...Creating \${BUILD_TREE}/sendmail compatibility symlink";
+	ln -sf src ${BUILD_TREE}/sendmail;
+	if [ ! -d ${BUILD_TREE}/devtools ]; then
+		echo "...Creating \${BUILD_TREE}/devtools compatibility symlink";
+		ln -sf BuildTools ${BUILD_TREE}/devtools;
+		fi;
+	fi;
+
+#------------------------------------------------------------------
+# Prior to 8.10.0, objects were in the source directories, not separate
+#	Create compatibility links (to look like 8.10.0+)
+#------------------------------------------------------------------
+echo "...Creating ${OBJ_DIR}/<dir> directories";
+mkdir -p ${BUILD_TREE}/${OBJ_DIR};
+for subdir in $SUBDIRS; do
+	if [ -d ${BUILD_TREE}/${subdir} ]; then
+		ln -sf "../${subdir}/${OBJ_DIR}" \
+			${BUILD_TREE}/${OBJ_DIR}/${subdir};
+		fi;
+	done;
+
+#------------------------------------------------------------------
+# If 8.9.0+, we're done, get the flock outa here...
+#------------------------------------------------------------------
+if [ -e ${BUILD_TREE}/sendmail/Build ]; then
+	echo '...Done.';
+	exit 0;
+	fi;
+
+#------------------------------------------------------------------
+# Prior to 8.9.0, READ_ME was seen in a few places
+#	Create compatibility links
+#------------------------------------------------------------------
+echo '...Creating READ_ME compatility symlinks';
+for file in $(find ${BUILD_TREE} -name 'READ_ME'); do
+	ln -sf READ_ME $(echo "${file}" | sed -e 's/READ_ME/README/');
+	done;
+
+#------------------------------------------------------------------
+# Prior to 8.9.0, MAKE was used instead of Build
+#	 We'll install a small wrapper for the earlier releases
+# Prior to 8.9.0, Only src directory had an obj.* subdirectory
+#	Create compatibility links (to look like 8.9.0+)
+#------------------------------------------------------------------
+echo "...Creating <dir>/${OBJ_DIR}";
+for subdir in $SUBDIRS; do
+	if [ -d ${BUILD_TREE}/${subdir} ]; then
+		if [ ! -d ${BUILD_TREE}/${subdir}/Makefiles ]; then
+			mkdir -p ${BUILD_TREE}/${subdir}/${OBJ_DIR};
+			for file in `find ${BUILD_TREE}/${subdir} -type f`; do 
+				cp -a $file ${BUILD_TREE}/${subdir}/${OBJ_DIR};
+				done;
+			fi;
+		cp -a debian/build/Build ${BUILD_TREE}/${subdir}/;
+		fi;
+	done;
+#
+#------------------------------------------------------------------
+# Kluge the Makefiles to comply with our file locations.
+#------------------------------------------------------------------
+echo '...Kluging Makefiles';
+for file in mailstats/Makefile.dist \
+	mail.local/Makefile.dist \
+	makemap/Makefile.dist \
+	praliases/Makefile.dist \
+	smrsh/Makefile.dist \
+	src/Makefiles/Makefile.Linux \
+	; do
+	cp -a ${BUILD_TREE}/${file} ${BUILD_TREE}/${file}.save;
+	#
+	# Set local variables to allow for quoting...
+	esq "@sm_incdirs@";
+	sm_incdirs=$result;
+	esq "@sm_mapdef@";
+	sm_mapdef=$result;
+	esq "@sm_envdef@";
+	sm_envdef=$result;
+	esq "@sm_libs@";
+	sm_libs=$result;
+	#
+	# global
+	sed  \
+		-e 's?-I/usr/sww/include??' \
+		-e 's?-I/usr/local/include??' \
+		-e 's?-L/usr/sww/lib??' \
+		-e 's?../src?../../src?g' \
+		-e "s?^INCDIRS=\(.*\)\$?INCDIRS=\1 $sm_incdirs?" \
+		-e "s?^DBMDEF=.*?DBMDEF=$sm_mapdef?" \
+		-e "s?^ENVDEF=\(.*\)\$?ENVDEF=\1 $sm_envdef?" \
+		-e "s?^LIBS=.*?LIBS=$sm_libs?" \
+	${BUILD_TREE}/${file} > ${BUILD_TREE}/${file}.new;
+	mv ${BUILD_TREE}/${file}.new ${BUILD_TREE}/${file};
+	#
+	# compilation/link
+	sed \
+		-e 's?^O=.*?O=@CFLAGS@?' \
+		-e 's?^LIBDIRS=.*?LIBDIRS=?' \
+	${BUILD_TREE}/${file} > ${BUILD_TREE}/${file}.new;
+	mv ${BUILD_TREE}/${file}.new ${BUILD_TREE}/${file};
+
+	#
+	# paths, owners, and modes
+	#	Note: EBINDIR deserves a better home, suggestions?
+	sed \
+		-e 's?^BINDIR=.*?BINDIR=${DESTDIR}@sbindir@?' \
+		-e 's?^BINMODE=.*?BINMODE=04755?' \
+		-e 's?^BINGRP=.*?BINGRP=mail?' \
+		-e 's?^BINOWN=.*?BINOWN=root?' \
+		-e 's?^HFDIR=.*?HFDIR=${DESTDIR}@sysconfdir@/mail?' \
+		-e 's?^STDIR=.*?STDIR=${DESTDIR}@localstatedir@/lib/sendmail?' \
+	${BUILD_TREE}/${file} > ${BUILD_TREE}/${file}.new;
+	mv ${BUILD_TREE}/${file}.new ${BUILD_TREE}/${file};
+
+	if [ "${file}" = 'mail.local/Makefile.dist' \
+		-o "${file}" = 'smrsh/Makefile.dist' \
+		]; then
+		sed \
+			-e 's?^BINDIR=.*?BINDIR=${DESTDIR}@libexecdir@?' \
+			-e 's?^BINMODE=.*?BINMODE=04755?' \
+			-e 's?^BINGRP=.*?BINGRP=mail?' \
+			-e 's?^BINOWN=.*?BINOWN=root?' \
+		${BUILD_TREE}/${file} > ${BUILD_TREE}/${file}.new;
+		echo 'force-install: install' >> ${BUILD_TREE}/${file}.new;
+		mv ${BUILD_TREE}/${file}.new ${BUILD_TREE}/${file};
+
+	elif [ "${file}" = 'mailstats/Makefile.dist' \
+		-o "${file}" = 'makemap/Makefile.dist' \
+		-o "${file}" = 'praliases/Makefile.dist' \
+		]; then
+		sed \
+			-e 's?^BINDIR=.*?BINDIR=${DESTDIR}@sbindir@?' \
+			-e 's?^BINMODE=.*?BINMODE=0755?' \
+			-e 's?^BINGRP=.*?BINGRP=mail?' \
+			-e 's?^BINOWN=.*?BINOWN=root?' \
+		${BUILD_TREE}/${file} > ${BUILD_TREE}/${file}.new;
+		mv ${BUILD_TREE}/${file}.new ${BUILD_TREE}/${file};
+		fi;
+
+	# For most directories, replace Makefile with our updated Makefile.dist
+	if [ "${file}" != 'src/Makefiles/Makefile.Linux' ]; then
+		cp ${BUILD_TREE}/${file} \
+			$(dirname "${BUILD_TREE}/${file}")/${OBJ_DIR}/Makefile;
+		fi;
+	done;
+
+echo '...Done.';

@@ -1,0 +1,860 @@
+#!/usr/bin/perl
+
+#	BSDI	$Id: checksendmail.perl,v 1.1.1.1 1994/01/13 21:15:31 polk Exp $
+
+# checksendmail
+#
+#	The checksendmail program is a perl script that aids the testing
+#	of sendmail's various configuration filse.  checksendmail 
+#	passes typical addresses (supplied in input files) through
+#	sendmail and prints the result of the resolution and 
+#	transformation routines. 
+#
+#			Gene Kim & Rob Kolstad & Jeff Polk, 7/11/90
+#			Modified by Robert Harker, 11/14/00
+
+# --	-a show aliasing of local addresses
+# --	-d preceed each line with ruleset sequence summary
+# --    -C config_file
+# --	-b sendmail_binary
+# --    -l log_file of results of tests
+# --    -r resolve_addresses_file
+# --	-T test one address
+
+# defaults:
+	$resolve  = "address.resolve";
+	$cffile   = "/etc/mail/sendmail.cf";
+
+sub usage {
+	die "Usage: checksendmail [-C cffile.cf] [-b sendmail_binary] [-l log_file]\n\t\t\t\t[-a] [-d] [-r resolve_addrs_file || -T one\@test.addr]\n$errormsg\n";
+}
+
+for (unshift (@ARGV, "XX"); $#ARGV > 0; shift ARGV) {
+	if ($ARGV[1] eq "-C") 
+	{
+		if ($setcffile & 1) { die "Can only set `cffile.cf' once"; }
+		shift @ARGV;
+		if ($#ARGV >= 1) {$cffile = $ARGV[1]; }
+		else {
+			$errormsg = "No sendmail.cf file given for -C flag\n";
+			&usage();
+		}
+		$setcffile += 1;
+	}
+	elsif ($ARGV[1] eq "-r")
+	{
+		if ($setfile & 1) { die "Can only set `resolve' once"; }
+		shift @ARGV;
+		if ($#ARGV < 1) {
+			$errormsg = "No resolve_addrs_file given for -r flag\n";
+			&usage();
+		}
+		$resolve = $ARGV[1];
+		$setfile += 1;
+	}
+	elsif ($ARGV[1] eq "-T")
+	{
+		if ($setfile) { die "Can't set other files and use -T"; }
+		shift @ARGV;
+		if ($#ARGV < 1) {
+			$errormsg = "No one\@test.addr given for -T flag\n";
+			&usage();
+		}
+		open (OUT, ">/tmp/csm.in$$") ||
+					die "Can't open >/tmp/csm.in$$";
+		$resolve = "/tmp/csm.in$$";
+		print OUT "$ARGV[1]\n";
+		close (OUT);
+		$setfile = 7;
+	}
+	elsif ($ARGV[1] eq "-b")
+	{
+		if ($setbin & 1) { die "Can only set `sendmail_binary' once"; }
+		shift @ARGV;
+		if ($#ARGV >= 1) {$sendmail = $ARGV[1]; }
+		else {
+			$errormsg = "No sendmail_binary file given for -b flag\n";
+			&usage();
+		}
+		$setbin += 1;
+	}
+	elsif ($ARGV[1] eq "-l")
+	{
+		if ($setlog & 1) { die "Can only set `log_file' once"; }
+		shift @ARGV;
+		if ($#ARGV >= 1) {$logfile = $ARGV[1]; }
+		else {
+			$errormsg = "No log_file file given for -l flag\n";
+			&usage();
+		}
+		$setlog += 1;
+	}
+	elsif ($ARGV[1] eq "-a")
+	{
+		$doaliasing += 1;
+	}
+	elsif ($ARGV[1] eq "-d")
+	{
+		$dorspath += 1;
+	}
+	else { &usage(); }
+}
+
+# Figure out where the sendmail binary is
+if (! $setbin & 1) {
+  foreach $i ("/usr/sbin/sendmail", "/usr/libexec/sendmail", "/usr/lib/sendmail")
+  {
+	# test if binary exists and is executable
+	if ((-e $i) && (-x $i)) { 
+		$sendmail = $i;
+		last;
+	}
+  }
+}
+
+
+# Figure out the version of sendmail and the location of the sendmail.cf file
+# sendmail -d0.10 -bv root
+#	("-bv root" is just to give sendmail something to chew on)
+
+$binversion = `$sendmail -d0.10 -bv root | grep "^Version "`;
+chop $binversion;
+$binversion =~ s/^Version //;
+
+# Get the major relase number from the sendmail version
+$binver = $binversion;
+$binver =~ s/^8\.//;
+$binver =~ s/\..+//;
+
+# if the cf file was not set on the command line,
+#	find out where the binary looks for it
+if ( ! -e $cffile ) {
+	$cffile = `$sendmail -d0.10 -bv root | grep "Def Conf file:"`;
+	chop $cffile;
+	$cffile =~ s/ //g;
+	$cffile =~ s/	//g;
+	$cffile =~ s/^DefConffile://;
+}
+
+if (!-e $cffile)   { die "Can't find configuration file $cffile\n"; }
+
+if (!-e $resolve)  { die "Can't find name file $resolve\n"; }
+
+# Figure out the version of the sendmail.cf file
+# Look for the V line
+$cfversion = `grep "^V" $cffile`;
+chop $cfversion;
+# if $cfversion is empty, then the configuration is sendmail 5, not sendmail 8
+$cfversion =~ s/^$/V0/;
+
+# Get the version number from the V line
+$cfver = $cfversion;
+$cfver =~ s/^V//;
+$cfver =~ s'/.+'';
+
+# check that the binary is a higher version than config file
+if ( $binver < $cfver + 1) {
+    die "$cffile version ($cfversion) is more advanced than $sendmail version ($binversion)\n";
+}
+
+# figure out where the mqueue directory is
+if ( $cfver <= 6 ) {
+	$maildir = `grep "^OQ" $cffile`;
+	chop $maildir;
+	$maildir =~ s/^OQ//;
+} else {
+	$maildir = `grep "^O QueueDirectory" $cffile`;
+	chop $maildir;
+	$maildir =~ s/^O QueueDirectory=//;
+}
+
+# make sure the user can access the ../mqueue directory
+if ((!-r $maildir) || (!-x $maildir) || (!-w $maildir)) { 
+	if ($doaliasing & 1) {
+	  die "checksendmail: can't access $maildir! can't use checksendmail's -a flag\n";
+	} else {
+	  warn "checksendmail: can't access $maildir!  trying anyway...\n";
+	}
+}
+
+chop($hostname = `hostname`);
+chop($pwd = `pwd`);
+print "system: $hostname\t\tcurrent dir: $pwd\n";
+print "resolve file: $resolve\n";
+print "sendmail binary: $sendmail\t\tsendmail version: $binversion\n";
+print "config file: $cffile\t\tconfig file version: $cfversion\n\n";
+if ($setlog & 1) {
+  print "log file: $logfile\n\n";
+  # now print to the log file
+  open (LOG , ">$logfile") || die "Can't open >$logfile";
+  print LOG "system: $hostname\t\tcurrent dir: $pwd\n";
+  print LOG "resolve file: $resolve\n";
+  print LOG "sendmail binary: $sendmail\t\tsendmail version: $binversion\n";
+  print LOG "config file: $cffile\t\tconfig file version: $cfversion\n";
+  print LOG "log file: $logfile\n\n";
+}
+
+sub handler {  # 1st argument is signal name
+     local($sig) = @_;
+     print STDERR "Caught a SIG$sig--shutting down\n";
+     unlink("/tmp/csm$$") || die "Can't unlink /tmp/csm$$";
+     unlink("/tmp/csm.in$$");
+     if ($setlog & 1) {
+       close(LOG);
+     }
+     exit(0);
+}
+
+$SIG{'INT'} = 'handler';
+$SIG{'QUIT'} = 'handler';
+
+
+
+# glean the mailers used from the rule 0 tests
+
+sub parseresolve
+{
+     while (<MAIL>)
+     {
+	# now print to the log file
+	if ($setlog & 1) {
+	  print LOG $_;
+	}
+	if (/^ADDRESS TEST MODE/) { next; }
+	if (/^Enter <ruleset>/) { next; }
+	if (/^Warning: .cf file is out of date/) { next; }
+
+	# if the binary is less than 8.7 then use result of ruleset 0
+	if ( $binver <= 6 ) {
+	  if (/^>/)			# INPUT LINE! (and last output is done)
+	  {
+	    chop;
+	    if ($prevline) {	# OUTPUT LINE!
+	      &printparseresolve;
+	    }
+	    s/> *[0-9,]* *//g;
+	    s/.*input: *//;
+	    s/ //g;
+	    s/"//g;
+	    $input = $_;
+	  }
+	  else { chop; }
+	  $prevline = $_;
+	} else {
+	  # format of /parse output is:
+	  #       Parsing envelope recipient address
+	  #       rewrite: ruleset   3   input: harker @ harker . com
+	  if ($prevrule eq "Parsing envelope recipient address\n" )
+	  {
+	    chop;
+	    s/> *[0-9,]* *//g;
+	    s/.*input: *//;
+	    s/ //g;
+	    s/"//g;
+	    $input = $_;
+	    $prevrule = $_;
+	  }
+	  elsif (/^mailer /)
+	  {
+	    $prevrule = $_;
+	    &printparseresolve;
+	  }
+	  else
+	  {
+	    $prevrule = $_;
+	  }
+	}
+     }
+    #&printparseresolve;
+}
+
+sub printparseresolve {
+	# if the binary is less than 8.7 then use result of ruleset 0
+	if ( $binver <= 6 ) {
+	  if ($input eq "") { return;}
+
+	  $prevline =~ s/.*returns:  *//;
+	  $prevline =~ s/"//g;
+	  $prevline =~ s/ //g;
+	  # Don't strip spaces off error messages
+	  $prevline =~ s/ *([.!%<>]) */$1/g;
+	  $prevline =~ s/ +([;?\$])/$1/g;
+	  $prevline =~ s/([#\@:]) +/$1/g;
+
+# non-Sun test mode delimiters -> easily-readable style
+# Mark Sausville, MIT Media Laboratory, saus@media-lab.media.mit.edu
+	  $prevline =~ s/\^V/\$#/;
+	  $prevline =~ s/\^W/\$@/;
+	  $prevline =~ s/\^X/\$:/;
+
+     #### $#ether$@sun-barr.Ebay.Sun.COM$:site!user@uunet.uu.NET
+	  @t = split( '\$', $prevline);
+	  $address = "XXX";
+	  $remote = "XXX";
+	  $mailer = "XXX";
+	  for ($i = 1; $i <= $#t; $i++)
+	  {
+	    if (substr($t[$i], 0, 1) eq ":")
+	      { $address = substr($t[$i], 1,999); }
+	    if (substr($t[$i], 0, 1) eq "@")
+	      { $remote = substr($t[$i], 1,999); }
+	    if (substr($t[$i], 0, 1) eq "#")
+	      { $mailer =  substr($t[$i], 1,999);
+		$mailer =~ tr/A-Z/a-z/; }
+	   }
+	} else {
+	# the binary is at least 8.7 then use result of /parse
+	  chop;
+	  s/,//g;
+
+	  # mailer esmtp, host harker.com., user harker@harker.com
+	  @t = split( ' ', $_);
+	  $address = "XXX";
+	  $remote = "XXX";
+	  $mailer = "XXX";
+	  for ($i = 0; $i <= $#t; $i++)
+	  {
+	    if ($t[$i] eq "user")
+	      { $address = $t[++$i]; }
+	    if ($t[$i] eq "host")
+	      { $remote = $t[++$i]; }
+	    if ($t[$i] eq "mailer")
+	      { $mailer = $t[++$i];
+		$mailer =~ tr/A-Z/a-z/; }
+	   }
+	}
+	printf("%-27.27s --(%-6.6s)-->  %s[%s]\n", $input, $mailer,
+			$address, $remote);
+	# now print to the log file
+	if ($setlog & 1) {
+	  printf LOG ("%-27.27s --(%-6.6s)-->  %s[%s]\n\n", $input, $mailer,
+			$address, $remote);
+	}
+
+	if ($doaliasing & 1) {
+	  # If the address resolved to the local mailer,
+	  #	then expand the username as an alias
+	  if ( $mailer eq  "local")
+	  {
+	    $setalias = $aliasfound = 0;
+	    $laddress = $address;
+	    $sendmailprog = "$sendmail -bv -C$cffile $laddress|";
+	    open(LOCAL, $sendmailprog) ||
+					die "can't exec $sendmailprog...\n";
+	    # now print to the log file
+	    if ($setlog & 1) {
+	      print LOG "\n$sendmailprog\n";
+	    }
+	    while (<LOCAL>)
+	    {
+	      # now print to the log file
+	      if ($setlog & 1) {
+  	        print LOG $_;
+	      }
+	      chop;
+	      if (/unknown/)
+	      {
+		$aliasfound = 1;
+		printf("\t\t aliased to --(error )-->  %s\n", $_);
+		# now print to the log file
+		if ($setlog & 1) {
+		  printf LOG ("\t\t aliased to --(error )-->  %s\n\n", $_);
+		}
+		next;
+	      }
+	      s/,//g;
+	      @l = split( ' ', $_);
+	      $aladdress = "XXX";
+	      $remote = "XXX";
+	      $mailer = "XXX";
+	      for ($i = 1; $i <= $#l; $i++)
+	      {
+		# ./sendmail -bv -C./sendmail.cf j.murphy
+		# j.murphy@pop.mcit.com... deliverable: mailer mciesmtp,
+		#	host pop.mcit.com, user j.murphy@pop.mcit.com
+		if ($l[$i] eq "user") { $aladdress = $l[++$i]; }
+		if ($l[$i] eq "host") { $remote = $l[++$i]; }
+		if ($l[$i] eq "mailer") { $mailer = $l[++$i]; }
+	      }
+	      if (("$laddress" eq "$aladdress") && ($aliasfound == 0)) {
+		$selfalias = 1;
+		next;
+	      }
+	      printf("\t\t aliased to --(%-6.6s)-->  %s[%s]\n",
+				$mailer, $aladdress, $remote);
+	      # now print to the log file
+	      if ($setlog & 1) {
+		printf LOG ("\t\t aliased to --(%-6.6s)-->  %s[%s]\n\n",
+				$mailer, $aladdress, $remote);
+	      }
+	      if ("$laddress" ne "$aladdress") {
+		$aliasfound = 1;
+	        $envsenderaddrs .= " $aladdress";
+	      }
+	      if ($mailer ne "XXX") { $themailers{$mailer}=1;}
+	    }
+	    close(LOCAL);
+	    if ($selfalias == 1 && $aliasfound == 1) {
+	      printf("\t\t aliased to --(%-6.6s)-->  %s[%s]\n",
+				$mailer, $aladdress, $remote);
+	      # now print to the log file
+	      if ($setlog & 1) {
+		printf LOG ("\t\t aliased to --(%-6.6s)-->  %s[%s]\n\n",
+				$mailer, $aladdress, $remote);
+	      }
+	    }
+	    # now print a blank line to the log file
+	    if ($setlog & 1) {
+	      print LOG "\n";
+	    }
+	  } else {
+	      $envsenderaddrs .= " $address";
+	  }
+	}
+
+	if ($mailer ne "XXX") { $themailers{$mailer}.="$input ";}
+}
+
+# Parse output of sendmail name resolution 
+
+sub parseaddress
+{
+##   ADDRESS TEST MODE
+##   Enter <ruleset> <address>
+##   > rewrite: ruleset  3   input: "user"
+
+    open(MAIL, $_[0]) || die "Can't open $_[0]...\n";
+    local ($k, $address, $prevline, $mailer, $remote, $input);
+    print $_[1];			# the title
+    # now print to the log file
+    if ($setlog & 1) {
+         print LOG "\n$_[1]";			# the title
+    }
+
+    $done = 0;
+    while (<MAIL>)
+    {
+	# now print to the log file
+	if ($setlog & 1) {
+	  print LOG $_;
+	}
+	if (/^>  *$/) { $done = 1; }
+	if (/^ADDRESS TEST MODE/) { next; }
+	if (/^Enter <ruleset>/) { next; }
+	if (/^Warning: .cf file is out of date/) { next; }
+	if (/^$/) { next; }
+	chop;
+	# rewrite $rules to be just a slash if it starts with a /
+	$rules =~ s'/.+'/';
+	# if the binary is less than 8.7 then use result of ruleset 4
+	if ( $binver <= 6 || $rules ne "/" ) {
+	  if (/^>/)			# INPUT LINE! (and last output is done)
+	  {
+		if ($prevline) {	# OUTPUT LINE!
+		    $prevline =~ s/.*returns:  *//;
+		    $prevline =~ s/"//g;
+		    $prevline =~ s/ //g;
+#> rewrite: ruleset  3   input: "site" "!" "user" "@" "uunet" "." "uu" "." "net"
+#rewrite: ruleset  8   input: "site" "!" "user" "@" "uunet" "." "uu" "." "net"
+#> 
+		    printf("%s%-24.24s ---->  %s\n", $rspath, $input, $prevline);
+		    # now print to the log file
+		    if ($setlog & 1) {
+		      printf LOG ("%s%-24.24s ---->  %s\n", $rspath, $input, $prevline);
+		    }
+		}
+	    s/> *[0-9,]* *//g;
+	    s/.*input: *//;
+	    s/ //g;
+	    s/"//g;
+	    $input = $_;
+	  }
+	  last if $done;
+	  $prevline = $_;
+	} else {
+	  # format of /try output is:
+	  #   Trying envelope recipient address harker for mailer esmtp
+	  #   ...
+	  #   Rcode = 0, addr = harker@mailhub.gadget.com
+	  # remove extra ">" from "> >" lines
+	  s/^> >/>/;
+	  if (/^> Trying/)		# INPUT LINE! (and last output is done)
+	  {
+	    chop;
+	    s/> Trying .+ address //;
+	    s/ for mailer .+//;
+	    s/ //g;
+	    s/"//g;
+	    $input = $_;
+	    $prevrule = $_;
+	  }
+	  elsif (/^Rcode = /)
+	  {
+	    $prevrule = $_;
+	    #   Rcode = 0, addr = harker@mailhub.gadget.com
+	    s/^Rcode = .+ addr = //;
+	    printf("%s%-24.24s ---->  %s\n", $rspath, $input, $_);
+	    # now print to the log file
+	    if ($setlog & 1) {
+	      printf LOG ("%s%-24.24s ---->  %s\n\n", $rspath, $input, $_);
+	    }
+	  }
+	  else
+	  {
+	    $prevrule = $_;
+	  }
+	}
+    }
+    # now print to the log file
+    if ($setlog & 1) {
+         print LOG "\n";
+    }
+    close(MAIL);
+}
+
+
+# if the binary is less than 8.7 then use result of ruleset 4
+if ( $binver <= 6 ) {
+  print "Mail address resolution (rule 0)\n";
+  # now print to the log file
+  if ($setlog & 1) {
+    print LOG "Mail address resolution (rule 0)\n";
+  }
+} else {
+  print "Mail address resolution (/parse)\n";
+  # now print to the log file
+  if ($setlog & 1) {
+    print LOG "Mail address resolution (/parse)\n";
+  }
+}
+# pass names from resolve files to sendmail
+
+open(IN, $resolve) || die "can't open $resolve\n";
+open(OUT, ">/tmp/csm$$") || die "can't open >/tmp/csm$$\n";
+while (<IN>) 
+{
+    /^$/ && next;
+    /^#/ && next;
+    # if the binary is less than 8.7 then use result of ruleset 0
+    if ( $binver == 5 ) {
+	$rules = "0 $_";
+    } elsif ( $binver <= 6 ) {
+	$rules = "3,0 $_";
+    } else {
+	$rules = "/parse $_";
+    }
+    print OUT $rules;
+    # now print to the log file
+    if ($setlog & 1) {
+      print LOG "$rules";
+    }
+    chop;
+    $allinput .= " $_";
+}
+    $allinput =~ s/^ //;
+close(OUT);
+close(IN);
+$sendmailprog = "$sendmail -bt -C$cffile < /tmp/csm$$|";
+open(MAIL, $sendmailprog) || die "can't exec $sendmailprog...\n";
+&parseresolve();
+
+# calculate $f
+    $sendmailprog = "|$sendmail -bt -C$cffile > /tmp/csm$$";
+    open (OUT, $sendmailprog);
+    open (IN, $resolve);
+    # sendmail 5 automatically runs ruleset 3
+    if ( $binver == 5 ) {
+	$rules = "1,4";
+    } else {
+	$rules = "3,1,4";
+    }
+    if ($dorspath & 1) { $rspath = "\$f: "; }
+
+    while (<IN>) {
+	chop;
+	/^$/ && next;
+	/^#/ && next;
+	$address = $_;
+	print OUT "$rules $address\n";
+        # now print to the log file
+        if ($setlog & 1) {
+	    print LOG "$rules $address\n";
+        }
+    }
+    print OUT "\n";			# stuff last line into sendmail
+    # now print to the log file
+    if ($setlog & 1) {
+	print LOG "\n";			# stuff last line into sendmail
+    }
+    close(IN);
+    close(OUT);
+    &parseaddress ("/tmp/csm$$", "\n\$f address header transformations\n");
+
+# Get the R= and S= special rulesets from the configuration
+# now print to the log file
+if ($setlog & 1) {
+  print LOG "\nGet the R= and S= mailer specific rulesets\n";
+}
+
+open(FID, "grep ^M $cffile|");
+while (<FID>)
+{
+#    Mether,	P=[IPC], F=msDFMueCX, S=11, R=21, A=IPC $h
+    chop;
+    $thisline = $_;
+    $thisline =~ s/M//;
+    $thisline =~ s/,.*//;
+    $thisline =~ tr/A-Z/a-z/;
+    $sendrule = $_;
+    $sendrule =~ s/.*S=//;
+    $sendrule =~ s/,.*//;
+    if ($sendrule=~q!/!) {
+      ($esendrule, $hsendrule) = split (q!/!, $sendrule);
+    } else {
+      $esendrule = $hsendrule = $sendrule;
+    }
+    $recvrule = $_;
+    $recvrule =~ s/.*R=//;
+    $recvrule =~ s/,.*//;
+    if ($recvrule=~q!/!) {
+      ($erecvrule, $hrecvrule) = split (q!/!, $recvrule);
+    } else {
+      $erecvrule = $hrecvrule = $recvrule;
+    }
+    $esendrules{$thisline} = $esendrule;
+    $hsendrules{$thisline} = $hsendrule;
+    $erecvrules{$thisline} = $erecvrule;
+    $hrecvrules{$thisline} = $hrecvrule;
+    # now print to the log file
+    if ($setlog & 1) {
+      print LOG "mailer: $thisline\t->\tesendrule = $esendrule, hsendrule = $hsendrule,
+    		erecvrule = $erecvrule, hrecvrule = $hrecvrule\n";
+    }
+}
+# now print to the log file
+if ($setlog & 1) {
+  print LOG "\n";
+}
+close(FID);
+
+# pass envelope recipient names from various mailers through sendmail
+foreach $i (keys %themailers)
+{
+    $sendmailprog = "|$sendmail -bt -C$cffile > /tmp/csm$$";
+    open (OUT, $sendmailprog);
+    if ($dorspath & 1) { $rspath = "$i ER: "; }
+
+    # if the binary is less than 8.7 then use result of ruleset 0
+    if ( $binver <= 6 ) {
+      if ($erecvrules{$i} == 0) {
+	print "\nCan't find recv rule for `$i', skipping this mailer <-------------------\n";
+	next;
+      }
+      # sendmail 5 automatically runs ruleset 3
+      if ( $binver == 5 ) {
+	$rules = "2,$erecvrules{$i},4";
+      } else {
+	$rules = "3,2,$erecvrules{$i},4";
+      }
+    } else {
+      print OUT "/tryflags ER\n";
+      # now print to the log file
+      if ($setlog & 1) {
+	print LOG "/tryflags ER\n";
+      }
+      $rules = "/try $i";
+    }
+    @namelist = split(/ /, $allinput);
+    foreach (@namelist) {
+	print OUT "$rules $_\n";
+    	# now print to the log file
+    	if ($setlog & 1) {
+      	  print LOG "$rules $_\n";
+    }
+    }
+    print OUT "\n";			# stuff last line into sendmail
+    # now print to the log file
+    if ($setlog & 1) {
+      	print LOG "\n";			# stuff last line into the log
+    }
+    close(OUT);
+    $note = "";
+    if ($erecvrules{$i} eq $hrecvrules{$i}) { $note = "and header "; }
+    &parseaddress ("/tmp/csm$$", "\n`To' envelope ${note}address transformations for mailer $i [$rules]:\n");
+}
+
+# pass header recipient names from various mailers through sendmail
+foreach $i (keys %themailers)
+{
+    $sendmailprog = "|$sendmail -bt -C$cffile > /tmp/csm$$";
+    open (OUT, $sendmailprog);
+    if ($dorspath & 1) { $rspath = "$i HR: "; }
+
+    # only run the header ruleset if the mailer uses split env/hdr rulesets
+    if ($hrecvrules{$i} ne $erecvrules{$i}) {
+      # if the binary is less than 8.7 then use result of ruleset 0
+      if ( $binver <= 6 ) {
+	if ($hrecvrules{$i} == 0) {
+	  print "\nCan't find recv rule for `$i', skipping this mailer <-------------------\n";
+	  next;
+	}
+	# sendmail 5 automatically runs ruleset 3
+	if ( $binver == 5 ) {
+	  $rules = "2,$hrecvrules{$i},4";
+	} else {
+	  $rules = "3,2,$hrecvrules{$i},4";
+	}
+      } else {
+	print OUT "/tryflags HR\n";
+      # now print to the log file
+      if ($setlog & 1) {
+	print LOG "/tryflags HR\n";
+      }
+	$rules = "/try $i";
+      }
+      @namelist = split(/ /, $allinput);
+      foreach (@namelist) {
+	print OUT "$rules $_\n";
+        # now print to the log file
+        if ($setlog & 1) {
+	  print LOG "$rules $_\n";
+      }
+      }
+      print OUT "\n";			# stuff last line into sendmail
+      # now print to the log file
+      if ($setlog & 1) {
+      	  print LOG "\n";			# stuff last line into the log
+      }
+      close(OUT);
+      &parseaddress ("/tmp/csm$$", "\n`To' header address transformations for mailer $i [$rules]:\n");
+    }
+}
+
+# pass envelope sender names from various mailers through sendmail
+foreach $i (keys %themailers)
+{
+    $sendmailprog = "|$sendmail -bt -C$cffile > /tmp/csm$$";
+    open (OUT, $sendmailprog);
+    if ($dorspath & 1) { $rspath = "$i ES: "; }
+
+    # if the binary is less than 8.7 then use result of ruleset 0
+    if ( $binver <= 6 ) {
+      if ($esendrules{$i} == 0) {
+	print "\nCan't find send rule for `$i', skipping this mailer <-------------------\n";
+	next;
+      }
+      # sendmail 5 automatically runs ruleset 3
+      if ( $binver == 5 ) {
+	$rules = "2,$esendrules{$i},4";
+      } else {
+	$rules = "3,2,$esendrules{$i},4";
+      }
+    } else {
+      print OUT "/tryflags ES\n";
+      # now print to the log file
+      if ($setlog & 1) {
+	print LOG "/tryflags ES\n";
+      }
+      $rules = "/try $i";
+    }
+    @namelist = split(/ /, $allinput);
+    foreach (@namelist) {
+	print OUT "$rules $_\n";
+        # now print to the log file
+        if ($setlog & 1) {
+	  print LOG "$rules $_\n";
+    }
+    }
+    print OUT "\n";			# stuff last line into sendmail
+    close(IN);
+    close(OUT);
+    $note = "";
+    if ($esendrules{$i} eq $hsendrles{$i}) {$note = "and header ";}
+    &parseaddress ("/tmp/csm$$", "\n`From' envelope ${note}address transformations for mailer $i [$rules]:\n");
+}
+
+# pass header sender names from various mailers through sendmail
+foreach $i (keys %themailers)
+{
+    $sendmailprog = "|$sendmail -bt -C$cffile > /tmp/csm$$";
+    open (OUT, $sendmailprog);
+    if ($dorspath & 1) { $rspath = "$i HS: "; }
+
+    # only run the header ruleset if the mailer uses split env/hdr rulesets
+    if ($hsendrules{$i} ne $esendrules{$i}) {
+      # if the binary is less than 8.7 then use result of ruleset 0
+      if ( $binver <= 6 ) {
+	if ($hsendrules{$i} == 0) {
+	  print "\nCan't find send rule for `$i', skipping this mailer <-------------------\n";
+	  next;
+	}
+	# sendmail 5 automatically runs ruleset 3
+	if ( $binver == 5 ) {
+	  $rules = "2,$hsendrules{$i},4";
+	} else {
+	  $rules = "3,2,$hsendrules{$i},4";
+	}
+      } else {
+	print OUT "/tryflags HS\n";
+      # now print to the log file
+      if ($setlog & 1) {
+	print LOG "/tryflags HR\n";
+      }
+	$rules = "/try $i";
+      }
+      @namelist = split(/ /, $allinput);
+      foreach (@namelist) {
+	  print OUT "$rules $_\n";
+          # now print to the log file
+          if ($setlog & 1) {
+	    print LOG "$rules $_\n";
+      }
+    }
+      print OUT "\n";			# stuff last line into sendmail
+      close(IN);
+      close(OUT);
+      &parseaddress ("/tmp/csm$$", "\n`From' address header transformations for mailer $i [$rules]:\n");
+    }
+}
+
+foreach $i (keys %themailers)
+{
+    $sendmailprog = "|$sendmail -bt -C$cffile > /tmp/csm$$";
+    open (OUT, $sendmailprog);
+    if ($dorspath & 1) { $rspath = "\$g: "; }
+
+    # if the binary is 8.9 or below then check if the mailer
+    #	specific ruleset exists
+    if ( $binver <= 9 ) {
+    # if the binary is less than 8.7 then use result of ruleset 0
+      if ($esendrules{$i} == 0) {
+	print "\nCan't find send rule for `$i', skipping this mailer <-------------------\n";
+	next;
+      }
+    }
+    # sendmail 5 automatically runs ruleset 3
+    if ( $binver == 5 ) {
+      $rules = "1,4,3,1,$hsendrules{$i},4"; # XXX esendrules? book p. 431???
+    } else {
+      $rules = "3,1,4,3,1,$hsendrules{$i},4"; # XXX esendrules? book p. 431???
+    }
+    open (IN, $resolve);
+    while (<IN>) {
+	chop;
+	/^$/ && next;
+	/^#/ && next;
+	$address = $_;
+	print OUT "$rules $address\n";
+    }
+    print OUT "\n";			# stuff last line into sendmail
+    close(IN);
+    close(OUT);
+    $note = "";
+    if ($esendrules{$i} eq $hsendrles{$i}) {$note = "and header ";}
+    &parseaddress ("/tmp/csm$$", "\n\$g address transformations for mailer $i [$rules]:\n");
+}
+
+unlink("/tmp/csm$$") || die "Can't unlink /tmp/csm$$";
+unlink("/tmp/csm.in$$");
+
+exit;

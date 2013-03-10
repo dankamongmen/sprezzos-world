@@ -1,0 +1,444 @@
+#!/bin/sh
+#------------------------------------------------------------------------
+#
+# $Sendmail: dynamic,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Shell functions to handle dynamic network updates.
+# Supports ppp, dhcp, ifup/down, etc.
+#
+# Copyright (c) 2004-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# This script is called from the following places:
+#   /etc/ppp/ip-down.d/sendmail                 #\
+#   /etc/ppp/ip-up.d/sendmail                   # | These are deprecated
+#   /etc/dhcp3/dhclient-exit-hooks.d/sendmail   #/ 
+#   /etc/network/if-down.d/sendmail             #standard
+#   /etc/network/if-post-down.d/sendmail        #standard
+#   /etc/network/if-up.d/sendmail               #standard
+#   /etc/resolvconf/update-libc.d/sendmail      #More or less useless :(
+#
+# The other half of the logic is in /etc/mail/sendmail.conf
+#
+# DAEMON_NETMODE="Dynamic";  Keyword  SMTP network mode
+#   static:  Do not monitor any network interfaces for changes
+#   dynamic: Monitor one or more interfaces for changes
+#
+# DAEMON_NETIF="eth0";  string SMTP interface(s)
+#   This parameter defines the network interface(s) that the daemon
+#   will monitor for status changes (via ppp, dhcp, ifup/down hooks).
+#
+# NOTES:
+#   1) Only list more than one interfaces if they only used for fallback,
+#      otherwise the daemon will wind up ping-ponging between interfaces.
+#   2) Do not use 'lo' unless your daemon only listens on the localhost.
+#
+# LOG_CMDS="No"; Binary command logging flag
+#   Will cause syslog entries for many of the sendmail related commands
+#   like runq, mailq, etc - you'll also see cron jobs (if enabled).
+#
+# HANDS_OFF="No"; Binary  Do *NOT* touch the configuration
+#   Set this *ONLY* if you are going to be fully responsible for the entire
+#   setup of sendmail - the directories, permissions, databases, etc.  With
+#   this variable set to "Yes", nothing will be done for you during
+#   updates.
+#
+#   In other words, "The blood be upon your hands" if you set this...
+#   My ability to help with problems will be greatly reduced !
+#
+#   "Well, a pet peeve of mine is people who directly edit the
+#   .cf file instead of using the m4 configuration files.
+#   Don't do it! [laughs] I treat the .cf file as a binary
+#   file - you should too."
+#       --  Eric Allman 1999/10/18
+#
+#------------------------------------------------------------------------
+#
+
+# The files we may alter
+provider_m4='@sysconfdir@/mail/m4/provider.m4';
+dialup_m4='@sysconfdir@/mail/m4/dialup.m4';
+
+# Default values
+SM_ignore=0;              # Ignore any changes
+SM_changed=0;             # Something has changed, dunno what
+SM_delay=0;               # Expect another call soon, do work then
+SM_interface='';          # The interface that changed
+SM_state='';              # How the interface changed
+SM_provider='';           # ISP/domain name/IPPARM/etc
+SM_ip='';                 # IP for the interface
+SM_host='';               # Reverse FQDN of IP
+SM_debug=1;               # Of minimal value
+
+# Path to other sendmail helpers
+if [ -x ./update_sendmail ]; then
+	sm_path='.';
+elif [ -x $(/usr/bin/dirname $0)/update_sendmail ]; then
+	sm_path=$(/usr/bin/dirname $0);
+else
+	sm_path=@datadir@/sendmail;
+	fi;
+
+# Bring in sendmail.conf for the network definitions
+if [ ! -f @sysconfdir@/mail/sendmail.conf ]; then
+	if [ -x $sm_path/update_conf ]; then
+		$sm_path/update_conf;
+		fi;
+	fi;
+DAEMON_NETMODE='Static';
+DAEMON_NETIF='';
+HANDS_OFF='No';
+LOG_CMDS='Yes';
+if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+	. @sysconfdir@/mail/sendmail.conf;
+	fi;
+
+# Record information on an interface and its status
+update_interface() {
+	SM_interface="$1";
+	SM_reason="$2";
+
+	# Translate DHCP style actions to a simple up/down
+	case "$SM_reason" in
+		DOWN|EXPIRE|FAIL|RELEASE|STOP)  # and TIMEOUT too ???
+			SM_state='down';
+			;;
+		UP|BOUND|RENEW|REBIND|REBOOT|TIMEOUT) # why TIMEOUT here ???
+			SM_state='up';
+			if [ "$SM_reason" = "BOUND" ]; then
+				SM_changed=1;
+				fi;
+			;;
+		*)
+			SM_state='unknown';
+			;;
+		esac;
+
+	# Mark what we're doing...
+	local msg;
+	msg="$SM_interface $SM_state $SM_provider $SM_ip $SM_host";
+	if [ "$LOG_CMDS" != 'No' ]; then
+		/usr/bin/logger -i -p mail.debug -- "$0 (dynamic) update_interface: $msg";
+		fi;
+
+	# Do absolutely nothing if they say so...
+	if [ "$HANDS_OFF" != 'No' -o "$DAEMON_NETMODE" = 'Static' ]; then
+		SM_ignore=1;
+		fi;
+	if [ -z "$SM_interface" ]; then
+		SM_ignore=1;
+		fi;
+
+	# Check to see if we care about this interface
+	if [ $SM_ignore -eq 0 ]; then
+		SM_ignore=1;
+		for if in $DAEMON_NETIF; do
+			if [ "$if" = "$SM_interface" ]; then
+				SM_ignore=0;
+				break;
+				fi;
+			done;
+		fi;
+
+	if [ $SM_ignore -ne 0 ]; then
+		return;
+		fi;
+	};
+
+# Record information about the upstream provider
+update_provider() {
+	SM_provider="$1";
+
+	# Mark what we're doing...
+	local msg;
+	msg="$SM_interface $SM_state $SM_provider $SM_ip $SM_host";
+	if [ "$LOG_CMDS" != 'No' ]; then
+		/usr/bin/logger -i -p mail.debug -- "$0 (dynamic) update_provider: $msg";
+		fi;
+
+	# Do absolutely nothing if they say so...
+	if [ "$HANDS_OFF" != 'No' -o "$DAEMON_NETMODE" = 'Static' ]; then
+		SM_ignore=1;
+		fi;
+	if [ $SM_ignore -ne 0 ]; then
+		return;
+		fi;
+	# Add smarthost information (if any)...
+	# But not if provider.m4 is a link !
+	if [ -z "$SM_provider" ]; then
+		return;
+		fi;
+	if [ ! -e "@sysconfdir@/mail/peers/$SM_provider" ]; then
+		SM_provider='default';
+		fi;
+	if [ -e "@sysconfdir@/mail/peers/$SM_provider" ] \
+	&& [ ! -L "$provider_m4" ]; then
+		SM_changed=1;
+		cat <<-EOT > "$provider_m4";
+			LOCAL_CONFIG
+			#------------------------------------------------------------
+			#
+			# Dynamic provider updates from $0:
+			#   Device=$SM_interface
+			#   State=$SM_state
+			#   Provider=$SM_provider
+			#
+			# NOTE: The following line *MUST* be in @sysconfdir@/mail/sendmail.mc
+			#dnl    include(\`@sysconfdir@/mail/provider.m4')dnl
+			#
+			# You may also need to include this file in submit.mc !
+			#
+			# Provider information from @sysconfdir@/mail/peers/$SM_provider
+			EOT
+		cat "@sysconfdir@/mail/peers/$SM_provider" >> "$provider_m4";
+		cat <<-EOT >> "$provider_m4";
+			#------------------------------------------------------------
+			EOT
+		fi;
+	};
+
+# Record information on an ip/host
+update_host() {
+	SM_ip="$1";
+
+	# Mark what we're doing...
+	local msg;
+	msg="$SM_interface $SM_state $SM_provider $SM_ip $SM_host";
+	if [ "$LOG_CMDS" != 'No' ]; then
+		/usr/bin/logger -i -p mail.debug -- "$0 (dynamic) update_host: $msg";
+		fi;
+
+	# Do absolutely nothing if they say so...
+	if [ "$HANDS_OFF" != 'No' -o "$DAEMON_NETMODE" = 'Static' ]; then
+		SM_ignore=1;
+		fi;
+	if [ $SM_ignore -ne 0 ]; then
+		return;
+		fi;
+	if [ -z "$SM_ip" ]; then
+		return;
+		fi;
+	find_host;
+	if [ $SM_ignore -ne 0 ]; then
+		return;
+		fi;
+	# Add ip related information (if any)...
+	# But not if dialup.m4 is a link !
+	if [ ! -L "$dialup_m4" ]; then
+		SM_changed=1;
+		cat <<-EOT > "$dialup_m4";
+			LOCAL_CONFIG
+			#------------------------------------------------------------
+			#
+			# Dynamic host/ip updates from $0:
+			#   Device=$SM_interface
+			#   State=$SM_state
+			#   Provider=$SM_provider
+			#   IP=$SM_ip
+			#   Host=$SM_host
+			#
+			# NOTE: The following line *MUST* be in @sysconfdir@/mail/sendmail.mc
+			#dnl    include(\`@sysconfdir@/mail/dialup.m4')dnl
+			#
+			# This should *NOT* be included in submit.mc !
+			#
+			# Make sure we accept mail as this ip (for bounces, etc)
+			Cw$SM_ip
+			EOT
+		if [ -z "$SM_host" ]; then
+			cat <<-EOT >> "$dialup_m4";
+				#
+				# Rats... FQDN lookup failed, your kit is incomplete :(
+				EOT
+		else
+			cat <<-EOT >> "$dialup_m4";
+				#
+				# Define our true hostname (from our ISP) - becomes \$j
+				define(\`confDOMAIN_NAME', \`$SM_host')dnl
+				#
+				# Make sure we accept mail as this name (for bounces, etc)
+				Cw$SM_host
+				#
+				# Add our hostname to class G for genericstable support
+				CG$SM_host
+				#------------------------------------------------------------
+				EOT
+			fi;
+		fi;
+	};
+
+# DNS support changed, we may (or may not) have a new name
+# but in any case, we may have stale host info in the queue
+update_resolv() {
+
+	# Mark what we're doing...
+	local msg;
+	msg="$SM_interface $SM_state $SM_provider $SM_ip $SM_host";
+	if [ "$LOG_CMDS" != 'No' ]; then
+		/usr/bin/logger -i -p mail.debug -- "$0 (dynamic) update_resolv: $msg";
+		fi;
+
+	# Do absolutely nothing if they say so...
+	if [ "$HANDS_OFF" != 'No' -o "$DAEMON_NETMODE" = 'Static' ]; then
+		SM_ignore=1;
+		fi;
+	if [ $SM_ignore -ne 0 ]; then
+		return;
+		fi;
+
+	# Ideally, we should re-check our IP if we didn't find the
+	# FQDN previously - but we need a state file to do that :(
+	#
+	# Hell, we don't even know what IF is, and if it is up or down :(
+
+	#SM_interface='?';  #\
+	#SM_state='up';     # \
+	#SM_provider='?';   #  |  Need to get these from somewhere !
+	#SM_ip='?';         # /
+	#SM_host='?';       #/
+	#find_host;
+
+	# Purge any latent host status that might cause us to *NOT* send mail
+	if [ -x @sysconfdir@/init.d/sendmail ]; then
+		if [ "$SM_state" = 'up' ]; then
+			@sysconfdir@/init.d/sendmail purgestat now;
+			fi;
+		fi;
+
+	# resolvconf is called as a DHCP pre-exit, so we'll defer any changes
+	SM_changed=0;
+	}
+
+# Attempt to locate our FQDN
+find_host() {
+	# Determine our fqdn from our ISP
+	maxloop=30;
+	cntr=0;
+	SM_host='';
+	until (test ! -z "$SM_host"); do
+		cntr=`expr $cntr + 1`;
+		if [ $cntr -gt $maxloop ]; then
+			SM_host='';
+			break;
+			fi;
+		rev=$(host $SM_ip);
+		SM_host=$(echo "$rev" | grep '^Name:' | awk '{print $2}');
+		if [ -z "$SM_host" ]; then
+			test=$(echo "$rev" | egrep -e 'not found:');
+			if [ -n "$test" ]; then
+				continue;
+			else
+				SM_host=${rev##*domain name pointer };
+				SM_host=${SM_host%.};
+				fi;
+			fi;
+		test=$(echo $SM_host | cut -d ' ' -f 1);
+		# continue scanning if we get this:
+		# ;; connection timed out; no servers could be reached
+		if [ "$test" = ";;" ]; then
+			SM_host='';
+		elif [ "$test" != "**" ]; then
+			break;
+			fi;
+		sleep 1s;
+		done;
+
+	# See if we actually found a host !
+	if [ -z "$SM_host" ]; then
+		# Drats, no host name :(
+		# We have a few choices - none pretty
+		#  1) Do not start sendmail
+		#  2) Use the info we have (ip) - but
+		#     then we may not accept mail we should,
+		#     accept mail we should not,
+		#     and our ougoing name may be wrong
+		#  3) Use the last known hostname
+		#     If it is not correct, we have the same
+		#     exposurs as option 2 !
+		#
+		# For the nonce, I choose option 2
+		:
+		fi;
+
+	if [ $SM_debug -ne 0 ]; then
+		echo "addr=$SM_ip,		 name=$SM_host";
+		fi;
+	};
+
+# If our state has changed in any way, update sendmail
+update_sendmail() {
+	SM_caller="$1";
+	SM_opts="$2";
+
+	# Mark what we're doing...
+	local msg;
+	msg="$SM_interface $SM_state $SM_provider $SM_ip $SM_host";
+	if [ "$LOG_CMDS" != 'No' ]; then
+		/usr/bin/logger -i -p mail.debug -- "$0 (dynamic) update_sendmail: $msg";
+		fi;
+
+	# Do absolutely nothing if they say so...
+	if [ "$HANDS_OFF" != 'No' -o "$DAEMON_NETMODE" = 'Static' ]; then
+		SM_ignore=1;
+		fi;
+	if [ $SM_ignore -ne 0 ]; then	  
+		return;
+		fi;
+
+	# Check for a delayed restart (for DHCP/PPP)
+	case "$SM_opts" in
+		[Dd]*)
+			if [ "$SM_state" = 'up' ]; then
+				SM_delay=1;
+				fi;
+			;;
+		esac;
+
+	if [ "$SM_state" = 'down' ]; then
+		SM_changed=1;
+		cat <<-EOT > "$dialup_m4";
+			LOCAL_CONFIG
+			#------------------------------------------------------------
+			# Dynamic host/ip updates from $0:
+			#   Device=$SM_interface
+			#   State=$SM_state
+			#   Provider=$SM_provider
+			#   IP=$SM_ip
+			#   Host=$SM_host
+			#
+			# NOTE: The following line *MUST* be in @sysconfdir@/mail/sendmail.mc
+			#dnl    include(\`@sysconfdir@/mail/dialup.m4')dnl
+			# This should *NOT* be included in submit.mc !
+			#
+			# sendmail is to only queue messages until connected again
+			define(\`confDELIVERY_MODE', \`deferred')dnl
+			#
+			# Allow the queue to age without carping every four hours
+			define(\`confTO_QUEUEWARN',\`1d')dnl
+			#
+			# Don't keep host status while the network is down
+			define(\`confHOST_STATUS_DIRECTORY')dnl
+			#------------------------------------------------------------
+			EOT
+		fi;
+
+	if  [ $SM_changed -eq 1 ]; then
+		# Build a new sendmail.cf from sendmail.mc, including our address.
+		/usr/bin/make -f @sysconfdir@/mail/Makefile sendmail.cf;
+		/usr/bin/make -f @sysconfdir@/mail/Makefile;
+
+		# Purge any latent host status that might cause us to *NOT* send mail
+		# Reload sendmail, IFF already running
+		if [ -x @sysconfdir@/init.d/sendmail ]; then
+			if [ "$SM_state" = 'up' ]; then
+				@sysconfdir@/init.d/sendmail purgestat now;
+				fi;
+			@sysconfdir@/init.d/sendmail reload-if-running &  # up, or down
+			fi;
+		fi;
+
+	# Process the sendmail queue 
+	# (background so as to not defer other ip-up work)
+	# This can be fatal on IF ping-pongs :(
+	# runq &
+	};
+

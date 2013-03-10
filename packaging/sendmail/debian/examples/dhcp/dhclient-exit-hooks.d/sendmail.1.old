@@ -1,0 +1,158 @@
+#!/bin/sh
+#
+# This script is called when dhcp connects to the network.
+#		 
+# Here is where we'll start sendmail if needed, and will
+# run the queue in either case.
+#
+# Written By Richard Nelson <cowboy@debian.org>
+#
+# NOTE: The following lines (without the #) must be in /etc/mail/sendmail.mc:
+# include(`/etc/mail/dialup.m4')dnl
+# include(`/etc/mail/provider.m4')dnl
+#
+# NOTE: The dhcp DNS name is used as the peer name in /etc/mail/peers.
+#
+# Exit by default, check for validity before commenting out the next line:
+exit 0;
+
+provider_m4='/etc/mail/provider.m4';
+#provider_m4='provider.m4';
+dialup_m4='/etc/mail/dialup.m4';
+#dialup_m4='dialup.m4';
+
+update_sendmail() {
+	# Build a new sendmail.cf from sendmail.mc, including our address.
+	m4 /etc/mail/sendmail.mc \
+		> /etc/mail/sendmail.cf.pnew;
+	chmod 0644 /etc/mail/sendmail.cf.pnew;
+	chown mail:mail /etc/mail/sendmail.cf.pnew;
+	mv -f /etc/mail/sendmail.cf.pnew /etc/mail/sendmail.cf;
+
+	# Purge any latent host status that might cause us to *NOT* send mail
+	AM='-Am';
+	if [ ! -f /usr/share/sendmail/cf/feature/msp.m4 ]; then
+		AM='';
+		fi;
+	sendmail $AM -bH -O Timeout.hoststatus=1s;
+
+	# Start/reload sendmail as needed
+	/etc/init.d/sendmail reload;            # may be up, or down
+
+	# Process the sendmail queue 
+	# (background so as to not defer other ip-up work)
+	runq &
+	};
+
+update_provider() {
+	# Add smarthost information (if any)...
+	# But not if provider.m4 is a link !
+	local domain;
+	domain="$1";
+	if [ -f /etc/mail/peers/$domain -a ! -L $provider_m4 ]; then
+		cat <<-EOT > $provider_m4;
+			LOCAL_CONFIG
+			#------------------------------------------------------------
+			#
+			# Dynamic provider updates from $0 
+			#
+			# NOTE: the following line *MUST* be in /etc/mail/sendmail.mc
+			dnl include(\`/etc/mail/provider.m4')dnl
+			#
+			# Provider information from /etc/mail/peers/$domain
+			EOT
+		cat /etc/mail/peers/$domain >> $provider_m4;
+		cat <<-EOT >> $provider_m4;
+			#------------------------------------------------------------
+			EOT
+		fi;
+	};
+
+find_host() {
+	# Determine our fqdn from our ISP
+	local addr;
+	addr="$1";
+	maxloop=20; 
+	cntr=0;
+	host='';
+	until (test ! -z "$host"); do
+		cntr=$(($cntr+1));      
+		rev=$(host $addr);
+		host=$(echo "$rev" | grep '^Name:' | awk '{print $2}');
+		if [ -z "$host" ]; then
+			host=${rev##*domain name pointer };
+			host=${host%.};
+			fi;
+		test=$(echo $host | cut -d ' ' -f 1);
+		if [ "$host" != "**" ]; then 
+			break;
+		elif (($cntr > $maxloop)); then
+			host='';
+			break;
+			fi;
+		done;
+	echo "addr=$addr,       name=$host";
+	};
+
+update_host() {
+	local host ip;
+	ip="$1";
+	find_host "$ip";
+	if [ ! -z "$host" ]; then
+		cat <<-EOT > $dialup_m4;
+			LOCAL_CONFIG
+			#------------------------------------------------------------
+			#
+			# Dynamic host/ip updates from $0
+			#
+			# NOTE: the following line *MUST* be in /etc/mail/sendmail.mc
+			dnl include(\`/etc/mail/dialup.m4')dnl
+			#
+			# Chose one of the following two options:
+			#  * Add our true hostname as a Virtual Host (we'll accept
+			#    mail for it, but keep our local name for SMTP AUTH, etc)
+			C{VirtHost}$host
+			#
+			#  * Define our true hostname (from our ISP) - becomes \$j
+			dnl define(\`confDOMAIN_NAME', \`$host')dnl
+			#
+			# Make sure we accept mail as this name (for bounces, etc)
+			Cw$host
+			Cw$ip
+			# Add our hostname to class G for genericstable support
+			CG$host
+			#------------------------------------------------------------
+			EOT
+		fi;
+	};
+
+# No need to continue if we're called with an unsupported option
+if [ "$reason" != BOUND ] && [ "$reason" != RENEW ] \
+   && [ "$reason" != REBIND ] && [ "$reason" != REBOOT ] \
+   && [ "$reason" != EXPIRE ] && [ "$reason" != FAIL ]
+   then
+	return;
+	fi;
+
+# Flag to denote changed have been made;
+changed=0;
+
+# If the domain name has changed, update the provider information
+if [ "$new_domain_name" != "$old_domain_name" ]; then
+	changed=1;
+	update_provider "$new_domain_name";
+	fi;
+
+# If the ip address has changed, update the host information
+if [ "$new_ip_address" != "$oldnew_ip_address" ]; then
+	changed=1;
+	update_host "$new_ip_address";
+	fi;
+
+# If anything has been changed, update sendmail.cf and reload
+if [ $changed -eq 1 ]; then
+	update_sendmail;
+	fi;
+
+exit 0;
+

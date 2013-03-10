@@ -1,0 +1,147 @@
+diff -Nurd ./devtools/bin/Build ./devtools/bin/Build
+--- ./devtools/bin/Build	2005-09-09 11:36:00.000000000 +0200
++++ ./devtools/bin/Build	2005-09-09 12:02:15.000000000 +0200
+@@ -422,6 +422,7 @@
+   NeXT)		mkdir="mkdirs";;
+   UNICOSMK)	rel=`echo $rel | sed -e 's/\(.*\)\.\(.*\)\.\(.*\)\..*$/\1.\2.\3/'`;;
+   UNICOS*)	rel=`echo $rel | sed -e 's/\(.*\)\.\(.*\)\..*$/\1.\2/'`;;
++  GNU-kFreeBSD*)	os=Linux;;
+ esac
+ 
+ # get "base part" of operating system release
+diff -Nurd ./include/sm/conf.h ./include/sm/conf.h
+--- ./include/sm/conf.h	2005-09-09 11:36:00.000000000 +0200
++++ ./include/sm/conf.h	2005-09-09 11:57:33.000000000 +0200
+@@ -783,7 +783,7 @@
+ **	See also BSD defines.
+ */
+ 
+-# if defined(BSD4_4) && !defined(__bsdi__) && !defined(__GNU__) && !defined(DARWIN)
++# if defined(BSD4_4) && !defined(__bsdi__) && !defined(__GNU__) && !defined(DARWIN) && !defined(__GLIBC__)
+ #  include <paths.h>
+ #  define HASUNSETENV	1	/* has unsetenv(3) call */
+ #  define USESETEUID	1	/* has usable seteuid(2) call */
+@@ -801,7 +801,7 @@
+ #  endif /* ! LA_TYPE */
+ #  define SFS_TYPE	SFS_MOUNT	/* use <sys/mount.h> statfs() impl */
+ #  define SPT_TYPE	SPT_PSSTRINGS	/* use PS_STRINGS pointer */
+-# endif /* defined(BSD4_4) && !defined(__bsdi__) && !defined(__GNU__) && !defined(DARWIN)*/
++# endif /* defined(BSD4_4) && !defined(__bsdi__) && !defined(__GNU__) && !defined(DARWIN) && !defined(__GLIBC__) */
+ 
+ 
+ /*
+@@ -1491,6 +1491,69 @@
+ 
+ 
+ /*
++**  GNU/kFreeBSD
++**	From Aurelien Jarno <aurel32@debian.org>
++ */
++
++# if defined (__GLIBC__) && defined(__FreeBSD_kernel__)
++#  define BSD		1	/* include BSD defines */
++#  define HASSETREGID	1	/* use setregid(2) to set saved gid */
++#  ifndef REQUIRES_DIR_FSYNC
++#   define REQUIRES_DIR_FSYNC	1	/* requires fsync() on directory */
++#  endif /* REQUIRES_DIR_FSYNC */
++#  ifndef USESETEUID
++#   define USESETEUID	0	/* has it due to POSIX, but doesn't work */
++#  endif /* USESETEUID */
++#  define SM_CONF_GETOPT	0	/* need a replacement for getopt(3) */
++#  define HASUNAME	1	/* use System V uname(2) system call */
++#  define HASUNSETENV	1	/* has unsetenv(3) call */
++#  define ERRLIST_PREDEFINED	/* don't declare sys_errlist */
++#  define GIDSET_T	gid_t	/* from <linux/types.h> */
++#  ifndef HASGETUSERSHELL
++#   define HASGETUSERSHELL 0	/* getusershell(3) broken in Slackware 2.0 */
++#  endif /* HASGETUSERSHELL */
++#  ifndef IP_SRCROUTE
++#   define IP_SRCROUTE	0	/* linux <= 1.2.8 doesn't support IP_OPTIONS */
++#  endif /* ! IP_SRCROUTE */
++#  ifndef HAS_IN_H
++#   define HAS_IN_H	1	/* use netinet/in.h */
++#  endif /* ! HAS_IN_H */
++#  ifndef USE_SIGLONGJMP
++#   define USE_SIGLONGJMP	1 /* sigsetjmp needed for signal handling */
++#  endif /* ! USE_SIGLONGJMP */
++#  ifndef LA_TYPE
++#   define LA_TYPE	LA_PROCSTR
++#  endif /* ! LA_TYPE */
++#  define SFS_TYPE	SFS_VFS		/* use <sys/vfs.h> statfs() impl */
++#  define SPT_PADCHAR	'\0'		/* pad process title with nulls */
++#  define HASSTRERROR	1	/* has strerror(3) */
++#  ifndef TZ_TYPE
++#   define TZ_TYPE	TZ_NONE		/* no standard for GNU/kFreeBSD */
++#  endif /* ! TZ_TYPE */
++#  include <paths.h>
++#  ifndef _PATH_SENDMAILPID
++#   define _PATH_SENDMAILPID	"/var/run/sendmail.pid"
++#  endif /* ! _PATH_SENDMAILPID */
++#  include <sys/sysmacros.h>
++#  undef atol			/* wounded in <stdlib.h> */
++#  if NETINET6
++   /*
++   **  Indirectly included from glibc's <feature.h>.  IPv6 support is native
++   **  in 2.1 and later, but the APIs appear before the functions.
++   */
++#   undef IPPROTO_ICMPV6
++#   if (!defined(NEEDSGETIPNODE))
++    /* Have APIs in <netdb.h>, but no support in glibc */
++#    define NEEDSGETIPNODE	1
++#   endif /* (!defined(NEEDSGETIPNODE)) */
++#  endif /* NETINET6 */
++#  ifndef HASFCHOWN
++#   define HASFCHOWN	1	/* fchown(2) */
++#  endif /* ! HASFCHOWN */
++# endif /* defined(__GLIBC__) && defined(__FreeBSD_kernel__*/
++
++
++/*
+ **  DELL SVR4 Issue 2.2, and others
+ **	From Kimmo Suominen <kim@grendel.lut.fi>
+ **
+diff -Nurd ./include/sm/os/sm_os_linux.h ./include/sm/os/sm_os_linux.h
+--- ./include/sm/os/sm_os_linux.h	2005-09-09 11:36:00.000000000 +0200
++++ ./include/sm/os/sm_os_linux.h	2005-09-09 11:45:45.000000000 +0200
+@@ -15,23 +15,27 @@
+ 
+ #define SM_OS_NAME	"linux"
+ 
+-/* to get version number */
+-#include <linux/version.h>
++#if defined(__linux__)
+ 
+-# if !defined(KERNEL_VERSION)	/* not defined in 2.0.x kernel series */
+-#  define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
+-# endif /* ! KERNEL_VERSION */
++ /* to get version number */
++# include <linux/version.h>
+ 
+-/* doesn't seem to work on Linux */
+-#ifndef SM_CONF_SETITIMER
+-# define SM_CONF_SETITIMER	0
+-#endif /* SM_CONF_SETITIMER */
++#  if !defined(KERNEL_VERSION)	/* not defined in 2.0.x kernel series */
++#   define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
++#  endif /* ! KERNEL_VERSION */
+ 
+-#ifndef SM_CONF_SHM
+-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,19))
+-#  define SM_CONF_SHM	1
+-# endif /* LINUX_VERSION_CODE */
+-#endif /* SM_CONF_SHM */
++ /* doesn't seem to work on Linux */
++# ifndef SM_CONF_SETITIMER
++#  define SM_CONF_SETITIMER	0
++# endif /* SM_CONF_SETITIMER */
++
++# ifndef SM_CONF_SHM
++#  if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,19))
++#   define SM_CONF_SHM	1
++#  endif /* LINUX_VERSION_CODE */
++# endif /* SM_CONF_SHM */
++
++#endif /* (__linux__) */
+ 
+ #define SM_CONF_SYS_CDEFS_H	1
+ #ifndef SM_CONF_SEM

@@ -9856,3 +9856,11 @@ $(OPENDKIM): $(SPREZZ)/opendkim/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf opendkim_$(opendkim_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: sendmail
+sendmail:$(SENDMAIL)_$(ARCH).deb
+$(SENDMAIL): $(SPREZZ)/sendmail/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sendmail_$(sendmail_UPVER).orig.tar.gz $(TARARGS) $@
+

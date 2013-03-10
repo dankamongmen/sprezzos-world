@@ -1,0 +1,320 @@
+#!/bin/sh -e
+#
+# Debian post installation script
+#
+# Install of already installed package:
+#	1) old-prerm upgrade new-version
+#		*) new-prerm failed-upgrade old-version
+#			*) old-postinst abort-upgrade new-version
+#
+# If a `conflicting' package is being removed at the same time:
+#	1) forall packages depending on conflicting package and --auto-deconfigure
+#		deconfigured's-prerm deconfigure \
+#			in-favour package-being-installed version \
+#			removing conflicting-package version
+#		*) deconfigured's-postinst abort-deconfigure \
+#				in-favour package-being-installed-but-failed version \
+#				removing conflicting-package version
+#	2) To prepare for removal of the conflicting package
+#		conflictor's-prerm remove \
+#			in-favour package new-version
+#		*) conflictor's-postinst abort-remove \
+#				in-favour package new-version
+#
+# Configuration of package:
+# postinst configure most-recently-configured-version
+#
+set -e;
+
+PACKAGE=sendmail-bin;
+
+#-----------------------------------------------------------
+#stop(): stop sendmail
+stop_mta () {
+	# Account for varying PIDfile locations of older sendmail packages
+	if [ -f /var/run/sendmail/mta/sendmail.pid ]; then
+		start-stop-daemon --stop --oknodo --quiet \
+			--pidfile /var/run/sendmail/msp/sendmail.pid > /dev/null;
+		start-stop-daemon --stop --oknodo --quiet \
+			-pidfile /var/run/sendmail/mta/sendmail.pid > /dev/null;
+	elif [ -f /var/run/sendmail/sendmail.pid ]; then
+		start-stop-daemon --stop --oknodo --quiet \
+			--pidfile /var/run/sendmail/sendmail.pid > /dev/null;
+	elif [ -f /var/run/sendmail.pid ]; then
+		start-stop-daemon --stop --oknodo --quiet \
+			--pidfile /var/run/sendmail.pid > /dev/null;
+		fi;
+	# Since we changed the executable, do one more try - using the old name
+	if [ -f /var/run/sendmail/mta/sendmail.pid ]; then
+		start-stop-daemon --stop --oknodo --quiet \
+			--pidfile /var/run/sendmail/mta/sendmail.pid > /dev/null;
+		fi;
+	start-stop-daemon --stop --oknodo --quiet \
+		--name sendmail > /dev/null;
+	if [ -x @sysconfdir@/init.d/sendmail ]; then
+		if [ -x /usr/sbin/invoke-rc.d ]; then
+			/usr/sbin/invoke-rc.d --quiet --force sendmail stop;
+		else
+			@sysconfdir@/init.d/sendmail stop;
+			fi;
+		fi;
+	};
+
+#-----------------------------------------------------------
+#start(): start sendmail
+start_mta () {
+	if [ -x /usr/sbin/invoke-rc.d ]; then
+		/usr/sbin/invoke-rc.d sendmail start;
+	else
+		@sysconfdir@/init.d/sendmail start;
+		fi;
+	};
+
+#-----------------------------------------------------------
+# configure(): save sendmail.cf, call sendmailconfig
+configure_mta () {
+	local enter;
+	echo -n "Configure now ? (y/N) ";
+	read yn;
+	yn=$(echo -n "$yn" | sed -e "s/^\ *//" -e "s/^\t*//");
+	test -n "$yn" || yn="N";
+	case "$yn" in 
+		[Yy]*) 
+			stop_mta;
+			@sbindir@/sendmailconfig --no-reload;
+			start_mta;
+			;;
+
+		[Nn]*)
+			echo '';
+			echo "To configure sendmail later, type" \
+				"sendmailconfig";
+			echo "After configuring sendmail, you can" \
+				"start it via @sysconfdir@/init.d/sendmail start";
+			echo -n "Press [ENTER] ";
+			read enter;
+			;;
+		esac;
+	};
+
+# do we have debconf?
+if [ -f /usr/share/debconf/confmodule ]; then
+	DEBCONF=true;
+	#. /usr/share/debconf/confmodule;
+	#db_stop; # For testing
+else
+	DEBCONF='';
+	fi;
+
+case "$1" in
+	configure)
+		# continue below
+		;;
+
+	abort-upgrade|abort-remove|abort-deconfigure)
+		exit 0;
+		;;
+
+	*)
+		echo "$PACKAGE postinst called with unknown argument \`$1'" >&2;
+		exit 1;
+		;;
+	esac;
+
+#--------------------------------------------------------------------
+# Continuation of "$1" = "configure"
+
+# Note: can't use debhelper here because the actions aren't contiguous
+#xxxHELPER#
+
+# Automatically added by dh_installinit
+if [ -x "@sysconfdir@/init.d/sendmail" ]; then
+	update-rc.d -f sendmail remove >/dev/null;
+	update-rc.d sendmail defaults 21 19 >/dev/null;
+	#/etc/init.d/sendmail start
+fi
+# End automatically added section
+
+#-----------------------------------------------------------
+# Create (or update) MTA, MSP alternatives
+# This way, we'll be able to install 2 MTAs on the same box :)
+update-alternatives \
+	--install @sbindir@/sendmail-mta sendmail-mta @libexecdir@/sendmail 25 \
+	--slave   @mandir@/man8/sendmail-mta.8.gz sendmail-mta.8.gz \
+			  @mandir@/man8/sendmail.sendmail.8.gz \
+	--slave	  @sbindir@/runq runq @datadir@/sendmail/runq \
+	--slave	  @mandir@/man8/runq.8.gz runq.8.gz \
+			  @mandir@/man8/runq.sendmail.8.gz \
+	--slave   @sbindir@/newaliases newaliases \
+			  @datadir@/sendmail/newaliases \
+	--slave	  @mandir@/man8/newaliases.8.gz newaliases.8.gz \
+			  @mandir@/man8/newaliases.sendmail.8.gz \
+	--slave	  @bindir@/mailq mailq @datadir@/sendmail/mailq \
+	--slave	  @mandir@/man1/mailq.1.gz mailq.1.gz \
+			  @mandir@/man1/mailq.sendmail.1.gz \
+	--slave	  @mandir@/man5/aliases.5.gz aliases.5.gz \
+			  @mandir@/man5/aliases.sendmail.5.gz \
+			  ;
+update-alternatives \
+	--install @sbindir@/sendmail-msp sendmail-msp @libexecdir@/sendmail 25 \
+	--slave   @mandir@/man8/sendmail-msp.8.gz sendmail-msp.8.gz \
+			  @mandir@/man8/sendmail.sendmail.8.gz \
+	--slave   @sbindir@/sendmail sendmail @libexecdir@/sendmail \
+	--slave   @libdir@/sendmail  lib.sendmail @libexecdir@/sendmail \
+	--slave   @mandir@/man8/sendmail.8.gz sendmail.8.gz \
+			  @mandir@/man8/sendmail.sendmail.8.gz \
+			  ;
+
+#-----------------------------------------------------------
+# With a dynamic uid/gid, have to set appropriate ownership herein
+if command -v suidregister >/dev/null 2>&1 && test -s /etc/suid.conf; then
+	suidregister -s sendmail @sbindir@/sendmail root smmsp 02755;
+	suidregister -s sendmail @libexecdir@/mailstats root smmsp 02755;
+elif [ -x @sbindir@/sendmail ]; then
+	chown root:smmsp @libexecdir@/sendmail;
+	chmod 02755 @libexecdir@/sendmail;
+	chown root:smmsp @libexecdir@/mailstats;
+	chmod 02755 @libexecdir@/mailstats;
+	fi;
+
+#-----------------------------------------------------------
+# Create backups of /etc/mail/{sendmail,submit}.mc
+if [ -f @sysconfdir@/mail/sendmail.cf ]; then
+	echo "Saving old /etc/mail/sendmail.cf" \
+		"as /etc/mail/sendmail.cf.old ...";
+	cp -f @sysconfdir@/mail/sendmail.cf \
+		@sysconfdir@/mail/sendmail.cf.old;
+	chown root:root @sysconfdir@/mail/sendmail.cf.old;
+	chmod 0644 @sysconfdir@/mail/sendmail.cf.old;
+	fi;
+if [ -f @sysconfdir@/mail/submit.cf ]; then
+	cp -f @sysconfdir@/mail/submit.cf \
+		@sysconfdir@/mail/submit.cf.old;
+	chown root:root @sysconfdir@/mail/submit.cf.old;
+	chmod 0644 @sysconfdir@/mail/submit.cf.old;
+	fi;
+
+start_ask=0;
+
+#-----------------------------------------------------------
+# Create /etc/mail/sendmail.mc if it doesn't exist
+if [ ! -f @sysconfdir@/mail/sendmail.mc ]; then
+	cat <<-EOT
+
+	You are doing a new install, or have erased /etc/mail/sendmail.mc.
+	If you've accidentaly erased /etc/mail/sendmail.mc, check /var/backups.
+
+	I am creating a safe, default sendmail.mc for you and you can
+	run sendmailconfig later if you need to change the defaults.
+
+	EOT
+	fi;
+
+if [ -x @datadir@/sendmail/update_sendmail ]; then
+	stop_mta;
+	echo "Updating sendmail environment ...";
+	@datadir@/sendmail/update_sendmail || true;
+	start_mta;
+	fi;
+exit 0;
+
+
+#-----------------------------------------------------------
+# See if we can do this automagically...
+cat <<-EOT
+
+It is a good idea to regenerate the sendmail configuration
+file with each new spin of the sendmail package.
+
+But, if you hand edit sendmail.cf instead of making changes through
+sendmail.mc, then you want to say no, save your old sendmail.cf, run
+sendmailconfig, then migrate your changes into the new version.
+
+EOT
+echo -n "Automagically regenerate the sendmail.cf configuration file? (Y/n) ";
+read yn;
+yn=$(echo -n "$yn" | sed -e "s/^\ *//" -e "s/^\t*//");
+test -n "$yn" || yn="Y";
+case "$yn" in
+	[Yy]*)
+		if [ -f @sysconfdir@/mail/sendmail.cf ]; then
+			echo "Saving old /etc/mail/sendmail.cf" \
+				"as /etc/mail/sendmail.cf.old ...";
+			cp -f @sysconfdir@/mail/sendmail.cf \
+				@sysconfdir@/mail/sendmail.cf.old;
+			chown root:root @sysconfdir@/mail/sendmail.cf.old;
+			chmod 0644 @sysconfdir@/mail/sendmail.cf.old;
+			fi;
+		if [ -f @sysconfdir@/mail/submit.cf ]; then
+			cp -f @sysconfdir@/mail/submit.cf \
+				@sysconfdir@/mail/submit.cf.old;
+			chown root:root @sysconfdir@/mail/submit.cf.old;
+			chmod 0644 @sysconfdir@/mail/submit.cf.old;
+			fi;
+		if [ -x @datadir@/sendmail/update_sendmail ]; then
+			stop_mta;
+			echo "Updating sendmail environment ...";
+			@datadir@/sendmail/update_sendmail || true;
+			fi;
+		;;
+
+	[Nn]*)
+		cat <<-EOT
+
+		Your files (sendmail.mc,cf, etc) have *not* been altered.
+
+  *** Warning *** Warning *** Warning *** Warning *** Warning *** Warning ***
+
+		There have been changes in
+			* Paths of some databases and executables
+			* FEATUREs, DOMAIN, includes
+			* Internal Database storage
+
+		These changes were *NOT* made for you ... And will not be
+		until you run sendmailconfig!
+
+		Until you update /etc/mail/sendmail.cf via sendmailconfig,
+		you should expect to have problems running sendmail!
+
+		"Well, a pet peeve of mine is people who directly edit the
+		.cf file instead of using the m4 configuration files.
+		Don't do it! [laughs] I treat the .cf file as a binary
+		file - you should too."
+						--	Eric Allman 1999/10/18
+
+  *** Warning *** Warning *** Warning *** Warning *** Warning *** Warning ***
+
+		EOT
+		echo "Do you wish to run sendmailconfig now, or later";
+		start_ask=0;
+		configure_mta;
+		case "$yn" in
+			[Yy]*)
+				cat <<-EOT
+
+				Do you wish to start sendmail with the new sendmail.cf,
+				or do you wish to delay until you can merge any changes
+				from your older sendmail.cf.old?
+				EOT
+				start_ask=1;
+				start_mta;
+				;;
+		   esac;
+		exit 0;
+	esac;
+
+#-----------------------------------------------------------
+# If we're still here, we're going the automagic path...
+# Now, liberal application of smoke and mirrors
+if [ -f @sysconfdir@/mail/sendmail.mc ]; then
+	start_ask=1;
+	start_mta;
+	fi;
+
+exit 0;
+
+#-----------------------------------------------------------
+#
+# List herein (for reference) what debhelper would've done:
+#DEBHELPER#
+exit 0;

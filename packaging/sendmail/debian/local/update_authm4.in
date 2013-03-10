@@ -1,0 +1,257 @@
+#!/usr/bin/perl -w
+#------------------------------------------------------------------------
+#
+# $Sendmail: update_auth,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Create @sysconfdir@/mail/sasl/sasl.m4 for Debian Sendmail
+#
+# Copyright 1998-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes (to all):
+#	*
+#
+# Notes (to self):
+#	*
+#
+#------------------------------------------------------------------------
+#
+# Initialization of the perl environment
+use strict;			# be kosher
+use Cwd;			# provide cwd()
+use Env;			# A few environmental references
+use integer;		# Peformance
+use Sys::Hostname;	# make sure we have a valid hostname
+use Getopt::Long;	# parameter handling
+
+# Local libraries - for Debian Sendmail Perl helper functions
+# BEGIN { $main::my_path = substr($0,$[,rindex($0,'/')) };
+use lib ('.', substr($0,$[,rindex($0,'/')), "@datadir@/sendmail");
+require Parse_mc;
+
+# Version of this program
+#($main::MYNAME			= $main::0) =~ s|.*/||;
+#$main::Author			= "Richard Nelson";
+#$main::AuthorMail		= "cowboy\@debian.org";
+#$main::Version			= '$Revision: 2.00 $ ';
+$main::program_name    = $0;
+$main::program_version = '@sm_version@';
+$main::program_date    = '@sm_date@ @sm_time@ cowboy';
+$main::debug			= 0;
+
+my $interp_pgm = "$^X";
+my $interp_vrm = $];
+$interp_vrm = ("$^V" | '000') if (defined $^V);
+my $current_time = scalar localtime;
+my $user = getlogin || (getpwuid($<))[0] || "Unknown!!";
+my $hostname = hostname();
+my $directory = getcwd();
+
+my $SASL_def = "@sysconfdir@/mail/sasl/sasl.m4";
+
+# Hash of define names to filename
+my %Def_Map;
+
+#
+#------------------------------------------------------------------------------
+# Finally, some code (almost)
+#------------------------------------------------------------------------------
+#
+# Argument handling...
+$main::opt_help='';
+$main::opt_output_file='';
+$main::opt_input_file='';
+$main::opt_debug='';
+my @options = qw(
+	help|h
+	output-file|output_file|o:s
+	input-file|input_file|i:s
+	debug!
+	);
+my $result = GetOptions(@options);
+if ( ! $result ) {
+	die "Terminating due to parameter error";
+	};
+if ( $main::opt_help ) {
+	warn "$main::program_name $main::program_version $main::program_date\n";
+	warn "$0 \n";
+	warn "	 -help\n" if $main::opt_help;
+	warn "	 -debug\n" if $main::opt_debug;
+	warn "	 -o $main::opt_output_file\n" if $main::opt_output_file;
+	warn "	 -i $main::opt_input_file\n"  if $main::opt_input_file;
+	exit 0;
+	};
+
+my $SASL = $main::opt_output_file || $SASL_def;
+${Parse_mc::database_file} = $main::opt_input_file
+	if $main::opt_input_file;
+# $main::debug is used in Parse_mc !
+$main::debug = $main::opt_debug || $main::debug;
+
+# Let them know wtf is going on...
+print STDOUT "Creating ${SASL}...\n";
+
+# Read the mc/m4 files
+&Parse_mc::read_dbs($Parse_mc::database_file, '');
+
+# Obtain SASL information from database
+&get_data;
+
+# Write out the textual representation
+&write_sasl;
+
+
+#
+#------------------------------------------------------------------------------
+# Obtain information from database
+#------------------------------------------------------------------------------
+sub get_data {
+	my @names = (
+			 'confTO_AUTH'
+			,'TRUST_AUTH_MECH'
+			,'confAUTH_MECHANISMS'
+			,'confAUTH_REALM'
+			);
+
+	foreach my $entry (@names) {
+		my ($class, $flags, $files, $options) =
+			&Parse_mc::entry_dbs($entry);
+		my $file = join(' ',@{$files});
+		$Def_Map{$entry} = '';
+		$Def_Map{$entry} = $file if ($file ne '-');
+		#$Def_Map{$entry} = &Parse_mc::format_dbs($entry);
+		};
+	};
+
+
+#
+#------------------------------------------------------------------------------
+# Create @sysconfdir@/mail/sasl/sasl.m4
+#------------------------------------------------------------------------------
+sub write_sasl {
+	my $ofh = new FileHandle;
+
+	$SASL = '&STDOUT' if ($SASL eq '-');
+	unless ( open($ofh, ">$SASL") ) {
+		warn("Could not open $SASL($!), using STDOUT.\n");
+		open($ofh, ">&STDOUT");
+		};
+	$SASL = '-' if ($SASL eq '&STDOUT');
+
+	&write_m4($ofh);
+
+	close $ofh;
+	if ($SASL eq $SASL_def) {
+		chown '0', '0', $SASL;
+		chmod 0744, $SASL;
+		};
+	};
+
+
+#
+#------------------------------------------------------------------------------
+# Write SASL m4 file
+#------------------------------------------------------------------------------
+sub write_m4 {
+	my ($ofh) = @_;
+
+	print $ofh <<"EOT";
+divert(-1)dnl
+####################################################################
+##### This file is automagically generated -- edit at your own risk
+#####
+##### Copyright (c) 2002-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#####
+##### file: ${SASL}
+#####		  AUTH Configuration for Debian Sendmail
+##### generated via: (${interp_pgm} ${interp_vrm})
+#####		${main::program_name}
+#####		version: ${main::program_version} ${main::program_date}
+##### by: ${user}\@${hostname}
+##### on: ${current_time}
+##### in: ${directory}
+##### input files: ${Parse_mc::database_file}
+#####
+##### Usage:
+#####	1) To get *ANY* AUTH support for sendmail you
+#####		A) *MUST* Add this line to @sysconfdir@/mail/sendmail.mc 
+#####		   \`include(\`@sysconfdir@/mail/sasl/sasl.m4\')dnl\'
+#####		B) *MAY* Add the same line to @sysconfdir@/mail/submit.mc
+#####		   to get MSP<->MTA authentication/encryption 
+#####	2) You may modify the marked portions of this file.
+#####	   If you need finer control of AUTH options, use the access
+#####	   database.
+#####
+####################################################################
+divert(0)dnl
+VERSIONID(\`\$Id: sasl.m4,v @sm_version@@sm_revision@ @sm_date@ @sm_time@ cowboy Exp \$\')
+dnl #
+dnl #---------------------------------------------------------------------
+dnl # Bring in Autoconf results
+dnl #---------------------------------------------------------------------
+ifdef(\`sm_version\', \`dnl\',
+\`include(\`@datadir@/sendmail/cf/debian/autoconf.m4\')dnl\')
+dnl #
+dnl #---------------------------------------------------------------------
+dnl # SMTP AUTH (SASL) support (sendmail 8.10.0 +)
+dnl # PLAIN/LOGIN needed to support SASL auth via PAM ;(
+dnl # if this bothers you, you allow them only in conjunction w/STARTTLS !
+dnl #---------------------------------------------------------------------
+ifelse(eval(sm_version_math >= 526848), \`1\', \`dnl
+ifelse(sm_enable_auth, \`yes\', \`dnl
+dnl #
+dnl #             ...Do not touch anything above this line...
+dnl #
+dnl # Set a more reasonable timeout on negotiation
+dnl #
+define(\`confTO_AUTH\',     \`$Def_Map{'confTO_AUTH'}\')dnl   # <= EDIT
+dnl #
+dnl # Define the REALM passed to sasl (8.13.0+)
+ifelse(eval(sm_version_math >= 527616), \`1\', \`dnl
+define(`confAUTH_REALM', \`$Def_Map{'confAUTH_REALM'}\')dnl   # <= EDIT
+\')dnl
+dnl #
+dnl # Available Authentication methods
+dnl #
+define(\`confAUTH_MECHANISMS\',dnl
+\`$Def_Map{'confAUTH_MECHANISMS'}\')dnl   # <= EDIT
+dnl #
+dnl # These, we will trust for relaying
+dnl #
+TRUST_AUTH_MECH(\`$Def_Map{'TRUST_AUTH_MECH'}\')dnl   # <= EDIT
+dnl #
+dnl #             ...Do not touch anything below this line...
+dnl #
+dnl #
+dnl # for 8.12.0+, add EXTERNAL as an available & trusted mech (w/STARTTLS)
+dnl # and allow sharing of /etc/sasldb(2) file, allow group read/write
+dnl #
+ifelse(eval(sm_version_math >= 527360), \`1\', \`dnl
+define(\`confAUTH_MECHANISMS\',dnl
+\`EXTERNAL \'defn(\`confAUTH_MECHANISMS\'))dnl
+TRUST_AUTH_MECH(\`EXTERNAL\')
+dnl #
+dnl # To support some SASL use, we need the DB to be group readable
+dnl #
+define(\`confDONT_BLAME_SENDMAIL\',dnl
+defn(\`confDONT_BLAME_SENDMAIL\')\`,GroupReadableSASLDBFile,GroupWritableSASLDBFile\')dnl
+\')dnl
+dnl #
+dnl # To support SMTP AUTH in \`sendmail -bs\' :
+dnl # Sigh: SASLV1 MSP AUTH does not work in -bs mode (/etc/sasldb !o+r)
+dnl # so, we have the MSP not use Auth (or ETRN)
+dnl # SASLV2 (w/saslauth) chose to prohibit user authentication - it can
+dnl # be made to work by:
+dnl # 1) changing /etc/sasldb2 {root,sasl,smmta}:smmsp 0660
+dnl # 2) dpkg-statoverride --remove /var/run/saslauthd
+dnl # 3) dpkg-statoverride --add root sasl 711 /var/run/saslauthd
+dnl #
+ifelse(eval(sm_auth_lib < 2), \`1\', \`dnl
+ifdef(\`DEBIAN_MSP\', \`dnl
+ifelse(defn(\`_DPO_\'), \`\', \`dnl
+DAEMON_OPTIONS(\`Name=NoMTA, Addr=0.0.0.0, M=EA\')dnl
+\')\')\')dnl
+dnl #
+\')\')dnl
+EOT
+	};
+

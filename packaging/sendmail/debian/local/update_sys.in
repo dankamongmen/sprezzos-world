@@ -1,0 +1,252 @@
+#!/bin/sh
+#-----------------------------------------------------------------------------
+#
+# $Sendmail: update_sys,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Update system files used by Sendmail for Debian
+#
+# Copyright (c) 2001-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes (to all):
+#	* Several directories/files have their permissions forced...
+#	  This is done to allow the MSP/MTA split
+#	* This exec runs 'set +e' to ignore errors!!! this is done to
+#	  support those running NFS (or similiar) systems, where the
+#	  chmod/chown may fail - If this happens, you'll need to update
+#	  those items by hand !
+#
+# Notes (to self):
+#	*
+#
+#-----------------------------------------------------------------------------
+set +e;
+
+# Path to other sendmail helpers
+if [ -x ./update_sendmail ]; then
+	sm_path='.';
+elif [ -x $(dirname $0)/update_sendmail ]; then
+	sm_path=$(dirname $0);
+else		
+	sm_path=@datadir@/sendmail;
+	fi;
+# Bring in sendmail.conf for the network definitions
+if [ ! -f @sysconfdir@/mail/sendmail.conf ]; then
+	if [ -x $sm_path/update_conf ]; then
+		$sm_path/update_conf;
+		fi;
+	fi;
+if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+	. @sysconfdir@/mail/sendmail.conf;
+	fi;
+if [ "$HANDS_OFF" != 'No' ]; then
+	exit 0;
+	fi;
+
+# flag used to indicate a dataset has been moved, may need another update
+changed=0;
+
+#-----------------------------------------------------------------------------
+# Warn the user that this may take a bit...
+#-----------------------------------------------------------------------------
+echo '';
+echo 'Checking filesystem, this may take some time - it will not hang!';
+echo -n '  ...  ';
+
+#------------------------------------------------------------------------------
+# Create any needed directories, and move any prior data to its new home
+#------------------------------------------------------------------------------
+# /etc/aliases should exist, though not owned by sendmail, we'll create one
+if [ ! -e @sysconfdir@/aliases ]; then
+	changed=1;
+	if [ -f @datadir@/doc/sendmail/examples/db/aliases ]; then
+		echo "Creating @sysconfdir@/aliases (not found)";
+		cp @datadir@/sendmail/examples/db/aliases \
+			@sysconfdir@/aliases;
+	else
+		touch @sysconfdir@/aliases;
+		fi;
+	chown root:root @sysconfdir@/aliases;
+	chmod 0644 @sysconfdir@/aliases;
+	fi;
+
+#------------------------------------------------------------------------------
+# /var/mail is the FHS user mail location, /var/spool/mail is older
+#	Note: we set the sticky bit to prevent a sgid exploit from erasing files
+if [ ! -e @localstatedir@/mail ]; then
+	changed=1;
+	if [ -L @localstatedir@/spool/mail ]; then
+		ln -sf spool/mail @localstatedir@/mail;
+	elif [ -d @localstatedir@/spool/mail ]; then
+		mv @localstatedir@/spool/mail @localstatedir@/mail;
+		chown root:root @localstatedir@/mail;
+		chmod 03777 @localstatedir@/mail;
+	else
+		mkdir @localstatedir@/mail;
+		chown root:root @localstatedir@/mail;
+		chmod 03777 @localstatedir@/mail;
+		fi;
+	fi;
+#
+# Make sure the sticky bit is set in pre-existing directories
+if [ -d @localstatedir@/mail ] && [ ! -k @localstatedir@/mail ]; then
+	chmod 03777 @localstatedir@/mail;
+	fi;
+if [ -d @localstatedir@/spool/mail ] \
+&& [ ! -k @localstatedir@/spool/mail ]; then
+	chmod a+t @localstatedir@/spool/mail;
+	fi;
+if [ ! -d @localstatedir@/spool/mail ] \
+&& [ ! -L @localstatedir@/spool/mail ]; then
+	ln -sf ../mail @localstatedir@/spool/mail;
+	#mkdir @localstatedir@/spool/mail;
+	#chown root:root @localstatedir@/spool/mail;
+	#chmod 03777 @localstatedir@/spool/mail;
+	fi;
+
+#------------------------------------------------------------------------------
+# /etc/mail is where the Sendmail config files live
+if [ ! -d @sysconfdir@/mail ]; then
+	changed=1;
+	mkdir @sysconfdir@/mail;
+	fi;
+chown smmta:smmsp @sysconfdir@/mail;
+chmod 02755 @sysconfdir@/mail;
+mkdir -p @sysconfdir@/mail/m4;
+chown smmta:smmsp @sysconfdir@/mail/m4;
+chmod 02755 @sysconfdir@/mail/m4;
+#
+# With the MSP/MTA split, we don't want any g=w files or directories
+# to save us from potential sgid attacks
+find @sysconfdir@/mail -perm +g=w \( -type f -o -type d \) -print \
+	| xargs -r chmod g-w,o-w;
+
+#------------------------------------------------------------------------------
+# /var/run/sendmail is where we store pid files, control sockets, stamps, etc
+if [ ! -d @localstatedir@/run/sendmail ]; then
+	changed=1;
+	mkdir @localstatedir@/run/sendmail;
+	fi;
+chown root:smmta @localstatedir@/run/sendmail;
+chmod 02755 @localstatedir@/run/sendmail;
+if [ ! -d @localstatedir@/run/sendmail/mta ]; then
+	mkdir @localstatedir@/run/sendmail/mta;
+	fi;
+chown smmta:smmsp @localstatedir@/run/sendmail/mta;
+chmod 02755 @localstatedir@/run/sendmail/mta;
+if [ ! -d @localstatedir@/run/sendmail/msp ]; then
+	mkdir @localstatedir@/run/sendmail/msp;
+	fi;
+chown smmsp:smmsp @localstatedir@/run/sendmail/msp;
+chmod 02775 @localstatedir@/run/sendmail/msp;
+if [ ! -d @localstatedir@/run/sendmail/stampdir ]; then
+	mkdir @localstatedir@/run/sendmail/stampdir;
+	fi;
+chown root:smmsp @localstatedir@/run/sendmail/stampdir;
+chmod 02775 @localstatedir@/run/sendmail/stampdir;
+#
+# Remove older files
+rm -f /var/run/sendmail.pid;
+rm -f /var/run/sendmail/sendmail.pid;
+rm -f /var/run/sendmail/smcontrol;
+
+#------------------------------------------------------------------------------
+# /var/lib/sendmail is where we stuff host status and sendmail.st
+# instead of the mail queue and  /etc/ (respectively)
+if [ ! -d @localstatedir@/lib/sendmail ]; then
+	changed=1;
+	mkdir @localstatedir@/lib/sendmail;
+	fi;
+chown smmta:smmsp @localstatedir@/lib/sendmail;
+chmod 02751 @localstatedir@/lib/sendmail;
+touch @localstatedir@/lib/sendmail/dead.letter;
+chown smmta:smmsp @localstatedir@/lib/sendmail/dead.letter;
+chmod 0660 @localstatedir@/lib/sendmail/dead.letter;
+if [ -d /var/state/sendmail/host_status ]; then
+	changed=1;
+	echo "Moving /var/state/sendmail/host_status to /var/lib/sendmail/";
+	mv -f /var/state/sendmail/host_status \
+		@localstatedir@/lib/sendmail/host_status;
+	fi;
+if [ -d /var/sendmail/host_status ]; then
+	changed=1;
+	echo "Moving /var/sendmail/host_status to /var/lib/sendmail/";
+	mv -f /var/sendmail/host_status \
+		@localstatedir@/lib/sendmail/host_status;
+	fi;
+if [ ! -d @localstatedir@/lib/sendmail/host_status ]; then
+	mkdir @localstatedir@/lib/sendmail/host_status;
+	fi;
+chown root:smmsp @localstatedir@/lib/sendmail/host_status;
+chmod 02775 @localstatedir@/lib/sendmail/host_status;
+find @localstatedir@/lib/sendmail/host_status -type d -print \
+	| xargs -r chown root:smmsp;
+find @localstatedir@/lib/sendmail/host_status -type d -print \
+	| xargs -r chmod 02755;
+#
+# if sendmail.st doesn't exist, don't create it !
+if [ -f /var/log/sendmail.st ]; then
+	changed=1;
+	echo "Moving /var/log/sendmail.st to /var/lib/sendmail/";
+	mv /var/log/sendmail.st \
+		@localstatedir@/lib/sendmail/sendmail.st;
+	fi;
+if [ -f /var/sendmail/sendmail.st ]; then
+	changed=1;
+	echo "Moving /var/sendmail/sendmail.st to /var/lib/sendmail/";
+	mv /var/sendmail/sendmail.st \
+		@localstatedir@/lib/sendmail/sendmail.st;
+	fi;
+if [ -f @localstatedir@/lib/sendmail/sendmail.st ]; then
+	chown root:smmsp @localstatedir@/lib/sendmail/sendmail.st;
+	chmod 0640 @localstatedir@/lib/sendmail/sendmail.st;
+	if [ ! -f @localstatedir@/lib/sendmail/sm-client.st ]; then
+		touch @localstatedir@/lib/sendmail/sm-client.st;
+		fi;
+	fi;
+if [ -f @localstatedir@/lib/sendmail/sm-client.st ]; then
+	chown smmsp:smmsp @localstatedir@/lib/sendmail/sm-client.st;
+	chmod 0660 @localstatedir@/lib/sendmail/sm-client.st;
+	fi;
+if [ ! -f @localstatedir@/lib/sendmail/dead.letter ]; then
+	touch @localstatedir@/lib/sendmail/dead.letter;
+	fi;
+chown root:smmsp @localstatedir@/lib/sendmail/dead.letter;
+chmod 0660 @localstatedir@/lib/sendmail/dead.letter;
+#
+# Remove older files
+rm -rf /var/sendmail;
+rm -rf /var/state/sendmail;
+
+#------------------------------------------------------------------------------
+# /var/spool/mqueue is the MTA mail queue directory
+if [ ! -d @localstatedir@/spool/mqueue ]; then
+	changed=1;
+	mkdir @localstatedir@/spool/mqueue;
+	fi;
+chown smmta:smmsp @localstatedir@/spool/mqueue;
+chmod 02750 @localstatedir@/spool/mqueue;
+#
+# With the MSP/MTA split, we *DO* need g=r, gid=smmsp queue directories and
+# files for mailq to work...
+find @localstatedir@/spool/mqueue -print \
+	| xargs -r chown smmta:smmsp;
+find @localstatedir@/spool/mqueue -type d -print \
+	| xargs -r chmod g+rxs-w,o-rwx;
+find @localstatedir@/spool/mqueue -type f -print \
+	| xargs -r chmod g+r-wx,o-rwx;
+
+#------------------------------------------------------------------------------
+# /var/spool/mqueue-client is the MSP mail queue directory
+if [ ! -d @localstatedir@/spool/mqueue-client ]; then
+	mkdir @localstatedir@/spool/mqueue-client;
+	fi;
+chown smmsp:smmsp @localstatedir@/spool/mqueue-client;
+chmod 02770 @localstatedir@/spool/mqueue-client;
+find @localstatedir@/spool/mqueue-client -perm +o=r -print \
+	| xargs -r chmod o-rwx;
+
+#-----------------------------------------------------------------------------
+echo ' Done.';
+
+#------------------------------------------------------------------------------
+exit $changed;

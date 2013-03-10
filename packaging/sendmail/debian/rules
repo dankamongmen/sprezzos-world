@@ -1,0 +1,606 @@
+#!/usr/bin/make -f
+#------------------------------------------------------------------------------
+# vim: syntax=make
+#
+# $Sendmail: rules,v 8.14.1  2007-05-27 18:30:00 cowboy Exp $
+#------------------------------------------------------------------------------
+
+# CDBS crud
+#include /usr/share/cdbs/1/class/makefile.mk
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+# Overridden below, but needed now
+#DEB_TAR_SRCDIR := .
+#include /usr/share/cdbs/1/rules/tarball.mk
+
+# Determine architecture
+DEB_HOST_GNU_CPU ?= $(shell dpkg-architecture -qDEB_HOST_GNU_CPU)
+
+# Make it even harder to exploit sendmail.
+# Well, almost impossible now 8-)
+# * Compile all with -fPIC (works for pic or pie objects)
+# * Link with either -pie or -shared
+ifeq ($(DEB_HOST_GNU_CPU),arm)
+	MY_CFLAGS := -fPIC
+else
+	MY_CFLAGS := -fPIC -fstack-protector-all
+	endif
+CFLAGS += ${MY_CFLAGS}
+export CFLAGS
+MY_LDFLAGS := -Wl,-z,noexecstack,-z,relro,-z,now -Wl,--warn-shared-textrel
+LDFLAGS += -pie ${MY_LDFLAGS}
+export LDFLAGS
+
+# Obtain package/version information from the path (debian/changelog is walkabout)
+ifneq (y, $(shell test -f debian/changelog && echo 'y'))
+	DIRNAME = $(shell basename $(CURDIR))
+	DEB_SOURCE_PACKAGE = $(shell expr "$(DIRNAME)" : '\(.*\)-')
+	DEB_VERSION = $(shell expr "$(DIRNAME)" : '.*-\(.*\)')
+	DEB_NOEPOCH_VERSION = $(shell echo $(DEB_VERSION) | cut -d: -f2-)
+	DEB_UPSTREAM_VERSION = $(shell echo $(DEB_NOEPOCH_VERSION) | sed 's/-[^-]*$$//')
+	endif
+
+# strip of a optionally added data (ie: upstream+cvs-debian)
+DEB_UPSTREAM_TARBALL_VERSION := $(shell echo $(DEB_UPSTREAM_VERSION) | sed 's/+[^-]*//')
+DEB_TAR_SRCDIR := $(DEB_SOURCE_PACKAGE)-$(DEB_UPSTREAM_TARBALL_VERSION)
+DEB_SRCDIR := build-tree/$(DEB_TAR_SRCDIR)
+DEB_BUILDDIR := $(DEB_SRCDIR)
+DEB_DESTDIR = debian/$(DEB_SOURCE_PACKAGE)
+DEB_DBG_PACKAGES = libmilter$(sm_libmilter_version)-dbg
+DEB_DBG_PACKAGE_libmilter$(sm_libmilter_version) = libmilter$(sm_libmilter_version)-dbg
+DEB_DH_INSTALL_CRON_ARGS = --name=$(DEB_SOURCE_PACKAGE)
+DEB_DH_INSTALLINIT_ARGS  = --name=$(DEB_SOURCE_PACKAGE)
+DEB_UPDATE_RCD_PARAMS    = --update-rcd-params="defaults 21 19"
+# autoconf/make are mine, not upstream (yet) :(
+DEB_CONFIGURE_LIBEXECDIR ="\$${prefix}/lib/sm.bin"
+DEB_AC_AUX_DIR = $(CURDIR)/debian/build
+DEB_CONFIGURE_SCRIPT = $(CURDIR)/debian/configure
+DEB_CONFIGURE_INVOKE = cd $(CURDIR)/debian \
+	&& $(DEB_CONFIGURE_SCRIPT_ENV) $(DEB_CONFIGURE_SCRIPT) $(DEB_CONFIGURE_NORMAL_ARGS)
+DEB_MAKE_INVOKE =
+DEB_MAKE_BUILD_TARGET =
+DEB_MAKE_INSTALL_TARGET =
+DEB_INSTALL_CHANGELOGS_ALL = $(DEB_SRCDIR)/RELEASE_NOTES
+DEB_DH_BUGFILES_ARGS_DEFAULT = -A
+
+version_string := ${DEB_VERSION}
+version_full   := $(shell expr "${version_string}" : '\([^-]*\)')
+version_debian := $(shell expr "${version_string}" : '.*\(-.*\)$$')
+version		   := ${version_full}
+version_major  := $(shell expr "${version_full}" : '\([0-9]*\.[0-9]*\)')
+version_minor  := $(shell expr "${version_full}" : '[0-9]*\.[0-9]*\.\(.*\)')
+ifneq (, $(findstring +,${version_minor}))
+	beta_version := $(shell expr "${version_full}" : '.*[+~]\([0-9.].*\)')
+	beta_major := $(shell expr "${beta_version}" : '\([0-9]*\.[0-9]*\)')
+	beta_minor := $(shell expr "${beta_version}" : '[0-9]*\.[0-9]*\.\(.*\)')
+	ifneq (, $(beta_version))
+		version        := ${beta_version}
+		version_major  := ${beta_major}
+		version_minor  := ${beta_minor}
+		endif
+	endif
+
+# Some variables that should be removed in favour of DEB_* above
+SRC_DIR    := $(CURDIR)/debian
+PKG_DIR    := debian/${DEB_SOURCE_PACKAGE}-bin
+PKG_DOC     = debian/${DEB_SOURCE_PACKAGE}-doc${docdir}/${DEB_SOURCE_PACKAGE}-doc
+SM_SUBDIRS := editmap libmilter mail.local mailstats \
+		makemap praliases rmail sendmail smrsh vacation
+
+# We want delayed interpretation of the options !
+ifeq (y, $(shell test -x /usr/bin/debuild && echo 'y'))
+	DEB_BUILD = \
+		DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS}" \
+		debuild
+else
+	DEB_BUILD = \
+		DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS}" \
+		dpkg-buildpackage
+	endif
+
+# Now that all that is out of the way, read the desired configuration
+# settings
+CONF_NAME = debian/configure.options
+$(eval CONFIG_OPTS := $(shell grep -v "^\#" ${CONF_NAME}))
+DEB_CONFIGURE_EXTRA_FLAGS = $(CONFIG_OPTS)
+
+# Include Debian Autoconf settings
+ifeq (y, $(shell test -e debian/build/autoconf.mk && echo 'y'))
+	include debian/build/autoconf.mk
+else
+	ifeq (y, $(shell test -e build/autoconf.mk && echo 'y'))
+		include build/autoconf.mk
+	else
+		include debian/build/autoconf.mk.in
+		endif
+	endif
+
+include /usr/share/cdbs/1/rules/tarball.mk
+include /usr/share/cdbs/1/rules/patchsys-quilt.mk
+DEB_PATCHDIRS = $(CURDIR)/debian/patches/${version_major}/${version_full}
+
+# Default rule
+all::
+	@echo 'Please specify a real target in the future...';
+	$(MAKE) -f debian/rules \
+		DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS}" \
+		binary;
+
+
+#-------------
+# Normalize CDBS rules
+.PHONY: unpack
+unpack:: pre-build
+.PHONY: configure
+configure:: common-configure-arch common-configure-indep
+
+
+#-------------
+# Maintainer only rule... copy external debian directory here
+.PHONY: refresh-debian
+refresh-debian::
+	@dh_testdir;
+	@echo 'updating debian directory ...';
+	sudo $(RM) -r debian;
+	sudo cp -a ../debian ./;
+	sudo $(RM) -rf ${_cdbs_tarball_dir};
+	# Remove local testing configuration
+	# Make sure directories are writeable by the owner (mine aren't)
+	chmod -R ug+w debian;
+	-(cd debian && aclocal -I ./build);
+	-(cd debian && autoconf);
+	-(cd debian && automake);
+	# Force a configure here, using $(CURDIR) so the changelog, etc.
+	# wind up with the right version numbers
+	$(MAKE) -f debian/rules \
+		DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS}" \
+		configure;
+	# Need to save these
+	/bin/mv -f debian/build/autoconf.mk \
+		debian/build/autoconf.mk.save;
+	/bin/mv -f debian/changelog \
+		debian/changelog.save;
+	-(cd debian && $(MAKE) distclean;)
+	# Need to save these
+	/bin/mv -f debian/build/autoconf.mk.save \
+		debian/build/autoconf.mk;
+	/bin/mv -f debian/changelog.save \
+		debian/changelog;
+	$(RM) -r debian/autom4te.cache;
+	# Remove pieces not needed for further building
+	find debian/patches -type d -a ! -name 'patches' \
+		-a ! -name "${version_major}" \
+		-a ! -name "${DEB_UPSTREAM_TARBALL_VERSION}" \
+		| xargs -r $(RM) -r;
+	$(RM) -r debian/bugs debian/private;
+	/usr/bin/find debian -type f -name '*.am' | xargs -r $(RM);
+	$(RM) \
+		debian/aclocal.m4 \
+		debian/build/*.m4;
+	$(MAKE) -f debian/rules clean-debian;
+
+
+#-------------
+# Maintainer only rule... refresh debian/configure
+refresh-debian-configure:
+	# unpack
+	-debian/rules configure
+	# regenerate
+	cd debian && aclocal -I ./build
+	cd debian && autoconf
+	-cd debian && automake
+	# regenerate more
+	$(RM) debian/stamp-autotools
+	debian/rules configure
+	# cleanup
+	fakeroot debian/rules clean
+
+
+#-------------
+# Maintainer only rule... cleanup & setup for general package
+.PHONY: clean-debian
+clean-debian::
+	@echo 'cleaning debian directory...';
+	#-(cd debian && $(MAKE) -f Makefile maintainer-clean;)
+	#-(cd debian && $(MAKE) -f Makefile distclean;)
+	find debian -name '*~' -o -name '\.*\.swp' \
+			| xargs -r $(RM);
+	$(RM) debian/*.sav debian/build/*.sav;
+	$(RM) debian/stamp-*;
+
+#-------------
+# Maintainer only rule... must be run in external debian directory
+.PHONY: refresh-faq
+refresh-faq::
+	@echo 'Refreshing FAQ'
+	@chmod u+w faq.txt;
+	(wget --passive-ftp --timestamping \
+		--cache=off http://www.sendmail.org/faq/faq.txt;);
+	@chmod a-w faq.txt;
+	@echo 'Refreshing Misc'
+	@chmod u+w cf/feature/rhsbl.m4;
+	(cd cf/feature && wget --passive-ftp --timestamping \
+		--cache=off http://www.megacity.org/software_downloads/rhsbl.m4;);
+	@chmod u-w cf/feature/rhsbl.m4;
+
+
+#-------------
+.PHONY: world
+world::
+	# Debian build daemons don't (for the nonce) support build-indep,
+	# so this rule allows *me* to build both arch and indep portions
+	# of sendmail in one go (so I don't forget).
+	@dh_testdir;
+	${DEB_BUILD};
+
+#------------------------------------------------------------------------------
+# Build/Package check rules
+#------------------------------------------------------------------------------
+#-------------
+.PHONY: info
+info:
+	#--------------------------------------------------------------------
+	# The following information will be used for this run:
+	#	Source	   = ${DEB_SOURCE_PACKAGE}
+	#	Package    = ${DEB_SOURCE_PACKAGE} ${DEB_VERSION}
+	#	             ${version_string}${sm_custom_s}${version_debian}
+	#	Upstream V = ${DEB_UPSTREAM_TARBALL_VERSION}
+	#	BuildTree  = ${DEB_SRCDIR}
+	#	Arch	   = ${DEB_BUILD_ARCH} on ${DEB_HOST_ARCH}
+	#	Options
+	#	  configure   = ${CONFIG_OPTS}
+	#	  config opt  = ${SM_CONF_OPT}
+	#	  ENABLE_INDEP= ${ENABLE_INDEP}
+	#	  ENABLE_ARCH = ${ENABLE_ARCH}
+	#	  ENABLE_DEV  = ${ENABLE_DEV}
+	#	  ENABLE_DOC  = ${ENABLE_DOC}
+	#	  compile opt = ${CC} ${CFLAGS} ${DEFINES}
+	#	DEB_BUILD_OPTIONS = ${DEB_BUILD_OPTIONS}
+	#	DH_VERBOSE = ${DH_VERBOSE}
+	#	DH_OPTIONS = ${DH_OPTIONS}
+	#	DH_COMPAT  = ${DH_COMPAT}
+	#--------------------------------------------------------------------
+
+#-------------
+.PHONY: pristine
+pristine::
+	#--------------------------------------------------------------------
+	# pristine:
+	#
+	# Fail if there are any modifications to the original
+	# tarball, other than the debian directory
+	@dh_testdir;
+	if [ -f ../${DEB_SOURCE_PACKAGE}_${DEB_VERSION}.diff.gz ]; then \
+		zgrep -e "^\+\+\+ " ../${DEB_SOURCE_PACKAGE}_${DEB_VERSION}.diff.gz \
+		| sed -e "/^\+\+\+ $(CURRDIR)\/debian\/.*$$/d" - \
+		| [ ! -z - ]; \
+		fi;
+	#
+	# Check for presence of TLS (crypto) enablement and bitch if found
+	@if (grep -qEe '^#TLS:[[:space:]]*yes' \
+		debian/build/site.config.m4); then \
+		echo '** ** --------------------------------------------------- ** **';\
+		echo '** ** This package contains crypto support ! Be careful ! ** **';\
+		echo '** ** --------------------------------------------------- ** **';\
+		fi;
+	#--------------------------------------------------------------------
+
+
+#-------------
+.PHONY: verify-tarball
+verify-tarball::
+	#--------------------------------------------------------------------
+	# verify_tarball:
+	#
+	# Verifying the md5 summs and signed files
+	@dh_testdir;
+	@for file in $$(find . -maxdepth 1 -name '*.md5'); do \
+		echo "Checking MD5 source: $$file."; \
+		cat $$file; \
+		md5sum -c $$file; \
+		done;
+	@for file in $$(find . -maxdepth 1 -name '*.sig'); do \
+		echo "Checking signature file $$file."; \
+		part=$$(echo "$$file" | sed -e 's/\.sig$$//'); \
+		if [ -f $$part ]; then \
+			gpg --verify $$part.sig $$part || true; \
+		elif [ -f $$part.gz ]; then \
+			gunzip -c $$part.gz > $$part; \
+			gpg --verify $$part.sig $$part || true; \
+			rm $$part; \
+			fi; \
+		done;
+	#--------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# User callable rules
+#------------------------------------------------------------------------------
+#-------------
+.PHONY: clean
+clean::
+	#--------------------------------------------------------------------
+	# clean:
+	#
+	# Local stuff
+	-if [ -f debian/Makefile ]; then \
+		(cd debian && $(MAKE) -f Makefile clean maintainer-clean;) \
+		fi;
+	# Debian stuff
+	$(RM) -r ${_cdbs_tarball_dir};
+	$(RM) \
+		debian/config.log \
+		debian/config.status \
+		debian/*.debhelper \
+		debian/build/debian/changelog.in \
+		debian/build/debian/control \
+		debian/bug-control \
+		debian/bug-script \
+		;
+	for file in tmp ${DEB_PACKAGES};do \
+		$(RM) -r debian/$$file; \
+		done;
+	#--------------------------------------------------------------------
+
+common-build-indep:: common-build-bugfiles
+common-build-arch:: common-build-bugfiles
+common-build-bugfiles:
+	cp debian/local/bug/sendmail/control debian/bug-control
+	cp debian/local/bug/sendmail/script debian/bug-script
+
+#-------------
+common-build-indep::
+	#--------------------------------------------------------------------
+	# build-indep:
+	#
+	# sendmail operations guide
+	(cd ${DEB_SRCDIR}/doc/op/ && GROFF_NO_SGR=1 make op.txt);
+	# Debian stuff
+	(cd debian && $(MAKE) -f Makefile build-indep;)
+	#--------------------------------------------------------------------
+
+
+#-------------
+common-install-indep::
+	#--------------------------------------------------------------------
+	# install-indep
+	#
+	# sendmail operations guide and other documentation
+	$(INSTALL_DATA) ${DEB_SRCDIR}/doc/op/op.ps	${PKG_DOC}/op;
+	$(INSTALL_DATA) ${DEB_SRCDIR}/doc/op/op.txt ${PKG_DOC}/op;
+	$(INSTALL_DATA) ${DEB_SRCDIR}/README		${PKG_DOC}/;
+	$(INSTALL_DATA) ${DEB_SRCDIR}/KNOWNBUGS	${PKG_DOC}/;
+	$(INSTALL_DATA) ${DEB_SRCDIR}/cf/README	${PKG_DOC}/cf.README;
+	$(INSTALL_DATA) ${DEB_SRCDIR}/sendmail/README \
+		${PKG_DOC}/sendmail/;
+	$(INSTALL_DATA) ${DEB_SRCDIR}/sendmail/SECURITY \
+		${PKG_DOC}/sendmail/SECURITY; \
+	$(INSTALL_DATA) ${DEB_SRCDIR}/sendmail/TRACEFLAGS \
+		${PKG_DOC}/sendmail/TRACEFLAGS;
+	$(INSTALL_DATA) ${DEB_SRCDIR}/sendmail/TUNING \
+		${PKG_DOC}/sendmail/TUNING; \
+	sed -e "s?/usr/libexec?${libexecdir}?g" \
+		-e "s?/usr/ucb/vacation?${libexecdir}/vacation.sendmail?g" \
+		-e "s?/usr/adm/sm.bin?/etc/mail/smrsh?g" \
+		${DEB_SRCDIR}/smrsh/README \
+		> ${PKG_DOC}/smrsh.README;
+	$(INSTALL_DATA) debian/faq.txt	${PKG_DOC}/;
+	# libmilter-dev package
+	if [ -d ${DEB_SRCDIR}/libmilter ]; then \
+		$(INSTALL_DATA) ${DEB_SRCDIR}/libmilter/README \
+			${PKG_DOC}/libmilter/README; \
+		cp -a ${DEB_SRCDIR}/libmilter/docs/* \
+			${PKG_DOC}/libmilter/html; \
+		fi;
+	# Debian stuff
+	(cd debian/cf && \
+		$(MAKE) -f Makefile install-indep \
+			DESTDIR="${SRC_DIR}/sendmail-cf";);
+	(cd debian/examples && \
+		$(MAKE) -f Makefile install-indep \
+			DESTDIR="${SRC_DIR}/sendmail-base";);
+	(cd debian/local && \
+		$(MAKE) -f Makefile install-indep \
+			DESTDIR="${SRC_DIR}/sendmail-base";);
+	# Install Lintian overrides
+	$(INSTALL_DATA) -g root -m 644 \
+		debian/build/debian/sendmail-base.lintian-overrides \
+		debian/sendmail-base/usr/share/lintian/overrides/sendmail-base;
+	#--------------------------------------------------------------------
+
+
+#-------------
+common-build-arch::
+	#--------------------------------------------------------------------
+	# build-arch
+	#
+	# Place our m4 configuration files for the sendmail build to use
+	cp -f debian/build/site.config.m4 \
+		${DEB_SRCDIR}/devtools/Site/; \
+	# Finally, build the whole enchilada (we'll let sendmail figure
+	# which, if any of the dependant libraries each component needs)
+	for subdir in ${SM_SUBDIRS}; do \
+		if [ -d  ${DEB_SRCDIR}/$${subdir} ]; then \
+			(cd ${DEB_SRCDIR}/$${subdir} && ./Build -S;); \
+			fi; \
+		done; 
+	if [ -d ${DEB_SRCDIR}/libmilter ]; then \
+		(cd ${DEB_SRCDIR}/obj*/libmilter && \
+			gcc -shared -pthread \
+				-o libmilter.so.${sm_libmilter_version} \
+				-fPIC ${MY_CFLAGS} \
+				-Wl,-soname,libmilter.so.${sm_libmilter_version} \
+				${MY_LDFLAGS} \
+				*.o;); \
+		fi; \
+	# Debian stuff
+	(cd debian && $(MAKE) -f Makefile build-arch;)
+	# Remove our config m4 files
+	$(RM) ${DEB_SRCDIR}/devtools/Site/site.config.m4;
+	#--------------------------------------------------------------------
+
+
+#-------------
+common-install-arch::
+	#--------------------------------------------------------------------
+	# install-arch
+	#
+	# sendmail install proper... with a little help ;-}
+	#$(MAKE) install DESTDIR="$(CURDIR)/${PKG_DIR}";
+	# Finally, install the whole enchilada
+	for subdir in ${SM_SUBDIRS}; do \
+		if [ -d  ${DEB_SRCDIR}/$${subdir} ]; then \
+			if [ "$${subdir}" = 'libmilter' ]; then \
+				(cd ${DEB_SRCDIR}/obj*/$${subdir} && \
+					$(INSTALL) libmilter.so.${sm_libmilter_version} \
+						../../../../debian/libmilter${sm_libmilter_version}${libdir}/; \
+				); \
+			elif [ "$${subdir}" = 'mail.local' ]  \
+			||	 [ "$${subdir}" = 'rmail' ]; then \
+				(cd ${DEB_SRCDIR}/obj*/$${subdir} && \
+					$(MAKE) force-install \
+					DESTDIR="../../../../${PKG_DIR}";); \
+			else \
+				(cd ${DEB_SRCDIR}/obj*/$${subdir} && \
+					$(MAKE) install \
+					DESTDIR="../../../../${PKG_DIR}";); \
+				fi; \
+			fi; \
+		done;
+	# FHS says that rmail belongs in \${sbindir} - and we now put
+	# it there, but in the rmail package !
+	mv ${PKG_DIR}${libexecdir}/rmail debian/rmail${sbindir}/;
+	mv ${PKG_DIR}${mandir}/man8/rmail.8 debian/rmail${mandir}/man8/;
+	# Sendmail alias handling...
+	# NOTE: whilst smptd is a valid alias for sendmail, we don't create
+	# one so that we can co-exists with smtpd (a firewall frontend)
+	# NOTE: newscache package also contains ${sbindir}/hoststat
+	# NOTE: newalias, purgestat, etc. aren't for the general user..
+	#		yeah, yeah, I know... these can be done with -b<flag>!
+	(cd ${PKG_DIR}${bindir} && \
+		$(RM) hoststat mailq newaliases purgestat smtpd;)
+	(cd ${PKG_DIR}${sbindir} && for file in \
+		newaliases hoststat purgestat \
+		; do \
+			ln -sf sendmail-mta $$file; \
+			done;);
+	# Handle man pages for these aliases
+	mv ${PKG_DIR}${mandir}/man5/aliases.5 \
+		${PKG_DIR}${mandir}/man5/aliases.sendmail.5;
+	mv ${PKG_DIR}${mandir}/man1/mailq.1 \
+		${PKG_DIR}${mandir}/man1/mailq.sendmail.1;
+	mv ${PKG_DIR}${mandir}/man1/newaliases.1 \
+		${PKG_DIR}${mandir}/man8/newaliases.sendmail.8;
+	(cd ${PKG_DIR}${mandir}/man8 && \
+		for file in hoststat.8.gz purgestat.8.gz \
+		; do \
+			ln -sf sendmail-mta.8.gz $$file; \
+			done;);
+	# Place those removed aliases in ${libexecdir} (mostly for me)
+	(cd ${PKG_DIR}${libexecdir} && for file in \
+		hoststat mailq newaliases purgestat smtpd; do \
+		ln -sf sendmail $$file; \
+		done;);
+	# NOTE: with the MSP/MTA split, we'll provide our own mailstats (keep orig)
+	ln -s ../share/sendmail/mailstats ${PKG_DIR}${sbindir}/mailstats;
+	ln -s ../share/sendmail/mailq ${PKG_DIR}${bindir}/mailq;
+	ln -s ../lib/sm.bin/editmap ${PKG_DIR}${sbindir}/editmap;
+	ln -s ../lib/sm.bin/makemap ${PKG_DIR}${sbindir}/makemap;
+	ln -s ../lib/sm.bin/praliases ${PKG_DIR}${sbindir}/praliases;
+	# Special handling of vacation - Debian has a seperate package
+	# with a different version (sigh) keep our copy just in case...
+	mv ${PKG_DIR}${libexecdir}/vacation \
+		${PKG_DIR}${libexecdir}/vacation.sendmail; \
+	mv ${PKG_DIR}${mandir}/man1/vacation.1 \
+		${PKG_DIR}${mandir}/man1/vacation.sendmail.1; \
+	# Correct some paths in upstream man pages
+	sed -e "s?/usr/adm/sm.bin?${sysconfdir}/mail/smrsh?g" \
+		-e "s?sm.bin?${sysconfdir}/mail/smrsh?g" \
+		${DEB_SRCDIR}/smrsh/smrsh.8 \
+		> ${DEB_SRCDIR}/smrsh/smrsh.8.new;
+	mv ${DEB_SRCDIR}/smrsh/smrsh.8.new ${DEB_SRCDIR}/smrsh/smrsh.8;
+	sed -e "s?/etc/mail/statistics?${localstatedir}/lib/sendmail/sendmail.st?g"\
+		${DEB_SRCDIR}/sendmail/sendmail.8 \
+		> ${DEB_SRCDIR}/sendmail/sendmail.8.new;
+	mv ${DEB_SRCDIR}/sendmail/sendmail.8.new \
+		${PKG_DIR}${mandir}/man8/sendmail.sendmail.8;
+	$(RM) ${DEB_SRCDIR}/sendmail/sendmail.8;
+	# Debian stuff
+	(cd debian/sensible_mda && \
+		$(MAKE) -f Makefile install-arch \
+			DESTDIR="${SRC_DIR}/sensible-mda";);
+	# libmilter-dev package
+	if [ -d ${DEB_SRCDIR}/libmilter ]; then \
+		(cd ${DEB_SRCDIR}/obj*/libmilter && \
+			$(MAKE) install \
+			DESTDIR="../../../../debian/libmilter-dev";); \
+		$(INSTALL_PROGRAM) ${DEB_SRCDIR}/obj.*/libmilter/libmilter.a \
+			debian/libmilter-dev${libdir}/libmilter/; \
+		$(INSTALL_DATA) ${DEB_SRCDIR}/include/libmilter/mfapi.h \
+			debian/libmilter-dev${includedir}/libmilter/; \
+		if [ -f ${DEB_SRCDIR}/include/libmilter/mfdef.h ]; then \
+			$(INSTALL_DATA) ${DEB_SRCDIR}/include/libmilter/mfdef.h \
+				debian/libmilter-dev${includedir}/libmilter/; \
+			fi; \
+		$(INSTALL_PROGRAM) ${DEB_SRCDIR}/obj.*/libsmutil/libsmutil.a \
+			debian/libmilter-dev${libdir}/libmilter/; \
+		if [ -d ${DEB_SRCDIR}/libsm ]; then \
+			$(INSTALL_PROGRAM) ${DEB_SRCDIR}/obj.*/libsm/libsm.a \
+				debian/libmilter-dev${libdir}/libmilter/; \
+			fi; \
+		fi;
+	# Install Lintian overrides
+	$(INSTALL_DATA) -g root -m 644 \
+		debian/libmilter${sm_libmilter_version}.lintian-overrides \
+		debian/libmilter${sm_libmilter_version}/usr/share/lintian/overrides/libmilter${sm_libmilter_version};
+	$(INSTALL_DATA) -g root -m 644 \
+		debian/build/debian/libmilter-dev.lintian-overrides \
+		debian/libmilter-dev/usr/share/lintian/overrides/libmilter-dev;
+	$(INSTALL_DATA) -g root -m 644 \
+		debian/build/debian/rmail.lintian-overrides \
+		debian/rmail/usr/share/lintian/overrides/rmail;
+	$(INSTALL_DATA) -g root -m 644 \
+		debian/build/debian/sensible-mda.lintian-overrides \
+		debian/sensible-mda/usr/share/lintian/overrides/sensible-mda;
+	$(INSTALL_DATA) -g root -m 644 \
+		debian/build/debian/sendmail-bin.lintian-overrides \
+		debian/sendmail-bin/usr/share/lintian/overrides/sendmail-bin;
+	#--------------------------------------------------------------------
+
+
+#-------------
+# CDBS host dh_fixperms fixup
+binary-predeb/sendmail-bin::
+	#--------------------------------------------------------------------
+	# Proper ownership/modes
+	chown root:mail ${PKG_DIR}${libexecdir}/sendmail;
+	chmod 02755 ${PKG_DIR}${libexecdir}/sendmail;
+	chown root:mail ${PKG_DIR}${libexecdir}/mailstats;
+	chmod 02755 ${PKG_DIR}${libexecdir}/mailstats;
+	#--------------------------------------------------------------------
+
+binary-predeb/sensible-mda::
+	#--------------------------------------------------------------------
+	# Proper ownership/modes
+	chmod 04755 debian/sensible-mda/usr/sbin/sensible-mda;
+	#--------------------------------------------------------------------
+
+binary-predeb/libmilter$(sm_libmilter_version)-dbg::
+	#--------------------------------------------------------------------
+	# Remove unneeded debugging information
+	$(RM) -r debian/libmilter$(sm_libmilter_version)-dbg/usr/lib/debug/usr/sbin;
+	$(RM) -r debian/libmilter$(sm_libmilter_version)-dbg/usr/lib/debug/usr/lib/sm.bin;
+	#--------------------------------------------------------------------
+
+
+#-------------
+# after the directories are created but before dh_compress is run.
+common-binary-post-install-arch::
+	#--------------------------------------------------------------------
+	# Obtain build dependancy information
+	dh_buildinfo
+	#--------------------------------------------------------------------
+
+binary-makedeb-IMPL/sendmail:: verify-tarball pristine
+
+

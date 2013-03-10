@@ -1,0 +1,1301 @@
+#!/bin/sh
+#-----------------------------------------------------------------------------
+# $Sendmail: sm_helper.sh,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Copyright (c) 1998-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+#	Debian helper function script for Debian Sendmail
+#	  Note: this file supports @SM_MINVERS@ - @SM_MAXVERS@
+#
+# Notes (to all):
+#	*
+#
+# Notes (to self):
+#	* clean_queues fubar, esp wrt MSP
+#
+#-----------------------------------------------------------------------------
+#
+DEBUG=0;
+
+# Support stand-alone execution
+if [ -z "$DAEMON" ]; then
+	PATH=/bin:/usr/bin:/sbin:/usr/sbin
+	DESC="Mail Transport Agent (MTA)"
+	NAME=sendmail
+	DAEMON=/usr/sbin/$NAME
+	DAEMON_ARGS=""
+	SCRIPTNAME=/etc/init.d/$NAME
+
+	# Exit if the package is not installed
+	[ -x "$DAEMON" ] || exit 0
+
+	# Read configuration variable file if it is present
+	[ -r /etc/default/sendmail ] && . /etc/default/sendmail
+
+	# Load the VERBOSE setting and other rcS variables
+	. /lib/init/vars.sh
+
+	# Define LSB log_* functions.
+	. /lib/lsb/init-functions
+	fi;
+
+# Can't do this earlier, the lsb inclusion is unsafe :(
+set -e;
+
+#------------------------------------------------------------------------------
+# Parameters for the sendmail daemon
+# Do *NOT* touch these lines, instead, edit /etc/mail/sendmail.conf
+# The _PARMS lines are listed in precedence order
+#------------------------------------------------------------------------------
+Get_Parameters () {
+
+	# Main configuration parameters in /etc/mail/sendmail.conf
+	DAEMON_MODE='Daemon';
+	DAEMON_PARMS='';
+	DAEMON_UID='root';
+	QUEUE_MODE="$DAEMON_MODE";
+	QUEUE_INTERVAL='10m';
+	QUEUE_PARMS='';
+	MSP_MODE="$QUEUE_MODE";
+	MSP_INTERVAL="$QUEUE_INTERVAL";
+	MSP_PARMS="";
+	MISC_PARMS='';
+	CRON_PARMS='';
+	LOG_CMDS='No';
+
+	# Secondary (non-documented) parameters in /etc/mail/sendmail.conf
+	# Caveat Emptor: change these at your own risk - they impact several
+	# disjoint pieces parts...
+	SENDMAIL_ROOT='@localstatedir@/run/sendmail';
+	MTA_DAEMON='@sbindir@/sendmail-mta';
+	MTA_COMMAND='@sbindir@/sendmail-mta';
+	MTA_A='-Am';
+	MTAL_L='-L sm-mta';
+	MTAL_L_QUEUE='-L sm-mta-queue';
+	MTAL_L_RUNQ='-L sm-mta-runq';
+	MTA_ROOT="${SENDMAIL_ROOT}/mta";
+	MTAL_PIDFILE="${MTA_ROOT}/sendmail.pid";
+	MTAL_SOCKET="${MTA_ROOT}/smsocket";
+	MTAL_CNTL="${MTA_ROOT}/smcontrol";
+	MTAQ_L='-L sm-que';
+	MTAQ_L_RUNQ='-L sm-que-runq';
+	MTAQ_PIDFILE="${MTA_ROOT}/queue.pid";
+	MTAQ_SOCKET="${MTA_ROOT}/qusocket";
+	MTAQ_CNTL="${MTA_ROOT}/qucontrol";
+	MSP_DAEMON='@sbindir@/sendmail-msp';
+	MSP_COMMAND='@sbindir@/sendmail-msp';
+	MSP_A='-Ac';
+	MSP_L='-L sm-msp';
+	MSP_L_QUEUE='-L sm-msp-queue';
+	MSP_ROOT="${SENDMAIL_ROOT}/msp";
+	MSP_PIDFILE="${MSP_ROOT}/sendmail.pid";
+	MSP_SOCKET="${MSP_ROOT}/smsocket";
+	MSP_CNTL="${MSP_ROOT}/smcontrol";
+
+	# Pull in any user modified variables
+	if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+		. @sysconfdir@/mail/sendmail.conf;
+		fi;
+
+	# These can't be user customized
+	SM_Get_Parameters='yes';
+	PATH='/bin:/usr/bin:/sbin:/usr/sbin';
+	STAMP_DIR="${SENDMAIL_ROOT}/stampdir";
+	START_MTAL_CMD="start-stop-daemon \
+		--pidfile $MTAL_PIDFILE \
+		--exec $MTA_DAEMON \
+		--startas $MTA_COMMAND \
+		--start";
+	STOP_MTAL_CMD="start-stop-daemon \
+		--pidfile $MTAL_PIDFILE \
+		--name sendmail-mta \
+		--stop";
+	SIGNAL_MTAL_CMD="start-stop-daemon \
+		--pidfile $MTAL_PIDFILE \
+		--name sendmail-mta \
+		--stop";
+	START_MTAQ_CMD="start-stop-daemon \
+		--pidfile $MTAQ_PIDFILE \
+		--make-pidfile \
+		--exec $MTA_DAEMON \
+		--startas $MTA_COMMAND \
+		--start";
+	STOP_MTAQ_CMD="start-stop-daemon \
+		--pidfile $MTAQ_PIDFILE \
+		--name sendmail-mta \
+		--stop";
+	SIGNAL_MTAQ_CMD="start-stop-daemon \
+		--pidfile $MTAQ_PIDFILE \
+		--name sendmail-mta \
+		--stop";
+	START_MSP_CMD="start-stop-daemon \
+		--pidfile $MSP_PIDFILE \
+		--exec $MSP_DAEMON \
+		--startas $MSP_COMMAND \
+		--chuid smmsp \
+		--start";
+	STOP_MSP_CMD="start-stop-daemon \
+		--pidfile $MSP_PIDFILE \
+		--name sendmail-msp \
+		--stop";
+	SIGNAL_MSP_CMD="start-stop-daemon \
+		--pidfile $MSP_PIDFILE \
+		--name sendmail-msp \
+		--stop";
+	NAME='sendmail';
+	FLAGS='defaults 50';
+
+	# Sanitize some keyword entries
+	DAEMON_MODE=$(echo "$DAEMON_MODE" | tr '[:upper:]' '[:lower:]');
+	QUEUE_MODE=$(echo  "$QUEUE_MODE"  | tr '[:upper:]' '[:lower:]');
+	MSP_MODE=$(echo    "$MSP_MODE"    | tr '[:upper:]' '[:lower:]');
+
+	# See if we can share the listener and queue-runner daemon:
+	#	* Both must be in daemon mode
+	#	* They must have the same (possibly empty) parameters
+	if [ "$DAEMON_MODE" = "daemon" \
+	   -a \( \( "$QUEUE_MODE" = "cron" -o "$QUEUE_MODE" = "none" \) \
+		  -o \( "$QUEUE_MODE" != "cron" \
+			 -a "$QUEUE_MODE" != "none" \
+			 -a "$DAEMON_PARMS" = "$QUEUE_PARMS" \
+			 \) \
+		  \) ]; then
+		SPLIT_DAEMON=0;
+	else
+		SPLIT_DAEMON=1;
+		fi;
+
+	# Version dependant support:
+	# 8.12.0+ M{TA,MSP}_A
+	if [ ! -f @datadir@/sendmail/cf/feature/msp.m4 ]; then
+		MTA_A='';
+		MTAL_L='';
+		MTAL_L_QUEUE='';
+		MSP_A='';
+		MSP_L='';
+		MSP_L_QUEUE='';
+		fi;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# enhanced sendmail startup
+#------------------------------------------------------------------------------
+start_mta () {
+	local result;
+	result=0;
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# If already running, don't start it...
+	if is_running mta; then
+		log_warning_msg 'MTA is already running.';
+		return 1;
+		fi;
+	#
+	# Check if we're going to run a daemon (and how many):
+	daemon_check || result=$?;
+	if [ "$result" -ne 0 ]; then
+		return 0;
+		fi;
+	#
+	# Mark restarted for communication betwixt here and /etc/mail/Makefile
+	touch $STAMP_DIR/reload;
+	#
+	if [ "$DAEMON_MODE" = "daemon" ]; then
+		#
+		# Allow Unix (local) connections betwixt MSP/MTA:
+		touch $MTAL_SOCKET;
+		#
+		# We can only afford to clean the MTA queues if running daemon mode,
+		# otherwise, there is a chance that a cronjob might still be using
+		# the queue...	Thats also why we don't clean the MSP queues herein.
+		#clean_queues;
+		#
+		# cd to a safe place to stash core files...
+		cd $MTA_ROOT;
+		CMD="$START_MTAL_CMD -- $MTAL_PARMS";
+		if [ "$LOG_CMDS" = "Yes" ]; then
+			logger -i -p mail.debug -- "$0 $CMD";
+			fi;
+		$CMD &
+		#
+		# Update permissions on smsocket
+		sleep 2;
+		chown $DAEMON_UID:smmsp $MTAL_SOCKET;
+		chmod 0666 $MTAL_SOCKET;
+		fi;
+	#
+	# Check for split daemon mode (separate listener/queue runner)
+	if [ "$SPLIT_DAEMON" -eq 1 ]; then
+		CMD="$START_MTAQ_CMD -- $MTAQ_PARMS";
+		if [ "$LOG_CMDS" = "Yes" ]; then
+			logger -i -p mail.debug -- "$0 $CMD";
+			fi;
+		$CMD &
+		sleep 2;
+		qp=`expr "${MTAQ_PARMS}" : '.*\(-qp[0-9]*[smhdw]\)'` || true;
+		if [ -z "$qp" ]; then
+			chmod 0664 $MTAQ_PIDFILE;
+		else
+			qc=`ps --no-headers -fCsendmail \
+				| egrep -e 'Queue control' \
+				| awk '{print $2}'`;
+			if [ -z "$qc" ]; then
+				rm -f $MTAQ_PIDFILE;
+			else
+				chmod 0664 $MTAQ_PIDFILE;
+				printf "$qc\n$MTA_COMMAND $MTAQ_PARMS" > $MTAQ_PIDFILE;
+				fi;
+			fi;
+		fi;
+	#
+	# if running split service, run the client queues (just to make sure)
+	if check_msp; then
+		$MSP_COMMAND -q $MSP_A $MSP_L_QUEUE $MSP_PARMS $MISC_PARMS;
+		fi;
+	return $result;
+	};
+
+start_msp () {
+	local result;
+	result=0;
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# If already running, don't start it...
+	if is_running msp; then
+		log_warning_msg 'MSP is already running.';
+		return 1;
+		fi;
+	#
+	# Check to see if MSP mode is indeed available
+	if ! check_msp; then
+		return 0;
+		fi;
+	#
+	# Check if we're going to run a daemon:
+	if [ "$MSP_MODE" != 'daemon' ]; then
+		return 0;
+		fi;
+	#
+	# We can only afford to clean the MSP queues if running daemon mode,
+	# otherwise, there is a chance that a cronjob might still be using
+	# the queue...	Thats also why we don't clean the MTA queues herein.
+	#clean_queues /var/spool/mqueue-client;
+	#
+	# cd to a safe place to stash core files...
+	cd $MSP_ROOT;
+	$START_MSP_CMD -- \
+		$MSP_A $MSP_L -q${MSP_INTERVAL} $MSP_PARMS $MISC_PARMS &
+	return $result;
+	};
+
+start_sendmail () {
+	local result;
+	# Update databases
+	make_databases;
+	result=0;
+	start_mta || result=$?;
+	if check_msp; then
+		start_msp || true;
+		fi;
+	return $result;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# enhanced sendmail reload
+#------------------------------------------------------------------------------
+reload_mta () {
+	local result;
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# Update databases
+	make_databases;
+	#
+	# reload (signal -HUP) is *much* better/faster than stop/start
+	#
+	# Mark restarted for communication betwixt here and /etc/mail/Makefile
+	touch $STAMP_DIR/reload;
+	#
+	# If not running, just start it...
+	if ! is_running mta; then
+		start_mta;
+		fi;
+	#
+	# Is running, must signal it...
+	result=0;
+	$SIGNAL_MTAL_CMD --signal HUP --oknodo --quiet || result=$?;
+	sleep 2;
+	chown $DAEMON_UID:smmta $MTAL_SOCKET;
+	chmod 0666 $MTAL_SOCKET;
+	#
+	# Check for split daemon mode (separate listener/queue runner)
+	if [ "$SPLIT_DAEMON" -eq 1 ]; then
+		$SIGNAL_MTAQ_CMD --signal HUP --oknodo --quiet || true;
+		fi;
+	return $result;
+	};
+
+reload_msp () {
+	local result;
+	result=0;
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# reload (signal -HUP) is *much* better/faster than stop/start
+	#
+	# If not running, just start it...
+	if ! is_running msp; then
+		start_msp;
+		fi;
+	#
+	# Is running, must signal it...
+	$SIGNAL_MSP_CMD --signal HUP --oknodo --quiet || result=$?;
+	return $result;
+	};
+
+reload_sendmail () {
+	local result;
+	result=0;
+	reload_mta || result=$?;
+	if check_msp; then
+		reload_msp || true;
+		fi;
+	return $result;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# enhanced sendmail shutdown
+#------------------------------------------------------------------------------
+stop_mta () {
+	local result cnt;
+	result=0;
+	stopped=0;
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# If not running, don't stop it...
+	if ! is_running mta; then
+		return 0;
+		fi;
+	#
+	# Is running, must stop it...
+	$STOP_MTAL_CMD --signal TERM --quiet --oknodo > /dev/null;
+	#
+	# Now we have to wait until sendmail has _really_ stopped.
+	#
+	sleep 2;
+	if $STOP_MTAL_CMD --signal TERM --quiet > /dev/null; then
+		log_progress_msg ' Waiting .';
+		cnt=0;
+		while $STOP_MTAL_CMD --signal TERM --quiet > /dev/null; do
+			cnt=`expr $cnt + 1`;
+			if [ $cnt -gt 60 ]; then
+				#
+				# Waited 120 seconds now. Fail.
+				#
+				echo -n ' Failed ';
+				stopped=1;
+				break;
+				fi;
+			sleep 2;
+			log_progress_msg '.';
+			done;
+		echo -n ' Done ';
+		fi;
+	#
+	# Remove pidfile iff stopped
+	if ! $STOP_MTAL_CMD --signal TERM --quiet > /dev/null; then
+		rm -f "$MTAL_PIDFILE";
+		fi
+	return $result;
+	};
+
+stop_queue () {
+	local result cnt;
+	result=0;
+	stopped=0;
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# If not running, don't stop it...
+	if ! is_running queue; then
+		return 0;
+		fi;
+	#
+	# Is running, must stop it...
+	$STOP_MTAQ_CMD --signal TERM --quiet --oknodo > /dev/null;
+	#
+	# Now we have to wait until sendmail has _really_ stopped.
+	#
+	sleep 2;
+	if $STOP_MTAQ_CMD --signal TERM --quiet > /dev/null; then
+		log_progress_msg ' Waiting .';
+		cnt=0;
+		while $STOP_MTAQ_CMD --signal TERM --quiet > /dev/null; do
+			cnt=`expr $cnt + 1`;
+			if [ $cnt -gt 60 ]; then
+				#
+				# Waited 120 seconds now. Fail.
+				#
+				echo -n ' Failed ';
+				stopped=1;
+				break;
+				fi;
+			sleep 2;
+			log_progress_msg '.';
+			done;
+		echo -n ' Done ';
+		fi;
+	#
+	# Remove pidfile iff stopped
+	if ! $STOP_MTAQ_CMD --signal TERM --quiet > /dev/null; then
+		rm -f "$MTAQ_PIDFILE";
+		fi
+	return $result;
+	};
+
+stop_msp () {
+	local result cnt;
+	result=0;
+	stopped=0;
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# If not running, don't stop it...
+	if ! is_running msp; then
+		return 0;
+		fi;
+	#
+	# Is running, must stop it...
+	$STOP_MSP_CMD --signal TERM --quiet --oknodo > /dev/null;
+	#
+	# Now we have to wait until sendmail has _really_ stopped.
+	#
+	sleep 2;
+	if $STOP_MSP_CMD --signal TERM --quiet > /dev/null; then
+		log_progress_msg 'Waiting .';
+		cnt=0;
+		while $STOP_MSP_CMD --signal TERM --quiet > /dev/null; do
+			cnt=`expr $cnt + 1`;
+			if [ $cnt -gt 60 ]; then
+				#
+				# Waited 120 seconds now. Fail.
+				#
+				echo -n ' Failed ';
+				stopped=1;
+				break;
+				fi;
+			sleep 2;
+			log_progress_msg '.';
+			done;
+		echo -n ' Done ';
+		fi;
+	#
+	# Remove pidfile iff stopped
+	if ! $STOP_MSP_CMD --signal TERM --quiet > /dev/null; then
+		rm -f "$MSP_PIDFILE";
+		fi;
+	return $result;
+	};
+
+stop_sendmail () {
+	local result;
+	result=0;
+	if check_msp; then
+		stop_msp || true;
+		fi;
+	stop_mta || result=$?;
+	stop_queue || true;
+	return $result;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# Check to see if sendmail is running
+#------------------------------------------------------------------------------
+is_running () {
+	local result;
+	result=1;
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# Determine proper pidfile to check
+	who=$(echo	"$1"  | tr '[:upper:]' '[:lower:]');
+	case $who in
+		mta)
+			PIDFILE="$MTAL_PIDFILE";
+			;;
+		queue)
+			PIDFILE="$MTAQ_PIDFILE";
+			;;
+		msp)
+			PIDFILE="$MSP_PIDFILE";
+			;;
+		*)
+			PIDFILE="$1";
+			;;
+		esac;
+	#
+	# If no pidfile, not running
+	# Extract pid/command and see if still running
+	# Remove pidfile if app didn't
+	# Also remove any control sockets
+	if [ -s $PIDFILE ]; then
+		PID=`head -n 1 $PIDFILE 2>/dev/null`;
+		COMMAND=`tail -n 1 $PIDFILE`;
+		if [ ! -z "`ps --no-heading $PID`" ]; then
+			result=0;
+		else
+			rm -f $PIDFILE;
+			case $who in
+				mta)
+					rm -f $MTAL_SOCKET $MTAL_CNTL;
+					;;
+				queue)
+					rm -f $MTAQ_SOCKET $MTAQ_CNTL;
+					;;
+				msp)
+					rm -f $MSP_SOCKET $MSP_CNTL;
+				esac;
+			fi;
+		fi;
+	return $result;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# Check to see if running split service (MTA, MSP)
+# Must be at 8.12.0+ for this support
+#------------------------------------------------------------------------------
+check_msp () {
+	local result;
+	result=1;
+	if [ ! -f @datadir@/sendmail/cf/feature/msp.m4 ]; then
+		result=1;
+	elif [ -s @sysconfdir@/mail/submit.cf ] \
+	&& [ -s @sysconfdir@/mail/submit.mc ]; then
+		if grep -qEe "^[[:space:]]*\`?FEATURE\([[:space:]]*\`?msp" \
+			@sysconfdir@/mail/submit.mc; then
+			result=0;
+			fi;
+		fi;
+	return $result;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# Miscellaneous sendmail command support for MSP/MTA split
+# mailstats, mailq, runq
+#------------------------------------------------------------------------------
+newaliases () {
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	$MTA_COMMAND $MTA_A -bi $*;
+	};
+
+hoststat () {
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	$MTA_COMMAND $MTA_A -bh $*;
+	};
+
+purgestat () {
+	local parms;
+	parms=$(echo "$1" | tr '[:upper:]' '[:lower:]');
+	case $parms in
+		n*)		# Now
+			parms='-O Timeout.hoststatus=0s';
+			shift;
+			;;
+		*)
+			parms='';
+			;;
+		esac;
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	$MTA_COMMAND $MTA_A -bH $parms $*;
+	};
+
+mailstats () {
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	# if running split service, show the client status first
+	if check_msp; then
+		echo 'MSP statistics...';
+		#check if we have a status file for the MSP
+		statusfile=$(grep -Ee '^O StatusFile=/.*' \
+			@sysconfdir@/mail/submit.cf | cut -d= -f2);
+		if [ -n $statusfile ]; then
+			@libexecdir@/mailstats -C \
+				@sysconfdir@/mail/submit.cf $* || true;
+			fi;
+		echo 'MTA statistics...';
+		fi;
+	#
+	# check if we have a status file for the MTA
+	statusfile=$(grep -Ee '^O StatusFile=/.*' \
+		@sysconfdir@/mail/sendmail.cf | cut -d= -f2);
+	if [ -n $statusfile ]; then
+		@libexecdir@/mailstats $* || true;
+		fi;
+	};
+
+mailq () {
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	# if running split service, show the client queues first
+	if check_msp; then
+		echo 'MSP Queue status...';
+		#
+		# Check to see if shared memory is in use (8.12.0+)
+		if grep -qEe "^[[:space:]]*\`?define\(\`?confSHAREDMEMORYKEY'?[[:space:]]*,[[:space:]]*\`?0*[1-9]+[0-9]*'?[[:space:]]*\)" \
+			@sysconfdir@/mail/submit.mc; then
+			$MSP_COMMAND -bP || true;
+			fi;
+		$MSP_COMMAND -bp $MSP_A $MISC_PARMS $* || true;
+		echo 'MTA Queue status...';
+		fi;
+	#
+	# Check to see if shared memory is in use (8.12.0+)
+	if grep -qEe "^[[:space:]]*\`?define\(\`?confSHAREDMEMORYKEY'?[[:space:]]*,[[:space:]]*\`?0*[1-9]+[0-9]*'?[[:space:]]*\)" \
+		@sysconfdir@/mail/sendmail.mc; then
+		$MTA_COMMAND -bP || true;
+		fi;
+	$MTA_COMMAND -bp $MTA_A $MISC_PARMS $* || true;
+	};
+
+runq () {
+	local parms flag;
+	parms=;
+	while [ $# -gt 0 ]; do
+		flag=$(echo "$1" | tr '[:upper:]' '[:lower:]');
+		case $flag in
+			n*)		# Now
+				parms="$parms -O Timeout.hoststatus=0s -O MinQueueAge=0";
+				shift;
+				;;
+			v*)     # verbose
+				parms="$parms -v";
+				shift;
+				;;
+			*)
+				parms="$parms $flag";
+				shift;
+				;;
+			esac;
+		done;
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	# if running split service, run the client queues first
+	if check_msp; then
+		echo 'Running the MSP queue...';
+		$MSP_COMMAND -q $MSP_A \
+			$MSP_L_QUEUE $MSP_PARMS $MISC_PARMS $parms || true;
+		echo 'Running the MTA queues...';
+		fi;
+	if [ "$SPLIT_DAEMON" -eq 0 ]; then
+		$MTA_COMMAND -q $MTA_A \
+			$MTAL_L_RUNQ $QUEUE_PARMS $MISC_PARMS $parms || true;
+	else
+		$MTA_COMMAND -q $MTA_A \
+			$MTAQ_L_RUNQ $QUEUE_PARMS $MISC_PARMS $parms || true;
+		fi;
+	};
+
+control () {
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	local parms;
+	parms="$*";
+	if [ -z "$parms" ]; then
+		parms='help';
+		fi;
+	if is_running mta; then
+		@datadir@/sendmail/smcontrol.pl $parms;
+	else
+		echo 'MTA: is not running';
+		fi;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# Print status of running job(s)
+#------------------------------------------------------------------------------
+status () {
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	# if running split service, check the client status first
+	if check_msp; then
+		if is_running msp; then
+			echo "MSP: $PID $COMMAND";
+			ps -fwp $PID;
+			if [ -S ${MSP_CNTL} ]; then
+				@datadir@/sendmail/smcontrol.pl \
+					-f ${MSP_CNTL} status || true;
+				fi;
+		elif [ $MSP_MODE = 'cron' ]; then
+			echo "MSP: is run via cron ($MSP_INTERVAL)";
+		elif [ $MSP_MODE = 'none' ]; then
+			echo 'MSP: is disabled';
+		else
+			echo 'MSP: is not running';
+			fi;
+		fi;
+	#
+	# Check MTA listener
+	if is_running mta; then
+		echo "MTA: $PID $COMMAND";
+		ps -fwp $PID;
+		if [ -S ${MTAL_CNTL} ]; then
+			@datadir@/sendmail/smcontrol.pl \
+				-f ${MTAL_CNTL} status || true;
+			fi;
+	elif [ $DAEMON_MODE = 'inetd' ]; then
+		echo 'MTA: is run via inetd';
+	elif [ $DAEMON_MODE = 'none' ]; then
+		echo 'MTA: is disabled';
+	else
+		echo 'MTA: is not running';
+		fi;
+	#
+	# Check for split daemon mode (separate listener/queue runner)
+	if is_running queue; then
+		echo "QUE: $PID $COMMAND";
+		ps -fwp $PID;
+		if [ -S ${MTAQ_CNTL} ]; then
+			@datadir@/sendmail/smcontrol.pl \
+				-f ${MTAQ_CNTL} status || true;
+			fi;
+	elif [ $QUEUE_MODE = 'cron' ]; then
+		echo "QUE: is run via cron ($QUEUE_INTERVAL)";
+	elif [ $QUEUE_MODE = 'none' ]; then
+		echo 'QUE: is disabled';
+	elif [ "$SPLIT_DAEMON" -eq 0 ]; then
+		echo "QUE: Same as MTA";
+	else
+		echo 'QUE: is not running';
+		fi;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# Cronjob handling
+#------------------------------------------------------------------------------
+cron_mta () {
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	# If cron not needed, don't do queue running (though it wouldn't hurt)
+	if [ $QUEUE_MODE = 'cron' ]; then
+		#
+		# If running a split (MTA/MSP) setup, we need to make sure that
+		# messages not immediately accepted by the MTA get delivered.
+		# Only run the MSP queue if MSP_MODE=none
+		if check_msp; then
+			if [ $MSP_MODE = 'none' ]; then
+				# Make sure only *ONE* cronjob at a time
+				if [ ! -f $STAMP_DIR/cron_msp ]; then
+					touch $STAMP_DIR/cron_msp;
+					#clean_queues /var/spool/mqueue-client;
+					$MSP_COMMAND -qf $MSP_A $MSP_L_QUEUE \
+						$MSP_PARMS $MISC_PARMS \
+						$CRON_PARMS || true;
+					rm -f $STAMP_DIR/cron_msp;
+					fi;
+				fi;
+			fi;
+
+		# Make sure only *ONE* cronjob at a time
+		if [ ! -f $STAMP_DIR/cron_mta ]; then
+			touch $STAMP_DIR/cron_mta;
+			$MTA_COMMAND -qf $MTA_A $MTAL_L_QUEUE \
+				$QUEUE_PARMS $MISC_PARMS $CRON_PARMS || true;
+			rm -f $STAMP_DIR/cron_mta;
+			fi;
+		fi;
+	};
+
+cron_msp () {
+	#
+	# Make sure @localstatedir@/run/sendmail/ exists
+	check_dirs;
+	#
+	# Obtain parameters IFF needed
+	if [ -z "$SM_Get_Parameters" ]; then
+		Get_Parameters;
+		fi;
+	#
+	# If cron not needed, don't do queue running (though it wouldn't hurt)
+	if [ $MSP_MODE = 'cron' ]; then
+		#
+		# If running a split (MTA/MSP) setup, we need to make sure that
+		# messages not immediately accepted by the MTA get delivered.
+		if check_msp; then
+			# Make sure only *ONE* cronjob at a time
+			if [ ! -f $STAMP_DIR/cron_msp ]; then
+				touch $STAMP_DIR/cron_msp;
+				#clean_queues /var/spool/mqueue-client;
+				$MSP_COMMAND -qf $MSP_A $MSP_L_QUEUE \
+					$MSP_PARMS $MISC_PARMS \
+					$CRON_PARMS || true;
+				rm -f $STAMP_DIR/cron_msp;
+				fi;
+			fi;
+		fi;
+	};
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# Determine how to run sendmail mta daemon
+#	* No daemon
+#	* As listener
+#	* As queue runner
+#	* As both listener and queue runner
+#------------------------------------------------------------------------------
+daemon_check () {
+	local run_daemon;
+	#
+	# Skip daemon run for the following:
+	#	* sendmail hasn't been configured
+	#	* DAEMON_MODE = (none | inet) & QUEUE_MODE = (none | cron)
+	if [ ! -s @sysconfdir@/mail/sendmail.cf ] || \
+	   [ ! -s @sysconfdir@/mail/sendmail.mc ]; then
+		log_failure_msg 'Not configured, not started.';
+		return 1;
+		fi;
+
+	MTAL_PARMS="$MTA_A $MTAL_L";
+	MTAQ_PARMS="$MTA_A $MTAQ_L";
+	run_daemon=3;
+
+	case "$DAEMON_MODE" in
+		none* | \
+		inetd*)
+			run_daemon=`expr $run_daemon - 1`;
+			;;
+
+		daemon* | \
+		*)
+			MTAL_PARMS="$MTAL_PARMS -bd $DAEMON_PARMS";
+			;;
+		esac;
+
+	case "$QUEUE_MODE" in
+		none* | \
+		cron*)
+			run_daemon=`expr $run_daemon - 1`;
+			;;
+
+		daemon* | \
+		*)
+			# Check for split daemon mode (separate listener/queue runner)
+			if [ $SPLIT_DAEMON -eq 0 ]; then
+				if [ ! -z "$QUEUE_INTERVAL" ]; then
+					MTAL_PARMS="$MTAL_PARMS -q${QUEUE_INTERVAL}";
+					fi;
+				MTAL_PARMS="$MTAL_PARMS $QUEUE_PARMS";
+			else
+				if [ ! -z "$QUEUE_INTERVAL" ]; then
+					MTAQ_PARMS="$MTAQ_PARMS -q${QUEUE_INTERVAL}";
+					fi;
+				MTAQ_PARMS="$MTAQ_PARMS $QUEUE_PARMS";
+				fi;
+			;;
+		esac;
+
+	# Add any miscellanous (ie debugging) parameters
+	MTAL_PARMS="$MTAL_PARMS $MISC_PARMS";
+	MTAQ_PARMS="$MTAQ_PARMS $MISC_PARMS";
+
+	# Add PidFile override for MTA queue runner
+	MTAQ_PARMS="$MTAQ_PARMS -O PidFile=$MTAQ_PIDFILE";
+	MTAQ_PARMS="$MTAQ_PARMS -O ControlSocketName=$MTAQ_CNTL";
+
+	if [ $run_daemon -lt 2 ]; then
+		log_failure_msg 'listen/queue daemon not needed.';
+		return 1;
+		fi;
+	return 0;
+	};
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Simple routine to update the databases on start/refresh/restart
+#------------------------------------------------------------------------------
+make_databases () {
+	#
+	# Life is so much simpler with make
+	if test -x /usr/bin/make -a -f /etc/mail/Makefile; then
+		/usr/bin/make all -s -C /etc/mail >/dev/null;
+	#
+	# Here, all I could do would be handle a *few* database -
+	# quite frankly, it isn't worth it, someone will want yet another
+	else
+		echo "No make, you'll have to rebuild your databases by hand :(";
+		fi;
+	}
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# Clean sendmail queues (somewhat): does *not* support split qf/df/xf dirs.
+# NOTE: This whole thing sucks with queue-groups, need to redo it!!!
+# NOTE: Check for race conditions betwixt this code and queue-runners
+#------------------------------------------------------------------------------
+clean_queues () {
+	local QUEUE_ROOT QUEUE QUIET
+	# Obtain queue root directory
+	if [ -z "$1" ]; then
+		QUEUE_ROOT=/var/spool/mqueue
+		QUEUE=/var/spool/mqueue
+		QUIET=''
+	else
+		QUEUE_ROOT="$1"
+		QUEUE="$1"
+		QUIET='1'
+		fi
+	# remove lock files left because of kill/crash
+	# rm -f $QUEUE/[lnx]f* doesn't work with a plethora of files ;-(
+	for i in A B C D E F G H I J K L M N O P Q R S T U V W X Y Z \
+		a b c d e f g h i j k l m n o p q r s t u v w x y z; do
+		rm -f $QUEUE/[lnx]f${i}*
+		done
+	# remove zero length qf files
+	#for qffile in $QUEUE/qf*; do
+	for qffile in $(find $QUEUE_ROOT -type f -name 'qf*'); do
+		if [ -r "$qffile" ] && [ ! -s "$qffile" ]; then
+			if [ ! -z "$QUIET" ]; then
+				echo -n "<zero: $qffile> "; fi
+			rm -f "$qffile"
+			fi
+		done
+	# rename tf files to be qf if the qf does not exist
+	for tffile in $QUEUE/tf*; do
+		qffile=`echo "$tffile" | sed 's/\/tf\([[:alnum:]]*\)$/\/qf\1/'`
+		if [ -r "$tffile" ] && [ ! -f "$qffile" ]; then
+			if [ ! -z "$QUIET" ]; then
+				echo -n "<recovering: $tffile> "; fi
+			mv "$tffile" "$qffile"
+		elif [ -f "$tffile" ]; then
+			echo -n "<extra: $tffile> "
+			rm -f "$tffile"
+			fi
+		done
+	# remove df files with no corresponding qf files
+	for dffile in $QUEUE/df*; do
+		qffile=`echo "$dffile" | sed 's/\/df\([[:alnum:]]*\)$/\/qf\1/'`
+		Dffile=`echo "$dffile" | sed 's/\/df\([[:alnum:]]*\)$/\/Df\1/'`
+		if [ -r "$dffile" ] && [ ! -f "$qffile" ]; then
+			if [ ! -s "$dffile" ]; then
+				rm -f "$dffile"
+			else
+				if [ ! -z "$QUIET" ]; then
+					 echo -n "<incomplete: $dffile> "; fi
+				mv "$dffile" "$Dffile";
+				fi
+			fi
+		done
+	# announce files that have been saved during disaster recovery
+	for xffile in $QUEUE/[A-Z]f*; do
+		if [ -f "$xffile" ]; then
+			if [ ! -z "$QUIET" ]; then
+				echo -n "<panic: $xffile> "; fi
+			fi
+		done
+	}
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# check_dirs:  Make sure @localstatedir@/run/sendmail/{mta,msp,stampdir} exist
+#------------------------------------------------------------------------------
+check_dirs () {
+	if [ ! -d "${SENDMAIL_ROOT}" ]; then
+		mkdir -p "${SENDMAIL_ROOT}";
+		chown root:smmta "${SENDMAIL_ROOT}";
+		chmod 02755 "${SENDMAIL_ROOT}";
+		fi;
+	if [ ! -d "${MTA_ROOT}" ]; then
+		mkdir -p "${MTA_ROOT}";
+		chown $DAEMON_UID:smmta "${MTA_ROOT}";
+		chmod 02755 "${MTA_ROOT}";
+		fi;
+	if [ ! -d "${MSP_ROOT}" ]; then
+		mkdir -p "${MSP_ROOT}";
+		chown smmsp:smmsp "${MSP_ROOT}";
+		chmod 02775 "${MSP_ROOT}";
+		fi;
+	if [ ! -d "${STAMP_DIR}" ]; then
+		mkdir -p "${STAMP_DIR}";
+		chown root:smmsp "${STAMP_DIR}";
+		chmod 02775 "${STAMP_DIR}";
+		fi;
+	}
+
+#------------------------------------------------------------------------------
+# Why are we here ?
+#------------------------------------------------------------------------------
+# Some requisite initialization
+if [ -z "$SM_Get_Parameters" ]; then
+	Get_Parameters;
+	fi;
+if [ "$LOG_CMDS" = "Yes" ]; then
+	logger -i -p mail.debug -- "$0 $@";
+	fi;
+
+#------------------------------------------------------------------------------
+# Handle being called via an alias
+#------------------------------------------------------------------------------
+case $(basename $0) in
+	newaliases)
+		newaliases $*;
+		exit $?;
+		;;
+	hoststat)
+		hoststat $*;
+		exit $?;
+		;;
+	purgestat)
+		purgestat $*;
+		exit $?;
+		;;
+	mailstats)
+		mailstats $*;
+		exit $?;
+		;;
+	mailq)
+		mailq $*;
+		exit $?;
+		;;
+	runq)
+		runq $*;
+		exit $?;
+		;;
+	control|smcontrol)
+		control $*;
+		exit $?;
+		;;
+	status)
+		status $*
+		exit $?
+		;;
+	*)
+		: # Fall through and handle below
+		;;
+	esac;
+
+#------------------------------------------------------------------------------
+# Handle being called via /etc/init.d/sendmail or directly
+#------------------------------------------------------------------------------
+# Ok, why are we here...
+case "$1" in
+
+	#-----------------------------------------------------------------------
+	# Debian required/optional targets:
+	#-----------------------------------------------------------------------
+	start)
+		log_daemon_msg "Starting $DESC" "$NAME";
+		start_sendmail;
+		log_end_msg $?;
+		;;
+
+	stop|force-stop)
+		log_daemon_msg "Stopping $DESC" "$NAME";
+		stop_sendmail;
+		log_end_msg $?;
+		;;
+
+	restart)
+		log_daemon_msg "Restarting $DESC" "$NAME";
+		# reload is equivalent (but faster) than stop/start !
+		# but... it doesn't honor changes to /etc/mail/sendmail.conf
+		#reload_sendmail;
+		stop_sendmail;
+		start_sendmail;
+		log_end_msg $?;
+		;;
+
+	restart-if-running)
+		if ! is_running mta && ! is_running msp; then
+			echo 'Mail Transport Agent: sendmail is not running';
+		else
+			$0 restart;
+			fi;
+		;;
+
+	reload-if-running)
+		if ! is_running mta && ! is_running msp; then
+			echo 'Mail Transport Agent: sendmail is not running';
+		else
+			$0 reload;
+			fi;
+		;;
+
+	reload|force-reload)
+		log_daemon_msg "Reloading $DESC" "$NAME";
+		reload_sendmail;
+		log_end_msg $?;
+		;;
+
+	#-----------------------------------------------------------------------
+	# Local targets (sendmail commands/aliases) for MSP/MTA split support
+	# These targets will pass along any provided parameters
+	#-----------------------------------------------------------------------
+	newaliases)
+		shift;
+		newaliases $*;
+		;;
+
+	hoststat)
+		shift;
+		hoststat $*;
+		;;
+
+	purgestat)
+		shift;
+		purgestat $*;
+		;;
+
+	mailstats)
+		shift;
+		mailstats $*;
+		;;
+
+	mailq)
+		shift;
+		mailq $*;
+		;;
+
+	runq)
+		shift;
+		runq $*;
+		;;
+
+	control|smcontrol)
+		shift;
+		control $*;
+		;;
+
+	#-----------------------------------------------------------------------
+	# Local targets for extended support/debugging
+	#-----------------------------------------------------------------------
+	status)
+		shift;
+		status $*;
+		;;
+
+	debug)
+		#
+		# If not running, can't debug
+		if is_running msp; then
+			echo -n 'Dumping MSP state...';
+			$SIGNAL_MSP_CMD --signal USR1;
+			echo 'done.';
+			fi;
+		if is_running mta; then
+			echo -n 'Dumping MTA state...';
+			$SIGNAL_MTAL_CMD --signal USR1;
+			echo 'done.';
+			fi;
+		;;
+
+	clean|clean_que*|clean-que*)
+		#
+		# If running, don't clean the queues...
+		if is_running mta; then
+			echo 'MTA is running, queue cleaning ill advised...';
+		else
+			echo -n 'Cleaning up the queues...';
+			clean_queues;
+			echo 'done.';
+			fi;
+		;;
+
+	#-----------------------------------------------------------------------
+	# Local targets for cronjob support
+	#-----------------------------------------------------------------------
+	cron-msp)
+		cron_msp;
+		;;
+
+	cron-mta)
+		cron_mta;
+		;;
+
+	#-----------------------------------------------------------------------
+	# Default target - bitch and moan
+	#-----------------------------------------------------------------------
+	*)
+		echo "Invalid command <$1>";
+		echo "Usage: $0 <command>";
+		echo '	Where <command> is one of the following';
+		echo '	  start|stop|restart|restart-if-running';
+		echo '	  reload-if-running|reload|force-reload';
+		echo '	  newaliases|hoststat|purgestat|mailstats|mailq|runq|control';
+		echo '	  status|debug|clean';
+		exit 1;
+		;;
+	esac;
+
+exit 0;

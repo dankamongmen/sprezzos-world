@@ -1,0 +1,285 @@
+#!/bin/sh -e
+#-----------------------------------------------------------------------------
+#
+# $Sendmail: update_mc,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Update Sendmail databases for Debian
+#
+# Copyright (c) 2000-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes (to all):
+#	* assumes makemap dbtype /etc/mail/database < /etc/mail/database
+#
+# Notes (to self):
+#	* changes made herein *must* be reflected in
+#		parse_mc,update_mk,update_db,debian.m4
+#
+#-----------------------------------------------------------------------------
+set -e;
+
+changed=0;
+
+# Path to other sendmail helpers
+if [ -x ./update_sendmail ]; then
+	sm_path='.';
+elif [ -x $(dirname $0)/update_sendmail ]; then
+	sm_path=$(dirname $0);
+else
+	sm_path=@datadir@/sendmail;
+	fi;
+# Bring in sendmail.conf for the network definitions
+if [ ! -f @sysconfdir@/mail/sendmail.conf ]; then
+	if [ -x $sm_path/update_conf ]; then
+		$sm_path/update_conf;
+		fi;
+	fi;
+if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+	. @sysconfdir@/mail/sendmail.conf;
+	fi;
+if [ "$HANDS_OFF" != 'No' ]; then
+	exit 0;
+	fi;
+
+new_mc () {
+	chown root:smmsp @sysconfdir@/mail/"$1".mc.new;
+	chmod 0644 @sysconfdir@/mail/"$1".mc.new;
+	mv @sysconfdir@/mail/"$1".mc.new @sysconfdir@/mail/"$1".mc;
+	changed=1;
+	};	
+
+#-----------------------------------------------------------------------------
+# Move sendmail.{mc,cf} from /etc/ to /etc/mail
+if [ ! -f @sysconfdir@/mail/sendmail.mc ]; then
+	if [ -f @sysconfdir@/sendmail.mc ]; then
+		echo "Moving /etc/sendmail.* to /etc/mail/";
+		mv @sysconfdir@/sendmail.mc @sysconfdir@/mail/sendmail.mc.new;
+		new_mc sendmail;
+		fi;
+	if [ -f @sysconfdir@/sendmail.cf ]; then
+		mv @sysconfdir@/sendmail.cf @sysconfdir@/mail/sendmail.cf;
+		chown root:smmsp @sysconfdir@/mail/sendmail.cf;
+		chmod 0644 @sysconfdir@/mail/sendmail.cf;
+		changed=1;
+		fi;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Create {submit,sendmail}.mc if needed
+if [ ! -f @sysconfdir@/mail/sendmail.mc ]; then
+	cp -p @datadir@/sendmail/cf/debian/sendmail.mc \
+		@sysconfdir@/mail/sendmail.mc.new;
+	if [ -f @sysconfdir@/mailname ] && [ ! -z @sysconfdir@/mailname ]; then
+		masq=$(cat @sysconfdir@/mailname);
+		echo "dnl # Masquerading options" \
+			>> @sysconfdir@/mail/sendmail.mc.new;
+		echo "FEATURE(\`always_add_domain')dnl" \
+			>> @sysconfdir@/mail/sendmail.mc.new;
+		echo "MASQUERADE_AS(\`${masq}')dnl" \
+			>> @sysconfdir@/mail/sendmail.mc.new;
+		echo "FEATURE(\`allmasquerade')dnl" \
+			>> @sysconfdir@/mail/sendmail.mc.new;
+		echo "FEATURE(\`masquerade_envelope')dnl" \
+			>> @sysconfdir@/mail/sendmail.mc.new;
+		fi;
+	new_mc sendmail;
+	fi;
+if [ ! -f @sysconfdir@/mail/submit.mc ]; then
+	if [ -f @datadir@/sendmail/cf/debian/submit.mc ]; then
+		cp -p @datadir@/sendmail/cf/debian/submit.mc \
+			@sysconfdir@/mail/submit.mc.new;
+		new_mc submit;
+		fi;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Make sure dialup support m4 files are extant
+if [ ! -f @sysconfdir@/mail/m4/dialup.m4 ]; then
+	if [ -f @sysconfdir@/mail/dialup.m4 ]; then
+		mv @sysconfdir@/mail/dialup.m4 @sysconfdir@/mail/m4/dialup.m4;
+	else
+		touch @sysconfdir@/mail/m4/dialup.m4;
+		fi;
+	chown root:smmsp @sysconfdir@/mail/m4/dialup.m4;
+	chmod 0640 @sysconfdir@/mail/m4/dialup.m4;
+	fi;
+if [ ! -f @sysconfdir@/mail/m4/provider.m4 ]; then
+	if [ -f @sysconfdir@/mail/provider.m4 ]; then
+		mv @sysconfdir@/mail/provider.m4 @sysconfdir@/mail/m4/provider.m4;
+	else
+		touch @sysconfdir@/mail/m4/provider.m4;
+		fi;
+	chown root:smmsp @sysconfdir@/mail/m4/provider.m4;
+	chmod 0640 @sysconfdir@/mail/m4/provider.m4;
+	fi;
+if (grep -qEe "^[[:space:]]*include\(\`?@sysconfdir@/mail/dialup.m4" \
+		@sysconfdir@/mail/sendmail.mc); then
+	sed -e "s=^\([[:space:]]*\)include(\`\?@sysconfdir@/mail/dialup\.m4.*$=include(\`@sysconfdir@/mail/m4/dialup\.m4')dnl=" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+if (grep -qEe "^[[:space:]]*include\(\`?@sysconfdir@/mail/provider.m4" \
+		@sysconfdir@/mail/sendmail.mc); then
+	sed -e "s=^\([[:space:]]*\)include(\`\?@sysconfdir@/mail/provider\.m4.*$=include(\`@sysconfdir@/mail/m4/provider\.m4')dnl=" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Make sure not using text mailertable (it doesn't work)
+if (grep -qEe "^[[:space:]]*FEATURE\(\`?mailertable'?, \`text /etc/mail/mailertable'\)" \
+		@sysconfdir@/mail/sendmail.mc); then
+	echo "Correcting FEATURE(mailertable) in /etc/mail/sendmail.mc";
+	sed -e "s=^\([[:space:]]*\)\(\`\?\)FEATURE(\`\?mailertable'\?, \`text /etc/mail/mailertable')\(dnl\)\?=\1\2FEATURE(\`mailertable')dnl=g" \
+		 @sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Make sure smrsh points to the correct location
+if (grep -qEe "^[[:space:]]*\`?FEATURE\(\`?smrsh'?[[:space:]]*,.*\)" \
+	@sysconfdir@/mail/sendmail.mc); then
+	echo "Correcting FEATURE(smrsh) in /etc/mail/sendmail.mc";
+	sed -e "s=\([[:space:]]*\)\(\`\?\)FEATURE(\`\?smrsh'\?[[:space:]]*,.*)\(dnl\)\?=\1\2FEATURE(\`smrsh')dnl=g" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Convert FEATURE(nouucp) to FEATURE(nouucp,reject)
+if (grep -qEe "^[[:space:]]*\`?FEATURE\(\`?nouucp'?\)" \
+	@sysconfdir@/mail/sendmail.mc); then
+	echo "Correcting FEATURE(nouucp) in /etc/mail/sendmail.mc";
+	sed -e "s=^\([[:space:]]*\)\(\`\?\)FEATURE(\`\?nouucp'\?)\(dnl\)\?=\1\2FEATURE(\`nouucp', \`reject')dnl=g" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Convert FEATURE(dont_masquerade_local) to FEATURE(local_no_masquerade)
+if [ -e @datadir@/sendmail/cf/feature/local_no_masquerade.m4 ]; then
+	if (grep -qEe "^[[:space:]]*\`?FEATURE\(\`?dont_masquerade_local'?\)" \
+		@sysconfdir@/mail/sendmail.mc); then
+		echo "Correcting FEATURE(dont_masquerade_local) in /etc/mail/sendmail.mc";
+		sed -e "s=^\([[:space:]]*\)\(\`\?\)FEATURE(\`\?dont_masquerade_local'\?)\(dnl\)\?=\1\2FEATURE(\`local_no_masquerade')dnl=g" \
+			@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+		new_mc sendmail;
+		fi;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Convert FEATURE(access_db,...) to FEATURE(access_db)
+if (grep -qEe "^[[:space:]]*\`?FEATURE\(\`?access_db'?[[:space:]]*,.*\)" \
+	@sysconfdir@/mail/sendmail.mc); then
+	sed -e "s=^\([[:space:]]*\)\(\`\?\)FEATURE(\`\?access_db'\?[[:space:]]*,[[:space:]]*\`\?hash[[:space:]]*\(-o\)\?[[:space:]]*/etc/mail/access.db'\?[[:space:]]*)\(dnl\)\?=\1\2FEATURE(\`access_db')dnl=g" \
+	@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# change include(/usr/share/sendmail/sendmail.cf/m4/cf.m4)
+if (grep -qEe "^[[:space:]]*\`?include\(\`?@datadir@/sendmail/sendmail.cf/m4/cf.m4'?\)" \
+	@sysconfdir@/mail/sendmail.mc); then
+	sed -e "s=sendmail/sendmail.cf=sendmail/cf=g" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	if [ -f @sysconfdir@/mail/submit.mc ]; then
+		sed -e "s=sendmail/sendmail.cf=sendmail/cf=g" \
+			@sysconfdir@/mail/submit.mc > @sysconfdir@/mail/submit.mc.new;
+		new_mc submit;
+		fi;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Add include(/usr/share/sendmail/cf/m4/cf.m4)
+if (grep -qEe "^[[:space:]]*\`?include\(\`?@datadir@/sendmail/cf/m4/cf.m4'?\)" \
+	@sysconfdir@/mail/sendmail.mc); then
+	:;
+else
+	echo "Adding include(.../cf.m4) to /etc/mail/sendmail.mc";
+	sed -e "s=^\([[:space:]]*\)\(\`\?\)VERSIONID(=\1\2include(\`@datadir@/sendmail/cf/m4/cf.m4')dnl\\
+\1\2VERSIONID(=" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Add define(`_USE_ETC_MAIL_')dnl
+if (grep -qEe "^[[:space:]]*\`?define\(\`?_USE_ETC_MAIL_" \
+	@sysconfdir@/mail/sendmail.mc); then
+	:;
+else
+	sed -e "s=^\([[:space:]]*\)\(\`\?\)include(\`\?@datadir@/sendmail/cf/m4/cf.m4'\?)\(dnl\)\?=\1\2define(\`_USE_ETC_MAIL_')dnl\\
+include(\`@datadir@/sendmail/cf/m4/cf.m4')dnl=" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Check for badness
+if (grep -qEe "^[[:space:]]*\`?OSTYPE\(\`?linux'?\)" \
+	@sysconfdir@/mail/sendmail.mc); then
+	sed -e 	"s=^\([[:space:]]*\)\(\`\?\)OSTYPE(\`\?linux'\?)\(dnl\)\?=\1\2OSTYPE(\`debian')dnl=" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+		new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Add DOMAIN(debian-mta)
+if (grep -qEe "^[[:space:]]*\`?DOMAIN\(\`?debian-mta'?\)" \
+	@sysconfdir@/mail/sendmail.mc); then
+	:;
+else
+	echo "Adding DOMAIN(debian-mta) to /etc/mail/sendmail.mc";
+	sed -e "s=^\([[:space:]]*\)\(\`\?\)OSTYPE(\`\?debian'\?)\(dnl\)\?=\1\2OSTYPE(\`debian')dnl\\
+\1\2DOMAIN(\`debian-mta')dnl=" \
+		@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Add sendmail.conf customization area
+if (grep -qEe "^dnl # Items controlled by /etc/mail/sendmail.conf" \
+	@sysconfdir@/mail/sendmail.mc); then
+	:;
+else
+	echo "Adding sendmail.conf customization area to /etc/mail/sendmail.mc";
+	sed -e "s=^\([[:space:]]*\)\(\`\?\)DOMAIN(\`\?debian-mta'\?)\(dnl\)\?=\1\2DOMAIN(\`debian-mta')dnl\\
+dnl # Items controlled by /etc/mail/sendmail.conf - DO NOT TOUCH HERE \\
+dnl undefine(\`confHOST_STATUS_DIRECTORY')dnl		#DAEMON_HOSTSTATS \\
+dnl # Items controlled by /etc/mail/sendmail.conf - DO NOT TOUCH HERE=" \
+	@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+	new_mc sendmail;
+	fi;
+
+#-----------------------------------------------------------------------------
+# Update items in sendmail.conf customization area
+case "$DAEMON_HOSTSTATS" in
+	[Nn]*)
+		if (grep -qEe "^dnl undefine\(\`confHOST_STATUS_DIRECTORY'\)dnl" \
+			@sysconfdir@/mail/sendmail.mc); then
+			echo "Turning off Host Status collection";
+			sed -e "s=^dnl undefine(\`confHOST_STATUS_DIRECTORY')dnl=undefine(\`confHOST_STATUS_DIRECTORY')dnl=" \
+			@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+			new_mc sendmail;
+			fi;
+		;;
+	[Yy]*)
+		if (grep -qEe "^undefine\(\`confHOST_STATUS_DIRECTORY'\)dnl" \
+			@sysconfdir@/mail/sendmail.mc); then
+			echo "Turning on Host Status collection";
+			sed -e "s=^undefine(\`confHOST_STATUS_DIRECTORY')dnl=dnl undefine(\`confHOST_STATUS_DIRECTORY')dnl=" \
+			@sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+			new_mc sendmail;
+			fi;
+	esac;
+
+#-----------------------------------------------------------------------------
+# Cleanup submit.mc
+if [ -f @sysconfdir@/mail/submit.mc ]; then
+	sed -e "/^define(\`\?confRUN_AS_USER'\?,.*$/d" \
+		-e "/^define(\`\?confTRUSTED_USER'\?,.*$/d" \
+		@sysconfdir@/mail/submit.mc > @sysconfdir@/mail/submit.mc.new;
+	new_mc submit;
+	fi;
+
+exit $changed;

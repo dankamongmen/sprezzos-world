@@ -1,0 +1,319 @@
+#!/bin/sh -e
+#-----------------------------------------------------------------------------
+#
+# $Sendmail: update_tls,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Sendmail support for TLS
+#
+# Copyright (c) 2000-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes:
+#
+#-----------------------------------------------------------------------------
+set -e;
+
+#------------------------------------------------------------------------------
+# Local variables
+#---------------------------------------------------------------------------
+HOSTNAME=`hostname -s`;
+DOMAINNAME=`hostname -d`;
+MAILNAME=`cat /etc/mailname 2> /dev/null || hostname -f`;
+SSL_FQDN=`hostname -f`;
+SSL_EMAIL="admin@${MAILNAME}";
+export SSL_FQDN SSL_EMAIL;
+PROGRAM='sendmail';
+CERT_DIR="@sysconfdir@/ssl/certs";
+COM_PRM="@sysconfdir@/mail/tls/$PROGRAM-common.prm";
+COM_KEY="@sysconfdir@/mail/tls/$PROGRAM-common.key";
+MTA_CFG="@sysconfdir@/mail/tls/$PROGRAM-server.cfg";
+MTA_CSR="@sysconfdir@/mail/tls/$PROGRAM-server.csr";
+MTA_CRT="@sysconfdir@/mail/tls/$PROGRAM-server.crt";
+MSP_CFG="@sysconfdir@/mail/tls/$PROGRAM-client.cfg";
+MSP_CSR="@sysconfdir@/mail/tls/$PROGRAM-client.csr";
+MSP_CRT="@sysconfdir@/mail/tls/$PROGRAM-client.crt";
+NEW=0;
+REFD=0;
+
+# Path to other sendmail helpers
+if [ -x ./update_sendmail ]; then
+	sm_path='.';
+elif [ -x $(dirname $0)/update_sendmail ]; then
+	sm_path=$(dirname $0);
+else
+	sm_path=@datadir@/sendmail;
+	fi;
+# Bring in sendmail.conf for the network definitions
+if [ ! -f @sysconfdir@/mail/sendmail.conf ]; then
+	if [ -x $sm_path/update_conf ]; then
+		$sm_path/update_conf;
+		fi;
+	fi; 
+if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+	. @sysconfdir@/mail/sendmail.conf;
+	fi;
+if [ "$HANDS_OFF" != 'No' ]; then
+	exit 0;
+	fi;
+
+#---------------------------------------------------------------------------
+# create_config: Function to create openssl configuration file
+#---------------------------------------------------------------------------
+create_config () {
+cat >$MTA_CFG <<EOT
+[ ca ]
+default_days	= 3650
+x509_extensions = X509v3
+[ req ]
+default_bits					= 2048
+distinguished_name				= req_DN
+[ req_DN ]
+countryName						= "1. Country Name			   (2 letter code)"
+countryName_min					= 2
+countryName_max					= 2
+countryName_default				= 
+stateOrProvinceName				= "2. State or Province Name   (full name)	  "
+stateOrProvinceName_default		= 
+localityName					= "3. Locality Name			   (eg, city)	  "
+localityName_default			= 
+0.organizationName				= "4. Organization Name		   (eg, company)  "
+0.organizationName_default		= Sendmail
+organizationalUnitName			= "5. Organizational Unit Name (eg, section)  "
+organizationalUnitName_default	= Sendmail Server
+commonName						= "6. Common Name			   (MUST==FQDN)   "
+commonName_max					= 64
+commonName_default				= \$ENV::SSL_FQDN
+emailAddress					= "7. Email Address			   (eg, name@FQDN)"
+emailAddress_max				= 40
+emailAddress_default			= \$ENV::SSL_EMAIL
+[ x509v3 ]
+subjectAltName	 = email:copy
+issuerAltName	 = issuer:copy
+basicConstraints = CA:false
+nsComment		 = "Sendmail generated custom certificate"
+nsCertType		 = server
+nsSslServerName  = \$ENV::SSL_FQDN
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid,issuer:always
+EOT
+};
+
+
+#---------------------------------------------------------------------------
+# Check if OpenSSL is installed
+if [ ! -d "$CERT_DIR" ]; then
+	cat <<-EOT
+
+	OpenSSL is not installed, will not configure sendmail support for it.
+
+	to install openssl, get openssl.
+
+	To enable sendmail TLS support at a later date, invoke "$0"
+
+	EOT
+	exit 0;
+	fi;
+
+echo ' ';
+echo 'Creating/Updating SSL(for TLS) information';
+
+
+#---------------------------------------------------------------------------
+# Process arguments
+#---------------------------------------------------------------------------
+case "$1" in
+	[Nn][Ee][Ww]* | \
+	[Rr][Ee][Nn][Ee][Ww]* | \
+	[Rr][Ee][Ss][Ii][Gg][Nn]*)
+		echo 'Removing any pre-existing sendmail certificates.';
+		if [ -x @bindir@/openssl ]; then
+			if [ -f $MTA_CRT ]; then
+				LINK="$CERT_DIR/"$(openssl x509 -noout -hash < $MTA_CRT)".0";
+				rm -f $LINK 2>/dev/null;
+				fi;
+			if [ -f $MSP_CRT ]; then
+				LINK="$CERT_DIR/"$(openssl x509 -noout -hash < $MSP_CRT)".0";
+				rm -f $LINK 2>/dev/null;
+				fi;
+			fi;
+		rm -f $MTA_CSR $MTA_CRT 2>/dev/null;
+		rm -f $MSP_CSR $MSP_CRT 2>/dev/null;
+		rm -f $COM_PRM $COM_KEY 2>/dev/null;
+		;;
+	esac
+
+#---------------------------------------------------------------------------
+# Make sure sendmail.mc points to proper /etc/mail/tls/starttls.m4
+if [ -f @sysconfdir@/mail/sendmail.mc ]; then
+	if (grep -qEe "^[[:space:]]*include\(\`?@sysconfdir@/mail/starttls.m4" \
+		@sysconfdir@/mail/sendmail.mc); then
+		sed -e "s=^\([[:space:]]*\)\(\`\?\)include(\`\?@sysconfdir@/mail/starttls.m4'\?)\(dnl\)\?=\1\2include(\`@sysconfdir@/mail/tls/starttls.m4')dnl=g" \
+			 @sysconfdir@/mail/sendmail.mc > @sysconfdir@/mail/sendmail.mc.new;
+		chown root:smmsp @sysconfdir@/mail/sendmail.mc.new;
+		chmod 0644 @sysconfdir@/mail/sendmail.mc.new;
+		mv @sysconfdir@/mail/sendmail.mc.new @sysconfdir@/mail/sendmail.mc;
+		fi;
+	fi;
+if [ -f @sysconfdir@/mail/submit.mc ]; then
+	if (grep -qEe "^[[:space:]]*include\(\`?@sysconfdir@/mail/starttls.m4" \
+		@sysconfdir@/mail/submit.mc); then
+		sed -e "s=^\([[:space:]]*\)\(\`\?\)include(\`\?@sysconfdir@/mail/starttls.m4'\?)\(dnl\)\?=\1\2include(\`@sysconfdir@/mail/tls/starttls.m4')dnl=g" \
+			 @sysconfdir@/mail/submit.mc > @sysconfdir@/mail/submit.mc.new;
+		chown root:smmsp @sysconfdir@/mail/submit.mc.new;
+		chmod 0644 @sysconfdir@/mail/submit.mc.new;
+		mv @sysconfdir@/mail/submit.mc.new @sysconfdir@/mail/submit.mc;
+		fi;
+	fi;
+
+#---------------------------------------------------------------------------
+# check for references to starttls.m4 in sendmail.mc
+if [ -f @sysconfdir@/mail/sendmail.mc ]; then
+	if grep -qEe "^[[:space:]]*include\(\`?@sysconfdir@/mail/tls/starttls.m4" \
+		@sysconfdir@/mail/sendmail.mc; then
+		REFD=1;
+		fi;
+	fi;
+
+#---------------------------------------------------------------------------
+# Make sure prototype /etc/mail/tls/starttls.m4 exists
+mkdir -p @sysconfdir@/mail/tls 2>/dev/null;
+chown smmta:smmsp @sysconfdir@/mail/tls;
+chmod 0755 @sysconfdir@/mail/tls;
+$sm_path/update_tlsm4 || true;
+
+#---------------------------------------------------------------------------
+# check for SSL
+if [ -d "$CERT_DIR" ]; then
+	if [ -f $MTA_CRT ] && [ -f $MSP_CRT ]; then
+		echo 'You already have sendmail certificates';
+		echo ' ';
+		chown root:smmsp $COM_PRM;
+		chown root:smmsp $COM_KEY;
+		chown root:smmsp $MTA_CRT;
+		chown root:smmsp $MSP_CRT;
+	else
+		if [ -x @bindir@/openssl ]; then
+			yn="Y";
+		else
+			cat <<-EOT
+			$PROGRAM needs openssl (not installed) to create a
+			certificate to validate users
+
+			If you don't need a certificate, say No
+			If you want a certificate, install openssl and say Yes
+
+			Do you wish to create a certificate?
+			EOT
+			read yn;
+			yn=$(echo -n "$yn" | sed -e "s/^\ *//" -e "s/^\t*//");
+			test -n "$yn" || yn="N";
+			fi;
+
+		# Create new (self-signed) certificate
+		case "$yn" in
+		   [Yy]*)
+			echo "Creating SSL certificates for sendmail.";
+			# Create prompt file
+			if [ ! -f @sysconfdir@/mail/tls/no_prompt ]; then
+				cat >@sysconfdir@/mail/tls/no_prompt <<-EOT
+
+
+
+
+
+
+
+				EOT
+				fi;
+
+			# Create config files
+			if [ ! -f $MTA_CFG ]; then
+				create_config;
+				chmod 0600 $MTA_CFG;
+				fi;
+			if [ ! -f $MSP_CFG ]; then
+				sed -e "s/Sendmail Server/Sendmail Client/" \
+					$MTA_CFG > $MSP_CFG;
+				chmod 0600 $MSP_CFG;
+				fi;
+			# Create shared DSA/DH password parameters
+			if [ ! -s $COM_PRM ]; then
+				openssl dsaparam 2048 -out $COM_PRM;
+				openssl dhparam -dsaparam -in $COM_PRM >> $COM_PRM;
+				chown root:smmsp $COM_PRM;
+				chmod 0640 $COM_PRM;
+				fi;
+			# Create shared DSA/RSA key (RSA preferred for browser support)
+			if [ ! -f $COM_KEY ]; then
+				openssl genrsa -out $COM_KEY 2048;
+				#openssl gendsa -out $COM_KEY $COM_PRM;
+				chown root:smmsp $COM_KEY;
+				chmod 0640 $COM_KEY;
+				fi;
+			# sendmail requires that CN=fqdn
+			# Prompts:	1) Country Name (2 letter code)
+			#			2) State or Province Name
+			#			3) Locality Name (eg, city)
+			#			4) Organization Name (eg, company)
+			#			5) Organizational Unit Name (eg, section)
+			#			6) Common Name (eg, YOUR name)
+			#			7) Email Address
+			if [ ! -f $MTA_CRT ]; then
+				openssl req -new -config $MTA_CFG -key $COM_KEY \
+					-out $MTA_CSR \
+					<@sysconfdir@/mail/tls/no_prompt >/dev/null 2>&1;
+				chmod 0600 $MTA_CSR;
+				openssl x509 -req -extfile $MTA_CFG \
+					-signkey $COM_KEY -in $MTA_CSR \
+					-out $MTA_CRT -days 3650 \
+					>/dev/null 2>&1;
+				chown root:smmsp $MTA_CRT;
+				chmod 0644 $MTA_CRT;
+				fi;
+			if [ ! -f $MSP_CRT ]; then
+				openssl req -new -config $MSP_CFG -key $COM_KEY \
+					-out $MSP_CSR \
+					<@sysconfdir@/mail/tls/no_prompt >/dev/null 2>&1;
+				chmod 0600 $MSP_CSR;
+				openssl x509 -req -extfile $MSP_CFG \
+					-signkey $COM_KEY -in $MSP_CSR \
+					-out $MSP_CRT -days 3650 \
+					>/dev/null 2>&1;
+				chown root:smmsp $MSP_CRT;
+				chmod 0644 $MSP_CRT;
+				fi;
+		   esac;
+		fi;
+
+	# Create hash link for new certificate (must do msp last!)
+	if [ -f $MTA_CRT ]; then
+		LINK="$CERT_DIR/"$(openssl x509 -noout -hash < $MTA_CRT)".0";
+		if [ ! -f $LINK ]; then
+			ln -sf $MTA_CRT $LINK;
+			fi;
+		fi;
+	if [ -f $MSP_CRT ]; then
+		LINK="$CERT_DIR/"$(openssl x509 -noout -hash < $MSP_CRT)".0";
+		if [ ! -f $LINK ]; then
+			ln -sf $MSP_CRT $LINK;
+			fi;
+		fi;
+	fi;
+
+if [ $REFD -eq 0 ]; then
+	cat <<-EOT
+	
+	*** *** *** WARNING *** WARNING *** WARNING *** WARNING *** *** ***
+
+	Everything you need to support STARTTLS (encrypted mail transmission
+	and user authentication via certificates) is installed and configured
+	but is *NOT* being used.
+
+	To enable sendmail to use STARTTLS, you need to:
+		1) Add this line to @sysconfdir@/mail/sendmail.mc and optionally
+		   to @sysconfdir@/mail/submit.mc:
+			  include(\`@sysconfdir@/mail/tls/starttls.m4')dnl
+		2) Run sendmailconfig
+		3) Restart sendmail
+
+	EOT
+	fi;

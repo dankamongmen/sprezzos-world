@@ -1,0 +1,138 @@
+#!/bin/sh -e
+#
+# Debian pre removal script
+#
+# Install of already installed package:
+#	1) old-prerm upgrade new-version
+#		*) new-prerm failed-upgrade old-version
+#			*) old-postinst abort-upgrade new-version
+#
+# If a `conflicting' package is being removed at the same time:
+#	1) forall packages depending on conflicting package and --auto-deconfigure
+#		deconfigured's-prerm deconfigure \
+#			in-favour package-being-installed version \
+#			removing conflicting-package version
+#		*) deconfigured's-postinst abort-deconfigure \
+#				in-favour package-being-installed-but-failed version \
+#				removing conflicting-package version
+#	2) To prepare for removal of the conflicting package
+#		conflictor's-prerm remove \
+#			in-favour package new-version
+#		*) conflictor's-postinst abort-remove \
+#				in-favour package new-version
+#
+# Removal of a package:
+#	1) prerm remove
+#	2) The package's files are removed (except conffiles).
+#	3) postrm remove
+#	4) All the maintainer scripts except the postrm are removed.
+#
+set -e;
+
+PACKAGE=sendmail-base;
+
+case "$1" in
+	remove)
+		if [ ! -z "$2" ]; then
+			echo "Removing $PACKAGE $2 $3($4)";
+			fi;
+
+		if [ -x /usr/sbin/update-inetd ]; then
+			update-inetd --group MAIL --disable smtp,smtps,submission;
+			fi;
+
+		# Make sure /etc/aliases is left (move it from /etc/mail if needed)
+		if [ -L @sysconfdir@/mail/aliases ]; then
+			rm -f @sysconfdir@/mail/aliases;
+		elif [ -f @sysconfdir@/mail/aliases ] \
+		&&   [ -L /etc/aliases ]; then
+			mv @sysconfdir@/mail/aliases /etc/aliases;
+			fi;
+
+		# Remove psuedo conffiles (managed by sendmail)
+		rm -f	@sysconfdir@/cron.d/sendmail;
+
+		# Remove files scattered across the system that
+		# happened to be created by sendmail
+		rm -f @libdir@/sasl/Sendmail.conf;
+
+		# Remove those files created by sendmail
+		rm -rf	@localstatedir@/lib/sendmail;
+		rm -rf	@localstatedir@/run/sendmail;
+		# Note: syslog really owns these files
+		#rm -f	@localstatedir@/log/mail/*;
+		#rm -f	@localstatedir@/log/mail.log;
+		# Note: these can lead to a loss of mail!!!!
+		if [ -x @sysconfdir@/init.d/sendmail ]; then
+			@sysconfdir@/init.d/sendmail clean;
+			fi;
+		if [ -L @localstatedir@/spool/mqueue ]; then
+			rmdir --ignore-fail-on-non-empty \
+			`readlink -fn @localstatedir@/spool/mqueue`;
+		elif [ -d @localstatedir@/spool/mqueue ]; then
+			rmdir	--ignore-fail-on-non-empty \
+				@localstatedir@/spool/mqueue;
+			fi;
+		if [ -L @localstatedir@/spool/mqueue-client ]; then
+			rmdir	--ignore-fail-on-non-empty \
+			`readlink -fn @localstatedir@/spool/mqueue-client`;
+		elif [ -d @localstatedir@/spool/mqueue-client ]; then
+			rmdir	--ignore-fail-on-non-empty \
+				@localstatedir@/spool/mqueue-client;
+			fi;
+
+		# Remove sendmail built configuration files
+		rm -f	@sysconfdir@/mail/*.db \
+			@sysconfdir@/mail/*.dir \
+			@sysconfdir@/mail/*.pag;
+		rm -f	@sysconfdir@/mail/sendmail.cf \
+			@sysconfdir@/mail/sendmail.cf.old \
+			@sysconfdir@/mail/sendmail.cf.errors \
+			@sysconfdir@/mail/sendmail.mc.old \
+			@sysconfdir@/mail/submit.cf \
+			@sysconfdir@/mail/submit.cf.errors \
+			@sysconfdir@/mail/submit.mc.old \
+			@sysconfdir@/mail/databases \
+			@sysconfdir@/mail/Makefile \
+			;
+		rm -rf @sysconfdir@/mail/smrsh \
+			@sysconfdir@/mail/sasl \
+			@sysconfdir@/mail/tls;
+
+		# Remove empty files (probably touched databases)
+		find @sysconfdir@/mail -maxdepth 1 -size 0 | xargs -r rm;
+		;;
+
+	upgrade)
+		# Potentially move the old configuration file to the new name -
+		# before it gets deleted (for not existing in the new package)
+		mv -f @sysconfdir@/default/sendmail \
+			@sysconfdir@/mail/sendmail.conf 2>/dev/null || true;
+
+		# Prevent cronjob from running during upgrade...
+		if [ -f /etc/cron.d/sendmail ]; then
+			echo "#prerm" > @sysconfdir@/cron.d/sendmail;
+			fi;
+		;;
+
+	failed-upgrade)
+		;;
+
+	deconfigure)
+		echo "Deconfigure of $PACKAGE $2 $3($4) $5 $6($7) ";
+		;;
+
+	*)
+		echo "$PACKAGE prerm called with unknown argument \`$1'" >&2;
+		exit 1;
+		;;
+	esac;
+
+# The @DEBHELPER@ stuff causes problems with upgrades because of the
+# length of time that Sendmail is stopped...
+
+#
+# Included for sanity checks
+#
+#DEBHELPER#
+exit 0;

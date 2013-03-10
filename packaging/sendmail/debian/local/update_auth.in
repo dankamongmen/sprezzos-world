@@ -1,0 +1,349 @@
+#!/bin/sh -e
+#-----------------------------------------------------------------------------
+#
+# $Sendmail: update_auth,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Sendmail support for SMTP AUTH (SASL)
+#
+# Copyright (c) 2000-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes:
+#
+#-----------------------------------------------------------------------------
+set -e;
+
+NEW=0;
+DEFAULT=0;
+HOSTNAME=`hostname -s`;
+HOSTFQDN=`hostname -f`;
+DOMAINNAME=`hostname -d`;
+SMUID=sendmail;
+SMAID=sendmail;
+SMPWD=sendmailpwd;
+SMRLM="$HOSTNAME.$DOMAINNAME";
+SMMCH='';
+
+# Path to other sendmail helpers
+if [ -x ./update_sendmail ]; then
+	sm_path='.';
+elif [ -x $(dirname $0)/update_sendmail ]; then
+	sm_path=$(dirname $0);
+else
+	sm_path=@datadir@/sendmail;
+	fi;
+# Bring in sendmail.conf for the network definitions
+if [ ! -f @sysconfdir@/mail/sendmail.conf ]; then
+	if [ -x $sm_path/update_conf ]; then
+		$sm_path/update_conf;
+		fi;
+	fi; 
+if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+	. @sysconfdir@/mail/sendmail.conf;
+	fi;
+if [ "$HANDS_OFF" != 'No' ]; then
+	exit 0;
+	fi;
+
+# See what sendmail was linked with
+if [ "@sm_enable_auth@" != "yes" ]; then
+	echo "SASL support not included in sendmail, skipping...";
+	exit 0;
+elif [ @sm_auth_lib@ -eq 2 ]; then
+	SASLDBLISTUSERS='/usr/sbin/sasldblistusers2';
+	SASLPASSWD='/usr/sbin/saslpasswd2';
+	SASLLIB='/usr/lib/sasl2';
+	SASLSO='2';
+	SASLDB='/etc/sasldb2';
+	SASL_BIN='sasl2-bin';
+	SASL_LIB='libsasl2';
+	SASL='SASL2';
+elif [ @sm_auth_lib@ -eq 1 ]; then
+	SASLDBLISTUSERS='/usr/sbin/sasldblistusers';
+	SASLPASSWD='/usr/sbin/saslpasswd';
+	SASLLIB='/usr/lib/sasl';
+	SASLSO='1';
+	SASLDB='/etc/sasldb';
+	SASL_BIN='sasl-bin';
+	SASL_LIB='libsasl';
+	SASL='SASL';
+	fi;	
+
+# Check if SASL is installed
+if [ ! -d ${SASLLIB} ]; then
+	cat <<-EOT
+
+		${SASL} not installed, not configuring sendmail support.
+
+		EOT
+	if [ "${SASLSO}" = '1' ]; then
+		cat <<-EOT
+		To install ${SASL}, get ${SASL_BIN}, ${SASL_LIB}-modules-plain,
+		${SASL_LIB}-digestmd5-plain or ${SASL_LIB}-digestmd5-des.
+		EOT
+	else
+		cat <<-EOT
+		To install ${SASL}, get ${SASL_BIN} and ${SASL_LIB}-modules.
+		EOT
+		fi;
+	cat <<-EOT
+
+		To enable sendmail ${SASL} support at a later date, invoke "$0"
+
+		EOT
+	exit 0;
+	fi;
+
+# Check for sasl-bin (wherein resides saslpasswd)
+if [ ! -x ${SASLPASSWD} ]; then
+	cat <<-EOT
+		${SASL_BIN} not installed, not configuring sendmail support.
+
+		To enable sendmail ${SASL} support at a later date, invoke "$0"
+
+		EOT
+	exit 0;
+	fi;
+#echo " ";
+#echo "Creating/Updating ${SASL} information";
+touch @sysconfdir@/mail/tsasl;
+if chown root:sasl @sysconfdir@/mail/tsasl 2>/dev/null; then
+	adduser smmta sasl 1>/dev/null 2>&1;
+	adduser smmsp sasl 1>/dev/null 2>&1;
+	fi;
+	rm @sysconfdir@/mail/tsasl;
+
+# See if we need to rename an existing SASL info file
+if [ -f @sysconfdir@/mail/auth-info ] \
+&&	[ ! -f @sysconfdir@/mail/default-auth-info ]; then
+	mv @sysconfdir@/mail/auth-info \
+		@sysconfdir@/mail/default-auth-info;
+	fi;
+
+# Use exisisting SASL auth information
+if [ -f @sysconfdir@/mail/default-auth-info ]; then
+	SMUID=$(head -n1 @sysconfdir@/mail/default-auth-info);
+	SMAID=$(head -n2 @sysconfdir@/mail/default-auth-info | tail -n1 -);
+	SMPWD=$(head -n3 @sysconfdir@/mail/default-auth-info | tail -n1 -);
+	SMRLM=$(head -n4 @sysconfdir@/mail/default-auth-info | tail -n1 -);
+	SMMCH=$(head -n5 @sysconfdir@/mail/default-auth-info | tail -n1 -);
+	fi;
+
+# Check for default settings, used in later test
+if [ "$SMUID" = 'sendmail' ] \
+&& [ "$SMAID" = 'sendmail' ] \
+&& [ "$SMPWD" = 'sendmailpwd' ]; then
+	DEFAULT=1;
+	fi;
+
+# Create Default SASL auth information
+if [ ! -f @sysconfdir@/mail/default-auth-info ]; then
+	cat <<-EOT > @sysconfdir@/mail/default-auth-info
+	$SMUID
+	$SMAID
+	$SMPWD
+	$SMRLM
+	$SMMCH
+	EOT
+	fi;
+
+# Create any missing SASL configuration files
+if [ -d ${SASLLIB} ]; then
+	# SASL password configuration
+	if [ ! -f ${SASLLIB}/saslpasswd.conf ]; then
+		NEW=1;
+		cp @datadir@/sendmail/examples/sasl/saslpasswd.conf.${SASLSO} \
+			${SASLLIB}/saslpasswd.conf;
+		fi;
+	chown root:root ${SASLLIB}/saslpasswd.conf;
+	chmod 0640 ${SASLLIB}/saslpasswd.conf;
+
+	# Sendmail SASL configuration
+	if [ -L ${SASLLIB}/Sendmail.conf ]; then
+		ln -sf @sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO} \
+			${SASLLIB}/Sendmail.conf;
+	else
+		if [ -f ${SASLLIB}/Sendmail.conf ]; then
+			mv ${SASLLIB}/Sendmail.conf \
+				@sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO};
+			fi;
+		ln -sf @sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO} \
+			${SASLLIB}/Sendmail.conf;
+		fi;
+
+	# Make sure libraries are properly installed...
+	( cd ${SASLLIB} && \
+	if [ -L libanonymous.so.${SASLSO} ] && [ ! -L libanonymous.so ]; then \
+		ln -s libanonymous.so.${SASLSO} libanonymous.so; \
+		fi; \
+	if [ -L libcrammd5.so.${SASLSO} ] && [ ! -L libcrammd5.so ]; then \
+		ln -s libcrammd5.so.${SASLSO} libcrammd5.so; \
+		fi; \
+	if [ -L libdigestmd5.so.${SASLSO} ] && [ ! -L libdigestmd5.so ]; then \
+		ln -s libdigestmd5.so.${SASLSO} libdigestmd5.so; \
+		fi; \
+	if [ -L libdigestmd5.so.0 ] && [ ! -L libdigestmd5.so ]; then \
+		ln -s libdigestmd5.so.0 libdigestmd5.so; \
+		fi; \
+	if [ -L libgssapiv2.so.${SASLSO} ] && [ ! -L libgssapiv2.so ]; then \
+		ln -s libgssapiv2.so.${SASLSO} libgssapiv2.so; \
+		fi; \
+	if [ -L liblogin.so.${SASLSO} ] && [ ! -L liblogin.so ]; then \
+		ln -s liblogin.so.${SASLSO} liblogin.so; \
+		fi; \
+	if [ -L liblogin.so.0 ] && [ ! -L liblogin.so ]; then \
+		ln -s liblogin.so.0 liblogin.so; \
+		fi; \
+	if [ -L libplain.so.${SASLSO} ] && [ ! -L libplain.so ]; then \
+		ln -s libplain.so.${SASLSO} libplain.so; \
+		fi; )
+	fi;
+
+# Create/update sendmail SASL files
+chown smmta:smmsp @sysconfdir@/mail/sasl;
+chmod 0755 @sysconfdir@/mail/sasl;
+if [ ! -f @sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO} ] \
+&& [ -f @sysconfdir@/mail/sasl/Sendmail.conf ]; then
+		mv @sysconfdir@/mail/sasl/Sendmail.conf \
+			@sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO};
+	fi;
+if [ ! -f @sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO} ]; then
+	NEW=1;
+	cp @datadir@/sendmail/examples/sasl/Sendmail.conf.${SASLSO} \
+		@sysconfdir@/mail/sasl/;
+	fi;
+chown smmta:smmsp @sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO};
+chmod 0640 @sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO};
+
+#---------------------------------------------------------------------------
+# Make sure prototype /etc/mail/sasl/sasl.m4 exists
+$sm_path/update_authm4 || true;
+
+# Recommend PAM for sendmail authorization
+if [ "${SASLSO}" = "2" ]; then
+	if grep -qEe '^[[:space:]]*auto_transition:[[:space:]]*false' \
+		@sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO}; then
+		sed -e \
+			's?^[[:space:]]*auto_transition:.*$?auto_transition: true?' \
+			@sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO} \
+			> @sysconfdir@/mail/sasl/Sendmail.conf.new;
+		fi;
+	if [ -f @sysconfdir@/mail/sasl/Sendmail.conf.new ]; then
+		chown smmta:smmsp @sysconfdir@/mail/sasl/Sendmail.conf.new;
+		chmod 0644 @sysconfdir@/mail/sasl/Sendmail.conf.new;
+		mv @sysconfdir@/mail/sasl/Sendmail.conf.new \
+		@sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO};
+		fi;
+
+	cat <<-EOT
+	
+	Ah, you're setup with SASL${SASLSO} !
+
+	Unfortunately, there is no automagic way to migrate to ${SASLDB} :(
+
+	You'll want to make sure /etc/default/saslauthd is setup to start,
+	and has at least MECHANISMS="pam" !
+
+	If you find out what more is needed, please let me know!
+	EOT
+else 
+	if ! grep -qEe "^[[:space:]]*pwcheck_method:[[:space:]]*PAM" \
+		${SASLLIB}/Sendmail.conf; then
+		cat <<-EOT
+
+		It is *strongly* recommended that you use PAM as the authentication
+		method for sendmail via ${SASL}.  Doing so will allow *all* your shell
+		users (those with an /etc/passwd entry) to automagically authenticate
+		themselves when using a MUA with ${SASL} support turned on.
+
+		Do you wish to use PAM (Y|n)?
+		EOT
+		read yn;
+		yn=$(echo -n "$yn" | sed -e "s/^\ *//" -e "s/^\t*//");
+		test -n "$yn" || yn="Y";
+		case "$yn" in
+			[Yy]*)
+				if grep -qEe '^[[:space:]]*pwcheck_method:' \
+					@sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO}; then
+					sed -e \
+					's?^[[:space:]]*pwcheck_method:.*$?pwcheck_method: PAM?' \
+					@sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO} \
+					> @sysconfdir@/mail/sasl/Sendmail.conf.new;
+				else
+					echo 'pwcheck_method: PAM' \
+						| cat @sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO} - \
+						> @sysconfdir@/mail/sasl/Sendmail.conf.new;
+					fi;
+				if [ -f @sysconfdir@/mail/sasl/Sendmail.conf.new ]; then
+					chown smmta:smmsp @sysconfdir@/mail/sasl/Sendmail.conf.new;
+					chmod 0640 @sysconfdir@/mail/sasl/Sendmail.conf.new;
+					mv @sysconfdir@/mail/sasl/Sendmail.conf.new \
+						@sysconfdir@/mail/sasl/Sendmail.conf.${SASLSO};
+					fi;
+				;;
+			esac;
+		fi;
+	fi;
+
+# Make sure default-auth-info is secure
+if [ -f @sysconfdir@/mail/default-auth-info ]; then
+	chown smmta:smmsp @sysconfdir@/mail/default-auth-info;
+	chmod 0640 @sysconfdir@/mail/default-auth-info;
+	fi;
+
+# Create skeleton file, the saslpasswd command will get a failure ;-{
+if [ ! -f ${SASLDB} ]; then
+	NEW=1;
+	if [ -x ${SASLPASSWD} ]; then
+		${SASLDBLISTUSERS} 1>/dev/null 2>&1 || true;
+		echo "$SMPWD" | ${SASLPASSWD} -p -c -u $SMRLM $SMAID \
+			1>/dev/null 2>&1 || true;
+		chown root:sasl ${SASLDB};
+		chmod 0660 ${SASLDB};
+	else
+		echo "*** You do not have the ${SASL_BIN} package installed!";
+		echo "*** Please install it and rerun $0";
+		echo "*** Sendmail can't use ${SASL} until this is done...";
+		fi;
+	fi;
+
+# Set SMTP auth password
+if [ -x ${SASLPASSWD} ]; then
+	if [ $DEFAULT = 0 ]; then
+		echo "$SMPWD" | ${SASLPASSWD} -p -c -u $SMRLM $SMAID || true;
+	else
+		${SASLPASSWD} -d -u $SMRLM $SMAID 1>/dev/null 2>&1 || true;
+		fi;
+	fi;
+
+# For sendmail, /etc/sasldb must be 0600 or (0640/0660 w/dontblamesendmail)
+if [ -f ${SASLDB} ]; then
+	find ${SASLDB} -gid 0 -print | xargs -r chown root:sasl;
+	find ${SASLDB} -gid 8 -print | xargs -r chown root:sasl;
+	find ${SASLDB} -group smmsp -print | xargs -r chown root:sasl;
+	chmod g-x,o-rwx ${SASLDB};
+	fi;
+
+# Tell them about the new wizbang features...
+if [ $NEW -eq 1 ]; then
+	cat <<-EOT
+
+	To enable sendmail to use SASLS, you need to:
+		1) Add this line to @sysconfdir@/mail/sendmail.mc and optionally
+		   to @sysconfdir@/mail/submit.mc:
+			  include(\`@sysconfdir@/mail/sasl/sasl.m4')dnl
+		2) Run sendmailconfig
+		3) Restart sendmail
+
+	${SASL} is now minimally setup, there are a few ways to handle users:
+	   *) Allow only shell users (default)
+		  You're all set, nothing else to do !
+	   *) Allow users other than shell
+		  Add users via ${SASLPASSWD} and make sure that the
+		  realm you used matches what your users specify in their
+		  netscape/outlook/mutt/etc profiles.
+
+	If you need to authorize sendmail as a sender, also update
+	@sysconfdir@/mail/default-auth-info and rerun $0.
+
+	EOT
+	fi;

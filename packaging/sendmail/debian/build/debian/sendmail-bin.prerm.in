@@ -1,0 +1,90 @@
+#!/bin/sh -e
+#
+# Debian pre removal script
+#
+# Install of already installed package:
+#	1) old-prerm upgrade new-version
+#		*) new-prerm failed-upgrade old-version
+#			*) old-postinst abort-upgrade new-version
+#
+# If a `conflicting' package is being removed at the same time:
+#	1) forall packages depending on conflicting package and --auto-deconfigure
+#		deconfigured's-prerm deconfigure \
+#			in-favour package-being-installed version \
+#			removing conflicting-package version
+#		*) deconfigured's-postinst abort-deconfigure \
+#				in-favour package-being-installed-but-failed version \
+#				removing conflicting-package version
+#	2) To prepare for removal of the conflicting package
+#		conflictor's-prerm remove \
+#			in-favour package new-version
+#		*) conflictor's-postinst abort-remove \
+#				in-favour package new-version
+#
+# Removal of a package:
+#	1) prerm remove
+#	2) The package's files are removed (except conffiles).
+#	3) postrm remove
+#	4) All the maintainer scripts except the postrm are removed.
+#
+set -e;
+
+PACKAGE=sendmail-bin;
+
+case "$1" in
+	remove)
+		if [ ! -z "$2" ]; then
+			echo "Removing $PACKAGE $2 $3($4)";
+			if [ "$PACKAGE" = 'sendmail' ] && [ "$3" = 'sendmail-tls' ] || \
+				[ "$PACKAGE" = 'sendmail-tls' ] && [ "$3" = 'sendmail' ]; then
+				echo '...Nothing to do...';
+				exit 0;
+				fi;
+			fi;
+		# Remove alternatives for MTA, MSP
+		update-alternatives --remove sendmail-mta @libexecdir@/sendmail;
+		update-alternatives --remove sendmail-msp @libexecdir@/sendmail;
+		if [ -x @sysconfdir@/init.d/sendmail ] && \
+			[ -x @datadir@/sendmail/sendmail ]; then
+			if [ -x /usr/sbin/invoke-rc.d ]; then
+				/usr/sbin/invoke-rc.d --quiet --force sendmail stop;
+			else
+				@sysconfdir@/init.d/sendmail stop;
+				fi;
+			fi;
+		# Prevent cronjob from running during upgrade...
+		if [ -f /etc/cron.d/sendmail ]; then
+			rm -f @sysconfdir@/cron.d/sendmail;
+			fi;
+		;;
+
+	upgrade)
+		# Prevent cronjob from running during upgrade...
+		if [ -f /etc/cron.d/sendmail ]; then
+			echo "#prerm" > @sysconfdir@/cron.d/sendmail;
+			fi;
+
+		# NOTE  NOTE  NOTE  NOTE  NOTE
+		# If we fall through to DEBHELPER, sendmail will be stopped
+		# much earlier than necessary !!!
+		exit 0;
+		;;
+
+	failed-upgrade)
+		;;
+
+	deconfigure)
+		echo "Deconfigure of $PACKAGE $2 $3($4) $5 $6($7) ";
+		;;
+
+	*)
+		echo "$PACKAGE prerm called with unknown argument \`$1'" >&2;
+		exit 1;
+		;;
+	esac;
+
+#
+# Included for sanity checks
+#
+#DEBHELPER#
+exit 0;

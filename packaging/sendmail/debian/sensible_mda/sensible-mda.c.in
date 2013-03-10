@@ -1,0 +1,350 @@
+/*
+ * $Sendmail: sensible-mda.c,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+ *
+ * sensible-mda.c
+ * Copyright (c) 1998, Johnie Ingram.
+ * Copyright (c) 1998-@SM_CPYRT@ Richard Nelson <cowboy@debian.org>.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ */
+
+#ifndef lint
+static const char id[] = "@(#)$Id: sensible-mda.c,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $";
+#endif /* ! lint */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <limits.h>
+#include <unistd.h>
+#include <pwd.h>
+#include <grp.h>
+#include <sysexits.h>
+#include <string.h>
+#include <syslog.h>
+
+// TODO: declare -x TCPREMOTEIP="$3"
+
+#  define min(a, b)   ((a) < (b) ? (a) : (b))
+
+#ifndef DEBUG
+	#define DEBUG 0
+	#endif
+#ifndef TESTING
+	#define TESTING 0
+	#endif
+
+#define PROCMAIL   "@sysconfdir@/mail/smrsh/procmail"
+#define MAILDROP   "@sysconfdir@/mail/smrsh/maildrop"
+#define DELIVER    "@sysconfdir@/mail/smrsh/deliver"
+#define MAIL_LOCAL "@sysconfdir@/mail/smrsh/mail.local"
+
+#define PROCMAILRCS "@sysconfdir@/procmailrcs/"
+
+static void	help(void);
+static int	drop_privs(char *, uid_t, gid_t);
+static void show_privs(void);
+static unsigned char program[PATH_MAX];
+
+static uid_t RealUid, RunAsUid;
+static gid_t RealGid, RunAsGid;
+
+int
+main (int argc, char *argv[]) {
+
+	struct stat MDA_stat;
+	int done = 1;
+	struct passwd* passwd_entry;
+
+	char *str_pos;
+	int exec_rc = EX_OK;
+
+	#if DEBUG
+		int arg_index;
+		int str_len;
+		#endif
+
+	(void) openlog( "sensible-mda", LOG_PID+LOG_PERROR, LOG_MAIL );
+
+	/*----------------------------------------------------------------
+	 * Obtain program name
+	 *----------------------------------------------------------------*/
+	str_pos = strrchr(argv[0], '/');
+	if ( str_pos )
+		str_pos++;
+	else
+		str_pos = argv[0];
+	(void) strncpy(program, str_pos,
+		min(strlen(str_pos), sizeof(program)-1));
+	program[sizeof(program)-1] = '\0';
+
+	#if DEBUG
+		str_len = 0;
+		for ( arg_index = 0; arg_index < argc; arg_index++ )
+			str_len += strlen( argv[arg_index] ) + 1;
+		str_pos = malloc( str_len + 1);
+		str_pos[0] = '\0';
+		for ( arg_index = 0; arg_index < argc; arg_index++ ) {
+			(void) strcat( str_pos, argv[arg_index] );
+			(void) strcat( str_pos, " " );
+			};
+		(void) syslog( LOG_INFO, "Parms: %s\n", str_pos );
+		(void) free(str_pos);
+		#endif
+
+	/*----------------------------------------------------------------
+	 * Parse input to determine to whom to speak and who we are...
+	 * Must have at least three parameters unless first is ?,-?,/?.
+	 *----------------------------------------------------------------*/
+	if (argc >= 2 &&
+		(strcmp(argv[1],"?") == 0 || strcmp(argv[1],"-?")  == 0 ||
+		strcmp(argv[1],"/?") == 0 || strcmp(argv[1],"\\?") == 0 ||
+		strcmp(argv[1],"-h") == 0 || strcmp(argv[1],"--help") == 0)) {
+		(void) printf( "%s - Help\n", program );
+		help();
+		(void) closelog();
+		return (EX_USAGE);
+		};
+	if (argc < 3) {
+		(void) syslog( LOG_ERR, "%s - Required parameters elided.\n",
+			program );
+		help();
+		(void) closelog();
+		return (EX_USAGE);
+		};
+
+	/*----------------------------------------------------------------
+	 * Determine to whom we are delivering mail to, and set that
+	 * as our real, effective, and saved {u,g}ids
+	 *----------------------------------------------------------------*/
+	RealUid = RunAsUid = geteuid();
+	RealGid = RunAsGid = getegid();
+	passwd_entry=getpwnam(argv[2]);
+	if (passwd_entry) {
+		RunAsUid = passwd_entry->pw_uid;
+		RunAsGid = passwd_entry->pw_gid;
+		}
+	else {
+		(void) syslog( LOG_ERR, "User(%s) does not exist!\n",
+			argv[2]);
+		(void) closelog();
+		return (EX_TEMPFAIL);
+		};
+
+	/*----------------------------------------------------------------
+	 * 1st: try delivery via PROCMAIL (Keep SUID, works better that way)
+	 *----------------------------------------------------------------*/
+	if (!stat(PROCMAIL, &MDA_stat)) {
+		done = 0;
+		#if DEBUG
+			(void) syslog( LOG_INFO, "MDA: %s -t -f %s"
+				" -a %s -d %s\n",
+				PROCMAIL, argv[1], argv[3], argv[2]);
+			#endif
+		#if ! TESTING
+			exec_rc = execl (PROCMAIL, PROCMAIL, "-t",
+				"-f", argv[1],
+				"-a", argv[3],
+				"-d", argv[2], NULL);
+			(void) syslog( LOG_ERR, "%s did not execute %i,%i\n",
+				PROCMAIL, exec_rc, errno);
+			(void) closelog();
+			return (EX_TEMPFAIL);
+			#endif
+		done = 1;
+		};
+
+	/*----------------------------------------------------------------
+	 * 2nd: try delivery via MAILDROP
+	 *----------------------------------------------------------------*/
+	if (done && !stat(MAILDROP, &MDA_stat)) {
+		done = 0;
+		#if DEBUG
+			(void) syslog( LOG_INFO, "MDA: %s -f %s -d %s %s\n",
+				MAILDROP, argv[1], argv[2], argv[3]);
+			#endif
+		if (drop_privs( argv[2], RunAsUid, RunAsGid )) {
+			(void) closelog();
+			return (EX_TEMPFAIL);
+			};
+		#if ! TESTING
+			exec_rc = execl (MAILDROP, MAILDROP,
+				"-f", argv[1], "-d", argv[2], argv[3], NULL);
+			(void) syslog( LOG_ERR, "%s did not execute %i,%i\n",
+				MAILDROP, exec_rc, errno);
+			(void) closelog();
+			return (EX_TEMPFAIL);
+			#endif
+		done = 1;
+		};
+
+	/*----------------------------------------------------------------
+	 * 3rd: try delivery via DELIVER
+	 *----------------------------------------------------------------*/
+	if (done && !stat(DELIVER, &MDA_stat)) {
+		done = 0;
+		#if DEBUG
+			(void) syslog( LOG_INFO, "MDA: %s -r %s %s\n",
+				DELIVER, argv[1], argv[2]);
+			#endif
+		if (drop_privs( argv[2], RunAsUid, RunAsGid )) {
+			(void) closelog();
+			return (EX_TEMPFAIL);
+			};
+		#if ! TESTING
+			exec_rc = execl (DELIVER, DELIVER,
+				"-r", argv[1], argv[2], NULL);
+			(void) syslog( LOG_ERR, "%s did not execute %i,%i\n",
+				DELIVER, exec_rc, errno);
+			(void) closelog();
+			return (EX_TEMPFAIL);
+			#endif
+		done = 1;
+		};
+
+	/*----------------------------------------------------------------
+	 * 4th: try delivery via MAIL.LOCAL (Needs SUID because of LMTP)
+	 *----------------------------------------------------------------*/
+	if (done && !stat(MAIL_LOCAL, &MDA_stat)) {
+		done = 0;
+		#if DEBUG
+			(void) syslog( LOG_INFO, "MDA: %s -f %s %s\n",
+			MAIL_LOCAL, argv[1], argv[2]);
+			#endif
+		#if ! TESTING
+			exec_rc = execl (MAIL_LOCAL, MAIL_LOCAL,
+				"-f", argv[1], argv[2], NULL);
+			(void) syslog( LOG_ERR, "%s did not execute %i,%i\n",
+				MAIL_LOCAL, exec_rc, errno);
+			(void) closelog();
+			return (EX_TEMPFAIL);
+			#endif
+		done = 1;
+		};
+
+	(void) syslog( LOG_ERR, "No MDA was found! Tried: "
+		"%s, %s, %s, and %s.\n",
+			PROCMAIL, MAILDROP, DELIVER, MAIL_LOCAL	);
+
+	(void) closelog();
+	return (EX_TEMPFAIL);
+	};
+
+/*-------------------------------------------------------------------
+ * drop_privs...
+ *-------------------------------------------------------------------*/
+static int
+drop_privs(char * luser, uid_t new_uid, gid_t new_gid) {
+	gid_t emptygidset[1];
+	uid_t EffUid;
+	gid_t EffGid;
+	int rval;
+
+	rval = EX_OK;
+	EffUid = geteuid();
+	EffGid = getegid();
+
+	/* reset group permissions; these can be set later */
+	emptygidset[0] = (RunAsGid != 0) ? RunAsGid : EffGid;
+	if (setgroups(1, emptygidset) == -1 && EffUid == 0) {
+		(void) syslog( LOG_ERR, "drop_privs: setgroups(1, %d) failed\n",
+			(int) emptygidset[0]);
+		rval = EX_OSERR;
+		};
+
+	/* reset primary group id */
+	if ((RunAsGid != 0) && EffGid != RunAsGid && setgid(RunAsGid) < 0) {
+		(void) syslog( LOG_ERR, "drop_privs: setgid(%d) failed\n",
+			(int) RunAsGid);
+		rval = EX_OSERR;
+		};
+
+	/* reset primary user id */
+	if ((RunAsUid != 0) && EffUid != RunAsUid && setuid(RunAsUid) < 0) {
+		(void) syslog( LOG_ERR, "drop_privs: setuid(%d) failed\n",
+			(int) RunAsUid);
+		rval = EX_OSERR;
+		};
+
+	#if DEBUG
+		show_privs();
+		(void) syslog( LOG_INFO, "drop_privs: rval = %d\n", rval);
+		#endif
+
+	if (rval) {
+		(void) syslog( LOG_ERR, 
+			"Can not setreuid to %d:%d for user(%s)!\n",
+			RunAsUid, RunAsGid, luser);
+		show_privs();
+		};
+
+	return rval;
+	};
+
+/*-------------------------------------------------------------------
+ * show_privs...
+ *-------------------------------------------------------------------*/
+static void
+show_privs(void) {
+
+	(void) syslog( LOG_INFO, "show_privs: RealUser = %d:%d\n",
+		(int) RealUid, (int) RealGid);
+	(void) syslog( LOG_INFO, "show_privs: "
+		"get[ug]id=%d:%d, gete[ug]id=%d:%d\n",
+		(int) getuid(), (int) getgid(),
+		(int) geteuid(), (int) getegid());
+	(void) syslog( LOG_INFO, "show_privs: RunAsUser = %d:%d\n",
+		(int) RunAsUid, (int) RunAsGid);
+	return;
+	};
+
+/*-------------------------------------------------------------------
+ * Help...
+ *-------------------------------------------------------------------*/
+static void
+help(void) {
+
+	(void) printf("\n%s - Help information.\n\n"
+		"%s:\n"
+			"\tA general MTA->MDA wrapper to isolate the MTA from\n"
+			"\tthe vagaries of MDA installation and invocation.\n"
+		"\nSupported MTAs:\n"
+			"\tsendmail\n"
+		"\nSupported MDAs:\n"
+			"\tprocmail, maildrop, deliver, mail.local\n"
+		"\nCalled by:\n"
+			"\tSendmail: \n"
+			"\tYou: "
+				"Go directly to jail, do not pass GO, "
+				"do not collect $200!\n"
+		"\nSyntax:\n"
+			"\t%s <from:$g> <user:$u> [<detail:$h>]"
+				"[<client:${client_addr}>]\n"
+		"\nCalls:\n"
+			"\tprocmail:\t procmail -t"
+				" -f <from>"
+				" -a <detail> -d <to>\n"
+			"\tmaildrop:\t maildrop -f <from> -d <to> <detail>\n"
+			"\tdeliver:\t deliver -r <from> <to>\n"
+			"\tmail.local:\t mail.local -f <from> <to>\n"
+		"\n"
+		,program, program, program
+		);
+	return;
+	};
+

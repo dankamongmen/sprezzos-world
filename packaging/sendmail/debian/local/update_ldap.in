@@ -1,0 +1,139 @@
+#!/bin/sh -e
+#-----------------------------------------------------------------------------
+#
+# $Sendmail: update_ldap,v @sm_version@ @sm_date@ @sm_time@ cowboy Exp $
+#
+# Sendmail support for LDAP
+#
+# Copyright (c) 2000-@SM_CPYRT@ Richard Nelson.  All Rights Reserved.
+#
+# Notes: supports local umich-ldap and openldap v1/v2 servers
+#
+#-----------------------------------------------------------------------------
+set -e
+
+#
+# Flag to determine if this is an install or update
+NEW=0;
+
+#
+# Flag to determine if any local LDAP server was found
+FOUND=0;
+
+#
+# Path to LDAP server schema directory
+LDAP_PATH=;
+SCHEMA_PATH=;
+SCHEMA_NAME=;
+LDAP_VERSION=;
+
+# Path to other sendmail helpers
+if [ -x ./update_sendmail ]; then
+	sm_path='.';
+elif [ -x $(dirname $0)/update_sendmail ]; then
+	sm_path=$(dirname $0);
+else
+	sm_path=@datadir@/sendmail;
+	fi;
+# Bring in sendmail.conf for the network definitions
+if [ ! -f @sysconfdir@/mail/sendmail.conf ]; then
+	if [ -x $sm_path/update_conf ]; then
+		$sm_path/update_conf;
+		fi;
+	fi; 
+if [ -f @sysconfdir@/mail/sendmail.conf ]; then
+	. @sysconfdir@/mail/sendmail.conf;
+	fi;
+if [ "$HANDS_OFF" != 'No' ]; then
+	exit 0;
+	fi;
+
+install_schema () {
+#
+# Install sendmail.schema in the appropriate place
+#
+if [ ! -z "$SCHEMA_PATH" ]; then
+	if [ -f "${LDAP_PATH}/slapd.conf" ]; then
+		FOUND=1;
+		if [ ! -e "${SCHEMA_PATH}/sendmail.schema" ]; then
+			NEW=1;
+			fi;
+		cp -p @datadir@/sendmail/examples/ldap/$SCHEMA_NAME \
+			$SCHEMA_PATH/sendmail.schema;
+		chmod 0644 $SCHEMA_PATH/sendmail.schema;
+		chown root:root $SCHEMA_PATH/sendmail.schema;
+		fi;
+	fi;
+	};
+
+#
+# Check if OpenLDAP (2.0.x) is installed
+if [ -d /etc/ldap ]; then
+	LDAP_VERSION="$LDAP_VERSION OpenLDAP V2";
+	LDAP_PATH='/etc/ldap';
+	SCHEMA_PATH="${LDAP_PATH}/schema";
+	SCHEMA_NAME=sendmail.schema.v2;
+	install_schema;
+	fi;
+
+#
+# Check if OpenLDAP (1.x.x) is installed
+if [ -d /etc/openldap ]; then
+	LDAP_VERSION="$LDAP_VERSION OpenLDAP V1";
+	LDAP_PATH='/etc/openldap';
+	SCHEMA_PATH="${LDAP_PATH}";
+	SCHEMA_NAME=sendmail.schema.v1;
+	install_schema;
+	fi;
+
+#
+# Check if UMich-LDAP (3.3) is installed
+if [ -d /etc/umich-ldap ]; then
+	LDAP_VERSION="$LDAP_VERSION UMich-LDAP V3";
+	LDAP_PATH='/etc/umich-ldap';
+	SCHEMA_PATH="${LDAP_PATH}";
+	SCHEMA_NAME=sendmail.schema.v1;
+	install_schema;
+	fi;
+
+#
+# Tell them about the new wizbang features...
+if [ $NEW -eq 0 ]; then
+	:;
+else
+	echo " ";
+	echo "Creating/Updating $LDAP_VERSION information...";
+	echo " ";
+	echo "$SCHEMA_PATH/sendmail.schema has been installed";
+	fi;
+
+if [ $FOUND -eq 0 ] && [ $NEW -eq 1 ]; then
+	cat <<-EOT
+
+	No local LDAP server was located (tried openldap v2/v1, umich-ldap).
+
+	If you wish to use sendmail and LDAP, you'll need to make sure your
+	server has the requisite schema setup.
+
+	You can find the schema (old and new) in the following places:
+	  * $SCHEMA_PATH/sendmail.schema for the version of LDAP you
+		currently have installed (if any)
+	  * @datadir@/sendmail/examples/ldap/sendmail.schema.<v>
+		where <v> is
+			<v1> for older schema (sendmail.{o,a}t.conf) format
+			<v2> for newer schema (sendmail.schema) format
+
+	If you later install a local LDAP server, be sure to re-run $0.
+	EOT
+elif [ $FOUND -eq 1 ] && [ $NEW -eq 1 ]; then
+	cat <<-EOT
+
+	You have a local $LDAP_VERSION server! Depending upon how (and if)
+	you wish to use LDAP with sendmail, you'll want to check your
+	slapd.conf file and possibly include these files:
+	  * $SCHEMA_PATH/sendmail.schema   <- alias and other map support
+	  * $SCHEMA_PATH/misc.schema	   <- OpenLDAP V2 ldap-mail-routing
+
+	If you later change your local LDAP server, be sure to re-run $0.
+	EOT
+	fi;

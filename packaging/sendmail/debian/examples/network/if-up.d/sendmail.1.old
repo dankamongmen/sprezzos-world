@@ -1,0 +1,130 @@
+#!/bin/sh
+#
+# This script is called when ppp connects to the network.
+#		 
+# Here is where we'll start sendmail if needed, and will
+# run the queue in either case.
+#
+# Written By Richard Nelson <cowboy@debian.org>
+#
+# NOTE: The following lines (without the #) must be in /etc/mail/sendmail.mc:
+# include(`/etc/mail/dialup.m4')dnl
+# include(`/etc/mail/provider.m4')dnl
+#
+# ALSO: make sure ipparam is specified somewhere in the ppp options;
+#		it will be used as the name of a file in /etc/mail/peers
+#
+# Exit by default, check for validity before commenting out the next line:
+exit 0;
+
+# Define our domain name (from PPP) for sendmail.
+
+# These variables are for the use of the scripts run by run-parts
+#PPP_IFACE="$1";
+#PPP_TTY="$2";
+#PPP_SPEED="$3";
+#PPP_LOCAL="$4";
+#PPP_REMOTE="$5";
+#PPP_IPPARAM="$6";
+
+if [ ! -z "$PPP_LOCAL" ]; then
+	addr=$PPP_LOCAL;
+	provider=$PPP_IPPARAM;
+else
+	addr=$1;
+	provider=$2;
+	fi;
+
+# Determine our fqdn from our ISP
+maxloop=20;
+cntr=0;
+name="";
+until (test ! -z "$name");	do
+	cntr=$(($cntr+1));
+	rev=$(host $addr);
+	name=$(echo "$rev" | grep '^Name:' | awk '{print $2}');
+	if [ -z "$name" ]; then
+		name=${rev##*domain name pointer };
+		name=${name%.};
+		fi;
+	test=$(echo $name | cut -d ' ' -f 1);
+	if [ "$name" != "**" ]; then
+		break;
+	elif (($cntr > $maxloop)); then
+		name='';
+		break;
+		fi;
+	done;
+echo "addr=$addr,	name=$name";
+
+file="/etc/mail/dialup.m4";
+#file="dialup.m4";
+if [ ! -z "$name" ]; then
+	cat <<-EOT > $file;
+		LOCAL_CONFIG
+		#------------------------------------------------------------
+		#
+		# Dynamic updates from $0
+		#
+		# NOTE: the following line *MUST* be in /etc/mail/sendmail.mc
+		dnl include(\`/etc/mail/dialup.m4')dnl
+		#
+		# Chose one of the following options:
+		#	* Add our true hostname as a Virtual Host (we'll accept
+		#	  mail for it, but keep our local name for SMTP AUTH, etc)
+		dnl C{VirtHost}$name
+		#	* Define our true hostname (from our ISP) becomes \$j
+		dnl define(\`confDOMAIN_NAME', \`$name')dnl
+		#
+		# Make sure we accept mail as this name (for bounces, etc)
+		Cw$name
+		# Add our hostname to class G for genericstable support
+		CG$name
+		#------------------------------------------------------------
+		EOT
+	fi;
+
+# Add smarthost information (if any)... But not if provider.m4 is a link !
+file="/etc/mail/provider.m4";
+#file="provider.m4";
+if [ -f /etc/mail/peers/$provider -a ! -L $file ]; then
+	cat <<-EOT > $file;
+		LOCAL_CONFIG
+		#------------------------------------------------------------
+		#
+		# Dynamic updates from $0
+		#
+		# NOTE: the following line *MUST* be in /etc/mail/sendmail.mc
+		dnl include(\`/etc/mail/provider.m4')dnl
+		#
+		# Provider information from /etc/mail/peers/$provider
+		EOT
+	cat /etc/mail/peers/$provider >> $file;
+	cat <<-EOT >> $file;
+		#------------------------------------------------------------
+		EOT
+	fi;
+#exit 0
+
+# Build a new sendmail.cf from sendmail.mc, including our address.
+# NOTE: The following lines (without the #) must be in /etc/mail/sendmail.mc:
+# include(`/etc/mail/dialup.m4')dnl
+# include(`/etc/mail/provider.m4')dnl
+m4 /etc/mail/sendmail.mc \
+	> /etc/mail/sendmail.cf.pnew;
+chmod 0644 /etc/mail/sendmail.cf.pnew;
+chown mail:mail /etc/mail/sendmail.cf.pnew;
+mv -f /etc/mail/sendmail.cf.pnew /etc/mail/sendmail.cf;
+
+# Purge any latent host status that might cause us to *NOT* send mail
+AM='-Am';
+if [ ! -f /usr/share/sendmail/cf/feature/msp.m4 ]; then
+	AM='';
+	fi;
+sendmail $AM -bH -O Timeout.hoststatus=1s;
+
+# Start/reload sendmail as needed
+/etc/init.d/sendmail reload;		# may be up, or down
+
+# Process the sendmail queue (background so as to not defer other ip-up work)
+runq &

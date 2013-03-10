@@ -1,0 +1,88 @@
+Description: Fix order of fcntl and dotlock in mail.local
+Author: Tim Marston <tim@ed.am>
+Bug-Debian: http://bugs.debian.org/684645
+--- sendmail-8.14.4.orig/mail.local/mail.local.c
++++ sendmail-8.14.4/mail.local/mail.local.c
+@@ -1082,26 +1082,6 @@
+ 	*/
+ 
+ tryagain:
+-#ifdef MAILLOCK
+-	p = name;
+-#else /* MAILLOCK */
+-	p = path;
+-#endif /* MAILLOCK */
+-	if ((off = lockmbox(p)) != 0)
+-	{
+-		if (off == EX_TEMPFAIL || e_to_sys(off) == EX_TEMPFAIL)
+-		{
+-			ExitVal = EX_TEMPFAIL;
+-			errcode = "451 4.3.0";
+-		}
+-		else
+-			errcode = "551 5.3.0";
+-
+-		mailerr(errcode, "lockmailbox %s failed; error code %d %s",
+-			p, off, errno > 0 ? sm_errstring(errno) : "");
+-		return;
+-	}
+-
+ 	if (lstat(path, &sb) < 0)
+ 	{
+ 		int save_errno;
+@@ -1252,6 +1232,26 @@
+ 		goto err1;
+ 	}
+ 
++#ifdef MAILLOCK
++	p = name;
++#else /* MAILLOCK */
++	p = path;
++#endif /* MAILLOCK */
++	if ((off = lockmbox(p)) != 0)
++	{
++		if (off == EX_TEMPFAIL || e_to_sys(off) == EX_TEMPFAIL)
++		{
++			ExitVal = EX_TEMPFAIL;
++			errcode = "451 4.3.0";
++		}
++		else
++			errcode = "551 5.3.0";
++
++		mailerr(errcode, "lockmailbox %s failed; error code %d %s",
++			p, off, errno > 0 ? sm_errstring(errno) : "");
++		goto err1;
++	}
++
+ 	/* Get the starting offset of the new message */
+ 	curoff = lseek(mbfd, (off_t) 0, SEEK_END);
+ 	(void) sm_snprintf(biffmsg, sizeof(biffmsg), "%s@%lld\n",
+@@ -1325,10 +1325,10 @@
+ #endif /* DEBUG */
+ 		if (mbfd >= 0)
+ 			(void) ftruncate(mbfd, curoff);
+-err1:		if (mbfd >= 0)
++err1:		unlockmbox();
++		if (mbfd >= 0)
+ 			(void) close(mbfd);
+ err0:		(void) setreuid(0, 0);
+-		unlockmbox();
+ 		return;
+ 	}
+ 
+@@ -1346,6 +1346,7 @@
+ 	else
+ 		cursize = sb.st_size;
+ 
++	unlockmbox();
+ 
+ 	/* Close and check -- NFS doesn't write until the close. */
+ 	if (close(mbfd))
+@@ -1395,7 +1396,6 @@
+ #ifdef DEBUG
+ 	fprintf(stderr, "reset euid = %d\n", (int) geteuid());
+ #endif /* DEBUG */
+-	unlockmbox();
+ 	if (LMTPMode)
+ 		printf("250 2.1.5 %s Ok\r\n", name);
+ }
