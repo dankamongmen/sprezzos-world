@@ -430,3 +430,11 @@ $(DISCOVERDATA): $(SPREZZ)/discover-data/debian/changelog
 	ln -sf discover-data-$(discover-data_UPVER).tar.xz $(DISCOVERDATA).orig.tar.xz
 	cp -r $(<D) $@
 
+.PHONY: umegaya
+umegaya:$(UMEGAYA)_$(ARCH).deb
+$(UMEGAYA): $(SPREZZ)/umegaya/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf umegaya_$(umegaya_UPVER).orig.tar.gz $(TARARGS) $@
+
