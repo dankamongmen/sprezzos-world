@@ -1988,7 +1988,7 @@ $(HASKELLQUICKCHECK1): $(SPREZZ)/haskell-quickcheck1/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf quickcheck1-$(haskell-quickcheck1_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf QuickCheck-$(haskell-quickcheck1_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-quickcheck2
 haskell-quickcheck2:$(HASKELLQUICKCHECK2)_$(ARCH).deb
