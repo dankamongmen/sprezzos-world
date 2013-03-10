@@ -1,0 +1,210 @@
+commit 86d695a7f8e3380b3c2c6045fc8ae5140f902f2f
+Author: Paolo Bonzini <bonzini@gnu.org>
+Date:   Thu Mar 24 10:17:57 2011 +0100
+
+    fix overflow detection on non-x86 platforms
+    
+    2011-03-24  Paolo Bonzini <bonzini@gnu.org>
+    
+    	* tests/intmath.st: Add testcases.
+    	* tests/intmath.ok: Regenerate.
+    
+    libgst:
+    2011-03-24  Paolo Bonzini  <bonzini@gnu.org>
+    
+    	* libgst/interp.inl: Fix brokenness on non-x86 platforms.
+
+ 2011-03-12  Paolo Bonzini  <bonzini@gnu.org>
+ 
+ 	* libgst/callin.c: Remove dead code signaled by clang analyzer.
+diff --git a/libgst/interp.inl b/libgst/interp.inl
+index 4bf5249..cda4405 100644
+--- a/libgst/interp.inl
++++ b/libgst/interp.inl
+@@ -111,71 +111,45 @@ tagged_xor (OOP op1, OOP op2)
+ OOP
+ add_with_check (OOP op1, OOP op2, mst_Boolean *overflow)
+ {
+-#if (defined __i386__ || defined __x86_64__)
+   intptr_t iop1 = (intptr_t) op1;
+-  intptr_t iop2 = ((intptr_t) op2) - 1;
++  intptr_t iop2 = (intptr_t) op2;
+   intptr_t iresult;
++#if (defined __i386__ || defined __x86_64__) && !defined NO_OPTIMIZED_SMALLINTEGERS
+   int of = 0;
++  iop2--;
+   asm ("add" OP_SUFFIX " %3, %2\n"
+        "seto %b1" : "=r" (iresult), "+&q" (of) : "0" (iop1), OP_CONSTRAINT (iop2));
+ 
+   *overflow = of;
+-  return (OOP) iresult;
+ #else
+-  intptr_t iop1 = TO_INT (op1);
+-  intptr_t iop2 = TO_INT (op2);
+-  intptr_t iresult = no_opt (iop1 + iop2);
++  iresult = no_opt (iop1 + (iop2 - 1));
+   *overflow = false;
+-  if (iresult < iop1)
+-    {
+-      if (iop2 < 0)
+-        return FROM_INT (iresult);
+-    }
+-  else
+-    {
+-      if (iop2 >= 0)
+-        return FROM_INT (iresult);
+-    }
+-
+-  if UNCOMMON (INT_OVERFLOW (iresult))
++  if (COMMON ((iop1 ^ iop2) >= 0) && UNCOMMON ((iop1 ^ iresult) < 0))
+     *overflow = true;
+-  return FROM_INT (iresult);
+ #endif
++  return (OOP) iresult;
+ }
+ 
+ OOP
+ sub_with_check (OOP op1, OOP op2, mst_Boolean *overflow)
+ {
+-#if (defined __i386__ || defined __x86_64__)
+   intptr_t iop1 = (intptr_t) op1;
+-  intptr_t iop2 = ((intptr_t) op2) - 1;
++  intptr_t iop2 = (intptr_t) op2;
+   intptr_t iresult;
++#if (defined __i386__ || defined __x86_64__) && !defined NO_OPTIMIZED_SMALLINTEGERS
+   int of = 0;
++  iop2--;
+   asm ("sub" OP_SUFFIX " %3, %2\n"
+        "seto %b1" : "=r" (iresult), "+&q" (of) : "0" (iop1), OP_CONSTRAINT (iop2));
+ 
+   *overflow = of;
+-  return (OOP) iresult;
+ #else
+-  intptr_t iop1 = TO_INT (op1);
+-  intptr_t iop2 = TO_INT (op2);
+-  intptr_t iresult = no_opt (iop1 - iop2);
++  iresult = no_opt (iop1 - (iop2 - 1));
+   *overflow = false;
+-  if (iresult < iop1)
+-    {
+-      if (iop2 >= 0)
+-        return FROM_INT (iresult);
+-    }
+-  else
+-    {
+-      if (iop2 < 0)
+-        return FROM_INT (iresult);
+-    }
+-
+-  if UNCOMMON (INT_OVERFLOW (iresult))
++  if (UNCOMMON ((iop1 ^ iop2) < 0) && UNCOMMON ((iop1 ^ iresult) < 0))
+     *overflow = true;
+-  return FROM_INT (iresult);
+ #endif
++  return (OOP) iresult;
+ }
+ 
+ OOP
+diff --git a/tests/intmath.ok b/tests/intmath.ok
+index 19120ee..4765e8a 100644
+--- a/tests/intmath.ok
++++ b/tests/intmath.ok
+@@ -105,6 +105,60 @@ Execution begins...
+ returned value is true
+ 
+ Execution begins...
++returned value is true
++
++Execution begins...
++returned value is true
++
++Execution begins...
++returned value is true
++
++Execution begins...
++returned value is false
++
++Execution begins...
++returned value is true
++
++Execution begins...
++returned value is false
++
++Execution begins...
++returned value is true
++
++Execution begins...
++returned value is false
++
++Execution begins...
++returned value is false
++
++Execution begins...
++returned value is false
++
++Execution begins...
++returned value is true
++
++Execution begins...
++returned value is true
++
++Execution begins...
++returned value is false
++
++Execution begins...
++returned value is true
++
++Execution begins...
++returned value is true
++
++Execution begins...
++returned value is false
++
++Execution begins...
++returned value is false
++
++Execution begins...
++returned value is true
++
++Execution begins...
+ returned value is false
+ 
+ Execution begins...
+diff --git a/tests/intmath.st b/tests/intmath.st
+index 0d72904..8b772ae 100644
+--- a/tests/intmath.st
++++ b/tests/intmath.st
+@@ -82,6 +82,10 @@ Eval [ (1000000000 raisedToInteger: 4) printString ]
+ Eval [ 100 factorial / 99 factorial ]	"should return 100 of course"
+ Eval [ 100 factorial printString ]
+ 
++Eval [ (SmallInteger largest + SmallInteger largest) > 0 ]
++Eval [ (SmallInteger largest - SmallInteger smallest) > 0 ]
++Eval [ SmallInteger smallest negated > 0 ]
++
+ Eval [ (40000 * 40000) =  (40000 * 40000) ]
+ Eval [ (40000 * 40000) <  (40000 * 40000) ]
+ Eval [ (40000 * 40000) <= (40000 * 40000) ]
+@@ -98,6 +102,22 @@ Eval [ (34567 * 34567) <= (45678 * 45678) ]
+ Eval [ (34567 * 34567) >  (45678 * 45678) ]
+ Eval [ (34567 * 34567) >= (45678 * 45678) ]
+ 
++Eval [ (4000000000 * 4000000000) =  (4000000000 * 4000000000) ]
++Eval [ (4000000000 * 4000000000) <  (4000000000 * 4000000000) ]
++Eval [ (4000000000 * 4000000000) <= (4000000000 * 4000000000) ]
++Eval [ (4000000000 * 4000000000) >  (4000000000 * 4000000000) ]
++Eval [ (4000000000 * 4000000000) >= (4000000000 * 4000000000) ]
++Eval [ (4000000000 * 4000000000) =  (1600000000 * 1600000000) ]
++Eval [ (4000000000 * 4000000000) <  (1600000000 * 1600000000) ]
++Eval [ (4000000000 * 4000000000) <= (1600000000 * 1600000000) ]
++Eval [ (4000000000 * 4000000000) >  (1600000000 * 1600000000) ]
++Eval [ (4000000000 * 4000000000) >= (1600000000 * 1600000000) ]
++Eval [ (3456734567 * 3456734567) =  (4567845678 * 4567845678) ]
++Eval [ (3456734567 * 3456734567) <  (4567845678 * 4567845678) ]
++Eval [ (3456734567 * 3456734567) <= (4567845678 * 4567845678) ]
++Eval [ (3456734567 * 3456734567) >  (4567845678 * 4567845678) ]
++Eval [ (3456734567 * 3456734567) >= (4567845678 * 4567845678) ]
++
+ "parsing in bases other than 10"
+ Eval [ 16rFFFFFFFF = 4294967295 ]
+ 

@@ -749,3 +749,11 @@ $(GSTREAMER0.10FFMPEG): $(SPREZZ)/gstreamer0.10-ffmpeg/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gstreamer0.10-ffmpeg_$(gstreamer0.10-ffmpeg_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: snappy-player
+snappy-player:$(SNAPPYPLAYER)_$(ARCH).deb
+$(SNAPPYPLAYER): $(SPREZZ)/snappy-player/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf snappy-player_$(snappy-player_UPVER).orig.tar.bz2 $(TARARGS) $@
+

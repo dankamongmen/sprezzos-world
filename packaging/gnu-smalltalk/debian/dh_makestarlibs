@@ -1,0 +1,117 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+dh_makestarlibs - creates starlibs files for GNU Smalltalk archives
+
+=cut
+
+use strict;
+use Debian::Debhelper::Dh_Lib;
+
+=head1 SYNOPSIS
+
+B<dh_makestarlibs> [S<I<debhelper options>>]
+
+=head1 DESCRIPTION
+
+dh_makestarlibs is a debhelper script that is responsible for generating
+starlibs files that will be used to compute GNU SmallTalk ARchives
+(.star files) dependencies.
+
+=cut
+
+init();
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+    next if is_udeb($package);
+
+    my $tmp = tmpdir($package);
+    my %seen;
+
+    doit("rm", "-f", "$tmp/DEBIAN/starlibs");
+
+    if (-e "debian/$package.starlibs") {
+	complex_doit("cat debian/$package.starlibs > $tmp/DEBIAN/starlibs");
+    } else {
+	open(FIND, "find $tmp -type f -name '*.star' |");
+
+	while (<FIND>) {
+	    chomp;
+	    my $starchive = $_;
+	    $starchive =~ s,.*/([^/]+)\.star$,$1,;
+
+	    if (!-d "$tmp/DEBIAN") {
+		doit("install", "-d", "$tmp/DEBIAN");
+	    }
+
+	    my $deps = depends($package);
+	    my $line = "$starchive $deps";
+
+	    if (!$seen{$line}) {
+		$seen{$line} = 1;
+		complex_doit("echo '$line' >> $tmp/DEBIAN/starlibs");
+	    }
+	}
+
+	close FIND;
+
+	# Support packages.xml
+	if (open(META, "$tmp/usr/share/gnu-smalltalk/packages.xml")) {
+	    my @lines = <META>;
+	    my $content = join("", @lines);
+
+	    if (my @pkgs = $content =~ m,<package>\s*<name>(\w+)</name>,gi) {
+		foreach my $p (@pkgs) {
+		    verbose_print("adding virtual package $p");
+		    my $deps = depends($package);
+		    complex_doit("echo '$p $deps' >> $tmp/DEBIAN/starlibs");
+		}
+	    }
+	}
+
+	if (-e "$tmp/DEBIAN/starlibs") {
+	    doit("chmod", 644,   "$tmp/DEBIAN/starlibs");
+	    doit("chown", "0:0", "$tmp/DEBIAN/starlibs");
+	}
+    }
+}
+
+sub depends {
+    my $package = shift;
+    my $deps = $package;
+
+    # Call isnative because it sets $dh{VERSION}
+    # as a side effect.
+    isnative($package);
+    my $version = $dh{VERSION};
+
+    # Old compatibility levels include the
+    # debian revision, while new do not.
+    if (!compat(3)) {
+	# Remove debian version, if any.
+	$version =~ s/-[^-]+$//;
+    }
+
+    if ($dh{V_FLAG_SET}) {
+	if ($dh{V_FLAG} ne '') {
+	    $deps = $dh{V_FLAG};
+	} else {
+	    $deps = "$package (>= $version)";
+	}
+    }
+
+    return $deps;
+}
+
+=head1 SEE ALSO
+
+L<debhelper(7)>
+
+=head1 AUTHOR
+
+Thomas Girard <thomas.g.girard@free.fr>, heavily based on code from
+Mirco Bauer <meebey@meebey.net> and Eduard Bloch <blade@debian.org>
+for dh_makeclilibs.
+
+=cut

@@ -311,3 +311,19 @@ $(OPENMOTIF): $(SPREZZ)/openmotif/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openmotif_$(openmotif_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: sdl-sound1.2
+sdl-sound1.2:$(SDLSOUND1.2)_$(ARCH).deb
+$(SDLSOUND1.2): $(SPREZZ)/sdl-sound1.2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sdl-sound1.2_$(sdl-sound1.2_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: smpeg
+smpeg:$(SMPEG)_$(ARCH).deb
+$(SMPEG): $(SPREZZ)/smpeg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf smpeg_$(smpeg_UPVER).orig.tar.gz $(TARARGS) $@
+

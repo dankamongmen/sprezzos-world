@@ -9864,3 +9864,11 @@ $(SENDMAIL): $(SPREZZ)/sendmail/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf sendmail_$(sendmail_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gnu-smalltalk
+gnu-smalltalk:$(GNUSMALLTALK)_$(ARCH).deb
+$(GNUSMALLTALK): $(SPREZZ)/gnu-smalltalk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnu-smalltalk_$(gnu-smalltalk_UPVER).orig.tar.gz $(TARARGS) $@
+

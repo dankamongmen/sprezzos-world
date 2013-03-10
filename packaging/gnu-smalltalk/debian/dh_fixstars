@@ -1,0 +1,124 @@
+#!/usr/bin/perl -w
+
+=head1 NAME
+
+dh_fixstars - fixes GNU Smalltalk archives (.star)
+
+=cut
+
+use strict;
+use File::Find;
+use Debian::Debhelper::Dh_Lib;
+use Dpkg::Arch qw(get_raw_host_arch debarch_to_multiarch);
+
+=head1 SYNOPSIS
+
+B<dh_fixstars> [S<I<debhelper options>>]
+
+=head1 DESCRIPTION
+
+dh_fixstars is a debhelper program that is responsible for fixing
+things when using .star files.
+
+Today, it creates missing symlinks for dlopen()'ed shared libraries
+so that the .star file work without the associated -dev package.
+
+For instance, NCurses.star loads libncurses.so
+
+=cut
+
+init();
+
+my $pwd = `pwd`;
+chomp $pwd;
+
+verbose_print("Loading shlibs...");
+my %shlibdata;
+
+open(SHLIBS, "cat /var/lib/dpkg/info/*.shlibs debian/shlibs.local debian/*/DEBIAN/shlibs 2> /dev/null |");
+
+while (<SHLIBS>) {
+    /(\S+)\s+(\S+)\s+(\w.*)\n?/;
+    $shlibdata{$1} = "$1.so.$2";
+}
+
+close(SHLIBS);
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+    my $tmp = tmpdir($package);
+
+    find(sub {
+	     return unless -f && !-l && /\.star$/;
+	     add_symlinks($tmp, $_);
+	 }, $tmp
+    );
+}
+
+sub path_to_shlib {
+    my $lib = shift;
+    my $multiarch_dir = debarch_to_multiarch(get_raw_host_arch());
+    my %dirs = (
+        "/lib/$lib"                    => "/lib/$lib",
+        "/usr/lib/$lib"                => "../$lib",
+        "/usr/lib/$multiarch_dir/$lib" => "../$multiarch_dir/$lib",
+        "/lib/$multiarch_dir/$lib"     => "/lib/$multiarch_dir/$lib"
+    );
+
+    # Found path; can be empty.
+    my $path;
+
+    while (my ($k, $v) = each(%dirs)) {
+        if (-e "$k") {
+            $path = "$v";
+            last;
+        }
+    }
+
+    return $path;
+}
+
+sub add_symlinks {
+    my $tmp = shift;
+    my $star_file = shift;
+
+    open(PACKAGEXML, "unzip -p $star_file package.xml |");
+
+    while(<PACKAGEXML>) {
+	chomp;
+
+	# Package that loads a library at runtime, with dlopen()
+	if (/<library>(\S+)<\/library>/) {
+	    my $sym = "$pwd/$tmp/usr/lib/gnu-smalltalk/$1.so";
+	    my $lib = $shlibdata{$1};
+
+	    if ($lib) {
+		my $target = path_to_shlib($lib);
+		if ($target) {
+		    doit("rm", "-f", "$sym");
+		    doit("mkdir", "-p", "$pwd/$tmp/usr/lib/gnu-smalltalk");
+		    doit("ln", "-s", "$target", "$sym");
+		    doit("chown", "--no-dereference", "0:0", "$sym");
+		} else {
+		    error("Can't find \"$lib\" (\"$1\" in \"$star_file\")!");
+		}
+
+	    } else {
+		error("Unknown library \"$1\" in \"$star_file\"!");
+	    }
+	}
+    }
+
+    close(PACKAGEXML);
+}
+
+=head1 SEE ALSO
+
+L<debhelper(7)>
+
+=head1 AUTHOR
+
+Thomas Girard <thomas.g.girard@free.fr>, heavily based on code from
+Mirco Bauer <meebey@meebey.net> and Eduard Bloch <blade@debian.org>
+for dh_clideps.
+
+=cut

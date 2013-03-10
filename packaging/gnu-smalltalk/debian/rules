@@ -1,0 +1,158 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+QUILT_STAMPFN = patch-stamp
+include /usr/share/quilt/quilt.make
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += --build $(DEB_HOST_GNU_TYPE)
+else
+  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+myCFLAGS = -Wall -g
+
+# Support for noopt in DEB_BUILD_OPTIONS
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+myCFLAGS += -O0
+else
+myCFLAGS += -O2
+endif
+
+configure: configure-stamp
+configure-stamp: patch-stamp
+	dh_testdir
+	autoreconf -vi
+
+	cp -f /usr/share/misc/config.sub build-aux/config.sub
+	cp -f /usr/share/misc/config.guess build-aux/config.guess
+	# Commands to configure the package.
+	./configure $(confflags) \
+                    --prefix=/usr --libexecdir='$${prefix}/lib' \
+                    --with-imagedir=/usr/lib/gnu-smalltalk \
+		    --enable-gtk=yes \
+		    --with-lispstartdir \
+		    --without-emacs \
+		    --with-system-libffi \
+		    --with-system-libsigsegv \
+		    --with-system-libltdl \
+		    --disable-relocatable \
+                    CFLAGS="$(myCFLAGS)"
+	# Get some info about the cpu and memory
+	-cat /proc/cpuinfo /proc/meminfo
+	touch $@
+
+build: build-stamp
+
+build-stamp: configure-stamp
+	dh_testdir
+	$(MAKE)
+	-$(MAKE) -k check
+	find tests/testsuite.dir -name "*.log" | xargs cat /dev/null
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp debian/gnu-smalltalk-el.emacsen-startup
+
+	# Commands to clean up after the build process.
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	-test -f patch-stamp && $(MAKE) -f debian/rules unpatch
+
+	rm -rf config.log libgst/gst.output
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	# We'll recreate this symlink
+	rm -f debian/tmp/usr/share/man/man1/gst-reload.1
+
+	# We don't install this one
+	rm -f debian/tmp/usr/share/gnu-smalltalk/examples/shell
+
+	# copy the icon
+	cp debian/gsticon.xpm debian/gnu-smalltalk-browser/usr/share/pixmaps/gsticon.xpm
+
+	# remove rpath
+	chrpath -d debian/tmp/usr/bin/gst debian/tmp/usr/bin/gst-browser \
+                   debian/tmp/usr/bin/gst-convert debian/tmp/usr/bin/gst-doc \
+                   debian/tmp/usr/bin/gst-load debian/tmp/usr/bin/gst-package \
+                   debian/tmp/usr/bin/gst-profile debian/tmp/usr/bin/gst-reload \
+                   debian/tmp/usr/bin/gst-remote debian/tmp/usr/bin/gst-sunit
+
+	dh_install --sourcedir=debian/tmp --list-missing
+
+	# copy emacs files
+	sed -e 's#@bindir@#/usr/bin#' < gst-mode.el.in > \
+	    debian/gnu-smalltalk-el/usr/share/emacs/site-lisp/gnu-smalltalk-el/gst-mode.el
+	cp smalltalk-mode.el debian/gnu-smalltalk-el/usr/share/emacs/site-lisp/gnu-smalltalk-el/smalltalk-mode.el
+	cp smalltalk-mode-init.el.in debian/gnu-smalltalk-el.emacsen-startup
+
+	# make the image file executable
+	chmod +x debian/gnu-smalltalk/usr/lib/gnu-smalltalk/gst.im
+
+# To silent out lintian
+build-arch build-indep: build-stamp
+
+# Build architecture-independent files here.
+binary-indep: build-indep install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installdocs -i
+	dh_installmenu -i
+	dh_installemacsen -i
+	dh_installinfo -i
+	dh_installman -i
+	dh_installchangelogs ChangeLog -i
+	dh_perl -i
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	perl -w debian/dh_makestarlibs -i -V
+	dh_installdeb -i
+	perl -w debian/dh_stardeps -i
+	perl -w debian/dh_fixstars -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build-arch install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdocs -a
+	dh_installmenu -a
+	dh_installman -a
+	dh_installchangelogs ChangeLog -a
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a -Xlib/gnu-smalltalk
+	perl -w debian/dh_makestarlibs -V
+	dh_installdeb -a
+	dh_shlibdeps -a
+	perl -w debian/dh_stardeps -a
+	perl -w debian/dh_fixstars -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build-arch build-indep build clean binary-indep binary-arch binary install configure patch unpatch
