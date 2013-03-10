@@ -4686,3 +4686,35 @@ $(HLINT): $(SPREZZ)/hlint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hlint-$(hlint_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: hpodder
+hpodder:$(HPODDER)_$(ARCH).deb
+$(HPODDER): $(SPREZZ)/hpodder/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hpodder_$(hpodder_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: hdbc-sqlite3
+hdbc-sqlite3:$(HDBCSQLITE3)_$(ARCH).deb
+$(HDBCSQLITE3): $(SPREZZ)/hdbc-sqlite3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hdbc-sqlite3_$(hdbc-sqlite3_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: hdbc
+hdbc:$(HDBC)_$(ARCH).deb
+$(HDBC): $(SPREZZ)/hdbc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hdbc_$(hdbc_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-lrucache
+haskell-lrucache:$(HASKELLLRUCACHE)_$(ARCH).deb
+$(HASKELLLRUCACHE): $(SPREZZ)/haskell-lrucache/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-lrucache_$(haskell-lrucache_UPVER).orig.tar.gz $(TARARGS) $@
+
