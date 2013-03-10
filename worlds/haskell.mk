@@ -4718,3 +4718,11 @@ $(HASKELLLRUCACHE): $(SPREZZ)/haskell-lrucache/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-lrucache_$(haskell-lrucache_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-reflection
+haskell-reflection:$(HASKELLREFLECTION)_$(ARCH).deb
+$(HASKELLREFLECTION): $(SPREZZ)/haskell-reflection/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-reflection_$(haskell-reflection_UPVER).orig.tar.gz $(TARARGS) $@
+
