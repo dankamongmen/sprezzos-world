@@ -3796,7 +3796,7 @@ $(HASKELLSHELLAC): $(SPREZZ)/haskell-shellac/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf shellac-$(haskell-shellac_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf Shellac-$(haskell-shellac_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-show
 haskell-show:$(HASKELLSHOW)_$(ARCH).deb
