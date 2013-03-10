@@ -295,3 +295,19 @@ $(STUMPWM): $(SPREZZ)/stumpwm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf stumpwm_$(stumpwm_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: freewrl
+freewrl:$(FREEWRL)_$(ARCH).deb
+$(FREEWRL): $(SPREZZ)/freewrl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf freewrl_$(freewrl_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: openmotif
+openmotif:$(OPENMOTIF)_$(ARCH).deb
+$(OPENMOTIF): $(SPREZZ)/openmotif/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openmotif_$(openmotif_UPVER).orig.tar.gz $(TARARGS) $@
+
