@@ -1,0 +1,66 @@
+#!/usr/bin/make -f
+
+DEB_DH_INSTALL_DIR=$(CURDIR)/debian/tmp
+
+# Pristine copy of php/libpuzzle, php build system is messy
+PRISTINE=php/libpuzzle.pristine
+
+override_dh_auto_configure:
+	# Create a pristine copy, since phpize and the like are a mess
+	# (and do that only once, since no recursive copy is wanted)
+	#  - add debian symlink needed to use DH tools while building the PHP module
+	#  - we simulate a real installation of libpuzzle in order
+	#    to properly detect it while building the PHP module
+	if [ ! -d $(PRISTINE) ]; then \
+		cp -r php/libpuzzle $(PRISTINE) ; \
+		mkdir -p php/libpuzzle/usr ; \
+		ln -s $(CURDIR)/debian php/libpuzzle/debian ; \
+		ln -s $(CURDIR)/src/.libs php/libpuzzle/usr/lib ; \
+		ln -s $(CURDIR)/src php/libpuzzle/usr/include ; \
+	fi
+	dh_auto_configure
+
+libpuzzle-build-stamp:
+	dh_auto_build
+	touch $@
+
+libpuzzle-php-build-stamp: libpuzzle-build-stamp
+	cd php/libpuzzle && phpize
+	cd php/libpuzzle && \
+		dh_auto_configure -- --with-libpuzzle=$(CURDIR)/php/libpuzzle/usr
+	cd php/libpuzzle && dh_auto_build
+	touch $@
+
+override_dh_auto_build: libpuzzle-php-build-stamp
+	pod2man --center "" --date "" --release "" --section=1 \
+		debian/manpages/puzzle-diff.pod -o debian/puzzle-diff.1
+	pod2man --center "" --date "" --release "" --section=3 \
+		debian/manpages/libpuzzle.pod   -o debian/libpuzzle.3
+	pod2man --center "" --date "" --release "" --section=3 \
+		debian/manpages/puzzle_set.pod  -o debian/puzzle_set.3
+
+override_dh_auto_install:
+	dh_auto_install
+	cd php/libpuzzle && dh_auto_install -- \
+		INSTALL_ROOT=$(DEB_DH_INSTALL_DIR)
+	# Strip the rpath
+	chrpath -d $(DEB_DH_INSTALL_DIR)/usr/lib/php*/*/libpuzzle.so
+	echo "php:Depends=phpapi-$(shell php-config5 --phpapi)" \
+		>> debian/libpuzzle-php.substvars
+
+override_dh_auto_clean:
+	dh_auto_clean
+	# Removing anoying Makefile not cleaned properly due
+	# to the seprate build of the PHP module
+	rm -f php/Makefile
+	# Restore the copy if existing
+	if [ -d $(PRISTINE) ]; then \
+		rm -rf php/libpuzzle ; \
+		mv $(PRISTINE) php/libpuzzle ; \
+	fi
+	rm -f libpuzzle-build-stamp libpuzzle-php-build-stamp
+	# Clean built manpages
+	rm -f debian/puzzle-diff.1 debian/libpuzzle.3 debian/puzzle_set.3
+
+%:
+	dh $@ --with autotools_dev

@@ -567,3 +567,11 @@ $(LIBUNICODESTRINGPERL): $(SPREZZ)/libunicode-string-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libunicode-string-perl_$(libunicode-string-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libany-moose-perl
+libany-moose-perl:$(LIBANYMOOSEPERL)_$(ARCH).deb
+$(LIBANYMOOSEPERL): $(SPREZZ)/libany-moose-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libany-moose-perl_$(libany-moose-perl_UPVER).orig.tar.gz $(TARARGS) $@
+

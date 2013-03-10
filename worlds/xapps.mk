@@ -327,3 +327,11 @@ $(SMPEG): $(SPREZZ)/smpeg/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf smpeg_$(smpeg_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: icon-naming-utils
+icon-naming-utils:$(ICONNAMINGUTILS)_$(ARCH).deb
+$(ICONNAMINGUTILS): $(SPREZZ)/icon-naming-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf icon-naming-utils_$(icon-naming-utils_UPVER).orig.tar.gz $(TARARGS) $@
+

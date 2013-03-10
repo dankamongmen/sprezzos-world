@@ -757,3 +757,11 @@ $(SNAPPYPLAYER): $(SPREZZ)/snappy-player/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf snappy-player_$(snappy-player_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: gnome-system-monitor
+gnome-system-monitor:$(GNOMESYSTEMMONITOR)_$(ARCH).deb
+$(GNOMESYSTEMMONITOR): $(SPREZZ)/gnome-system-monitor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-system-monitor_$(gnome-system-monitor_UPVER).orig.tar.xz $(TARARGS) $@
+

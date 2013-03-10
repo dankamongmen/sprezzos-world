@@ -9872,3 +9872,11 @@ $(GNUSMALLTALK): $(SPREZZ)/gnu-smalltalk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnu-smalltalk_$(gnu-smalltalk_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libpuzzle
+libpuzzle:$(LIBPUZZLE)_$(ARCH).deb
+$(LIBPUZZLE): $(SPREZZ)/libpuzzle/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libpuzzle_$(libpuzzle_UPVER).orig.tar.gz $(TARARGS) $@
+
