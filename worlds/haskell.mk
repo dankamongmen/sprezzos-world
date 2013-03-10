@@ -4758,3 +4758,11 @@ $(HASKELLGROUPOIDS): $(SPREZZ)/haskell-groupoids/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-groupoids_$(haskell-groupoids_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-generic-deriving
+haskell-generic-deriving:$(HASKELLGENERICDERIVING)_$(ARCH).deb
+$(HASKELLGENERICDERIVING): $(SPREZZ)/haskell-generic-deriving/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-generic-deriving_$(haskell-generic-deriving_UPVER).orig.tar.gz $(TARARGS) $@
+
