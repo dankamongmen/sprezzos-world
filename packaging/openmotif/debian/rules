@@ -1,0 +1,97 @@
+#!/usr/bin/make -f
+
+HERE := $(shell pwd)
+DEST := $(HERE)/debian/tmp
+
+
+# This is the debhelper compatibility version to use.
+#export DH_VERBOSE=1
+export LANG=POSIX
+
+include /usr/share/quilt/quilt.make
+
+# From /usr/share/doc/autotools-dev/README.Debian.gz
+export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+export DEB_HOST_ARCH_CPU  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  confflags += $(DEB_HOST_GNU_TYPE)
+else
+  $(error Cannot cross-compile this package out-of-the-box)
+endif
+
+ifeq '$(DEB_HOST_ARCH_CPU)' 'mips'
+CFLAGS_NEW =-mplt
+endif
+
+ifeq '$(DEB_HOST_ARCH_CPU)' 'mipsel'
+CFLAGS_NEW =-mplt
+endif
+
+build: build-stamp
+
+build-stamp: $(QUILT_STAMPFN)
+	dh_testdir
+	CFLAGS="-g -O2 -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 $(CFLAGS_NEW)" ./configure --prefix=/usr --mandir=/usr/share/man --build=$(DEB_HOST_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+		make;
+		touch build-stamp
+
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -rf work work.tmp
+	rm -f build-stamp
+	dh_clean
+
+install: 
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	# install motif libs + clients
+	for dir in doc lib clients bitmaps bindings; do cd $dir; make DESTDIR=$(DEST) install; done
+
+	# fixup some minor stuff / take care about menus
+	mkdir -p debian/tmp/etc/X11/mwm
+	mkdir -p debian/tmp/usr/lib/X11
+#	rm -f debian/tmp/etc/X11/system.mwmrc
+	rm -f debian/tmp/usr/lib/X11/system.mwmrc
+	cp -a clients/mwm/system.mwmrc debian/tmp/etc/X11/mwm/system.mwmrc-menu
+	ln -s /etc/X11/mwm/system.mwmrc debian/tmp/usr/lib/X11/system.mwmrc
+	mkdir -p debian/tmp/usr/lib/X11/bindings/
+
+	# splitup packages
+	dh_movefiles
+
+binary-indep: build install
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+#	dh_installdebconf
+	dh_installdocs
+#		work/motif-doc-ps/*
+#	dh_installmanpages
+	for pkg in libmotif4 libmotif4-dbg libmotif-dev motif-clients ; do \
+	    cat LICENSE >> debian/$${pkg}/usr/share/doc/$${pkg}/copyright ; \
+	done
+	dh_installwm	-p motif-clients	/usr/bin/mwm
+	dh_installmenu
+	dh_installchangelogs
+	dh_lintian
+	dh_link
+	dh_strip --dbg-package=libmotif4-dbg
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
+
