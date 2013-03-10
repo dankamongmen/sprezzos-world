@@ -557,7 +557,7 @@ $(LIBTERMREADLINEGNUPERL): $(SPREZZ)/libterm-readline-gnu-perl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf Term-ReadLine-Gnu_$(libterm-readline-gnu-perl_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xzvf Term-ReadLine-Gnu-$(libterm-readline-gnu-perl_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libunicode-string-perl
 libunicode-string-perl:$(LIBUNICODESTRINGPERL)_$(ARCH).deb

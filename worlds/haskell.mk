@@ -4726,3 +4726,27 @@ $(HASKELLREFLECTION): $(SPREZZ)/haskell-reflection/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-reflection_$(haskell-reflection_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-profunctors
+haskell-profunctors:$(HASKELLPROFUNCTORS)_$(ARCH).deb
+$(HASKELLPROFUNCTORS): $(SPREZZ)/haskell-profunctors/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-profunctors_$(haskell-profunctors_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-profunctor-extras
+haskell-profunctor-extras:$(HASKELLPROFUNCTOREXTRAS)_$(ARCH).deb
+$(HASKELLPROFUNCTOREXTRAS): $(SPREZZ)/haskell-profunctor-extras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-profunctor-extras_$(haskell-profunctor-extras_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-semigroupoid-extras
+haskell-semigroupoid-extras:$(HASKELLSEMIGROUPOIDEXTRAS)_$(ARCH).deb
+$(HASKELLSEMIGROUPOIDEXTRAS): $(SPREZZ)/haskell-semigroupoid-extras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-semigroupoid-extras_$(haskell-semigroupoid-extras_UPVER).orig.tar.gz $(TARARGS) $@
+
