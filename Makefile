@@ -9848,3 +9848,11 @@ $(OPENDMARC): $(SPREZZ)/opendmarc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf opendmarc_$(opendmarc_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: opendkim
+opendkim:$(OPENDKIM)_$(ARCH).deb
+$(OPENDKIM): $(SPREZZ)/opendkim/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf opendkim_$(opendkim_UPVER).orig.tar.gz $(TARARGS) $@
+
