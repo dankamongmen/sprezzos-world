@@ -4750,3 +4750,11 @@ $(HASKELLSEMIGROUPOIDEXTRAS): $(SPREZZ)/haskell-semigroupoid-extras/debian/chang
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-semigroupoid-extras_$(haskell-semigroupoid-extras_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-groupoids
+haskell-groupoids:$(HASKELLGROUPOIDS)_$(ARCH).deb
+$(HASKELLGROUPOIDS): $(SPREZZ)/haskell-groupoids/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-groupoids_$(haskell-groupoids_UPVER).orig.tar.gz $(TARARGS) $@
+
