@@ -6683,7 +6683,7 @@ $(OMPHALOS): $(SPREZZ)/omphalos/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf omphalos-$(omphalos_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf omphalos_$(omphalos_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: opal
 opal:$(OPAL)_$(ARCH).deb
