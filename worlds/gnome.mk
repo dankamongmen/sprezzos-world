@@ -765,3 +765,19 @@ $(GNOMESYSTEMMONITOR): $(SPREZZ)/gnome-system-monitor/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-system-monitor_$(gnome-system-monitor_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: telepathy-mission-control-5
+telepathy-mission-control-5:$(TELEPATHYMISSIONCONTROL5)_$(ARCH).deb
+$(TELEPATHYMISSIONCONTROL5): $(SPREZZ)/telepathy-mission-control-5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf telepathy-mission-control-5_$(telepathy-mission-control-5_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: telepathy-logger
+telepathy-logger:$(TELEPATHYLOGGER)_$(ARCH).deb
+$(TELEPATHYLOGGER): $(SPREZZ)/telepathy-logger/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf telepathy-logger_$(telepathy-logger_UPVER).orig.tar.bz2 $(TARARGS) $@
+
