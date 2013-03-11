@@ -3012,7 +3012,7 @@ $(HASKELLHOPENPGP): $(SPREZZ)/haskell-hopenpgp/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf hopenpgp-$(haskell-hopenpgp_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf hOpenPGP-$(haskell-hopenpgp_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-hs-bibutils
 haskell-hs-bibutils:$(HASKELLHSBIBUTILS)_$(ARCH).deb
