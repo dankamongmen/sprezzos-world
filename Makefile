@@ -9880,3 +9880,19 @@ $(LIBPUZZLE): $(SPREZZ)/libpuzzle/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libpuzzle_$(libpuzzle_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: rarian
+rarian:$(RARIAN)_$(ARCH).deb
+$(RARIAN): $(SPREZZ)/rarian/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rarian_$(rarian_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: file
+file:$(FILE)_$(ARCH).deb
+$(FILE): $(SPREZZ)/file/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf file_$(file_UPVER).orig.tar.gz $(TARARGS) $@
+
