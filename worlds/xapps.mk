@@ -335,3 +335,11 @@ $(ICONNAMINGUTILS): $(SPREZZ)/icon-naming-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf icon-naming-utils_$(icon-naming-utils_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: librecad
+librecad:$(LIBRECAD)_$(ARCH).deb
+$(LIBRECAD): $(SPREZZ)/librecad/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf librecad_$(librecad_UPVER).orig.tar.gz $(TARARGS) $@
+
