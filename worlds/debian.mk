@@ -438,3 +438,11 @@ $(UMEGAYA): $(SPREZZ)/umegaya/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf umegaya_$(umegaya_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: adequate
+adequate:$(ADEQUATE)_$(ARCH).deb
+$(ADEQUATE): $(SPREZZ)/adequate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf adequate_$(adequate_UPVER).orig.tar.gz $(TARARGS) $@
+
