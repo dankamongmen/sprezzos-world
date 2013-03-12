@@ -9926,5 +9926,13 @@ $(SORD): $(SPREZZ)/sord/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf sord_$(sord_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf sord_$(sord_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: serd
+serd:$(SERD)_$(ARCH).deb
+$(SERD): $(SPREZZ)/serd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf serd_$(serd_UPVER).orig.tar.gz $(TARARGS) $@
 
