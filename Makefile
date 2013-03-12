@@ -9910,5 +9910,13 @@ $(LV2): $(SPREZZ)/lv2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf lv2_$(lv2_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf lv2_$(lv2_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: lilv
+lilv:$(LILV)_$(ARCH).deb
+$(LILV): $(SPREZZ)/lilv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lilv_$(lilv_UPVER).orig.tar.gz $(TARARGS) $@
 
