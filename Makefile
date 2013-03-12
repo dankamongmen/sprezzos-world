@@ -9958,5 +9958,13 @@ $(ETHTOOL): $(SPREZZ)/ethtool/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ethtool_$(ethtool_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf ethtool_$(ethtool_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: purple-plugin-pack
+purple-plugin-pack:$(PURPLEPLUGINPACK)_$(ARCH).deb
+$(PURPLEPLUGINPACK): $(SPREZZ)/purple-plugin-pack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf purple-plugin-pack_$(purple-plugin-pack_UPVER).orig.tar.gz $(TARARGS) $@
 
