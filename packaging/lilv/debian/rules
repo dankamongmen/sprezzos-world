@@ -1,0 +1,47 @@
+#!/usr/bin/make -f
+
+upstream_version ?= $(shell dpkg-parsechangelog | sed -rne 's/^Version: ([0-9.]+)(\+dfsg\d+)?.*$$/\1/p')
+dfsg_version = $(upstream_version)~dfsg0
+pkg = $(shell dpkg-parsechangelog | sed -ne 's/^Source: //p')
+
+LDFLAGS+=-Wl,--as-needed
+WAF = ./waf
+PYVERS=$(shell pyversions -s)
+
+%:
+	dh $@ --with python2
+
+override_dh_auto_configure:
+override_dh_auto_build:
+override_dh_auto_install:
+	for pyver in $(PYVERS); do \
+		PYTHON="$$pyver" $(WAF) configure \
+				--prefix=/usr \
+				--mandir=/usr/share/man \
+				--strict \
+				--debug \
+				--bindings \
+				--dyn-manifest && \
+		PYTHON="$$pyver" $(WAF) && \
+		PYTHON="$$pyver" $(WAF) install -f --destdir=$(CURDIR)/debian/tmp ; \
+	done
+
+override_dh_auto_clean:
+	$(WAF) clean || true
+	find -name "*.pyc" -delete
+	rm -rf build .waf*
+	dh_auto_clean
+
+# get-orig-source to drop waf
+get-orig-source:
+	uscan --noconf --force-download --rename --download-current-version --destdir=.
+	tar -xf $(pkg)_$(upstream_version).orig.tar.bz2
+	mv $(pkg)-$(upstream_version) $(pkg)-$(dfsg_version)
+	cd $(pkg)-$(dfsg_version) ; python waf --help > /dev/null
+	mv $(pkg)-$(dfsg_version)/.waf-*/* $(pkg)-$(dfsg_version)
+	sed -i '/^#==>$$/,$$d' $(pkg)-$(dfsg_version)/waf
+	rmdir $(pkg)-$(dfsg_version)/.waf-*
+	find $(pkg)-$(dfsg_version)/ -name '*.pyc' -delete
+	tar cf $(pkg)_$(dfsg_version).orig.tar $(pkg)-$(dfsg_version)
+	bzip2 -9f $(pkg)_$(dfsg_version).orig.tar
+	rm -rf $(pkg)-$(dfsg_version)
