@@ -9934,5 +9934,13 @@ $(SERD): $(SPREZZ)/serd/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf serd_$(serd_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf serd_$(serd_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: sratom
+sratom:$(SRATOM)_$(ARCH).deb
+$(SRATOM): $(SPREZZ)/sratom/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf sratom_$(sratom_UPVER).orig.tar.bz2 $(TARARGS) $@
 
