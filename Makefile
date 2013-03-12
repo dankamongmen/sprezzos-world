@@ -9918,5 +9918,13 @@ $(LILV): $(SPREZZ)/lilv/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf lilv_$(lilv_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf lilv_$(lilv_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: sord
+sord:$(SORD)_$(ARCH).deb
+$(SORD): $(SPREZZ)/sord/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sord_$(sord_UPVER).orig.tar.gz $(TARARGS) $@
 

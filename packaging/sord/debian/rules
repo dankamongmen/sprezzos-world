@@ -1,0 +1,53 @@
+#!/usr/bin/make -f
+
+upstream_version ?= $(shell dpkg-parsechangelog | sed -rne 's/^Version: ([0-9.]+)(\+dfsg\d+)?.*$$/\1/p')
+dfsg_version = $(upstream_version)~dfsg0
+pkg = $(shell dpkg-parsechangelog | sed -ne 's/^Source: //p')
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+LDFLAGS+=-Wl,--as-needed
+WAF = ./waf
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	$(WAF) configure \
+		--prefix=/usr \
+		--mandir=/usr/share/man \
+		--libdir=/usr/lib/$(DEB_HOST_MULTIARCH) \
+		--strict \
+		--debug \
+		--docs
+
+override_dh_auto_build:
+	$(WAF)
+
+override_dh_auto_clean:
+	$(WAF) clean || true
+	find -name "*.pyc" -delete
+	dh_auto_clean
+
+override_dh_auto_install:
+	$(WAF) install --destdir=$(CURDIR)/debian/tmp
+
+override_dh_strip:
+	dh_strip -plibsord-0-0 --dbg-package=sord-dbg
+	dh_strip --remaining-packages
+
+override_dh_installchangelogs:
+	dh_installchangelogs NEWS
+
+# get-orig-source to drop waf
+get-orig-source:
+	uscan --noconf --force-download --rename --download-current-version --destdir=.
+	tar -xf $(pkg)_$(upstream_version).orig.tar.bz2
+	mv $(pkg)-$(upstream_version) $(pkg)-$(dfsg_version)
+	cd $(pkg)-$(dfsg_version) ; python waf --help > /dev/null
+	mv $(pkg)-$(dfsg_version)/.waf-*/* $(pkg)-$(dfsg_version)
+	sed -i '/^#==>$$/,$$d' $(pkg)-$(dfsg_version)/waf
+	rmdir $(pkg)-$(dfsg_version)/.waf-*
+	find $(pkg)-$(dfsg_version)/ -name '*.pyc' -delete
+	tar cf $(pkg)_$(dfsg_version).orig.tar $(pkg)-$(dfsg_version)
+	xz -9fz $(pkg)_$(dfsg_version).orig.tar
+	rm -rf $(pkg)-$(dfsg_version)
