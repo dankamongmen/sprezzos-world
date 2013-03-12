@@ -1,0 +1,110 @@
+Description: Disable parallel build on hppa architecture.
+Origin: http://code.google.com/p/waf/source/browse/tags/waf-1.5.0/playground/serial.py
+
+---
+ wafadmin/Runner.py |   97 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 97 insertions(+)
+
+--- slv2.orig/wafadmin/Runner.py
++++ slv2/wafadmin/Runner.py
+@@ -150,3 +150,100 @@ class Parallel(object):
+ 			self.get_out()
+ 		assert(self.count==0 or self.stop)
+ 
++class Serial(object):
++
++	def __init__(self, bld, j=1):
++		self.manager = bld.task_manager
++		self.outstanding = []
++
++		# progress bar
++		self.total = self.manager.total()
++		self.processed = 0
++		self.error = 0
++
++		self.switchflag = 1 # postpone
++
++		self.consumers = None
++
++	# warning, this one is recursive ..
++	def get_next(self):
++		if self.outstanding:
++			t = self.outstanding.pop(0)
++			self.processed += 1
++			return t
++
++		# handle case where only one wscript exist
++		# that only install files
++		if not self.manager.groups:
++			return None
++
++		(_, self.outstanding) = self.manager.get_next_set()
++		if not self.outstanding: return None
++
++		return self.get_next()
++
++	def postpone(self, tsk):
++		self.processed -= 1
++		self.switchflag *= -1
++		# this actually shuffle the list
++		if self.switchflag>0: self.outstanding.insert(0, tsk)
++		else:                 self.outstanding.append(tsk)
++
++	def start(self):
++		debug('runner: Serial start called')
++		while 1:
++			# get next Task
++			tsk = self.get_next()
++			if tsk is None: break
++
++			if Logs.verbose: debug('runner: retrieving %r' % tsk)
++
++			st = tsk.runnable_status()
++			if st == ASK_LATER:
++				debug('runner: postponing %r' % tsk)
++				self.postpone(tsk)
++				continue
++
++			#continue
++			if st == SKIP_ME:
++				tsk.hasrun = SKIPPED
++				self.manager.add_finished(tsk)
++				continue
++
++			tsk.position = (self.processed, self.total)
++
++			# display the command that we are about to run
++			tsk.generator.bld.printout(tsk.display())
++
++			# run the command
++			if tsk.__class__.stat: ret = tsk.__class__.stat(tsk)
++			else: ret = tsk.run()
++			self.manager.add_finished(tsk)
++
++			# non-zero means something went wrong
++			if ret:
++				self.error = 1
++				tsk.hasrun = CRASHED
++				tsk.err_code = ret
++				if Options.options.keep: continue
++				else: return -1
++
++			try:
++				tsk.post_run()
++			except OSError:
++				self.error = 1
++				tsk.hasrun = MISSING
++				if Options.options.keep: continue
++				else: return -1
++			else:
++				tsk.hasrun = SUCCESS
++
++		if self.error:
++			return -1
++
++import subprocess
++p = subprocess.Popen(['dpkg', '--print-architecture'], stdout=subprocess.PIPE)
++arch = p.stdout.read().strip()
++p.wait()
++if arch == 'hppa':
++	Parallel = Serial

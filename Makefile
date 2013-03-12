@@ -9896,3 +9896,19 @@ $(FILE): $(SPREZZ)/file/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf file_$(file_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: slv2
+slv2:$(SLV2)_$(ARCH).deb
+$(SLV2): $(SPREZZ)/slv2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf slv2_$(slv2_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: lv2
+lv2:$(LV2)_$(ARCH).deb
+$(LV2): $(SPREZZ)/lv2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lv2_$(lv2_UPVER).orig.tar.gz $(TARARGS) $@
+
