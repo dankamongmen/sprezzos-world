@@ -257,7 +257,7 @@ $(ZEITGEIST): $(SPREZZ)/zeitgeist/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf zeitgeist-$(zeitgeist_UPVER).tar.bz2 $(TARARGS) $@
+	tar xJvf zeitgeist-$(zeitgeist_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: marlin
 marlin:$(MARLIN)_$(ARCH).deb
