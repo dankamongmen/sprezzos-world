@@ -9984,3 +9984,11 @@ $(RAPTOR): $(SPREZZ)/raptor/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf raptor_$(raptor_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: uhd
+uhd:$(UHD)_$(ARCH).deb
+$(UHD): $(SPREZZ)/uhd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf uhd_$(uhd_UPVER).orig.tar.gz $(TARARGS) $@
+
