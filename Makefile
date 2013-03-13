@@ -9976,3 +9976,11 @@ $(FILTERS): $(SPREZZ)/filters/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf filters_$(filters_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: raptor
+raptor:$(RAPTOR)_$(ARCH).deb
+$(RAPTOR): $(SPREZZ)/raptor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf raptor_$(raptor_UPVER).orig.tar.gz $(TARARGS) $@
+
