@@ -9966,5 +9966,13 @@ $(PURPLEPLUGINPACK): $(SPREZZ)/purple-plugin-pack/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf purple-plugin-pack_$(purple-plugin-pack_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf purple-plugin-pack_$(purple-plugin-pack_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: filters
+filters:$(FILTERS)_$(ARCH).deb
+$(FILTERS): $(SPREZZ)/filters/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf filters_$(filters_UPVER).orig.tar.gz $(TARARGS) $@
 
