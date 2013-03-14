@@ -9992,3 +9992,11 @@ $(UHD): $(SPREZZ)/uhd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf uhd_$(uhd_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: sgml2x
+sgml2x:$(SGML2X)_$(ARCH).deb
+$(SGML2X): $(SPREZZ)/sgml2x/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sgml2x_$(sgml2x_UPVER).orig.tar.gz $(TARARGS) $@
+
