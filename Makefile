@@ -6790,8 +6790,8 @@ $(OPENEXR): $(SPREZZ)/openexr/debian/changelog
 	tar xzvf openexr-$(openexr_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: ilmbase
-ilmbase:$(ilmbase)_$(ARCH).deb
-$(ilmbase): $(SPREZZ)/ilmbase/debian/changelog
+ilmbase:$(ILMBASE)_$(ARCH).deb
+$(ILMBASE): $(SPREZZ)/ilmbase/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
