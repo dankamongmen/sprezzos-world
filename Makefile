@@ -10016,3 +10016,19 @@ $(NETPBM): $(SPREZZ)/netpbm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf netpbm_$(netpbm_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mjpegtools
+mjpegtools:$(MJPEGTOOLS)_$(ARCH).deb
+$(MJPEGTOOLS): $(SPREZZ)/mjpegtools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mjpegtools_$(mjpegtools_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: chromaprint
+chromaprint:$(CHROMAPRINT)_$(ARCH).deb
+$(CHROMAPRINT): $(SPREZZ)/chromaprint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf chromaprint_$(chromaprint_UPVER).orig.tar.gz $(TARARGS) $@
+
