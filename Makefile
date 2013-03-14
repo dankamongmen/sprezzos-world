@@ -10000,3 +10000,11 @@ $(SGML2X): $(SPREZZ)/sgml2x/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf sgml2x_$(sgml2x_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libwmf
+libwmf:$(LIBWMF)_$(ARCH).deb
+$(LIBWMF): $(SPREZZ)/libwmf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libwmf_$(libwmf_UPVER).orig.tar.gz $(TARARGS) $@
+
