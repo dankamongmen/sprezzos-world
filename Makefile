@@ -10008,3 +10008,11 @@ $(LIBWMF): $(SPREZZ)/libwmf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libwmf_$(libwmf_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: netpbm
+netpbm:$(NETPBM)_$(ARCH).deb
+$(NETPBM): $(SPREZZ)/netpbm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf netpbm_$(netpbm_UPVER).orig.tar.gz $(TARARGS) $@
+
