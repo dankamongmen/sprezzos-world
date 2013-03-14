@@ -343,3 +343,11 @@ $(LIBRECAD): $(SPREZZ)/librecad/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf librecad_$(librecad_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: acoustid-fingerprinter
+acoustid-fingerprinter:$(ACOUSTIDFINGERPRINTER)_$(ARCH).deb
+$(ACOUSTIDFINGERPRINTER): $(SPREZZ)/acoustid-fingerprinter/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf acoustid-fingerprinter_$(acoustid-fingerprinter_UPVER).orig.tar.gz $(TARARGS) $@
+
