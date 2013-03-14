@@ -45,3 +45,11 @@ $(LIBPHONENUMBER): $(SPREZZ)/libphonenumber/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version --repack
 
+.PHONY: bsh
+bsh:$(bsh)_$(ARCH).deb
+$(bsh): $(SPREZZ)/bsh/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf bsh_$(bsh_UPVER).orig.tar.gz $(TARARGS) $@
+
