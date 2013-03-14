@@ -71,3 +71,11 @@ $(SEASCOPE): $(SPREZZ)/seascope/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf seascope_$(seascope_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: pymad
+pymad:$(PYMAD)_$(ARCH).deb
+$(PYMAD): $(SPREZZ)/pymad/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pymad_$(pymad_UPVER).orig.tar.gz $(TARARGS) $@
+
