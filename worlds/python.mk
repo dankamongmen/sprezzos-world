@@ -79,3 +79,19 @@ $(PYMAD): $(SPREZZ)/pymad/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pymad_$(pymad_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: pyacoustid
+pyacoustid:$(PYACOUSTID)_$(ARCH).deb
+$(PYACOUSTID): $(SPREZZ)/pyacoustid/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pyacoustid_$(pyacoustid_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: audioread
+audioread:$(AUDIOREAD)_$(ARCH).deb
+$(AUDIOREAD): $(SPREZZ)/audioread/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf audioread_$(audioread_UPVER).orig.tar.gz $(TARARGS) $@
+
