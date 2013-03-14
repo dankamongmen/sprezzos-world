@@ -1,0 +1,71 @@
+# see #283203
+# Thanks to Héctor García <hector@debian.org> for the patch
+--- netpbm/pnm/pnmquant.orig	2006-04-26 11:35:30.000000000 +0200
++++ netpbm/pnm/pnmquant	2006-04-26 11:32:47.000000000 +0200
+@@ -9,6 +9,7 @@
+ use Getopt::Long;
+ use File::Temp "tempfile";
+ use File::Spec;
++use Fcntl ":seek";
+ 
+ my ($TRUE, $FALSE) = (1,0);
+ 
+@@ -70,9 +71,14 @@
+ open(OLDOUT, ">&STDOUT");
+ select(OLDOUT);  # avoids Perl bug where it says we never use STDOUT 
+ open(STDOUT, ">", $mapfileSpec);
+-my $maprc = system("pnmcolormap", $ncolors, $averageOpt, $spreadOpt, $infile);
++
++&inputSTDIN($infile);
++
++my $maprc = system("pnmcolormap", $ncolors, $averageOpt, $spreadOpt);
+ open(STDOUT, ">&OLDOUT");
+ 
++seek(STDIN, 0, SEEK_SET);
++
+ if ($maprc != 0) {
+     print(STDERR "pnmcolormap failed, rc=$maprc\n");
+     exit(1);
+@@ -80,7 +86,7 @@
+     my $floydOpt = $opt_floyd ? "-floyd" : "-nofloyd";
+ 
+     my $remaprc = system("pnmremap", 
+-                         "-mapfile=$mapfileSpec", $floydOpt, $infile);
++                         "-mapfile=$mapfileSpec", $floydOpt);
+ 
+     if ($remaprc != 0) {
+         print(STDERR "pnmremap failed, rc=$remaprc\n");
+@@ -89,4 +95,33 @@
+ }
+ 
+ 
++sub inputSTDIN {
++	my $inputfile = shift;
+ 
++	if ($inputfile eq "-") {
++		unless (seek(STDIN, 0, SEEK_SET)) {
++			my ($fileFh, $fileSpec) = tempfile("pnmquantSTDINXXXX",
++			             		                SUFFIX => ".pnm",
++					 							UNLINK => $TRUE,
++												DIR => File::Spec->tmpdir());
++			while (<STDIN>) {
++				print($fileFh $_);
++			}
++		
++			unless (seek($fileFh, 0, SEEK_SET)) {
++				print(STDERR "pnmquant failed, seek of temporary input file failed! Errno = $ERRNO\n");
++				exit(1);
++			}
++			
++			*FILEFH = *$fileFh;
++			open(STDIN, "<&FILEFH");
++			tell(FILEFH);
++		}
++	}
++	else {
++		unless (open(STDIN, "<", $inputfile)) {
++			print(STDERR "pnmremap failed, can't open $inputfile: $!\n");
++			exit(1);
++		}
++	}
++}
