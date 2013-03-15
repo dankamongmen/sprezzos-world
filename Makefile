@@ -10078,5 +10078,5 @@ $(gupnptools): $(SPREZZ)/gupnp-tools/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gupnp-tools_$(gupnp-tools_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf gupnp-tools_$(gupnp-tools_UPVER).orig.tar.xz $(TARARGS) $@
 
