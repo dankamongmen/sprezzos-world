@@ -10056,3 +10056,27 @@ $(openbabel): $(SPREZZ)/openbabel/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openbabel_$(openbabel_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: blt
+blt:$(blt)_$(ARCH).deb
+$(blt): $(SPREZZ)/blt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blt_$(blt_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: guacamole
+guacamole:$(guacamole)_$(ARCH).deb
+$(guacamole): $(SPREZZ)/guacamole/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf guacamole_$(guacamole_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: gupnp-tools
+gupnp-tools:$(gupnptools)_$(ARCH).deb
+$(gupnptools): $(SPREZZ)/gupnp-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gupnp-tools_$(gupnp-tools_UPVER).orig.tar.gz $(TARARGS) $@
+
