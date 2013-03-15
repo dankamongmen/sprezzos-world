@@ -10046,5 +10046,13 @@ $(libnetfilterlog): $(SPREZZ)/libnetfilter-log/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libnetfilter-log_$(libnetfilter-log_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf libnetfilter-log_$(libnetfilter-log_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: openbabel
+openbabel:$(openbabel)_$(ARCH).deb
+$(openbabel): $(SPREZZ)/openbabel/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openbabel_$(openbabel_UPVER).orig.tar.gz $(TARARGS) $@
 
