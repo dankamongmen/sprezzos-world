@@ -1,0 +1,53 @@
+#!/usr/bin/env tclsh8.5
+
+# find the system shlib file, and split the library identifier part from the
+# package dependency identifier part.
+proc getdep { pkg } {
+    set path "/var/lib/dpkg/info/$pkg.shlibs"
+    set in [open $path]
+    if { $in == 0 } { 
+	error "could not open $path" 
+    }
+    set line [gets $in]
+    close $in
+    if {! [regexp {^(\S+\s+\d+)\s+(.*)$} $line m0 m1 m2]} { 
+	    error "invalid text in $path"
+    }
+    return [list $m1 $m2]
+}
+
+# Now, make sure we're in the right place to do all this
+if { [ file isdirectory "debian" ] == 0 } { error "not in source dir" }
+
+# process the tcl/tk versions in best-to-worst order
+foreach ver { "8.5" "8.4" } {
+    # the libname+soversion goes in one list, the dependency info in another
+    set l [getdep "tcl$ver"]
+    lappend tcllibs [lindex $l 0]
+    lappend tcldeps [lindex $l 1]
+    # repeat the process with the tk packages
+    set l [getdep "tk$ver"]
+    lappend tklibs [lindex $l 0]
+    lappend tkdeps [lindex $l 1]
+}
+
+# we're ready to make a new local shlibs file
+set out [open "debian/shlibs.local" "w"]
+if { $out == 0} { error "Can't make local shlibs file" }
+
+# Now we'll make a new tcl dependency list, with all the packages 'or'd,
+# to be used for all he tcl libs in our local shlibs file
+set dep [join $tcldeps " | "]
+# And spit out the list of libs, each with our new, 'or'-filled dependency
+foreach lib $tcllibs {
+    puts $out "$lib $dep"
+}
+
+# Repeat the process for the tk libs...
+set dep [join $tkdeps " | "]
+foreach lib $tklibs {
+    puts $out "$lib $dep"
+}
+
+# and we're done
+close $out

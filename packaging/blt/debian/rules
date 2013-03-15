@@ -1,0 +1,227 @@
+#!/usr/bin/make -f
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+DEB_BUILD_GNU_TYPE      ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE       ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+
+DEB_CFLAGS=$(shell dpkg-buildflags --get CFLAGS)
+DEB_CFLAGS+=$(shell dpkg-buildflags --get CPPFLAGS)
+DEB_LDFLAGS=$(shell dpkg-buildflags --get LDFLAGS)
+
+# useful variables
+v = 2.4
+
+dtmp = $(shell pwd)/debian/tmp
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+        CONFIGURE = CC=$(DEB_HOST_GNU_TYPE)-gcc
+endif
+
+CONFIGURE += EXTRA_LDFLAGS="$(DEB_LDFLAGS)"
+CONFIGURE += ./configure --prefix=/usr/ --mandir=/usr/share/man \
+	--with-cflags="$(DEB_CFLAGS) -D_REENTRANT"
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+        CONFIGURE += --host $(DEB_HOST_GNU_TYPE) --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+# Now, the build targets...
+
+build: build-stamp
+build-stamp: build-8.4-stamp build-8.5-stamp
+	touch build-stamp
+
+#
+# build for tcl/tk version (8.4)
+#
+build-8.4-stamp:
+	dh_testdir
+	-mkdir -p tmplib
+
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -rf debian/tcl8.4 debian/tk8.4
+
+	-mkdir -p debian/tcl8.4/include debian/tk8.4/include
+	-mkdir -p debian/tcl8.4/lib debian/tk8.4/lib
+
+	ln -s /usr/lib/libtcl8.4.so.1 debian/tcl8.4/lib/libtcl8.4.so
+	ln -s /usr/lib/libtk8.4.so.1  debian/tk8.4/lib/libtk8.4.so
+
+	cp debian/tcl.h.tcl8.4        debian/tcl8.4/include/tcl.h
+	cp debian/tclDecls.h.tcl8.4   debian/tcl8.4/include/tclDecls.h
+	cp debian/tclPlatDecls.h.tcl8.4   debian/tcl8.4/include/tclPlatDecls.h
+	cp debian/tclConfig.sh.tcl8.4 debian/tcl8.4/tclConfig.sh
+	echo TCL_PREFIX="'"`pwd`/debian/tcl8.4"'" \
+		>> debian/tcl8.4/tclConfig.sh
+	echo TCL_EXEC_PREFIX="'"`pwd`/debian/tcl8.4"'" \
+		>> debian/tcl8.4/tclConfig.sh
+
+	cp debian/tk.h.tk8.4        debian/tk8.4/include/tk.h
+	cp debian/tkDecls.h.tk8.4   debian/tk8.4/include/tkDecls.h
+	cp debian/tkPlatDecls.h.tk8.4   debian/tk8.4/include/tkPlatDecls.h
+	cp debian/tkConfig.sh.tk8.4 debian/tk8.4/tkConfig.sh
+	echo TK_PREFIX="'"`pwd`/debian/tk8.4"'" \
+		>> debian/tk8.4/tkConfig.sh
+	echo TK_EXEC_PREFIX="'"`pwd`/debian/tk8.4"'" \
+		>> debian/tk8.4/tkConfig.sh
+
+	$(CONFIGURE) --with-tk=debian/tk8.4 --with-tcl=debian/tcl8.4
+
+	( cd src/shared ; \
+	  sed -e 's:$$(version)$$(SHLIB_SUFFIX):.2.4.so.8.4:' Makefile > M2 ; \
+	  mv M2 Makefile )
+
+	( cd src; $(MAKE) )
+	mv src/shared/libBLTlite* tmplib/libBLTlite.$(v).so.8.4
+	mv src/shared/libBLT*     tmplib/libBLT.$(v).so.8.4
+	mv src/libBLTlite.a       tmplib/libBLTlite.$(v).8.4.a
+	mv src/libBLT.a           tmplib/libBLT.$(v).8.4.a
+
+	touch build-8.4-stamp
+
+#
+# Now build for the best tcl/tk version (8.5)
+#
+build-8.5-stamp:
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	$(CONFIGURE) --with-tk=/usr/lib/tk8.5 --with-tcl=/usr/lib/tcl8.5
+
+	( cd src/shared ; \
+	  sed -e 's:$$(version)$$(SHLIB_SUFFIX):.2.4.so.8.5:' Makefile > M2 ; \
+	  mv M2 Makefile )
+
+	$(MAKE) all
+
+	touch build-8.5-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build*-stamp
+	rm -f configure.old
+
+	rm -f build config.cache
+	[ ! -f Makefile ] || $(MAKE) clean
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -f src/shared/*.o
+	rm -f src/bltConfig.h src/bltHash.h
+
+	rm -f `find . -name "Makefile"`
+
+	rm -f debian/shlibs.local
+	rm -rf tmplib
+	rm -rf debian/tcl8.[0-5] debian/tk8.[0-5]
+	dh_clean
+
+install: DH_OPTIONS=
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+
+# Ok, do the basic install
+	-mkdir -p $(dtmp)
+	$(MAKE) INSTALL_ROOT=$(dtmp) install
+
+# Add the extra libs we built, and rename the latest for consistency
+	cp tmplib/* $(dtmp)/usr/lib
+	(cd $(dtmp)/usr/lib/; mv libBLT24.a     libBLT.$(v).8.5.a)
+	(cd $(dtmp)/usr/lib/; mv libBLTlite24.a libBLTlite.$(v).8.5.a)
+
+# Now fix up the man pages
+	(cd $(dtmp)/usr/share/man/mann ; for i in *.n ; do \
+	   mv $$i ../man3/`basename $$i .n`.3blt ; \
+	done)
+	rmdir $(dtmp)/usr/share/man/mann
+
+# remove some misplaced documentation
+	(cd $(dtmp)/usr/lib/blt2.4; rm README PROBLEMS NEWS)
+
+# Now we need to move the demos and examples over to /usr/share
+	mkdir -p $(dtmp)/usr/share/blt2.4
+	mv $(dtmp)/usr/lib/blt2.4/demos $(dtmp)/usr/share/blt2.4
+	chmod a-x $(dtmp)/usr/share/blt2.4/demos/*.txt
+
+	mkdir -p $(dtmp)/usr/share/blt2.4/examples
+	cp examples/* $(dtmp)/usr/share/blt2.4/examples
+
+# patch the demos and examples to use wish
+	(cd $(dtmp)/usr/share/blt2.4; \
+	   for i in demos/*.tcl examples/*.tcl ; do \
+		sed -e '1c#!/usr/bin/wish' $$i >$$i.new ; \
+		mv $$i.new $$i ; \
+		chmod 755 $$i; \
+	   done)
+
+	chmod 644 $(dtmp)/usr/share/blt2.4/demos/images/*
+	chmod 644 $(dtmp)/usr/share/blt2.4/demos/scripts/*.tcl
+	chmod 755 $(dtmp)/usr/share/blt2.4/demos/scripts/page.tcl
+
+# Build architecture-independent files here.
+# Pass -i to all debhelper commands in this target to reduce clutter.
+binary-indep: DH_OPTIONS=-i
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	dh_installdocs
+	dh_installchangelogs
+	dh_movefiles
+	dh_compress
+	dh_fixperms
+	dh_link
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-dependent files here.
+# Pass -a to all debhelper commands in this target to reduce clutter.
+binary-arch: DH_OPTIONS=-a
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	dh_installdocs
+
+# some minor cleanup needed for the html docs
+	rm debian/blt/usr/share/doc/blt/html/Makefile.vc
+	cp debian/blt-index.html debian/blt/usr/share/doc/blt/html
+
+#	dh_installexamples
+	dh_installchangelogs
+#	dh_installmenu
+
+	dh_movefiles
+
+	dh_strip
+	dh_link
+	dh_compress
+	dh_fixperms
+
+	dh_makeshlibs -V 'blt (>= 2.4z-4.1)'
+#	The excludes are probably wrong but necessary to make lintian happy
+#	dh_makeshlibs -V 'blt (>= 2.4z)' \
+#		--exclude="8.0" --exclude="8.3"
+
+	dh_installdeb
+
+# Now, it's time to  call upon my magic ugly little hack script, which
+# makes a shlibs.local file with which to fool the shlibs system,
+# and get the special dependencies we need.
+
+	chmod +x debian/hackshlibs # make sure we can run it
+	debian/hackshlibs
+	dh_shlibdeps
+
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
