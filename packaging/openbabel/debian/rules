@@ -1,0 +1,52 @@
+#!/usr/bin/make -f
+#
+#export DH_VERBOSE=1
+
+-include /usr/share/python/python.mk
+
+PYVERS=$(shell pyversions -vs)
+
+export CPPFLAGS     := $(shell dpkg-buildflags --get CPPFLAGS)
+export CFLAGS       := $(shell dpkg-buildflags --get CFLAGS) $(CPPFLAGS)
+export CXXFLAGS     := $(shell dpkg-buildflags --get CXXFLAGS) $(CPPFLAGS)
+export LDFLAGS      := $(shell dpkg-buildflags --get LDFLAGS)
+
+%:
+	dh $@ --with=python2 --builddirectory=$(CURDIR)/build --parallel
+
+override_dh_auto_configure:
+	dh_auto_configure -- -DCMAKE_BUILD_TYPE=None \
+                             -DPYTHON_BINDINGS=ON -DPERL_BINDINGS=ON \
+                             -DOBPERL_INSTALLDIRS=vendor \
+                             -DCMAKE_SKIP_RPATH=ON -DBUILD_GUI=ON
+
+override_dh_auto_build:
+	dh_auto_build
+	for pyversion in $(PYVERS); do \
+	  cd $(CURDIR)/build/scripts && CPPFLAGS=-I/usr/include/eigen2 \
+	  python$$pyversion $(CURDIR)/scripts/python/setup.py build --force; \
+	done
+
+override_dh_auto_install:
+	dh_auto_install
+	for pyversion in $(PYVERS); do \
+	  cd $(CURDIR)/build/scripts && \
+	  python$$pyversion $(CURDIR)/scripts/python/setup.py install \
+	  --force --root $(CURDIR)/debian/python-openbabel --prefix=/usr --no-compile -O0 \
+	  $(py_setup_install_args); \
+	done
+
+override_dh_install:
+	dh_install -Xperllocal.pod --list-missing
+
+override_dh_installdocs:
+	dh_installdocs -Xjquery.js
+
+override_dh_compress:
+	dh_compress -Xusr/share/doc/libopenbabel-doc/html/ \
+	            -Xusr/share/doc/python-openbabel/examples
+
+override_dh_auto_test:
+	-BABEL_LIBDIR=$(CURDIR)/build/lib \
+	LD_LIBRARY_PATH=$(CURDIR)/build/lib \
+	dh_auto_test
