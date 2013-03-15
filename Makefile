@@ -10032,3 +10032,19 @@ $(CHROMAPRINT): $(SPREZZ)/chromaprint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf chromaprint_$(chromaprint_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mythes
+mythes:$(mythes)_$(ARCH).deb
+$(mythes): $(SPREZZ)/mythes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mythes_$(mythes_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libnetfilter-log
+libnetfilter-log:$(libnetfilterlog)_$(ARCH).deb
+$(libnetfilterlog): $(SPREZZ)/libnetfilter-log/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnetfilter-log_$(libnetfilter-log_UPVER).orig.tar.gz $(TARARGS) $@
+
