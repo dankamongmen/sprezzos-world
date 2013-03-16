@@ -1,0 +1,106 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+
+# mafm 1.7.3-4: Disabling extra hardening and -Wl,-Bsymbolic because of
+# Launchpad bug #913523
+#
+#export DEB_BUILD_MAINT_OPTIONS := hardening=+pie,+bindnow
+export DEB_BUILD_MAINT_OPTIONS   := hardening=+bindnow
+# CMake doesn't use CPPFLAGS, pass them to CFLAGS/CXXFLAGS to enable the
+# missing (hardening) flags. dpkg_buildflags is necessary because $(shell ..)
+# doesn't use local environment variables. (bug #665324)
+dpkg_buildflags = DEB_BUILD_MAINT_OPTIONS=$(DEB_BUILD_MAINT_OPTIONS) dpkg-buildflags
+export DEB_CFLAGS_MAINT_APPEND   := -pipe -Wall $(shell $(dpkg_buildflags) --get CPPFLAGS)
+export DEB_CXXFLAGS_MAINT_APPEND := -pipe -Wall $(shell $(dpkg_buildflags) --get CPPFLAGS)
+export DEB_LDFLAGS_MAINT_APPEND  := -Wl,-z,defs -Wl,--as-needed
+
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+
+# Use this variable to define the particular version of OGRE that we're building
+OGRE_VERSION=1.8.0
+
+OGRE_CHANGELOG = Docs/ChangeLog.html
+
+# Directories to install with Multi-arch and versioned OGRE dir names
+LIB_MULTIARCH_DIR = /usr/lib/$(DEB_HOST_MULTIARCH)
+LIB_MULTIARCH_PRIVATE_DIR = /usr/lib/$(DEB_HOST_MULTIARCH)/OGRE-$(OGRE_VERSION)
+
+
+%:
+	dh $@ --buildsystem=cmake --parallel
+
+override_dh_auto_configure:
+        # Samples removed (do not meet DFSG), modify CMake files accordingly
+	sed -i 's|^add_subdirectory(Samples)|#add_subdirectory(Samples)|' CMakeLists.txt
+
+        # RPATH from http://www.ogre3d.org/tikiwiki/Building+Ogre+With+CMake
+	dh_auto_configure -- \
+		-DOGRE_LIB_DIRECTORY="lib/$(DEB_HOST_MULTIARCH)" \
+		-DOGRE_FULL_RPATH:BOOL=FALSE \
+		-DOGRE_BUILD_SAMPLES:BOOL=FALSE \
+		-DOGRE_INSTALL_SAMPLES:BOOL=FALSE \
+		-DOGRE_INSTALL_SAMPLES_SOURCE:BOOL=FALSE
+
+override_dh_install:
+        # Copy files from template for this particular version
+	cp -f debian/libogre-VERSION.install debian/libogre-$(OGRE_VERSION).install
+	cp -f debian/libogre-VERSION.lintian-overrides debian/libogre-$(OGRE_VERSION).lintian-overrides
+	cp -f debian/libogre-VERSION.preinst debian/libogre-$(OGRE_VERSION).preinst
+	cp -f debian/libogre-VERSION.postinst debian/libogre-$(OGRE_VERSION).postinst
+	cp -f debian/libogre-VERSION.postrm debian/libogre-$(OGRE_VERSION).postrm
+
+        # Workaround for CMake and debhelper with mutiarch (Debian bug:
+        # http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=641051 )
+        #
+        # Using cmake's OGRE_LIB_DIRECTORY now
+        #
+        #sed -i "/^libdir=/ s|/lib|/lib/$(DEB_HOST_MULTIARCH)|" debian/tmp/usr/lib/pkgconfig/*
+        #sed -i "/{libdir}/ s|{libdir}/OGRE|{libdir}/OGRE-$(OGRE_VERSION)|g" debian/tmp/usr/lib/pkgconfig/*
+        #
+        # Moving libraries by hand
+        #mkdir -p /tmp/$(DEB_HOST_MULTIARCH)
+        #mv debian/tmp/usr/lib/* /tmp/$(DEB_HOST_MULTIARCH)/
+        #mv /tmp/$(DEB_HOST_MULTIARCH) debian/tmp/usr/lib/
+
+        # Introduced in 1.7.3-5 as an attempt at using versioned files/dirs for
+        # plugins and config files (so several versions of OGRE can be installed
+        # at once)
+	mv debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/OGRE debian/tmp/$(LIB_MULTIARCH_PRIVATE_DIR)
+	sed -i "/{libdir}/ s|{libdir}/OGRE|{libdir}/OGRE-$(OGRE_VERSION)|g" debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig/*
+        # Samples
+        #mv debian/tmp/usr/share/OGRE debian/tmp/usr/share/OGRE-$(OGRE_VERSION)
+        #sed -i "/OGRE/ s|/OGRE|/OGRE-$(OGRE_VERSION)|g" debian/tmp/usr/share/OGRE-$(OGRE_VERSION)/*.cfg
+
+        # multi-arch/rpath issue with lintian:
+        # E: libogre-1.7.3: binary-or-shlib-defines-rpath usr/lib/x86_64-linux-gnu/OGRE/Plugin_OctreeZone.so /usr/lib/OGRE
+	chrpath --replace $(LIB_MULTIARCH_PRIVATE_DIR) debian/tmp/$(LIB_MULTIARCH_PRIVATE_DIR)/Plugin_OctreeZone.so.*
+
+	dh_install --fail-missing
+
+        # More fixes for multi-arch introduced in 1.7.3-5, and attempt at using
+        # versioned files for plugins and config files (so several versions can
+        # be installed at once)
+        #
+        # As of 1.7.3-6, not shipping /etc/OGRE*/plugins.cfg anymore
+        #
+        #sed -i "/^PluginFolder=/ s|MULTIARCH_TRIPLET/OGRE_VERSION|$(DEB_HOST_MULTIARCH)/OGRE-$(OGRE_VERSION)|" debian/libogre-$(OGRE_VERSION)/etc/OGRE/plugins.cfg
+        #mv debian/libogre-$(OGRE_VERSION)/etc/OGRE debian/libogre-$(OGRE_VERSION)/etc/OGRE-$(OGRE_VERSION)
+
+override_dh_installchangelogs:
+	dh_installchangelogs -- $(OGRE_CHANGELOG)
+
+override_dh_strip:
+	dh_strip -plibogre-$(OGRE_VERSION) --dbg-package=libogre-$(OGRE_VERSION)-dbg
+	dh_strip -pogre-1.8-tools
+        #dh_strip -pogre-1.8-samples --dbg-package=ogre-1.8-samples-dbg
+
+override_dh_clean:
+	dh_clean
+
+        # Remove files from template
+	rm -rf debian/libogre-$(OGRE_VERSION).*
