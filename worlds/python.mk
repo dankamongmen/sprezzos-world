@@ -103,3 +103,11 @@ $(pythonnetfilter): $(SPREZZ)/python-netfilter/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-netfilter_$(python-netfilter_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: nose
+nose:$(nose)_$(ARCH).deb
+$(nose): $(SPREZZ)/nose/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nose_$(nose_UPVER).orig.tar.gz $(TARARGS) $@
+
