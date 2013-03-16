@@ -4766,3 +4766,19 @@ $(HASKELLGENERICDERIVING): $(SPREZZ)/haskell-generic-deriving/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-generic-deriving_$(haskell-generic-deriving_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: alex
+alex:$(alex)_$(ARCH).deb
+$(alex): $(SPREZZ)/alex/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf alex_$(alex_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: c2hs
+c2hs:$(c2hs)_$(ARCH).deb
+$(c2hs): $(SPREZZ)/c2hs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf c2hs_$(c2hs_UPVER).orig.tar.gz $(TARARGS) $@
+
