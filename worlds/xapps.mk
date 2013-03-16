@@ -351,3 +351,19 @@ $(ACOUSTIDFINGERPRINTER): $(SPREZZ)/acoustid-fingerprinter/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf acoustid-fingerprinter_$(acoustid-fingerprinter_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: shared-desktop-ontologies
+shared-desktop-ontologies:$(shareddesktopontologies)_$(ARCH).deb
+$(shareddesktopontologies): $(SPREZZ)/shared-desktop-ontologies/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf shared-desktop-ontologies_$(shared-desktop-ontologies_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: pidgin-extprefs
+pidgin-extprefs:$(pidginextprefs)_$(ARCH).deb
+$(pidginextprefs): $(SPREZZ)/pidgin-extprefs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pidgin-extprefs_$(pidgin-extprefs_UPVER).orig.tar.gz $(TARARGS) $@
+
