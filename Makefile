@@ -52,7 +52,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -10079,4 +10079,12 @@ $(gupnptools): $(SPREZZ)/gupnp-tools/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gupnp-tools_$(gupnp-tools_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: radvd
+radvd:$(radvd)_$(ARCH).deb
+$(radvd): $(SPREZZ)/radvd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf radvd_$(radvd_UPVER).orig.tar.gz $(TARARGS) $@
 
