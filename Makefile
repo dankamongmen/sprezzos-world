@@ -10160,3 +10160,19 @@ $(EARS): $(SPREZZ)/ears/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ears_$(ears_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libcue
+libcue:$(LIBCUE)_$(ARCH).deb
+$(LIBCUE): $(SPREZZ)/libcue/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libcue_$(libcue_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: pidgin-privacy-please
+pidgin-privacy-please:$(PIDGINPRIVACYPLEASE)_$(ARCH).deb
+$(PIDGINPRIVACYPLEASE): $(SPREZZ)/pidgin-privacy-please/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pidgin-privacy-please_$(pidgin-privacy-please_UPVER).orig.tar.gz $(TARARGS) $@
+
