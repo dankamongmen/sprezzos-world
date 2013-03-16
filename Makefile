@@ -10088,3 +10088,35 @@ $(radvd): $(SPREZZ)/radvd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf radvd_$(radvd_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: diffutils
+diffutils:$(diffutils)_$(ARCH).deb
+$(diffutils): $(SPREZZ)/diffutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf diffutils_$(diffutils_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: input-utils
+input-utils:$(inpututils)_$(ARCH).deb
+$(inpututils): $(SPREZZ)/input-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf input-utils_$(input-utils_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: freeimage
+freeimage:$(freeimage)_$(ARCH).deb
+$(freeimage): $(SPREZZ)/freeimage/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf freeimage_$(freeimage_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ois
+ois:$(ois)_$(ARCH).deb
+$(ois): $(SPREZZ)/ois/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ois_$(ois_UPVER).orig.tar.gz $(TARARGS) $@
+
