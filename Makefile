@@ -10152,3 +10152,11 @@ $(LIBJITSI): $(SPREZZ)/libjitsi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libjitsi_$(libjitsi_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ears
+ears:$(EARS)_$(ARCH).deb
+$(EARS): $(SPREZZ)/ears/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ears_$(ears_UPVER).orig.tar.gz $(TARARGS) $@
+

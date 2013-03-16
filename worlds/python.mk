@@ -119,3 +119,11 @@ $(MUSICBRAINZNGS): $(SPREZZ)/musicbrainzngs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf musicbrainzngs_$(musicbrainzngs_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mutagen
+mutagen:$(MUTAGEN)_$(ARCH).deb
+$(MUTAGEN): $(SPREZZ)/mutagen/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mutagen_$(mutagen_UPVER).orig.tar.gz $(TARARGS) $@
+
