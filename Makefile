@@ -10120,3 +10120,11 @@ $(ois): $(SPREZZ)/ois/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ois_$(ois_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: latex2html
+latex2html:$(LATEX2HTML)_$(ARCH).deb
+$(LATEX2HTML): $(SPREZZ)/latex2html/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf latex2html_$(latex2html_UPVER).orig.tar.gz $(TARARGS) $@
+
