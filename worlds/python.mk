@@ -111,3 +111,11 @@ $(nose): $(SPREZZ)/nose/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf nose_$(nose_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: musicbrainzngs
+musicbrainzngs:$(MUSICBRAINZNGS)_$(ARCH).deb
+$(MUSICBRAINZNGS): $(SPREZZ)/musicbrainzngs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf musicbrainzngs_$(musicbrainzngs_UPVER).orig.tar.gz $(TARARGS) $@
+
