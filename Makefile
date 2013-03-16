@@ -10136,3 +10136,11 @@ $(LIBSPIRO): $(SPREZZ)/libspiro/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libspiro_$(libspiro_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: shtool
+shtool:$(SHTOOL)_$(ARCH).deb
+$(SHTOOL): $(SPREZZ)/shtool/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf shtool_$(shtool_UPVER).orig.tar.gz $(TARARGS) $@
+
