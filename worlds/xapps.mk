@@ -375,3 +375,11 @@ $(ogre1.8): $(SPREZZ)/ogre-1.8/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf ogre-1.8_$(ogre-1.8_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: jitsi
+jitsi:$(JITSI)_$(ARCH).deb
+$(JITSI): $(SPREZZ)/jitsi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf jitsi_$(jitsi_UPVER).orig.tar.gz $(TARARGS) $@
+

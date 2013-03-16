@@ -10144,3 +10144,11 @@ $(SHTOOL): $(SPREZZ)/shtool/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf shtool_$(shtool_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libjitsi
+libjitsi:$(LIBJITSI)_$(ARCH).deb
+$(LIBJITSI): $(SPREZZ)/libjitsi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf libjitsi_$(libjitsi_UPVER).orig.tar.gz $(TARARGS) $@
+
