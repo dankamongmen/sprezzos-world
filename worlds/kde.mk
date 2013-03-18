@@ -502,3 +502,11 @@ $(KINO): $(SPREZZ)/kino/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf kino_$(kino_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: pykde4
+pykde4:$(PYKDE4)_$(ARCH).deb
+$(PYKDE4): $(SPREZZ)/pykde4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf pykde4_$(pykde4_UPVER).orig.tar.xz $(TARARGS) $@
+
