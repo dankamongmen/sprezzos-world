@@ -4782,3 +4782,11 @@ $(c2hs): $(SPREZZ)/c2hs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf c2hs_$(c2hs_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-derive
+haskell-derive:$(HASKELLDERIVE)_$(ARCH).deb
+$(HASKELLDERIVE): $(SPREZZ)/haskell-derive/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-derive_$(haskell-derive_UPVER).orig.tar.gz $(TARARGS) $@
+
