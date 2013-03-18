@@ -575,3 +575,67 @@ $(LIBANYMOOSEPERL): $(SPREZZ)/libany-moose-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libany-moose-perl_$(libany-moose-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libencode-hanextra-perl
+libencode-hanextra-perl:$(LIBENCODEHANEXTRAPERL)_$(ARCH).deb
+$(LIBENCODEHANEXTRAPERL): $(SPREZZ)/libencode-hanextra-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libencode-hanextra-perl_$(libencode-hanextra-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libencode-jis2k-perl
+libencode-jis2k-perl:$(LIBENCODEJIS2KPERL)_$(ARCH).deb
+$(LIBENCODEJIS2KPERL): $(SPREZZ)/libencode-jis2k-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libencode-jis2k-perl_$(libencode-jis2k-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libhtml-tidy-perl
+libhtml-tidy-perl:$(LIBHTMLTIDYPERL)_$(ARCH).deb
+$(LIBHTMLTIDYPERL): $(SPREZZ)/libhtml-tidy-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libhtml-tidy-perl_$(libhtml-tidy-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libsgml-parser-opensp-perl
+libsgml-parser-opensp-perl:$(LIBSGMLPARSEROPENSPPERL)_$(ARCH).deb
+$(LIBSGMLPARSEROPENSPPERL): $(SPREZZ)/libsgml-parser-opensp-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsgml-parser-opensp-perl_$(libsgml-parser-opensp-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libmath-random-isaac-xs-perl
+libmath-random-isaac-xs-perl:$(LIBMATHRANDOMISAACXSPERL)_$(ARCH).deb
+$(LIBMATHRANDOMISAACXSPERL): $(SPREZZ)/libmath-random-isaac-xs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmath-random-isaac-xs-perl_$(libmath-random-isaac-xs-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libclass-xsaccessor-perl
+libclass-xsaccessor-perl:$(LIBCLASSXSACCESSORPERL)_$(ARCH).deb
+$(LIBCLASSXSACCESSORPERL): $(SPREZZ)/libclass-xsaccessor-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libclass-xsaccessor-perl_$(libclass-xsaccessor-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libhtml-strip-perl
+libhtml-strip-perl:$(LIBHTMLSTRIPPERL)_$(ARCH).deb
+$(LIBHTMLSTRIPPERL): $(SPREZZ)/libhtml-strip-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libhtml-strip-perl_$(libhtml-strip-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libdevel-caller-perl
+libdevel-caller-perl:$(LIBDEVELCALLERPERL)_$(ARCH).deb
+$(LIBDEVELCALLERPERL): $(SPREZZ)/libdevel-caller-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdevel-caller-perl_$(libdevel-caller-perl_UPVER).orig.tar.gz $(TARARGS) $@
+

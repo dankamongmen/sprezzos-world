@@ -494,3 +494,11 @@ $(SRTP): $(SPREZZ)/srtp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf srtp-$(srtp_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: kino
+kino:$(KINO)_$(ARCH).deb
+$(KINO): $(SPREZZ)/kino/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf kino_$(kino_UPVER).orig.tar.gz $(TARARGS) $@
+
