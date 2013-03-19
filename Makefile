@@ -23,6 +23,7 @@ PACKAGES:=$(wildcard $(SPREZZ)*)
 include worlds/ml.mk
 include worlds/kde.mk
 include worlds/java.mk
+include worlds/ruby.mk
 include worlds/perl.mk
 include worlds/lxde.mk
 include worlds/xfce.mk
@@ -7413,22 +7414,6 @@ $(RUBBERBAND): $(SPREZZ)/rubberband/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf rubberband-$(rubberband_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: ruby1.8
-ruby1.8:$(RUBY1.8)_$(ARCH).deb
-$(RUBY1.8): $(SPREZZ)/ruby1.8/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ruby1.8_$(ruby1.8_UPVER).orig.tar.gz $(TARARGS) $@
-
-.PHONY: ruby1.9.1
-ruby1.9.1:$(RUBY1.9.1)_$(ARCH).deb
-$(RUBY1.9.1): $(SPREZZ)/ruby1.9.1/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf ruby1.9.1_$(ruby1.9.1_UPVER).orig.tar.gz $(TARARGS) $@
-
 .PHONY: libraw
 libraw:$(LIBRAW)_$(ARCH).deb
 $(LIBRAW): $(SPREZZ)/libraw/debian/changelog
@@ -10167,4 +10152,52 @@ $(PIDGINPRIVACYPLEASE): $(SPREZZ)/pidgin-privacy-please/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pidgin-privacy-please_$(pidgin-privacy-please_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: boost1.53
+boost1.53:$(BOOST1.53)_$(ARCH).deb
+$(BOOST1.53): $(SPREZZ)/boost1.53/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf boost1.53_$(boost1.53_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: i18nspector
+i18nspector:$(I18NSPECTOR)_$(ARCH).deb
+$(I18NSPECTOR): $(SPREZZ)/i18nspector/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf i18nspector_$(i18nspector_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: silan
+silan:$(SILAN)_$(ARCH).deb
+$(SILAN): $(SPREZZ)/silan/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf silan_$(silan_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: openvdb
+openvdb:$(OPENVDB)_$(ARCH).deb
+$(OPENVDB): $(SPREZZ)/openvdb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf openvdb_$(openvdb_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ps2eps
+ps2eps:$(PS2EPS)_$(ARCH).deb
+$(PS2EPS): $(SPREZZ)/ps2eps/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ps2eps_$(ps2eps_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libjs-qunit
+libjs-qunit:$(LIBJSQUNIT)_$(ARCH).deb
+$(LIBJSQUNIT): $(SPREZZ)/libjs-qunit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libjs-qunit_$(libjs-qunit_UPVER).orig.tar.gz $(TARARGS) $@
 
