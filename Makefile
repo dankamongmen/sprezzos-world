@@ -6948,7 +6948,7 @@ $(PATCH): $(SPREZZ)/patch/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xzvf patch-$(patch_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf patch_$(patch_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: patchutils
 patchutils:$(PATCHUTILS)_$(ARCH).deb
