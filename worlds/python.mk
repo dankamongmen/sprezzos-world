@@ -127,3 +127,11 @@ $(MUTAGEN): $(SPREZZ)/mutagen/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mutagen_$(mutagen_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-publicsuffix
+python-publicsuffix:$(PYTHONPUBLICSUFFIX)_$(ARCH).deb
+$(PYTHONPUBLICSUFFIX): $(SPREZZ)/python-publicsuffix/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-publicsuffix_$(python-publicsuffix_UPVER).orig.tar.gz $(TARARGS) $@
+
