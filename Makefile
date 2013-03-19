@@ -10201,3 +10201,11 @@ $(LIBJSQUNIT): $(SPREZZ)/libjs-qunit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libjs-qunit_$(libjs-qunit_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cinfony
+cinfony:$(CINFONY)_$(ARCH).deb
+$(CINFONY): $(SPREZZ)/cinfony/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cinfony_$(cinfony_UPVER).orig.tar.gz $(TARARGS) $@
+
