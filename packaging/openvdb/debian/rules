@@ -1,0 +1,78 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+VER_FULL = $(shell dpkg-parsechangelog | grep '^Version' | cut -d' ' -f2 | cut -f1 -d-)
+VER_SONAME = $(shell dpkg-parsechangelog | grep '^Version' | cut -d' ' -f2 | cut -f1 -d- | cut -f1-2 -d.)
+
+#
+CFLAGS+=$(CPPFLAGS)
+CXXFLAGS+=$(CPPFLAGS)
+
+# deduce documentation option (build-indep target)
+ifeq "" "$(filter %-doc,$(shell dh_listpackages))"
+  BUILDDOC = DOXYGEN=
+else
+  BUILDDOC =
+endif
+
+ALLOPTS = $(BUILDDOC) HT=/usr HDSO=/usr/lib \
+					CPPUNIT_INCL_DIR=/usr/include CPPUNIT_LIB_DIR=/usr/lib \
+					GLFW_INCL_DIR=/usr/include/GL GLFW_LIB_DIR=/usr/lib \
+					LIBS_RPATH='$(LDFLAGS) -ldl -lm -lz -lHalf -ltbb' \
+					verbose=yes debug=yes
+
+%:
+	dh $@ --parallel
+
+MPL: LICENSE
+	cp -f $< $@
+
+override_dh_auto_build-arch:
+	test -h openvdb||ln -f -s . openvdb
+	dh_auto_build -- $(ALLOPTS)
+
+# No tests for now (too long to run):
+override_dh_auto_test-arch:
+
+override_dh_auto_build-indep:
+	$(MAKE) doc
+
+# No tests needed for docs
+override_dh_auto_test-indep:
+
+# do not run make install
+override_dh_auto_install:
+	dh_auto_install -- $(ALLOPTS) INSTALL_DIR=$(CURDIR)$(DESTDIR)/debian/tmp/usr INSTALL_LIB_DIR=$(CURDIR)$(DESTDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+	rm openvdb
+
+pkg_run = libopenvdb-tools
+pkg_lib = libopenvdb$(VER_SONAME)
+pkg_dev = libopenvdb-dev
+pkg_doc = libopenvdb-doc
+
+override_dh_install:
+	dh_install -p$(pkg_run) debian/tmp/usr/bin
+	dh_install -p$(pkg_lib) debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libopenvdb.so.$(VER_SONAME)
+	dh_install -p$(pkg_lib) debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libopenvdb.so.$(VER_FULL)
+	dh_install -p$(pkg_dev) debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libopenvdb.so
+	dh_install -p$(pkg_dev) debian/tmp/usr/include
+	dh_install -p$(pkg_doc) debian/tmp/usr/share/doc
+
+override_dh_installdocs: MPL
+	dh_installdocs -A $^
+
+debian/vdb_print.1: debian/vdb_print.1.in
+	help2man --version-string=$(VER_FULL) --include=$< --output=$@ --no-info --no-discard-stderr vdb_print
+
+debian/vdb_view.1: debian/vdb_view.1.in
+	help2man --version-string=$(VER_FULL) --include=$< --output=$@ --no-info --no-discard-stderr vdb_view
+
+#override_dh_shlibdeps:
+#override_dh_installchangelogs:
+#	dh_installchangelogs CHANGES
+#debian/CHANGES:
+#	links -dump http://www.openvdb.org/documentation/changes.html | tail -n +7 > $@
+
+get-orig-source:
+	uscan --verbose --force-download --rename --repack
