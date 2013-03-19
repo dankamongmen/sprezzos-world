@@ -10209,3 +10209,19 @@ $(CINFONY): $(SPREZZ)/cinfony/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cinfony_$(cinfony_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: openscenegraph
+openscenegraph:$(OPENSCENEGRAPH)_$(ARCH).deb
+$(OPENSCENEGRAPH): $(SPREZZ)/openscenegraph/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openscenegraph_$(openscenegraph_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: mrpt
+mrpt:$(MRPT)_$(ARCH).deb
+$(MRPT): $(SPREZZ)/mrpt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mrpt_$(mrpt_UPVER).orig.tar.gz $(TARARGS) $@
+

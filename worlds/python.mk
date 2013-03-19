@@ -135,3 +135,11 @@ $(PYTHONPUBLICSUFFIX): $(SPREZZ)/python-publicsuffix/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-publicsuffix_$(python-publicsuffix_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: isodate
+isodate:$(ISODATE)_$(ARCH).deb
+$(ISODATE): $(SPREZZ)/isodate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf isodate_$(isodate_UPVER).orig.tar.gz $(TARARGS) $@
+
