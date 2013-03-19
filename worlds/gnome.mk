@@ -781,3 +781,11 @@ $(TELEPATHYLOGGER): $(SPREZZ)/telepathy-logger/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf telepathy-logger_$(telepathy-logger_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libbonobo
+libbonobo:$(LIBBONOBO)_$(ARCH).deb
+$(LIBBONOBO): $(SPREZZ)/libbonobo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libbonobo_$(libbonobo_UPVER).orig.tar.gz $(TARARGS) $@
+
