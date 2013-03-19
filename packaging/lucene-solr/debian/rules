@@ -1,0 +1,66 @@
+#!/usr/bin/make -f
+
+export JAVA_HOME=/usr/lib/jvm/default-java
+
+DEB_UPSTREAM_VERSION=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([^+]+).*,\1,p')
+
+%:
+	dh $@ --with maven_repo_helper
+
+override_dh_auto_configure:
+	# Link in jars from /usr/share/java rather
+	# than patching the build process
+	for pkg in `cat debian/build-jars`; \
+	do \
+		ln -sf `echo $$pkg | cut -d : -f 1` `echo $$pkg | cut -d : -f 2`; \
+	done
+	dh_auto_configure
+
+override_dh_auto_build:
+	mkdir -p lucene/site/build/site
+	ant -buildfile build.xml -Dversion=$(DEB_UPSTREAM_VERSION) get-maven-poms
+	ant -buildfile lucene/build.xml -propertyfile debian/ant.properties \
+		-Dversion=$(DEB_UPSTREAM_VERSION) javacc jar-core docs javadocs build-contrib
+	ant -buildfile solr/contrib/dataimporthandler/build.xml \
+		-propertyfile debian/ant.properties -Dversion=$(DEB_UPSTREAM_VERSION) dist
+	ant -buildfile solr/build.xml -propertyfile debian/ant.properties \
+		-Dversion=$(DEB_UPSTREAM_VERSION) dist-war
+
+ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
+override_dh_auto_test:
+	ant -buildfile lucene/build.xml -propertyfile debian/ant.properties \
+        -Dversion=$(DEB_UPSTREAM_VERSION) test-core test-contrib
+	ant -buildfile solr/build.xml -propertyfile debian/ant.properties \
+        -Dversion=$(DEB_UPSTREAM_VERSION) test-core
+endif
+
+override_dh_auto_clean:
+	ant clean-jars
+	# breaks if patches not applied
+	ant -buildfile lucene/build.xml clean-javacc || true
+	find . -name "*.jar" -type l -delete || true
+	find . -name "pom.xml" -type f -delete || true
+	rm -f debian/liblucene3-java.poms
+	rm -rf lucene/site/build/site
+	dh_auto_clean
+
+override_dh_fixperms:
+	chmod 644 debian/solr-common/usr/share/solr/web/WEB-INF/weblogic.xml \
+		debian/solr-common/etc/solr/conf/schema.xml \
+		debian/solr-common/etc/solr/conf/solrconfig.xml \
+		debian/solr-common/usr/share/solr/web/favicon.ico \
+		debian/solr-common/usr/share/solr/web/admin/favicon.ico
+	dh_fixperms
+
+override_dh_auto_install:
+	sed -e "s|__VERSION__|$(DEB_UPSTREAM_VERSION)|g" \
+		< debian/liblucene3-java.poms.in > debian/liblucene3-java.poms 
+	dh_auto_install
+
+override_dh_installchangelogs:
+	dh_installchangelogs -pliblucene3-java lucene/CHANGES.txt
+	dh_installchangelogs -plibsolr-java solr/CHANGES.txt
+	dh_installchangelogs
+
+get-orig-source:
+	uscan --force-download --rename
