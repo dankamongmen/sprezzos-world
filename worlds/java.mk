@@ -53,3 +53,11 @@ $(bsh): $(SPREZZ)/bsh/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf bsh_$(bsh_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: lucene-solr
+lucene-solr:$(LUCENESOLR)_$(ARCH).deb
+$(LUCENESOLR): $(SPREZZ)/lucene-solr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lucene-solr_$(lucene-solr_UPVER).orig.tar.gz $(TARARGS) $@
+
