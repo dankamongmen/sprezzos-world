@@ -10225,3 +10225,11 @@ $(MRPT): $(SPREZZ)/mrpt/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mrpt_$(mrpt_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libprelude
+libprelude:$(LIBPRELUDE)_$(ARCH).deb
+$(LIBPRELUDE): $(SPREZZ)/libprelude/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libprelude_$(libprelude_UPVER).orig.tar.gz $(TARARGS) $@
+
