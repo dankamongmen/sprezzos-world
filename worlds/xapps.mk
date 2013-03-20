@@ -391,3 +391,11 @@ $(LIBSOIL): $(SPREZZ)/libsoil/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsoil_$(libsoil_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libdrawtext
+libdrawtext:$(LIBDRAWTEXT)_$(ARCH).deb
+$(LIBDRAWTEXT): $(SPREZZ)/libdrawtext/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdrawtext_$(libdrawtext_UPVER).orig.tar.gz $(TARARGS) $@
+
