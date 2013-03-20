@@ -143,3 +143,11 @@ $(ISODATE): $(SPREZZ)/isodate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf isodate_$(isodate_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cython
+cython:$(CYTHON)_$(ARCH).deb
+$(CYTHON): $(SPREZZ)/cython/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cython_$(cython_UPVER).orig.tar.gz $(TARARGS) $@
+
