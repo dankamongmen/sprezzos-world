@@ -151,3 +151,27 @@ $(CYTHON): $(SPREZZ)/cython/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cython_$(cython_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-argcomplete
+python-argcomplete:$(PYTHONARGCOMPLETE)_$(ARCH).deb
+$(PYTHONARGCOMPLETE): $(SPREZZ)/python-argcomplete/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-argcomplete_$(python-argcomplete_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: python-wsgilog
+python-wsgilog:$(PYTHONWSGILOG)_$(ARCH).deb
+$(PYTHONWSGILOG): $(SPREZZ)/python-wsgilog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-wsgilog_$(python-wsgilog_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: python-dvdvideo
+python-dvdvideo:$(PYTHONDVDVIDEO)_$(ARCH).deb
+$(PYTHONDVDVIDEO): $(SPREZZ)/python-dvdvideo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-dvdvideo_$(python-dvdvideo_UPVER).orig.tar.gz $(TARARGS) $@
+
