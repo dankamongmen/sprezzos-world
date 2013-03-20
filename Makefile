@@ -4738,14 +4738,6 @@ $(INDIGO): $(SPREZZ)/indigo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf indigo-$(indigo_UPVER).tar.gz $(TARARGS) $@
 
-.PHONY: libblossom
-libblossom:$(LIBBLOSSOM)_$(ARCH).deb
-$(LIBBLOSSOM): $(SPREZZ)/libblossom/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libblossom_$(libblossom_UPVER).orig.tar.gz $(TARARGS) $@
-
 .PHONY: libbluray
 libbluray:$(LIBBLURAY)_$(ARCH).deb
 $(LIBBLURAY): $(SPREZZ)/libbluray/debian/changelog
@@ -7501,14 +7493,6 @@ $(RAPTOR2): $(SPREZZ)/raptor2/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf raptor2-$(raptor2_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: raptorial
-raptorial:$(RAPTORIAL)_$(ARCH).deb
-$(RAPTORIAL): $(SPREZZ)/raptorial/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf raptorial_$(raptorial_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: rasqal
 rasqal:$(RASQAL)_$(ARCH).deb

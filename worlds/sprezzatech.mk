@@ -9,3 +9,27 @@ $(SPREZZOSGRUB2THEME): $(SPREZZ)/sprezzos-grub2theme/debian/changelog
 	ln -s sprezzos-grub2theme-$(sprezzos-grub2theme_UPVER).tar.xz \
 		sprezzos-grub2theme_$(sprezzos-grub2theme_UPVER).orig.tar.xz
 
+.PHONY: charn
+charn:$(CHARN)_$(ARCH).deb
+$(CHARN): $(SPREZZ)/charn/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf charn_$(charn_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: raptorial
+raptorial:$(RAPTORIAL)_$(ARCH).deb
+$(RAPTORIAL): $(SPREZZ)/raptorial/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf raptorial_$(raptorial_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libblossom
+libblossom:$(LIBBLOSSOM)_$(ARCH).deb
+$(LIBBLOSSOM): $(SPREZZ)/libblossom/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libblossom_$(libblossom_UPVER).orig.tar.gz $(TARARGS) $@
+
