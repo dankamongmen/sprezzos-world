@@ -1,0 +1,53 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+export DEB_BUILD_HARDENING=1
+export DEB_BUILD_HARDENING_FORMAT=0
+
+PYVERS=$(shell pyversions -vr)
+
+override_dh_auto_configure:
+	# backup files to be regenerated
+	mkdir debian/temp.backup; \
+	cp -a bindings/python/PreludeEasy.py bindings/python/_PreludeEasy.cxx debian/temp.backup/
+	dh_auto_configure -- --with-perl-installdirs=vendor
+
+override_dh_auto_build: build-core $(PYVERS:%=build-python%)
+
+build-core:
+	dh_auto_build
+
+build-python%:
+	vers="$*"; \
+	pythonvers="python$*"; \
+	echo "python$*"; \
+	PYFLAGS="PYTHON=$$pythonvers PYTHON_VERSION=$$vers _capng_la_LIBADD=\"-l$$pythonvers\""; \
+	$(MAKE) -C bindings/python clean; \
+	$(MAKE) -C bindings/python $$PYFLAGS; \
+	$(MAKE) -C bindings/python $$PYFLAGS DESTDIR=$(CURDIR)/debian/tmp-python-libprelude install; \
+	$(MAKE) -C bindings/low-level/python clean; \
+	$(MAKE) -C bindings/low-level/python $$PYFLAGS; \
+	$(MAKE) -C bindings/low-level/python $$PYFLAGS DESTDIR=$(CURDIR)/debian/tmp-python-libprelude install; \
+	echo "OK"
+
+override_dh_auto_install:
+	dh_auto_install; \
+	rm -rf debian/tmp/usr/lib/python*; \
+	find debian/tmp-python-libprelude/usr/lib -name "*.la" -delete; \
+	mv debian/tmp-python-libprelude/usr/lib/* debian/tmp/usr/lib/
+
+override_dh_strip:
+	dh_strip --dbg-package=libprelude2-dbg
+
+override_dh_auto_clean:
+	-rm -rf debian/tmp-python-libprelude
+	[ ! -d bindings/low-level/python/build ] || rm -rf bindings/low-level/python/build
+	[ ! -d bindings/python/build ] || rm -rf bindings/python/build
+	dh_auto_clean
+	rm -f bindings/low-level/perl/Makefile.old
+	rm -f bindings/perl/PreludeEasy.pm
+	[ ! -d debian/temp.backup ] || cp -a debian/temp.backup/* bindings/python/
+	[ ! -d debian/temp.backup ] || rm -rf debian/temp.backup
+
+%:
+	dh $@ --with=quilt,python2,autoreconf
