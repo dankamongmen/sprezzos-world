@@ -1,0 +1,65 @@
+Description: Use secure compare for hmac comparison
+ Rack::Session::Cookie in Rack 1.5.x before 1.5.2, 1.4.x before 1.4.5,
+ 1.3.x before 1.3.10, 1.2.x before 1.2.8, and 1.1.x before 1.1.6 allows
+ remote attackers to guess the session cookie, gain privileges, and
+ execute arbitrary code via a timing attack involving am HMAC
+ comparison function that does not run in constant time.
+
+Origin: upstream,
+ https://github.com/rack/rack/commit/0cd7e9aa397f8ebb3b8481d67dbac8b4863a7f07,
+ https://github.com/rack/rack/commit/9a81b961457805f6d1a5c275d053068440421e11
+Bug: https://security-tracker.debian.org/tracker/CVE-2013-0263
+Bug-Debian: http://bugs.debian.org/700226
+
+Index: ruby-rack/lib/rack/session/cookie.rb
+===================================================================
+--- ruby-rack.orig/lib/rack/session/cookie.rb	2013-02-11 15:09:25.000000000 +0900
++++ ruby-rack/lib/rack/session/cookie.rb	2013-02-20 23:11:19.091085974 +0900
+@@ -108,7 +108,7 @@
+ 
+             if session_data && digest
+               ok = @secrets.any? do |secret|
+-                secret && digest == generate_hmac(session_data, secret)
++                secret && Rack::Utils.secure_compare(digest, generate_hmac(session_data, secret))
+               end
+             end
+ 
+Index: ruby-rack/lib/rack/utils.rb
+===================================================================
+--- ruby-rack.orig/lib/rack/utils.rb	2013-02-11 15:09:25.000000000 +0900
++++ ruby-rack/lib/rack/utils.rb	2013-02-20 23:12:39.171087876 +0900
+@@ -336,6 +336,18 @@
+     end
+     module_function :byte_ranges
+ 
++    # Constant time string comparison.
++    def secure_compare(a, b)
++      return false unless bytesize(a) == bytesize(b)
++
++      l = a.unpack("C*")
++
++      r, i = 0, -1
++      b.each_byte { |v| r |= v ^ l[i+=1] }
++      r == 0
++    end
++    module_function :secure_compare
++
+     # Context allows the use of a compatible middleware at different points
+     # in a request handling stack. A compatible middleware must define
+     # #context which should take the arguments env and app. The first of which
+Index: ruby-rack/test/spec_utils.rb
+===================================================================
+--- ruby-rack.orig/test/spec_utils.rb	2013-02-11 15:09:25.000000000 +0900
++++ ruby-rack/test/spec_utils.rb	2013-02-20 23:13:55.627089693 +0900
+@@ -322,6 +322,11 @@
+     Rack::Utils.bytesize("FOO\xE2\x82\xAC").should.equal 6
+   end
+ 
++  should "should perform constant time string comparison" do
++    Rack::Utils.secure_compare('a', 'a').should.equal true
++    Rack::Utils.secure_compare('a', 'b').should.equal false
++  end
++
+   should "return status code for integer" do
+     Rack::Utils.status_code(200).should.equal 200
+   end

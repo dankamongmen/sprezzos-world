@@ -1,0 +1,67 @@
+From: James Tucker <jftucker@gmail.com>
+Date: Sun, 13 May 2012 15:02:17 -0700
+Subject: Fix parsing performance for unquoted filenames
+
+Special thanks to Paul Rogers & Eric Wong
+
+Origin: upstream, https://github.com/rack/rack/commit/4fc44671b3cad569421f4f8b775c0590b86f575e
+Bug: https://security-tracker.debian.org/tracker/CVE-2012-6109
+Bug-Debian: http://bugs.debian.org/698440
+
+---
+ lib/rack/multipart.rb  |    4 ++--
+ test/spec_multipart.rb |   21 +++++++++++++++++++++
+ 2 files changed, 23 insertions(+), 2 deletions(-)
+
+diff --git a/lib/rack/multipart.rb b/lib/rack/multipart.rb
+index 3777106..6849248 100644
+--- a/lib/rack/multipart.rb
++++ b/lib/rack/multipart.rb
+@@ -12,7 +12,7 @@ module Rack
+     MULTIPART = %r|\Amultipart/.*boundary=\"?([^\";,]+)\"?|n
+     TOKEN = /[^\s()<>,;:\\"\/\[\]?=]+/
+     CONDISP = /Content-Disposition:\s*#{TOKEN}\s*/i
+-    DISPPARM = /;\s*(#{TOKEN})=("(?:\\"|[^"])*"|#{TOKEN})*/
++    DISPPARM = /;\s*(#{TOKEN})=("(?:\\"|[^"])*"|#{TOKEN})/
+     RFC2183 = /^#{CONDISP}(#{DISPPARM})+$/i
+     BROKEN_QUOTED = /^#{CONDISP}.*;\sfilename="(.*?)"(?:\s*$|\s*;\s*#{TOKEN}=)/i
+     BROKEN_UNQUOTED = /^#{CONDISP}.*;\sfilename=(#{TOKEN})/i
+@@ -31,4 +31,4 @@ module Rack
+     end
+
+   end
+-end
+\ No newline at end of file
++end
+diff --git a/test/spec_multipart.rb b/test/spec_multipart.rb
+index b0bf57c..e4e5981 100644
+--- a/test/spec_multipart.rb
++++ b/test/spec_multipart.rb
+@@ -48,6 +48,27 @@ describe Rack::Multipart do
+     params['profile']['bio'].should.include 'hello'
+   end
+
++  should "parse very long unquoted multipart file names" do
++    data = <<-EOF
++--AaB03x\r
++Content-Type: text/plain\r
++Content-Disposition: attachment; name=file; filename=#{'long' * 100}\r
++\r
++contents\r
++--AaB03x--\r
++    EOF
++
++    options = {
++      "CONTENT_TYPE" => "multipart/form-data; boundary=AaB03x",
++      "CONTENT_LENGTH" => data.length.to_s,
++      :input => StringIO.new(data)
++    }
++    env = Rack::MockRequest.env_for("/", options)
++    params = Rack::Utils::Multipart.parse_multipart(env)
++
++    params["file"][:filename].should.equal('long' * 100)
++  end
++
+   should "parse multipart upload with text file" do
+     env = Rack::MockRequest.env_for("/", multipart_fixture(:text))
+     params = Rack::Multipart.parse_multipart(env)

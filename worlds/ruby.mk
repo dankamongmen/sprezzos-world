@@ -166,3 +166,51 @@ $(RUBYSHOULDA): $(SPREZZ)/ruby-shoulda/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ruby-shoulda_$(ruby-shoulda_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ruby-rack
+ruby-rack:$(RUBYRACK)_$(ARCH).deb
+$(RUBYRACK): $(SPREZZ)/ruby-rack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-rack_$(ruby-rack_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-bacon
+ruby-bacon:$(RUBYBACON)_$(ARCH).deb
+$(RUBYBACON): $(SPREZZ)/ruby-bacon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-bacon_$(ruby-bacon_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-memcache-client
+ruby-memcache-client:$(RUBYMEMCACHECLIENT)_$(ARCH).deb
+$(RUBYMEMCACHECLIENT): $(SPREZZ)/ruby-memcache-client/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-memcache-client_$(ruby-memcache-client_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: thin
+thin:$(THIN)_$(ARCH).deb
+$(THIN): $(SPREZZ)/thin/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf thin_$(thin_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-eventmachine
+ruby-eventmachine:$(RUBYEVENTMACHINE)_$(ARCH).deb
+$(RUBYEVENTMACHINE): $(SPREZZ)/ruby-eventmachine/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-eventmachine_$(ruby-eventmachine_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-daemons
+ruby-daemons:$(RUBYDAEMONS)_$(ARCH).deb
+$(RUBYDAEMONS): $(SPREZZ)/ruby-daemons/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-daemons_$(ruby-daemons_UPVER).orig.tar.gz $(TARARGS) $@
+
