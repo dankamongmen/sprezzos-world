@@ -118,3 +118,51 @@ $(RUBYCONFIGURATE): $(SPREZZ)/ruby-configurate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ruby-configurate_$(ruby-configurate_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ruby-riot
+ruby-riot:$(RUBYRIOT)_$(ARCH).deb
+$(RUBYRIOT): $(SPREZZ)/ruby-riot/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-riot_$(ruby-riot_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-multipart-parser
+ruby-multipart-parser:$(RUBYMULTIPARTPARSER)_$(ARCH).deb
+$(RUBYMULTIPARTPARSER): $(SPREZZ)/ruby-multipart-parser/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-multipart-parser_$(ruby-multipart-parser_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-rack-mobile-detect
+ruby-rack-mobile-detect:$(RUBYRACKMOBILEDETECT)_$(ARCH).deb
+$(RUBYRACKMOBILEDETECT): $(SPREZZ)/ruby-rack-mobile-detect/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-rack-mobile-detect_$(ruby-rack-mobile-detect_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-rack-openid
+ruby-rack-openid:$(RUBYRACKOPENID)_$(ARCH).deb
+$(RUBYRACKOPENID): $(SPREZZ)/ruby-rack-openid/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-rack-openid_$(ruby-rack-openid_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-rr
+ruby-rr:$(RUBYRR)_$(ARCH).deb
+$(RUBYRR): $(SPREZZ)/ruby-rr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-rr_$(ruby-rr_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ruby-shoulda
+ruby-shoulda:$(RUBYSHOULDA)_$(ARCH).deb
+$(RUBYSHOULDA): $(SPREZZ)/ruby-shoulda/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-shoulda_$(ruby-shoulda_UPVER).orig.tar.gz $(TARARGS) $@
+
