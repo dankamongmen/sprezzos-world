@@ -383,3 +383,11 @@ $(JITSI): $(SPREZZ)/jitsi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf jitsi_$(jitsi_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libsoil
+libsoil:$(LIBSOIL)_$(ARCH).deb
+$(LIBSOIL): $(SPREZZ)/libsoil/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsoil_$(libsoil_UPVER).orig.tar.gz $(TARARGS) $@
+

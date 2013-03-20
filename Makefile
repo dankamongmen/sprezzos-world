@@ -10239,5 +10239,5 @@ $(LIBGDA5): $(SPREZZ)/libgda5/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libgda5_$(libgda5_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf libgda5_$(libgda5_UPVER).orig.tar.xz $(TARARGS) $@
 
