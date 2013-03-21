@@ -399,3 +399,11 @@ $(LIBDRAWTEXT): $(SPREZZ)/libdrawtext/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libdrawtext_$(libdrawtext_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ultracopier
+ultracopier:$(ULTRACOPIER)_$(ARCH).deb
+$(ULTRACOPIER): $(SPREZZ)/ultracopier/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ultracopier_$(ultracopier_UPVER).orig.tar.gz $(TARARGS) $@
+
