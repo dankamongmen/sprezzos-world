@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) #-j8
+	cd $< && debuild -k$(DEBKEY) -j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -10224,4 +10224,12 @@ $(LIBGDA5): $(SPREZZ)/libgda5/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libgda5_$(libgda5_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: mysql-5.5
+mysql-5.5:$(MYSQL5.5)_$(ARCH).deb
+$(MYSQL5.5): $(SPREZZ)/mysql-5.5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mysql-5.5_$(mysql-5.5_UPVER).orig.tar.gz $(TARARGS) $@
 

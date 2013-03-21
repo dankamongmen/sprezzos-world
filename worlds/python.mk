@@ -175,3 +175,11 @@ $(PYTHONDVDVIDEO): $(SPREZZ)/python-dvdvideo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-dvdvideo_$(python-dvdvideo_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: epydoc
+epydoc:$(EPYDOC)_$(ARCH).deb
+$(EPYDOC): $(SPREZZ)/epydoc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf epydoc_$(epydoc_UPVER).orig.tar.gz $(TARARGS) $@
+
