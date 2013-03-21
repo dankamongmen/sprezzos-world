@@ -368,8 +368,8 @@ $(pidginextprefs): $(SPREZZ)/pidgin-extprefs/debian/changelog
 	tar xzvf pidgin-extprefs_$(pidgin-extprefs_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: ogre-1.8
-ogre-1.8:$(ogre1.8)_$(ARCH).deb
-$(ogre1.8): $(SPREZZ)/ogre-1.8/debian/changelog
+ogre-1.8:$(OGRE1.8)_$(ARCH).deb
+$(OGRE1.8): $(SPREZZ)/ogre-1.8/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
