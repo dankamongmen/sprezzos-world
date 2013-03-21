@@ -415,3 +415,19 @@ $(YAFARAY): $(SPREZZ)/yafaray/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf yafaray_$(yafaray_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cegui
+cegui:$(CEGUI)_$(ARCH).deb
+$(CEGUI): $(SPREZZ)/cegui/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cegui_$(cegui_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: devil
+devil:$(DEVIL)_$(ARCH).deb
+$(DEVIL): $(SPREZZ)/devil/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf devil_$(devil_UPVER).orig.tar.gz $(TARARGS) $@
+

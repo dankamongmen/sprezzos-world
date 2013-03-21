@@ -1,0 +1,87 @@
+#!/usr/bin/make -f
+
+include /usr/share/quilt/quilt.make
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+
+CFLAGS = -Wall -g -DGLX_GLXEXT_LEGACY
+LDFLAGS = -Wl,--as-needed -lm -lXpm -lXcursor -lpthread -ldl -lXxf86vm
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+DEBUG_FLAGS = --disable-release
+endif
+
+configure: configure-stamp
+configure-stamp: $(QUILT_STAMPFN)
+	dh_testdir
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" \
+		./configure --prefix=/usr --mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info --enable-static=yes \
+		--enable-shared=yes --host=$(DEB_HOST_GNU_TYPE) \
+		--build=$(DEB_BUILD_GNU_TYPE) $(DEBUG_FLAGS) \
+		--enable-IL=yes --enable-ILU=yes --enable-ILUT=yes
+	touch "$@"
+
+build: build-stamp
+build-stamp: configure
+	dh_testdir
+	$(MAKE)
+	touch "$@"
+
+clean: unpatch
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+	rm debian/tmp/usr/share/info/DevIL_manual.info
+	rm -f debian/tmp/usr/share/info/dir
+	mkdir -p debian/libdevil1c2/usr/share/lintian/overrides/
+	cp -a debian/libdevil1c2.lintian-overrides \
+		debian/libdevil1c2/usr/share/lintian/overrides/libdevil1c2
+	
+	for file in debian/tmp/usr/lib/*.la; do \
+	sed -i "/dependency_libs/ s/'.*'/''/" $$file ; \
+	done
+
+binary-indep: build install
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_install --fail-missing
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure
