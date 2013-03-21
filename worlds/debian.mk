@@ -446,3 +446,11 @@ $(ADEQUATE): $(SPREZZ)/adequate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf adequate_$(adequate_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python3-defaults
+python3-defaults:$(PYTHON3DEFAULTS)_$(ARCH).deb
+$(PYTHON3DEFAULTS): $(SPREZZ)/python3-defaults/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python3-defaults_$(python3-defaults_UPVER).orig.tar.gz $(TARARGS) $@
+
