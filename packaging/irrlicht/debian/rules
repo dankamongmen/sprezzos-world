@@ -1,0 +1,90 @@
+#!/usr/bin/make -f
+
+-include /usr/share/topgit/tg2quilt.mk
+
+export DEB_LDFLAGS_MAINT_APPEND=-Wl,--as-needed
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# shared library versions, option 1
+upstream_version=1.8
+version=1.8.0
+major=1.8
+repackv=1
+
+%:
+	dh $@
+
+override_dh_clean:
+	# clean documentation
+	rm -rf doctemp
+	rm -rf doc/html
+	rm -rf doc/latex
+	
+	# clean everything else
+	$(MAKE) -C source/Irrlicht clean
+	
+	dh_clean
+
+override_dh_auto_build:
+	mkdir -p lib/Linux
+	
+	# build irrlicht shared and static lib
+	NDEBUG="true" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" \
+	CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C source/Irrlicht sharedlib
+	NDEBUG="true" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" \
+	CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C source/Irrlicht staticlib
+	
+	# build documentation
+	cd scripts/doc/irrlicht && sh makedocumentation.sh
+	mv doctemp/* doc/
+
+override_dh_installdirs:
+	dh_installdirs -plibirrlicht-dev -Pdebian/tmp usr/include/irrlicht \
+	usr/lib/$(DEB_HOST_MULTIARCH)
+
+override_dh_auto_install:
+	$(MAKE) -C source/Irrlicht DESTDIR=$(CURDIR)/debian/tmp \
+	INSTALL_DIR=$(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH) install
+
+override_dh_installchangelogs:
+	dh_installchangelogs changes.txt
+
+override_dh_link:
+	dh_link -plibirrlicht$(major) \
+	usr/lib/$(DEB_HOST_MULTIARCH)/libIrrlicht.so.$(version) \
+	usr/lib/$(DEB_HOST_MULTIARCH)/libIrrlicht.so.$(major)
+
+override_dh_strip:
+	dh_strip --dbg-package=libirrlicht$(major)-dbg
+
+get-orig-source:
+	# Note: scripts/ directory seems to be missing from upstream zip, so download from:
+	# https://irrlicht.svn.sourceforge.net/svnroot/irrlicht/branches/releases/1.7/scripts/
+	mkdir -p ../repack
+	uscan --force-download --destdir ../repack --download-current-version
+	( \
+		cd ../repack ;\
+		unzip irrlicht-$(upstream_version).zip ;\
+		cd irrlicht-$(upstream_version) ;\
+		rm -rf source/Irrlicht/jpeglib ;\
+		rm -rf source/Irrlicht/zlib ;\
+		rm -rf source/Irrlicht/libpng ;\
+		rm -rf source/Irrlicht/lzma ;\
+		rm -rf source/Irrlicht/bzip2 ;\
+		rm -rf source/Irrlicht/MacOSX ;\
+		rm -f source/Irrlicht/glext.h ;\
+		rm -f source/Irrlicht/glxext.h ;\
+		rm -f source/Irrlicht/wglext.h ;\
+		rm -rf bin ;\
+		rm -rf media ;\
+		rm -rf lib ;\
+		rm -rf doc/html ;\
+		svn co https://irrlicht.svn.sourceforge.net/svnroot/irrlicht/branches/releases/1.7/scripts/ scripts ;\
+		find . -name .svn -exec rm -rf {} \; ;\
+		find . \( -name \*.exe -o -name \*.dll \) -exec rm -f {} \; ;\
+		cd .. ;\
+		GZIP="--best" tar -czf irrlicht_$(upstream_version)+dfsg$(repackv).orig.tar.gz irrlicht-$(upstream_version) ;\
+		mv irrlicht_$(upstream_version)+dfsg$(repackv).orig.tar.gz .. ;\
+	)
+	rm -rf ../repack

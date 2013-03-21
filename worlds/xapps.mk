@@ -431,3 +431,11 @@ $(DEVIL): $(SPREZZ)/devil/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf devil_$(devil_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: irrlicht
+irrlicht:$(IRRLICHT)_$(ARCH).deb
+$(IRRLICHT): $(SPREZZ)/irrlicht/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf irrlicht_$(irrlicht_UPVER).orig.tar.gz $(TARARGS) $@
+
