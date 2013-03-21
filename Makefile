@@ -10241,3 +10241,11 @@ $(GLM): $(SPREZZ)/glm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf glm_$(glm_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libquvi-scripts
+libquvi-scripts:$(LIBQUVISCRIPTS)_$(ARCH).deb
+$(LIBQUVISCRIPTS): $(SPREZZ)/libquvi-scripts/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libquvi-scripts_$(libquvi-scripts_UPVER).orig.tar.xz $(TARARGS) $@
+
