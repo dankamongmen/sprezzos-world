@@ -446,3 +446,11 @@ $(OCAMLWEB): $(SPREZZ)/ocamlweb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocamlweb_$(ocamlweb_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ocaml-re
+ocaml-re:$(OCAMLRE)_$(ARCH).deb
+$(OCAMLRE): $(SPREZZ)/ocaml-re/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocaml-re_$(ocaml-re_UPVER).orig.tar.gz $(TARARGS) $@
+
