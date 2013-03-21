@@ -10238,6 +10238,6 @@ glm:$(GLM)_$(ARCH).deb
 $(GLM): $(SPREZZ)/glm/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
+	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf glm_$(glm_UPVER).orig.tar.gz $(TARARGS) $@
 
