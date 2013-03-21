@@ -407,3 +407,11 @@ $(ULTRACOPIER): $(SPREZZ)/ultracopier/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf ultracopier_$(ultracopier_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: yafaray
+yafaray:$(YAFARAY)_$(ARCH).deb
+$(YAFARAY): $(SPREZZ)/yafaray/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf yafaray_$(yafaray_UPVER).orig.tar.gz $(TARARGS) $@
+
