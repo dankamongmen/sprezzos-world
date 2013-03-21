@@ -439,3 +439,11 @@ $(IRRLICHT): $(SPREZZ)/irrlicht/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf irrlicht_$(irrlicht_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: allegro5
+allegro5:$(ALLEGRO5)_$(ARCH).deb
+$(ALLEGRO5): $(SPREZZ)/allegro5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf allegro5_$(allegro5_UPVER).orig.tar.gz $(TARARGS) $@
+

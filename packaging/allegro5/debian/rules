@@ -1,0 +1,59 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+# Use this variable to allow options passed to cmake to be overridable.
+# WANT_EXAMPLES is set to ON only to check if they build successfully,
+# as their source is shipped in the doc package.
+DEB_CMAKE_OPTIONS ?= -DCMAKE_VERBOSE_MAKEFILE=ON \
+		-DCMAKE_INSTALL_PREFIX="/usr" \
+		-DLIB_SUFFIX="/$(DEB_HOST_MULTIARCH)" \
+                -DWANT_DEMO=OFF \
+                -DWANT_EXAMPLES=ON \
+                -DWANT_DOCS=ON \
+                -DWANT_DOCS_HTML=ON \
+                -DWANT_DOCS_MAN=ON
+
+%:
+	dh $@ --builddirectory=build --parallel
+
+override_dh_auto_configure:
+# Delete possibly non-free images/music.
+	rm -rf examples/data/haiku demos
+# Delete precompiled files.
+	rm -rf docs/man/ docs/html/
+	rm examples/data/DejaVuSans.*
+	rm addons/audio/kcm_mixer_helpers.inc
+	rm include/allegro5/opengl/GLext/*gl*_ext_alias.h
+	rm src/convert.c include/allegro5/internal/aintern_convert.h
+	rm src/scanline_drawers.*
+	rm addons/primitives/directx_shaders.c
+# Regenerate generated files.
+	misc/regenerate.sh
+	dh_auto_configure -- $(DEB_CMAKE_OPTIONS)
+
+override_dh_auto_install:
+	dh_auto_install
+	mkdir -p debian/tmp/usr/include/$(DEB_HOST_MULTIARCH)/allegro5/platform
+	mv debian/tmp/usr/include/allegro5/platform/alplatf.h debian/tmp/usr/include/$(DEB_HOST_MULTIARCH)/allegro5/platform/alplatf.h
+	sed -i 's@Cflags: -I$${includedir}@Cflags: -I$${includedir}/$(DEB_HOST_MULTIARCH)@' debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig/allegro-*.pc
+
+override_dh_auto_test:
+	cd build && tests/test_driver --no-display ../tests/test_*.ini
+
+override_dh_installchangelogs:
+	dh_installchangelogs CHANGES-5.0.txt
+
+override_dh_installexamples-indep:
+	dh_installexamples
+# Delete haiku example, because we are not shipping its data.
+	rm debian/allegro5-doc/usr/share/doc/allegro5-doc/examples/ex_haiku.c
+# Delete examples intended for other platforms.
+	rm debian/allegro5-doc/usr/share/doc/allegro5-doc/examples/ex_gp2xwiz.c
+	rm debian/allegro5-doc/usr/share/doc/allegro5-doc/examples/ex_iphone.c
+# Fix permissions
+	find debian/allegro5-doc/usr/share/doc/allegro5-doc/examples -type f -exec chmod 644 \{\} \+
