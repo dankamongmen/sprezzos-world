@@ -639,3 +639,11 @@ $(LIBDEVELCALLERPERL): $(SPREZZ)/libdevel-caller-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libdevel-caller-perl_$(libdevel-caller-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libmojolicious-perl
+libmojolicious-perl:$(LIBMOJOLICIOUSPERL)_$(ARCH).deb
+$(LIBMOJOLICIOUSPERL): $(SPREZZ)/libmojolicious-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmojolicious-perl_$(libmojolicious-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
