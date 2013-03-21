@@ -10198,7 +10198,7 @@ openscenegraph:$(OPENSCENEGRAPH)_$(ARCH).deb
 $(OPENSCENEGRAPH): $(SPREZZ)/openscenegraph/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
+	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf openscenegraph_$(openscenegraph_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: mrpt

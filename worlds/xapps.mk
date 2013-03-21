@@ -447,3 +447,27 @@ $(ALLEGRO5): $(SPREZZ)/allegro5/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf allegro5_$(allegro5_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: simage
+simage:$(SIMAGE)_$(ARCH).deb
+$(SIMAGE): $(SPREZZ)/simage/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf simage_$(simage_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: osgearth
+osgearth:$(OSGEARTH)_$(ARCH).deb
+$(OSGEARTH): $(SPREZZ)/osgearth/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf osgearth_$(osgearth_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: coin3
+coin3:$(COIN3)_$(ARCH).deb
+$(COIN3): $(SPREZZ)/coin3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf coin3_$(coin3_UPVER).orig.tar.gz $(TARARGS) $@
+
