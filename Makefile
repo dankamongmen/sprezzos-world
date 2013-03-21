@@ -10233,3 +10233,11 @@ $(MYSQL5.5): $(SPREZZ)/mysql-5.5/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mysql-5.5_$(mysql-5.5_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: glm
+glm:$(GLM)_$(ARCH).deb
+$(GLM): $(SPREZZ)/glm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf glm_$(glm_UPVER).orig.tar.gz $(TARARGS) $@
+
