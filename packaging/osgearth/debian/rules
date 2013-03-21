@@ -1,0 +1,126 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+include /usr/share/quilt/quilt.make
+
+PACKAGE := $(shell dpkg-parsechangelog | sed -n 's/^Source: //p')
+VERSION := $(shell dpkg-parsechangelog | sed -ne 's/^Version: \(.*\)-.*/\1/p')
+
+LDFLAGS += -Wl,--as-needed
+CFLAGS = -Wall -g
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+
+configure: configure-stamp
+configure-stamp:  $(QUILT_STAMPFN)
+	dh_testdir
+	mkdir tmp
+	cd tmp && cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DLIB_POSTFIX=""
+	touch configure-stamp
+
+
+#Architecture
+build: build-arch build-indep
+
+build-arch: build-arch-stamp
+build-arch-stamp: configure-stamp  $(QUILT_STAMPFN)
+	$(MAKE) -C tmp
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp: configure-stamp  $(QUILT_STAMPFN)
+	touch $@
+
+clean: unpatch
+	dh_testdir
+	dh_testroot
+	rm -f build-arch-stamp build-indep-stamp configure-stamp
+	rm -rf tmp
+	dh_clean
+
+install: install-indep install-arch
+install-indep:
+	dh_testdir
+	dh_testroot
+	dh_prep -i 
+	dh_installdirs -i
+
+	dh_install -i
+
+	mkdir -p debian/osgearth-data/usr/share/osgearth/maps && \
+          cp tests/*.earth debian/osgearth-data/usr/share/osgearth/maps/ && \
+          cp debian/*.earth debian/osgearth-data/usr/share/osgearth/maps/ && \
+          sed --in-place -e 's!\\!/!g' -e 's!\.\./data!/usr/share/osgearth/data!g' debian/osgearth-data/usr/share/osgearth/maps/*.earth
+	mkdir -p debian/osgearth-data/usr/share/osgearth/data && \
+          cp data/world.tif debian/osgearth-data/usr/share/osgearth/data/
+
+install-arch:
+	dh_testdir
+	dh_testroot
+	dh_prep -s 
+	dh_installdirs -s
+
+	$(MAKE) -C tmp install DESTDIR=$(CURDIR)/debian/tmp
+	
+	dh_install -s
+
+	install -D README.txt debian/osgearth/usr/share/doc/osgearth/README.txt
+
+	mkdir -p debian/osgearth/usr/share/osgearth/fonts && \
+	  ln -s ../../fonts/truetype/ttf-liberation/LiberationSans-Regular.ttf debian/osgearth/usr/share/osgearth/fonts/arial.ttf && \
+	  ln -s ../../fonts/truetype/ttf-liberation/LiberationSerif-Regular.ttf debian/osgearth/usr/share/osgearth/fonts/times.ttf
+
+# Must not depend on anything. This is to be called by
+# binary-arch/binary-indep
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs 
+	dh_installdocs
+	dh_installman
+	dh_lintian
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture independant packages using the common target.
+binary-indep: build-indep install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture dependant packages using the common target.
+binary-arch: build-arch install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install install-indep install-arch configure get-orig-source
+
+
+get-orig-source:
+	uscan --noconf --force-download --rename --download-current-version --destdir=.
+	rm -rf $(PACKAGE)-$(VERSION)
+	tar -xf $(PACKAGE)_$(VERSION).orig.tar.gz
+	rm $(PACKAGE)_$(VERSION).orig.tar.gz
+	mv gwaldron-osgearth* $(PACKAGE)-$(VERSION)
+	#Remove data files with unknown license
+	find $(PACKAGE)-$(VERSION)/data -not -name world.tif -type f | xargs rm
+	mv $(PACKAGE)-$(VERSION) $(PACKAGE)-$(VERSION).orig
+	GZIP=--best tar -cz --owner root --group root --mode a+rX \
+	                -f $(PACKAGE)_$(VERSION)+dfsg.orig.tar.gz \
+	                $(PACKAGE)-$(VERSION).orig
+	rm -r $(PACKAGE)-$(VERSION).orig
