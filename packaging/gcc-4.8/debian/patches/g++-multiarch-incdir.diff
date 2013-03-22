@@ -1,0 +1,119 @@
+# DP: Use /usr/include/<multiarch>/c++/4.x as the include directory
+# DP: for host dependent c++ header files.
+
+Index: b/src/libstdc++-v3/include/Makefile.am
+===================================================================
+--- a/src/libstdc++-v3/include/Makefile.am
++++ b/src/libstdc++-v3/include/Makefile.am
+@@ -828,7 +828,7 @@
+ host_srcdir = ${glibcxx_srcdir}/$(OS_INC_SRCDIR)
+ default_host_alias = @default_host_alias@
+ host_builddir = ./${default_host_alias}/bits
+-host_installdir = ${gxx_include_dir}/${default_host_alias}$(MULTISUBDIR)/bits
++host_installdir = $(if $(shell $(CC) -print-multiarch),/usr/include/$(shell $(filter-out -m%,$(CC)) -print-multiarch)/c++/$(notdir ${gxx_include_dir})$(MULTISUBDIR)/bits,${gxx_include_dir}/${default_host_alias}$(MULTISUBDIR)/bits)
+ host_headers = \
+ 	${host_srcdir}/ctype_base.h \
+ 	${host_srcdir}/ctype_inline.h \
+Index: b/src/libstdc++-v3/include/Makefile.in
+===================================================================
+--- a/src/libstdc++-v3/include/Makefile.in
++++ b/src/libstdc++-v3/include/Makefile.in
+@@ -1105,7 +1105,7 @@
+ host_srcdir = ${glibcxx_srcdir}/$(OS_INC_SRCDIR)
+ default_host_alias = @default_host_alias@
+ host_builddir = ./${default_host_alias}/bits
+-host_installdir = ${gxx_include_dir}/${default_host_alias}$(MULTISUBDIR)/bits
++host_installdir = $(if $(shell $(CC) -print-multiarch),/usr/include/$(shell $(filter-out -m%,$(CC)) -print-multiarch)/c++/$(notdir ${gxx_include_dir})$(MULTISUBDIR)/bits,${gxx_include_dir}/${default_host_alias}$(MULTISUBDIR)/bits)
+ host_headers = \
+ 	${host_srcdir}/ctype_base.h \
+ 	${host_srcdir}/ctype_inline.h \
+Index: b/src/gcc/Makefile.in
+===================================================================
+--- a/src/gcc/Makefile.in
++++ b/src/gcc/Makefile.in
+@@ -1106,6 +1106,7 @@
+ 	"prefix=$(prefix)" \
+ 	"local_prefix=$(local_prefix)" \
+ 	"gxx_include_dir=$(gcc_gxx_include_dir)" \
++	"gxx_tool_include_dir=$(gcc_gxx_tool_include_dir)" \
+ 	"build_tooldir=$(build_tooldir)" \
+ 	"gcc_tooldir=$(gcc_tooldir)" \
+ 	"bindir=$(bindir)" \
+@@ -1542,6 +1543,14 @@
+ include $(xmake_file)
+ endif
+ 
++# Directory in which the compiler finds target-dependent g++ includes.
++ifneq ($(call if_multiarch,non-empty),)
++  gcc_gxx_tool_include_dir = /usr/include/$(MULTIARCH_DIRNAME)/c++/$(BASEVER_c)
++else
++  gcc_gxx_tool_include_dir = $(gcc_gxx_include_dir)/$(target_noncanonical)
++endif
++
++
+ # all-tree.def includes all the tree.def files.
+ all-tree.def: s-alltree; @true
+ s-alltree: Makefile
+@@ -3986,7 +3995,7 @@
+   -DFIXED_INCLUDE_DIR=\"$(libsubdir)/include-fixed\" \
+   -DGPLUSPLUS_INCLUDE_DIR=\"$(gcc_gxx_include_dir)\" \
+   -DGPLUSPLUS_INCLUDE_DIR_ADD_SYSROOT=$(gcc_gxx_include_dir_add_sysroot) \
+-  -DGPLUSPLUS_TOOL_INCLUDE_DIR=\"$(gcc_gxx_include_dir)/$(target_noncanonical)\" \
++  -DGPLUSPLUS_TOOL_INCLUDE_DIR=\"$(gcc_gxx_tool_include_dir)\" \
+   -DGPLUSPLUS_BACKWARD_INCLUDE_DIR=\"$(gcc_gxx_include_dir)/backward\" \
+   -DLOCAL_INCLUDE_DIR=\"$(local_includedir)\" \
+   -DCROSS_INCLUDE_DIR=\"$(CROSS_SYSTEM_HEADER_DIR)\" \
+Index: b/src/gcc/cppdefault.c
+===================================================================
+--- a/src/gcc/cppdefault.c
++++ b/src/gcc/cppdefault.c
+@@ -49,6 +49,8 @@
+     /* Pick up GNU C++ target-dependent include files.  */
+     { GPLUSPLUS_TOOL_INCLUDE_DIR, "G++", 1, 1,
+       GPLUSPLUS_INCLUDE_DIR_ADD_SYSROOT, 1 },
++    { GPLUSPLUS_INCLUDE_DIR, "G++", 1, 1,
++      GPLUSPLUS_INCLUDE_DIR_ADD_SYSROOT, 2 },
+ #endif
+ #ifdef GPLUSPLUS_BACKWARD_INCLUDE_DIR
+     /* Pick up GNU C++ backward and deprecated include files.  */
+Index: b/src/gcc/incpath.c
+===================================================================
+--- a/src/gcc/incpath.c
++++ b/src/gcc/incpath.c
+@@ -160,6 +160,18 @@
+ 			}
+ 		      str = reconcat (str, str, dir_separator_str,
+ 				      imultiarch, NULL);
++		      if (p->cplusplus)
++			{
++			  char *suffix = strstr (str, "/c++/");
++			  *suffix++ = '\0';
++			  suffix = xstrdup (suffix);
++			  str = reconcat (str, str, dir_separator_str,
++					  imultiarch,
++					  dir_separator_str, suffix, NULL);
++			}
++		      else
++			str = reconcat (str, str, dir_separator_str,
++					imultiarch, NULL);
+ 		    }
+ 		  add_path (str, SYSTEM, p->cxx_aware, false);
+ 		}
+@@ -224,7 +236,16 @@
+ 		  free (str);
+ 		  continue;
+ 		}
+-	      str = reconcat (str, str, dir_separator_str, imultiarch, NULL);
++	      if (p->cplusplus)
++		{
++		  char *suffix = strstr (str, "/c++/");
++		  *suffix++ = '\0';
++		  suffix = xstrdup (suffix);
++		  str = reconcat (str, str, dir_separator_str, imultiarch,
++				  dir_separator_str, suffix, NULL);
++		}
++	      else
++		str = reconcat (str, str, dir_separator_str, imultiarch, NULL);
+ 	    }
+ 
+ 	  add_path (str, SYSTEM, p->cxx_aware, false);

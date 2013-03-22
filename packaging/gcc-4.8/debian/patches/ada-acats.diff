@@ -1,0 +1,199 @@
+# DP: - When running the ACATS, look for the gnat tools in their new
+# DP:   directory (build/gnattools), and for the shared libraries in
+# DP:   build/gcc/ada/rts-shared-zcx, build/libgnatvsn and build/libgnatprj.
+
+Index: b/src/gcc/testsuite/ada/acats/run_acats
+===================================================================
+--- a/src/gcc/testsuite/ada/acats/run_acats
++++ b/src/gcc/testsuite/ada/acats/run_acats
+@@ -20,52 +20,29 @@
+     return 1
+ }
+ 
++echo '#!/bin/sh' > host_gnatchop
++echo exec /usr/bin/gnatchop '$*' >> host_gnatchop
++
++chmod +x host_gnatchop
++
++echo '#!/bin/sh' > host_gnatmake
++echo echo '$PATH' '$*' >> host_gnatmake
++echo exec /usr/bin/gnatmake '$*' >> host_gnatmake
++
++chmod +x host_gnatmake
++
+ # Set up environment to use the Ada compiler from the object tree
+ 
+-host_gnatchop=`which gnatchop`
+-host_gnatmake=`which gnatmake`
+ ROOT=`${PWDCMD-pwd}`
+ BASE=`cd $ROOT/../../..; ${PWDCMD-pwd}`
+-
+ PATH=$BASE:$ROOT:$PATH
+-ADA_INCLUDE_PATH=$BASE/ada/rts
+-LD_LIBRARY_PATH=$ADA_INCLUDE_PATH:$BASE:$LD_LIBRARY_PATH
+-ADA_OBJECTS_PATH=$ADA_INCLUDE_PATH
+-
+-if [ ! -d $ADA_INCLUDE_PATH ]; then
+-   echo gnatlib missing, exiting.
+-   exit 1
+-fi
+-
+-if [ ! -f $BASE/gnatchop ]; then
+-   echo gnattools missing, exiting.
+-   exit 1
+-fi
+-
+-if [ ! -f $BASE/gnatmake ]; then
+-   echo gnattools missing, exiting.
+-   exit 1
+-fi
+-
++GNATTOOLS=`cd $BASE/../gnattools; ${PWDCMD-pwd}`
++LIBGNATVSN=`cd $BASE/../libgnatvsn; ${PWDCMD-pwd}`
++LIBGNATPRJ=`cd $BASE/../libgnatprj; ${PWDCMD-pwd}`
+ GCC_DRIVER="$BASE/xgcc"
+ GCC="$BASE/xgcc -B$BASE/"
+ export PATH ADA_INCLUDE_PATH ADA_OBJECTS_PATH GCC_DRIVER GCC LD_LIBRARY_PATH
+-
+-echo '#!/bin/sh' > host_gnatchop
+-echo PATH=`dirname $host_gnatchop`:'$PATH' >> host_gnatchop
+-echo unset ADA_INCLUDE_PATH ADA_OBJECTS_PATH GCC_EXEC_PREFIX >> host_gnatchop
+-echo export PATH >> host_gnatchop
+-echo exec gnatchop '"$@"' >> host_gnatchop
+-
+-chmod +x host_gnatchop
+-
+-echo '#!/bin/sh' > host_gnatmake
+-echo PATH=`dirname $host_gnatmake`:'$PATH' >> host_gnatmake
+-echo unset ADA_INCLUDE_PATH ADA_OBJECTS_PATH GCC_EXEC_PREFIX >> host_gnatmake
+-echo export PATH >> host_gnatmake
+-echo exec gnatmake '"$@"' >> host_gnatmake
+-
+-chmod +x host_gnatmake
++export GNATTOOLS LIBGNATVSN LIBGNATPRJ
+ 
+ # Limit the stack to 16MB for stack checking
+ ulimit -s 16384
+Index: b/src/gcc/testsuite/ada/acats/run_all.sh
+===================================================================
+--- a/src/gcc/testsuite/ada/acats/run_all.sh
++++ b/src/gcc/testsuite/ada/acats/run_all.sh
+@@ -12,6 +12,10 @@
+ gccflags="-O2"
+ gnatflags="-gnatws"
+ 
++RTS=`cd $GNATTOOLS/../gcc/ada/rts-shared-zcx; ${PWDCMD-pwd}`
++LD_LIBRARY_PATH=$RTS:$LIBGNATVSN:$LIBGNATPRJ
++export LD_LIBRARY_PATH
++
+ target_run () {
+   eval $EXPECT -f $testdir/run_test.exp $*
+ }
+@@ -48,15 +52,25 @@
+ fi
+ 
+ target_gnatchop () {
+-  gnatchop --GCC="$GCC_DRIVER" $*
++  display ADA_INCLUDE_PATH=$GNATTOOLS/../../src/gcc/ada $GNATTOOLS/gnatchop --GCC="$GCC_DRIVER" $*
++  ADA_INCLUDE_PATH=$GNATTOOLS/../../src/gcc/ada $GNATTOOLS/gnatchop --GCC="$GCC_DRIVER" $*
+ }
+ 
+ target_gnatmake () {
+-  echo gnatmake --GCC=\"$GCC\" $gnatflags $gccflags $* -largs $EXTERNAL_OBJECTS --GCC=\"$GCC\"
+-  gnatmake --GCC="$GCC" $gnatflags $gccflags $* -largs $EXTERNAL_OBJECTS --GCC="$GCC"
++  RTS="$GNATTOOLS/../gcc/ada/rts-shared-zcx"
++  EXTERNAL_OBJECTS="$EXTERNAL_OBJECTS $RTS/adaint.o $RTS/sysdep.o $RTS/init.o $RTS/raise-gcc.o"
++  display $GNATTOOLS/gnatmake -I- -I$RTS -I. \
++      --GCC=\"$GCC\" --GNATBIND="$GNATTOOLS/gnatbind" \
++      --GNATLINK="$GNATTOOLS/gnatlink" $gnatflags $gccflags $* \
++      -bargs -static -largs $EXTERNAL_OBJECTS --GCC=\"$GCC -I- -I$RTS -I.\"
++  $GNATTOOLS/gnatmake -I- -I$RTS -I. \
++      --GCC="$GCC" --GNATBIND="$GNATTOOLS/gnatbind" \
++      --GNATLINK="$GNATTOOLS/gnatlink" $gnatflags $gccflags $* \
++      -bargs -static -largs $EXTERNAL_OBJECTS --GCC="$GCC -I- -I$RTS -I."
+ }
+ 
+ target_gcc () {
++  display $GCC $gccflags $*
+   $GCC $gccflags $*
+ }
+ 
+@@ -86,8 +100,8 @@
+ display `$GCC -v 2>&1`
+ display host=`gcc -dumpmachine`
+ display target=$target
+-display `type gnatmake`
+-gnatls -v >> $dir/acats.log
++display `type $GNATTOOLS/gnatmake`
++$GNATTOOLS/gnatls -I- -I$RTS -v >> $dir/acats.log
+ display ""
+ 
+ display "		=== acats support ==="
+Index: b/src/gcc/testsuite/lib/gnat.exp
+===================================================================
+--- a/src/gcc/testsuite/lib/gnat.exp
++++ b/src/gcc/testsuite/lib/gnat.exp
+@@ -89,18 +89,24 @@
+     global GNAT_UNDER_TEST
+     global TOOL_EXECUTABLE
+     global gnat_target_current
++    global ld_library_path
+ 
+     set gnat_target_current ""
+ 
+     if { $gnat_initialized == 1 } { return }
+ 
+-    if ![info exists GNAT_UNDER_TEST] then {
+-	if [info exists TOOL_EXECUTABLE] {
+-	    set GNAT_UNDER_TEST "$TOOL_EXECUTABLE"
+-	} else {
+-	    set GNAT_UNDER_TEST "[local_find_gnatmake]"
+-	}
+-    }
++    set GNAT_UNDER_TEST "$rootme/../gnattools/gnatmake -I$rootme/ada/rts-shared-zcx --GCC=$rootme/xgcc --GNATBIND=$rootme/../gnattools/gnatbind --GNATLINK=$rootme/../gnattools/gnatlink -cargs -B$rootme -largs --GCC=$rootme/xgcc -B$rootme -margs"
++    append ld_library_path ":$rootme/ada/rts-shared-zcx"
++    append ld_library_path ":$rootme/../libgnatvsn"
++    append ld_library_path ":$rootme/../libgnatprj"
++    set_ld_library_path_env_vars
++
++    # gnatlink looks for system.ads itself and has no --RTS option, so
++    # specify via environment
++    verbose -log "ADA_INCLUDE_PATH=$rootme/ada/rts-shared-zcx"
++    verbose -log "ADA_OBJECTS_PATH=$rootme/ada/rts-shared-zcx"
++    setenv ADA_INCLUDE_PATH "$rootme/ada/rts-shared-zcx"
++    setenv ADA_OBJECTS_PATH "$rootme/ada/rts-shared-zcx"
+ 
+     if ![info exists tmpdir] then {
+ 	set tmpdir /tmp
+@@ -121,31 +127,6 @@
+ 	return [gcc_target_compile $source $dest $type $options]
+     }
+ 
+-    # If we detect a change of target, we need to recompute both
+-    # GNAT_UNDER_TEST and the appropriate RTS.
+-    if { $gnat_target_current!="[current_target_name]" } {
+-	set gnat_target_current "[current_target_name]"
+-	if [info exists TOOL_OPTIONS] {
+-	    set rtsdir "[get_multilibs ${TOOL_OPTIONS}]/libada"
+-	} else {
+-	    set rtsdir "[get_multilibs]/libada"
+-	}
+-	if [info exists TOOL_EXECUTABLE] {
+-	    set GNAT_UNDER_TEST "$TOOL_EXECUTABLE"
+-	} else {
+-	    set GNAT_UNDER_TEST "[local_find_gnatmake]"
+-	}
+-        set GNAT_UNDER_TEST "$GNAT_UNDER_TEST --RTS=$rtsdir"
+-
+-	# gnatlink looks for system.ads itself and has no --RTS option, so
+-	# specify via environment
+-	setenv ADA_INCLUDE_PATH "$rtsdir/adainclude"
+-	setenv ADA_OBJECTS_PATH "$rtsdir/adainclude"
+-	# Always log so compilations can be repeated manually.
+-	verbose -log "ADA_INCLUDE_PATH=$rtsdir/adainclude"
+-	verbose -log "ADA_OBJECTS_PATH=$rtsdir/adainclude"
+-    }
+-
+     lappend options "compiler=$GNAT_UNDER_TEST -q -f"
+     lappend options "timeout=[timeout_value]"
+ 

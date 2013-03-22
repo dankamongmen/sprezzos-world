@@ -2354,7 +2354,7 @@ $(CUPSFILTERS): $(SPREZZ)/cups-filters/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf cups-filters-$(cups-filters_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf cups-filters-$(cups-filters_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: curl
 curl:$(CURL)_$(ARCH).deb
@@ -10256,4 +10256,12 @@ $(UNIXODBC): $(SPREZZ)/unixodbc/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf unixodbc_$(unixodbc_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: cloog
+cloog:$(CLOOG)_$(ARCH).deb
+$(CLOOG): $(SPREZZ)/cloog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cloog_$(cloog_UPVER).orig.tar.gz $(TARARGS) $@
 

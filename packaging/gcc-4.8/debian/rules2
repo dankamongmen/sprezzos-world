@@ -1,0 +1,2291 @@
+#! /usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+.SUFFIXES:
+
+include debian/rules.defs
+include debian/rules.parameters
+
+# some tools
+SHELL	= /bin/bash -e		# brace expansion in rules file
+IR	= install -m 644	# Install regular file
+IP	= install -m 755	# Install program
+IS	= install -m 755	# Install script
+
+#number of jobs to run for build
+ifeq ($(USE_NJOBS),no)
+  NJOBS :=
+  USE_CPUS := 1
+else
+  ifeq ($(with_java),yes)
+    MEM_PER_CPU = 192
+  else
+    MEM_PER_CPU = 128
+  endif
+  NUM_CPUS := $(shell if echo $(USE_NJOBS) | grep -q -E '^[0-9]+$$'; \
+			then echo $(USE_NJOBS); \
+			else getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1; fi)
+  USE_CPUS := $(shell mt=`awk '/^MemTotal/ { print $$2 }' /proc/meminfo`; \
+			awk -vn=$(NUM_CPUS) -vmt=$$mt -vm=$(MEM_PER_CPU) \
+				'END { mt/=1024; n2 = int(mt/m); print n==1 ? 1 : n2<n+1 ? n2 : n+1}' < /dev/null)
+  ifneq (,$(strip $(USE_CPUS)))
+    NJOBS := -j $(USE_CPUS)
+  endif
+endif
+
+# Support parallel=<n> in DEB_BUILD_OPTIONS (see #209008)
+ifneq (,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+  USE_CPUS := $(subst parallel=,,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+  NJOBS := -j $(USE_CPUS)
+endif
+
+# kernel-specific ulimit hack
+ifeq ($(findstring linux,$(DEB_HOST_GNU_SYSTEM)),linux)
+  ULIMIT_M =  if [ -e /proc/meminfo ]; then \
+	    m=`awk '/^((Mem|Swap)Free|Cached)/{m+=$$2}END{print int(m*.9)}' \
+		/proc/meminfo`; \
+	  else \
+	    m=`vmstat --free --swap-free --kilobytes|awk '{m+=$$2}END{print int(m*.9)}'`; \
+	  fi; \
+	  ulimit -m $$m; \
+	  echo "Limited memory for test runs to `ulimit -m`kB"
+else
+  ULIMIT_M = true
+endif
+
+ifeq ($(locale_data),generate)
+  SET_LOCPATH = LOCPATH=$(PWD)/locales
+endif
+
+SET_PATH = PATH=$(PWD)/bin:/usr/$(libdir)/gcc/bin:$$PATH
+ifeq ($(trunk_build),yes)
+  ifneq (,$(findstring sparc64-linux,$(DEB_TARGET_GNU_TYPE)))
+    SET_PATH = PATH=/usr/lib/gcc-snapshot/bin:$(PWD)/bin:/usr/$(libdir)/gcc/bin:$$PATH
+  endif
+  ifneq (,$(findstring ppc64-linux,$(DEB_TARGET_GNU_TYPE)))
+    SET_PATH = PATH=/usr/lib/gcc-snapshot/bin:$(PWD)/bin:/usr/$(libdir)/gcc/bin:$$PATH
+  endif
+endif
+
+# the recipient for the test summaries. Send with: debian/rules mail-summary
+S_EMAIL = gcc@packages.debian.org gcc-testresults@gcc.gnu.org
+
+# build not yet prepared to take variables from the environment
+define unsetenv
+  unexport $(1)
+  $(1) =
+endef
+$(foreach v, CPPFLAGS CFLAGS CXXFLAGS FFLAGS LDFLAGS, $(if $(filter environment,$(origin $(v))),$(eval $(call unsetenv, $(v)))))
+
+ifeq ($(REVERSE_CROSS),yes)
+  CC	=
+else
+  CC	= $(if $(filter yes,$(with_ada)),gnatgcc,gcc)
+endif
+
+ifneq ($(distribution),Ubuntu)
+  ifneq (,$(filter $(DEB_TARGET_ARCH), arm armel mips mipsel))
+    STAGE1_CFLAGS = -g -O2
+  endif
+endif
+
+ifeq ($(with_d),yes)
+  CFLAGS  += -std=gnu99
+  LDFLAGS += -lm
+endif
+
+ifeq ($(with_ssp_default),yes)
+  STAGE1_CFLAGS	= -g
+  BOOT_CFLAGS	= -g -O2
+  LIBCFLAGS		= -g -O2
+  LIBCXXFLAGS	= -g -O2 -fno-implicit-templates
+  # Only use -fno-stack-protector when known to the stage1 compiler.
+  cc-fno-stack-protector := $(shell if $(CC) $(CFLAGS) -fno-stack-protector \
+                             -S -o /dev/null -xc /dev/null > /dev/null 2>&1; \
+							 then echo "-fno-stack-protector"; fi;)
+  $(foreach var,STAGE1_CFLAGS BOOT_CFLAGS LIBCFLAGS LIBCXXFLAGS,$(eval \
+    $(var) += $(cc-fno-stack-protector)))
+endif
+
+ifeq ($(DEB_CROSS),yes)
+  CFLAGS	= -g -O2
+endif
+
+ifneq (,$(findstring static,$(DEB_BUILD_OPTIONS)))
+  LDFLAGS	+= -static
+endif
+
+ifneq (,$(filter $(DEB_TARGET_ARCH),alpha))
+  LDFLAGS += -Wl,--no-relax
+endif
+
+CFLAGS_TO_PASS = \
+	$(if $(CFLAGS),CFLAGS="$(CFLAGS)") \
+	$(if $(BOOT_CFLAGS),BOOT_CFLAGS="$(BOOT_CFLAGS)") \
+	$(if $(LIBCFLAGS),LIBCFLAGS="$(LIBCFLAGS)") \
+	$(if $(LIBCXXFLAGS),LIBCXXFLAGS="$(LIBCXXFLAGS)")
+LDFLAGS_TO_PASS = \
+	$(if $(LDFLAGS),LDFLAGS="$(LDFLAGS)")
+STAGE1_CFLAGS_TO_PASS = \
+	$(if $(STAGE1_CFLAGS),STAGE1_CFLAGS="$(STAGE1_CFLAGS)")
+
+docdir		= usr/share/doc
+
+CONFARGS = -v \
+	--with-pkgversion='$(distribution)$(if $(with_linaro_branch),/Linaro)___$(DEB_VERSION)' \
+	--with-bugurl='file:///usr/share/doc/$(subst gcj,gcc,$(PKGSOURCE))/README.Bugs'
+
+CONFARGS += \
+	--enable-languages=$(subst $(SPACE),$(COMMA),$(enabled_languages)) \
+	--prefix=/$(PF)
+
+ifeq ($(versioned_packages),yes)
+  CONFARGS += --program-suffix=-$(BASE_VERSION)
+endif
+
+ifdef DEB_STAGE
+  CONFARGS += \
+	--disable-decimal-float \
+	--disable-libgomp  \
+	--disable-libmudflap  \
+	--disable-libssp \
+	--disable-libquadmath \
+	--disable-threads \
+	--libexecdir=/$(libexecdir) \
+	--libdir=/$(PF)/$(configured_libdir) \
+	$(if $(with_build_sysroot),--with-build-sysroot=$(with_build_sysroot)) \
+	$(if $(with_sysroot),--with-sysroot=$(with_sysroot))
+
+  ifeq ($(with_multiarch_lib),yes)
+    CONFARGS += \
+	--enable-multiarch
+  endif
+
+  ifeq ($(DEB_STAGE),stage1)
+    CONFARGS += \
+	--disable-shared  \
+	--with-newlib  \
+	--without-headers
+  else
+    # stage2
+    CONFARGS += \
+	--enable-shared
+  endif
+else
+  CONFARGS += \
+	--enable-shared \
+	--enable-linker-build-id \
+
+ifneq ($(single_package),yes)
+  CONFARGS += \
+        --libexecdir=/$(libexecdir) \
+        --without-included-gettext \
+        --enable-threads=posix \
+	--with-gxx-include-dir=/$(cxx_inc_dir) \
+	--libdir=/$(PF)/$(configured_libdir)
+endif
+
+ifneq ($(with_cpp),yes)
+  CONFARGS += --disable-cpp
+endif
+
+ifeq ($(with_nls),yes)
+  CONFARGS += --enable-nls
+else
+  CONFARGS += --disable-nls
+endif
+
+ifeq ($(with_bootstrap),off)
+  CONFARGS += --disable-bootstrap
+else ifneq ($(with_bootstrap),)
+  CONFARGS += --enable-bootstrap=$(with_bootstrap)
+endif
+
+ifneq ($(with_sysroot),)
+  CONFARGS += --with-sysroot=$(with_sysroot)
+endif
+ifneq ($(with_build_sysroot),)
+  CONFARGS += --with-build-sysroot=$(with_build_sysroot)
+endif
+
+ifeq ($(force_gnu_locales),yes)
+  CONFARGS += --enable-clocale=gnu
+endif
+
+ifeq ($(with_cxx)-$(with_debug),yes-yes)
+  CONFARGS += --enable-libstdcxx-debug
+endif
+CONFARGS += --enable-libstdcxx-time=yes
+
+ifeq (,$(filter $(DEB_TARGET_ARCH), hurd-i386 kfreebsd-i386 kfreebsd-amd64))
+  CONFARGS += --enable-gnu-unique-object
+endif
+
+ifneq ($(with_ssp),yes)
+  CONFARGS += --disable-libssp
+endif
+
+ifneq ($(with_mudflap),yes)
+  CONFARGS += --disable-libmudflap
+endif
+
+ifneq ($(with_gomp),yes)
+  CONFARGS += --disable-libgomp
+endif
+
+ifneq ($(with_itm),yes)
+  CONFARGS += --disable-libitm
+endif
+
+ifeq ($(with_plugins),yes)
+  CONFARGS += --enable-plugin
+endif
+
+#ifeq ($(with_gold),yes)
+#  CONFARGS += --enable-gold --enable-ld=default
+#endif
+
+#CONFARGS += --with-plugin-ld=ld.gold
+#CONFARGS += --with-plugin-ld
+
+endif # !DEB_STAGE
+
+CONFARGS += --with-system-zlib
+
+jvm_name_short = java-1.5.0-gcj-$(BASE_VERSION)$(if $(findstring snap,$(PKGSOURCE)),-snap)
+jvm_name_long = $(jvm_name_short)-1.5.0.0
+
+ifeq ($(with_java),yes)
+  CONFARGS += --disable-browser-plugin
+  ifeq ($(with_java_maintainer_mode),yes)
+    CONFARGS += --enable-java-maintainer-mode
+  endif
+  ifeq ($(with_java_biarch_awt),yes)
+    CONFARGS += --enable-java-awt=$(subst $(SPACE),$(COMMA),$(foreach p,$(java_awt_peers),$(p)-default))
+  else
+    CONFARGS += --enable-java-awt=$(subst $(SPACE),$(COMMA),$(foreach p,$(java_awt_peers),$(p)))
+  endif
+  ifneq (,$(findstring gtk,$(java_awt_peers)))
+    CONFARGS += --enable-gtk-cairo
+  endif
+  jvm_ext = -$(DEB_TARGET_ARCH)$(if $(filter yes,$(DEB_CROSS)),-cross)
+  jvm_dir = /usr/lib/jvm/$(jvm_name_short)$(jvm_ext)
+  CONFARGS += --with-java-home=$(jvm_dir)/jre
+  CONFARGS += --enable-java-home \
+	--with-jvm-root-dir=$(jvm_dir) \
+	--with-jvm-jar-dir=/usr/lib/jvm-exports/$(jvm_name_short)$(jvm_ext)
+  CONFARGS += --with-arch-directory=$(java_cpu)
+  ifeq (./,$(dir $(ecj_jar)))
+    CONFARGS += --with-ecj-jar=$(jvm_dir)/lib/ecj.jar
+  else
+    CONFARGS += --with-ecj-jar=$(ecj_jar)
+  endif
+endif
+
+ifeq ($(with_gcj),yes)
+  ifeq ($(DEB_HOST_GNU_CPU),m32r)
+    CONFARGS += --enable-libgcj
+  endif
+endif
+
+ifeq ($(with_objc)-$(with_objc_gc),yes-yes)
+  CONFARGS += --enable-objc-gc
+endif
+
+ifneq (,$(filter $(DEB_TARGET_GNU_TYPE), i486-linux-gnu i586-linux-gnu i686-linux-gnu))
+    ifeq ($(multilib),yes)
+      ifeq ($(biarch64),yes)
+        CONFARGS += --enable-targets=all
+      endif
+    endif
+endif
+
+ifneq (,$(filter $(DEB_TARGET_GNU_TYPE), x86_64-linux-gnu x86_64-kfreebsd-gnu s390x-linux-gnu))
+    ifneq ($(biarch32),yes)
+      CONFARGS += --disable-multilib
+    endif
+endif
+
+ifneq (,$(filter $(DEB_TARGET_GNU_TYPE), powerpc-linux-gnu powerpc-linux-gnuspe))
+    CONFARGS += --enable-secureplt
+    ifeq ($(biarch64),yes)
+      CONFARGS += --disable-softfloat --with-cpu=default32
+      ifeq ($(multilib),yes)
+        CONFARGS += --disable-softfloat \
+	  --enable-targets=powerpc-linux,powerpc64-linux
+      endif
+    else
+      CONFARGS += --disable-multilib
+    endif
+endif
+
+ifneq (,$(findstring powerpc64-linux,$(DEB_TARGET_GNU_TYPE)))
+    CONFARGS += --enable-secureplt
+    ifeq ($(biarch32),yes)
+      ifeq ($(multilib),yes)
+        CONFARGS += --disable-softfloat --enable-targets=powerpc64-linux,powerpc-linux
+      endif
+    else
+      CONFARGS += --disable-multilib
+    endif
+    ifeq ($(distribution),Ubuntu)
+      CONFARGS += --with-cpu-32=power7 --with-cpu-64=power7
+    endif
+endif
+
+ifeq ($(REVERSE_CROSS),yes)
+  # FIXME: requires isl and cloog headers for the target
+  #CONFARGS += --without-isl
+  # FIXME: build currently fails build the precompiled headers
+  CONFARGS += --disable-libstdcxx-pch
+endif
+
+ifeq ($(with_multiarch_lib),yes)
+  CONFARGS += --enable-multiarch
+endif
+
+ifeq ($(findstring powerpcspe,$(DEB_TARGET_ARCH)),powerpcspe)
+  CONFARGS += --with-cpu=8548 --enable-e500_double
+endif
+
+ifneq (,$(findstring softfloat,$(DEB_TARGET_GNU_CPU)))
+  CONFARGS += --with-float=soft
+endif
+
+ifneq (,$(findstring arm-vfp,$(DEB_TARGET_GNU_CPU)))
+  CONFARGS += --with-fpu=vfp
+endif
+
+ifneq (,$(findstring arm, $(DEB_TARGET_GNU_CPU)))
+  ifeq ($(multilib),yes)
+    CONFARGS += --enable-multilib
+  endif
+  CONFARGS += --disable-sjlj-exceptions
+  # FIXME: libjava is not ported for thumb, this hack only works for
+  # separate gcj builds
+  ifneq (,$(filter armhf,$(DEB_TARGET_ARCH)))
+    ifneq (,$(findstring gcj,$(PKGSOURCE)))
+      with_arm_arch = armv6
+    else
+      with_arm_arch = armv7-a
+    endif
+    with_arm_fpu = vfpv3-d16
+  else
+    # armel
+    ifeq ($(distribution),Debian)
+      with_arm_arch = armv4t
+    else ifneq (,$(filter $(distrelease),karmic))
+      with_arm_arch = armv6
+      with_arm_fpu = vfpv3-d16
+    else ifneq (,$(filter $(distrelease),lucid maverick natty oneiric precise))
+      ifneq (,$(findstring gcj,$(PKGSOURCE)))
+        with_arm_arch = armv6
+      else
+        with_arm_arch = armv7-a
+      endif
+      with_arm_fpu = vfpv3-d16
+    else
+      with_arm_arch = armv5t  # starting with quantal
+    endif
+  endif
+  CONFARGS += --with-arch=$(with_arm_arch)
+  ifneq (,$(with_arm_fpu))
+    CONFARGS += --with-fpu=$(with_arm_fpu)
+  endif
+  CONFARGS += --with-float=$(float_abi)
+  ifeq ($(with_arm_thumb),yes)
+    CONFARGS += --with-mode=thumb
+  endif
+endif
+
+ifeq ($(DEB_TARGET_GNU_CPU),$(findstring $(DEB_TARGET_GNU_CPU),m68k))
+  CONFARGS += --disable-werror
+endif
+# FIXME: correct fix-warnings.dpatch
+ifeq ($(distribution),Ubuntu)
+  CONFARGS += --disable-werror
+endif
+
+ifneq (,$(findstring sparc-linux,$(DEB_TARGET_GNU_TYPE)))
+  ifeq ($(biarch64),yes)
+    CONFARGS += --enable-targets=all
+  endif
+endif
+
+ifneq (,$(findstring sparc64-linux,$(DEB_TARGET_GNU_TYPE)))
+    ifneq ($(biarch32),yes)
+      CONFARGS += --disable-multilib
+    endif
+endif
+
+ifneq (,$(findstring ia64-linux,$(DEB_TARGET_GNU_TYPE)))
+  CONFARGS += --with-system-libunwind
+endif
+
+ifneq (,$(findstring sh4-linux,$(DEB_TARGET_GNU_TYPE)))
+  ifeq ($(multilib),yes)
+    CONFARGS += --with-multilib-list=m4,m4-nofpu
+  endif
+  CONFARGS += --with-cpu=sh4
+endif
+
+ifneq (,$(findstring m68k-linux,$(DEB_TARGET_GNU_TYPE)))
+  CONFARGS += --disable-multilib
+endif
+
+ifeq ($(DEB_TARGET_ARCH_OS),linux)
+  ifneq (,$(findstring $(DEB_TARGET_ARCH), alpha powerpc ppc64 s390 s390x sparc sparc64))
+    CONFARGS += --with-long-double-128
+  endif
+endif
+
+ifneq (,$(filter $(DEB_TARGET_ARCH), amd64 i386 kfreebsd-i386 kfreebsd-amd64))
+  ifneq (,$(filter $(distrelease),etch lenny dapper hardy))
+    CONFARGS += --with-arch-32=i486
+  else ifneq (,$(filter $(distrelease),squeeze wheezy sid jaunty karmic lucid))
+    CONFARGS += --with-arch-32=i586
+  else
+    CONFARGS += --with-arch-32=i686
+  endif
+endif
+
+ifeq ($(DEB_TARGET_ARCH),amd64)
+  CONFARGS += --with-abi=m64
+endif
+ifeq ($(multilib),yes)
+  ifneq (,$(filter $(DEB_TARGET_ARCH), amd64 i386))
+    CONFARGS += --with-multilib-list=m32,m64$(if $(filter yes,$(biarchx32)),$(COMMA)mx32)
+  else ifeq ($(DEB_TARGET_ARCH),x32)
+    CONFARGS += --with-abi=mx32 --with-multilib-list=mx32,m64,m32
+  endif
+endif
+
+ifneq (,$(filter $(DEB_TARGET_ARCH), hurd-i386))
+  CONFARGS += --with-arch=i586
+endif
+
+ifeq ($(DEB_TARGET_ARCH),lpia)
+  CONFARGS += --with-arch=pentium-m --with-tune=i586
+endif
+
+ifneq (,$(filter $(DEB_TARGET_ARCH), amd64 i386 hurd-i386 kfreebsd-i386 kfreebsd-amd64))
+  CONFARGS += --with-tune=generic
+endif
+
+ifneq (,$(findstring mips-linux,$(DEB_TARGET_GNU_TYPE)))
+  CONFARGS += --with-mips-plt
+  CONFARGS += --with-arch-32=mips2 --with-tune-32=mips32
+  ifeq ($(multilib),yes)
+    ifeq ($(biarchn32)-$(biarch64),yes-yes)
+      CONFARGS += --enable-targets=all
+      CONFARGS += --with-arch-64=mips3 --with-tune-64=mips64
+    endif
+  endif
+endif
+
+ifneq (,$(findstring mipsel-linux,$(DEB_TARGET_GNU_TYPE)))
+  CONFARGS += --with-mips-plt
+  CONFARGS += --with-arch-32=mips2 --with-tune-32=mips32
+  ifeq ($(multilib),yes)
+    ifeq ($(biarchn32)-$(biarch64),yes-yes)
+      CONFARGS += --enable-targets=all
+      CONFARGS += --with-arch-64=mips3 --with-tune-64=mips64
+    endif
+  endif
+endif
+
+ifneq (,$(findstring s390-linux,$(DEB_TARGET_GNU_TYPE)))
+  ifeq ($(multilib),yes)
+    ifeq ($(biarch64),yes)
+      CONFARGS += --enable-targets=all
+    endif
+  endif
+endif
+
+ifneq (,$(findstring hppa-linux,$(DEB_TARGET_GNU_TYPE)))
+  CONFARGS += --disable-libstdcxx-pch
+endif
+
+ifneq (,$(findstring gdc, $(PKGSOURCE)))
+    CONFARGS += --disable-libquadmath
+endif
+
+ifeq ($(trunk_build),yes)
+  ifeq ($(findstring --disable-werror, $(CONFARGS)),)
+    CONFARGS += --disable-werror
+  endif
+  CONFARGS += --enable-checking=yes
+else
+  CONFARGS += --enable-checking=release
+endif
+
+CONFARGS += \
+	--build=$(DEB_BUILD_GNU_TYPE) \
+	--host=$(DEB_HOST_GNU_TYPE) \
+	--target=$(TARGET_ALIAS)
+
+ifeq ($(DEB_CROSS),yes)
+  CONFARGS += \
+	--program-prefix=$(TARGET_ALIAS)-
+  ifneq ($(with_deps_on_target_arch_pkgs),yes)
+    CONFARGS += \
+	--includedir=/$(PFL)/include
+  endif
+endif
+
+ifeq ($(with_bootstrap),off)
+  bootstrap_target =
+else ifeq ($(with_bootstrap),)
+  bootstrap_target = bootstrap-lean
+  # no profiledbootstrap on the following architectures
+  # - m68k: we're happy that it builds at all
+  no_profiled_bs_archs := alpha arm arm64 hppa m68k
+  ifeq (,$(findstring $(DEB_TARGET_GNU_CPU),$(no_profiled_bs_archs)))
+    bootstrap_target = profiledbootstrap
+    # FIXME: disabled for first uploads
+    bootstrap_target = bootstrap-lean
+  endif
+  ifeq ($(PKGSOURCE),gcj-$(BASE_VERSION))
+    bootstrap_target = bootstrap-lean
+  endif
+  ifeq ($(PKGSOURCE),gnat-$(BASE_VERSION))
+    bootstrap_target = bootstrap-lean
+  endif
+
+  # disable profiled bootstrap on slow archs, get to testing first ...
+  ifeq ($(distribution),Debian)
+    ifneq (,$(filter $(DEB_TARGET_ARCH), arm arm64 armel armhf mips mipsel sparc))
+      bootstrap_target = bootstrap-lean
+    endif
+  endif
+  ifeq ($(distribution),Ubuntu)
+    ifneq (,$(filter $(DEB_TARGET_ARCH), arm64 sparc))
+      bootstrap_target = bootstrap-lean
+    endif
+  endif
+endif
+
+DEJAGNU_TIMEOUT=300
+# Increase the timeout for one testrun on slow architectures
+ifeq ($(distribution),Debian)
+  ifneq (,$(findstring $(DEB_TARGET_ARCH),arm arm64 armel armhf hppa m68k sparc))
+    DEJAGNU_TIMEOUT=600
+  else ifneq (,$(findstring $(DEB_TARGET_GNU_CPU),amd64 i386 i486 i686 lpia))
+    DEJAGNU_TIMEOUT=180
+  endif
+  ifeq ($(DEB_TARGET_GNU_SYSTEM),gnu)
+    DEJAGNU_TIMEOUT=900
+  endif
+else ifeq ($(distribution),Ubuntu)
+  ifneq (,$(findstring $(DEB_TARGET_ARCH),arm64 armel armhf hppa ia64 sparc))
+    DEJAGNU_TIMEOUT=600
+  else ifneq (,$(findstring $(DEB_TARGET_GNU_CPU),amd64 i386 i486 i686 lpia))
+    DEJAGNU_TIMEOUT=180
+  endif
+endif
+
+DEJAGNU_RUNS =
+ifneq ($(trunk_build),yes)
+ifeq ($(with_ssp),yes)
+  ifneq ($(single_package),yes)
+    DEJAGNU_RUNS += $(if $(filter yes,$(with_ssp_default)),-fno-stack-protector,-fstack-protector)
+  endif
+  # FIXME Ubuntu armel buildd hangs
+  ifneq (,$(findstring arm, $(DEB_TARGET_GNU_CPU)))
+    DEJAGNU_RUNS =
+  endif
+  ifeq ($(distribution),Ubuntu)
+    # the buildds are just slow ... don't check the non-default
+    ifneq (,$(findstring $(DEB_TARGET_GNU_CPU),ia64 powerpc sparc))
+      DEJAGNU_RUNS =
+    endif
+  endif
+endif
+endif
+
+ifeq ($(distribution),Ubuntu)
+  ifneq (,$(findstring arm, $(DEB_TARGET_GNU_CPU)))
+    ifeq ($(with_arm_thumb),yes)
+      #DEJAGNU_RUNS += -marm
+    else
+      DEJAGNU_RUNS += -mthumb
+    endif
+  endif
+endif
+
+# no b-d on g++-multilib, this is run by the built compiler
+abi_run_check = $(strip $(if $(wildcard build/runcheck$(1).out), \
+				$(shell cat build/runcheck$(1).out), \
+				$(shell CC="$(builddir)/gcc/xgcc -B$(builddir)/gcc/ -static-libgcc $(1)" bash debian/runcheck.sh)))
+ifeq ($(biarch32),yes)
+  DEJAGNU_RUNS += $(call abi_run_check,-m32)
+endif
+ifeq ($(biarch64),yes)
+  DEJAGNU_RUNS += $(call abi_run_check,$(if $(filter $(DEB_TARGET_ARCH_CPU),mips mipsel),-mabi=64,-m64))
+endif
+ifeq ($(biarchn32),yes)
+  DEJAGNU_RUNS += $(call abi_run_check,-mabi=n32)
+endif
+ifeq ($(biarchx32),yes)
+  DEJAGNU_RUNS += $(call abi_run_check,-mx32)
+endif
+
+# gdc is not multilib'd
+ifneq (,$(findstring gdc, $(PKGSOURCE)))
+  DEJAGNU_RUNS =
+endif
+
+ifneq (,$(findstring gcj, $(PKGSOURCE)))
+  DEJAGNU_RUNS =
+endif
+
+# neither is gnat
+ifneq (,$(findstring gnat, $(PKGSOURCE)))
+  DEJAGNU_RUNS =
+endif
+
+ifneq (,$(strip $(value DEJAGNU_RUNS)))
+  RUNTESTFLAGS = RUNTESTFLAGS="--target_board=unix\{,$(subst $(SPACE),$(COMMA),$(strip $(DEJAGNU_RUNS)))\}"
+endif
+
+# PF is the installation prefix for the package without the leading slash.
+# It's "usr" for gcc releases.
+ifneq (,$(PF))
+  # use value set in the environment
+else ifeq ($(trunk_build),yes)
+  PF		= usr/lib/gcc-snapshot
+else ifeq ($(PKGSOURCE),gcc-linaro)
+  PF		= usr/lib/gcc-linaro
+else
+  PF		= usr
+endif
+
+# PFL is the installation prefix with DEB_TARGET_GNU_TYPE attached for cross builds
+ifeq ($(DEB_CROSS),yes)
+  ifneq ($(with_deps_on_target_arch_pkgs),yes)
+    PFL		= $(PF)/$(DEB_TARGET_GNU_TYPE)
+  else
+    PFL		= $(PF)
+  endif
+else
+  PFL		= $(PF)
+endif
+
+# RPF is the base prefix or installation prefix with DEB_TARGET_GNU_TYPE attached for cross builds
+ifeq ($(DEB_CROSS),yes)
+  ifneq ($(with_deps_on_target_arch_pkgs),yes)
+    RPF		= $(PF)/$(DEB_TARGET_GNU_TYPE)
+  else
+    RPF		=
+  endif
+else
+  RPF		=
+endif
+
+ifeq ($(with_multiarch_lib),yes)
+  ifeq ($(DEB_CROSS),yes)
+    ifneq ($(with_deps_on_target_arch_pkgs),yes)
+      libdir	= lib
+    else
+      libdir	= lib/$(DEB_TARGET_MULTIARCH)
+    endif
+  else
+    libdir	= lib/$(DEB_TARGET_MULTIARCH)
+  endif
+else
+  libdir	= lib
+endif
+configured_libdir = lib
+
+spulibexecdir	= $(PF)/lib
+hppa64libexecdir= $(PF)/lib
+
+# /usr/libexec doesn't follow the FHS
+ifeq ($(single_package),yes)
+  libdir	= lib
+  libexecdir	= $(PF)/libexec
+  versiondir	= $(GCC_VERSION)
+else
+  libexecdir	= $(PF)/$(configured_libdir)
+  versiondir	= $(BASE_VERSION)
+endif
+buildlibdir	= $(builddir)/$(TARGET_ALIAS)
+
+# install cross compilers in /usr/lib/gcc-cross, native ones in /usr/lib/gcc
+gcc_subdir_name = gcc
+gcc_spu_subdir_name = gcc
+ifneq ($(single_package),yes)
+  gcc_spu_subdir_name = gcc-cross
+  ifeq ($(DEB_CROSS),yes)
+    ifneq ($(with_deps_on_target_arch_pkgs),yes)
+      gcc_subdir_name = gcc-cross
+    endif
+  endif
+endif
+
+gcc_lib_dir	= $(PF)/$(configured_libdir)/$(gcc_subdir_name)/$(TARGET_ALIAS)/$(versiondir)
+gcc_lexec_dir	= $(libexecdir)/$(gcc_subdir_name)/$(TARGET_ALIAS)/$(versiondir)
+gcc_spu_lib_dir	= $(PF)/spu/lib/$(gcc_spu_subdir_name)/spu/$(versiondir)
+gcc_spu_lexec_dir	= $(spulibexecdir)/$(gcc_spu_subdir_name)/spu/$(versiondir)
+
+lib32		= $(PF)/lib32
+lib64		= lib64
+libn32		= lib32
+libx32		= libx32
+
+p_l= $(1)$(cross_lib_arch)
+p_d= $(1)-dbg$(cross_lib_arch)
+d_l= debian/$(p_l)
+d_d= debian/$(p_d)
+
+ifeq ($(DEB_CROSS),yes)
+  ifneq ($(with_deps_on_target_arch_pkgs),yes)
+    usr_lib = $(PFL)/lib
+
+    # sh4 has multilib. base is sh4-linux-gnu. See #663028.
+    ifneq (,$(findstring sh4-linux,$(DEB_TARGET_GNU_TYPE)))
+      usr_lib = $(PFL)/lib/sh4-linux-gnu/
+    endif
+  else
+    usr_lib = $(PFL)/$(libdir)
+  endif
+else
+  usr_lib = $(PFL)/$(libdir)
+endif
+usr_lib32 = $(PFL)/lib32
+usr_libn32 = $(PFL)/lib32
+usr_libx32 = $(PFL)/libx32
+usr_lib64 = $(PFL)/lib64
+# FIXME: Don't hard code
+usr_libhf = $(PFL)/lib/arm-linux-gnueabihf
+usr_libsf = $(PFL)/lib/arm-linux-gnueabi
+
+gcc_lib_dir32 = $(gcc_lib_dir)/$(biarch32subdir)
+gcc_lib_dirn32 = $(gcc_lib_dir)/$(biarchn32subdir)
+gcc_lib_dirx32 = $(gcc_lib_dir)/$(biarchx32subdir)
+gcc_lib_dir64 = $(gcc_lib_dir)/$(biarch64subdir)
+# FIXME: Don't hard code
+gcc_lib_dirhf = $(gcc_lib_dir)/$(biarchhfsubdir)
+gcc_lib_dirsf = $(gcc_lib_dir)/$(biarchsfsubdir)
+
+libgcc_dir = $(RPF)/$(libdir)
+# yes, really; lib32gcc_s ends up in usr
+libgcc_dir32 = $(PFL)/lib32
+libgcc_dirn32 = $(RPF)/lib32
+# libx32gcc_s also ends up in usr
+libgcc_dirx32 = $(PFL)/libx32
+libgcc_dir64 = $(RPF)/lib64
+libgcc_dirhf = $(RPF)/lib/arm-linux-gnueabihf
+libgcc_dirsf = $(RPF)/lib/arm-linux-gnueabi
+
+# install_gcc_lib(lib,soname,flavour,package)
+define install_gcc_lib
+	mv $(d)/$(usr_lib$(3))/$(1)*.a debian/$(4)/$(gcc_lib_dir$(3))/
+	rm -f $(d)/$(usr_lib$(3))/$(1)*.{la,so}
+	dh_link -p$(4) \
+	  /$(usr_lib$(3))/$(1).so.$(2) /$(gcc_lib_dir$(3))/$(1).so
+
+endef
+
+checkdirs = $(builddir)
+ifeq ($(with_separate_libgcj),yes)
+  ifeq ($(PKGSOURCE),gcj-$(BASE_VERSION))
+    ifneq ($(with_standalone_gcj),yes)
+      checkdirs = $(buildlibdir)/libffi $(buildlibdir)/libjava
+    endif
+  endif
+endif
+ifeq ($(with_separate_go),yes)
+  ifeq ($(PKGSOURCE),gccgo-$(BASE_VERSION))
+    checkdirs = $(buildlibdir)/libgo
+  endif
+endif
+ifeq ($(with_separate_gnat),yes)
+  ifeq ($(PKGSOURCE),gnat-$(BASE_VERSION))
+    checkdirs = $(builddir)/gcc
+  endif
+endif
+
+ifneq ($(DEB_CROSS),yes)
+  ifneq ($(single_package),yes)
+    cxx_inc_dir	= $(PF)/include/c++/$(BASE_VERSION)
+  else
+    cxx_inc_dir	= $(PF)/include/c++/$(GCC_VERSION)
+  endif
+else
+  ifeq ($(with_deps_on_target_arch_pkgs),yes)
+    cxx_inc_dir	= $(PF)/include/c++/$(BASE_VERSION)
+  else
+    cxx_inc_dir	= $(PF)/$(TARGET_ALIAS)/include/c++/$(GCC_VERSION)
+  endif
+endif
+
+# FIXME: MULTIARCH_DIRNAME needed for g++-multiarch-incdir.diff
+MULTIARCH_DIRNAME := $(DEB_HOST_MULTIARCH)
+export MULTIARCH_DIRNAME
+
+default: build
+
+configure: $(configure_dependencies)
+
+$(configure_dummy_stamp):
+	touch $(configure_dummy_stamp)
+
+$(configure_stamp):
+	dh_testdir
+	: # give information about the build process
+	@echo "------------------------ Build process variables ------------------------"
+	@echo "Number of parallel processes used for the build: $(USE_CPUS)"
+	@echo "Package source: $(PKGSOURCE)"
+	@echo "GCC version: $(GCC_VERSION)"
+	@echo "Base Debian version: $(BASE_VERSION)"
+	@echo -e "Configured with: $(subst ___, ,$(foreach i,$(CONFARGS),$(i)\n\t))"
+ifeq ($(DEB_CROSS),yes)
+	@echo "Building cross compiler for $(DEB_TARGET_ARCH)"
+endif
+	@echo "Using shell $(SHELL)"
+	@echo "Architecture: $(DEB_TARGET_ARCH) (GNU: $(TARGET_ALIAS))"
+	@echo "CPPFLAGS: $(CPPFLAGS)"
+	@echo "CFLAGS: $(CFLAGS)"
+	@echo "LDFLAGS: $(LDFLAGS)"
+	@echo "BOOT_CFLAGS: $(BOOT_CFLAGS)"
+	@echo "DEBIAN_BUILDARCH: $(DEBIAN_BUILDARCH)"
+	@echo "Install prefix: /$(PF)"
+ifeq ($(biarchn32)-$(biarch64),yes-yes)
+	@echo "Will build the triarch compilers (o32/n32/64, defaulting to o32)"
+else ifeq ($(biarch64)-$(biarch32),yes-yes)
+	@echo "Will build the triarch compilers (x32/64/32, defaulting to x32)"
+else ifeq ($(biarch64)-$(biarchx32),yes-yes)
+	@echo "Will build the triarch compilers (32/64/x32, defaulting to 32bit)"
+else ifeq ($(biarch32)-$(biarchx32),yes-yes)
+	@echo "Will build the triarch compilers (64/32/x32, defaulting to 64bit)"
+else
+  ifeq ($(biarch64),yes)
+	@echo "Will build the biarch compilers (32/64, defaulting to 32bit)"
+  else
+    ifeq ($(biarch32),yes)
+	@echo "Will build the biarch compilers (64/32, defaulting to 64bit)"
+    else
+	@echo "Will not build the biarch compilers"
+    endif
+  endif
+endif
+
+ifeq ($(with_cxx),yes)
+	@echo "Will build the C++ compiler"
+else
+	@echo "Will not build the C++ compiler: $(with_cxx)"
+endif
+ifeq ($(with_objc),yes)
+	@echo "Will build the ObjC compiler."
+    ifeq ($(with_objc_gc),yes)
+	@echo "Will build the extra ObjC runtime for garbage collection."
+    else
+	@echo "Will not build the extra ObjC runtime for garbage collection."
+    endif
+else
+	@echo "Will not build the ObjC compiler: $(with_objc)"
+endif
+ifeq ($(with_objcxx),yes)
+	@echo "Will build the Obj-C++ compiler"
+else
+	@echo "Will not build the Obj-C++ compiler: $(with_objcxx)"
+endif
+ifeq ($(with_fortran),yes)
+	@echo "Will build the Fortran 95 compiler."
+else
+	@echo "Will not build the Fortran 95 compiler: $(with_fortran)"
+endif
+ifeq ($(with_java),yes)
+	@echo "Will build the Java compiler."
+else
+	@echo "Will not build the Java compiler: $(with_java)"
+endif
+ifeq ($(with_ada),yes)
+	@echo "Will build the Ada compiler."
+  ifeq ($(with_libgnat),yes)
+	@echo "Will build the shared Ada libraries."
+  else
+	@echo "Will not build the shared Ada libraries."
+  endif
+else
+	@echo "Will not build the Ada compiler: $(with_ada)"
+endif
+ifeq ($(with_go),yes)
+	@echo "Will build the Go compiler."
+else
+	@echo "Will not build the Go compiler: $(with_go)"
+endif
+ifeq ($(with_d),yes)
+	@echo "Will build the D compiler"
+  ifeq ($(with_libphobos),yes)
+	@echo "Will build the phobos D runtime library."
+  else
+	@echo "Will not build the phobos D runtime library: $(with_libphobos)"
+  endif
+else
+	@echo "Will not build the D compiler: $(with_d)"
+endif
+ifeq ($(with_ssp),yes)
+	@echo "Will build with SSP support."
+else
+	@echo "Will build without SSP support: $(with_ssp)"
+endif
+ifeq ($(with_check),yes)
+	@echo "Will run the testsuite."
+else
+	@echo "Will not run the testsuite: $(with_check)"
+endif
+ifeq ($(with_nls),yes)
+	@echo "Will enable national language support."
+else
+	@echo "Will disable national language support: $(with_nls)"
+endif
+	@echo "-----------------------------------------------------------------------------"
+	@echo ""
+ifeq ($(with_check),yes)
+	@if echo "spawn true" | /usr/bin/expect -f - >/dev/null; then \
+	  : ; \
+	else \
+	  echo "expect is failing on your system with the above error, which means the GCC"; \
+	  echo "testsuite will fail.  Please resolve the above issues and retry the build."; \
+	  echo "-----------------------------------------------------------------------------"; \
+	  exit 1; \
+	fi
+endif
+	rm -f $(configure_stamp) $(build_stamp)
+	cat debian/README.Debian $(patch_stamp) > debian/README.Debian.$(DEB_TARGET_ARCH)
+
+	rm -rf $(builddir)
+	mkdir $(builddir)
+
+	: # configure
+	cd $(builddir) \
+	  && $(SET_PATH) \
+		CC="$(CC)" \
+		$(SET_SHELL) \
+	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}$(builddir)/gcc/ada/rts \
+		../src/configure $(subst ___, ,$(CONFARGS))
+
+	: # multilib builds without b-d on gcc-multilib (used in FLAGS_FOR_TARGET)
+	if [ -d /usr/include/$(DEB_TARGET_MULTIARCH)/asm ]; then \
+	  mkdir -p $(builddir)/sys-include; \
+	  ln -sf /usr/include/$(DEB_TARGET_MULTIARCH)/asm $(builddir)/sys-include/asm; \
+	fi
+
+	touch $(configure_stamp)
+
+build: $(build_dependencies)
+
+$(build_dummy_stamp):
+	touch $(build_dummy_stamp)
+
+$(build_locale_stamp):
+ifeq ($(locale_data)-$(with_cxx),generate-yes)
+	: # build locales needed by libstdc++ testsuite
+	rm -rf locales
+	mkdir locales
+	- sh debian/locale-gen
+endif
+	touch $(build_locale_stamp)
+
+
+$(build_stamp): $(configure_stamp) $(build_locale_stamp)
+	dh_testdir
+	rm -f bootstrap-protocol
+# DEB_CROSS is never set if REVERSE_CROSS is set and vice-versa.
+# DEB_CROSS build
+ifeq ($(DEB_CROSS),yes)
+	: # build cross compiler for $(TARGET_ALIAS)
+	( \
+	  set +e; \
+	  $(SET_PATH) \
+	  $(SET_LOCPATH) \
+	    $(MAKE) -C $(builddir) $(NJOBS) \
+		CC="$(CC)" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS) \
+		; \
+	  echo $$? > status; \
+	) 2>&1 | tee bootstrap-protocol
+	s=`cat status`; rm -f status; test $$s -eq 0
+else
+  # REVERSE_CROSS build
+  ifeq ($(REVERSE_CROSS),yes)
+	: # build cross compiler for $(TARGET_ALIAS)
+	( \
+	  set +e; \
+	  $(SET_PATH) \
+	  $(SET_LOCPATH) \
+	    $(MAKE) -C $(builddir) $(NJOBS) \
+		CC="$(CC)" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS) \
+		; \
+	  echo $$? > status; \
+	) 2>&1 | tee bootstrap-protocol
+	s=`cat status`; rm -f status; test $$s -eq 0
+else
+  # Native build
+  ifeq ($(with_java),yes)
+	mkdir -p bin
+	ln -sf /usr/bin/fastjar bin/jar
+    ifeq ($(with_native_ecj),yes)
+	: # prepare the standalone ecj jar
+	cp /usr/share/java/ecj.jar $(srcdir)/ecj-standalone.jar
+	zip -d $(srcdir)/ecj-standalone.jar 'org/eclipse/jdt/core/JDTCompilerAdapter*'
+    endif
+    ifeq ($(with_java_maintainer_mode),yes)
+	( \
+	  echo '#!/bin/sh'; \
+	  echo 'exec gij-4.8 -cp /usr/share/java/ecj.jar org.eclipse.jdt.internal.compiler.batch.GCCMain "$$@"'; \
+	) > bin/ecj1
+	chmod +x bin/ecj1
+	: # If we don't have gjavah in PATH, try to build it with the old gij
+	mkdir -p bin
+	if [ -x /usr/bin/gjavah-4.8 ]; then \
+	  ln -sf /usr/bin/gjavah-4.8 bin/gjavah; \
+	elif [ -x bin/gjavah ]; then \
+	  : ; \
+	else \
+	  mkdir -p $(builddir)/java_hacks; \
+	  cd $(builddir)/java_hacks; \
+	  cp -a $(srcdir)/libjava/classpath/tools/external external; \
+	  mkdir -p gnu/classpath/tools; \
+	  cp -a $(srcdir)/libjava/classpath/tools/gnu/classpath/tools/{common,javah,getopt} \
+	    gnu/classpath/tools/; \
+	  cp -a $(srcdir)/libjava/classpath/tools/resource/gnu/classpath/tools/common/Messages.properties \
+	    gnu/classpath/tools/common; \
+	  cd external/asm; \
+	  for i in `find . -name \*.java`; do gcj-4.8 --encoding ISO-8859-1 -C $$i -I.; done; \
+	  cd ../..; \
+	  for i in `find gnu -name \*.java`; do gcj-4.8 -C $$i -I. -Iexternal/asm/; done; \
+	  gcj-4.8 -findirect-dispatch -O2 -fmain=gnu.classpath.tools.javah.Main \
+	    -I. -Iexternal/asm/ `find . -name \*.class` -o $(PWD)/bin/gjavah.real; \
+	  ( \
+	    echo '#!/bin/sh'; \
+	    echo 'export CLASSPATH='`pwd`'$${CLASSPATH:+:$$CLASSPATH}'; \
+	    echo 'exec $(PWD)/bin/gjavah.real "$$@"'; \
+	  ) > $(PWD)/bin/gjavah; \
+	  chmod +x $(PWD)/bin/gjavah; \
+	fi
+    endif
+  endif
+	: # build native compiler
+	( \
+	  set +e; \
+	  $(SET_PATH) \
+	  $(SET_SHELL) \
+	  $(SET_LOCPATH) \
+	    $(MAKE) -C $(builddir) $(NJOBS) $(bootstrap_target) \
+		CC="$(CC)" \
+		$(CFLAGS_TO_PASS) \
+		$(STAGE1_CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS) \
+		; \
+	  echo $$? > status; \
+	) 2>&1 | tee bootstrap-protocol
+	s=`cat status`; rm -f status; test $$s -eq 0
+endif
+endif
+	-chmod 755 $(srcdir)/contrib/warn_summary
+	if [ -x $(srcdir)/contrib/warn_summary ]; then \
+	  rm -f bootstrap-summary; \
+	  $(srcdir)/contrib/warn_summary bootstrap-protocol \
+	    > bootstrap-summary; \
+	fi
+
+	touch $(build_stamp)
+
+ifeq ($(versioned_packages),yes)
+  hppa64_configure_flags += --program-suffix=-$(BASE_VERSION)
+endif
+
+ifeq ($(DEB_CROSS),yes)
+  CC_for_hppa64_cross = $(CC)
+else
+  CC_for_hppa64_cross = $(builddir)/gcc/xgcc -B$(builddir)/gcc/
+endif
+
+$(configure_hppa64_stamp): $(build_stamp)
+	dh_testdir
+	rm -f $(configure_hppa64_stamp) $(build_hppa64_stamp)
+	rm -rf $(builddir_hppa64)
+	mkdir $(builddir_hppa64)
+	: # configure
+	cd $(builddir_hppa64) && \
+	  $(SET_PATH) \
+	  $(SET_SHELL) \
+	  CC="$(CC_for_hppa64_cross)" \
+	     ../src/configure \
+		--enable-languages=c \
+		--prefix=/$(PF) \
+		--libexecdir=/$(hppa64libexecdir) \
+		--disable-shared \
+		--disable-nls \
+		--disable-threads \
+		--disable-libgomp \
+		--disable-libitm \
+		--disable-libmudflap \
+		--disable-libssp \
+		--disable-libquadmath \
+		--enable-plugin \
+		--with-system-zlib \
+		--with-as=/usr/bin/hppa64-linux-gnu-as \
+		--with-ld=/usr/bin/hppa64-linux-gnu-ld \
+		--includedir=/usr/hppa64-linux-gnu/include \
+		--build=$(DEB_BUILD_GNU_TYPE) \
+		--host=$(DEB_HOST_GNU_TYPE) \
+		--target=hppa64-linux-gnu
+	touch $(configure_hppa64_stamp)
+
+$(build_hppa64_stamp): $(configure_hppa64_stamp)
+	  $(SET_PATH) \
+	  $(SET_SHELL) \
+	  $(SET_LOCPATH) \
+	  LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}$(builddir)/gcc \
+	    $(MAKE) -C $(builddir_hppa64) $(NJOBS) \
+		CC="$(CC_for_hppa64_cross)" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS)
+	touch $(build_hppa64_stamp)
+
+$(configure_neon_stamp): $(build_stamp)
+	dh_testdir
+	rm -f $(configure_neon_stamp) $(build_neon_stamp)
+	rm -rf $(builddir_neon)
+	mkdir $(builddir_neon)
+	: # configure
+	cd $(builddir_neon) && \
+	  $(SET_PATH) \
+	  $(SET_SHELL) \
+	  CC="$(builddir)/gcc/xgcc -B$(builddir)/gcc/" \
+	     ../src/configure \
+		--disable-bootstrap \
+		--enable-languages=c,c++,objc,fortran \
+		--prefix=/$(PF) \
+		--libexecdir=/$(libexecdir) \
+		--program-suffix=-$(BASE_VERSION) \
+		--disable-nls \
+		--enable-plugin \
+		--disable-libmudflap \
+		--with-arch=armv7-a --with-tune=cortex-a8 \
+		--with-float=$(float_abi) --with-fpu=neon \
+		--host=arm-linux-gnueabi \
+		--build=arm-linux-gnueabi \
+		--target=arm-linux-gnueabi
+	touch $(configure_neon_stamp)
+
+$(build_neon_stamp): $(configure_neon_stamp)
+	  $(SET_PATH) \
+	  $(SET_SHELL) \
+	  $(SET_LOCPATH) \
+	    $(MAKE) -C $(builddir_neon) $(NJOBS) \
+		CC="$(builddir)/gcc/xgcc -B$(builddir)/gcc/" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS)
+	touch $(build_neon_stamp)
+
+spu_configure_args = \
+	--enable-languages=c,c++,fortran \
+	--prefix=/$(PF) \
+	--libexecdir=/$(spulibexecdir) \
+	--disable-shared \
+	--disable-nls \
+	--disable-threads \
+	--enable-checking=release \
+	--disable-libssp \
+	--with-system-zlib \
+	--with-newlib \
+	--enable-plugin \
+	--program-prefix=spu- \
+	--with-as=/usr/bin/spu-as \
+	--with-ar=/usr/bin/spu-ar \
+	--with-ld=/usr/bin/spu-ld
+
+ifeq ($(versioned_packages),yes)
+  spu_configure_args += --program-suffix=-$(BASE_VERSION)
+endif
+
+# FIXME: --with-sysroot=/usr/spu breaks libgfortran build
+#ifeq ($(single_package),yes)
+#  spu_configure_args += \
+#	--with-sysroot=/usr/spu
+#else
+  spu_configure_args += \
+	--includedir=/usr/spu/include \
+	--libdir=/usr/spu/lib
+#endif
+
+spu_configure_args += \
+	--host=$(DEB_HOST_GNU_TYPE) \
+	--build=$(DEB_BUILD_GNU_TYPE) \
+	--target=spu
+
+$(configure_spu_stamp): $(src_spu_stamp) $(build_stamp)
+	dh_testdir
+	rm -f $(configure_spu_stamp) $(build_spu_stamp)
+	rm -rf $(builddir_spu)
+	mkdir $(builddir_spu)
+	: # configure
+	cd $(builddir_spu) && \
+	  $(SET_PATH) \
+	  $(SET_SHELL) \
+	  CC="$(builddir)/gcc/xgcc -B$(builddir)/gcc/" \
+	     ../src-spu/configure $(spu_configure_args)
+	touch $(configure_spu_stamp)
+
+$(build_spu_stamp): $(configure_spu_stamp)
+	  $(SET_PATH) \
+	  $(SET_SHELL) \
+	  $(SET_LOCPATH) \
+	    $(MAKE) -C $(builddir_spu) $(NJOBS) \
+		CC="$(builddir)/gcc/xgcc -B$(builddir)/gcc/" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS)
+	touch $(build_spu_stamp)
+
+
+MANUALS = \
+	$(srcdir)/gcc/doc/cpp.texi \
+	$(srcdir)/gcc/doc/cppinternals.texi \
+	$(srcdir)/gcc/doc/gcc.texi \
+	$(srcdir)/gcc/doc/gccint.texi
+ifeq ($(with_fortran),yes)
+  MANUALS += $(srcdir)/gcc/fortran/gfortran.texi
+endif
+ifeq ($(with_java),yes)
+  MANUALS += $(srcdir)/gcc/java/gcj.texi
+endif
+ifeq ($(with_ada),yes)
+  MANUALS += \
+	$(builddir)/gcc/doc/gnat_ugn.texi \
+	$(srcdir)/gcc/ada/gnat_rm.texi \
+	$(srcdir)/gcc/ada/gnat-style.texi
+endif
+ifeq ($(with_gomp),yes)
+  MANUALS += $(srcdir)/libgomp/libgomp.texi
+endif
+ifeq ($(with_itm),yes)
+  MANUALS += $(srcdir)/libitm/libitm.texi
+endif
+ifeq ($(with_qmath),yes)
+  MANUALS += $(srcdir)/libquadmath/libquadmath.texi
+endif
+ifeq ($(with_go),yes)
+  MANUALS += $(srcdir)/gcc/go/gccgo.texi
+endif
+
+html-docs: $(build_html_stamp)
+#$(build_html_stamp): html-texi2html
+#$(build_html_stamp): html-makeinfo
+$(build_html_stamp): html-makeinfo-nosplit
+
+html-texi2html:
+	rm -rf html $(builddir)/gcc/html
+	mkdir $(builddir)/gcc/html
+	ln -s $(builddir)/gcc/html html
+	cd $(builddir)/gcc; \
+	for manual in $(MANUALS); do \
+	  outname=`basename $${manual} .texi`; \
+	  echo "generating $$outname ..."; \
+	  texi2html -number -split chapter \
+		-I $(srcdir)/gcc/doc/include \
+		-I $(srcdir)/gcc/p/doc \
+		-I $(srcdir)/gcc/p/doc/generated \
+		-I `dirname $${manual}` \
+		-I $(builddir)/gcc \
+		-I $(buildlibdir)/libquadmath \
+		-subdir html \
+		$${manual}; \
+	done
+
+html-makeinfo:
+	rm -rf html
+	mkdir html
+	cd $(builddir)/gcc; \
+	for manual in $(MANUALS); do \
+	  manual=`find $(srcdir) -name $${file}.texi`; \
+	  outname=`basename $${manual} .texi`; \
+	  echo "generating $$outname ..."; \
+	  if [ "$${manual}" ]; then \
+	    makeinfo --html --number-sections \
+		-I $(srcdir)/gcc/doc/include -I `dirname $${manual}` \
+		-I $(srcdir)/gcc/p/doc \
+		-I $(srcdir)/gcc/p/doc/generated \
+		-I $(builddir)/gcc \
+		-I $(buildlibdir)/libquadmath \
+		-o $${outname} \
+		$${manual}; \
+	  fi; \
+	done
+
+html-makeinfo-nosplit:
+	rm -rf html
+	mkdir html
+	cd $(builddir)/gcc; \
+	for manual in $(MANUALS); do \
+	  outname=`basename $${manual} .texi`.html; \
+	  echo "generating $$outname ..."; \
+	  makeinfo --html --number-sections --no-split \
+		-I $(srcdir)/gcc/doc/include -I `dirname $${manual}` \
+		-I $(srcdir)/gcc/p/doc \
+		-I $(srcdir)/gcc/p/doc/generated \
+		-I $(builddir)/gcc \
+		-I $(buildlibdir)/libquadmath \
+		-o $(PWD)/html/$${outname} \
+		$${manual}; \
+	done
+
+# start the script only on architectures known to have slow autobuilders ...
+logwatch_archs := alpha arm m68k mips mipsel sparc
+ifeq ($(DEB_HOST_GNU_CPU), $(findstring $(DEB_HOST_GNU_CPU),$(logwatch_archs)))
+  start_logwatch = yes
+endif
+ifeq ($(DEB_HOST_GNU_SYSTEM),gnu)
+  start_logwatch = yes
+endif
+
+stamps/mauve-build: stamps/build
+	rm -rf mauve
+	mkdir -p mauve
+ifeq ($(with_mauve_check),yes)
+	tar xf $(wildcard /usr/src/mauve*.tar.*)
+	cd mauve \
+	    && aclocal \
+	    && automake \
+	    && autoconf2.59 \
+	    && PATH=$(CURDIR)/$(sdkimg)/bin:$$PATH ./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE)
+	PATH=$(CURDIR)/$(sdkimg)/bin:$$PATH $(MAKE) -C mauve
+endif
+	touch $@
+
+stamps/mauve-check: stamps/build stamps/mauve-build
+ifeq ($(with_mauve_check),yes)
+	-cd mauve && \
+	    JAVA_HOME=$(CURDIR)/$(sdkimg) \
+	    PATH=$(CURDIR)/$(sdkimg)/bin:$$PATH \
+		xvfb-run -s "-extension GLX" java Harness \
+		    -vm $(CURDIR)/$(sdkimg)/bin/java \
+		    -file $(CURDIR)/debian/mauve_tests \
+		    -timeout 30000 2>&1 \
+		| tee mauve_output
+	@sleep 5
+else
+	echo "mauve testsuite not run for this build" > mauve/mauve_output
+endif
+	touch $@
+
+check: $(check_stamp) # $(if $(filter yes, $(with_java)),stamps/05-build-mauve-stamp) #$(check_inst_stamp)
+$(check_stamp): $(build_stamp) $(build_locale_stamp)
+	rm -f test-protocol
+	rm -f $(builddir)/runcheck*
+
+	-chmod 755 $(srcdir)/contrib/test_summary
+ifneq ($(with_common_libs),yes)
+  ifeq ($(with_cxx),yes)
+	: # libstdc++6 built from newer gcc-4.x source, run testsuite against the installed lib
+
+	sed 's/-L[^ ]*//g' $(buildlibdir)/libstdc++-v3/scripts/testsuite_flags \
+	  > $(buildlibdir)/libstdc++-v3/scripts/testsuite_flags.installed
+	-$(ULIMIT_M); \
+	    set +e; \
+	    for d in $(buildlibdir)/libstdc++-v3/testsuite; do \
+	      echo "Running testsuite in $$d ..."; \
+	      TEST_INSTALLED=1 \
+	      $(SET_SHELL) \
+	      $(SET_LOCPATH) \
+	      $(SET_PATH) \
+	      DEJAGNU_TIMEOUT=$(DEJAGNU_TIMEOUT) \
+	      DEB_GCC_NO_O3=1 \
+		$(MAKE) -k -C $$d $(NJOBS) check $(RUNTESTFLAGS); \
+	    done 2>&1 | tee test-protocol2
+
+	BOOT_CFLAGS="$(BOOT_CFLAGS)" \
+	  $(srcdir)/contrib/test_summary -m "$(S_EMAIL)" > raw-test-summary
+	-( \
+	  sed -n '/^Mail/s/.*"\([^"][^"]*\)".*/\1/p' raw-test-summary; \
+	  awk '/^cat/, /^EOF/' raw-test-summary | grep -v EOF; \
+	) > libstdc++-test-summary
+	echo 'BEGIN installed libstdc++-v3 test-summary'
+	cat libstdc++-test-summary
+	echo 'END installed libstdc++-v3 test-summary'
+	find $(buildlibdir)/libstdc++-v3/testsuite -name '*.log' -o -name '*.sum' \
+	  | xargs -r rm -f
+  endif
+endif
+
+ifeq ($(start_logwatch),yes)
+	: # start logwatch script for regular output during test runs
+	chmod +x debian/logwatch.sh
+	-debian/logwatch.sh -t 900 -p $(builddir)/logwatch.pid \
+		-m '\ntestsuite still running ...\n' \
+		test-protocol \
+		$(builddir)/gcc/testsuite/gcc/gcc.log \
+		$(builddir)/gcc/testsuite/g++/g++.log \
+		$(builddir)/gcc/testsuite/gfortran/gfortran.log \
+		$(builddir)/gcc/testsuite/objc/objc.log \
+		$(builddir)/gcc/testsuite/obj-c++/obj-c++.log \
+		$(builddir)/gcc/testsuite/gnat/gnat.log \
+		$(builddir)/gcc/testsuite/ada/acats/acats.log \
+		$(builddir)/gcc/testsuite/gfortran/gfortran.log \
+		$(builddir)/gcc/p/test/test_log \
+		$(buildlibdir)/libstdc++-v3/testsuite/libstdc++.log \
+		$(buildlibdir)/libjava/testsuite/libjava.log \
+		$(buildlibdir)/libmudflap/testsuite/libmudflap.log \
+		$(buildlibdir)/libgomp/testsuite/libgomp.log \
+		$(buildlibdir)/libffi/testsuite/libffi.log \
+		&
+endif
+
+ifeq ($(with_ada),yes)
+	chmod +x debian/acats-killer.sh
+	-debian/acats-killer.sh -p $(builddir)/acats-killer.pid \
+		$(builddir)/gcc/testsuite/ada/acats/acats.log \
+		$(builddir)/gcc/testsuite/g++.log \
+		&
+endif
+
+	-$(ULIMIT_M); \
+	    set +e; \
+	    for d in $(checkdirs); do \
+	      echo "Running testsuite in $$d ..."; \
+	      $(SET_SHELL) \
+	      $(SET_LOCPATH) \
+	      $(SET_PATH) \
+	      EXTRA_TEST_PFLAGS=-g0 \
+	      DEJAGNU_TIMEOUT=$(DEJAGNU_TIMEOUT) \
+	      DEB_GCC_NO_O3=1 \
+		$(MAKE) -k -C $$d $(NJOBS) check $(RUNTESTFLAGS); \
+	    done 2>&1 | tee test-protocol
+
+	-ps aux | fgrep logwatch | fgrep -v fgrep
+	-if [ -f $(builddir)/logwatch.pid ]; then \
+	  kill -1 `cat $(builddir)/logwatch.pid`; \
+	  sleep 1; \
+	  kill -9 `cat $(builddir)/logwatch.pid`; \
+	  rm -f $(builddir)/logwatch.pid; \
+	fi
+	-ps aux | fgrep logwatch | fgrep -v fgrep
+
+ifeq ($(with_ada),yes)
+	-if [ -f $(builddir)/acats-killer.pid ]; then \
+	  kill -1 `cat $(builddir)/acats-killer.pid`; \
+	  sleep 1; \
+	  kill -9 `cat $(builddir)/acats-killer.pid`; \
+	  rm -f $(builddir)/acats-killer.pid; \
+	fi
+endif
+
+	: # running the libjava testsuite alone is missing this information
+	$(builddir)/gcc/xgcc -B$(builddir)/gcc/ -v > $(builddir)/compiler_version.sum 2>&1
+
+	if [ -x $(srcdir)/contrib/test_summary ]; then \
+	  rm -f test-summary; \
+	  ( \
+	    cd $(builddir); \
+	    echo '' > ts-include; \
+	    echo '' >> ts-include; \
+	    if [ -f $(builddir)/gcc/.bad_compare ]; then \
+	      echo 'Bootstrap comparison failure:' >> ts-include; \
+	      cat $(builddir)/gcc/.bad_compare >> ts-include; \
+	      echo '' >> ts-include; \
+	      echo '' >> ts-include; \
+	    fi; \
+	    echo "Build Dependencies:" >> ts-include; \
+	    dpkg -l g++-* binutils* `echo '$(LIBC_DEP)' | awk '{print $$1}'` \
+		libgmp*-dev libmpfr-dev libmpc-dev libisl-dev libcloog-isl-dev \
+	        | fgrep -v '<none>' >> ts-include; \
+	    echo '' >> ts-include; \
+	    cat ../$(patch_stamp) >> ts-include; \
+	    BOOT_CFLAGS="$(BOOT_CFLAGS)" \
+	      $(srcdir)/contrib/test_summary \
+		-i ts-include -m "$(S_EMAIL)" \
+	  ) > raw-test-summary; \
+	  if [ -n "$(testsuite_tarball)" ]; then \
+	    echo "Test suite used: $(testsuite_srcdir)" > test-summary; \
+	    echo "  Do not interpret the results on its own" >> test-summary; \
+	    echo "  but compare them with the results from" >> test-summary; \
+	    echo "  the gcc-snapshot package." >> test-summary; \
+	  fi; \
+	  sed -n '/^Mail/s/.*"\([^"][^"]*\)".*/\1/p' raw-test-summary \
+		>> test-summary; \
+	  awk '/^cat/, /^EOF/' raw-test-summary | grep -v EOF >> test-summary; \
+	  if [ -f bootstrap-summary -a "$(bootstrap_target)" != profiledbootstrap ]; then \
+	    echo '' >> test-summary; \
+	    cat bootstrap-summary >> test-summary; \
+	  fi; \
+	  echo 'BEGIN test-summary'; \
+	  cat test-summary; \
+	  echo 'END test-summary'; \
+	fi
+
+	touch $(check_stamp)
+
+$(check_inst_stamp): $(check_stamp)
+	rm -f test-inst-protocol
+
+ifeq ($(start_logwatch),yes)
+	: # start logwatch script for regular output during test runs
+	chmod +x debian/logwatch.sh
+	-debian/logwatch.sh -t 900 -p $(builddir)/logwatch-inst.pid \
+		-m '\ntestsuite (3.3) still running ...\n' \
+		test-inst-protocol \
+		check-inst/{gcc,g++,g77,objc}.log \
+		&
+endif
+
+	rm -rf check-inst
+	mkdir check-inst
+
+	echo "Running testsuite ..."
+	-$(ULIMIT_M) ; \
+	    $(SET_SHELL) \
+	    $(SET_LOCPATH) \
+	    EXTRA_TEST_PFLAGS=-g0 \
+	    DEJAGNU_TIMEOUT=$(DEJAGNU_TIMEOUT) \
+	  cd check-inst && $(srcdir)/contrib/test_installed \
+	    --with-gcc=gcc-3.3 --with-g++=g++-3.3 --with-g77=g77-3.3 \
+		2>&1 | tee test-inst-protocol
+
+	-ps aux | fgrep logwatch | fgrep -v fgrep
+	if [ -f $(builddir)/logwatch-inst.pid ]; then \
+	  kill -1 `cat $(builddir)/logwatch-inst.pid`; \
+	else \
+	  true; \
+	fi
+	-ps aux | fgrep logwatch | fgrep -v fgrep
+
+	-chmod 755 $(srcdir)/contrib/test_summary
+	if [ -x $(srcdir)/contrib/test_summary ]; then \
+	  rm -f test-inst-summary; \
+	  ( \
+	    cd check-inst; \
+	    echo '' > ts-include; \
+	    echo '' >> ts-include; \
+	    echo "Build Dependencies:" >> ts-include; \
+	    dpkg -l g++-* binutils* `echo '$(LIBC_DEP)' | awk '{print $$1}'` \
+		libgmp*-dev libmpfr-dev libmpc-dev libisl*-dev libcloog-isl-dev \
+	        | fgrep -v '<none>' >> ts-include; \
+	    echo '' >> ts-include; \
+	    echo 'Results for the installed GCC-3.3 compilers' >> ts-include; \
+	    $(srcdir)/contrib/test_summary \
+		-i ts-include -m "$(S_EMAIL)" \
+	  ) > raw-test-inst-summary; \
+	  sed -n '/^Mail/s/.*"\([^"][^"]*\)".*/\1/p' raw-test-inst-summary \
+		>> test-inst-summary; \
+	  awk '/^cat/, /^EOF/' raw-test-inst-summary \
+		| grep -v EOF >> test-inst-summary; \
+	  echo 'BEGIN test-installed-summary'; \
+	  cat test-inst-summary; \
+	  echo 'END test-installed-summary'; \
+	fi
+
+	chmod 755 debian/reduce-test-diff.awk
+	if diff -u test-inst-summary test-summary \
+		| debian/reduce-test-diff.awk > diff-summary; \
+	then \
+	  mv -f diff-summary testsuite-comparision; \
+	else \
+	  ( \
+	    echo "WARNING: New failures in gcc-3.4 compared to gcc-3.3"; \
+	    echo ''; \
+	    cat diff-summary; \
+	  ) > testsuite-comparision; \
+	  rm -f diff-summary; \
+	fi
+	touch $(check_inst_stamp)
+
+clean: debian/control
+	dh_testdir
+	rm -f pxxx status
+	rm -f *-summary *-protocol testsuite-comparision summary-diff
+	if [ -f $(srcdir)/gcc/p/config-lang.in.debian ]; then \
+	  mv -f $(srcdir)/gcc/p/config-lang.in.debian $(srcdir)/gcc/p/config-lang.in; \
+	else true; fi
+	rm -f $(srcdir)/gcc/po/*.gmo
+	rm -f debian/lib{gcc,gcj,objc,stdc++}{-v3,[0-9]}*.{{pre,post}{inst,rm},shlibs}
+	fs=`echo debian/*BV* debian/*GCJ* debian/*CXX* debian/*LC* debian/*MF* | sort -u`; \
+	for f in $$fs; do \
+	  [ -f $$f ] || continue; \
+	  f2=$$(echo $$f \
+		| sed 's/BV/$(BASE_VERSION)/;s/CXX/$(CXX_SONAME)/;s/LGCJ/$(PKG_LIBGCJ_EXT)/;s/GCJ/$(PKG_GCJ_EXT)/;s/LC/$(GCC_SONAME)/;s/MF/$(MUDFLAP_SONAME)/;s/-CRB/$(cross_bin_arch)/;s/\.in$$//'); \
+	  rm -f $$f2; \
+	done
+	find debian -maxdepth 1 -name '*.symbols' -type l | xargs -r rm -f
+	rm -f debian/gcc-{XX,ar,nm,ranlib}-$(BASE_VERSION).1
+	rm -f debian/shlibs.local debian/substvars.local
+	rm -f debian/*.debhelper
+	-[ -d debian/bugs ] && $(MAKE) -C debian/bugs clean
+	rm -f debian/README.libstdc++-baseline debian/README.Bugs debian/README.Debian.$(DEB_TARGET_ARCH)
+	rm -f debian/lib*gcj-bc.shlibs
+	rm -rf bin locales share
+	rm -rf check-inst
+	rm -rf .pc
+	dh_clean
+	$(cross_clean) dh_clean
+
+# -----------------------------------------------------------------------------
+# some abbrevations for the package names and directories;
+# p_XXX is the package name, d_XXX is the package directory
+# these macros are only used in the binary-* targets.
+
+ifeq ($(versioned_packages),yes)
+  pkg_ver := -$(BASE_VERSION)
+endif
+
+ifneq ($(DEB_CROSS),yes)
+  p_base = gcc$(pkg_ver)-base
+  p_xbase = gcc$(pkg_ver)-base
+  p_gcc  = gcc$(pkg_ver)
+  p_cpp  = cpp$(pkg_ver)
+  p_cppd = cpp$(pkg_ver)-doc
+  p_cxx  = g++$(pkg_ver)
+  p_doc  = gcc$(pkg_ver)-doc
+  p_lgcc = libgcc$(GCC_SONAME)
+else
+  # only triggered if DEB_CROSS set
+  ifneq ($(with_deps_on_target_arch_pkgs),yes)
+    p_base = gcc$(pkg_ver)$(cross_bin_arch)-base
+    p_xbase = gcc$(pkg_ver)$(cross_bin_arch)-base
+  else
+    p_base = gcc$(pkg_ver)-base
+    p_xbase = $(p_cpp)
+  endif
+  p_cpp  = cpp$(pkg_ver)$(cross_bin_arch)
+  p_gcc  = gcc$(pkg_ver)$(cross_bin_arch)
+  p_cxx  = g++$(pkg_ver)$(cross_bin_arch)
+endif
+p_hppa64 = gcc$(pkg_ver)-hppa64
+
+d	= debian/tmp
+d_base	= debian/$(p_base)
+d_xbase = debian/$(p_xbase)
+d_gcc	= debian/$(p_gcc)
+d_cpp	= debian/$(p_cpp)
+d_cppd	= debian/$(p_cppd)
+d_cxx	= debian/$(p_cxx)
+d_doc	= debian/$(p_doc)
+d_lgcc	= debian/$(p_lgcc)
+d_hppa64= debian/$(p_hppa64)
+
+d_spu   = debian/tmp-spu
+d_neon   = debian/tmp-neon
+
+common_substvars = \
+	$(shell awk "{printf \"'-V%s' \", \$$0}" debian/substvars.local)
+
+ifeq ($(DEB_CROSS),yes)
+  lib_binaries := indep_binaries
+else
+  lib_binaries := arch_binaries
+endif
+
+# ---------------------------------------------------------------------------
+
+ifeq ($(single_package),yes)
+  include debian/rules.d/binary-snapshot.mk
+else
+
+ifneq ($(DEB_CROSS),yes)
+ifeq ($(with_source),yes)
+  include debian/rules.d/binary-source.mk
+endif
+endif
+
+ifneq ($(BACKPORT),true)
+ifeq ($(with_gccxbase),yes)
+  include debian/rules.d/binary-base.mk
+endif
+
+ifeq ($(with_gccbase),yes)
+  include debian/rules.d/binary-base.mk
+endif
+
+# always include to get some definitions
+include debian/rules.d/binary-libgcc.mk
+
+ifeq ($(with_libqmath),yes)
+  include debian/rules.d/binary-libquadmath.mk
+endif
+
+ifeq ($(with_libgmath),yes)
+  include debian/rules.d/binary-libgccmath.mk
+endif
+
+ifeq ($(with_libgomp),yes)
+  include debian/rules.d/binary-libgomp.mk
+endif
+
+ifeq ($(with_libitm),yes)
+  include debian/rules.d/binary-libitm.mk
+endif
+
+ifeq ($(with_libatomic),yes)
+  include debian/rules.d/binary-libatomic.mk
+endif
+
+ifeq ($(with_libbacktrace),yes)
+  include debian/rules.d/binary-libbacktrace.mk
+endif
+
+ifeq ($(with_cdev),yes)
+  include debian/rules.d/binary-cpp.mk
+endif
+
+ifeq ($(with_fixincl),yes)
+  include debian/rules.d/binary-fixincl.mk
+endif
+
+ifeq ($(with_mudflap),yes)
+  include debian/rules.d/binary-libmudflap.mk
+endif
+
+ifeq ($(with_libssp),yes)
+  include debian/rules.d/binary-libssp.mk
+endif
+
+ifeq ($(with_objcxx),yes)
+  include debian/rules.d/binary-objcxx.mk
+endif
+
+ifeq ($(with_objc),yes)
+  include debian/rules.d/binary-objc.mk
+  include debian/rules.d/binary-libobjc.mk
+endif
+
+ifeq ($(with_go),yes)
+  include debian/rules.d/binary-go.mk
+endif
+
+# include before cxx
+ifeq ($(with_java),yes)
+  include debian/rules.d/binary-java.mk
+endif
+
+ifeq ($(with_cxxdev),yes)
+  include debian/rules.d/binary-cxx.mk
+endif
+ifeq ($(with_cxx),yes)
+  include debian/rules.d/binary-libstdcxx.mk
+endif
+
+ifeq ($(with_libasan),yes)
+  include debian/rules.d/binary-libasan.mk
+endif
+
+ifeq ($(with_libtsan),yes)
+  include debian/rules.d/binary-libtsan.mk
+endif
+
+ifeq ($(with_f77),yes)
+  include debian/rules.d/binary-f77.mk
+endif
+
+ifeq ($(with_fortran),yes)
+  include debian/rules.d/binary-fortran.mk
+endif
+
+ifeq ($(with_ada),yes)
+  include debian/rules.d/binary-ada.mk
+endif
+
+ifeq ($(with_d),yes)
+  include debian/rules.d/binary-d.mk
+endif
+
+ifeq ($(with_libnof),yes)
+  ifeq ($(DEB_TARGET_GNU_CPU),powerpc)
+    include debian/rules.d/binary-nof.mk
+  endif
+endif
+
+ifeq ($(with_softfloat),yes)
+  include debian/rules.d/binary-softfloat.mk
+endif
+
+# gcc must be moved/built after g77 and g++
+ifeq ($(with_cdev),yes)
+  include debian/rules.d/binary-gcc.mk
+endif
+
+ifeq ($(with_hppa64),yes)
+  include debian/rules.d/binary-hppa64.mk
+endif
+
+ifeq ($(with_neon),yes)
+  include debian/rules.d/binary-neon.mk
+endif
+
+ifeq ($(with_spu),yes)
+  include debian/rules.d/binary-spu.mk
+endif
+endif
+
+endif # ($(single_package),yes)
+
+# ----------------------------------------------------------------------
+install: $(install_dependencies)
+
+$(install_dummy_stamp): $(build_dummy_stamp)
+	touch $(install_dummy_stamp)
+
+$(install_snap_stamp): $(build_dependencies)
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+
+	: # Install directories
+	rm -rf $(d)
+	mkdir -p $(d)/$(PF)
+
+ifeq ($(with_hppa64),yes)
+	: # Install hppa64
+	$(SET_PATH) \
+	    $(MAKE) -C $(builddir_hppa64) \
+		CC="$(CC)" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS) \
+		DESTDIR=$(PWD)/$(d) \
+		    install
+
+	ls -l $(d)/$(PF)/bin
+	if [ ! -x $(d)/$(PF)/bin/hppa64-linux-gnu-gcc ]; then \
+	  mv $(d)/$(PF)/bin/hppa64-linux-gnu-gcc-4* $(d)/$(PF)/bin/hppa64-linux-gnu-gcc; \
+	else \
+	  rm -f $(d)/$(PF)/bin/hppa64-linux-gnu-gcc-4*; \
+	fi
+
+	for i in ar nm ranlib; do \
+	  cp debian/gcc-$$i$(pkg_ver).1 $(d)/$(PF)/share/man/man1/$(cmd_prefix)gcc-$$i$(pkg_ver).1; \
+	done
+
+	: # remove files not needed from the hppa64 build
+	rm -rf $(d)/$(PF)/share/info
+	rm -rf $(d)/$(PF)/share/man
+	rm -f $(d)/$(PF)/$(libdir)/libiberty.a
+	rm -f $(d)/$(PF)/bin/*{gcov,gccbug,gcc}
+
+	rm -rf $(d)/$(PF)/hppa64-linux-gnu/include
+	rm -rf $(d)/$(PF)/hppa64-linux-gnu/lib
+	set -e; \
+	  cd $(d)/$(PF)/$(libdir)/gcc/hppa64-linux-gnu/$(versiondir)/include-fixed; \
+	  for i in *; do \
+	    case "$$i" in \
+	      README|features.h|syslimits.h|limits.h) ;; \
+	      linux|$(TARGET_ALIAS)) ;; \
+	      $(subst $(DEB_TARGET_GNU_CPU),$(biarch_cpu),$(TARGET_ALIAS))) ;; \
+	      *) echo "remove include-fixed/$$i"; rm -rf $$i; \
+	    esac; \
+	  done
+endif
+
+ifeq ($(with_spu),yes)
+	: # Install spu
+	$(SET_PATH) \
+	    $(MAKE) -C $(builddir_spu) \
+		CC="$(CC)" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS) \
+		DESTDIR=$(PWD)/$(d) \
+		    install
+
+	ls -l $(d)/$(PF)/bin
+	if [ ! -x $(d)/$(PF)/bin/spu-gcc ]; then \
+	  mv $(d)/$(PF)/bin/spu-gcc-4* $(d)/$(PF)/bin/spu-gcc; \
+	else \
+	  rm -f $(d)/$(PF)/bin/spu-gcc-4*; \
+	fi
+	if [ ! -x $(d)/$(PF)/bin/spu-g++ ]; then \
+	  mv $(d)/$(PF)/bin/spu-g++-4* $(d)/$(PF)/bin/spu-g++; \
+	else \
+	  rm -f $(d)/$(PF)/bin/spu-g++-4*; \
+	fi
+
+ifneq (,$(findstring fortran, $(spu_configure_args)))
+	if [ ! -x $(d)/$(PF)/bin/spu-gfortran ]; then \
+	  mv $(d)/$(PF)/bin/spu-gfortran-4* $(d)/$(PF)/bin/spu-gfortran; \
+	else \
+	  rm -f $(d)/$(PF)/bin/spu-gfortran-4*; \
+	fi
+endif
+	rm -f $(d)/$(PF)/bin/spu-c++*
+
+	: # remove files not needed from the spu build
+	rm -rf $(d)/$(PF)/info $(d)/$(PF)/share/info
+	rm -rf $(d)/$(PF)/man $(d)/$(PF)/share/man
+	rm -rf $(d)/$(PF)/$(libdir)/gcc/spu/$(GCC_VERSION)/plugin
+	rm -f $(d)/$(PF)/$(libdir)/libiberty.a
+	rm -f $(d)/$(PF)/bin/*{gcov,gccbug,gcc}
+
+# FIXME
+#	rm -rf $(d)/$(PF)/spu/include
+#	rm -rf $(d)/$(PF)/spu/lib
+	-set -e; \
+	  cd $(d)/$(PF)/$(libdir)/gcc/spu/$(versiondir)/include-fixed; \
+	  for i in *; do \
+	    case "$$i" in \
+	      README|features.h|syslimits.h|limits.h) ;; \
+	      linux|$(TARGET_ALIAS)) ;; \
+	      $(subst $(DEB_TARGET_GNU_CPU),$(biarch_cpu),$(TARGET_ALIAS))) ;; \
+	      *) echo "remove include-fixed/$$i"; rm -rf $$i; \
+	    esac; \
+	  done
+endif
+
+	: # Work around PR lto/41569
+	ln -sf gcc $(builddir)/prev-gcc
+
+	: # Install everything
+	$(SET_PATH) \
+	$(SET_SHELL) \
+	  $(MAKE) -C $(builddir) \
+	    $(CFLAGS_TO_PASS) \
+	    $(LDFLAGS_TO_PASS) \
+	    DESTDIR=$(PWD)/$(d) \
+	    infodir=/$(PF)/share/info \
+	    mandir=/$(PF)/share/man \
+		install
+
+	ls -l $(d)/$(PF)/bin
+	if [ ! -x $(d)/$(PF)/bin/$(TARGET_ALIAS)-gcc ]; then \
+	  mv $(d)/$(PF)/bin/$(TARGET_ALIAS)-gcc-4* $(d)/$(PF)/bin/$(TARGET_ALIAS)-gcc; \
+	else \
+	  rm -f $(d)/$(PF)/bin/$(TARGET_ALIAS)-gcc-4*; \
+	fi
+	set -e; \
+	  cd $(d)/$(gcc_lib_dir)/include-fixed; \
+	  for i in *; do \
+	    case "$$i" in \
+	      README|features.h|syslimits.h|limits.h) ;; \
+	      linux|$(TARGET_ALIAS)) ;; \
+	      $(subst $(DEB_TARGET_GNU_CPU),$(biarch_cpu),$(TARGET_ALIAS))) ;; \
+	      *) echo "remove include-fixed/$$i"; rm -rf $$i; \
+	    esac; \
+	  done
+
+ifneq ($(configured_libdir),$(libdir))
+	for i in debug go pkgconfig '*.so' '*.so.*' '*.a' '*.la' '*.py' '*.spec'; do \
+	  mv $(d)/$(PF)/$(configured_libdir)/$$i \
+		$(d)/$(PF)/$(libdir)/. || true; \
+	done
+endif
+
+# FIXME: libjava/classpath not correctly patched
+ifeq ($(with_java),yes)
+	-if [ -d $(d)/$(PF)/lib/gcj-$(GCC_VERSION)-$(GCJ_SONAME) ]; then \
+	  ls -l $(d)/$(PF)/lib/gcj-$(GCC_VERSION)-$(GCJ_SONAME); \
+	  mv $(d)/$(PF)/lib/gcj-$(GCC_VERSION)-$(GCJ_SONAME)/* \
+	    $(d)/$(PF)/lib/gcj-$(BASE_VERSION)-$(GCJ_SONAME)/; \
+	  rmdir $(d)/$(PF)/lib/gcj-$(GCC_VERSION)-$(GCJ_SONAME); \
+	fi
+
+	ln -sf libgcj.so.$(GCJ_SONAME).0.0 $(d)/$(PF)/lib/libgcj_bc.so.1.0.0
+
+	install -m 755 $(d)/$(PF)/lib/libgcj_bc.so.1 \
+		$(d)/$(gcc_lib_dir)/libgcj_bc.so
+	$(builddir)/gcc/xgcc -B$(builddir)/gcc/ -shared -fpic -xc /dev/null \
+		-o build/libgcj.so -Wl,-soname,libgcj.so.$(GCJ_SONAME) -nostdlib
+	$(builddir)/gcc/xgcc -B$(builddir)/gcc/ -shared -fpic \
+		$(srcdir)/libjava/libgcj_bc.c \
+		-o $(d)/$(gcc_lib_dir)/libgcj_bc.so \
+		-Wl,-soname,libgcj_bc.so.1 $(builddir)/libgcj.so -shared-libgcc
+endif
+
+	-ls -l $(d)/usr
+	if [ -d $(d)/usr/man/man1 ]; then \
+	  mv $(d)/usr/man/man1/* $(d)/usr/share/man/man1/; \
+	fi
+
+	chmod 755 debian/dh_*
+	touch $(install_snap_stamp)
+
+$(install_stamp): $(build_stamp)
+	dh_testdir
+	dh_testroot
+	dh_clean -k -N$(p_hppa64)
+
+	if [ -f $(binary_stamp)-hppa64 ]; then \
+	  mv $(binary_stamp)-hppa64 saved-stamp-hppa64; \
+	fi
+	if [ -f $(binary_stamp)-spu ]; then \
+	  mv $(binary_stamp)-spu saved-stamp-spu; \
+	fi
+	rm -f $(binary_stamp)*
+	if [ -f saved-stamp-hppa64 ]; then \
+	  mv saved-stamp-hppa64 $(binary_stamp)-hppa64; \
+	fi
+	if [ -f saved-stamp-spu ]; then \
+	  mv saved-stamp-spu $(binary_stamp)-spu; \
+	fi
+
+	: # Install directories
+	rm -rf $(d)
+	mkdir -p $(d)/$(libdir) $(d)/$(PF) $(d)/$(PF)/$(libdir)/debug
+ifeq ($(biarch32),yes)
+	mkdir -p $(d)/$(PF)/lib32/debug
+endif
+ifeq ($(biarch64),yes)
+	mkdir -p $(d)/$(PF)/lib64/debug
+endif
+ifeq ($(biarchn32),yes)
+	mkdir -p $(d)/$(PF)/$(libn32)/debug
+endif
+ifeq ($(biarchx32),yes)
+	mkdir -p $(d)/$(PF)/libx32/debug
+endif
+
+ifneq (,$(filter $(DEB_TARGET_GNU_CPU),x86_64 sparc64 s390x powerpc64))
+ifneq ($(DEB_TARGET_ARCH),x32)
+	: # link lib to lib64 and $(PF)/lib to $(PF)/lib64
+	: # (this works when CONFARGS contains '--disable-multilib')
+	ln -s $(configured_libdir) $(d)/lib64
+	mkdir -p $(d)/$(PF)/$(configured_libdir)
+	ln -s $(configured_libdir) $(d)/$(PF)/lib64
+endif
+endif
+ifeq ($(DEB_TARGET_ARCH),x32)
+	: # link lib to libx32 and $(PF)/lib to $(PF)/libx32
+	ln -s $(configured_libdir) $(d)/libx32
+	mkdir -p $(d)/$(PF)/$(configured_libdir)
+	ln -s $(configured_libdir) $(d)/$(PF)/libx32
+endif
+
+	: # Work around PR lto/41569
+	ln -sf gcc $(builddir)/prev-gcc
+
+	: # Install everything
+	$(SET_PATH) \
+	$(SET_SHELL) \
+	  $(MAKE) -C $(builddir) \
+	    $(CFLAGS_TO_PASS) \
+	    $(LDFLAGS_TO_PASS) \
+	    DESTDIR=$(PWD)/$(d) \
+	    infodir=/$(PF)/share/info \
+	    mandir=/$(PF)/share/man \
+		install
+
+ifneq ($(configured_libdir),$(libdir))
+	for i in debug go pkgconfig '*.so' '*.so.*' '*.a' '*.la' '*.o' '*.py' '*.spec'; do \
+	  mv $(d)/$(PF)/$(configured_libdir)/$$i \
+		$(d)/$(PF)/$(libdir)/. || true; \
+	done
+endif
+
+ifeq ($(with_libcxxdbg),yes)
+	: # FIXME: the libstdc++ gdb.py file is installed with a wrong name
+	for i in $$(find $(d)/$(PF) -name libstdc++_pic.a-gdb.py); do \
+	  [ -f $$i ] || continue; \
+	  d=$$(dirname $$i); \
+	  b=$$(basename $$i); \
+	  t=$$(cd $$d; echo libstdc++.so.*.*.*)-gdb.py; \
+	  mv $$i $$d/$$t; \
+	done
+endif
+
+# FIXME: libjava/classpath not correctly patched
+ifeq ($(with_java),yes)
+	-if [ -d $(d)/$(PF)/lib/gcj-$(GCC_VERSION)-$(GCJ_SONAME) ]; then \
+	  ls -l $(d)/$(PF)/lib/gcj-$(GCC_VERSION)-$(GCJ_SONAME); \
+	  mv $(d)/$(PF)/lib/gcj-$(GCC_VERSION)-$(GCJ_SONAME)/* \
+	    $(d)/$(PF)/lib/gcj-$(BASE_VERSION)-$(GCJ_SONAME)/; \
+	  rmdir $(d)/$(PF)/lib/gcj-$(GCC_VERSION)-$(GCJ_SONAME); \
+	fi
+endif
+
+	: # remove rpath settings from binaries and shared libs
+	for i in $$(chrpath -k $(d)/$(PF)/bin/* $(d)/$(PF)/lib*/lib*.so.* \
+			$(if $(filter $(with_multiarch_lib),yes), \
+			  $(d)/$(PF)/lib/$(DEB_HOST_MULTIARCH)/lib*.so.*) \
+			$(d)/$(PF)/lib*/gcj$(pkg_ver)*/lib*.so.* \
+			2>/dev/null | awk -F: '/RPATH=/ {print $$1}'); \
+	do \
+	  case "$$i" in ecj1|*gij-*|*libjawt*|*libjvm*) continue; esac; \
+	  [ -h $$i ] && continue; \
+	  chrpath --delete $$i; \
+	  echo "removed RPATH: $$i"; \
+	done
+
+	: # remove '*.la' and '*.lai' files, not shipped in any package.
+	find $(d) -name '*.la' -o -name '*.lai' | xargs -r rm -f
+
+ifneq ($(with_libgnat),yes)
+	rm -f $(d)/$(gcc_lib_dir)/adalib/lib*.so*
+endif
+
+ifeq ($(GFDL_INVARIANT_FREE),yes)
+	for i in gcc gcov; do \
+	  I=`echo $$i | tr a-z A-Z`; \
+	  sed -e "s/@NAME@/$$I$(pkg_ver)/g" -e "s/@name@/$$i$(pkg_ver)/g" \
+	    debian/dummy-man.1 > $(d)/$(PF)/share/man/man1/$$i.1; \
+	done
+
+  ifeq ($(with_fortran),yes)
+	for i in g77; do \
+	  I=`echo $$i | tr a-z A-Z`; \
+	  sed -e "s/@NAME@/$$I$(pkg_ver)/g" -e "s/@name@/$$i$(pkg_ver)/g" \
+	    debian/dummy-man.1 > $(d)/$(PF)/share/man/man1/$$i.1; \
+	done
+  endif
+  ifeq ($(with_java),yes)
+	for i in gcj gcjh gij jv-convert jv-scan jcf-dump grmic grmiregistry; \
+	do \
+	  I=`echo $$i | tr a-z A-Z`; \
+	  sed -e "s/@NAME@/$$I$(pkg_ver)/g" -e "s/@name@/$$i$(pkg_ver)/g" \
+	    debian/dummy-man.1 > $(d)/$(PF)/share/man/man1/$$i.1; \
+	done
+  endif
+endif
+
+#  ifeq ($(with_ada),yes)
+#	: # rename files (versioned ada binaries)
+#	for i in ; do \
+#	  mv $(d)/$(PF)/bin/$$i $(d)/$(PF)/bin/$$i-$(GNAT_VERSION); \
+#	  mv $(d)/$(PF)/share/man/man1/$$i.1 \
+#		$(d)/$(PF)/share/man/man1/$$i-$(GNAT_VERSION).1; \
+#	done
+#	for i in $(GNAT_TOOLS); do \
+#	  mv $(d)/$(PF)/bin/$$i $(d)/$(PF)/bin/$$i-$(GNAT_VERSION); \
+#	done
+#  endif
+
+ifeq ($(DEB_CROSS)-$(multilib),yes-yes)
+  ifneq ($(DEB_STAGE),stage1)
+    ifeq ($(DEB_TARGET_ARCH)-$(biarch64),s390-yes)
+	: # s390 64bit stuff happens to be in s390x-linux-gnu/lib64/
+	mkdir -p $(d)/$(PF)/s390-linux-gnu/lib64
+	cp -a $(d)/$(PF)/s390x-linux-gnu/lib64/* $(d)/$(PF)/s390-linux-gnu/lib64/
+    endif
+    ifeq ($(DEB_TARGET_ARCH)-$(biarch64),powerpc-yes)
+	: # ppc 64bit build slaps libgcc and libstdc++ to powerpc64-linux-gnu
+	mkdir -p $(d)/$(PF)/powerpc-linux-gnu/lib64
+	cp -a $(d)/$(PF)/powerpc64-linux-gnu/lib64/* $(d)/$(PF)/powerpc-linux-gnu/lib64/
+    endif
+  endif
+endif
+
+	for i in ar nm ranlib; do \
+	  cp debian/gcc-$$i$(pkg_ver).1 $(d)/$(PF)/share/man/man1/$(cmd_prefix)gcc-$$i$(pkg_ver).1; \
+	done
+
+	chmod 755 debian/dh_*
+
+#	tar cf tmp.tar debian/tmp
+
+	touch $(install_stamp)
+
+$(install_hppa64_stamp): $(build_hppa64_stamp)
+	dh_testdir
+	dh_testroot
+	rm -rf $(d_hppa64)
+	mkdir -p $(d_hppa64)/$(PF)
+
+	$(SET_PATH) \
+	    $(MAKE) -C $(builddir_hppa64) \
+		CC="$(CC)" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS) \
+		DESTDIR=$(PWD)/$(d_hppa64) \
+		    install
+
+ifeq ($(versioned_packages),yes)
+	mv $(d_hppa64)/$(PF)/bin/hppa64-linux-gnu-cpp \
+		$(d_hppa64)/$(PF)/bin/hppa64-linux-gnu-cpp$(pkg_ver)
+endif
+
+ifneq ($(single_package),yes)
+	: # remove files not needed
+	rm -rf $(d_hppa64)/$(PF)/info $(d_hppa64)/$(PF)/share/info
+	rm -rf $(d_hppa64)/$(PF)/man $(d_hppa64)/$(PF)/share/man
+	rm -rf $(d_hppa64)/$(PF)/$(libdir)/gcc/hppa64-linux-gnu/$(GCC_VERSION)/plugin
+	rm -f $(d_hppa64)/$(PF)/$(libdir)/libiberty.a
+	rm -f $(d_hppa64)/$(PF)/bin/*{gcov,gccbug,gcc}
+
+	rm -rf $(d_hppa64)/$(PF)/hppa64-linux-gnu/include
+	rm -rf $(d_hppa64)/$(PF)/hppa64-linux-gnu/lib
+	rm -rf $(d_hppa64)/$(hppa64libexecdir)/gcc/hppa64-linux-gnu/$(GCC_VERSION)/install-tools
+endif
+
+	touch $(install_hppa64_stamp)
+
+$(install_neon_stamp): $(build_neon_stamp)
+	dh_testdir
+	dh_testroot
+	rm -rf $(d_neon)
+	mkdir -p $(d_neon)/$(PF)
+
+	$(SET_PATH) \
+	    $(MAKE) -C $(builddir_neon) \
+		CC="$(CC)" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS) \
+		DESTDIR=$(PWD)/$(d_neon) \
+		    install
+	touch $(install_neon_stamp)
+
+$(install_spu_stamp): $(build_spu_stamp)
+	dh_testdir
+	dh_testroot
+	rm -rf $(d_spu)
+	mkdir -p $(d_spu)/$(PF)
+
+	$(SET_PATH) \
+	    $(MAKE) -C $(builddir_spu) \
+		CC="$(CC)" \
+		$(CFLAGS_TO_PASS) \
+		$(LDFLAGS_TO_PASS) \
+		DESTDIR=$(PWD)/$(d_spu) \
+		    install
+ifneq (,$(findstring c++, $(spu_configure_args)))
+	mv $(d_spu)/usr/spu/lib/lib{std,sup}c++.a \
+		$(d_spu)/$(gcc_spu_lib_dir)/.
+  ifeq ($(with_spumea64),yes)
+	mv $(d_spu)/usr/spu/lib/mea64/lib{std,sup}c++.a \
+		$(d_spu)/$(gcc_spu_lib_dir)/mea64/.
+  endif
+endif
+ifneq (,$(findstring fortran, $(spu_configure_args)))
+	mv $(d_spu)/usr/spu/lib/libgfortran.a \
+		$(d_spu)/$(gcc_spu_lib_dir)/.
+  ifeq ($(with_spumea64),yes)
+	mv $(d_spu)/usr/spu/lib/mea64/libgfortran.a \
+		$(d_spu)/$(gcc_spu_lib_dir)/mea64/.
+  endif
+endif
+
+ifneq ($(single_package),yes)
+	: # remove files not needed
+	rm -rf $(d_spu)/$(PF)/info
+#	rm -rf $(d_spu)/$(PF)/man
+	rm -f $(d_spu)/$(PF)/$(libdir)/libiberty.a
+	rm -f $(d_spu)/$(PF)/bin/*{gcov,gccbug,gcc}
+
+#	rm -rf $(d_spu)/$(PF)/spu/include
+#	rm -rf $(d_spu)/$(PF)/spu/lib
+endif
+
+	touch $(install_spu_stamp)
+
+# ----------------------------------------------------------------------
+# Build architecture-dependent files here.
+#binary-arch: build install $(foreach i,$(arch_binaries),$(binary_stamp)-$(i))
+binary-arch: $(foreach i,$(arch_binaries),$(binary_stamp)-$(i))
+ifeq ($(with_check),yes)
+	@echo Done
+#	: # Send Email about sucessfull build.
+#	# cat raw-test-summary | sh; echo "Sent mail to $(S_EMAIL)"
+endif
+
+# ----------------------------------------------------------------------
+# Build architecture-independent files here.
+#binary-indep: build install $(foreach i,$(indep_binaries),$(binary_stamp)-$(i))
+binary-indep: $(foreach i,$(indep_binaries),$(binary_stamp)-$(i))
+
+source diff:
+	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary
