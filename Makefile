@@ -10265,3 +10265,19 @@ $(CLOOG): $(SPREZZ)/cloog/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cloog_$(cloog_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: isl
+isl:$(ISL)_$(ARCH).deb
+$(ISL): $(SPREZZ)/isl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf isl_$(isl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: gcc-4.8
+gcc-4.8:$(GCC4.8)_$(ARCH).deb
+$(GCC4.8): $(SPREZZ)/gcc-4.8/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gcc-4.8_$(gcc-4.8_UPVER).orig.tar.gz $(TARARGS) $@
+
