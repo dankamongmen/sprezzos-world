@@ -10249,3 +10249,11 @@ $(LIBQUVISCRIPTS): $(SPREZZ)/libquvi-scripts/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libquvi-scripts_$(libquvi-scripts_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: unixodbc
+unixodbc:$(UNIXODBC)_$(ARCH).deb
+$(UNIXODBC): $(SPREZZ)/unixodbc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unixodbc_$(unixodbc_UPVER).orig.tar.gz $(TARARGS) $@
+

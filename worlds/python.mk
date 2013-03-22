@@ -183,3 +183,11 @@ $(EPYDOC): $(SPREZZ)/epydoc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf epydoc_$(epydoc_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: scour
+scour:$(SCOUR)_$(ARCH).deb
+$(SCOUR): $(SPREZZ)/scour/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf scour_$(scour_UPVER).orig.tar.gz $(TARARGS) $@
+
