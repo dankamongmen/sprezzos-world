@@ -7452,7 +7452,7 @@ $(LIBRSVG): $(SPREZZ)/librsvg/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xzvf librsvg-$(librsvg_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf librsvg-$(librsvg_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libgssapi-perl
 libgssapi-perl:$(LIBGSSAPIPERL)_$(ARCH).deb
