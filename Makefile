@@ -10281,3 +10281,11 @@ $(GCC4.8): $(SPREZZ)/gcc-4.8/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gcc-4.8_$(gcc-4.8_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libspectre
+libspectre:$(LIBSPECTRE)_$(ARCH).deb
+$(LIBSPECTRE): $(SPREZZ)/libspectre/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libspectre_$(libspectre_UPVER).orig.tar.gz $(TARARGS) $@
+
