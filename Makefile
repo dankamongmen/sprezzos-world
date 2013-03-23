@@ -10289,3 +10289,11 @@ $(LIBSPECTRE): $(SPREZZ)/libspectre/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libspectre_$(libspectre_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: zutils
+zutils:$(ZUTILS)_$(ARCH).deb
+$(ZUTILS): $(SPREZZ)/zutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf zutils_$(zutils_UPVER).orig.tar.gz $(TARARGS) $@
+
