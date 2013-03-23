@@ -647,3 +647,11 @@ $(LIBMOJOLICIOUSPERL): $(SPREZZ)/libmojolicious-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmojolicious-perl_$(libmojolicious-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libtest-warn-perl
+libtest-warn-perl:$(LIBTESTWARNPERL)_$(ARCH).deb
+$(LIBTESTWARNPERL): $(SPREZZ)/libtest-warn-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtest-warn-perl_$(libtest-warn-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
