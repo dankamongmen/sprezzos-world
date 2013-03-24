@@ -10353,3 +10353,11 @@ $(SOUNDTOUCH): $(SPREZZ)/soundtouch/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf soundtouch_$(soundtouch_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libmatio
+libmatio:$(LIBMATIO)_$(ARCH).deb
+$(LIBMATIO): $(SPREZZ)/libmatio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmatio_$(libmatio_UPVER).orig.tar.gz $(TARARGS) $@
+
