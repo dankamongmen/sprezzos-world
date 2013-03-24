@@ -66,6 +66,6 @@ libjgraphx-java:$(libjgraphxjava)_$(ARCH).deb
 $(libjgraphxjava): $(SPREZZ)/libjgraphx-java/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
+	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libjgraphx-java_$(libjgraphx-java_UPVER).orig.tar.gz $(TARARGS) $@
 
