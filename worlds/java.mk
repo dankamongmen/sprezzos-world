@@ -77,3 +77,11 @@ $(LIBFLEXDOCKJAVA): $(SPREZZ)/libflexdock-java/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libflexdock-java_$(libflexdock-java_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libjlatexmath-java
+libjlatexmath-java:$(LIBJLATEXMATHJAVA)_$(ARCH).deb
+$(LIBJLATEXMATHJAVA): $(SPREZZ)/libjlatexmath-java/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libjlatexmath-java_$(libjlatexmath-java_UPVER).orig.tar.gz $(TARARGS) $@
+
