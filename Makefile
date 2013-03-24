@@ -10329,3 +10329,11 @@ $(LIBMIMIC): $(SPREZZ)/libmimic/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmimic_$(libmimic_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: zvbi
+zvbi:$(ZVBI)_$(ARCH).deb
+$(ZVBI): $(SPREZZ)/zvbi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf zvbi_$(zvbi_UPVER).orig.tar.gz $(TARARGS) $@
+
