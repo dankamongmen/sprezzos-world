@@ -69,3 +69,11 @@ $(libjgraphxjava): $(SPREZZ)/libjgraphx-java/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libjgraphx-java_$(libjgraphx-java_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libflexdock-java
+libflexdock-java:$(LIBFLEXDOCKJAVA)_$(ARCH).deb
+$(LIBFLEXDOCKJAVA): $(SPREZZ)/libflexdock-java/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libflexdock-java_$(libflexdock-java_UPVER).orig.tar.gz $(TARARGS) $@
+
