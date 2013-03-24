@@ -10297,3 +10297,11 @@ $(ZUTILS): $(SPREZZ)/zutils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf zutils_$(zutils_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mtdev
+mtdev:$(MTDEV)_$(ARCH).deb
+$(MTDEV): $(SPREZZ)/mtdev/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mtdev_$(mtdev_UPVER).orig.tar.gz $(TARARGS) $@
+
