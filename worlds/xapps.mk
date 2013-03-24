@@ -477,5 +477,5 @@ $(WESTON): $(SPREZZ)/weston/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf weston_$(weston_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf weston_$(weston_UPVER).orig.tar.xz $(TARARGS) $@
 
