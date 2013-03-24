@@ -1,0 +1,88 @@
+#!/bin/bash -e
+#
+# Copyright (C) 2009  Robert Millan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+usage ()
+{
+  cat << EOF >&2
+Usage: $0 file1.deb [file2.deb ...]
+EOF
+}
+
+fix_control ()
+{
+  local dir=$(mktemp -d)
+  trap "rm -rf ${dir}" 0
+
+  files=$(tar -C ${dir} -xzvf $1)
+
+  if grep -q "^Pre-Depends:" ${dir}/control ; then
+    sed -i ${dir}/control -e "s/^Pre-Depends: /&dpkg (>= 1.14.21), /"
+  else
+    echo "Pre-Depends: dpkg (>= 1.14.21)" >> ${dir}/control
+  fi
+
+  tar -C ${dir} -czf - ${files} > $1
+
+  rm -rf ${dir}
+}
+
+compress_deb ()
+{
+  local dir=$(mktemp -d)
+  trap "rm -rf ${dir}" 0
+
+  deb="$(readlink -f $1)"
+
+  (cd ${dir} && ar -x "${deb}")
+
+  if test -e ${dir}/data.tar.lzma ; then
+    echo "${deb}: Already LZMA compressed." >&2
+  elif test -e ${dir}/data.tar.gz ; then
+    gzip -d < ${dir}/data.tar.gz | lzma -9 > ${dir}/data.tar.lzma
+    rm -f ${dir}/data.tar.gz
+    fix_control ${dir}/control.tar.gz
+    rm -f "${deb}"
+    (cd ${dir} && ar -r "${deb}" debian-binary control.tar.gz data.tar.lzma 2> /dev/null)
+  else
+    echo "${deb}: Only gzipped debs are supported." >&2
+  fi
+
+  rm -rf ${dir}
+}
+
+if [ "$1" = "" ] ; then
+  usage
+  exit 1
+fi
+
+case "$1" in
+  -h|--help)
+    usage
+    exit 0
+  ;;
+  -*)
+    usage
+    exit 0
+  ;;
+esac
+
+for i in $@ ; do
+  compress_deb "$i"
+done
+
+exit 0

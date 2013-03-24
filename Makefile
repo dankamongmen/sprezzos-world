@@ -10375,5 +10375,13 @@ $(UPXUCL): $(SPREZZ)/upx-ucl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf upx-ucl_$(upx-ucl_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf upx-ucl_$(upx-ucl_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: lzma
+lzma:$(LZMA)_$(ARCH).deb
+$(LZMA): $(SPREZZ)/lzma/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lzma_$(lzma_UPVER).orig.tar.gz $(TARARGS) $@
 
