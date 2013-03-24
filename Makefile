@@ -10311,5 +10311,13 @@ $(FLITE): $(SPREZZ)/flite/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf flite_$(flite_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf flite_$(flite_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: libcdaudio
+libcdaudio:$(LIBCDAUDIO)_$(ARCH).deb
+$(LIBCDAUDIO): $(SPREZZ)/libcdaudio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libcdaudio_$(libcdaudio_UPVER).orig.tar.gz $(TARARGS) $@
 
