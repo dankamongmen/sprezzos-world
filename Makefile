@@ -7084,7 +7084,7 @@ $(LIBPLIST): $(SPREZZ)/libplist/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xjvf libplist-$(libplist_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf libplist-$(libplist_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: policykit
 policykit:$(POLICYKIT)_$(ARCH).deb
