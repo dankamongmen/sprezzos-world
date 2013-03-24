@@ -10361,3 +10361,11 @@ $(LIBMATIO): $(SPREZZ)/libmatio/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmatio_$(libmatio_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ecere-sdk
+ecere-sdk:$(ECERESDK)_$(ARCH).deb
+$(ECERESDK): $(SPREZZ)/ecere-sdk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ecere-sdk_$(ecere-sdk_UPVER).orig.tar.gz $(TARARGS) $@
+
