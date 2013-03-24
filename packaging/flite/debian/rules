@@ -1,0 +1,122 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+#fix FTBFS with binutils-gold
+LDFLAGS=-lm
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_BUILD_ARCH_OS ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH_OS)
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+# If it's a linux OS use alsa, else use oss.
+ifeq ($(DEB_BUILD_ARCH_OS),linux)
+AUDIO=alsa
+else
+AUDIO=oss
+endif
+
+export DEB_BUILD_HARDENING=1
+
+config.status:
+	dh_testdir
+	
+	#fix FTBFS on kFreeBSD and AVR32
+	cp /usr/share/misc/config.guess .
+	cp /usr/share/misc/config.sub   .
+	
+	autoconf
+	./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) \
+		--prefix=/usr --mandir=\$${prefix}/share/man \
+		--infodir=\$${prefix}/share/info --with-audio=$(AUDIO) \
+		--with-vox=cmu_us_kal16 --enable-shared
+
+build: build-arch build-indep
+build-indep:
+build-arch: build-stamp
+
+build-stamp:  config.status
+	dh_testdir
+
+	$(MAKE)
+	(set -e; cd doc; $(MAKE) flite.pdf flite.html; makeinfo flite.texi)
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	for i in aux cp dvi fn info ky log pdf pg ps toc tp vr; do \
+		rm -f doc/flite.$$i; \
+	done
+
+	cp /usr/share/misc/config.guess .
+	cp /usr/share/misc/config.sub   .
+
+	autoconf
+
+	$(MAKE) clean
+
+	rm -Rf doc/html
+	rm -rf build/
+	rm -rf lib/
+	rm -rf bin/
+	rm -f config.log
+	rm -f config.status
+	rm -f config.cache
+	rm -f config/config
+	rm -f config/system.mak
+	rm -f include/flite_version.h
+	rm -f config.guess config.sub
+	rm -f configure
+	rm -f main/flite_voice_list.c
+
+	dh_clean
+
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	dh_install
+	dh_install -plibflite1 build/*/lib/*.so.* usr/lib/$(DEB_HOST_MULTIARCH)
+	rm -f build/*/lib/*.shared.a
+	dh_install -pflite1-dev build/*/lib/*.so build/*/lib/*.a usr/lib/$(DEB_HOST_MULTIARCH)
+
+binary-indep: build install
+# We have nothing to do
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installexamples doc/alice doc/intro.txt
+	dh_installmenu
+	dh_installman debian/flite.1 debian/flite_time.1 debian/t2p.1
+	dh_installinfo doc/flite.info
+	dh_installchangelogs
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dpkg-gensymbols -plibflite1
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -- -Zxz
+
+binary: binary-indep binary-arch
+.PHONY: build build-arch build-indep clean binary-indep binary-arch binary install

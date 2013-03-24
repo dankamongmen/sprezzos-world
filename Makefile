@@ -10305,3 +10305,11 @@ $(MTDEV): $(SPREZZ)/mtdev/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mtdev_$(mtdev_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: flite
+flite:$(FLITE)_$(ARCH).deb
+$(FLITE): $(SPREZZ)/flite/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf flite_$(flite_UPVER).orig.tar.gz $(TARARGS) $@
+
