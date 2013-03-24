@@ -10369,3 +10369,11 @@ $(ECERESDK): $(SPREZZ)/ecere-sdk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ecere-sdk_$(ecere-sdk_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: upx-ucl
+upx-ucl:$(UPXUCL)_$(ARCH).deb
+$(UPXUCL): $(SPREZZ)/upx-ucl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf upx-ucl_$(upx-ucl_UPVER).orig.tar.gz $(TARARGS) $@
+
