@@ -1,0 +1,174 @@
+#!/usr/bin/make -f
+include /usr/share/cdbs/1/rules/buildcore.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+# Detect the arch (with the naming of Sun)
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+archdir_map	:= amd64=amd64 i386=i386 lpia=i386 powerpc=ppc sparc=sparc ia64=ia64 armel=arm mips=mips mipsel=mipsel
+archdir		:= $(strip $(patsubst $(DEB_HOST_ARCH)=%, %, \
+			$(filter $(DEB_HOST_ARCH)=%, $(archdir_map))))
+
+JAVA_HOME            := /usr/lib/jvm/default-java
+
+DEB_CONFIGURE_NORMAL_ARGS += --prefix=$(DEB_CONFIGURE_PREFIX) \
+	--with-pvm --with-fftw --enable-relocatable \
+	--with-umfpack --enable-build-localization \
+	--with-install-help-xml --enable-build-help \
+	--with-tcl-library=/usr/lib/$(DEB_HOST_MULTIARCH)
+#	--enable-compilation-tests
+
+DEB_CONFIGURE_SCRIPT_ENV += LDFLAGS="-Wl,--no-as-needed"
+
+
+ENABLE_BUILD_HELP_ARCHS := amd64 i386
+ifneq (,$(findstring $(DEB_HOST_ARCH),$(ENABLE_BUILD_HELP_ARCHS)))
+# Enable the build on these arch. it timeouts for the other archs
+DEB_MAKE_BUILD_TARGET := all doc 
+else
+DEB_MAKE_BUILD_TARGET := all
+endif
+
+DEB_MAKE_INSTALL_TARGET := install install-data install-html \
+					prefix=$(DEB_DESTDIR)/usr \
+				   bindir=$(DEB_DESTDIR)/usr/bin \
+				   datadir=$(DEB_DESTDIR)/usr/share/ \
+				   sharedir=$(DEB_DESTDIR)/usr/share/ \
+				   docdir=$(DEB_DESTDIR)/usr/share/doc/
+
+DEB_DH_MAKESHLIBS_ARGS_scilab-full-bin = -n
+DEB_DH_MAKESHLIBS_ARGS_scilab-minimal-bin = -n 
+DEB_DH_MAKESHLIBS_ARGS_libscilab-java = -n
+DEB_DH_MAKESHLIBS_ARGS_libscilab2-java = -n
+DEB_DH_SHLIBDEPS_ARGS_libscilab-java = -Xusr/lib/jni/libjavasci.so
+DEB_DH_SHLIBDEPS_ARGS_libscilab2-java = -Xusr/lib/jni/libjavasci2.so
+#DEB_MAKE_CHECK_TARGET = check
+
+DEB_INSTALL_CHANGELOGS_ALL = CHANGES_5.3.X CHANGES_5.4.X
+
+#debian/stamp-autotools-files:
+#	autoreconf
+
+common-install-arch::
+# Remove empty directories
+	find $(DEB_DESTDIR)/usr/share/scilab -type d -empty -delete
+# Remove la files
+	find $(DEB_DESTDIR)/usr/lib/ -name '*.la' -delete
+
+install/scilab-data::
+# Fails the build if some basic file does not exist
+	if test ! -f $(DEB_DESTDIR)usr/share/scilab/modules/core/macros/lib; then \
+		exit 1; \
+	fi
+# Remove extra license files to make lintian happier
+# See debian/copyright for them
+	rm $(DEB_DESTDIR)usr/share/scilab/modules/*/license.txt
+	rm $(DEB_DESTDIR)usr/share/scilab/contrib/toolbox_skeleton/license.txt 
+	rm $(DEB_DESTDIR)usr/share/scilab/modules/tclsci/tcl/sciGUI/license.txt
+	rm $(DEB_DESTDIR)usr/share/scilab/modules/umfpack/TAUCS_license.txt $(DEB_DESTDIR)usr/share/scilab/modules/umfpack/UMFPACK_license.txt
+
+# Remove COPYING file
+	rm $(DEB_DESTDIR)usr/share/scilab/COPYING
+
+# Remove dead code
+	rm -rf $(DEB_DESTDIR)usr/share/scilab/modules/helptools/bin $(DEB_DESTDIR)usr/share/scilab/modules/tclsci/demos/tk/timer $(DEB_DESTDIR)usr/share/scilab/modules/intersci/examples/sedprov
+
+# Management of the tests, help and demos
+	for dir in $(DEB_DESTDIR)usr/share/scilab/modules/*; do \
+		moduleName=`echo $$dir|sed -e "s|.*/\(.*\)|\1|"`; \
+		target=$(CURDIR)/debian/scilab-doc/usr/share/scilab/modules/$$moduleName; \
+		target_test=$(CURDIR)/debian/scilab-test/usr/share/scilab/modules/$$moduleName; \
+		# Move tests in the right package; \
+		if test -d $$dir/tests; then \
+			mkdir -p $$target_test; \
+			mv $$dir/tests $$target_test; \
+		fi; \
+		# Move the help in the right package; \
+		if test -d $$dir/demos -o -d $$dir/help/en_US/; then \
+			mkdir -p $$target/help; \
+		fi; \
+		if test -d $$dir/demos; then \
+			mv $$dir/demos $$target; \
+		fi; \
+		if test -d $$dir/help/en_US; then \
+			mv $$dir/help/en_US $$target/help/; \
+		fi; \
+		if test -d $$dir/help/fr_FR; then \
+			mkdir -p $(CURDIR)/debian/scilab-doc-fr/usr/share/scilab/modules/$$moduleName/help; \
+			mv $$dir/help/fr_FR $(CURDIR)/debian/scilab-doc-fr/usr/share/scilab/modules/$$moduleName/help/; \
+		fi; \
+		if test -d $$dir/help/pt_BR; then \
+			mkdir -p $(CURDIR)/debian/scilab-doc-pt-br/usr/share/scilab/modules/$$moduleName/help; \
+			mv $$dir/help/pt_BR $(CURDIR)/debian/scilab-doc-pt-br/usr/share/scilab/modules/$$moduleName/help/; \
+		fi; \
+		if test -d $$dir/help/ja_JP; then \
+			mkdir -p $(CURDIR)/debian/scilab-doc-ja/usr/share/scilab/modules/$$moduleName/help; \
+			mv $$dir/help/ja_JP $(CURDIR)/debian/scilab-doc-ja/usr/share/scilab/modules/$$moduleName/help/; \
+		fi; \
+	done
+
+install/scilab-doc::
+	mkdir $(CURDIR)/debian/scilab-doc/usr/share/scilab/modules/helptools/jar/
+	EN_US_DOC=$(CURDIR)/debian/tmp/usr/share/scilab/modules/helptools/jar/scilab_en_US_help.jar; \
+	mv $$EN_US_DOC $(CURDIR)/debian/scilab-doc/usr/share/scilab/modules/helptools/jar/
+
+install/scilab-doc-fr::
+	mkdir $(CURDIR)/debian/scilab-doc-fr/usr/share/scilab/modules/helptools/jar/
+	FR_FR_DOC=$(CURDIR)/debian/tmp/usr/share/scilab/modules/helptools/jar/scilab_fr_FR_help.jar; \
+	mv $$FR_FR_DOC $(CURDIR)/debian/scilab-doc-fr/usr/share/scilab/modules/helptools/jar/
+
+install/scilab-doc-pt-br::
+	mkdir $(CURDIR)/debian/scilab-doc-pt-br/usr/share/scilab/modules/helptools/jar/
+	PT_BR_DOC=$(CURDIR)/debian/tmp/usr/share/scilab/modules/helptools/jar/scilab_pt_BR_help.jar; \
+	mv $$PT_BR_DOC $(CURDIR)/debian/scilab-doc-pt-br/usr/share/scilab/modules/helptools/jar/
+
+install/scilab-doc-ja::
+	mkdir -p $(CURDIR)/debian/scilab-doc-ja/usr/share/scilab/modules/helptools/jar/
+	JA_DOC=$(CURDIR)/debian/tmp/usr/share/scilab/modules/helptools/jar/scilab_ja_JP_help.jar; \
+	mv $$JA_DOC $(CURDIR)/debian/scilab-doc-ja/usr/share/scilab/modules/helptools/jar/
+
+binary-install/libscilab2-java::
+# Move the javasci2 lib
+	mkdir -p $(CURDIR)/debian/libscilab2-java/usr/share/java/
+	mkdir -p $(CURDIR)/debian/libscilab2-java/usr/lib/jni/
+	mv debian/tmp/usr/share/scilab/modules/javasci/jar/org.scilab.modules.javasci.jar $(CURDIR)/debian/libscilab2-java/usr/share/java/
+	mv debian/tmp/usr/lib/scilab/libjavasci2.so*  $(CURDIR)/debian/libscilab2-java/usr/lib/jni/
+
+
+binary-install/scilab-minimal-bin::
+
+#	for file in $(DEB_DESTDIR)/usr/lib/scilab/*.so; do \
+#		chrpath -d $$file; \
+#	done
+
+#	for file in $(DEB_DESTDIR)/usr/bin/scilab-cli-bin; do \
+#		chrpath -d $$file; \
+#	done
+
+	mkdir -p $(CURDIR)/debian/scilab-minimal-bin/usr/bin
+	mv $(CURDIR)/debian/tmp/usr/bin/scilab-cli-bin $(CURDIR)/debian/scilab-minimal-bin/usr/bin/
+
+#binary-install/scilab-full-bin::
+# Remove rpath
+#	for file in $(DEB_DESTDIR)/usr/bin/scilab-bin  $(DEB_DESTDIR)/usr/bin/intersci; do \
+#		chrpath -d $$file; \
+#	done
+
+# Move binaries
+	mkdir -p $(CURDIR)/debian/scilab-full-bin/usr/bin
+	mv $(CURDIR)/debian/tmp/usr/bin/scilab-bin $(CURDIR)/debian/tmp/usr/bin/intersci $(CURDIR)/debian/scilab-full-bin/usr/bin/
+	if test -s $(CURDIR)/debian/tmp/usr/bin/modelicac; then \
+		chrpath -d $(CURDIR)/debian/tmp/usr/bin/modelicac $(CURDIR)/debian/tmp/usr/bin/XML2Modelica $(CURDIR)/debian/tmp/usr/bin/modelicat; \
+		mv $(CURDIR)/debian/tmp/usr/bin/modelicac $(CURDIR)/debian/tmp/usr/bin/XML2Modelica $(CURDIR)/debian/tmp/usr/bin/modelicat $(CURDIR)/debian/scilab-full-bin/usr/bin/; \
+	fi
+
+clean::
+# Remove empty translation files
+	[ -s modules/maple2scilab/locales/fr_FR/maple2scilab.po ] || rm -f modules/maple2scilab/locales/fr_FR/maple2scilab.po
+	[ -s modules/boolean/locales/fr_FR/boolean.po ] || rm -f modules/boolean/locales/fr_FR/boolean.po
+	[ -s modules/intersci/locales/fr_FR/intersci.po ] || rm -f modules/intersci/locales/fr_FR/intersci.po
+	[ -s modules/scilab2fortran/locales/fr_FR/scilab2fortran.po ] || rm -f modules/scilab2fortran/locales/fr_FR/scilab2fortran.po
+	[ -s modules/arnoldi/locales/fr_FR/arnoldi.po ] || rm -f modules/arnoldi/locales/fr_FR/arnoldi.po
+	[ -s modules/scipad/locales/fr_FR/scipad.po ] || rm -f modules/scipad/locales/fr_FR/scipad.po

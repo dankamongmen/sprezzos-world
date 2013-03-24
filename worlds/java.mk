@@ -61,3 +61,11 @@ $(LUCENESOLR): $(SPREZZ)/lucene-solr/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lucene-solr_$(lucene-solr_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libjgraphx-java
+libjgraphx-java:$(libjgraphxjava)_$(ARCH).deb
+$(libjgraphxjava): $(SPREZZ)/libjgraphx-java/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libjgraphx-java_$(libjgraphx-java_UPVER).orig.tar.gz $(TARARGS) $@
+

@@ -10337,3 +10337,11 @@ $(WILDMIDI): $(SPREZZ)/wildmidi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf wildmidi_$(wildmidi_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: scilab
+scilab:$(scilab)_$(ARCH).deb
+$(scilab): $(SPREZZ)/scilab/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf scilab_$(scilab_UPVER).orig.tar.gz $(TARARGS) $@
+
