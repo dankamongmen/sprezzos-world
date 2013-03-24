@@ -797,3 +797,11 @@ $(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf simple-scan_$(simple-scan_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: gnome-calculator
+gnome-calculator:$(GNOMECALCULATOR)_$(ARCH).deb
+$(GNOMECALCULATOR): $(SPREZZ)/gnome-calculator/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-calculator_$(gnome-calculator_UPVER).orig.tar.xz $(TARARGS) $@
+
