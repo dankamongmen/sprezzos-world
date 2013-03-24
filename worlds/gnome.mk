@@ -805,3 +805,11 @@ $(GNOMECALCULATOR): $(SPREZZ)/gnome-calculator/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-calculator_$(gnome-calculator_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: crunchyfrog
+crunchyfrog:$(CRUNCHYFROG)_$(ARCH).deb
+$(CRUNCHYFROG): $(SPREZZ)/crunchyfrog/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf crunchyfrog_$(crunchyfrog_UPVER).orig.tar.gz $(TARARGS) $@
+
