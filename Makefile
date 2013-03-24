@@ -10383,7 +10383,7 @@ $(LZMA): $(SPREZZ)/lzma/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf lzma_$(lzma_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf lzma_$(lzma_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: ucl
 ucl:$(UCL)_$(ARCH).deb
