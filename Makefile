@@ -7790,14 +7790,6 @@ $(SILGRAPHITE): $(SPREZZ)/silgraphite/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf graphite2-$(silgraphite_UPVER).tgz $(TARARGS) $@
 
-.PHONY: simple-scan
-simple-scan:$(SIMPLESCAN)_$(ARCH).deb
-$(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf simple-scan_$(simple-scan_UPVER).orig.tar.gz $(TARARGS) $@
-
 .PHONY: sip4
 sip4:$(SIP4)_$(ARCH).deb
 $(SIP4): $(SPREZZ)/sip4/debian/changelog

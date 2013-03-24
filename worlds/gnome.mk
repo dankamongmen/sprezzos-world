@@ -789,3 +789,11 @@ $(LIBBONOBO): $(SPREZZ)/libbonobo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libbonobo_$(libbonobo_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: simple-scan
+simple-scan:$(SIMPLESCAN)_$(ARCH).deb
+$(SIMPLESCAN): $(SPREZZ)/simple-scan/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf simple-scan_$(simple-scan_UPVER).orig.tar.xz $(TARARGS) $@
+
