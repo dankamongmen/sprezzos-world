@@ -10335,5 +10335,13 @@ $(ZVBI): $(SPREZZ)/zvbi/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf zvbi_$(zvbi_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf zvbi_$(zvbi_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: wildmidi
+wildmidi:$(WILDMIDI)_$(ARCH).deb
+$(WILDMIDI): $(SPREZZ)/wildmidi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf wildmidi_$(wildmidi_UPVER).orig.tar.gz $(TARARGS) $@
 
