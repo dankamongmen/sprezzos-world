@@ -10345,3 +10345,11 @@ $(scilab): $(SPREZZ)/scilab/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf scilab_$(scilab_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: soundtouch
+soundtouch:$(SOUNDTOUCH)_$(ARCH).deb
+$(SOUNDTOUCH): $(SPREZZ)/soundtouch/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf soundtouch_$(soundtouch_UPVER).orig.tar.gz $(TARARGS) $@
+
