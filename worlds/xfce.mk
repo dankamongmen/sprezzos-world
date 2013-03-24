@@ -166,3 +166,11 @@ $(XFBURN): $(SPREZZ)/xfburn/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfburn-$(xfburn_UPVER).tar.bz2 $(TARARGS) $@
 
+.PHONY: gtk2-engines-xfce
+gtk2-engines-xfce:$(GTK2ENGINESXFCE)_$(ARCH).deb
+$(GTK2ENGINESXFCE): $(SPREZZ)/gtk2-engines-xfce/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtk2-engines-xfce_$(gtk2-engines-xfce_UPVER).orig.tar.gz $(TARARGS) $@
+
