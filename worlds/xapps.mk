@@ -479,3 +479,11 @@ $(WESTON): $(SPREZZ)/weston/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf weston_$(weston_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: leocad
+leocad:$(LEOCAD)_$(ARCH).deb
+$(LEOCAD): $(SPREZZ)/leocad/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf leocad_$(leocad_UPVER).orig.tar.gz $(TARARGS) $@
+
