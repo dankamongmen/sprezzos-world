@@ -191,3 +191,11 @@ $(SCOUR): $(SPREZZ)/scour/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf scour_$(scour_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-markdown
+python-markdown:$(PYTHONMARKDOWN)_$(ARCH).deb
+$(PYTHONMARKDOWN): $(SPREZZ)/python-markdown/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-markdown_$(python-markdown_UPVER).orig.tar.gz $(TARARGS) $@
+

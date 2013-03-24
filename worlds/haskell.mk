@@ -4790,3 +4790,11 @@ $(HASKELLDERIVE): $(SPREZZ)/haskell-derive/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-derive_$(haskell-derive_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-mmorph
+haskell-mmorph:$(HASKELLMMORPH)_$(ARCH).deb
+$(HASKELLMMORPH): $(SPREZZ)/haskell-mmorph/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-mmorph_$(haskell-mmorph_UPVER).orig.tar.gz $(TARARGS) $@
+
