@@ -82,6 +82,14 @@ libjlatexmath-java:$(LIBJLATEXMATHJAVA)_$(ARCH).deb
 $(LIBJLATEXMATHJAVA): $(SPREZZ)/libjlatexmath-java/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
+	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf libjlatexmath-java_$(libjlatexmath-java_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: scirenderer
+scirenderer:$(SCIRENDERER)_$(ARCH).deb
+$(SCIRENDERER): $(SPREZZ)/scirenderer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf scirenderer_$(scirenderer_UPVER).orig.tar.gz $(TARARGS) $@
 
