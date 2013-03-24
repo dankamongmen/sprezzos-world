@@ -471,3 +471,11 @@ $(COIN3): $(SPREZZ)/coin3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf coin3_$(coin3_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: weston
+weston:$(WESTON)_$(ARCH).deb
+$(WESTON): $(SPREZZ)/weston/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf weston_$(weston_UPVER).orig.tar.gz $(TARARGS) $@
+
