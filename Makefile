@@ -10409,3 +10409,11 @@ $(ITCL4): $(SPREZZ)/itcl4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf itcl4_$(itcl4_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: html-xml-utils
+html-xml-utils:$(HTMLXMLUTILS)_$(ARCH).deb
+$(HTMLXMLUTILS): $(SPREZZ)/html-xml-utils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf html-xml-utils_$(html-xml-utils_UPVER).orig.tar.gz $(TARARGS) $@
+
