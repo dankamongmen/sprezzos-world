@@ -487,3 +487,11 @@ $(LEOCAD): $(SPREZZ)/leocad/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf leocad_$(leocad_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: oglft
+oglft:$(OGLFT)_$(ARCH).deb
+$(OGLFT): $(SPREZZ)/oglft/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf oglft_$(oglft_UPVER).orig.tar.gz $(TARARGS) $@
+
