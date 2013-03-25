@@ -8094,14 +8094,6 @@ $(LIBV8): $(SPREZZ)/libv8/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libv8_$(libv8_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: valac
-valac:$(VALAC)_$(ARCH).deb
-$(VALAC): $(SPREZZ)/valac/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf vala-$(valac_UPVER).tar.xz $(TARARGS) $@
-
 .PHONY: valgrind
 valgrind:$(VALGRIND)_$(ARCH).deb
 $(VALGRIND): $(SPREZZ)/valgrind/debian/changelog

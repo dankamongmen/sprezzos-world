@@ -821,3 +821,11 @@ $(GDEVILSPIE): $(SPREZZ)/gdevilspie/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gdevilspie_$(gdevilspie_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: valac
+valac:$(VALAC)_$(ARCH).deb
+$(VALAC): $(SPREZZ)/valac/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf vala-$(valac_UPVER).tar.xz $(TARARGS) $@
+
