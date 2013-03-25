@@ -10393,3 +10393,11 @@ $(UCL): $(SPREZZ)/ucl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ucl_$(ucl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: itk3
+itk3:$(ITK3)_$(ARCH).deb
+$(ITK3): $(SPREZZ)/itk3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf itk3_$(itk3_UPVER).orig.tar.gz $(TARARGS) $@
+

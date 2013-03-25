@@ -1,0 +1,155 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export QUILT_PATCHES := debian/patches
+
+vmajor=$(shell dpkg-parsechangelog | grep ^Version: | sed 's/[^0-9]*\([0-9]*\).*/\1/')
+vminor=$(shell dpkg-parsechangelog | grep ^Version: | sed 's/[^0-9]*[0-9]*\.\([0-9]*\).*/\1/')
+vrelease=$(shell dpkg-parsechangelog | grep ^Version: | sed 's/[^0-9]*[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/')
+v=$(vmajor).$(vminor)
+v1=$(vmajor).$(shell expr $(vminor) + 1)
+dtmp=$(shell pwd)/debian/tmp
+
+tclv=8.5
+
+unpatch:
+	dh_testdir
+	quilt pop -a || test $$? = 2
+	rm -rf patch-stamp .pc
+
+patch: patch-stamp
+patch-stamp:
+	dh_testdir
+	quilt push -a || test $$? = 2
+	touch patch-stamp
+
+build-arch: build-stamp
+build-indep: build-stamp
+build: build-stamp
+build-stamp: patch-stamp
+	dh_testdir
+	#
+	sh ./configure --prefix=/usr \
+		       --includedir=/usr/include/tcl$(tclv) \
+		       --enable-shared \
+		       --enable-threads \
+		       --with-tcl=/usr/lib/tcl$(tclv)
+	$(MAKE) LIBS="-Wl,-soname,\$$@.1"
+	#
+	touch build-stamp
+
+clean: clean-patched unpatch
+	dh_testdir
+	dh_testroot
+	dh_clean
+
+clean-patched: patch-stamp
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp install-stamp
+	#
+	[ ! -f Makefile ] || $(MAKE) clean
+	[ ! -f Makefile ] || $(MAKE) distclean
+	#
+	rm -f itclConfig.sh pkgIndex.tcl
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+	#
+	mkdir -p debian/tmp
+	$(MAKE) prefix=$(dtmp)/usr \
+		exec_prefix=$(dtmp)/usr \
+		includedir=$(dtmp)/usr/include/tcl$(tclv) \
+		install
+	#
+	# Fix up the itcl libraries.
+	mv $(dtmp)/usr/lib/itcl*/libitcl$(v).so $(dtmp)/usr/lib/libitcl$(v).so.1
+	mv $(dtmp)/usr/lib/itcl*/*.a $(dtmp)/usr/lib/
+	ln -sf libitcl$(v).so.1 $(dtmp)/usr/lib/libitcl$(v).so
+	#  (itclConfig.sh doesn't get installed at all, so we install it here)
+	sed -e "s:^\(\(ITCL\|itcl\)_\(BUILD_\)\?LIB_SPEC\)=.*$$:\1='-L/usr/lib -litcl$(v)':" \
+	    -e "s:^\(\(ITCL\|itcl\)_\(BUILD_\)\?STUB_LIB_SPEC\)=.*$$:\1='-L/usr/lib -litclstub$(v)':" \
+	    -e "s:^\(\(ITCL\|itcl\)_\(BUILD_\)\?STUB_LIB_PATH\)=.*$$:\1=/usr/lib/libitclstub$(v).a:" \
+	    -e "s:^\(\(ITCL\|itcl\)_SRC_DIR\)=.*$$:\1='/usr/include/tcl$(tclv)/itcl-private':" \
+	    -e "s:^\(\(ITCL\|itcl\)_LIB_FILE\)=.*$$:\1=libitcl$(v).so.1:" \
+	    -e "s:^\(\(ITCL\|itcl\)_STUB_LIB_FILE\)=.*$$:\1=libitclstub$(v).a:" \
+	    -e "s:^\(\(ITCL\|itcl\)_VERSION\)=.*$$:\1='$(v)':" \
+	    itclConfig.sh > $(dtmp)/usr/lib/itcl$(v)/itclConfig.sh
+	#
+	# Move the Tcl library to /usr/share/tcltk
+	install -d -m 755 $(dtmp)/usr/share/tcltk
+	mv $(dtmp)/usr/lib/itcl$(v) $(dtmp)/usr/share/tcltk/
+	#
+	# Fix up the include files.
+	install -d $(dtmp)/usr/include/tcl$(tclv)/itcl-private/generic
+	cp generic/*.h $(dtmp)/usr/include/tcl$(tclv)/itcl-private/generic
+	#
+	# Fix up the manpages.
+	# - just remove the installed ones, they're all mixed together
+	rm -r $(dtmp)/usr/man
+	mkdir -p $(dtmp)/usr/share/man/man3
+	#
+	cp doc/*.n $(dtmp)/usr/share/man/man3
+	cd $(dtmp)/usr/share/man/man3 && \
+	  for i in *.n ; do \
+	    sed -i -e'/^\.so man\.macros/d' \
+		   -e'/^\.BS/d' \
+		   -e'/^\.BE/d' \
+		   -e'/^\.CS/d' \
+		   -e'/^\.CE/d' \
+	    	   -e's/^\.TH \([^ ]\+\) n /.TH \1 3itcl /' $$i ; \
+	    mv $$i `echo $$i | sed -e 's/\.n/\.3itcl/'` ; \
+          done
+	#
+	dh_movefiles -pitcl3-dev
+	dh_movefiles -Nitcl3-dev
+	#
+	touch install-stamp
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installdocs -i
+	dh_installchangelogs -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir -a
+	dh_testroot -a
+	dh_installdocs -a
+	install -D -m 644 debian/itcl3.lintian-override \
+		  debian/itcl3/usr/share/lintian/overrides/itcl3
+	dh_installchangelogs -a
+	#
+	# hack up the /usr/doc links for dependent packages
+	rm -rf debian/itcl3-dev/usr/share/doc/itcl3-dev
+	ln -sf itcl3 debian/itcl3-dev/usr/share/doc/itcl3-dev
+	#
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a -V 'itcl3 (>= $(v)~), itcl3 (<< $(v1)~)'
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+source diff:
+	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false
+
+binary: binary-indep binary-arch
+.PHONY: patch unpatch build build-arch build-indep clean clean-patched binary-indep binary-arch binary install
