@@ -813,3 +813,11 @@ $(CRUNCHYFROG): $(SPREZZ)/crunchyfrog/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf crunchyfrog_$(crunchyfrog_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gdevilspie
+gdevilspie:$(GDEVILSPIE)_$(ARCH).deb
+$(GDEVILSPIE): $(SPREZZ)/gdevilspie/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gdevilspie_$(gdevilspie_UPVER).orig.tar.gz $(TARARGS) $@
+
