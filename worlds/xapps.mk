@@ -495,3 +495,11 @@ $(OGLFT): $(SPREZZ)/oglft/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf oglft_$(oglft_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: devilspie
+devilspie:$(DEVILSPIE)_$(ARCH).deb
+$(DEVILSPIE): $(SPREZZ)/devilspie/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf devilspie_$(devilspie_UPVER).orig.tar.gz $(TARARGS) $@
+
