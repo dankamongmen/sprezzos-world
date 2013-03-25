@@ -174,3 +174,11 @@ $(GTK2ENGINESXFCE): $(SPREZZ)/gtk2-engines-xfce/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gtk2-engines-xfce_$(gtk2-engines-xfce_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: libxfcegui4
+libxfcegui4:$(LIBXFCEGUI4)_$(ARCH).deb
+$(LIBXFCEGUI4): $(SPREZZ)/libxfcegui4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libxfcegui4_$(libxfcegui4_UPVER).orig.tar.bz2 $(TARARGS) $@
+
