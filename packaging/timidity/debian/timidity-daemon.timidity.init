@@ -1,0 +1,104 @@
+#!/bin/sh
+#
+# TiMidity      /etc/init.d/ initscript for TiMidity++
+#               $Id: timidity.init,v 1.6 2004/09/30 01:04:04 hmh Exp $
+#
+#               Copyright (c) 2004 by Henrique M. Holschuh <hmh@debian.org>
+#               Copyright (c) 2007-2009 Joost Yervante Damad <andete@debian.org>
+#
+#               Distributed under the GPL version 2
+#
+
+### BEGIN INIT INFO
+# Provides: timidity
+# Required-Start: $remote_fs
+# Required-Stop: $remote_fs
+# Default-Start:  2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: start and stop timidity
+# Description:  TiMidity++ is a very high quality software-only MIDI sequencer
+#        and MOD player.
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+NAME="timidity"
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=/usr/bin/${NAME}
+DESC="TiMidity++ ALSA midi emulation"
+PIDFILE=/var/run/timidity/${NAME}.pid
+
+set -e
+
+test -x ${DAEMON} || exit 0
+
+TIM_ALSASEQ=true
+TIM_ALSASEQPARAMS="-B2,8"
+[ -r /etc/default/timidity ] && . /etc/default/timidity
+if [ "${TIM_ALSASEQ}" != "true" ]; then
+	log_daemon_msg "Starting" "${NAME}"
+	log_daemon_msg " (to get timidity as an ALSA Sequencer enable this by editing the file /etc/default/timidity)"
+	log_end_msg 0
+	exit 0
+fi
+
+[ -z "$SERVER_USER" ] && SERVER_USER=timidity
+[ -z "$SERVER_GROUP" ] && SERVER_GROUP=timidity
+
+if ! getent passwd | grep -q "^${SERVER_USER}:"; then
+log_daemon_msg "Server user does not exist. Aborting"
+log_end_msg 0
+exit 1
+fi
+if ! getent group | grep -q "^${SERVER_GROUP}:" ; then
+log_daemon_msg "Server group does not exist. Aborting"
+log_end_msg =
+exit 1
+fi
+
+PARAMS="${TIM_ALSASEQPARAMS} -iAD"
+
+
+START="--start --chuid ${SERVER_USER} --quiet --exec ${DAEMON} --pidfile ${PIDFILE} -- ${PARAMS}"
+
+case "$1" in
+  start)
+	#log_daemon_msg "Starting" "${NAME}"
+	[ -d /proc/asound ] && [ -d /dev/snd/ ] || {
+		log_end_msg 1 || echo -n
+		log_warning_msg "ALSA is not active, cannot start $DESC"
+		exit 0
+	}
+	log_begin_msg "Starting $DESC..."
+    mkdir -p /var/run/timidity
+    chown timidity /var/run/timidity
+	if start-stop-daemon ${START} < /dev/null >/dev/null 2>&1; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+		exit 1
+	fi
+	;;
+  stop)
+	log_begin_msg "Stopping $DESC..."
+	if start-stop-daemon --stop --oknodo --pidfile ${PIDFILE} \
+          --name ${NAME} --retry 10 ; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+		exit 1
+	fi
+	;;
+  restart|force-reload)
+  	$0 stop
+	exec $0 start
+  	;;
+  status)
+	status_of_proc $DAEMON $NAME
+	;;
+  *)
+    echo "Usage: $0 {start|stop|restart|force-reload|status}" >&2
+    exit 1
+esac
+ 
+exit 0

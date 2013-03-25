@@ -10409,3 +10409,11 @@ $(HTMLXMLUTILS): $(SPREZZ)/html-xml-utils/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf html-xml-utils_$(html-xml-utils_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: timidity
+timidity:$(TIMIDITY)_$(ARCH).deb
+$(TIMIDITY): $(SPREZZ)/timidity/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf timidity_$(timidity_UPVER).orig.tar.gz $(TARARGS) $@
+

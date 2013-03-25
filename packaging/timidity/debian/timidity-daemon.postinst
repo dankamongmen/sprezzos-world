@@ -1,0 +1,66 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+configure)
+
+[ -f "/etc/default/timidity" ] && . /etc/default/timidity
+
+# Sane defaults, needed for when the user has messed with /etc/default/timidity:
+
+[ -z "$SERVER_HOME" ] && SERVER_HOME=/etc/timidity
+[ -z "$SERVER_USER" ] && SERVER_USER=timidity
+[ -z "$SERVER_NAME" ] && SERVER_NAME="TiMidity++ MIDI sequencer service"
+[ -z "$SERVER_GROUP" ] && SERVER_GROUP=timidity
+
+# Groups that the user will be added to, if undefined, then none.
+[ -z "$ADDGROUP" ] && ADDGROUP=audio
+
+# create user to avoid running server as root
+# 1. create group if not existing
+if ! getent group | grep -q "^$SERVER_GROUP:" ; then
+echo -n "Adding group $SERVER_GROUP.."
+addgroup --quiet --system $SERVER_GROUP 2>/dev/null ||true
+echo "..done"
+fi
+# 2. create user if not existing
+if ! getent passwd | grep -q "^$SERVER_USER:"; then
+echo -n "Adding system user $SERVER_USER.."
+adduser --quiet \
+            --system \
+            --ingroup $SERVER_GROUP \
+            --no-create-home \
+            --disabled-password \
+            $SERVER_USER 2>/dev/null || true
+echo "..done"
+fi
+# 3. adjust passwd entry
+usermod -c "$SERVER_NAME" \
+            -d $SERVER_HOME   \
+            -g $SERVER_GROUP  \
+            $SERVER_USER 2> /dev/null || true
+# 4. Add the user to the ADDGROUP group
+if test -n $ADDGROUP
+   then
+   if ! groups $SERVER_USER | cut -d: -f2 | \
+        grep -qw $ADDGROUP; then
+        adduser $SERVER_USER $ADDGROUP
+   fi
+fi
+;;
+esac
+
+rm -f /etc/timidity/timidity.daemon
+
+# make sure we really stop, because packaging system doesn't
+# understand what we're trying to do with migration to timidity-daemon
+[ -f "/etc/init.d/timidity" ] && if which invoke-rc.d >/dev/null 2>&1; then
+  invoke-rc.d timidity stop
+else
+  /etc/init.d/timidity stop
+fi
+
+#DEBHELPER#
+
+exit 0
+
