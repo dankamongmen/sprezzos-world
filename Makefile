@@ -10417,3 +10417,11 @@ $(TIMIDITY): $(SPREZZ)/timidity/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf timidity_$(timidity_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libdiscid
+libdiscid:$(LIBDISCID)_$(ARCH).deb
+$(LIBDISCID): $(SPREZZ)/libdiscid/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdiscid_$(libdiscid_UPVER).orig.tar.gz $(TARARGS) $@
+
