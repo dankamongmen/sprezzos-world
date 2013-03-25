@@ -10401,3 +10401,11 @@ $(ITK3): $(SPREZZ)/itk3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf itk3_$(itk3_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: itcl4
+itcl4:$(ITCL4)_$(ARCH).deb
+$(ITCL4): $(SPREZZ)/itcl4/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf itcl_$(itcl4_UPVER).orig.tar.gz $(TARARGS) $@
+
