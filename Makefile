@@ -10407,5 +10407,5 @@ $(ITCL4): $(SPREZZ)/itcl4/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf itcl_$(itcl4_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xzvf itcl4_$(itcl4_UPVER).orig.tar.gz $(TARARGS) $@
 
