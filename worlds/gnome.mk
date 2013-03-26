@@ -14,6 +14,30 @@ $(ANJUTAEXTRAS): $(SPREZZ)/anjuta-extras/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf anjuta-extras-$(anjuta-extras_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: atk
+atk:$(ATK)_$(ARCH).deb
+$(ATK): $(SPREZZ)/atk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf atk-$(atk_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: atk-bridge
+atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
+$(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf at-spi2-atk-$(atk-bridge_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: at-spi
+at-spi:$(ATSPI)_$(ARCH).deb
+$(ATSPI): $(SPREZZ)/at-spi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf at-spi2-core-$(at-spi_UPVER).tar.xz $(TARARGS) $@
+
 .PHONY: caribou
 caribou:$(CARIBOU)_$(ARCH).deb
 $(CARIBOU): $(SPREZZ)/caribou/debian/changelog
@@ -548,7 +572,7 @@ $(LIBPEAS): $(SPREZZ)/libpeas/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xzvf libpeas-$(libpeas_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf libpeas-$(libpeas_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libsocialweb
 libsocialweb:$(LIBSOCIALWEB)_$(ARCH).deb

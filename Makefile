@@ -1320,30 +1320,6 @@ $(AT): $(SPREZZ)/at/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf at_$(at_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: atk
-atk:$(ATK)_$(ARCH).deb
-$(ATK): $(SPREZZ)/atk/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf atk-$(atk_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: atk-bridge
-atk-bridge:$(ATKBRIDGE)_$(ARCH).deb
-$(ATKBRIDGE): $(SPREZZ)/atk-bridge/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf at-spi2-atk-$(atk-bridge_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: at-spi
-at-spi:$(ATSPI)_$(ARCH).deb
-$(ATSPI): $(SPREZZ)/at-spi/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf at-spi2-core-$(at-spi_UPVER).tar.xz $(TARARGS) $@
-
 .PHONY: attr
 attr:$(ATTR)_$(ARCH).deb
 $(ATTR): $(SPREZZ)/attr/debian/changelog
