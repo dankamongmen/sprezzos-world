@@ -374,6 +374,14 @@ $(GNOMEMIMEDATA): $(SPREZZ)/gnome-mime-data/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnome-mime-data-$(gnome-mime-data_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: gnome-orca
+gnome-orca:$(GNOMEORCA)_$(ARCH).deb
+$(GNOMEORCA): $(SPREZZ)/gnome-orca/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-orca_$(gnome-orca_UPVER).orig.tar.xz $(TARARGS) $@
+
 .PHONY: gnome-packagekit
 gnome-packagekit:$(GNOMEPACKAGEKIT)_$(ARCH).deb
 $(GNOMEPACKAGEKIT): $(SPREZZ)/gnome-packagekit/debian/changelog

@@ -3370,14 +3370,6 @@ $(GNOMEONLINEACCOUNTS): $(SPREZZ)/gnome-online-accounts/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-online-accounts_$(gnome-online-accounts_UPVER).orig.tar.xz $(TARARGS) $@
 
-.PHONY: gnome-orca
-gnome-orca:$(GNOMEORCA)_$(ARCH).deb
-$(GNOMEORCA): $(SPREZZ)/gnome-orca/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xJvf gnome-orca-$(gnome-orca_UPVER).tar.xz $(TARARGS) $@
-
 .PHONY: gnome-paint
 gnome-paint:$(GNOMEPAINT)_$(ARCH).deb
 $(GNOMEPAINT): $(SPREZZ)/gnome-paint/debian/changelog
@@ -8585,6 +8577,14 @@ $(XSERVERXORGINPUTKEYBOARD): $(SPREZZ)/xserver-xorg-input-keyboard/debian/change
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86-input-keyboard-$(xserver-xorg-input-keyboard_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-input-mouse
+xserver-xorg-input-mouse:$(XSERVERXORGINPUTMOUSE)_$(ARCH).deb
+$(XSERVERXORGINPUTMOUSE): $(SPREZZ)/xserver-xorg-input-mouse/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-input-mouse-$(xserver-xorg-input-mouse_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xserver-xorg-input-wacom
 xserver-xorg-input-wacom:$(XSERVERXORGINPUTWACOM)_$(ARCH).deb
 $(XSERVERXORGINPUTWACOM): $(SPREZZ)/xserver-xorg-input-wacom/debian/changelog
@@ -10408,4 +10408,12 @@ $(LIBDISCID): $(SPREZZ)/libdiscid/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libdiscid_$(libdiscid_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: liblouis
+liblouis:$(LIBLOUIS)_$(ARCH).deb
+$(LIBLOUIS): $(SPREZZ)/liblouis/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liblouis_$(liblouis_UPVER).orig.tar.gz $(TARARGS) $@
 
