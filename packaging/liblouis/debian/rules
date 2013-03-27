@@ -1,0 +1,116 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS := --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+else
+CROSS := --build $(DEB_BUILD_GNU_TYPE)
+endif
+
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+
+export DEB_BUILD_HARDENING=1
+
+maybe_check = $(if $(findstring nocheck,$(DEB_BUILD_OPTIONS)),,check)
+
+PYVERS := $(shell pyversions -r)
+
+config.status: configure
+	dh_testdir
+	cp -f /usr/share/misc/config.sub build-aux/config.sub
+	cp -f /usr/share/misc/config.guess build-aux/config.guess
+	./configure $(CROSS) --prefix=/usr --libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs" --enable-ucs4
+
+
+build: build-indep build-arch
+build-indep: build-stamp
+build-arch: build-stamp
+build-stamp:  config.status
+	dh_testdir
+	$(MAKE)
+	cd python; \
+	    for py in $(PYVERS); do \
+		LD_LIBRARY_PATH=../liblouis/.libs$${LD_LIBRARY_PATH+:$$LD_LIBRARY_PATH} $$py setup.py build; \
+	    done
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp check-stamp
+	[ ! -f Makefile ] || $(MAKE) distclean
+	-cd python; \
+	    for py in $(PYVERS); do \
+		LD_LIBRARY_PATH=../liblouis/.libs$${LD_LIBRARY_PATH+:$$LD_LIBRARY_PATH} $$py setup.py clean --all; \
+	    done; \
+	    rm -f louis/__init__.pyc
+	rm -f doc/liblouis.info doc/stamp-vti doc/version.texi
+	rm -f build-aux/config.sub
+	rm -f build-aux/config.guess
+	rm -fr python/build
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+	cd python; \
+	    for py in $(PYVERS); do \
+		LD_LIBRARY_PATH=../liblouis/.libs$${LD_LIBRARY_PATH+:$$LD_LIBRARY_PATH} $$py setup.py install --root=$(CURDIR)/debian/python-louis; \
+	    done
+
+check: check-stamp
+check-stamp:
+	-$(MAKE) check
+	touch $@
+
+binary-arch: export DH_OPTIONS=-s
+binary-arch: build install $(maybe_check)
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_installexamples
+	dh_install
+	dh_installman
+	dh_installinfo
+	dh_python2
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-indep: export DH_OPTIONS=-i
+binary-indep: build install $(maybe_check)
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_install
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+get-orig-source:
+	uscan --verbose --rename --repack --force-download
+
+binary: binary-indep binary-arch
+.PHONY: build build-indep build-arch clean binary-indep binary-arch binary install
