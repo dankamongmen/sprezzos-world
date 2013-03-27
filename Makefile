@@ -8577,6 +8577,14 @@ $(XSERVERXORGINPUTEVDEV): $(SPREZZ)/xserver-xorg-input-evdev/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xf86-input-evdev-$(xserver-xorg-input-evdev_UPVER).tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-input-keyboard
+xserver-xorg-input-keyboard:$(XSERVERXORGINPUTKEYBOARD)_$(ARCH).deb
+$(XSERVERXORGINPUTKEYBOARD): $(SPREZZ)/xserver-xorg-input-keyboard/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xf86-input-keyboard-$(xserver-xorg-input-keyboard_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: xserver-xorg-input-wacom
 xserver-xorg-input-wacom:$(XSERVERXORGINPUTWACOM)_$(ARCH).deb
 $(XSERVERXORGINPUTWACOM): $(SPREZZ)/xserver-xorg-input-wacom/debian/changelog
