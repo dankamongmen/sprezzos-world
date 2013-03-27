@@ -1510,7 +1510,7 @@ $(BINUTILSMINGWW64): $(SPREZZ)/binutils-mingw-w64/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf binutils-mingw-w64-$(binutils-mingw-w64_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf binutils-mingw-w64_$(binutils-mingw-w64_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: binwalk
 binwalk:$(BINWALK)_$(ARCH).deb
