@@ -655,3 +655,11 @@ $(LIBTESTWARNPERL): $(SPREZZ)/libtest-warn-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtest-warn-perl_$(libtest-warn-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libcompress-raw-lzma-perl
+libcompress-raw-lzma-perl:$(LIBCOMPRESSRAWLZMAPERL)_$(ARCH).deb
+$(LIBCOMPRESSRAWLZMAPERL): $(SPREZZ)/libcompress-raw-lzma-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libcompress-raw-lzma-perl_$(libcompress-raw-lzma-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
