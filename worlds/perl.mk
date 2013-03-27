@@ -663,3 +663,11 @@ $(LIBCOMPRESSRAWLZMAPERL): $(SPREZZ)/libcompress-raw-lzma-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libcompress-raw-lzma-perl_$(libcompress-raw-lzma-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libsereal-decoder-perl
+libsereal-decoder-perl:$(LIBSEREALDECODERPERL)_$(ARCH).deb
+$(LIBSEREALDECODERPERL): $(SPREZZ)/libsereal-decoder-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsereal-decoder-perl_$(libsereal-decoder-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
