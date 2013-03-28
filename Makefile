@@ -10419,3 +10419,11 @@ $(LIBLOUIS): $(SPREZZ)/liblouis/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf liblouis_$(liblouis_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libnet
+libnet:$(LIBNET)_$(ARCH).deb
+$(LIBNET): $(SPREZZ)/libnet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnet_$(libnet_UPVER).orig.tar.gz $(TARARGS) $@
+
