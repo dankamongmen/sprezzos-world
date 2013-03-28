@@ -1,0 +1,181 @@
+#!/usr/bin/perl -w
+#
+#	Copyright (c) 2006 Krzysztof Krzyzaniak
+#
+#	Contains changes from:
+#		- Tobias Gruetzmacher <tobias@portfolio16.de>
+#		- Arno Toell <debian@toell.net>
+#
+#	You may distribute under the terms of either the GNU General Public
+#	License[1] or the Artistic License[2].
+#
+#	[1] http://www.gnu.org/licenses/gpl.html
+#	[2] http://www.perl.com/pub/a/language/misc/Artistic.html
+#
+
+use strict;
+use Term::ReadLine;
+use File::Basename;
+use File::Glob ':glob';
+use File::stat;
+
+#--- some initializations
+my $confdir = "/etc/lighttpd/";
+my %available = ();
+my %enabled = ();
+my @todo = ();
+my $enabling = 1;
+
+#--- some defaults
+use constant {
+	EXIT_OK => 0,
+	EXIT_FAILURE => 1,
+	EXIT_NO_ACTION => 2
+};
+
+#--- first check if we enabling or disabling
+if ($0 =~ /disable-mod$/) {
+	#--- disabling mode
+	$enabling = 0;
+}
+
+
+sub mydie {
+	my $reason = shift;
+	print($reason);
+	exit(EXIT_FAILURE);
+}
+
+#--- list of available modules
+my @files = bsd_glob($confdir.'conf-available/*.conf');
+foreach my $file (@files) {
+	if (basename($file) =~ /^\d+\-([\w\-\.]+)\.conf$/) {
+		$available{$1} = $file;
+	}
+}
+
+#--- list of already enabled modules
+@files = bsd_glob($confdir.'conf-enabled/*.conf');
+foreach my $file (@files) {
+	if (basename($file) =~ /^\d+\-([\w\-\.]+)\.conf$/) {
+		$enabled{$1} = $file;
+	}
+}
+
+unless (defined($ARGV[0])) {
+	print "Disabled modules: ";
+	foreach (sort(keys %available)) {
+		if (!defined($enabled{$_})) {
+			print qq{$_ };
+		}
+	}
+	print "\n";
+	print "Enabled modules: ";
+	foreach (sort(keys %enabled)) {
+		print qq{$_ };
+	}
+	print "\n";
+	my $prompt =  $enabling ? 'Enable module: ' : 'Disable module: ';
+	my $term = new Term::ReadLine $prompt;
+	my $OUT = $term->OUT || \*STDOUT;
+	my $var = lc($term->readline($prompt));
+	@todo = split(/ /, $var);
+}
+else {
+	@todo = @ARGV;
+}
+
+my $exit_status = EXIT_OK;
+#--- activate (link) or deactivate (remove) module
+foreach my $do (@todo) {
+
+	if (! exists($available{$do})) {
+		print("Ignoring unknown module: $do\n");
+		$exit_status = EXIT_NO_ACTION;
+		next;
+	}
+
+	if ($enabling) {
+		next unless defined($available{$do});
+		my $target = sprintf("%s/conf-enabled/%s", $confdir,basename($available{$do}));
+		my $source = $available{$do};
+
+		my $st = stat($target);
+		unless ( -f $target ) {
+			# scan for a dependency line
+			local *MOD;
+			open(MOD, "< $source") || mydie("can't read $source: $!");
+			while(my $i = <MOD>) {
+				if ($i =~ m/# -\*- depends: ([-\w, ]+) -\*-/) {
+					my @matches = split(/,\s+/, $1);
+					for my $module (@matches) {
+						if (exists $available{$module} and ! exists $enabled{$module}) {
+							print("Met dependency: $module\n");
+							push(@todo, $module);
+						}
+						elsif (exists $available{$module} and exists $enabled{$module}) {
+							# Do nothing
+						}
+						else
+						{
+							mydie("Unresolved dependency: $module\n");
+						}
+					}
+					last;
+				}
+			}
+			close(MOD);
+			if (symlink("../conf-available/" . basename($available{$do}), $target)) {
+				print "Enabling $do: ok\n";
+			}
+			else {
+				print "failure: $!\n";
+				$exit_status = EXIT_FAILURE;
+			}
+		}
+		else {
+			print "already enabled\n";
+			# Set exit status only, if no more severe problem
+			# occured so far
+			$exit_status = EXIT_NO_ACTION if $exit_status != EXIT_FAILURE;
+		}
+
+	}
+	else {
+		if (defined($enabled{$do})) {
+			print qq{Disabling $do\n};
+			my $target = sprintf("%s/conf-enabled/%s", $confdir,basename($enabled{$do}));
+			my $source = $available{$do};
+
+			# scan for a reverse dependency line
+			foreach my $available_module (keys %available) {
+				if ($available_module eq $do) {
+					next;
+					}
+				local *MOD;
+				open(MOD, "< $available{$available_module}") || mydie("can't read $available{$available_module}: $!");
+				while(my $i = <MOD>) {
+					if ($i =~ m/# -\*- depends: ([-\w, ]+) -\*-/) {
+						my @matches = split(/,\s+/, $1);
+						for my $module (@matches) {
+						if ($module eq $do && exists $enabled{$available_module}) {
+							print("Reverse dependency met: Disabling $available_module too\n");
+							push(@todo, $available_module);
+							}
+						}
+					last;
+					}
+				}
+			}
+			close(MOD);
+
+			unlink($target);
+		} else {
+			print qq{Already disabled $do\n};
+			$exit_status = EXIT_NO_ACTION if $exit_status != EXIT_FAILURE;
+		}
+	}
+}
+
+print "Run /etc/init.d/lighttpd force-reload to enable changes\n";
+exit($exit_status);

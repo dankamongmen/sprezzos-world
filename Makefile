@@ -10427,3 +10427,11 @@ $(LIBNET): $(SPREZZ)/libnet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libnet_$(libnet_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: lighttpd
+lighttpd:$(LIGHTTPD)_$(ARCH).deb
+$(LIGHTTPD): $(SPREZZ)/lighttpd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lighttpd_$(lighttpd_UPVER).orig.tar.gz $(TARARGS) $@
+
