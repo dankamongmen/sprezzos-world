@@ -240,22 +240,22 @@ $(EMAP): $(SPREZZ)/emap/debian/changelog
 	ln -sf emap-$(emap_UPVER).tar.xz emap_$(emap_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
-.PHONY: webkit
-webkit:$(WEBKIT)_$(ARCH).deb
-$(WEBKIT): $(SPREZZ)/webkit/debian/changelog
-	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
-	svn checkout https://svn.webkit.org/repository/webkit/trunk $@
-	tar cJf webkit-$(webkit_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf webkit-$(webkit_UPVER).tar.xz webkit_$(webkit_UPVER).orig.tar.xz
-	cp -r $(<D) $@/
-
 #.PHONY: webkit
 #webkit:$(WEBKIT)_$(ARCH).deb
 #$(WEBKIT): $(SPREZZ)/webkit/debian/changelog
-#	mkdir $@
+#	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+#	svn checkout https://svn.webkit.org/repository/webkit/trunk $@
+#	tar cJf webkit-$(webkit_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf webkit-$(webkit_UPVER).tar.xz webkit_$(webkit_UPVER).orig.tar.xz
 #	cp -r $(<D) $@/
-#	cd $@ && uscan --force-download --download-current-version
-#	tar xJvf webkit_$(webkit_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: webkit
+webkit:$(WEBKIT)_$(ARCH).deb
+$(WEBKIT): $(SPREZZ)/webkit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf webkit_$(webkit_UPVER).orig.tar.xz $(TARARGS) $@
 
 #.PHONY: gtk-theme-config
 #gtk-theme-config:$(GTKTHEMECONFIG)_$(ARCH).deb
