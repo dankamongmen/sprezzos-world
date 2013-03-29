@@ -4111,8 +4111,8 @@ kismet:$(KISMET)_$(ARCH).deb
 $(KISMET): $(SPREZZ)/kismet/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	{ cd $@ && TARBALL=`uscan --force-download --download-current-version --dehs | xmlstarlet sel -t -v //target` && \
-	  cd - && tar xzvf $$TARBALL $(TARARGS) $@ ; }
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf kismet_$(kismet_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: klibc
 klibc:$(KLIBC)_$(ARCH).deb
