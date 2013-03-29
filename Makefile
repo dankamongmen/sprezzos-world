@@ -48,7 +48,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	 echo -n "$(shell echo $(@F) | tr [:lower:] [:upper:] | tr -d -):=$(@F)_" &&\
 	 rapt-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | cut -d- -f1 && \
 	 echo -n "$(@F)_UPVER:=" && \
-	 rapt-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | sed -e 's/[+-].*SprezzOS[0-9]*//' | sed -e 's/+sfsg//g' \
+	 rapt-parsechangelog -l$< | grep-dctrl -ensVersion -FSource . | cut -d: -f2- | sed -e 's/[+-].*SprezzOS[0-9]*//' -e 's/+sfsg//g' \
 	 ) > $@
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
