@@ -10435,3 +10435,11 @@ $(LIGHTTPD): $(SPREZZ)/lighttpd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lighttpd_$(lighttpd_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: blcr
+blcr:$(BLCR)_$(ARCH).deb
+$(BLCR): $(SPREZZ)/blcr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf blcr_$(blcr_UPVER).orig.tar.gz $(TARARGS) $@
+
