@@ -1,0 +1,221 @@
+#!/usr/bin/make -f
+DATE      := $(shell date +%Y%m%d)
+M         := $(CURDIR)
+CFLAGS     = -Wall -g
+
+include debian/conf.mk
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+DEB_HOST_ARCH := $(shell dpkg --print-architecture)
+
+# Doing this breaks configure --enable-multilib on amd64 (and others?)
+#export DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+#export DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+# FOR AUTOCONF 2.52 AND NEWER ONLY
+#ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+#  confflags += --build $(DEB_HOST_GNU_TYPE)
+#else
+#  confflags += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+#endif
+
+
+EXTRA_CONFIG =
+BUILD_LIB32 = no
+
+ifeq "$(DEB_HOST_ARCH)" "amd64"
+	EXTRA_CONFIG += --enable-multilib
+	BUILD_LIB32 = yes
+endif
+ifeq "$(DEB_HOST_ARCH)" "ppc64"
+	EXTRA_CONFIG += --enable-multilib
+	BUILD_LIB32 = yes
+endif
+
+
+# Name of the source package
+psource:=blcr-source
+dkmssource:=blcr-dkms
+# The short upstream name, used for the module source directory
+sname:=blcr
+
+version:= $(shell dpkg-parsechangelog | grep ^Version: | cut -d' ' -f2 \
+            | cut -d- -f1)
+
+ifdef KVERS
+mdir := $(CURDIR)$(shell test $(shell echo $(KVERS)|cut -f3 -d. | cut -f1 -d-) -lt 25 && echo /old)
+else
+mdir := $(CURDIR)
+endif
+
+kdist_config: prep-deb-files
+
+kdist_clean:
+	[ ! -f debian/control ] || dh_clean
+	[ ! -f Makefile ] || $(MAKE) clean
+
+kdist_configure: kdist_config
+
+#
+### end  KERNEL SETUP
+
+build-arch: build-arch-stamp
+
+build-arch-stamp:
+	dh_testdir
+	mkdir build
+	cp debian/Kbuild .
+	cd build && ../configure $(confflags) --with-installed-modules --enable-testsuite --prefix=/usr --libexecdir=/usr/lib --mandir=/usr/share/man $(EXTRA_CONFIG)
+	$(MAKE) -C build
+	touch $@
+
+binary-modules: prep-deb-files
+	dh_testroot
+	dh_clean -k
+	# Build the modules
+	 ./configure $(confflags) --with-installed-libcr --with-installed-util --with-components=modules --prefix=/usr --with-linux=$(KVERS)
+	# We'll just trust the generated makefiles to run kbuild for now I think
+	$(MAKE) -C blcr_imports
+	$(MAKE) -C cr_module
+#	$(MAKE) -C $(KSRC) M=$(CURDIR)/blcr_imports/kbuild modules
+#	$(MAKE) -C $(KSRC) M=$(CURDIR)/cr_module/kbuild modules
+	install -D -m 0644 $(CURDIR)/blcr_imports/kbuild/blcr_imports.ko \
+		debian/$(PKGNAME)/lib/modules/$(KVERS)/blcr/blcr_imports.ko
+	install -D -m 0644 $(CURDIR)/cr_module/kbuild/blcr.ko \
+		debian/$(PKGNAME)/lib/modules/$(KVERS)/blcr/blcr.ko
+	dh_installdocs
+	dh_installchangelogs
+	dh_compress
+	dh_fixperms
+	dh_installmodules
+	dh_installdeb
+	dh_gencontrol -- -v$(VERSION)
+	dh_md5sums
+	dh_builddeb --destdir=$(DEB_DESTDIR)
+	dh_clean -k
+
+build: build-arch
+
+clean: clean1 
+clean1: 
+	dh_testdir
+	#dh_testroot
+	rm -f build-arch-stamp
+	[ ! -f Makefile ] || $(MAKE) -C build distclean
+	-rm -rf build
+	#-rm -f config/config.sub config/config.guess
+	-rm -f Kbuild
+	-rm -f debian/blcr-source.debhelper.log
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+#	Create the directories to install the source into
+	dh_installdirs -p$(psource) usr/src/modules/$(sname)
+	dh_installdirs -p$(dkmssource) usr/src/$(sname)-$(version)
+	#                usr/src/modules/$(sname)/include 
+	dh_installdirs
+
+	DESTDIR=$(CURDIR)/debian/blcr-util make -C build/util install
+	DESTDIR=$(CURDIR)/debian/libcr-dev make -C build/include install
+	DESTDIR=$(CURDIR)/debian/libcr0 make -C build/libcr install
+	#DESTDIR=$(CURDIR)/debian/libcr-dbg make -C build/libcr install
+	DESTDIR=$(CURDIR)/debian/blcr-testsuite make -C build/tests install
+ifeq "$(BUILD_LIB32)" "yes"
+	DESTDIR=$(CURDIR)/debian/lib32cr0 make -C build/libcr32/libcr install
+	#not sure if this is the right place/way to fix this?
+	mv $(CURDIR)/debian/libcr0/usr/lib64  $(CURDIR)/debian/libcr0/usr/lib
+	# lib32 please (#555475)
+	mv $(CURDIR)/debian/lib32cr0/usr/lib $(CURDIR)/debian/lib32cr0/usr/lib32
+	# No lib32cr-dev package, so we don't need these
+	rm $(CURDIR)/debian/lib32cr0/usr/lib32/*.la $(CURDIR)/debian/lib32cr0/usr/lib32/*.so
+endif
+	mv $(CURDIR)/debian/libcr0/usr/lib/*.la $(CURDIR)/debian/libcr-dev/usr/lib/
+	mv $(CURDIR)/debian/libcr0/usr/lib/*.so $(CURDIR)/debian/libcr-dev/usr/lib/
+
+	# fix the libdir in the -dev package too
+	sed -i -e 's/lib64/lib/g' $(CURDIR)/debian/libcr-dev/usr/lib/*.la
+	# fix for policy 3.9.1 change of *.la files in -dev packages
+	sed -i -e "s/^dependency_libs.*/dependency_libs=''/" $(CURDIR)/debian/libcr-dev/usr/lib/*.la
+
+	chrpath -d $(CURDIR)/debian/blcr-util/usr/bin/cr_checkpoint $(CURDIR)/debian/blcr-util/usr/bin/cr_restart
+	-chrpath -d -k $(CURDIR)/debian/blcr-testsuite/usr/lib/blcr-testsuite/*
+
+	# This is a midly convoluted way of making a tarball!
+	cd debian/$(psource)/usr/src/modules/$(sname) && ln -s $(CURDIR)/* .
+	rm debian/$(psource)/usr/src/modules/$(sname)/debian
+	rm debian/$(psource)/usr/src/modules/$(sname)/build
+	# make a blank debian dir
+	install -d debian/$(psource)/usr/src/modules/$(sname)/debian
+	# populate it
+	cp debian/*modules.in* debian/$(psource)/usr/src/modules/$(sname)/debian
+	cp debian/rules debian/changelog debian/copyright debian/compat debian/conf.mk \
+		debian/$(psource)/usr/src/modules/$(sname)/debian/
+	
+	cd debian/$(psource)/usr/src && tar ch modules | bzip2 -9 > $(sname).tar.bz2 && rm -rf modules
+
+	# Base the DKMS source on the blcr.tar.bz2 that we ship! 
+	cd $(CURDIR)/debian/$(dkmssource)/usr/src/$(sname)-$(version) && tar --strip-components=2 -xjf $(CURDIR)/debian/$(psource)/usr/src/blcr.tar.bz2
+
+	# we don't ship -source anymore, so delete it!
+	-rm -rf $(CURDIR)/debian/$(psource)/
+
+	# clean up the shipped source
+	# Tests should be executable
+	find $(CURDIR)/debian/$(dkmssource)/usr/src/$(sname)-$(version)/tests/ -iname '*.sh' -exec chmod a+x {} \;
+	# we don't duplicate this everywhere, it's in /usr/share/doc
+	find $(CURDIR)/debian/$(dkmssource)/ -name 'license.txt' -exec rm {} \;	
+	cd $(CURDIR)/debian/$(dkmssource)/usr/src/$(sname)-$(version)/ && rm COPYING COPYING.LIB LICENSE.txt
+	# make more things executable that should be
+	cd $(CURDIR)/debian/$(dkmssource)/usr/src/$(sname)-$(version)/ && chmod a+x contrib/cr_depmod debian/conf.mk etc/blcr.rc
+	# make some things *not* executable
+	cd $(CURDIR)/debian/$(dkmssource)/usr/src/$(sname)-$(version)/ && chmod a-x vmadump4/vmadump_sparc.c cr_module/arch/sparc/cr_arch.h 
+
+	sed -e 's/[@]VERSION[@]/$(version)/' debian/dkms.conf.in \
+             > debian/$(dkmssource)/usr/src/$(sname)-$(version)/dkms.conf
+
+
+	dh_installdocs
+
+
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs -i $(CURDIR)/NEWS
+	dh_installdocs -i
+	dh_installkpatches -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install
+	dh_testdir -s
+	dh_testroot -s
+	dh_installdocs -s
+	dh_installman -s
+	dh_installexamples -s
+	dh_installchangelogs -s $(CURDIR)/NEWS
+	dh_strip -s --dbg-package=libcr-dbg
+	dh_link -s
+	dh_compress -s
+	dh_fixperms -s
+	dh_makeshlibs -s
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install binary-modules kdist kdist_config kdist_image kdist_clean clean1
