@@ -1,0 +1,174 @@
+#!/usr/bin/make -f
+
+include /usr/share/gnome-pkg-tools/1/rules/uploaders.mk
+-include /usr/share/gnome-pkg-tools/1/rules/gnome-get-source.mk
+
+include /usr/share/python/python.mk
+
+CFLAGS += -Wall -g -O$(if $(findstring noopt,$(DEB_BUILD_OPTIONS)),0,2)
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+export echo=/bin/echo
+
+configure_flags += \
+		--prefix=/usr \
+		--enable-thread \
+		--build=$(DEB_BUILD_GNU_TYPE) \
+		--disable-introspection \
+		--disable-maintainer-mode
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	configure_flags += --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+PYDEFAULTVER := $(shell pyversions --default --version)
+PYVERS := $(shell pyversions --requested --version debian/control)
+PYVERS := $(filter-out $(PYDEFAULTVER), $(PYVERS)) $(PYDEFAULTVER)
+
+patch-stamp:
+	dh_testdir
+	dh_autoreconf
+	touch $@
+
+patch: patch-stamp
+
+build-%/configure-stamp: patch-stamp
+	dh_testdir
+	mkdir -p build-$*
+	cd build-$* && \
+		PYTHON=/usr/bin/python$* CFLAGS="$(CFLAGS)" \
+			$(CURDIR)/configure $(configure_flags)
+	touch $@
+
+dbg-build-%/configure-stamp: patch-stamp
+	dh_testdir
+	mkdir -p dbg-build-$*
+	cd dbg-build-$* && \
+		PYTHON=/usr/bin/python$*-dbg CFLAGS="$(CFLAGS) -O0" \
+			$(CURDIR)/configure $(configure_flags)
+	touch $@
+
+build-%/build-stamp: build-%/configure-stamp
+	dh_testdir
+	PYTHON=/usr/bin/python$* $(MAKE) -C build-$* pyexecdir=$(call py_libdir_sh, $*)
+	touch $@
+
+dbg-build-%/build-stamp: dbg-build-%/configure-stamp
+	dh_testdir
+	PYTHON=/usr/bin/python$*-dbg $(MAKE) -C dbg-build-$* pyexecdir=$(call py_libdir_sh, $*)
+	touch $@
+
+build: $(PYVERS:%=build-%/build-stamp) $(PYVERS:%=dbg-build-%/build-stamp)
+
+build-%/check-stamp: build-%/build-stamp
+	find gi glib gobject gio -name '*.py' -exec cp '$(CURDIR)/{}' build-$*/'{}' \;
+	# don't run the tests under fakeroot, otherwise they will try to
+	# connect to root's session D-BUS
+	-PYTHON=/usr/bin/python$* LD_PRELOAD= xvfb-run $(MAKE) -C build-$* check
+	touch $@
+
+dbg-build-%/check-stamp: dbg-build-%/build-stamp
+	find gi glib gobject gio -name '*.py' -exec cp '$(CURDIR)/{}' dbg-build-$*/'{}' \;
+	# don't run the tests under fakeroot, otherwise they will try to
+	# connect to root's session D-BUS
+	-PYTHON=/usr/bin/python$*-dbg LD_PRELOAD= xvfb-run $(MAKE) -C dbg-build-$* check
+	touch $@
+
+check: $(PYVERS:%=build-%/check-stamp) $(PYVERS:%=dbg-build-%/check-stamp)
+
+build-%/install-stamp: build-%/build-stamp
+	dh_testdir
+	dh_testroot
+	PYTHON=/usr/bin/python$* $(MAKE) -C build-$* install DESTDIR=$(CURDIR)/debian/python-gobject-2-dev pyexecdir=$(call py_libdir_sh, $*)
+	# dh_python2 trips over this empty dir in the sanity check for >= 2.6, so remove it
+	-rmdir debian/python-gobject-2-dev/usr/lib/python$*/site-packages
+	# until all reverse dependencies of pygobject have been converted to
+	# dh_python2, install a library search path which is backwards
+	# compatible to pysupport (see Debian#614764)
+	echo "/usr/lib/pymodules/python$*/gtk-2.0/" > $(CURDIR)/debian/python-gobject-2-dev/$(call py_libdir_sh, $*)/gtk-2.0-pysupport-compat.pth
+	touch $@
+
+dbg-build-%/install-stamp: dbg-build-%/build-stamp
+	dh_testdir
+	dh_testroot
+	PYTHON=/usr/bin/python$*-dbg $(MAKE) -C dbg-build-$* install DESTDIR=$(CURDIR)/debian/python-gobject-2-dbg pyexecdir=$(call py_libdir_sh, $*)
+	find debian/python-gobject-2-dbg ! -type d ! \( -name '*.so' -o -name '*.so.*' \) -delete
+	find debian/python-gobject-2-dbg -type d -empty -delete
+	touch $@
+
+install-stamp: $(PYVERS:%=build-%/build-stamp) $(PYVERS:%=dbg-build-%/build-stamp)
+	dh_testdir
+	dh_testroot
+	# remove the install stamps to force a reinstall (since dh_clean is
+	# removing the package dirs)
+	dh_prep
+	rm -f $(PYVERS:%=build-%/install-stamp) $(PYVERS:%=dbg-build-%/install-stamp)
+	$(MAKE) -f debian/rules $(PYVERS:%=build-%/install-stamp) $(PYVERS:%=dbg-build-%/install-stamp)
+	find debian/python-gobject-2-dev -name \*.la -delete
+	mkdir -p debian/python-gobject-2/usr/lib
+	mv debian/python-gobject-2-dev/usr/lib/python* debian/python-gobject-2/usr/lib/
+	mv debian/python-gobject-2-dev/usr/lib/libpyglib-*so.* \
+	   debian/python-gobject-2/usr/lib
+	rm -rf debian/python-gobject-2-dev/usr/lib/python*
+	for i in $$(find debian/python-gobject-2-dbg -name '*.so' -path 'debian/python-gobject-2-dbg/usr/lib/python*/*-packages/*'); do \
+		b=$$(basename $$i .so); \
+		mv $$i $$(dirname $$i)/$${b}_d.so; \
+	done
+
+	touch $@
+
+install: install-stamp
+
+clean::
+	dh_testdir
+	dh_testroot
+	rm -f install-stamp
+	rm -f patch-stamp
+	rm -rf build-* dbg-build-*
+	dh_autoreconf_clean
+	dh_clean *.pyc */*.pyc
+
+maybe_check = $(if $(findstring nocheck,$(DEB_BUILD_OPTIONS)),,check)
+
+binary-indep: install $(maybe_check)
+	dh_testdir
+	dh_testroot
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_installchangelogs ChangeLog -i
+	dh_link -i
+	dh_compress -i -X.py
+	dh_fixperms -i
+	# More permission fixing
+	chmod 755 `grep -rl "^#\!.*python" debian/python-gobject-2-dev/usr`
+	dh_python2 -i /usr/share/pygobject
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: install $(maybe_check)
+	dh_testdir
+	dh_testroot
+	dh_installdocs -s
+	dh_installexamples -s
+	dh_installchangelogs -s ChangeLog
+	dh_strip -ppython-gobject-2 --dbg-package=python-gobject-2-dbg
+	rm -rf debian/python-gobject-2-dbg/usr/share/doc/python-gobject-2-dbg
+	ln -sf python-gobject-2 debian/python-gobject-2-dbg/usr/share/doc/python-gobject-2-dbg
+	dh_link -s
+	dh_compress -s -X.py
+	dh_fixperms -s
+	dh_python2 -a
+	dh_makeshlibs -ppython-gobject-2   -V'python-gobject-2 (>= 2.28.1)'
+	dh_makeshlibs -ppython-gobject-2-dbg -V'python-gobject-2-dbg (>= 2.28.1)'
+	dh_installdeb -s
+	dh_shlibdeps -s
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-arch binary-indep
+.PHONY: patch build check install clean binary-indep binary-arch binary
