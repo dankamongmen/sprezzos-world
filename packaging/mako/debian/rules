@@ -1,0 +1,73 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+PYVERS=$(shell pyversions -vr)
+PY3VERS=$(shell py3versions -vs)
+pkgdir = $(CURDIR)/debian/python$(if $(patsubst 3.%,,$(1)),,3)-mako
+-include /usr/share/python/python.mk
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-*
+	rm -rf build
+	find . -name '*\.py[co]' -delete
+	dh_clean
+
+build:
+build-indep: build-docs
+build-arch:
+
+test: $(PYVERS:%=test-python%)
+test-python%:
+	-
+ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+	python$* setup.py test --quiet
+endif
+
+build-docs:
+	dh_testdir
+	dh_installdirs -i
+	cd doc/build && sphinx-build -N -q -E -b html . \
+	 $(call pkgdir,2.X)-doc/usr/share/doc/python-mako-doc/html/
+	rm -rf $(call pkgdir,2.X)-doc/usr/share/doc/python-mako-doc/html/.doctrees
+	touch $@
+
+install: $(PYVERS:%=install-python%) $(PY3VERS:%=install-python%) build-docs test
+	dh_install
+	mv $(CURDIR)/debian/python-mako-doc/usr/share/vim/addons/indent/mako_indent.vim \
+	   $(CURDIR)/debian/python-mako-doc/usr/share/vim/addons/indent/mako.vim
+	#rm -rf debian/python-mako-doc/usr/share/doc/python-mako/doc/build
+
+install-python%:
+	python$* setup.py build_scripts	--executable=/usr/bin/python
+	python$* setup.py install $(py_setup_install_args) \
+		--root $(call pkgdir,$*)
+	([ -d build/lib ] && mv build/lib $(shell python$* -c 'from distutils.command.build import build; from distutils.core import Distribution; b = build(Distribution()); b.finalize_options(); print(b.build_platlib)')) || true
+
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+	dh_installchangelogs -i
+	dh_installchangelogs -p python-mako-doc CHANGES
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_link -i
+	dh_installman -i
+	dh_python2 -i
+	# TODO: new name for Py3k's mako-render
+	rm -rf $(call pkgdir,3.X)/usr/bin
+	dh_python3 -i
+	dh_compress -i -X.py -X.js -Xmakotemplates.txt
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i -- -Z bzip2
+
+binary-arch:
+
+binary: binary-indep binary-arch
+
+.PHONY: clean build-arch build-indep binary binary-arch binary-indep install
