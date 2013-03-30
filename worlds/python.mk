@@ -199,3 +199,11 @@ $(PYTHONMARKDOWN): $(SPREZZ)/python-markdown/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-markdown_$(python-markdown_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mako
+mako:$(MAKO)_$(ARCH).deb
+$(MAKO): $(SPREZZ)/mako/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mako_$(mako_UPVER).orig.tar.gz $(TARARGS) $@
+

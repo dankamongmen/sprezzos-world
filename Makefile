@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -5521,6 +5521,8 @@ $(LIBX86): $(SPREZZ)/libx86/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libx86_$(libx86_UPVER).orig.tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: libx86emu
 libx86emu:$(LIBX86EMU)_$(ARCH).deb
@@ -10442,4 +10444,28 @@ $(BLCR): $(SPREZZ)/blcr/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf blcr_$(blcr_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: wit
+wit:$(WIT)_$(ARCH).deb
+$(WIT): $(SPREZZ)/wit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf wit_$(wit_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: intltool
+intltool:$(INTLTOOL)_$(ARCH).deb
+$(INTLTOOL): $(SPREZZ)/intltool/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf intltool_$(intltool_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: psmisc
+psmisc:$(PSMISC)_$(ARCH).deb
+$(PSMISC): $(SPREZZ)/psmisc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf psmisc_$(psmisc_UPVER).orig.tar.gz $(TARARGS) $@
 
