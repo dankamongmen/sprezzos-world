@@ -207,3 +207,11 @@ $(MAKO): $(SPREZZ)/mako/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mako_$(mako_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: pygobject-2
+pygobject-2:$(PYGOBJECT2)_$(ARCH).deb
+$(PYGOBJECT2): $(SPREZZ)/pygobject-2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pygobject-2_$(pygobject-2_UPVER).orig.tar.gz $(TARARGS) $@
+
