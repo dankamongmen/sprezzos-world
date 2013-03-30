@@ -861,3 +861,11 @@ $(VALAC): $(SPREZZ)/valac/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf vala-$(valac_UPVER).tar.xz $(TARARGS) $@
 
+.PHONY: gtksourceview3
+gtksourceview3:$(GTKSOURCEVIEW3)_$(ARCH).deb
+$(GTKSOURCEVIEW3): $(SPREZZ)/gtksourceview3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gtksourceview3_$(gtksourceview3_UPVER).orig.tar.xz $(TARARGS) $@
+
