@@ -510,3 +510,11 @@ $(PYKDE4): $(SPREZZ)/pykde4/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf pykde4_$(pykde4_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: kdocker
+kdocker:$(KDOCKER)_$(ARCH).deb
+$(KDOCKER): $(SPREZZ)/kdocker/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf kdocker_$(kdocker_UPVER).orig.tar.gz $(TARARGS) $@
+

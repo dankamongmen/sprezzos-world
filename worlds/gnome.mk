@@ -893,3 +893,11 @@ $(GNOMESYSTEMTOOLS): $(SPREZZ)/gnome-system-tools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gnome-system-tools_$(gnome-system-tools_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: postr
+postr:$(POSTR)_$(ARCH).deb
+$(POSTR): $(SPREZZ)/postr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf postr_$(postr_UPVER).orig.tar.xz $(TARARGS) $@
+

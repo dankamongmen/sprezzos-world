@@ -551,3 +551,11 @@ $(XPLANET): $(SPREZZ)/xplanet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xplanet_$(xplanet_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gtk-theme-switch
+gtk-theme-switch:$(GTKTHEMESWITCH)_$(ARCH).deb
+$(GTKTHEMESWITCH): $(SPREZZ)/gtk-theme-switch/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gtk-theme-switch_$(gtk-theme-switch_UPVER).orig.tar.gz $(TARARGS) $@
+
