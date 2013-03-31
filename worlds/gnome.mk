@@ -869,3 +869,11 @@ $(GTKSOURCEVIEW3): $(SPREZZ)/gtksourceview3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gtksourceview3_$(gtksourceview3_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: gpaint
+gpaint:$(GPAINT)_$(ARCH).deb
+$(GPAINT): $(SPREZZ)/gpaint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpaint_$(gpaint_UPVER).orig.tar.gz $(TARARGS) $@
+
