@@ -535,3 +535,11 @@ $(uuuuuuuuuuuuuuuuuuuu): $(SPREZZ)/xserver-xorg-input-void/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xserver-xorg-input-void_$(xserver-xorg-input-void_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-video-chips
+xserver-xorg-video-chips:$(XSERVERXORGVIDEOCHIPS)_$(ARCH).deb
+$(XSERVERXORGVIDEOCHIPS): $(SPREZZ)/xserver-xorg-video-chips/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-chips_$(xserver-xorg-video-chips_UPVER).orig.tar.gz $(TARARGS) $@
+
