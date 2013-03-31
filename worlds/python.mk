@@ -215,3 +215,11 @@ $(PYGOBJECT2): $(SPREZZ)/pygobject-2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pygobject-2_$(pygobject-2_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-soappy
+python-soappy:$(PYTHONSOAPPY)_$(ARCH).deb
+$(PYTHONSOAPPY): $(SPREZZ)/python-soappy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-soappy_$(python-soappy_UPVER).orig.tar.gz $(TARARGS) $@
+

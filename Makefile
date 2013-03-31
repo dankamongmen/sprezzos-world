@@ -10493,3 +10493,19 @@ $(LUALGI): $(SPREZZ)/lua-lgi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lua-lgi_$(lua-lgi_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: liboobs
+liboobs:$(LIBOOBS)_$(ARCH).deb
+$(LIBOOBS): $(SPREZZ)/liboobs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf liboobs_$(liboobs_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: xapian-bindings
+xapian-bindings:$(XAPIANBINDINGS)_$(ARCH).deb
+$(XAPIANBINDINGS): $(SPREZZ)/xapian-bindings/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xapian-bindings_$(xapian-bindings_UPVER).orig.tar.gz $(TARARGS) $@
+

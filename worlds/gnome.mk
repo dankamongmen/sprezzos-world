@@ -877,3 +877,19 @@ $(GPAINT): $(SPREZZ)/gpaint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gpaint_$(gpaint_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gnome-system-log
+gnome-system-log:$(GNOMESYSTEMLOG)_$(ARCH).deb
+$(GNOMESYSTEMLOG): $(SPREZZ)/gnome-system-log/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-system-log_$(gnome-system-log_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gnome-system-tools
+gnome-system-tools:$(GNOMESYSTEMTOOLS)_$(ARCH).deb
+$(GNOMESYSTEMTOOLS): $(SPREZZ)/gnome-system-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gnome-system-tools_$(gnome-system-tools_UPVER).orig.tar.bz2 $(TARARGS) $@
+
