@@ -543,3 +543,11 @@ $(XSERVERXORGVIDEOCHIPS): $(SPREZZ)/xserver-xorg-video-chips/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xserver-xorg-video-chips_$(xserver-xorg-video-chips_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xplanet
+xplanet:$(XPLANET)_$(ARCH).deb
+$(XPLANET): $(SPREZZ)/xplanet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xplanet_$(xplanet_UPVER).orig.tar.gz $(TARARGS) $@
+
