@@ -10509,3 +10509,11 @@ $(XAPIANBINDINGS): $(SPREZZ)/xapian-bindings/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xapian-bindings_$(xapian-bindings_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: postr
+postr:$(POSTR)_$(ARCH).deb
+$(POSTR): $(SPREZZ)/postr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf postr_$(postr_UPVER).orig.tar.gz $(TARARGS) $@
+
