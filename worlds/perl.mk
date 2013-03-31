@@ -687,3 +687,11 @@ $(LIBTESTPODPERL): $(SPREZZ)/libtest-pod-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtest-pod-perl_$(libtest-pod-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libclass-inspector-perl
+libclass-inspector-perl:$(LIBCLASSINSPECTORPERL)_$(ARCH).deb
+$(LIBCLASSINSPECTORPERL): $(SPREZZ)/libclass-inspector-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libclass-inspector-perl_$(libclass-inspector-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
