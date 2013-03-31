@@ -1,0 +1,161 @@
+## DP: ztcfg: Add options to activate a specific span (or all of them) or 
+## DP: shut down just a specific span (not just all of them).
+
+@DPATCH@
+diff -urN zaptel-1.4.4.orig/ztcfg.c zaptel-1.4.4/ztcfg.c
+--- zaptel-1.4.4.orig/dahdi_cfg.c	2007-02-07 17:51:27.000000000 +0100
++++ zaptel-1.4.4/dahdi_cfg.c	2007-07-18 14:33:17.884803750 +0200
+@@ -96,6 +96,10 @@
+ 
+ static int stopmode = 0;
+ 
++static int stopwhich = -1;
++
++static int startwhich = -1;
++
+ static int numdynamic = 0;
+ 
+ static char zonestoload[ZT_TONE_ZONE_MAX][10];
+@@ -1261,7 +1265,8 @@
+ 		"  -d [level]        -- Generate debugging output. (Default level is 1.)\n"
+ 		"  -f                -- Always reconfigure every channel\n"
+ 		"  -h                -- Generate this help statement\n"
+-		"  -s                -- Shutdown spans only\n"
++		"  -s[span]          -- Deactivate/shutdown span [span]. Deactivates all spans if no [span] is given.\n"
++		"  -a[span]          -- Activate/start span [span]. Activates all spans if no [span] is given.\n"
+ 		"  -t                -- Test mode only, do not apply\n"
+ 		"  -v                -- Verbose (more -v's means more verbose)\n"
+ 	,c);
+@@ -1274,7 +1279,7 @@
+ 	char *buf;
+ 	char *key, *value;
+ 	int x,found;
+-	while((c = getopt(argc, argv, "fthc:vsd::")) != -1) {
++	while((c = getopt(argc, argv, "fthc:vs::a::d::")) != -1) {
+ 		switch(c) {
+ 		case 'c':
+ 			filename=optarg;
+@@ -1295,8 +1300,20 @@
+ 			fo_real = 0;
+ 			break;
+ 		case 's':
++			if (optarg) {
++			    stopwhich = atoi(optarg);
++			} else {
++			    stopwhich = -1;
++			}
+ 			stopmode = 1;
+ 			break;
++		case 'a':
++			if (optarg) {
++			    startwhich = atoi(optarg);
++			} else {
++			    startwhich = -1;
++			}
++			break;
+ 		case 'd':
+ 			if (optarg)
+ 				debug = atoi(optarg);
+@@ -1358,29 +1375,42 @@
+ 				ioctl(fd, ZT_DYNAMIC_DESTROY, &zds[x]);
+ 			}
+ 			if (stopmode) {
+-				for (x=0;x<spans;x++) {
++				if (stopwhich > 0){
++				    if ((stopwhich > spans) || (ioctl(fd, ZT_SHUTDOWN, &lc[stopwhich - 1].span))) {
++					fprintf(stderr, "Zaptel shutdown failed: %s\n", strerror(errno));
++					close(fd);
++					exit(1);						
++				    } else {
++					if (verbose) {
++					    printf("Deactivated span %d\n", stopwhich);
++					}
++				    }					    
++				} else {
++				    for (x=0;x<spans;x++) {
+ 					if (ioctl(fd, ZT_SHUTDOWN, &lc[x].span)) {
+ 						fprintf(stderr, "Zaptel shutdown failed: %s\n", strerror(errno));
+ 						close(fd);
+ 						exit(1);
+ 					}
++				    }
+ 				}
+ 			} else {
+-				for (x=0;x<spans;x++) {
++ 				if (startwhich == -1) {
++				    for (x=0;x<spans;x++) {
+ 					if (ioctl(fd, ZT_SPANCONFIG, lc + x)) {
+ 						fprintf(stderr, "ZT_SPANCONFIG failed on span %d: %s (%d)\n", lc[x].span, strerror(errno), errno);
+ 						close(fd);
+ 						exit(1);
+ 					}
+-				}
+-				for (x=0;x<numdynamic;x++) {
++				    }
++				    for (x=0;x<numdynamic;x++) {
+ 					if (ioctl(fd, ZT_DYNAMIC_CREATE, &zds[x])) {
+ 						fprintf(stderr, "Zaptel dynamic span creation failed: %s\n", strerror(errno));
+ 						close(fd);
+ 						exit(1);
+ 					}
+-				}
+-				for (x=1;x<ZT_MAX_CHANNELS;x++) {
++				    }
++				    for (x=1;x<ZT_MAX_CHANNELS;x++) {
+ 					struct zt_params current_state;
+ 					int master;
+ 					int needupdate = force;
+@@ -1454,33 +1484,46 @@
+ 						close(fd);
+ 						exit(1);
+ 					}
+-				}
+-				for (x=0;x<numzones;x++) {
++				    }
++				    for (x=0;x<numzones;x++) {
+ 					if (debug & DEBUG_APPLY) {
+ 						printf("Loading tone zone for %s\n", zonestoload[x]);
+ 						fflush(stdout);
+ 					}
+ 					if (tone_zone_register(fd, zonestoload[x]))
+ 						if (errno != EBUSY)
+ 							error("Unable to register tone zone '%s'\n", zonestoload[x]);
+-				}
+-				if (debug & DEBUG_APPLY) {
++				    }
++				    if (debug & DEBUG_APPLY) {
+ 					printf("Doing startup\n");
+ 					fflush(stdout);
+-				}
+-				if (deftonezone > -1) {
++				    }
++				    if (deftonezone > -1) {
+ 					if (ioctl(fd, ZT_DEFAULTZONE, &deftonezone)) {
+ 						fprintf(stderr, "ZT_DEFAULTZONE failed: %s (%d)\n", strerror(errno), errno);
+ 						close(fd);
+ 						exit(1);
+ 					}
++				    }
+ 				}
+-				for (x=0;x<spans;x++) {
++				if (startwhich > 0) {
++					if ((startwhich > spans) || (ioctl(fd, ZT_STARTUP, &lc[startwhich - 1].span))) {
++					    fprintf(stderr, "Zaptel startup failed: %s\n", strerror(errno));
++					    close(fd);
++					    exit(1);
++					} else {
++					    if (verbose) {
++					        printf("Activated span %d\n", startwhich);
++					    }
++					}
++				} else {
++				    for (x=0;x<spans;x++) {
+ 					if (ioctl(fd, ZT_STARTUP, &lc[x].span)) {
+ 						fprintf(stderr, "Zaptel startup failed: %s\n", strerror(errno));
+ 						close(fd);
+ 						exit(1);
+ 					}
++				    }
+ 				}
+ 			}
+ 		}

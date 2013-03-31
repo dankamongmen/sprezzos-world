@@ -1,0 +1,71 @@
+#!/bin/sh
+
+# debian/modulestest: a postbuild script to build zaptel modules
+# example usage:
+#  
+#  svn-buildpackage --svn-postbuild='debian/modulestest -r' --svn-ignore-new 
+
+# At least one of the following two must be set to a sensible value:
+# If both are empty, the script does nothing useful)
+#
+# kernel versions: Comma-separated. Use those if you have their
+# kernel-headers/linux-headers packages installed
+#
+
+# Full pathes to trees:
+# Use this to provide a full path to a custom kernel tree:
+#KERNEL_SOURCES=$HOME/Proj/Debs/Kernel/SwSusp/linux-2.6.15-rc5
+KERNEL_HEADERS=
+KERNEL_SOURCES=
+# run module-asustant with environment params that will generate
+# .changes files even without signing
+MODASS="env SIGNCHANGES=1 DEBSIGNCOMMAND=not_an_executable m-a"
+me=`basename $0`
+
+# workaround for silly bash parsing issue in our build scripts:
+if [ "$#" -lt 1 ]; then
+  set -- $MODULESTEST_ARGS
+fi
+
+while getopts ah:rs:t arg
+do
+  case "$arg" in
+    a) # All of the kernel-headers packages installed:
+        KERNEL_HEADERS=`COLUMNS=160 dpkg -l 'kernel-headers-2.[46].*-*-*' | awk '/^.i/{print $2}' | sed -e 's/^kernel-headers-//'| xargs| tr ' ' ,`
+      ;;
+    h) KERNEL_HEADERS=$OPTARG;;
+    s) KERNEL_SOURCES=$OPTARG;;
+    r) KERNEL_HEADERS=`uname -r`;;
+    t) # TODO: make this test per-distro or something 
+      KERNEL_HEADERS=2.4.27-2-386,2.6.8-2-686-smp
+      ;;
+  esac
+done
+shift $(( $OPTIND-1 ))
+
+echo "Building for: Headers: $KERNEL_HEADERS, Sources: $KERNEL_SOURCES"
+
+if [ "$KERNEL_HEADERS" != '' ]; then hdrs_sw="-l $KERNEL_HEADERS"; fi
+if [ "$KERNEL_SOURCES" != '' ]; then srcs_sw="-k $KERNEL_SOURCES"; fi
+
+# must be absolute for m-a ta accept TARBALL:
+# Also note that $PWD is ugly and is about to be deleted. We need
+# $PWD/.. 
+TOP_DIR=`dirname $PWD`
+MODS_DIR=$TOP_DIR/modules
+TAR_BALL=$MODS_DIR/usr/src/zaptel.tar.bz2
+DEB=$TOP_DIR/$PACKAGE-source_${TAG_VERSION}_all.deb
+LOG_FILE=$TOP_DIR/$PACKAGE-modules-build-$TAG_VERSION.log
+
+rm -f $LOG_FILE
+dpkg -x $DEB $MODS_DIR
+
+if [ "$hdrs_sw" != '' ]; then
+  TARBALL=$TAR_BALL $MODASS -u $TOP_DIR -t -i -f $hdrs_sw build $PACKAGE >>$LOG_FILE
+fi
+if [ "$srcs_sw" != '' ]; then
+  TARBALL=$TAR_BALL $MODASS -u $TOP_DIR -t -i -f $srcs_sw build $PACKAGE >>$LOG_FILE
+fi
+
+ls -l $TOP_DIR/$PACKAGE-modules-*_$TAG_VERSION+*.deb
+echo "$me: Log file: $LOG_FILE"
