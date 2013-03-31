@@ -503,3 +503,35 @@ $(DEVILSPIE): $(SPREZZ)/devilspie/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf devilspie_$(devilspie_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-input-synaptics
+xserver-xorg-input-synaptics:$(uuuuuuuuuuuuuuuuuuuuuuuuu)_$(ARCH).deb
+$(uuuuuuuuuuuuuuuuuuuuuuuuu): $(SPREZZ)/xserver-xorg-input-synaptics/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-input-synaptics_$(xserver-xorg-input-synaptics_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xf86-input-tslib
+xf86-input-tslib:$(uu86uuuuuuuuuu)_$(ARCH).deb
+$(uu86uuuuuuuuuu): $(SPREZZ)/xf86-input-tslib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf xf86-input-tslib_$(xf86-input-tslib_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: xserver-xorg-input-joystick
+xserver-xorg-input-joystick:$(uuuuuuuuuuuuuuuuuuuuuuuu)_$(ARCH).deb
+$(uuuuuuuuuuuuuuuuuuuuuuuu): $(SPREZZ)/xserver-xorg-input-joystick/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-input-joystick_$(xserver-xorg-input-joystick_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-input-void
+xserver-xorg-input-void:$(uuuuuuuuuuuuuuuuuuuu)_$(ARCH).deb
+$(uuuuuuuuuuuuuuuuuuuu): $(SPREZZ)/xserver-xorg-input-void/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-input-void_$(xserver-xorg-input-void_UPVER).orig.tar.gz $(TARARGS) $@
+

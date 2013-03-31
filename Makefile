@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -4872,7 +4872,7 @@ $(LIBXML): $(SPREZZ)/libxml/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libxml-$(libxml_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libxml2_$(libxml_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libxtst
 libxtst:$(LIBXTST)_$(ARCH).deb
@@ -5618,7 +5618,7 @@ $(LIBXML2): $(SPREZZ)/libxml2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libxml2-$(libxml2_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libxml2_$(libxml2_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libxslt
 libxslt:$(LIBXSLT)_$(ARCH).deb
@@ -10476,4 +10476,12 @@ $(LIBSS7): $(SPREZZ)/libss7/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libss7_$(libss7_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: dahdi-tools
+dahdi-tools:$(DAHDITOOLS)_$(ARCH).deb
+$(DAHDITOOLS): $(SPREZZ)/dahdi-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dahdi-tools_$(dahdi-tools_UPVER).orig.tar.gz $(TARARGS) $@
 

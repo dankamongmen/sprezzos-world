@@ -52,7 +52,7 @@ $(LIBTHAI): $(SPREZZ)/libthai/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libthai-$(libthai_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf libthai-$(libthai_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: openntpd
 openntpd:$(OPENNTPD)_$(ARCH).deb
