@@ -10469,3 +10469,11 @@ $(PSMISC): $(SPREZZ)/psmisc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf psmisc_$(psmisc_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libss7
+libss7:$(LIBSS7)_$(ARCH).deb
+$(LIBSS7): $(SPREZZ)/libss7/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libss7_$(libss7_UPVER).orig.tar.gz $(TARARGS) $@
+
