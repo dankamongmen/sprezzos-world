@@ -4840,7 +4840,7 @@ $(LIBDATRIE): $(SPREZZ)/libdatrie/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libdatrie-$(libdatrie_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf libdatrie-$(libdatrie_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: libdca
 libdca:$(LIBDCA)_$(ARCH).deb
@@ -5160,7 +5160,7 @@ $(LIBVIRT): $(SPREZZ)/libvirt/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libvirt-$(libvirt_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf libvirt_$(libvirt_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libvirt-glib
 libvirt-glib:$(LIBVIRTGLIB)_$(ARCH).deb
@@ -10484,4 +10484,12 @@ $(DAHDITOOLS): $(SPREZZ)/dahdi-tools/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dahdi-tools_$(dahdi-tools_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: lua-lgi
+lua-lgi:$(LUALGI)_$(ARCH).deb
+$(LUALGI): $(SPREZZ)/lua-lgi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lua-lgi_$(lua-lgi_UPVER).orig.tar.gz $(TARARGS) $@
 
