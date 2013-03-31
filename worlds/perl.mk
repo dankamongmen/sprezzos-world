@@ -671,3 +671,11 @@ $(LIBSEREALDECODERPERL): $(SPREZZ)/libsereal-decoder-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsereal-decoder-perl_$(libsereal-decoder-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libyaml-tiny-perl
+libyaml-tiny-perl:$(LIBYAMLTINYPERL)_$(ARCH).deb
+$(LIBYAMLTINYPERL): $(SPREZZ)/libyaml-tiny-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libyaml-tiny-perl_$(libyaml-tiny-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
