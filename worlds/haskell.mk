@@ -4798,3 +4798,11 @@ $(HASKELLMMORPH): $(SPREZZ)/haskell-mmorph/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-mmorph_$(haskell-mmorph_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-quickcheck-io
+haskell-quickcheck-io:$(HASKELLQUICKCHECKIO)_$(ARCH).deb
+$(HASKELLQUICKCHECKIO): $(SPREZZ)/haskell-quickcheck-io/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-quickcheck-io_$(haskell-quickcheck-io_UPVER).orig.tar.gz $(TARARGS) $@
+
