@@ -679,3 +679,11 @@ $(LIBYAMLTINYPERL): $(SPREZZ)/libyaml-tiny-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libyaml-tiny-perl_$(libyaml-tiny-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libtest-pod-perl
+libtest-pod-perl:$(LIBTESTPODPERL)_$(ARCH).deb
+$(LIBTESTPODPERL): $(SPREZZ)/libtest-pod-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtest-pod-perl_$(libtest-pod-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
