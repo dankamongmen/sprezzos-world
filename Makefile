@@ -10014,8 +10014,8 @@ $(gupnptools): $(SPREZZ)/gupnp-tools/debian/changelog
 	tar xJvf gupnp-tools_$(gupnp-tools_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: radvd
-radvd:$(radvd)_$(ARCH).deb
-$(radvd): $(SPREZZ)/radvd/debian/changelog
+radvd:$(RADVD)_$(ARCH).deb
+$(RADVD): $(SPREZZ)/radvd/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
@@ -10508,4 +10508,12 @@ $(XAPIANBINDINGS): $(SPREZZ)/xapian-bindings/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xapian-bindings_$(xapian-bindings_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libaqbanking
+libaqbanking:$(LIBAQBANKING)_$(ARCH).deb
+$(LIBAQBANKING): $(SPREZZ)/libaqbanking/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libaqbanking_$(libaqbanking_UPVER).orig.tar.gz $(TARARGS) $@
 

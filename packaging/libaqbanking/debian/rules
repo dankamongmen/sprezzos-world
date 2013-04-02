@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+
+# let aqbanking benefit from symbol visibility feature of gcc
+# this explicit setting is needed because the corresponding test in
+# configure.ac checks for the basename of the called $CC binary.
+CC=gcc
+ifneq (,$(findstring nodocs,$(DEB_BUILD_OPTIONS)))
+	DEB_BUILD_APIDOC=0
+else
+	DEB_BUILD_APIDOC=1
+endif
+
+%:
+	dh $@ 
+
+# Let dpkg-gensymbols fail if symbols file updates are needed
+DPKG_GENSYMBOLS_CHECK_LEVEL ?= 4
+export DPKG_GENSYMBOLS_CHECK_LEVEL
+
+override_dh_auto_configure:
+	dh_auto_configure --max-parallel=1 -- \
+		--with-backends="aqnone aqhbci aqofxconnect"
+
+override_dh_auto_test:
+	# Skip dh_auto_test (does not work with AqBanking 3.7.2)
+
+override_dh_auto_build:
+	dh_auto_build --max-parallel=1
+	$(MAKE) -C debian/doc
+	
+	# Build the documentation (unless nodocs is set in DEB_BUILD_OPTIONS)
+	if [ "$(DEB_BUILD_APIDOC)" = "1" ]; then \
+		$(MAKE) srcdoc; \
+		mv apidoc/html/aqbanking-* apidoc/html/aqbanking.html; \
+		rm -vf apidoc/html/aqbanking.html/jquery.js; \
+	else \
+		mkdir -p apidoc/html/aqbanking.html; \
+	fi
+
+override_dh_auto_install:
+	dh_auto_install
+	# Remove .la files for shared plugin libraries
+	find $(CURDIR)/debian/tmp/usr/lib/gwenhywfar/plugins -name \*.la -exec rm -v \{\} \;
+	find $(CURDIR)/debian/tmp/usr/lib/aqbanking/plugins -name \*.la -exec rm -v \{\} \;
+	rm -vf $(CURDIR)/debian/tmp/usr/lib/libaqbankingpp.so
+
+override_dh_strip:
+	dh_strip --dbg-package=libaqbanking34-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs -a -X/usr/lib/aqbanking/plugins/
+
+override_dh_auto_clean:
+	dh_auto_clean --max-parallel=1
+	-rm -rf apidoc headers aqbanking.tag listdoc.h
+	@if [ -e $(CURDIR)/src/plugins/backends/aqyellownet ]; then \
+	  echo "ERROR: The directory src/plugins/backends/aqyellownet exists. This usually"; \
+	  echo "indicates that you're using a pristine upstream tarball which distributes"; \
+	  echo "non-free material in this directory. This is unacceptable for Debian."; \
+	  echo "Please see http://bugs.debian.org/469131 for further details."; \
+	  exit 1; \
+	fi
+	$(MAKE) -C debian/doc clean
