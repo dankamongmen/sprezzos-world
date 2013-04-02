@@ -10517,3 +10517,11 @@ $(LIBAQBANKING): $(SPREZZ)/libaqbanking/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libaqbanking_$(libaqbanking_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libgwenhywfar
+libgwenhywfar:$(LIBGWENHYWFAR)_$(ARCH).deb
+$(LIBGWENHYWFAR): $(SPREZZ)/libgwenhywfar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libgwenhywfar_$(libgwenhywfar_UPVER).orig.tar.gz $(TARARGS) $@
+
