@@ -504,8 +504,8 @@ $(DEVILSPIE): $(SPREZZ)/devilspie/debian/changelog
 	tar xzvf devilspie_$(devilspie_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: xserver-xorg-input-synaptics
-xserver-xorg-input-synaptics:$(uuuuuuuuuuuuuuuuuuuuuuuuu)_$(ARCH).deb
-$(uuuuuuuuuuuuuuuuuuuuuuuuu): $(SPREZZ)/xserver-xorg-input-synaptics/debian/changelog
+xserver-xorg-input-synaptics:$(XSERVERXORGINPUTSYNAPTICS)_$(ARCH).deb
+$(XSERVERXORGINPUTSYNAPTICS): $(SPREZZ)/xserver-xorg-input-synaptics/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
