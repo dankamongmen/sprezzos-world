@@ -901,3 +901,11 @@ $(POSTR): $(SPREZZ)/postr/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf postr_$(postr_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: lightdm-gtk-greeter
+lightdm-gtk-greeter:$(LIGHTDMGTKGREETER)_$(ARCH).deb
+$(LIGHTDMGTKGREETER): $(SPREZZ)/lightdm-gtk-greeter/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lightdm-gtk-greeter_$(lightdm-gtk-greeter_UPVER).orig.tar.gz $(TARARGS) $@
+
