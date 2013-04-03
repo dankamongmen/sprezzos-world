@@ -10533,3 +10533,11 @@ $(DFEET): $(SPREZZ)/d-feet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf d-feet_$(d-feet_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: surfraw
+surfraw:$(SURFRAW)_$(ARCH).deb
+$(SURFRAW): $(SPREZZ)/surfraw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf surfraw_$(surfraw_UPVER).orig.tar.gz $(TARARGS) $@
+
