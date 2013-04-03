@@ -4814,3 +4814,35 @@ $(HASKELLDATADEFAULTCLASS): $(SPREZZ)/haskell-data-default-class/debian/changelo
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-data-default-class_$(haskell-data-default-class_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-data-default-instances-base
+haskell-data-default-instances-base:$(HASKELLDATADEFAULTINSTANCESBASE)_$(ARCH).deb
+$(HASKELLDATADEFAULTINSTANCESBASE): $(SPREZZ)/haskell-data-default-instances-base/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-data-default-instances-base_$(haskell-data-default-instances-base_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-data-default-instances-containers
+haskell-data-default-instances-containers:$(HASKELLDATADEFAULTINSTANCESCONTAINERS)_$(ARCH).deb
+$(HASKELLDATADEFAULTINSTANCESCONTAINERS): $(SPREZZ)/haskell-data-default-instances-containers/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-data-default-instances-containers_$(haskell-data-default-instances-containers_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-data-default-instances-dlist
+haskell-data-default-instances-dlist:$(HASKELLDATADEFAULTINSTANCESDLIST)_$(ARCH).deb
+$(HASKELLDATADEFAULTINSTANCESDLIST): $(SPREZZ)/haskell-data-default-instances-dlist/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-data-default-instances-dlist_$(haskell-data-default-instances-dlist_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-data-default-instances-old-locale
+haskell-data-default-instances-old-locale:$(HASKELLDATADEFAULTINSTANCESOLDLOCALE)_$(ARCH).deb
+$(HASKELLDATADEFAULTINSTANCESOLDLOCALE): $(SPREZZ)/haskell-data-default-instances-old-locale/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-data-default-instances-old-locale_$(haskell-data-default-instances-old-locale_UPVER).orig.tar.gz $(TARARGS) $@
+
