@@ -559,3 +559,11 @@ $(GTKTHEMESWITCH): $(SPREZZ)/gtk-theme-switch/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gtk-theme-switch_$(gtk-theme-switch_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gpointing-device-settings
+gpointing-device-settings:$(GPOINTINGDEVICESETTINGS)_$(ARCH).deb
+$(GPOINTINGDEVICESETTINGS): $(SPREZZ)/gpointing-device-settings/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpointing-device-settings_$(gpointing-device-settings_UPVER).orig.tar.gz $(TARARGS) $@
+
