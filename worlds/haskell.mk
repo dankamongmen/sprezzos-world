@@ -4806,3 +4806,11 @@ $(HASKELLQUICKCHECKIO): $(SPREZZ)/haskell-quickcheck-io/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-quickcheck-io_$(haskell-quickcheck-io_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-data-default-class
+haskell-data-default-class:$(HASKELLDATADEFAULTCLASS)_$(ARCH).deb
+$(HASKELLDATADEFAULTCLASS): $(SPREZZ)/haskell-data-default-class/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-data-default-class_$(haskell-data-default-class_UPVER).orig.tar.gz $(TARARGS) $@
+
