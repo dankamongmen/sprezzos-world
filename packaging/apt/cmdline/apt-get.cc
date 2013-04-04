@@ -2395,7 +2395,7 @@ bool DoDownload(CommandLine &CmdL)
       HashString hash;
       if (rec.SHA512Hash() != "")
          hash = HashString("sha512", rec.SHA512Hash());
-      if (rec.SHA256Hash() != "")
+      else if (rec.SHA256Hash() != "")
          hash = HashString("sha256", rec.SHA256Hash());
       else if (rec.SHA1Hash() != "")
          hash = HashString("sha1", rec.SHA1Hash());
@@ -2714,7 +2714,7 @@ bool DoSource(CommandLine &CmdL)
 	 {
 	    string buildopts = _config->Find("APT::Get::Host-Architecture");
 	    if (buildopts.empty() == false)
-	       buildopts = "-a " + buildopts + " ";
+	       buildopts = "-a" + buildopts + " ";
 	    buildopts.append(_config->Find("DPkg::Build-Options","-b -uc"));
 
 	    // Call dpkg-buildpackage

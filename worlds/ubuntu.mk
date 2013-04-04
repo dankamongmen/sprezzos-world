@@ -197,15 +197,23 @@ $(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libindicator-$(libindicator_UPVER).tar.gz $(TARARGS) $@
 
+#.PHONY: libunity
+#libunity:$(LIBUNITY)_$(ARCH).deb
+#$(LIBUNITY): $(SPREZZ)/libunity/debian/changelog
+#	bzr branch lp:libunity $@
+#	rm -rf $@/debian
+#	tar cJf libunity-$(libunity_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf libunity-$(libunity_UPVER).tar.xz \
+#		libunity_$(libunity_UPVER).orig.tar.xz
+#	cp -r $(<D) $@/
+
 .PHONY: libunity
 libunity:$(LIBUNITY)_$(ARCH).deb
 $(LIBUNITY): $(SPREZZ)/libunity/debian/changelog
-	bzr branch lp:libunity $@
-	rm -rf $@/debian
-	tar cJf libunity-$(libunity_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf libunity-$(libunity_UPVER).tar.xz \
-		libunity_$(libunity_UPVER).orig.tar.xz
-	cp -r $(<D) $@/
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libunity_$(libunity_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: libunity-misc
 libunity-misc:$(LIBUNITYMISC)_$(ARCH).deb
