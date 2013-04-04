@@ -291,7 +291,7 @@ $(UNITY): $(SPREZZ)/unity/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf unity-$(unity_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf unity-$(unity_UPVER).tar.bz2 $(TARARGS) $@
 
 # We're building from bzr in Makefile
 #.PHONY: nux
