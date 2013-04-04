@@ -518,3 +518,11 @@ $(KDOCKER): $(SPREZZ)/kdocker/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf kdocker_$(kdocker_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: lightdm-kde
+lightdm-kde:$(LIGHTDMKDE)_$(ARCH).deb
+$(LIGHTDMKDE): $(SPREZZ)/lightdm-kde/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf lightdm-kde_$(lightdm-kde_UPVER).orig.tar.bz2 $(TARARGS) $@
+
