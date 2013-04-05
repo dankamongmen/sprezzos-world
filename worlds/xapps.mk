@@ -582,4 +582,6 @@ $(LIBSDL2): $(SPREZZ)/libsdl2/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsdl2_$(libsdl2_UPVER).orig.tar.gz $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@
 

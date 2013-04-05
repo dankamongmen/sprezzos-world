@@ -10541,3 +10541,11 @@ $(SURFRAW): $(SPREZZ)/surfraw/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf surfraw_$(surfraw_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: scalasca
+scalasca:$(SCALASCA)_$(ARCH).deb
+$(SCALASCA): $(SPREZZ)/scalasca/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf scalasca_$(scalasca_UPVER).orig.tar.gz $(TARARGS) $@
+

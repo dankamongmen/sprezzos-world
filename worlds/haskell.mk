@@ -4846,3 +4846,11 @@ $(HASKELLDATADEFAULTINSTANCESOLDLOCALE): $(SPREZZ)/haskell-data-default-instance
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-data-default-instances-old-locale_$(haskell-data-default-instances-old-locale_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-fingertree
+haskell-fingertree:$(HASKELLFINGERTREE)_$(ARCH).deb
+$(HASKELLFINGERTREE): $(SPREZZ)/haskell-fingertree/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-fingertree_$(haskell-fingertree_UPVER).orig.tar.gz $(TARARGS) $@
+
