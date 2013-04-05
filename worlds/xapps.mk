@@ -575,3 +575,11 @@ $(FLOWBLADE): $(SPREZZ)/flowblade/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf flowblade_$(flowblade_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libsdl2
+libsdl2:$(LIBSDL2)_$(ARCH).deb
+$(LIBSDL2): $(SPREZZ)/libsdl2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsdl2_$(libsdl2_UPVER).orig.tar.gz $(TARARGS) $@
+
