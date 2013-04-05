@@ -1,0 +1,98 @@
+#!/usr/bin/make -f
+
+CFLAGS += -Wall -g -O$(if $(findstring noopt,$(DEB_BUILD_OPTIONS)),0,2)
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+configure_flags += \
+	--prefix=/usr \
+	--build=$(DEB_BUILD_GNU_TYPE)
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	configure_flags += --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+PYVERS := $(shell pyversions -vr debian/control 2>/dev/null)
+
+build-%/configure-stamp:
+	dh_testdir
+	mkdir -p build-$*
+	cd build-$* && \
+		PYTHON=/usr/bin/python$* CFLAGS="$(CFLAGS)" \
+			$(CURDIR)/configure $(configure_flags)
+	touch $@
+
+build-%/build-stamp: build-%/configure-stamp
+	dh_testdir
+	$(MAKE) -C build-$*
+	touch $@
+
+build: $(PYVERS:%=build-%/build-stamp)
+
+install-clean:
+	dh_testdir
+	dh_testroot
+	dh_prep
+
+install-%: install-clean build-%/build-stamp
+	dh_testdir
+	dh_testroot
+	$(MAKE) -C build-$* install DESTDIR=$(CURDIR)/debian/tmp-$*
+	cd debian/tmp-$*/usr/lib/gnome-vfs-2.0/modules && \
+		mv libpythonmethod.so libpythonmethod-$*.so
+	dh_install --sourcedir=debian/tmp-$*
+
+install: $(PYVERS:%=install-%)
+	dh_installdirs
+	chmod 755 debian/python-gnome2/usr/share/python/runtime.d/*
+
+clean::
+	dh_testdir
+	dh_testroot
+	rm -rf build-* debian/tmp-*
+	dh_clean
+
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -i
+	dh_installexamples -i
+	dh_installmenu -i
+	dh_installcron -i
+	dh_installinfo -i
+	dh_installchangelogs ChangeLog -i
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_python2 -i /usr/share/pygtk/2.0/argtypes
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs -s
+	dh_installexamples -s
+	dh_installmenu -s
+	dh_installman -s
+	dh_installinfo -s
+	dh_installchangelogs ChangeLog -s
+	dh_link -s
+	dh_strip -s
+	dh_compress -s
+	dh_fixperms -s
+	dh_python2 -a
+	dh_installdeb -s
+	dh_shlibdeps -s -Xusr/lib/gnome-vfs-2.0/modules
+	dh_gencontrol -s
+	dh_md5sums -s
+	dh_builddeb -s
+
+binary: binary-arch binary-indep
+# NB: install-% should be .PHONY to avoid checking for real files, but
+# implicit/pattern rules may only build real files; if you declare these
+# .PHONY, no command will be run
+.PHONY: build install-clean install clean binary-indep binary-arch binary

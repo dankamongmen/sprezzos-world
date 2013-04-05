@@ -567,3 +567,11 @@ $(GPOINTINGDEVICESETTINGS): $(SPREZZ)/gpointing-device-settings/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gpointing-device-settings_$(gpointing-device-settings_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: flowblade
+flowblade:$(FLOWBLADE)_$(ARCH).deb
+$(FLOWBLADE): $(SPREZZ)/flowblade/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf flowblade_$(flowblade_UPVER).orig.tar.gz $(TARARGS) $@
+

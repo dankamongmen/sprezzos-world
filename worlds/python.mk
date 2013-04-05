@@ -223,3 +223,11 @@ $(PYTHONSOAPPY): $(SPREZZ)/python-soappy/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-soappy_$(python-soappy_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gnome-python
+gnome-python:$(GNOMEPYTHON)_$(ARCH).deb
+$(GNOMEPYTHON): $(SPREZZ)/gnome-python/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gnome-python_$(gnome-python_UPVER).orig.tar.bz2 $(TARARGS) $@
+
