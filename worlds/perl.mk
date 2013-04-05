@@ -695,3 +695,11 @@ $(LIBCLASSINSPECTORPERL): $(SPREZZ)/libclass-inspector-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libclass-inspector-perl_$(libclass-inspector-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libxml-compile-perl
+libxml-compile-perl:$(LIBXMLCOMPILEPERL)_$(ARCH).deb
+$(LIBXMLCOMPILEPERL): $(SPREZZ)/libxml-compile-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxml-compile-perl_$(libxml-compile-perl_UPVER).orig.tar.gz $(TARARGS) $@
+

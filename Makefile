@@ -10549,3 +10549,11 @@ $(SCALASCA): $(SPREZZ)/scalasca/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf scalasca_$(scalasca_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libsoxr
+libsoxr:$(LIBSOXR)_$(ARCH).deb
+$(LIBSOXR): $(SPREZZ)/libsoxr/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libsoxr_$(libsoxr_UPVER).orig.tar.xz $(TARARGS) $@
+

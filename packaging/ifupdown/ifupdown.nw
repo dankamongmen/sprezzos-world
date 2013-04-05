@@ -161,7 +161,7 @@ OBJ := main.o addrfam.o execute.o config.o \
 	$(patsubst %.defn,%.o,$(DEFNFILES)) arch$(ARCH).o meta.o link.o
 
 MAN := $(patsubst %.defn,%.man,$(DEFNFILES))
-DEFNFILES += meta.defn
+DEFNFILES += meta.defn link.defn
 
 default : executables
 all : executables docs
@@ -1342,6 +1342,10 @@ variable * set_variable(char *filename, char *name, char *value,
 					return NULL;
 				}
 
+				if ((*var)[j].value == value) {
+				    return value;
+				}
+
 				free((*var)[j].value);
 				(*var)[j].value = strdup(value);
 				if (!(*var)[j].value) {
@@ -2144,6 +2148,7 @@ if (strcmp(firstword, "pre-down") == 0) {
 
 				currif->option[i].value[l] = '\n';
 				strcpy(&(currif->option[i].value[l + 1]), rest);
+				rest = currif->option[i].value;
 			}
 		}
 	}
@@ -3212,11 +3217,14 @@ Which means we can finish of the chunk, thus:
 varvalue = get_var(command, namelen, ifd);
 @ 
 
-We also define an exported [[var_true()]] function to allow methods to
-have lines of code that are conditional on the value of a variable.
+We also define an exported [[var_true()]], [[var_set()]] and [[var_set_anywhere()]] functions
+to allow methods to have lines of code that are conditional on the value
+of a variable.
 
 <<exported symbols>>=
 int var_true(char *id, interface_defn *ifd);
+int var_set(char *id, interface_defn *ifd);
+int var_set_anywhere(char *id, interface_defn *ifd);
 @
 
 <<execute functions>>=
@@ -3225,7 +3233,7 @@ int var_true(char *id, interface_defn *ifd) {
 
 	varvalue = get_var(id, strlen(id), ifd);
 	if (varvalue) {
-		if (strcmp(varvalue, "1") == 0 ||
+		if (atoi(varvalue) ||
 			strcasecmp(varvalue, "on") == 0 ||
 			strcasecmp(varvalue, "true") == 0 ||
 			strcasecmp(varvalue, "yes") == 0)
@@ -3238,6 +3246,34 @@ int var_true(char *id, interface_defn *ifd) {
 		}
 	} else
 		return 0;
+}
+
+int var_set(char *id, interface_defn *ifd) {
+	char *varvalue;
+
+	varvalue = get_var(id, strlen(id), ifd);
+	if (varvalue) {
+		free(varvalue);
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+int var_set_anywhere(char *id, interface_defn *ifd) {
+	char *varvalue;
+	interface_defn *currif;
+
+	for (currif = defn->ifaces; currif; currif = currif->next) {
+		if (strcmp(ifd->logical_iface, currif->logical_iface) == 0) {
+			varvalue = get_var(id, strlen(id), currif);
+			if (varvalue) {
+				free(varvalue);
+				return 1;
+			}
+		}
+	}
+	return 0;
 }
 @
 
@@ -3876,7 +3912,11 @@ if (do_all && <<we're querying an interface's config>>) {
 Since this has all been covered in a previous section, this is pretty
 trivial.
 
-<<variables local to main>>=
+<<exported symbols>>=
+extern interfaces_file *defn;
+@ 
+
+<<main global variables>>=
 interfaces_file *defn;
 @ 
 
@@ -4064,6 +4104,7 @@ Bringing an interface up or taking it down can be done thusly:
 	if (!okay && <<we're bringing interfaces up>>) {
 		interface_defn link = {
 		    .real_iface = iface,
+		    .logical_iface = liface,
 		    .max_options = 0,
 		    .address_family = &addr_link,
 		    .method = &(addr_link.method[0]),
@@ -4200,7 +4241,7 @@ if (do_all) {
 	okay = iface_postdown(&meta_iface);
     }
     if (!okay) {
-	fprintf(stderr, "%s: pre-%s script failed.\n", argv[0], &argv[0][2]);
+	fprintf(stderr, "%s: post-%s script failed.\n", argv[0], &argv[0][2]);
 	exit(1);
     }
 }
@@ -5087,10 +5128,10 @@ method dhcp
 
   up
     [[ip link set dev %iface% address %hwaddress%]]
-    dhclient -1 -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+    dhclient -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
 	[[-e IF_METRIC=%metric%]] \
         if (execable("/sbin/dhclient"))
-    dhclient3 -1 -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
+    dhclient3 -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
 	[[-e IF_METRIC=%metric%]] \
         elsif (execable("/sbin/dhclient3"))
     pump -i %iface% [[-h %hostname%]] [[-l %leasehours%]] \
@@ -5160,7 +5201,7 @@ method tunnel
   up
     ip tunnel add %iface% mode %mode% remote %endpoint% [[local %local%]] \
        [[ttl %ttl%]]
-    ip link set %iface% up
+    ip link set %iface% up [[mtu %mtu%]]
     ip addr add %address%/%netmask% dev %iface% [[peer %dstaddr%]]
     [[ ip route add default via %gateway% ]]
   down
@@ -5234,7 +5275,8 @@ method auto
     properly configured and running.
     If stateless DHCPv6 support is turned on, then additional network
     configuration parameters such as DNS and NTP servers will be retrieved
-    from a DHCP server.
+    from a DHCP server. Please note that on ifdown, the lease is not currently
+    released (a known bug).
 
   options
     privext int            -- Privacy extensions (RFC3041) (0=off, 1=assign, 2=prefer)
@@ -5245,7 +5287,7 @@ method auto
     sysctl -q -e -w net.ipv6.conf.%iface/.//%.accept_ra=1
     sysctl -q -e -w net.ipv6.conf.%iface/.//%.autoconf=1
     ip link set dev %iface% up
-    dhclient -6 -1 -S -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 -S -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (var_true("dhcp", ifd) && execable("/sbin/dhclient"))
   down
     ip -6 addr flush dev %iface% scope global
@@ -5331,7 +5373,7 @@ method dhcp
     [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.accept_ra=%accept_ra%]]
     [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.autoconf=%autoconf%]]
     ip link set dev %iface% [[address %hwaddress%]] up
-    dhclient -6 -1 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (execable("/sbin/dhclient"))
 
   down
@@ -5574,10 +5616,10 @@ method dhcp
 
   up
     [[ifconfig %iface% link %hwaddress%]]
-    dhclient -1 -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+    dhclient -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
 	[[-e IF_METRIC=%metric%]] \
         if (execable("/sbin/dhclient"))
-    dhclient3 -1 -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
+    dhclient3 -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
 	[[-e IF_METRIC=%metric%]] \
         elsif (execable("/sbin/dhclient3"))
     udhcpc -n -p /run/udhcpc.%iface%.pid -i %iface% [[-H %hostname%]] \
@@ -5649,6 +5691,34 @@ method manual
 
   down
 
+method auto
+  description
+    This method may be used to define interfaces with automatically assigned
+    IPv6 addresses. Using this method on its own doesn't mean that RDNSS options
+    will be applied, too. To make this happen, *rdnssd* daemon must be installed,
+    properly configured and running.
+    If stateless DHCPv6 support is turned on, then additional network
+    configuration parameters such as DNS and NTP servers will be retrieved
+    from a DHCP server. Please note that on ifdown, the lease is not currently
+    released (a known bug).
+
+  options
+    dhcp int               -- Use stateless DHCPv6 (0=off, 1=on)
+
+  conversion
+    hwaddress cleanup_hwaddress
+
+  up
+    sysctl -q -e -w net.inet6.ip6.accept_rtadv=1
+    ifconfig %iface% up
+    dhclient -6 -S -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (var_true("dhcp", ifd) && execable("/sbin/dhclient"))
+
+  down
+    ifconfig %iface% down
+
+
+
 method dhcp
   description
     This method may be used to obtain network interface configuration via
@@ -5663,7 +5733,7 @@ method dhcp
 
   up
     ifconfig %iface% [[link %hwaddress%]] up
-    dhclient -6 -1 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (execable("/sbin/dhclient"))
 
   down
@@ -5764,7 +5834,7 @@ method dhcp
 
   up
     [[Warning: Option hwaddress: %hwaddress% not yet supported]]
-    dhclient -1 -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+    dhclient -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
         if (execable("/sbin/dhclient"))
     udhcpc -n -p /run/udhcpc.%iface%.pid -i %iface% [[-H %hostname%]] \
            [[-c %client%]] \
@@ -5846,7 +5916,7 @@ method dhcp
   up
     [[Warning: Option hwaddress: %hwaddress% not yet supported]]
     inetutils-ifconfig --interface %iface% --up
-    dhclient -6 -1 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (execable("/sbin/dhclient"))
 
   down
@@ -5900,9 +5970,9 @@ method none
     then \
         ip link set up dev %link%; \
         ip link add link %link% name %iface0% type vlan id %vlan_id%; \
-    fi if (iface_has("."))
+    fi if (iface_has(".") && (!var_set_anywhere("bridge_ports", ifd)))
   down
-    ip link del %iface% if (iface_has("."))
+    ip link del %iface% if (iface_has(".") && (!var_set_anywhere("bridge_ports", ifd)))
 
 architecture kfreebsd
 
