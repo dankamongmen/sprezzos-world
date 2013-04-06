@@ -585,3 +585,11 @@ $(LIBSDL2): $(SPREZZ)/libsdl2/debian/changelog
 	rm -rf $@/debian
 	cp -r $(<D) $@
 
+.PHONY: wmctrl
+wmctrl:$(WMCTRL)_$(ARCH).deb
+$(WMCTRL): $(SPREZZ)/wmctrl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf wmctrl_$(wmctrl_UPVER).orig.tar.gz $(TARARGS) $@
+
