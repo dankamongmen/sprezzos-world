@@ -526,3 +526,11 @@ $(LIGHTDMKDE): $(SPREZZ)/lightdm-kde/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf lightdm-kde_$(lightdm-kde_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: svgpart
+svgpart:$(SVGPART)_$(ARCH).deb
+$(SVGPART): $(SPREZZ)/svgpart/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf svgpart_$(svgpart_UPVER).orig.tar.xz $(TARARGS) $@
+

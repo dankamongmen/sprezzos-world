@@ -10565,3 +10565,19 @@ $(DKMS): $(SPREZZ)/dkms/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf dkms_$(dkms_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ilmbase2
+ilmbase2:$(ILMBASE2)_$(ARCH).deb
+$(ILMBASE2): $(SPREZZ)/ilmbase2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ilmbase2_$(ilmbase2_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: openexr2
+openexr2:$(OPENEXR2)_$(ARCH).deb
+$(OPENEXR2): $(SPREZZ)/openexr2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf openexr2_$(openexr2_UPVER).orig.tar.gz $(TARARGS) $@
+
