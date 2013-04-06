@@ -76,7 +76,7 @@ $(GWENVIEW): $(SPREZZ)/gwenview/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version --repack
-	tar xJvf gwenview-$(gwenview_UPVER).tar.xz $(TARARGS) $@
+	tar xzvf gwenview-$(gwenview_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: hupnp
 hupnp:$(HUPNP)_$(ARCH).deb
