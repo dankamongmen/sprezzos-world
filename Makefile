@@ -9998,8 +9998,8 @@ $(blt): $(SPREZZ)/blt/debian/changelog
 	tar xzvf blt_$(blt_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: gupnp-tools
-gupnp-tools:$(gupnptools)_$(ARCH).deb
-$(gupnptools): $(SPREZZ)/gupnp-tools/debian/changelog
+gupnp-tools:$(GUPNPTOOLS)_$(ARCH).deb
+$(GUPNPTOOLS): $(SPREZZ)/gupnp-tools/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
