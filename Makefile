@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -1127,14 +1127,6 @@ $(ACPID): $(SPREZZ)/acpid/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf acpid-$(acpid_UPVER).tar.xz $(TARARGS) $@
-
-.PHONY: acpica-unix
-acpica-unix:$(ACPICAUNIX)_$(ARCH).deb
-$(ACPICAUNIX): $(SPREZZ)/acpica-unix/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf acpica-unix_$(acpica-unix_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: afpfs-ng
 afpfs-ng:$(AFPFSNG)_$(ARCH).deb
@@ -10556,4 +10548,20 @@ $(LIBSOXR): $(SPREZZ)/libsoxr/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libsoxr_$(libsoxr_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: acpica-unix
+acpica-unix:$(ACPICAUNIX)_$(ARCH).deb
+$(ACPICAUNIX): $(SPREZZ)/acpica-unix/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf acpica-unix_$(acpica-unix_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: dkms
+dkms:$(DKMS)_$(ARCH).deb
+$(DKMS): $(SPREZZ)/dkms/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dkms_$(dkms_UPVER).orig.tar.gz $(TARARGS) $@
 
