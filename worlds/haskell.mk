@@ -4854,3 +4854,11 @@ $(HASKELLFINGERTREE): $(SPREZZ)/haskell-fingertree/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-fingertree_$(haskell-fingertree_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: hothasktags
+hothasktags:$(HOTHASKTAGS)_$(ARCH).deb
+$(HOTHASKTAGS): $(SPREZZ)/hothasktags/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hothasktags_$(hothasktags_UPVER).orig.tar.gz $(TARARGS) $@
+
