@@ -10581,3 +10581,11 @@ $(OPENEXR2): $(SPREZZ)/openexr2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf openexr2_$(openexr2_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libwpg
+libwpg:$(LIBWPG)_$(ARCH).deb
+$(LIBWPG): $(SPREZZ)/libwpg/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libwpg_$(libwpg_UPVER).orig.tar.gz $(TARARGS) $@
+
