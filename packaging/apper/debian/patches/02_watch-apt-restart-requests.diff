@@ -1,0 +1,330 @@
+Description: Watch Apt restart requests
+ This patch makes Apper listen to restart requests issued
+ by other Apt tools. Before, Apper was only able to
+ process restart requests by PackageKit.
+Forwarded: yes
+Author: Matthias Klumpp <matthias@tenstral.net>
+Last-Update: 2012-11-06
+
+diff --git a/Sentinel/ApperSentinel.cpp b/Sentinel/ApperSentinel.cpp
+index e0ae70d..384bcc7 100644
+--- a/Sentinel/ApperSentinel.cpp
++++ b/Sentinel/ApperSentinel.cpp
+@@ -81,6 +81,10 @@ ApperSentinel::ApperSentinel()
+     connect(m_interface, SIGNAL(refreshCache()),
+             m_refreshCache, SLOT(refreshCache()));
+
++    // connect the reboot-notify DBus request
++    connect(m_interface, SIGNAL(aptNotifyReboot()),
++            m_trayIcon, SLOT(showRebootNotificationApt()));
++
+     // connect the watch transaction coming from the updater icon to our watcher
+ //     connect(m_updateIcon, SIGNAL(watchTransaction(const QString &, bool)),
+ //             m_transWatcher, SLOT(watchTransaction(const QString &, bool)));
+diff --git a/Sentinel/DBusInterface.cpp b/Sentinel/DBusInterface.cpp
+index e71a4f8..8e0af0c 100644
+--- a/Sentinel/DBusInterface.cpp
++++ b/Sentinel/DBusInterface.cpp
+@@ -64,6 +64,11 @@ void DBusInterface::CheckForUpdates(bool system_ready)
+     emit checkForUpdates(system_ready);
+ }
+
++void DBusInterface::AptNotifyReboot()
++{
++    emit aptNotifyReboot();
++}
++
+ void DBusInterface::SetupDebconfDialog(const QString &tid, const QString &socketPath, uint xidParent)
+ {
+ #ifdef HAVE_DEBCONFKDE
+diff --git a/Sentinel/DBusInterface.h b/Sentinel/DBusInterface.h
+index 9b79c94..cfc7c6f 100644
+--- a/Sentinel/DBusInterface.h
++++ b/Sentinel/DBusInterface.h
+@@ -41,10 +41,14 @@ public:
+     void CheckForUpdates(bool system_ready);
+     void SetupDebconfDialog(const QString &tid, const QString &socketPath, uint xidParent);
+
++    void AptNotifyReboot();
++
+ signals:
+     void checkForUpdates(bool system_ready);
+     void refreshCache();
+
++    void aptNotifyReboot();
++
+ private slots:
+     void debconfActivate();
+     void transactionFinished();
+diff --git a/Sentinel/TransactionWatcher.cpp b/Sentinel/TransactionWatcher.cpp
+index d0f16b5..3f8ce3f 100644
+--- a/Sentinel/TransactionWatcher.cpp
++++ b/Sentinel/TransactionWatcher.cpp
+@@ -151,6 +151,29 @@ void TransactionWatcher::setCurrentTransaction(const QString &tid)
+     }
+ }
+
++void TransactionWatcher::showRebootNotificationApt() {
++    // Create the notification about this transaction
++    KNotification *notify = new KNotification("RestartRequired");
++    QString text("<b>" + i18n("The system update has completed") + "</b>");
++    text.append("<br>" + PkStrings::restartType(PackageKit::Package::RestartSystem));
++    notify->setPixmap(PkIcons::restartIcon(PackageKit::Package::RestartSystem).pixmap(KPK_ICON_SIZE, KPK_ICON_SIZE));
++    notify->setText(text);
++    notify->sendEvent();
++
++    m_restartType = Package::RestartSystem;
++
++    if (m_restartSNI == 0) {
++        m_restartSNI = new StatusNotifierItem(this);
++        connect(m_restartSNI, SIGNAL(activateRequested(bool,QPoint)),
++                this, SLOT(logout()));
++        // Right click shows HIDE action
++        QAction *action;
++        action = m_restartSNI->contextMenu()->addAction(i18n("Hide"));
++        connect(action, SIGNAL(triggered(bool)),
++                 this, SLOT(hideRestartIcon()));
++    }
++}
++
+ void TransactionWatcher::finished(PackageKit::Transaction::Exit exit)
+ {
+     // check if the transaction emitted any require restart
+diff --git a/Sentinel/TransactionWatcher.h b/Sentinel/TransactionWatcher.h
+index bf98201..5e1f833 100644
+--- a/Sentinel/TransactionWatcher.h
++++ b/Sentinel/TransactionWatcher.h
+@@ -55,6 +55,9 @@ private slots:
+     void hideMessageIcon();
+     void hideRestartIcon();
+
++public slots:
++    void showRebootNotificationApt();
++
+ private:
+     void suppressSleep(bool enable, const QString &reason = QString());
+     void setCurrentTransaction(const QString &tid);
+diff --git a/Sentinel/org.kde.ApperSentinel.xml b/Sentinel/org.kde.ApperSentinel.xml
+index 673a497..1d2a813 100644
+--- a/Sentinel/org.kde.ApperSentinel.xml
++++ b/Sentinel/org.kde.ApperSentinel.xml
+@@ -11,5 +11,7 @@
+            <arg type="s" name="socket_path" direction="in" />
+            <arg type="u" name="xid_parent" direction="in" />
+        </method>
++       <method name="AptNotifyReboot" >
++       </method>
+    </interface>
+ </node>
+diff --git a/apperd/ApperdThread.cpp b/apperd/ApperdThread.cpp
+index d10a3f4..e1f3122 100644
+--- a/apperd/ApperdThread.cpp
++++ b/apperd/ApperdThread.cpp
+@@ -37,6 +37,8 @@
+
+ #include <KDebug>
+
++#include "reboot_listener.h"
++
+ #define FIVE_MIN 360000
+ #define ONE_MIN   72000
+
+@@ -51,7 +53,8 @@
+ ApperdThread::ApperdThread(QObject *parent) :
+     QObject(parent),
+     m_actRefreshCacheChecked(false),
+-    m_refreshCacheInterval(Enum::TimeIntervalDefault)
++    m_refreshCacheInterval(Enum::TimeIntervalDefault),
++    m_AptRebootListener(new reboot_listener_t(this))
+ {
+     // Make all our init code run on the thread since
+     // the DBus calls were made blocking
+@@ -133,6 +136,10 @@ void ApperdThread::init()
+         transactionListChanged(reply.value()); // In case of a running transaction fire up sentinel
+     }
+
++    // listen to Debian/Apt reboot signals from other sources (apt)
++    connect(m_AptRebootListener, SIGNAL(request_reboot()), this,SLOT(aptNotifyReboot()));
++    QTimer::singleShot(2 /*minutes*/ * 60 /*seconds*/ * 1000 /*msec*/, m_AptRebootListener, SLOT(check_for_reboot()));
++
+     // read the current settings
+     configFileChanged();
+ }
+@@ -170,6 +177,12 @@ void ApperdThread::poll()
+     }
+ }
+
++void ApperdThread::aptNotifyReboot()
++{
++    // Notify user about restart by calling ApperSentinel
++    callApperSentinel(QLatin1String("AptNotifyReboot"));
++}
++
+ void ApperdThread::configFileChanged()
+ {
+     KConfig config("apper");
+diff --git a/apperd/ApperdThread.h b/apperd/ApperdThread.h
+index 12c279a..86b2ae6 100644
+--- a/apperd/ApperdThread.h
++++ b/apperd/ApperdThread.h
+@@ -26,6 +26,8 @@
+ #include <QDBusConnection>
+ #include <QDateTime>
+
++class reboot_listener_t;
++
+ class ApperdThread : public QObject
+ {
+     Q_OBJECT
+@@ -42,6 +44,8 @@ private slots:
+     void updatesChanged();
+     void serviceOwnerChanged(const QString &serviceName, const QString &oldOwner, const QString &newOwner);
+
++    void aptNotifyReboot();
++
+ private:
+     void callApperSentinel(const QString &method,
+                            const QList<QVariant> &arguments = QList<QVariant>());
+@@ -57,6 +61,9 @@ private:
+     uint m_refreshCacheInterval;
+     QTimer *m_qtimer;
+     QThread *m_thread;
++
++    // Apt reboot listener
++    reboot_listener_t *m_AptRebootListener;
+ };
+
+ #endif // APPERDTHREAD_H
+diff --git a/apperd/CMakeLists.txt b/apperd/CMakeLists.txt
+index ebc84fc..66f6c80 100644
+--- a/apperd/CMakeLists.txt
++++ b/apperd/CMakeLists.txt
+@@ -1,5 +1,6 @@
+ kde4_add_plugin(kded_apperd
+     ApperdThread.cpp
++    reboot_listener.cpp
+     apperd.cpp
+ )
+
+diff --git a/apperd/reboot_listener.cpp b/apperd/reboot_listener.cpp
+new file mode 100644
+index 0000000..c252248
+--- /dev/null
++++ b/apperd/reboot_listener.cpp
+@@ -0,0 +1,60 @@
++/*
++    Copyright (c) 2010 Sune Vuorela <sune@vuorela.dk>
++
++    Permission is hereby granted, free of charge, to any person
++    obtaining a copy of this software and associated documentation
++    files (the "Software"), to deal in the Software without
++    restriction, including without limitation the rights to use,
++    copy, modify, merge, publish, distribute, sublicense, and/or sell
++    copies of the Software, and to permit persons to whom the
++    Software is furnished to do so, subject to the following
++    conditions:
++
++    The above copyright notice and this permission notice shall be
++    included in all copies or substantial portions of the Software.
++
++    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++    OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++    OTHER DEALINGS IN THE SOFTWARE.
++
++*/
++
++#include "reboot_listener.h"
++#include <QFileSystemWatcher>
++#include <QDebug>
++#include <KDirWatch>
++#include <QTimer>
++#include <QFile>
++
++static const char reboot_required_path[] = "/var/run/reboot-required";
++
++reboot_listener_t::reboot_listener_t(QObject* parent): QObject(parent) {
++  m_watcher = new KDirWatch(this);
++  m_watcher->addFile(QString::fromLatin1(reboot_required_path));
++  connect(m_watcher,SIGNAL(created(QString)),this,SLOT(directory_changed_slot(QString)));
++  m_timer = new QTimer(this);
++  m_timer->setSingleShot(true);
++  m_timer->setInterval(500);
++  connect(m_timer,SIGNAL(timeout()),SIGNAL(request_reboot()));
++}
++void reboot_listener_t::check_for_reboot() {
++  if(QFile::exists(QString::fromLatin1(reboot_required_path))) {
++    m_timer->start();
++  }
++}
++
++
++void reboot_listener_t::directory_changed_slot(const QString& path) {
++  if(path==QLatin1String(reboot_required_path)) {
++     m_timer->start();
++  }
++}
++
++
++
++#include <reboot_listener.moc>
+diff --git a/apperd/reboot_listener.h b/apperd/reboot_listener.h
+new file mode 100644
+index 0000000..57c48a8
+--- /dev/null
++++ b/apperd/reboot_listener.h
+@@ -0,0 +1,50 @@
++/*
++    Copyright (c) 2010 Sune Vuorela <sune@vuorela.dk>
++
++    Permission is hereby granted, free of charge, to any person
++    obtaining a copy of this software and associated documentation
++    files (the "Software"), to deal in the Software without
++    restriction, including without limitation the rights to use,
++    copy, modify, merge, publish, distribute, sublicense, and/or sell
++    copies of the Software, and to permit persons to whom the
++    Software is furnished to do so, subject to the following
++    conditions:
++
++    The above copyright notice and this permission notice shall be
++    included in all copies or substantial portions of the Software.
++
++    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++    OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++    OTHER DEALINGS IN THE SOFTWARE.
++
++*/
++
++#ifndef REBOOT_LISTENER_H
++#define REBOOT_LISTENER_H
++
++#include <QObject>
++
++class KDirWatch;
++class QTimer;
++
++class reboot_listener_t : public QObject {
++  Q_OBJECT
++  public:
++    reboot_listener_t(QObject* parent=0);
++  Q_SIGNALS:
++    void request_reboot();
++  public Q_SLOTS:
++    void check_for_reboot();
++  private Q_SLOTS:
++    void directory_changed_slot(const QString& path);
++  private:
++    KDirWatch* m_watcher;
++    QTimer* m_timer;
++};
++
++#endif // REBOOT_LISTENER_H

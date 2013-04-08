@@ -558,3 +558,11 @@ $(LIBKSANE): $(SPREZZ)/libksane/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libksane_$(libksane_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: apper
+apper:$(APPER)_$(ARCH).deb
+$(APPER): $(SPREZZ)/apper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf apper_$(apper_UPVER).orig.tar.gz $(TARARGS) $@
+
