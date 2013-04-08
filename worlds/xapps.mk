@@ -601,3 +601,11 @@ $(FLTK1.3): $(SPREZZ)/fltk1.3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fltk1.3_$(fltk1.3_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: nestopia
+nestopia:$(NESTOPIA)_$(ARCH).deb
+$(NESTOPIA): $(SPREZZ)/nestopia/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nestopia_$(nestopia_UPVER).orig.tar.gz $(TARARGS) $@
+
