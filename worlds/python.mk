@@ -231,3 +231,11 @@ $(GNOMEPYTHON): $(SPREZZ)/gnome-python/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gnome-python_$(gnome-python_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: lxml
+lxml:$(LXML)_$(ARCH).deb
+$(LXML): $(SPREZZ)/lxml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lxml_$(lxml_UPVER).orig.tar.gz $(TARARGS) $@
+

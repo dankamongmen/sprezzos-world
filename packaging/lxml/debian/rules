@@ -1,0 +1,141 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+PYVERS	:= $(shell pyversions -vs)
+PYVER	:= $(shell pyversions -vd)
+
+PY3VERS	:= $(shell py3versions -vs)
+ifeq (,$(filter 3.3,$(PY3VERS)))
+  PY3VERS += 3.3
+endif
+PY3VER	:= $(shell py3versions -vd)
+
+UPSTREAMVER := $(subst lxml-,,$(notdir $(CURDIR)))
+
+include /usr/share/python3/python.mk
+
+prebuild: prebuild-stamp
+prebuild-stamp: src/lxml/lxml.etree.pyx src/lxml/lxml.objectify.pyx
+#	cython src/lxml/lxml.etree.pyx src/lxml/lxml.objectify.pyx
+	touch $@
+
+build-arch: build
+build-indep: build
+build: build-stamp build3-stamp
+build-stamp: $(PYVERS:%=build-python%) $(PYVERS:%=dbg-build-python%)
+	touch $@
+build-python%: prebuild
+	python$* setup.py build
+	touch $@
+dbg-build-python%: prebuild
+	python$*-dbg setup.py build
+	touch $@
+
+build3-stamp: $(PY3VERS:%=build3-python%) $(PY3VERS:%=dbg-build3-python%)
+	touch $@
+build3-python%: prebuild
+	python$* setup.py build
+	touch $@
+dbg-build3-python%: prebuild
+	python$*-dbg setup.py build
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build*-stamp build*-python* dbg-build*-python* prebuild-stamp
+	rm -rf build dist __pycache__
+#	rm -f src/lxml/lxml.etree_api.h src/lxml/lxml.etree.c \
+#	      src/lxml/lxml.etree.h src/lxml/lxml.objectify.c
+
+	-find -name '*.py[co]' | xargs rm -f
+	rm -rf [23].[0-9]
+	rm -f src/lxml/lxml-version.h
+	dh_clean 
+
+install: build install-prereq $(PYVERS:%=install-python%) $(PYVERS:%=dbg-install-python%) $(PY3VERS:%=install3-python%) $(PY3VERS:%=dbg-install3-python%)
+	-find debian -name '*.py[co]' | xargs rm -f
+	-find debian -name __pycache__ | xargs rm -rf
+	rm -rf debian/python*-lxml/usr/lib/python
+
+install-prereq:
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+
+install-python%:
+	mkdir -p debian/python-lxml/usr/bin
+	mkdir -p debian/python-lxml/$(call py_libdir, $*)
+	python$* setup.py install \
+		--root=$(CURDIR)/debian/python-lxml --install-layout=deb
+
+dbg-install-python%:
+	mkdir -p debian/python-lxml/usr/bin
+	mkdir -p debian/python-lxml-dbg/$(call py_libdir, $*)
+	python$*-dbg setup.py install \
+		--root=$(CURDIR)/debian/python-lxml-dbg --install-layout=deb
+	find debian/python-*-dbg ! -type d ! -name '*.so' | xargs rm -f
+	find debian/python-*-dbg -depth -empty -exec rmdir {} \;
+
+install3-python%:
+	mkdir -p debian/python3-lxml/usr/bin
+	mkdir -p debian/python3-lxml/$(call py_libdir, $*)
+	python$* setup.py install \
+		--root=$(CURDIR)/debian/python3-lxml --install-layout=deb
+
+dbg-install3-python%:
+	mkdir -p debian/python3-lxml/usr/bin
+	mkdir -p debian/python3-lxml-dbg/$(call py_libdir, $*)
+	python$*-dbg setup.py install \
+		--root=$(CURDIR)/debian/python3-lxml-dbg --install-layout=deb
+	find debian/python3-*-dbg ! -type d ! -name '*.so' | xargs rm -f
+	find debian/python3-*-dbg -depth -empty -exec rmdir {} \;
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -i
+	dh_installdocs -i
+	mkdir -p debian/python-lxml-doc/usr/share/doc/python-lxml
+	cp -r doc/html debian/python-lxml-doc/usr/share/doc/python-lxml/
+	ln -sf ../python-lxml/html debian/python-lxml-doc/usr/share/doc/python-lxml-doc/html
+	dh_installexamples -i samples/*
+	dh_compress -i -X.xml -X.py \
+	    -X.html -X.css -X.asc -X.png -Xapi-objects.txt
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_shlibdeps -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -a CHANGES.txt
+	dh_installdocs -a CREDITS.txt README.rst TODO.txt
+	dh_installexamples -a samples/*
+	dh_python2 -a
+	dh_python3 -a
+	dh_strip -ppython-lxml --dbg-package=python-lxml-dbg
+	rm -rf debian/python-lxml-dbg/usr/share/doc/python-lxml-dbg
+	ln -s python-lxml debian/python-lxml-dbg/usr/share/doc/python-lxml-dbg
+	dh_strip -ppython3-lxml --dbg-package=python3-lxml-dbg
+	rm -rf debian/python3-lxml-dbg/usr/share/doc/python3-lxml-dbg
+	ln -s python3-lxml debian/python3-lxml-dbg/usr/share/doc/python3-lxml-dbg
+	dh_compress -a -X.xml -X.py \
+	    -X.html -X.css -X.asc -X.png -Xapi-objects.txt
+	dh_fixperms -a
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
