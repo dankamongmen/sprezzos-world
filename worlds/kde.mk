@@ -580,5 +580,5 @@ $(LIBKEXIV2): $(SPREZZ)/libkexiv2/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libkexiv2_$(libkexiv2_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf libkexiv2_$(libkexiv2_UPVER).orig.tar.xz $(TARARGS) $@
 
