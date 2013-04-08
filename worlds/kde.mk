@@ -550,3 +550,11 @@ $(KWALLET): $(SPREZZ)/kwallet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kwallet_$(kwallet_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: libksane
+libksane:$(LIBKSANE)_$(ARCH).deb
+$(LIBKSANE): $(SPREZZ)/libksane/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libksane_$(libksane_UPVER).orig.tar.gz $(TARARGS) $@
+
