@@ -1,0 +1,196 @@
+Index: libxfixes-dev/include/X11/extensions/Xfixes.h
+===================================================================
+--- libxfixes-dev.orig/include/X11/extensions/Xfixes.h	2012-03-13 09:36:56.810984004 +1100
++++ libxfixes-dev/include/X11/extensions/Xfixes.h	2012-03-13 09:39:08.842990643 +1100
+@@ -259,11 +259,48 @@
+ 			   int x2, int y2, int directions,
+ 			   int num_devices, int *devices);
+ 
++PointerBarrier
++XFixesCreatePointerBarrierVelocity(Display *dpy, Window w, int x1, int y1,
++			   int x2, int y2, int directions, int velocity,
++			   int num_devices, int *devices);
++
+ void
+ XFixesDestroyPointerBarrier(Display *dpy, PointerBarrier b);
+ 
+ #endif /* XFIXES_MAJOR >= 5 */
+ 
++#if XFIXES_MAJOR >= 6
++
++typedef int32_t BarrierEventID;
++
++typedef struct {
++    int type;			/* event base */
++    unsigned long serial;
++    Bool send_event;
++    Display *display;
++    Window window;
++    int subtype;
++    BarrierEventID event_id;
++    int directions;
++    PointerBarrier barrier;
++    int x;
++    int y;
++    int velocity;
++    Time timestamp;
++} XFixesBarrierNotifyEvent;
++
++void
++XFixesSelectBarrierInput (Display	*dpy,
++			 Window		win,
++			 unsigned long	eventMask);
++
++void
++XFixesBarrierReleasePointer(Display *dpy,
++			    PointerBarrier b,
++			    BarrierEventID event_id);
++
++#endif
++
+ _XFUNCPROTOEND
+ 
+ #endif /* _XFIXES_H_ */
+Index: libxfixes-dev/src/Cursor.c
+===================================================================
+--- libxfixes-dev.orig/src/Cursor.c	2012-03-13 09:36:56.810984004 +1100
++++ libxfixes-dev/src/Cursor.c	2012-03-13 09:38:44.842989436 +1100
+@@ -334,3 +334,84 @@
+     UnlockDisplay (dpy);
+     SyncHandle();
+ }
++
++void
++XFixesSelectBarrierInput (Display *dpy, Window win, unsigned long eventMask)
++{
++    XFixesExtDisplayInfo *info = XFixesFindDisplay (dpy);
++    xXFixesSelectBarrierInputReq *req;
++
++    XFixesSimpleCheckExtension (dpy, info);
++    if (info->major_version < 6)
++	return;
++
++    LockDisplay (dpy);
++    GetReq (XFixesSelectBarrierInput, req);
++    req->reqType = info->codes->major_opcode;
++    req->xfixesReqType = X_XFixesSelectBarrierInput;
++    req->window = win;
++    req->eventMask = eventMask;
++    UnlockDisplay (dpy);
++    SyncHandle();
++}
++
++PointerBarrier
++XFixesCreatePointerBarrierVelocity(Display *dpy, Window w, int x1, int y1,
++				   int x2, int y2, int directions, int velocity,
++			   int num_devices, int *devices)
++{
++    XFixesExtDisplayInfo *info = XFixesFindDisplay (dpy);
++    xXFixesCreatePointerBarrierVelocityReq *req;
++    PointerBarrier barrier;
++    int extra = 0;
++
++    XFixesCheckExtension (dpy, info, 0);
++    if (info->major_version < 6)
++	return 0;
++
++    if (num_devices)
++	extra = (((2 * num_devices) + 3) / 4) * 4;
++
++    LockDisplay (dpy);
++    GetReqExtra (XFixesCreatePointerBarrierVelocity, extra, req);
++    req->reqType = info->codes->major_opcode;
++    req->xfixesReqType = X_XFixesCreatePointerBarrierVelocity;
++    barrier = req->barrier = XAllocID (dpy);
++    req->window = w;
++    req->x1 = x1;
++    req->y1 = y1;
++    req->x2 = x2;
++    req->y2 = y2;
++    req->directions = directions;
++    req->velocity = velocity;
++    if ((req->num_devices = num_devices)) {
++	int i;
++	CARD16 *devs = (CARD16 *)(req + 1);
++	for (i = 0; i < num_devices; i++)
++	    devs[i] = (CARD16)(devices[i]);
++    }
++
++    UnlockDisplay (dpy);
++    SyncHandle();
++    return barrier;
++}
++
++void
++XFixesBarrierReleasePointer(Display *dpy, PointerBarrier b, BarrierEventID event_id)
++{
++    XFixesExtDisplayInfo *info = XFixesFindDisplay (dpy);
++    xXFixesBarrierReleasePointerReq *req;
++
++    XFixesSimpleCheckExtension (dpy, info);
++    if (info->major_version < 6)
++	return;
++
++    LockDisplay (dpy);
++    GetReq (XFixesBarrierReleasePointer, req);
++    req->reqType = info->codes->major_opcode;
++    req->xfixesReqType = X_XFixesBarrierReleasePointer;
++    req->barrier = b;
++    req->event_id = event_id;
++    UnlockDisplay (dpy);
++    SyncHandle();
++}
+Index: libxfixes-dev/src/Xfixes.c
+===================================================================
+--- libxfixes-dev.orig/src/Xfixes.c	2012-03-13 09:36:56.810984004 +1100
++++ libxfixes-dev/src/Xfixes.c	2012-03-13 09:38:44.842989436 +1100
+@@ -253,6 +253,26 @@
+ 	aevent->cursor_name = awire->name;
+ 	return True;
+     }
++    case XFixesBarrierNotify: {
++	XFixesBarrierNotifyEvent *aevent;
++	xXFixesBarrierNotifyEvent *awire;
++	awire = (xXFixesBarrierNotifyEvent *)wire;
++	aevent = (XFixesBarrierNotifyEvent *)event;
++	aevent->type = awire->type & 0x7F;
++	aevent->subtype = awire->subtype;
++	aevent->serial = _XSetLastRequestRead(dpy,
++					      (xGenericReply *) wire);
++	aevent->send_event = (awire->type & 0x80) != 0;
++	aevent->display = dpy;
++	aevent->window = awire->window;
++	aevent->event_id = awire->event_id;
++	aevent->barrier = awire->barrier;
++	aevent->x = awire->x;
++	aevent->y = awire->y;
++	aevent->velocity = awire->velocity;
++	aevent->timestamp = awire->timestamp;
++	return True;      
++    }
+     }
+     return False;
+ }
+@@ -292,6 +312,22 @@
+ 	awire->cursorSerial = aevent->cursor_serial;
+ 	awire->name = aevent->cursor_name;
+     }
++    case XFixesBarrierNotify: {
++	XFixesBarrierNotifyEvent *aevent;
++	xXFixesBarrierNotifyEvent *awire;
++	awire = (xXFixesBarrierNotifyEvent *)wire;
++	aevent = (XFixesBarrierNotifyEvent *)event;
++	awire->type = aevent->type | (aevent->send_event ? 0x80 : 0);
++	awire->subtype = aevent->subtype;
++	awire->window = aevent->window;
++	awire->event_id = aevent->event_id;
++	awire->barrier = aevent->barrier;
++	awire->x = aevent->x;
++	awire->y = aevent->y;
++	awire->velocity = aevent->velocity;
++	awire->timestamp = aevent->timestamp;
++	return True;      
++    }
+     }
+     return False;
+ }

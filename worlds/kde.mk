@@ -534,3 +534,19 @@ $(SVGPART): $(SPREZZ)/svgpart/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf svgpart_$(svgpart_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: kdepim
+kdepim:$(KDEPIM)_$(ARCH).deb
+$(KDEPIM): $(SPREZZ)/kdepim/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf kdepim_$(kdepim_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: kwallet
+kwallet:$(KWALLET)_$(ARCH).deb
+$(KWALLET): $(SPREZZ)/kwallet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kwallet_$(kwallet_UPVER).orig.tar.xz $(TARARGS) $@
+

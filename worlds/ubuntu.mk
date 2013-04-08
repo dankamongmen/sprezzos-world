@@ -189,13 +189,23 @@ $(LIBINDICATE): $(SPREZZ)/libindicate/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libindicate-$(libindicate_UPVER).tar.gz $(TARARGS) $@
 
+#.PHONY: libindicator
+#libindicator:$(LIBINDICATOR)_$(ARCH).deb
+#$(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@/
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xzvf libindicator-$(libindicator_UPVER).tar.gz $(TARARGS) $@
+
 .PHONY: libindicator
 libindicator:$(LIBINDICATOR)_$(ARCH).deb
 $(LIBINDICATOR): $(SPREZZ)/libindicator/debian/changelog
-	mkdir $@
+	bzr branch lp:libindicator $@
+	rm -rf $@/debian
+	tar cJf libindicator-$(libindicator_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf libindicator-$(libindicator_UPVER).tar.xz \
+		libindicator_$(libindicator_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libindicator-$(libindicator_UPVER).tar.gz $(TARARGS) $@
 
 #.PHONY: libunity
 #libunity:$(LIBUNITY)_$(ARCH).deb
@@ -333,4 +343,12 @@ $(DOCKY): $(SPREZZ)/docky/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf docky-$(docky_UPVER).tar.xz $(TARARGS) $@
+
+.PHONY: unity-asset-pool
+unity-asset-pool:$(UNITYASSETPOOL)_$(ARCH).deb
+$(UNITYASSETPOOL): $(SPREZZ)/unity-asset-pool/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf unity-asset-pool_$(unity-asset-pool_UPVER).orig.tar.gz $(TARARGS) $@
 
