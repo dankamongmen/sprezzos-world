@@ -1,0 +1,75 @@
+#!/usr/bin/make -f
+
+# Enable all hardening options.
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+# To distinguish variables that are truly local to this file (rather
+# than for use by cdbs), we adopt the convention of starting local
+# variables' names with l_.
+
+l_PWD := $(shell pwd)
+l_STAMPS = debian/l_stamps
+
+# Build for all available python versions
+l_PYTHON_VERSION := $(shell pyversions -vd)
+l_OTHER_PYTHON_VERSIONS := \
+	$(filter-out $(l_PYTHON_VERSION), $(shell pyversions -vr))
+
+# Variables used by cdbs
+
+VERSION := $(shell dpkg-parsechangelog | \
+             awk '/Version:/ {print $$2}' | cut -d- -f 1)
+
+DEB_INSTALL_DOCS_libvips-doc = \
+	$(DEB_BUILDDIR)/doc/html
+DEB_COMPRESS_EXCLUDE = html
+
+# Include cdbs rules files.
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/python-module.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+include /usr/share/python/python.mk
+
+# exec_prefix set explicitly to /usr appears to be required by
+# configure scripts in order to properly install multiple versions of
+# python.  Setting to "\$${prefix}" doesn't work.
+DEB_CONFIGURE_EXTRA_FLAGS = --exec_prefix=/usr
+DEB_CONFIGURE_USER_FLAGS = --libdir="\$${prefix}/lib/$(DEB_HOST_MULTIARCH)" \
+
+ifneq (, $(filter kfreebsd%, $(DEB_HOST_ARCH_OS)))
+DEB_CONFIGURE_EXTRA_FLAGS += --without-v4l
+endif
+
+# "make install" runs installed programs at one point, so we need to
+# set LD_LIBRARY_PATH to the installed library directory.
+ifeq ("$(LD_LIBRARY_PATH)", "")
+LD_LIBRARY_PATH=$(l_PWD)/debian/tmp/usr/lib
+else
+LD_LIBRARY_PATH += :$(l_PWD)/debian/tmp/usr/lib
+endif
+export LD_LIBRARY_PATH
+
+cleanbuilddir::
+	$(RM) -r $(l_STAMPS)
+
+clean::
+	$(RM) *.cdbs-config_list
+
+pre-build::
+	find build-tree -name CVS -print | xargs rm -rf
+
+install/libvips-tools::
+	rm debian/tmp/usr/bin/header
+	rm debian/tmp/usr/share/man/man1/header.1*
+	perl $(l_PWD)/debian/scripts/create_missing_manual_pages
+
+install/python-vipscc::
+	set -e; \
+	for v in $(l_OTHER_PYTHON_VERSIONS); do \
+	  make -C $(DEB_BUILDDIR)/swig/vipsCC clean; \
+          make -C $(DEB_BUILDDIR)/swig/vipsCC PYTHON_VERSION=$$v PYTHON_INCLUDES=-I/usr/include/python$$v pyexecdir="$(call py_libdir_sh, $$v)" install DESTDIR=$(l_PWD)/debian/tmp; \
+	done
+	find $(l_PWD)/debian/tmp -type f \( -name '*.la' -o -name '*.pyc' -o -name '*.pyo' \) -exec rm {} \;

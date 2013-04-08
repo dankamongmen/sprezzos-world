@@ -10589,3 +10589,11 @@ $(LIBWPG): $(SPREZZ)/libwpg/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libwpg_$(libwpg_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: vips
+vips:$(VIPS)_$(ARCH).deb
+$(VIPS): $(SPREZZ)/vips/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vips_$(vips_UPVER).orig.tar.gz $(TARARGS) $@
+
