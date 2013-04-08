@@ -1,0 +1,50 @@
+#!/usr/bin/make -f
+
+DEB_UPSTREAM_VERSION=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([^+]+).*-.*,\1,p')
+#export DH_VERBOSE=1
+%:
+	dh $@ --parallel
+
+override_dh_auto_configure: debian/mygui-doc.docs
+#	Don't autoconfigure, need to build for Ogre and OpenGL
+
+override_dh_auto_install:
+	mv $(CURDIR)/debian/tmp2 $(CURDIR)/debian/tmp
+
+override_dh_auto_build:
+#	build for OpenGL
+	dh_auto_configure -- -DMYGUI_BUILD_DEMOS=FALSE -DMYGUI_RENDERSYSTEM=3 \
+	 -DMYGUI_BUILD_DOCS=FALSE -DMYGUI_BUILD_PLUGINS=FALSE \
+	 -DMYGUI_BUILD_TOOLS=FALSE
+	dh_auto_build
+	${MAKE} install -C obj-$(DEB_BUILD_GNU_TYPE) DESTDIR=$(CURDIR)/debian/tmp2
+#	Build for Ogre platform, and tools
+	dh_auto_configure -- -DMYGUI_BUILD_DEMOS=FALSE -DMYGUI_RENDERSYSTEM=2 \
+	 -DMYGUI_BUILD_DOCS=TRUE -DMYGUI_BUILD_PLUGINS=FALSE \
+	 -DMYGUI_BUILD_TOOLS=FALSE
+	dh_auto_build
+	${MAKE} install -C obj-$(DEB_BUILD_GNU_TYPE) DESTDIR=$(CURDIR)/debian/tmp2
+
+override_dh_install:
+	cd obj-$(DEB_BUILD_GNU_TYPE)/Docs && doxygen Doxyfile && cd $(CURDIR)
+	find debian/ -type d -empty -delete
+	dh_install -Xlicense.txt -Xttf
+
+debian/%.docs: debian/%.docs.in
+	sed 's/@BUILD_DIR@/obj-$(DEB_BUILD_GNU_TYPE)/g' $< > $@
+
+override_dh_strip:
+	dh_strip -plibmyguiengine3 --dbg-package=libmyguiengine3-dbg
+	dh_strip -plibmygui.ogreplatform0debian0 --dbg-package=libmygui.ogreplatform0debian0-dbg
+	dh_strip -plibmygui.openglplatform0debian0 --dbg-package=libmygui.openglplatform0debian0-dbg
+	dh_strip
+
+override_dh_makeshlibs:
+	dh_makeshlibs -V -- -c0 -v$(DEB_UPSTREAM_VERSION)
+
+copyright_check:
+	${MAKE} -f /usr/share/cdbs/1/rules/utils.mk debian/stamp-copyright-check
+	rm debian/stamp-copyright-check
+
+get-orig-source:
+	uscan --download-current-version --repack --rename --verbose
