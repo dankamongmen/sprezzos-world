@@ -10587,5 +10587,5 @@ $(LIBWPG): $(SPREZZ)/libwpg/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libwpg_$(libwpg_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf libwpg_$(libwpg_UPVER).orig.tar.xz $(TARARGS) $@
 
