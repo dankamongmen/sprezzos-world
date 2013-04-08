@@ -609,3 +609,11 @@ $(NESTOPIA): $(SPREZZ)/nestopia/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf nestopia_$(nestopia_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mygui
+mygui:$(MYGUI)_$(ARCH).deb
+$(MYGUI): $(SPREZZ)/mygui/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mygui_$(mygui_UPVER).orig.tar.gz $(TARARGS) $@
+

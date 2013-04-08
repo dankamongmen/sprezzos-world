@@ -10597,3 +10597,11 @@ $(VIPS): $(SPREZZ)/vips/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vips_$(vips_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libtins
+libtins:$(LIBTINS)_$(ARCH).deb
+$(LIBTINS): $(SPREZZ)/libtins/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtins_$(libtins_UPVER).orig.tar.gz $(TARARGS) $@
+
