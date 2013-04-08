@@ -617,3 +617,11 @@ $(MYGUI): $(SPREZZ)/mygui/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf mygui_$(mygui_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: compiz-fusion-plugins-main
+compiz-fusion-plugins-main:$(COMPIZFUSIONPLUGINSMAIN)_$(ARCH).deb
+$(COMPIZFUSIONPLUGINSMAIN): $(SPREZZ)/compiz-fusion-plugins-main/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf compiz-fusion-plugins-main_$(compiz-fusion-plugins-main_UPVER).orig.tar.gz $(TARARGS) $@
+
