@@ -593,3 +593,11 @@ $(WMCTRL): $(SPREZZ)/wmctrl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf wmctrl_$(wmctrl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fltk1.3
+fltk1.3:$(FLTK1.3)_$(ARCH).deb
+$(FLTK1.3): $(SPREZZ)/fltk1.3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fltk1.3_$(fltk1.3_UPVER).orig.tar.gz $(TARARGS) $@
+

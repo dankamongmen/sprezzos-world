@@ -1,0 +1,85 @@
+#!/usr/bin/make -f
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+
+CFLAGS   := $(shell dpkg-buildflags --get CFLAGS)
+CPPFLAGS := $(shell dpkg-buildflags --get CPPFLAGS)
+CXXFLAGS := $(shell dpkg-buildflags --get CXXFLAGS)
+LDFLAGS  := $(shell dpkg-buildflags --get LDFLAGS)
+
+export CFLAGS CPPFLAGS CXXFLAGS LDFLAGS
+
+XCFLAGS = -Wall -Wunused -Wno-format-y2k -fPIE -fno-strict-aliasing
+
+DEB_HOST_ARCH := $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+libdir = /usr/lib/$(DEB_HOST_MULTIARCH)
+
+%:
+	dh $@
+
+override_dh_clean:
+	dh_clean fltk-config.unhardened
+
+override_dh_auto_configure:
+	dh_auto_configure -- CC="$(CC)" CXX="$(CXX)" \
+	    --enable-shared --enable-cairo --enable-cp936 --libdir=$(libdir) \
+	    $(shell DEB_BUILD_MAINT_OPTIONS=hardening=-all \
+	        dpkg-buildflags --export=configure)
+	mv fltk-config fltk-config.unhardened
+	dh_auto_configure -- CC="$(CC)" CXX="$(CXX)" \
+            DSOFLAGS="$(filter-out -fPIE -pie,$(LDFLAGS))" \
+	    --enable-shared --enable-cairo --enable-cp936 --with-links \
+	    --libdir=$(libdir)
+
+override_dh_auto_build:
+	dh_auto_build -- OPTIM="$(CFLAGS) $(XCFLAGS)" STRIP=@: CAIROLIBS=-lcairo
+	-$(MAKE) -C documentation all html pdf
+
+override_dh_auto_install:
+	dh_auto_install
+	mkdir -p debian/tmp/usr/games
+	mkdir -p debian/tmp/usr/lib/fltk
+	mkdir -p debian/tmp/usr/share/applications
+	mkdir -p debian/tmp/usr/share/doc/fltk1.3-doc
+	mkdir -p debian/tmp/usr/share/icons/hicolor/32x32/apps
+	mkdir -p debian/tmp/usr/share/icons/hicolor/128x128/apps
+	mkdir -p debian/tmp/usr/share/man/man6
+	mkdir -p debian/tmp/usr/share/pixmaps
+## fltk1.3-doc
+	-cp documentation/latex/refman.pdf \
+	    debian/tmp/usr/share/doc/fltk1.3-doc/fltk.pdf
+## fltk1.3-games (installed by hand to be able to add fl prefixes.)
+	for game in blocks checkers sudoku; do \
+	    cp test/$$game debian/tmp/usr/games/fl$$game && \
+	    sed -e 's,Exec=,&/usr/games/fl,; s,Icon=,&fl,; s,Name=,&FLTK ,' \
+	      test/desktop/$$game.desktop \
+	      >debian/tmp/usr/share/applications/fl$$game.desktop && \
+	    cp test/desktop/$$game-32.png \
+	      debian/tmp/usr/share/icons/hicolor/32x32/apps/fl$$game.png && \
+	    cp test/desktop/$$game-128.png \
+	      debian/tmp/usr/share/icons/hicolor/128x128/apps/fl$$game.png && \
+	    sed -e '1s,^\.TH ,&fl,; 3s,^,fl,' documentation/src/$$game.man \
+	      >debian/tmp/usr/share/man/man6/fl$$game.6 && \
+	    convert test/desktop/$$game-32.png \
+	      debian/tmp/usr/share/pixmaps/fl$$game-32.xpm \
+	    || exit 1; \
+	done
+## fluid
+	$(MAKE) -C fluid install-linux DESTDIR=$(CURDIR)/debian/tmp
+	cp fluid/icons/fluid-32.xpm debian/tmp/usr/share/pixmaps
+## libfltk1.3-dev
+	cp debian/CMakeCache.txt debian/*.cmake debian/tmp/usr/lib/fltk
+	for x in debian/*.cmake.in; do \
+	    sed 's,@libdir@,$(libdir),g' $$x \
+		> debian/tmp/usr/lib/fltk/`basename $$x .in`; \
+	done
+	install fltk-config.unhardened debian/tmp/usr/bin/fltk-config
+
+override_dh_installdocs:
+	dh_installdocs -A CREDITS README
+
+override_dh_makeshlibs:
+	dh_makeshlibs  -V
+
+override_dh_strip:
+	dh_strip       --dbg-package=libfltk1.3-dbg
