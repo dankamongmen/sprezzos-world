@@ -550,3 +550,35 @@ $(KWALLET): $(SPREZZ)/kwallet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kwallet_$(kwallet_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: libksane
+libksane:$(LIBKSANE)_$(ARCH).deb
+$(LIBKSANE): $(SPREZZ)/libksane/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libksane_$(libksane_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: apper
+apper:$(APPER)_$(ARCH).deb
+$(APPER): $(SPREZZ)/apper/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf apper_$(apper_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: listaller
+listaller:$(LISTALLER)_$(ARCH).deb
+$(LISTALLER): $(SPREZZ)/listaller/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf listaller_$(listaller_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libkexiv2
+libkexiv2:$(LIBKEXIV2)_$(ARCH).deb
+$(LIBKEXIV2): $(SPREZZ)/libkexiv2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libkexiv2_$(libkexiv2_UPVER).orig.tar.xz $(TARARGS) $@
+
