@@ -606,6 +606,6 @@ mygui:$(MYGUI)_$(ARCH).deb
 $(MYGUI): $(SPREZZ)/mygui/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
+	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf mygui_$(mygui_UPVER).orig.tar.gz $(TARARGS) $@
 
