@@ -564,5 +564,21 @@ $(APPER): $(SPREZZ)/apper/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf apper_$(apper_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf apper_$(apper_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: listaller
+listaller:$(LISTALLER)_$(ARCH).deb
+$(LISTALLER): $(SPREZZ)/listaller/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf listaller_$(listaller_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libkexiv2
+libkexiv2:$(LIBKEXIV2)_$(ARCH).deb
+$(LIBKEXIV2): $(SPREZZ)/libkexiv2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libkexiv2_$(libkexiv2_UPVER).orig.tar.gz $(TARARGS) $@
 
