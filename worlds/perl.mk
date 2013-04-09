@@ -703,3 +703,19 @@ $(LIBXMLCOMPILEPERL): $(SPREZZ)/libxml-compile-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxml-compile-perl_$(libxml-compile-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libclass-methodmaker-perl
+libclass-methodmaker-perl:$(LIBCLASSMETHODMAKERPERL)_$(ARCH).deb
+$(LIBCLASSMETHODMAKERPERL): $(SPREZZ)/libclass-methodmaker-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libclass-methodmaker-perl_$(libclass-methodmaker-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libtext-bidi-perl
+libtext-bidi-perl:$(LIBTEXTBIDIPERL)_$(ARCH).deb
+$(LIBTEXTBIDIPERL): $(SPREZZ)/libtext-bidi-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtext-bidi-perl_$(libtext-bidi-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
