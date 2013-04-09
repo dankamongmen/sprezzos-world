@@ -633,3 +633,11 @@ $(GLIV): $(SPREZZ)/gliv/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gliv_$(gliv_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gmic
+gmic:$(GMIC)_$(ARCH).deb
+$(GMIC): $(SPREZZ)/gmic/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gmic_$(gmic_UPVER).orig.tar.gz $(TARARGS) $@
+
