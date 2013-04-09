@@ -96,16 +96,16 @@ $(AUDIOREAD): $(SPREZZ)/audioread/debian/changelog
 	tar xzvf audioread_$(audioread_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: python-netfilter
-python-netfilter:$(pythonnetfilter)_$(ARCH).deb
-$(pythonnetfilter): $(SPREZZ)/python-netfilter/debian/changelog
+python-netfilter:$(PYTHONNETFILTER)_$(ARCH).deb
+$(PYTHONNETFILTER): $(SPREZZ)/python-netfilter/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-netfilter_$(python-netfilter_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: nose
-nose:$(nose)_$(ARCH).deb
-$(nose): $(SPREZZ)/nose/debian/changelog
+nose:$(NOSE)_$(ARCH).deb
+$(NOSE): $(SPREZZ)/nose/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version

@@ -10605,3 +10605,11 @@ $(LIBTINS): $(SPREZZ)/libtins/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtins_$(libtins_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gnuclad
+gnuclad:$(GNUCLAD)_$(ARCH).deb
+$(GNUCLAD): $(SPREZZ)/gnuclad/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnuclad_$(gnuclad_UPVER).orig.tar.gz $(TARARGS) $@
+
