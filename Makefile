@@ -10613,3 +10613,11 @@ $(GNUCLAD): $(SPREZZ)/gnuclad/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnuclad_$(gnuclad_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: protobuf-c
+protobuf-c:$(PROTOBUFC)_$(ARCH).deb
+$(PROTOBUFC): $(SPREZZ)/protobuf-c/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf protobuf-c_$(protobuf-c_UPVER).orig.tar.gz $(TARARGS) $@
+
