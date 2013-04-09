@@ -625,3 +625,11 @@ $(COMPIZFUSIONPLUGINSMAIN): $(SPREZZ)/compiz-fusion-plugins-main/debian/changelo
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf compiz-fusion-plugins-main_$(compiz-fusion-plugins-main_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gliv
+gliv:$(GLIV)_$(ARCH).deb
+$(GLIV): $(SPREZZ)/gliv/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gliv_$(gliv_UPVER).orig.tar.gz $(TARARGS) $@
+
