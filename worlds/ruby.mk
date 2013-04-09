@@ -214,3 +214,11 @@ $(RUBYDAEMONS): $(SPREZZ)/ruby-daemons/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ruby-daemons_$(ruby-daemons_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ruby-spoon
+ruby-spoon:$(RUBYSPOON)_$(ARCH).deb
+$(RUBYSPOON): $(SPREZZ)/ruby-spoon/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ruby-spoon_$(ruby-spoon_UPVER).orig.tar.gz $(TARARGS) $@
+

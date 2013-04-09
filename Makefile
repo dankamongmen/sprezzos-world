@@ -6006,7 +6006,7 @@ $(MPD): $(SPREZZ)/mpd/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf mpd_$(mpd_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf mpd_$(mpd_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: mpfr4
 mpfr4:$(MPFR4)_$(ARCH).deb
