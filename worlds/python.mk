@@ -239,3 +239,19 @@ $(LXML): $(SPREZZ)/lxml/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lxml_$(lxml_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: pyppd
+pyppd:$(PYPPD)_$(ARCH).deb
+$(PYPPD): $(SPREZZ)/pyppd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pyppd_$(pyppd_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: python-cups
+python-cups:$(PYTHONCUPS)_$(ARCH).deb
+$(PYTHONCUPS): $(SPREZZ)/python-cups/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-cups_$(python-cups_UPVER).orig.tar.gz $(TARARGS) $@
+
