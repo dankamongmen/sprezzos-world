@@ -10621,3 +10621,11 @@ $(PROTOBUFC): $(SPREZZ)/protobuf-c/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf protobuf-c_$(protobuf-c_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: vc
+vc:$(VC)_$(ARCH).deb
+$(VC): $(SPREZZ)/vc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vc_$(vc_UPVER).orig.tar.gz $(TARARGS) $@
+
