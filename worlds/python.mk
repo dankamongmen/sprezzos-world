@@ -253,5 +253,13 @@ $(PYTHONCUPS): $(SPREZZ)/python-cups/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf python-cups_$(python-cups_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf python-cups_$(python-cups_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: pysmbc
+pysmbc:$(PYSMBC)_$(ARCH).deb
+$(PYSMBC): $(SPREZZ)/pysmbc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf pysmbc_$(pysmbc_UPVER).orig.tar.bz2 $(TARARGS) $@
 
