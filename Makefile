@@ -10629,3 +10629,11 @@ $(VC): $(SPREZZ)/vc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vc_$(vc_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: media-ctl
+media-ctl:$(MEDIACTL)_$(ARCH).deb
+$(MEDIACTL): $(SPREZZ)/media-ctl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf media-ctl_$(media-ctl_UPVER).orig.tar.gz $(TARARGS) $@
+
