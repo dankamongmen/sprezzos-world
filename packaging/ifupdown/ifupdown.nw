@@ -4690,6 +4690,7 @@ void compute_v4_broadcast(interface_defn *ifd, char **pparam, int argc, char ** 
 void set_preferred_lft(interface_defn *ifd, char **pparam, int argc, char ** argv);
 void get_token(interface_defn *ifd, char **pparam, int argc, char ** argv);
 void to_decimal(interface_defn *ifd, char **pparam, int argc, char ** argv);
+void map_value(interface_defn *ifd, char **pparam, int argc, char ** argv);
 @ 
 
 <<common functions implementations>>=
@@ -4914,6 +4915,28 @@ void to_decimal(interface_defn *ifd UNUSED, char **pparam, int argc, char ** arg
 	snprintf(*pparam, strlen(*pparam) + 1, "%ld", value);
 }
 
+void map_value(interface_defn *ifd UNUSED, char **pparam, int argc, char ** argv)
+{
+	if (argc < 2) return;
+
+	int value;
+	if (argc == 2) {
+		value = (atoi(*pparam) ||
+			strcasecmp(*pparam, "on") == 0 ||
+			strcasecmp(*pparam, "true") == 0 ||
+			strcasecmp(*pparam, "yes") == 0);
+	}
+	if ((value < argc) && (argv[value] != NULL)) {
+		*pparam = realloc(*pparam, strlen(argv[value]) + 1);
+		if (*pparam == NULL) return;
+		strcpy(*pparam, argv[value]);
+	} else {
+		*pparam = realloc(*pparam, 1);
+		if (*pparam == NULL) return;
+		*pparam[0] = 0;
+	}
+}
+
 @ 
 
 \subsection{Linux-specific functions}
@@ -5122,16 +5145,18 @@ method dhcp
     vendor vendor           -- Vendor class identifier (dhcpcd)
     client client           -- Client identifier (dhcpcd, udhcpc)
     hwaddress address       -- Hardware address.
+    tryonce bool            -- Try to acquire lease just once (dhclient). [yes]
 
   conversion
     hwaddress cleanup_hwaddress
+    tryonce (map_value "" -1)
 
   up
     [[ip link set dev %iface% address %hwaddress%]]
-    dhclient -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+    dhclient [[%tryonce%]] -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
 	[[-e IF_METRIC=%metric%]] \
         if (execable("/sbin/dhclient"))
-    dhclient3 -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
+    dhclient3 [[%tryonce%]] -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
 	[[-e IF_METRIC=%metric%]] \
         elsif (execable("/sbin/dhclient3"))
     pump -i %iface% [[-h %hostname%]] [[-l %leasehours%]] \
@@ -5275,21 +5300,27 @@ method auto
     properly configured and running.
     If stateless DHCPv6 support is turned on, then additional network
     configuration parameters such as DNS and NTP servers will be retrieved
-    from a DHCP server. Please note that on ifdown, the lease is not currently
-    released (a known bug).
+    from a DHCP server.
 
   options
     privext int            -- Privacy extensions (RFC3041) (0=off, 1=assign, 2=prefer)
     dhcp int               -- Use stateless DHCPv6 (0=off, 1=on)
+    tryonce bool           -- For DHCPv6, try to acquire lease just once. [yes]
+
+  conversion
+    tryonce (map_value "" -1)
+
   up
     modprobe -q net-pf-10 > /dev/null 2>&1 || true # ignore failure.
     [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.use_tempaddr=%privext%]]
     sysctl -q -e -w net.ipv6.conf.%iface/.//%.accept_ra=1
     sysctl -q -e -w net.ipv6.conf.%iface/.//%.autoconf=1
     ip link set dev %iface% up
-    dhclient -6 -S -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 [[%tryonce%]] -S -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (var_true("dhcp", ifd) && execable("/sbin/dhclient"))
   down
+    dhclient -6 -r -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (var_true("dhcp", ifd) && execable("/sbin/dhclient"))
     ip -6 addr flush dev %iface% scope global
     ip link set dev %iface% down \
 		if (iface_is_link())
@@ -5364,16 +5395,18 @@ method dhcp
     hwaddress address      -- Hardware address
     accept_ra int          -- Accept router advertisements (0=off, 1=on) [0]
     autoconf int           -- Perform stateless autoconfiguration (0=off, 1=on)
+    tryonce bool           -- Try to acquire lease just once. [yes]
 
   conversion
     hwaddress cleanup_hwaddress
+    tryonce (map_value "" -1)
 
   up
     modprobe -q net-pf-10 > /dev/null 2>&1 || true # ignore failure.
     [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.accept_ra=%accept_ra%]]
     [[sysctl -q -e -w net.ipv6.conf.%iface/.//%.autoconf=%autoconf%]]
     ip link set dev %iface% [[address %hwaddress%]] up
-    dhclient -6 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 [[%tryonce%]] -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (execable("/sbin/dhclient"))
 
   down
@@ -5610,16 +5643,18 @@ method dhcp
     vendor vendor           -- Vendor class identifier (dhcpcd)
     client client           -- Client identifier (dhcpcd, udhcpc)
     hwaddress address       -- Hardware Address.
+    tryonce bool            -- Try to acquire lease just once (dhclient). [yes]
 
   conversion
     hwaddress cleanup_hwaddress
+    tryonce (map_value "" -1)
 
   up
     [[ifconfig %iface% link %hwaddress%]]
-    dhclient -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+    dhclient [[%tryonce%]] -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
 	[[-e IF_METRIC=%metric%]] \
         if (execable("/sbin/dhclient"))
-    dhclient3 -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
+    dhclient3 [[%tryonce%]] -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp3/dhclient.%iface%.leases %iface% \
 	[[-e IF_METRIC=%metric%]] \
         elsif (execable("/sbin/dhclient3"))
     udhcpc -n -p /run/udhcpc.%iface%.pid -i %iface% [[-H %hostname%]] \
@@ -5699,22 +5734,25 @@ method auto
     properly configured and running.
     If stateless DHCPv6 support is turned on, then additional network
     configuration parameters such as DNS and NTP servers will be retrieved
-    from a DHCP server. Please note that on ifdown, the lease is not currently
-    released (a known bug).
+    from a DHCP server.
 
   options
     dhcp int               -- Use stateless DHCPv6 (0=off, 1=on)
+    tryonce bool           -- Try to acquire lease just once. [yes]
 
   conversion
     hwaddress cleanup_hwaddress
+    tryonce (map_value "" -1)
 
   up
     sysctl -q -e -w net.inet6.ip6.accept_rtadv=1
     ifconfig %iface% up
-    dhclient -6 -S -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 [[%tryonce%]] -S -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (var_true("dhcp", ifd) && execable("/sbin/dhclient"))
 
   down
+    dhclient -6 -r -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+        if (var_true("dhcp", ifd) && execable("/sbin/dhclient"))
     ifconfig %iface% down
 
 
@@ -5727,13 +5765,15 @@ method dhcp
 
   options
     hwaddress address      -- Hardware address
+    tryonce bool           -- Try to acquire lease just once. [yes]
 
   conversion
     hwaddress cleanup_hwaddress
+    tryonce (map_value "" -1)
 
   up
     ifconfig %iface% [[link %hwaddress%]] up
-    dhclient -6 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 [[%tryonce%]] -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (execable("/sbin/dhclient"))
 
   down
@@ -5828,13 +5868,15 @@ method dhcp
     vendor vendor           -- Vendor class identifier (dhcpcd)
     client client           -- Client identifier (dhcpcd, udhcpc)
     hwaddress address       -- Hardware Address (Not yet supported)
+    tryonce bool            -- Try to acquire lease just once (dhclient). [yes]
 
   conversion
     hwaddress cleanup_hwaddress
+    tryonce (map_value "" -1)
 
   up
     [[Warning: Option hwaddress: %hwaddress% not yet supported]]
-    dhclient -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
+    dhclient [[%tryonce%]] -v -pf /run/dhclient.%iface%.pid -lf /var/lib/dhcp/dhclient.%iface%.leases %iface% \
         if (execable("/sbin/dhclient"))
     udhcpc -n -p /run/udhcpc.%iface%.pid -i %iface% [[-H %hostname%]] \
            [[-c %client%]] \
@@ -5909,14 +5951,16 @@ method dhcp
 
   options
     hwaddress address      -- Hardware address (Not yet supported)
+    tryonce bool           -- Try to acquire lease just once. [yes]
 
   conversion
     hwaddress cleanup_hwaddress
+    tryonce (map_value "" -1)
 
   up
     [[Warning: Option hwaddress: %hwaddress% not yet supported]]
     inetutils-ifconfig --interface %iface% --up
-    dhclient -6 -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
+    dhclient -6 [[%tryonce%]] -pf /run/dhclient6.%iface%.pid -lf /var/lib/dhcp/dhclient6.%iface%.leases %iface% \
         if (execable("/sbin/dhclient"))
 
   down
