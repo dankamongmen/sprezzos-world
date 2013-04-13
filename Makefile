@@ -10235,7 +10235,7 @@ $(ISL): $(SPREZZ)/isl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf isl_$(isl_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf isl_$(isl_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: gcc-4.8
 gcc-4.8:$(GCC4.8)_$(ARCH).deb
