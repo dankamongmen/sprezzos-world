@@ -8114,6 +8114,8 @@ $(VIRTUALBOX): $(SPREZZ)/virtualbox/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf virtualbox_$(virtualbox_UPVER).orig.tar.bz2 $(TARARGS) $@
+	rm -rf $@/debian
+	cp -r $(<D) $@/
 
 .PHONY: virtuoso-opensource
 virtuoso-opensource:$(VIRTUOSOOPENSOURCE)_$(ARCH).deb
@@ -10652,4 +10654,12 @@ $(I7Z): $(SPREZZ)/i7z/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf i7z_$(i7z_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: msr-tools
+msr-tools:$(MSRTOOLS)_$(ARCH).deb
+$(MSRTOOLS): $(SPREZZ)/msr-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf msr-tools_$(msr-tools_UPVER).orig.tar.gz $(TARARGS) $@
 
