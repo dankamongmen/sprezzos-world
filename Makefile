@@ -2330,7 +2330,7 @@ $(CURL): $(SPREZZ)/curl/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf curl-$(curl_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf curl-$(curl_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: cyrus-sasl
 cyrus-sasl:$(CYRUSSASL)_$(ARCH).deb
@@ -10644,4 +10644,12 @@ $(ALSABASE): $(SPREZZ)/alsa-base/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf alsa-base_$(alsa-base_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: i7z
+i7z:$(I7Z)_$(ARCH).deb
+$(I7Z): $(SPREZZ)/i7z/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf i7z_$(i7z_UPVER).orig.tar.gz $(TARARGS) $@
 
