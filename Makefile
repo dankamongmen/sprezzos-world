@@ -6688,7 +6688,7 @@ $(OPENCV): $(SPREZZ)/opencv/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf OpenCV-$(opencv_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf opencv-$(opencv_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: openipmi
 openipmi:$(OPENIPMI)_$(ARCH).deb
