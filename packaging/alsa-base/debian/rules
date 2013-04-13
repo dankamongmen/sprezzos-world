@@ -1,0 +1,64 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+INSTALL_UAG := -o root -g audio
+
+override_dh_auto_clean:
+	dh_auto_clean
+	-$(RM) debian/files
+	-$(RM) debian/ALSA-card-list_cleaned
+	-$(RM) debian/ALSA-card-list_cleaned_nobrackets
+	-$(RM) debian/ALSA-card-list_cleaned_nodescriptions
+	-$(RM) debian/ALSA-card-list_needingpostinstall
+	-$(RM) debian/ALSA-card-list_modem
+	-$(RM) debian/ALSA-card-list_tv
+
+override_dh_auto_install:
+	dh_auto_install
+	install $(INSTALL_UAG) -m755 debian/alsa debian/alsa-base/usr/sbin/alsa
+	### Generate lists
+	cat debian/ALSA-card-list \
+		| sed -e 's/^[[:space:]]*//' -e 's/#.*//' -e 's/,//' -e '/^$$/d' \
+		> debian/ALSA-card-list_cleaned
+	cat debian/ALSA-card-list_cleaned \
+		| sed -e 's/ \[[^]]*\]//' \
+		> debian/ALSA-card-list_cleaned_nobrackets
+	cat debian/ALSA-card-list_cleaned \
+		| sed -e 's/ .*$$//' \
+		> debian/ALSA-card-list_cleaned_nodescriptions
+	cat debian/ALSA-card-list_cleaned \
+		| sed -e '/MODEM/d' \
+		      -e '/TV/d' \
+		      -e '/UNREAL/d' \
+		      -e '/NOPOSTINSTALL/d' \
+		> debian/ALSA-card-list_needingpostinstall
+	cat debian/ALSA-card-list_cleaned \
+		| grep -e 'MODEM' \
+		> debian/ALSA-card-list_modem
+	cat debian/ALSA-card-list_cleaned \
+		| grep -e 'TV' \
+		> debian/ALSA-card-list_tv
+override_dh_installmodules:
+	dh_installmodules
+	# Install blacklists and related
+	echo '# Uncomment these entries in order to blacklist unwanted modem drivers' \
+		> debian/alsa-base/etc/modprobe.d/alsa-base-blacklist.conf
+	cat debian/ALSA-card-list_modem \
+		| sed -e 's/[[:space:]].*//' -e 's/^/# blacklist snd-/' \
+		>> debian/alsa-base/etc/modprobe.d/alsa-base-blacklist.conf
+	echo '# Comment this entry in order to load snd-pcsp driver' \
+		>> debian/alsa-base/etc/modprobe.d/alsa-base-blacklist.conf
+	echo 'blacklist snd-pcsp' \
+		>> debian/alsa-base/etc/modprobe.d/alsa-base-blacklist.conf
+	# Add extra configuration.
+	echo "# Prevent abnormal drivers from grabbing index 0" \
+		>> debian/alsa-base/etc/modprobe.d/alsa-base.conf
+	cat debian/ALSA-card-list_tv \
+		| sed -e 's/[[:space:]].*//' -e 's%\(.*\)%options \1 index=-2%' \
+		>> debian/alsa-base/etc/modprobe.d/alsa-base.conf
+	cat debian/ALSA-card-list_modem \
+		| sed -e 's/[[:space:]].*//' -e 's%\(.*\)%options snd-\1 index=-2%' \
+		>> debian/alsa-base/etc/modprobe.d/alsa-base.conf
+	# Install it for the udeb
+	cp debian/alsa-base/etc/modprobe.d/* debian/alsa-base-udeb/etc/modprobe.d/

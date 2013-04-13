@@ -582,3 +582,19 @@ $(LIBKEXIV2): $(SPREZZ)/libkexiv2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libkexiv2_$(libkexiv2_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: ksnapshot
+ksnapshot:$(KSNAPSHOT)_$(ARCH).deb
+$(KSNAPSHOT): $(SPREZZ)/ksnapshot/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf ksnapshot_$(ksnapshot_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: libqtgtl
+libqtgtl:$(LIBQTGTL)_$(ARCH).deb
+$(LIBQTGTL): $(SPREZZ)/libqtgtl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libqtgtl_$(libqtgtl_UPVER).orig.tar.bz2 $(TARARGS) $@
+

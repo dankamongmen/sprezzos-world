@@ -4862,3 +4862,19 @@ $(HOTHASKTAGS): $(SPREZZ)/hothasktags/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hothasktags_$(hothasktags_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-process-extras
+haskell-process-extras:$(HASKELLPROCESSEXTRAS)_$(ARCH).deb
+$(HASKELLPROCESSEXTRAS): $(SPREZZ)/haskell-process-extras/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-process-extras_$(haskell-process-extras_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-asn1-types
+haskell-asn1-types:$(HASKELLASN1TYPES)_$(ARCH).deb
+$(HASKELLASN1TYPES): $(SPREZZ)/haskell-asn1-types/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-asn1-types_$(haskell-asn1-types_UPVER).orig.tar.gz $(TARARGS) $@
+

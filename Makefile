@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -10636,4 +10636,12 @@ $(MEDIACTL): $(SPREZZ)/media-ctl/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf media-ctl_$(media-ctl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: alsa-base
+alsa-base:$(ALSABASE)_$(ARCH).deb
+$(ALSABASE): $(SPREZZ)/alsa-base/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf alsa-base_$(alsa-base_UPVER).orig.tar.gz $(TARARGS) $@
 
