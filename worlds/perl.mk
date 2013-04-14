@@ -719,3 +719,11 @@ $(LIBTEXTBIDIPERL): $(SPREZZ)/libtext-bidi-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtext-bidi-perl_$(libtext-bidi-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libtext-csv-xs-perl
+libtext-csv-xs-perl:$(LIBTEXTCSVXSPERL)_$(ARCH).deb
+$(LIBTEXTCSVXSPERL): $(SPREZZ)/libtext-csv-xs-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtext-csv-xs-perl_$(libtext-csv-xs-perl_UPVER).orig.tar.gz $(TARARGS) $@
+

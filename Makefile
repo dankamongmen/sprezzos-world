@@ -707,7 +707,7 @@ $(LUMINANCEHDR): $(SPREZZ)/luminance-hdr/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf luminance-hdr-$(luminance-hdr_UPVER).tar.bz2 $(TARARGS) $@
+	tar xjvf luminance-hdr-$(luminance-hdr_UPVER).tar.bz2 --exclude=$(shell echo $@ | tr _ -)/debian -C $@
 
 .PHONY: lvm2
 lvm2:$(LVM2)_$(ARCH).deb
@@ -10694,4 +10694,12 @@ $(PHOTOUPLOADER): $(SPREZZ)/photo-uploader/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf photo-uploader_$(photo-uploader_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: httrack
+httrack:$(HTTRACK)_$(ARCH).deb
+$(HTTRACK): $(SPREZZ)/httrack/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf httrack_$(httrack_UPVER).orig.tar.gz $(TARARGS) $@
 
