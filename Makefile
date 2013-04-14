@@ -74,6 +74,22 @@ $(GEGL): $(SPREZZ)/gegl/debian/changelog
 	ln -sf gegl-$(gegl_UPVER).tar.xz gegl_$(gegl_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
 
+.PHONY: nemo
+nemo:$(NEMO)_$(ARCH).deb
+$(NEMO): $(SPREZZ)/nemo/debian/changelog
+	git clone git@github.com:dankamongmen/nemo.git $@
+	tar cJf nemo-$(nemo_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf nemo-$(nemo_UPVER).tar.xz nemo_$(nemo_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+#.PHONY: nemo
+#nemo:$(NEMO)_$(ARCH).deb
+#$(NEMO): $(SPREZZ)/nemo/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@/
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xzvf nemo_$(nemo_UPVER).orig.tar.gz $(TARARGS) $@
+
 .PHONY: usbutils
 usbutils:$(USBUTILS)_$(ARCH).deb
 $(USBUTILS): $(SPREZZ)/usbutils/debian/changelog
@@ -239,6 +255,23 @@ $(EMAP): $(SPREZZ)/emap/debian/changelog
 	tar cJf emap-$(emap_UPVER).tar.xz $@ --exclude-vcs
 	ln -sf emap-$(emap_UPVER).tar.xz emap_$(emap_UPVER).orig.tar.xz
 	cp -r $(<D) $@/
+
+.PHONY: xmlrpc-c
+xmlrpc-c:$(XMLRPCC)_$(ARCH).deb
+$(XMLRPCC): $(SPREZZ)/xmlrpc-c/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	svn checkout http://svn.code.sf.net/p/xmlrpc-c/code/advanced $@
+	tar cJf xmlrpc-c-$(xmlrpc-c_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf xmlrpc-c-$(xmlrpc-c_UPVER).tar.xz xmlrpc-c_$(xmlrpc-c_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
+#.PHONY: xmlrpc-c
+#xmlrpc-c:$(XMLRPCC)_$(ARCH).deb
+#$(XMLRPCC): $(SPREZZ)/xmlrpc-c/debian/changelog
+#	mkdir $@
+#	cp -r $(<D) $@
+#	cd $@ && uscan --force-download --download-current-version
+#	tar xzvf xmlrpc-c_$(xmlrpc-c_UPVER).orig.tar.gz $(TARARGS) $@
 
 #.PHONY: webkit
 #webkit:$(WEBKIT)_$(ARCH).deb
@@ -6144,14 +6177,6 @@ $(NCURSES): $(SPREZZ)/ncurses/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ncurses_$(ncurses_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: nemo
-nemo:$(NEMO)_$(ARCH).deb
-$(NEMO): $(SPREZZ)/nemo/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf nemo_$(nemo_UPVER).orig.tar.gz $(TARARGS) $@
-
 .PHONY: neon
 neon:$(NEON)_$(ARCH).deb
 $(NEON): $(SPREZZ)/neon/debian/changelog
@@ -10662,4 +10687,11 @@ $(MSRTOOLS): $(SPREZZ)/msr-tools/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf msr-tools_$(msr-tools_UPVER).orig.tar.gz $(TARARGS) $@
+.PHONY: photo-uploader
+photo-uploader:$(PHOTOUPLOADER)_$(ARCH).deb
+$(PHOTOUPLOADER): $(SPREZZ)/photo-uploader/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf photo-uploader_$(photo-uploader_UPVER).orig.tar.gz $(TARARGS) $@
 
