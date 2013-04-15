@@ -10775,3 +10775,11 @@ $(PORTAUDIO): $(SPREZZ)/portaudio/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf portaudio_$(portaudio_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libverto
+libverto:$(LIBVERTO)_$(ARCH).deb
+$(LIBVERTO): $(SPREZZ)/libverto/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libverto_$(libverto_UPVER).orig.tar.gz $(TARARGS) $@
+
