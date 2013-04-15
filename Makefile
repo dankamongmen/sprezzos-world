@@ -10703,3 +10703,59 @@ $(HTTRACK): $(SPREZZ)/httrack/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf httrack_$(httrack_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: neard
+neard:$(NEARD)_$(ARCH).deb
+$(NEARD): $(SPREZZ)/neard/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf neard_$(neard_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: nat-traverse
+nat-traverse:$(NATTRAVERSE)_$(ARCH).deb
+$(NATTRAVERSE): $(SPREZZ)/nat-traverse/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf nat-traverse_$(nat-traverse_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: nicstat
+nicstat:$(NICSTAT)_$(ARCH).deb
+$(NICSTAT): $(SPREZZ)/nicstat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nicstat_$(nicstat_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: flexbar
+flexbar:$(FLEXBAR)_$(ARCH).deb
+$(FLEXBAR): $(SPREZZ)/flexbar/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf flexbar_$(flexbar_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: aragorn
+aragorn:$(ARAGORN)_$(ARCH).deb
+$(ARAGORN): $(SPREZZ)/aragorn/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf aragorn_$(aragorn_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: zalign
+zalign:$(ZALIGN)_$(ARCH).deb
+$(ZALIGN): $(SPREZZ)/zalign/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf zalign_$(zalign_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: zegrapher
+zegrapher:$(ZEGRAPHER)_$(ARCH).deb
+$(ZEGRAPHER): $(SPREZZ)/zegrapher/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	cd $@ && 7z e ../ZeGrapher_v$(zegrapher_UPVER)_Sources.7z
+
