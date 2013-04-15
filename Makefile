@@ -10759,3 +10759,19 @@ $(ZEGRAPHER): $(SPREZZ)/zegrapher/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	cd $@ && 7z e ../ZeGrapher_v$(zegrapher_UPVER)_Sources.7z
 
+.PHONY: qmidiarp
+qmidiarp:$(QMIDIARP)_$(ARCH).deb
+$(QMIDIARP): $(SPREZZ)/qmidiarp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf qmidiarp_$(qmidiarp_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: portaudio
+portaudio:$(PORTAUDIO)_$(ARCH).deb
+$(PORTAUDIO): $(SPREZZ)/portaudio/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf portaudio_$(portaudio_UPVER).orig.tar.gz $(TARARGS) $@
+

@@ -4878,3 +4878,11 @@ $(HASKELLASN1TYPES): $(SPREZZ)/haskell-asn1-types/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-asn1-types_$(haskell-asn1-types_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-concrete-typerep
+haskell-concrete-typerep:$(HASKELLCONCRETETYPEREP)_$(ARCH).deb
+$(HASKELLCONCRETETYPEREP): $(SPREZZ)/haskell-concrete-typerep/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-concrete-typerep_$(haskell-concrete-typerep_UPVER).orig.tar.gz $(TARARGS) $@
+

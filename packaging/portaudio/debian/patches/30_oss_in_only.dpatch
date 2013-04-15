@@ -1,0 +1,147 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 30_oss_in_only.dpatch by  <mikma@users.sourceforge.net>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: OSS support of input only devices
+
+@DPATCH@
+diff -urNad portaudio-18.1/pa_unix_oss/pa_unix_oss.c /tmp/dpep.SJR1fu/portaudio-18.1/pa_unix_oss/pa_unix_oss.c
+--- portaudio-18.1/pa_unix_oss/pa_unix_oss.c	2005-01-17 21:40:16.000000000 +0100
++++ /tmp/dpep.SJR1fu/portaudio-18.1/pa_unix_oss/pa_unix_oss.c	2005-01-17 21:40:37.000000000 +0100
+@@ -37,6 +37,12 @@
+    PLB20021018 - Fill device info table with actual sample rates instead of wished for rates.
+                - Allow stream to open if sample rate within 10% of desired rate.
+    20030630 - Thomas Richter - eliminated unused variable warnings.
++
++   20041215 - Mikael Magnusson
++       Detect max input and output channels separately by opening the
++       device with flag O_RDONLY respectively O_WRONLY. Previously
++       PortAudio didn't use devices with only inputs, and it also
++       skipped all devices that followed.
+ */
+ 
+ #include "pa_unix.h"
+@@ -69,7 +75,8 @@
+  * If it opens, try to set various rates and formats and fill in 
+  * the device info structure.
+  */
+-PaError Pa_QueryDevice( const char *deviceName, internalPortAudioDevice *pad )
++static PaError Pa_QueryDeviceSingle( const char *deviceName,
++				     internalPortAudioDevice *pad, int input )
+ {
+     int result = paHostError;
+     int tempDevHandle;
+@@ -89,9 +96,8 @@
+      the correct order for OSS is: format, channels, sample rate
+      
+     */
+-    if ( (tempDevHandle = open(deviceName,O_WRONLY|O_NONBLOCK))  == -1 )
++    if ( (tempDevHandle = open(deviceName, input ? O_RDONLY:O_WRONLY))  == -1 )
+     {
+-        DBUG(("Pa_QueryDevice: could not open %s\n", deviceName ));
+         return paHostError;
+     }
+ 
+@@ -147,7 +153,11 @@
+         DBUG(("Pa_QueryDevice: use SNDCTL_DSP_STEREO, maxNumChannels = %d\n", maxNumChannels ))
+     }
+ 
+-    pad->pad_Info.maxOutputChannels = maxNumChannels;
++    if (input) {
++	pad->pad_Info.maxInputChannels = maxNumChannels;
++    } else {
++	pad->pad_Info.maxOutputChannels = maxNumChannels;
++    }
+     DBUG(("Pa_QueryDevice: maxNumChannels = %d\n", maxNumChannels))
+ 
+     /* During channel negotiation, the last ioctl() may have failed. This can
+@@ -159,14 +169,6 @@
+         ioctl(tempDevHandle, SNDCTL_DSP_CHANNELS, &temp);
+     }
+ 
+-    /* FIXME - for now, assume maxInputChannels = maxOutputChannels.
+-     *    Eventually do separate queries for O_WRONLY and O_RDONLY
+-    */
+-    pad->pad_Info.maxInputChannels = pad->pad_Info.maxOutputChannels;
+-
+-    DBUG(("Pa_QueryDevice: maxInputChannels = %d\n",
+-          pad->pad_Info.maxInputChannels))
+-
+ 
+     /* Determine available sample rates by trying each one and seeing result.
+      * OSS often supports funky rates such as 44188 instead of 44100!
+@@ -217,6 +219,74 @@
+     return result;
+ }
+ 
++static void AddSampleRates( internalPortAudioDevice *dst,
++			    const internalPortAudioDevice *src)
++{
++    int i;
++    int j;
++    
++    DBUG(("AddSampleRates in %d\n", src->pad_Info.numSampleRates));
++    for (i = 0; i < src->pad_Info.numSampleRates; i++) {
++	int found = 0;
++
++	for (j = 0; j < dst->pad_Info.numSampleRates; j++) {
++	    if (dst->pad_SampleRates[j] == src->pad_SampleRates[i]) {
++		found = 1;
++		break;
++	    }
++	}
++
++	if (!found) {
++	    dst->pad_SampleRates[dst->pad_Info.numSampleRates] =
++		src->pad_SampleRates[i];
++	    dst->pad_Info.numSampleRates++;
++	    
++	    DBUG(("AddSampleRates %f\n", src->pad_Info.sampleRates[i]));
++	}
++    }
++    DBUG(("AddSampleRates out %d\n", src->pad_Info.numSampleRates));
++}
++
++PaError Pa_QueryDevice( const char *deviceName, internalPortAudioDevice *pad )
++{
++    PaError result;
++    PaError result2;
++    internalPortAudioDevice input;
++    internalPortAudioDevice output;
++    
++    memset(&input, 0, sizeof(input));
++    memset(&output, 0, sizeof(output));
++
++    result = Pa_QueryDeviceSingle(deviceName, &input, 1);
++    pad->pad_Info.sampleRates = pad->pad_SampleRates;
++
++    if (result == paNoError) {
++	pad->pad_Info.nativeSampleFormats |= 
++	    input.pad_Info.nativeSampleFormats;
++
++	pad->pad_Info.maxInputChannels = input.pad_Info.maxInputChannels;
++
++	AddSampleRates(pad, &input);
++    }
++
++    result2 = Pa_QueryDeviceSingle(deviceName, &output, 0);
++
++    if (result2 == paNoError) {
++	pad->pad_Info.nativeSampleFormats |=
++	    output.pad_Info.nativeSampleFormats;
++
++	pad->pad_Info.maxOutputChannels = output.pad_Info.maxOutputChannels;
++
++	AddSampleRates(pad, &output);
++	result = paNoError;
++    }
++
++    /* sample rates */
++    pad->pad_Info.name = deviceName;
++    
++    return result;
++}
++
+ /*******************************************************************************************/
+ PaError Pa_SetupDeviceFormat( int devHandle, int numChannels, int sampleRate )
+ {

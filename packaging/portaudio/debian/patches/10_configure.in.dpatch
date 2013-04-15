@@ -1,0 +1,160 @@
+#! /bin/sh -e
+## 10_configure.in.dpatch by  <mikma@users.sourceforge.net>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Modify configure.in and Makefile.in to build static and shared
+## DP: libraries using libtool. 10_configure.dpatch contains the
+## DP: automatically created files. It's created with: ./debian/rules configure
+
+if [ $# -lt 1 ]; then
+    echo "`basename $0`: script expects -patch|-unpatch as argument" >&2
+    exit 1
+fi
+
+[ -f debian/patches/00patch-opts ] && . debian/patches/00patch-opts
+patch_opts="${patch_opts:--f --no-backup-if-mismatch} ${2:+-d $2}"
+
+case "$1" in
+    -patch) patch -p1 ${patch_opts} < $0;;
+    -unpatch) patch -R -p1 ${patch_opts} < $0;;
+    *)
+        echo "`basename $0`: script expects -patch|-unpatch as argument" >&2
+        exit 1;;
+esac
+
+exit 0
+
+@DPATCH@
+diff -urNad /var/local/tmp/svn/build-area/portaudio-18.1/configure.in portaudio-18.1/configure.in
+--- /var/local/tmp/svn/build-area/portaudio-18.1/configure.in	2004-09-29 21:44:32.000000000 +0200
++++ portaudio-18.1/configure.in	2004-09-29 21:45:43.000000000 +0200
+@@ -13,21 +13,30 @@
+ 
+ dnl Checks for programs
+ AC_PROG_CC
+-AC_PROG_RANLIB
++AC_PROG_LIBTOOL
+ AC_PROG_INSTALL
+ AC_PATH_PROG(AR, ar, no)
+ if [[ $AR = "no" ]] ; then
+    AC_MSG_ERROR("Could not find ar - needed to create a library");
+ fi
+ 
++LT_CURRENT=0
++LT_REVISION=18
++LT_AGE=0
++
++AC_SUBST(LT_CURRENT)
++AC_SUBST(LT_REVISION)
++AC_SUBST(LT_AGE)
++
+ dnl Extra variables we want to substitute
+ AC_SUBST(OTHER_OBJS)
+ AC_SUBST(PADLL)
+ AC_SUBST(SHARED_FLAGS)
+ AC_SUBST(DLL_LIBS)
++AC_SUBST(VERSION_INFO)
+ 
+ dnl Determine the host operating system / platform
+-AC_CANONICAL_HOST
++dnl in AC_PROG_INSTALL AC_CANONICAL_HOST
+ 
+ case "${host_os}" in
+   darwin* )
+@@ -68,8 +77,9 @@
+ 
+ 	OTHER_OBJS="pa_unix_oss/pa_unix_oss.o pa_unix_oss/pa_unix.o";
+ 	LIBS="-lm -lpthread";
++	DLL_LIBS="-lm -lpthread";
+ 	PADLL="libportaudio.so";
+-	SHARED_FLAGS="-shared";
++	SHARED_FLAGS="-rpath $libdir -version-info $LT_CURRENT:$LT_REVISION:$LT_AGE -Wl,-z,defs";
+ esac
+ 
+ AC_OUTPUT([Makefile])
+diff -urNad /var/local/tmp/svn/build-area/portaudio-18.1/Makefile.in portaudio-18.1/Makefile.in
+--- /var/local/tmp/svn/build-area/portaudio-18.1/Makefile.in	2004-09-29 21:44:32.000000000 +0200
++++ portaudio-18.1/Makefile.in	2004-09-29 21:45:43.000000000 +0200
+@@ -4,21 +4,24 @@
+ # Dominic Mazzoni
+ #
+ 
++top_builddir = .
+ PREFIX = @prefix@
++prefix = @prefix@
++exec_prefix = @exec_prefix@
++libdir = @libdir@
+ CC = @CC@
+ CFLAGS = @CFLAGS@ -Ipa_common
+ LIBS = @LIBS@
+ AR = @AR@
+ RANLIB = @RANLIB@
++LIBTOOL = @LIBTOOL@
+ INSTALL = @INSTALL@
+ SHARED_FLAGS = @SHARED_FLAGS@
+-DLL_LIBS = @DLL_LIBS@
++DLL_LIBS = @DLL_LIBS@ -lpthread
+ 
+ OTHER_OBJS = @OTHER_OBJS@
+ 
+-PALIB = libportaudio.a
+-PADLL = @PADLL@
+-PADLLV = $(PADLL).0.0.18
++PALIB = libportaudio.la
+ PAINC = pa_common/portaudio.h
+ 
+ COMMON_OBJS = \
+@@ -51,25 +54,20 @@
+ 	bin/patest_wire
+ 
+ OBJS = $(COMMON_OBJS) $(OTHER_OBJS)
++LTOBJS:= $(OBJS:.o=.lo)
+ 
+-all: lib/$(PALIB) lib/$(PADLLV) tests
++all: lib/$(PALIB) tests
+ 
+ tests: bin/ $(TESTS)
+ 
+-lib/$(PALIB): lib/ $(OBJS) Makefile $(PAINC)
+-	$(AR) ruv lib/$(PALIB) $(OBJS)
+-	$(RANLIB) lib/$(PALIB)
+-
+-lib/$(PADLLV): lib/ $(OBJS) Makefile $(PAINC)
+-	$(CC) $(SHARED_FLAGS) -o lib/$(PADLLV) $(OBJS) $(DLL_LIBS)
++lib/$(PALIB): lib/ $(LTOBJS) Makefile $(PAINC)
++	$(LIBTOOL) --mode=link $(CC) $(SHARED_FLAGS) -o lib/$(PALIB) $(LTOBJS) $(DLL_LIBS)
+ 
+ $(TESTS): bin/%: lib/$(PALIB) Makefile $(PAINC) pa_tests/%.c
+-	$(CC) -o $@ $(CFLAGS) pa_tests/$*.c lib/$(PALIB) $(LIBS)
++	$(LIBTOOL) --mode=link $(CC) -o $@ $(CFLAGS) pa_tests/$*.c lib/$(PALIB) $(LIBS)
+ 
+-install: lib/$(PALIB) lib/$(PADLLV)
+-	$(INSTALL) -m 644 lib/$(PADLLV) $(PREFIX)/lib/$(PADLLV)
+-	$(INSTALL) -m 644 lib/$(PALIB) $(PREFIX)/lib/$(PALIB)
+-	cd $(PREFIX)/lib && rm -f $(PADLL) && ln -s $(PADLLV) $(PADLL)
++install: lib/$(PALIB)
++	$(LIBTOOL) --mode=install $(INSTALL) lib/$(PALIB) $(PREFIX)/lib/
+ 	$(INSTALL) -m 644 pa_common/portaudio.h $(PREFIX)/include/portaudio.h
+ 	@echo ""
+ 	@echo "------------------------------------------------------------"
+@@ -83,12 +81,17 @@
+ 	@echo ""
+ 
+ clean:
+-	rm -f $(OBJS) $(TESTS) lib/$(PALIB)
+-	rm -f config.log config.status
++	$(LIBTOOL) --mode=clean $(RM) $(TESTS) $(LTOBJS) lib/$(PALIB)
+ 
+-%.o: %.c Makefile $(PAINC)
++distclean: clean
++	$(RM) config.log config.status Makefile libtool
++
++%.o: %.c $(PAINC)
+ 	$(CC) -c $(CFLAGS) $< -o $@
+ 
++%.lo: %.c $(PAINC)
++	$(LIBTOOL) --mode=compile $(CC) -c $(CFLAGS) $< -o $@
++
+ bin:
+ 	mkdir bin
+ 
