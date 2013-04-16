@@ -10823,3 +10823,19 @@ $(MONO3): $(SPREZZ)/mono3/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf mono_$(mono3_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: dbus-sharp
+dbus-sharp:$(DBUSSHARP)_$(ARCH).deb
+$(DBUSSHARP): $(SPREZZ)/dbus-sharp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf dbus-sharp_$(dbus-sharp_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: nunit
+nunit:$(NUNIT)_$(ARCH).deb
+$(NUNIT): $(SPREZZ)/nunit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nunit_$(nunit_UPVER).orig.tar.gz $(TARARGS) $@
+
