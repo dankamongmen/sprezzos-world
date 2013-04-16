@@ -10783,3 +10783,35 @@ $(LIBVERTO): $(SPREZZ)/libverto/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libverto_$(libverto_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: qmidinet
+qmidinet:$(QMIDINET)_$(ARCH).deb
+$(QMIDINET): $(SPREZZ)/qmidinet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qmidinet_$(qmidinet_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: mididings
+mididings:$(MIDIDINGS)_$(ARCH).deb
+$(MIDIDINGS): $(SPREZZ)/mididings/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mididings_$(mididings_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libsmf
+libsmf:$(LIBSMF)_$(ARCH).deb
+$(LIBSMF): $(SPREZZ)/libsmf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libsmf_$(libsmf_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: smokekde
+smokekde:$(SMOKEKDE)_$(ARCH).deb
+$(SMOKEKDE): $(SPREZZ)/smokekde/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf smokekde_$(smokekde_UPVER).orig.tar.gz $(TARARGS) $@
+
