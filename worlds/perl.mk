@@ -727,3 +727,11 @@ $(LIBTEXTCSVXSPERL): $(SPREZZ)/libtext-csv-xs-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtext-csv-xs-perl_$(libtext-csv-xs-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libmidi-perl
+libmidi-perl:$(LIBMIDIPERL)_$(ARCH).deb
+$(LIBMIDIPERL): $(SPREZZ)/libmidi-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libmidi-perl_$(libmidi-perl_UPVER).orig.tar.gz $(TARARGS) $@
+

@@ -909,3 +909,19 @@ $(LIGHTDMGTKGREETER): $(SPREZZ)/lightdm-gtk-greeter/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lightdm-gtk-greeter_$(lightdm-gtk-greeter_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gmidimonitor
+gmidimonitor:$(GMIDIMONITOR)_$(ARCH).deb
+$(GMIDIMONITOR): $(SPREZZ)/gmidimonitor/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gmidimonitor_$(gmidimonitor_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: gnac
+gnac:$(GNAC)_$(ARCH).deb
+$(GNAC): $(SPREZZ)/gnac/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gnac_$(gnac_UPVER).orig.tar.gz $(TARARGS) $@
+
