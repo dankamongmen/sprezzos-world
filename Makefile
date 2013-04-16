@@ -10836,6 +10836,6 @@ nunit:$(NUNIT)_$(ARCH).deb
 $(NUNIT): $(SPREZZ)/nunit/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
+	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf nunit_$(nunit_UPVER).orig.tar.gz $(TARARGS) $@
 
