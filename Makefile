@@ -10815,3 +10815,11 @@ $(SMOKEKDE): $(SPREZZ)/smokekde/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf smokekde_$(smokekde_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mono3
+mono3:$(MONO3)_$(ARCH).deb
+$(MONO3): $(SPREZZ)/mono3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf mono_$(mono3_UPVER).orig.tar.bz2 $(TARARGS) $@
+
