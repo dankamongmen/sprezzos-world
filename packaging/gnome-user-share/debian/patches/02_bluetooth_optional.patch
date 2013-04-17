@@ -1,0 +1,324 @@
+From cc71d396069c036643eec8038377d233e2f8f303 Mon Sep 17 00:00:00 2001
+From: Emilio Pozuelo Monfort <pochu27@gmail.com>
+Date: Sun, 31 Mar 2013 17:56:49 +0200
+Subject: [PATCH] Make bluetooth support optional
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+As gnome-bluetooth doesn’t build on non-Linux architectures, bluetooth
+support in gnome-user-share needs to be optional to allow it to build on
+non-linux.
+
+Based on a patch by Josselin Mouette.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=601890
+---
+ configure.ac          |   13 +++++++++++--
+ src/Makefile.am       |   18 ++++++++++++++----
+ src/share-extension.c |   15 ++++++++++++++-
+ src/user_share.c      |   31 ++++++++++++++++++++++++++++++-
+ 4 files changed, 69 insertions(+), 8 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 4208716..6d3a4e7 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -54,10 +54,19 @@ fi
+ 
+ AC_SUBST(HTTPD)
+ 
+-PKG_CHECK_MODULES(USER_SHARE, glib-2.0 >= 2.28 gio-2.0 >= 2.26 gtk+-3.0 dbus-1 >= 1.1.1 dbus-glib-1 libnotify libcanberra-gtk3 gnome-bluetooth-1.0 >= 2.91.5)
++PKG_CHECK_MODULES(USER_SHARE, glib-2.0 >= 2.28 gio-2.0 >= 2.26 gtk+-3.0 dbus-1 >= 1.1.1 dbus-glib-1 libnotify libcanberra-gtk3)
+ AC_SUBST(USER_SHARE_CFLAGS)
+ AC_SUBST(USER_SHARE_LIBS)
+ 
++AC_ARG_ENABLE(bluetooth, AS_HELP_STRING([--disable-bluetooth],[compile without bluetooth support]),,enable_bluetooth=yes)
++if test "x$enable_bluetooth" = "xyes"; then
++  PKG_CHECK_MODULES(BLUETOOTH, gnome-bluetooth-1.0 >= 2.91.5)
++  AC_DEFINE(HAVE_BLUETOOTH, 1, [Set to true if gnome-bluetooth support is available])
++else
++  AC_MSG_WARN([Bluetooth support is disabled.])
++fi
++AM_CONDITIONAL(USE_BLUETOOTH, [test "$enable_bluetooth" = "yes"])
++
+ AC_CHECK_LIB(socket, socket)
+ 
+ have_socket=no
+@@ -124,7 +133,7 @@ AC_ARG_WITH(nautilusdir,
+ 	    [ac_with_nautilusdir=""])
+ 
+ PKG_CHECK_MODULES(EXTENSION,
+-		   libnautilus-extension >= 2.91.7 gnome-bluetooth-1.0)
++		   libnautilus-extension >= 2.91.7)
+ if test "${ac_with_nautilusdir}" = ""; then
+ 	ac_with_nautilusdir=`pkg-config --variable=extensiondir libnautilus-extension`
+ fi
+diff --git a/src/Makefile.am b/src/Makefile.am
+index d49a70c..9787073 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -27,6 +27,7 @@ INCLUDES=	\
+ 	-I$(top_builddir) 				\
+ 	$(EXTENSION_CFLAGS)				\
+ 	$(USER_SHARE_CFLAGS)				\
++	$(BLUETOOTH_CFLAGS)				\
+ 	$(X_CFLAGS)
+ 
+ gnome_user_share_SOURCES =	\
+@@ -36,10 +37,6 @@ gnome_user_share_SOURCES =	\
+ 	user_share-private.c	\
+ 	http.c			\
+ 	http.h			\
+-	obexftp.c		\
+-	obexftp.h		\
+-	obexpush.c		\
+-	obexpush.h		\
+ 	$(MARSHALFILES)
+ 
+ gnome_user_share_LDADD =	\
+@@ -48,6 +45,15 @@ gnome_user_share_LDADD =	\
+ 	$(SELINUX_LIBS)	\
+ 	$(X_LIBS) $(X_PRE_LIBS) -lX11 $(X_EXTRA_LIBS)
+ 
++if USE_BLUETOOTH
++gnome_user_share_SOURCES += \
++	obexftp.c		\
++	obexftp.h		\
++	obexpush.c		\
++	obexpush.h
++gnome_user_share_LDADD += $(BLUETOOTH_LIBS)
++endif
++
+ nautilus_extensiondir = $(NAUTILUSDIR)
+ nautilus_extension_LTLIBRARIES = libnautilus-share-extension.la
+ 
+@@ -60,6 +66,10 @@ libnautilus_share_extension_la_SOURCES =	\
+ libnautilus_share_extension_la_LIBADD = libuser-share-common.la $(EXTENSION_LIBS)
+ libnautilus_share_extension_la_LDFLAGS = -avoid-version -module -no-undefined
+ 
++if USE_BLUETOOTH
++libnautilus_share_extension_la_LIBADD += $(BLUETOOTH_LIBS)
++endif
++
+ EXTRA_DIST = marshal.list
+ 
+ CLEANFILES = $(BUILT_SOURCES)
+diff --git a/src/share-extension.c b/src/share-extension.c
+index 7e81b5a..b9e0df4 100644
+--- a/src/share-extension.c
++++ b/src/share-extension.c
+@@ -28,10 +28,13 @@
+ #include <glib/gi18n-lib.h>
+ #include <gio/gdesktopappinfo.h>
+ #include <gtk/gtk.h>
+-#include <bluetooth-client.h>
+ #include <libnautilus-extension/nautilus-menu-provider.h>
+ #include <libnautilus-extension/nautilus-location-widget-provider.h>
+ 
++#ifdef HAVE_BLUETOOTH
++#include <bluetooth-client.h>
++#endif /* HAVE_BLUETOOTH */
++
+ #include "nautilus-share-bar.h"
+ #include "user_share-common.h"
+ 
+@@ -89,6 +92,7 @@ bar_response_cb (NautilusShareBar *bar,
+                 launch_prefs_on_window ();
+ }
+ 
++#ifdef HAVE_BLUETOOTH
+ static void
+ downloads_bar_set_from_bluetooth_status (GtkWidget *bar)
+ {
+@@ -109,6 +113,7 @@ default_adapter_powered_cb (GObject    *gobject,
+ {
+ 	downloads_bar_set_from_bluetooth_status (bar);
+ }
++#endif /* HAVE_BLUETOOTH */
+ 
+ static GtkWidget *
+ nautilus_user_share_get_location_widget (NautilusLocationWidgetProvider *iface,
+@@ -151,8 +156,13 @@ nautilus_user_share_get_location_widget (NautilusLocationWidgetProvider *iface,
+ 	if (is_dir[0] != FALSE && is_dir[1] != FALSE) {
+ 		bar = nautilus_share_bar_new (_("May be used to share or receive files"));
+ 	} else if (is_dir[0] != FALSE) {
++#ifdef HAVE_BLUETOOTH
+ 		bar = nautilus_share_bar_new (_("May be shared over the network or Bluetooth"));
++#else
++		bar = nautilus_share_bar_new (_("May be shared over the network"));
++#endif /* HAVE_BLUETOOTH */
+ 	} else {
++#ifdef HAVE_BLUETOOTH
+ 		BluetoothClient *client;
+ 
+ 		bar = nautilus_share_bar_new (_("May be used to receive files over Bluetooth"));
+@@ -162,6 +172,9 @@ nautilus_user_share_get_location_widget (NautilusLocationWidgetProvider *iface,
+ 		g_signal_connect (G_OBJECT (client), "notify::default-adapter-powered",
+ 				  G_CALLBACK (default_adapter_powered_cb), bar);
+ 		downloads_bar_set_from_bluetooth_status (bar);
++#else
++		return NULL;
++#endif /* HAVE_BLUETOOTH */
+ 	}
+ 
+ 	g_signal_connect (bar, "response",
+diff --git a/src/user_share.c b/src/user_share.c
+index 3bcec7f..139bacd 100644
+--- a/src/user_share.c
++++ b/src/user_share.c
+@@ -27,7 +27,6 @@
+ #include <gtk/gtk.h>
+ #include <glib/gi18n.h>
+ #include <glib/gstdio.h>
+-#include <bluetooth-client.h>
+ #include <gio/gio.h>
+ #include <X11/Xlib.h>
+ 
+@@ -35,11 +34,16 @@
+ #include "user_share-private.h"
+ #include "user_share-common.h"
+ #include "http.h"
++
++#ifdef HAVE_BLUETOOTH
++#include <bluetooth-client.h>
++
+ #include "obexftp.h"
+ #include "obexpush.h"
+ 
+ #include <dbus/dbus.h>
+ #include <dbus/dbus-glib.h>
++#endif /* HAVE_BLUETOOTH */
+ 
+ #include <stdarg.h>
+ #include <string.h>
+@@ -56,6 +60,8 @@
+ static GSettings *settings = NULL;
+ 
+ static guint disabled_timeout_tag = 0;
++
++#ifdef HAVE_BLUETOOTH
+ static GDBusProxy *session_proxy = NULL;
+ static gboolean has_console = TRUE;
+ 
+@@ -185,6 +191,7 @@ bluez_init (void)
+ 	g_signal_connect (G_OBJECT (client), "notify::default-adapter-powered",
+ 			  G_CALLBACK (default_adapter_changed), NULL);
+ }
++#endif /* HAVE_BLUETOOTH */
+ 
+ static void
+ migrate_old_configuration (void)
+@@ -216,9 +223,13 @@ disabled_timeout_callback (void)
+ {
+ 	http_down ();
+ 
++#ifdef HAVE_BLUETOOTH
+ 	if (g_settings_get_boolean (settings, FILE_SHARING_BLUETOOTH_ENABLED) == FALSE &&
+ 	    g_settings_get_boolean (settings, FILE_SHARING_BLUETOOTH_OBEXPUSH_ENABLED) == FALSE)
+ 		_exit (0);
++#else
++	_exit (0);
++#endif /* HAVE_BLUETOOTH */
+ 	return FALSE;
+ }
+ 
+@@ -246,6 +257,7 @@ file_sharing_enabled_changed (void)
+ 	}
+ }
+ 
++#ifdef HAVE_BLUETOOTH
+ static void
+ file_sharing_bluetooth_allow_write_changed (void)
+ {
+@@ -312,6 +324,7 @@ file_sharing_bluetooth_obexpush_notify_changed (void)
+ {
+ 	obexpush_set_notify (g_settings_get_boolean (settings, FILE_SHARING_BLUETOOTH_OBEXPUSH_NOTIFY));
+ }
++#endif /* HAVE_BLUETOOTH */
+ 
+ static void
+ setttings_changed (GSettings *settings,
+@@ -324,6 +337,7 @@ setttings_changed (GSettings *settings,
+ 	else if (g_strcmp0 (FILE_SHARING_REQUIRE_PASSWORD, path) == 0)
+ 		require_password_changed ();
+ 
++#ifdef HAVE_BLUETOOTH
+ 	else if (g_strcmp0 (FILE_SHARING_BLUETOOTH_ENABLED, path) == 0)
+ 		file_sharing_bluetooth_enabled_changed ();
+ 
+@@ -341,14 +355,17 @@ setttings_changed (GSettings *settings,
+ 
+ 	else if (g_strcmp0 (FILE_SHARING_BLUETOOTH_OBEXPUSH_NOTIFY, path) == 0)
+ 		file_sharing_bluetooth_obexpush_notify_changed ();
++#endif /* HAVE_BLUETOOTH */
+ }
+ 
+ static void
+ cleanup_handler (int sig)
+ {
+ 	http_down ();
++#ifdef HAVE_BLUETOOTH
+ 	obexftp_down ();
+ 	obexpush_down ();
++#endif /* HAVE_BLUETOOTH */
+ 	_exit (2);
+ }
+ 
+@@ -356,7 +373,9 @@ static int
+ x_io_error_handler (Display *xdisplay)
+ {
+ 	http_down ();
++#ifdef HAVE_BLUETOOTH
+ 	obexftp_down ();
++#endif /* HAVE_BLUETOOTH */
+ 	_exit (2);
+ }
+ 
+@@ -411,10 +430,14 @@ main (int argc, char **argv)
+ 
+ 	migrate_old_configuration ();
+ 
++#ifdef HAVE_BLUETOOTH
+ 	settings = g_settings_new (GNOME_USER_SHARE_SCHEMAS);
+ 	if (g_settings_get_boolean (settings, FILE_SHARING_ENABLED) == FALSE &&
+ 	    g_settings_get_boolean (settings, FILE_SHARING_BLUETOOTH_ENABLED) == FALSE &&
+ 	    g_settings_get_boolean (settings, FILE_SHARING_BLUETOOTH_OBEXPUSH_ENABLED) == FALSE)
++#else
++	if (g_settings_get_boolean (settings, FILE_SHARING_ENABLED) == FALSE)
++#endif /* HAVE_BLUETOOTH */
+ 		return 1;
+ 
+ 	x_fd = ConnectionNumber (xdisplay);
+@@ -422,22 +445,28 @@ main (int argc, char **argv)
+ 
+ 	if (http_init () == FALSE)
+ 		return 1;
++#ifdef HAVE_BLUETOOTH
+ 	if (obexftp_init () == FALSE)
+ 		return 1;
+ 	if (obexpush_init () == FALSE)
+ 		return 1;
++#endif /* HAVE_BLUETOOTH */
+ 
+ 	g_signal_connect (settings, "changed", G_CALLBACK(setttings_changed), NULL);
+ 
++#ifdef HAVE_BLUETOOTH
+ 	bluez_init ();
+ 	session_init ();
++#endif /* HAVE_BLUETOOTH */
+ 
+ 	/* Initial setting */
+ 	file_sharing_enabled_changed ();
++#ifdef HAVE_BLUETOOTH
+ 	file_sharing_bluetooth_enabled_changed ();
+ 	file_sharing_bluetooth_obexpush_accept_files_changed ();
+ 	file_sharing_bluetooth_obexpush_notify_changed ();
+ 	file_sharing_bluetooth_obexpush_enabled_changed ();
++#endif /* HAVE_BLUETOOTH */
+ 
+ 	gtk_main ();
+ 	g_object_unref (settings);
+-- 
+1.7.10.4
+
