@@ -10839,3 +10839,11 @@ $(NUNIT): $(SPREZZ)/nunit/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf nunit_$(nunit_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: geoip
+geoip:$(GEOIP)_$(ARCH).deb
+$(GEOIP): $(SPREZZ)/geoip/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf geoip_$(geoip_UPVER).orig.tar.gz $(TARARGS) $@
+
