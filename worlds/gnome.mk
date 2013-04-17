@@ -925,3 +925,11 @@ $(GNAC): $(SPREZZ)/gnac/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gnac_$(gnac_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gnome-user-share
+gnome-user-share:$(GNOMEUSERSHARE)_$(ARCH).deb
+$(GNOMEUSERSHARE): $(SPREZZ)/gnome-user-share/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gnome-user-share_$(gnome-user-share_UPVER).orig.tar.xz $(TARARGS) $@
+

@@ -93,3 +93,11 @@ $(SCIRENDERER): $(SPREZZ)/scirenderer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf scirenderer_$(scirenderer_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libjna-java
+libjna-java:$(LIBJNAJAVA)_$(ARCH).deb
+$(LIBJNAJAVA): $(SPREZZ)/libjna-java/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libjna-java_$(libjna-java_UPVER).orig.tar.gz $(TARARGS) $@
+
