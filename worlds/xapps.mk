@@ -641,3 +641,11 @@ $(GMIC): $(SPREZZ)/gmic/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gmic_$(gmic_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: winswitch
+winswitch:$(WINSWITCH)_$(ARCH).deb
+$(WINSWITCH): $(SPREZZ)/winswitch/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf winswitch_$(winswitch_UPVER).orig.tar.bz2 $(TARARGS) $@
+

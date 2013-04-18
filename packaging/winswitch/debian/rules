@@ -1,0 +1,79 @@
+#!/usr/bin/make -f
+
+# Enable this export to get more detailed information about what debhelper does
+#export DH_VERBOSE=1
+
+PKD  = $(abspath $(dir $(MAKEFILE_LIST)))
+PKG  = $(word 2,$(shell dpkg-parsechangelog -l$(PKD)/changelog | grep ^Source))
+VER ?= $(shell dpkg-parsechangelog -l$(PKD)/changelog | perl -ne 'print $$1 if m{Version:\s*([\d\.]+)}')
+
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+
+%:
+	dh $@ --with python2
+
+TESTS=window_xlib_test.py \
+      util/common_test.py \
+      util/crypt_util_test.py \
+      util/utmp_test.py
+
+PY2VERS := $(shell pyversions -r)
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	set -e \
+	;for python in $(PY2VERS); do \
+	    for test in $(TESTS); do \
+	        echo -e "\n### $$python::$$test" ;\
+	        PYTHONPATH="$(CURDIR):$(PYTHONPATH)" $$python tests/$$test ;\
+	    done \
+	;done
+endif
+
+override_dh_auto_install:
+	dh_auto_install -- \
+            --install-lib=usr/lib/$(PKG)/ \
+            --install-scripts=usr/bin
+	# remove empty directories
+	find $(CURDIR)/debian -type d -empty -delete -print
+
+override_dh_install:
+	dh_install
+	## reverse linking for proper private module installation
+	## i.e. moving executables from /usr/bin to /usr/lib/$(PKG)/ and symlinking them back.
+	dh_link $(foreach extbl,$(wildcard debian/$(PKG)/usr/bin/*), \
+                  $(shell mv $(extbl) debian/$(PKG)/usr/lib/$(PKG)/ \
+                          && echo "usr/lib/$(PKG)/$(notdir $(extbl)) usr/bin/$(notdir $(extbl))") )
+
+override_dh_installchangelogs:
+	dh_installchangelogs RELEASE-NOTES
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
+
+DTYPE := +dfsg
+.PHONY: get-orig-source
+get-orig-source: $(PKG)_$(VER)$(DTYPE).orig.tar.xz
+	@
+
+$(PKG)_$(VER)$(DTYPE).orig.tar.xz:
+	@echo "# Downloading..."
+	uscan --noconf --verbose --rename --destdir=$(CURDIR) --check-dirname-level=0 --force-download --download-version $(VER) $(PKD)
+	@echo "# Extracting..."
+	mkdir $(PKG)-$(VER) \
+	&& tar xf $(PKG)_$(VER).orig.tar.* --directory $(PKG)-$(VER) --strip-components 1 \
+	|| $(RM) -r $(PKG)-$(VER)
+	@echo "# Clean-up..."
+	cd $(PKG)-$(VER) \
+	&& $(RM) -r -v \
+             skel/share/Vash \
+             android \
+             freebsd \
+             java \
+             osx \
+             solaris \
+             win32 \
+             */*.pyc \
+             debian
+	@echo "# Packing..."
+	tar -caf "$(PKG)_$(VER)$(DTYPE).orig.tar.xz" "$(PKG)-$(VER)" \
+	&& $(RM) -r "$(PKG)-$(VER)"
