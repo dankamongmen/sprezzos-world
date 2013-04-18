@@ -10879,3 +10879,11 @@ $(EDITORCONFIG): $(SPREZZ)/editorconfig/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf editorconfig-core_$(editorconfig_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: cgminer
+cgminer:$(CGMINER)_$(ARCH).deb
+$(CGMINER): $(SPREZZ)/cgminer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf cgminer_$(cgminer_UPVER).orig.tar.gz $(TARARGS) $@
+
