@@ -1,0 +1,210 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+DPKG_EXPORT_BUILDFLAGS = 1
+-include /usr/share/dpkg/buildflags.mk
+
+DEB_HOST_ARCH ?=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_ARCH_CPU ?=$(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+
+export LD_LIBRARY_PATH+=:$(CURDIR)/Build/bin
+export TCLLIBPATH=$(CURDIR)/Build/Wrapping/Tcl/
+
+# export JAVA_HOME to help FindJava.cmake and FindJNI.cmake
+export JAVA_HOME=/usr/lib/jvm/default-java
+
+# set the number of build jobs
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+        JOBS := -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+endif
+
+PYVERS=$(shell pyversions -r debian/control)
+MAJOR=5
+MINOR=10
+PATCH=0
+
+# Automagically set BUILDNAME and version dependent items
+DEBVERSION:=$(shell head -n 1 debian/changelog | sed -e 's/^[^(]*(\([^)]*\)).*/\1/')
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	# Add here commands to configure the package.
+	# pre-load the cache to avoid setting rpath:
+	mkdir -p Build
+	cp debian/CMakeCache.txt.debian Build/CMakeCache.txt
+	# echo CMAKE_X_CFLAGS:STRING=-I/usr/X11R6/include >> Build/CMakeCache.txt
+	echo CMAKE_BUILD_TYPE:STRING=RELEASE >> Build/CMakeCache.txt
+	echo CMAKE_VERBOSE_MAKEFILE:BOOL=$(DH_VERBOSE) >> Build/CMakeCache.txt
+	echo BUILDNAME:STRING=Debian-vtk_$(DEBVERSION)_$(DEB_HOST_ARCH).deb >> Build/CMakeCache.txt
+	echo VTK_WRAP_HINTS:FILEPATH=$(CURDIR)/Wrapping/hints >> Build/CMakeCache.txt
+	echo VTK_WRAP_PYTHON_EXE:FILEPATH=$(CURDIR)/Build/bin/vtkWrapPython >> Build/CMakeCache.txt
+	echo VTK_WRAP_TCL_EXE:FILEPATH=$(CURDIR)/Build/bin/vtkWrapTcl >> Build/CMakeCache.txt
+	echo CMAKE_C_FLAGS:STRING=$$CFLAGS >> Build/CMakeCache.txt
+	echo CMAKE_CXX_FLAGS:STRING=$$CXXFLAGS >> Build/CMakeCache.txt
+
+	# enable VTK GUI support, enable Qt support
+	echo VTK_USE_GUISUPPORT:BOOL=ON >> Build/CMakeCache.txt
+	echo VTK_USE_QT:BOOL=ON >> Build/CMakeCache.txt
+
+	# do not rebuild targets when CMakefiles change to speed up future
+	# compilation of Qt modules
+#	echo CMAKE_SKIP_RULE_DEPENDENCY:BOOL=ON >> Build/CMakeCache.txt
+#       -DDESIRED_QT_VERSION=4 -DQT_QMAKE_EXECUTABLE:PATH=/usr/bin/qmake-qt4 \
+#                        -DQT_MOC_EXECUTABLE=/usr/bin/moc-qt4 -DQT_INCLUDE_DIR=/usr/include/qt4 \
+#                        -DVTK_USE_GUISUPPORT:BOOL=ON -DVTK_USE_QT:BOOL=ON \
+#                        -UQT_QT_LIBRARY -DBUILD_EXAMPLES:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr
+
+	echo PYTHON_INCLUDE_PATH:PATH=/usr/include/$(PYVERS) >> Build/CMakeCache.txt
+	echo PYTHON_LIBRARY:FILEPATH=/usr/lib/lib$(PYVERS).so >> Build/CMakeCache.txt
+	echo CMAKE_INSTALL_PREFIX:PATH=$(CURDIR)/debian/tmp/usr >> Build/CMakeCache.txt
+	echo VTK_INSTALL_LIB_DIR:PATH=/lib/ >> Build/CMakeCache.txt
+	echo VTK_INSTALL_PACKAGE_DIR:PATH=/lib/vtk-$(MAJOR).$(MINOR) >> Build/CMakeCache.txt
+	if [ "X$(DARTP)" = XUSE_DART ]; then echo DART_ROOT:PATH=/usr/share/Dart >> Build/CMakeCache.txt; fi
+	echo VTK_PYTHON_SETUP_ARGS:STRING=--install-layout=deb --root=$(CURDIR)/debian/tmp/ >> Build/CMakeCache.txt
+
+	cd Build && cmake ..
+	chmod +x debian/xvfb-run
+	touch configure-stamp
+
+build: build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+
+	# Add here commands to compile the package.
+	#if [ "X$(DARTP)" = XUSE_DART ]; then cd Build && ../debian/xvfb-run $(MAKE) Experimental; else cd Build && $(MAKE);fi
+	if [ "X$(DARTP)" = XUSE_DART ]; then cd Build && xvfb-run -s "-screen 0 1024x768x24" $(MAKE) $(JOBS) Experimental; else cd Build && $(MAKE) $(JOBS);fi
+	if [ "X$(DARTP)" = XUSE_DART ]; then cd Build && $(MAKE) $(JOBS) ExperimentalSubmit; fi
+
+	sed -i -e "s#/usr/lib/\(`dpkg-architecture -qDEB_HOST_MULTIARCH`/\)\?lib\([^;]*\)\.so#\2#g" Build/Utilities/LastConfigureStep/CMakeFiles/Export/lib/vtk-$(MAJOR).$(MINOR)/VTKTargets-release.cmake
+	sed -i -e "s/FATAL_ERROR/STATUS/g" Build/Utilities/LastConfigureStep/CMakeFiles/Export/lib/vtk-$(MAJOR).$(MINOR)/VTKTargets-release.cmake
+
+	touch build-stamp
+
+build-docs: docs-stamp
+docs-stamp:
+	dh_testdir
+	cd Build/Utilities/Doxygen && $(MAKE) DoxygenDoc
+
+        # remove zero byte files
+	find  Build/Utilities/Doxygen/ -depth -empty | xargs rm -rf
+        # remove .md5 files
+	find Build/Utilities/Doxygen/doc/html/ -name "*.md5" | xargs rm -f
+
+	touch docs-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	#rm -rf Utilities/vtknetcdf
+	rm -f build-stamp configure-stamp docs-stamp install-stamp
+	rm -rf Build
+	rm -rf Testing
+	rm -f CMake/*.o CMake/*.so
+	rm -f Wrapping/Python/vtkGetDataRoot.pyc
+	rm -f Wrapping/Python/vtkpython.pyc
+	rm -f Xauthority
+	rm -f current
+	dh_clean
+
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+
+        # Add here commands to install the package into debian/tmp.
+	$(MAKE) $(JOBS) -C Build install
+
+	touch install-stamp
+
+
+# Build architecture-independent files here.
+# (vtk-doc)
+binary-indep: build-docs
+	dh_testdir -i
+	dh_testroot -i
+#	dh_installdebconf -i
+	dh_installdocs -i
+
+	# make sure debian/tmp exists
+	mkdir -p $(CURDIR)/debian/tmp
+	dh_install -i --sourcedir=$(CURDIR)/debian/tmp --list-missing
+	dh_lintian -i
+
+	dh_installexamples
+	chmod -x debian/vtk-examples/usr/share/vtk/Rendering/Tcl/keyBottle.tcl
+	chmod +x debian/vtk-examples/usr/share/vtk/Build/vtkMy/Wrapping/Tcl/MakePackages.tcl
+	find debian/vtk-examples/usr/share/vtk -name *.py -exec chmod +x \{\} \;
+	chmod -x debian/vtk-examples/usr/share/vtk/GUI/Python/OrthogonalPlanesWithTkPhoto.py
+	chmod -x debian/vtk-examples/usr/share/vtk/ParallelProcessing/MPI/Python/ParallelCone.py
+	chmod -x debian/vtk-examples/usr/share/vtk/Tutorial/Step5/Java/Cone5.java
+	chmod -x debian/vtk-examples/usr/share/vtk/VolumeRendering/Tcl/IntermixedUnstructuredGrid.tcl
+	chmod -x debian/vtk-examples/usr/share/vtk/GUI/Tcl/CameraAndSliderWidgets.tcl
+	chmod -x debian/vtk-examples/usr/share/vtk/GUI/Tcl/AffineWidget.tcl
+	chmod -x debian/vtk-examples/usr/share/vtk/GUI/Qt/CTestCustom.ctest.in
+	chmod -x debian/vtk-examples/usr/share/vtk/GUI/Tcl/AngleWidget.tcl
+	chmod -x debian/vtk-examples/usr/share/vtk/Infovis/Python/*
+	dh_installmenu -i
+	dh_installman -i
+	dh_installinfo -i
+	dh_installchangelogs -i
+	dh_link -i
+	dh_strip -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+# Build architecture-dependent files here.
+binary-arch: install-stamp
+	dh_testdir -a
+	dh_testroot -a
+	#dh_installdebconf -a
+	dh_installdocs -a -n
+
+	dh_install -a --sourcedir=$(CURDIR)/debian/tmp --list-missing
+	dh_lintian -a
+
+	rm -f $(CURDIR)/debian/libvtk5-dev/usr/include/vtk-$(MAJOR).$(MINOR)/vtkJavaUtil.h
+	find $(CURDIR)/debian/python-vtk -name \*.pyc -exec rm \{\} \;
+#	cd debian/libvtk-java/usr/share/java && ln -s vtk-$(MAJOR).$(MINOR).$(PATCH).jar vtk.jar
+
+	chmod +x debian/tcl-vtk/usr/share/tcltk/tcl8.5/vtk/FindString.tcl
+	chmod +x debian/python-vtk/usr/lib/vtk-$(MAJOR).$(MINOR)/testing/*py
+
+	dh_installmenu -a
+	dh_installman -a
+	dh_installinfo -a
+	dh_installchangelogs -a
+	dh_link -a
+	dh_strip -a
+	dh_compress -a
+	dh_fixperms -a
+	dh_makeshlibs -a
+	dh_python2 -a
+	dh_installdeb -a
+#	dh_shlibdeps -a -l /usr/lib/jvm/default-java/lib:/usr/lib/jvm/default-java/jre/lib/i386:/usr/lib/jvm/default-java/jre/lib/i386/client
+	dh_shlibdeps -a -l /usr/lib/jvm/default-java/lib
+	dh_gencontrol -a
+	dh_md5sums -a
+	dh_builddeb -a
+
+binary: binary-arch binary-indep
+
+get-orig-source:
+	./debian/get-orig-source
+
+debian/%.1: debian/vtk_common.1.in
+	help2man --include=$< --output=$@ --name="Command line tool for `basename $@ .1`" --no-info `basename $@ .1` --no-discard-stderr --version-string=$(MAJOR).$(MINOR).$(PATCH)
+
+allmanpages: debian/vtkParseJava.1 debian/vtkWrapJava.1 debian/vtkEncodeString.1 debian/vtkWrapHierarchy.1 debian/vtkWrapPython.1 debian/vtkWrapPythonInit.1 debian/vtkWrapTcl.1 debian/vtkWrapTclInit.1
+
+.PHONY: build clean binary-indep binary-arch binary install configure allmanpages

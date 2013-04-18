@@ -1,0 +1,123 @@
+#!/bin/sh
+
+# xvfb-run - run the specified command in a virtual X server
+
+# This script starts an instance of Xvfb, the "fake" X server, runs a
+# command with that server available, and kills the X server when
+# done.  The return value of the command becomes the return value of
+# this script.
+#
+# If anyone is using this to build a Debian package, make sure the
+# package Build-Depends on xvfb, xbase-clients, and xfonts-base.
+
+set -e
+
+PROGNAME=xvfb-run
+SERVERNUM=99
+AUTHFILE=$(pwd)/.Xauthority
+ERRORFILE=/dev/null
+STARTWAIT=3
+LISTENTCP="-nolisten tcp"
+XAUTHPROTO=.
+
+# display a usage message
+usage () {
+    cat << EOF
+Usage: $PROGNAME [OPTION ...] command
+
+run specified X client or command in a virtual X server environment
+
+-a        --auto-servernum   try to get a free server number, starting at
+                               --server-num
+-e FILE   --error-file=FILE  file used to store xauth errors and Xvfb output
+                               (defualt: $ERRORFILE)
+-f FILE   --auth-file=FILE   file used to store auth cookie
+                               (default: ./.Xauthority)
+-h        --help             display this usage message and exit
+-n NUM    --server-num=NUM   server number to use (default: $SERVERNUM)
+-l        --listen-tcp       enable TCP port listening in the X server
+-p PROTO  --xauth-protocol=PROTO   X authority protocol name to use
+                                     (defaults to xauth's default)
+-w DELAY  --wait=DELAY       delay in seconds to wait for Xvfb to start
+                               (default: $STARTWAIT)
+EOF
+    :;
+}
+
+# find free server number by looking at .X*-lock files in /tmp
+find_free_servernum() {
+    i=$SERVERNUM
+    while [ -f /tmp/.X$i-lock ]; do
+        i=$(($i + 1))
+    done
+    echo $i;
+}
+
+# parse command line
+ARGS=$(getopt --options +ae:f:hn:lp:w: \
+       --long auto-servernum,authority-file:,server-num:error-file:,help,listen-tcp,wait:,xauth-protocol: \
+       --name "$PROGNAME" -- "$@")
+
+if [ $? -ne 0 ]; then
+    echo "$PROGNAME: error while getting options" >&2
+    exit 1
+fi
+
+eval set -- "$ARGS"
+
+while :; do
+    case "$1" in
+        -a|--auto-servernum) SERVERNUM=$(find_free_servernum) ;;
+        -e|--error-file) ERRORFILE="$1"; shift ;;
+        -f|--auth-file) AUTHFILE="$1"; shift ;;
+        -h|--help) SHOWHELP=1 ;;
+        -n|--server-num) SERVERNUM="$1"; shift ;;
+        -l|--listen-tcp) LISTENTCP="" ;;
+        -p|--xauth-protocol) XAUTHPROTO="$1"; shift ;;
+        -w|--wait) STARTWAIT="$1"; shift ;;
+        --) shift; break ;;
+        *) echo "$PROGNAME: error while parsing option \"$1\"" >&2; USAGE=$(usage); echo "$USAGE" >&2; exit 1 ;;
+    esac
+    shift
+done
+
+if [ "$SHOWHELP" ]; then
+    usage
+    exit 0
+fi
+
+if [ -z "$*" ]; then
+    echo "$PROGNAME: need a command to run" >&2
+    exit 2
+fi
+
+if ! which xauth > /dev/null; then
+    echo "$PROGNAME: xauth command not found; exiting." >&2
+    exit 3
+fi
+
+# start Xvfb
+rm -f $AUTHFILE
+MCOOKIE=$(mcookie)
+XAUTHORITY=$AUTHFILE xauth add :$SERVERNUM $XAUTHPROTO $MCOOKIE > $ERRORFILE 2>&1
+XAUTHORITY=$AUTHFILE Xvfb :$SERVERNUM -screen 0 1024x768x24 $LISTENTCP > $ERRORFILE 2>&1 &
+XVFBPID=$!
+sleep $STARTWAIT
+
+# start the command and save its exit status
+set +e
+DISPLAY=:$SERVERNUM XAUTHORITY=$AUTHFILE $@ 2>&1
+RETVAL=$?
+set -e
+
+# kill Xvfb now that the command has exited
+kill $XVFBPID
+
+# clean up
+XAUTHORITY=$AUTHFILE xauth remove :$SERVERNUM > $ERRORFILE 2>&1
+rm $AUTHFILE
+
+# return the executed command's exit status
+exit $RETVAL
+
+# vim:set ai et sts=4 sw=4 tw=0:

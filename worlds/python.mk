@@ -263,3 +263,11 @@ $(PYSMBC): $(SPREZZ)/pysmbc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pysmbc_$(pysmbc_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: python-casmoothing
+python-casmoothing:$(PYTHONCASMOOTHING)_$(ARCH).deb
+$(PYTHONCASMOOTHING): $(SPREZZ)/python-casmoothing/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf python-casmoothing_$(python-casmoothing_UPVER).orig.tar.gz $(TARARGS) $@
+

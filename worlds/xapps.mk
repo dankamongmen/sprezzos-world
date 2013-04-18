@@ -657,3 +657,19 @@ $(DIN): $(SPREZZ)/din/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf din_$(din_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: invesalius
+invesalius:$(INVESALIUS)_$(ARCH).deb
+$(INVESALIUS): $(SPREZZ)/invesalius/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf invesalius_$(invesalius_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: vtk
+vtk:$(VTK)_$(ARCH).deb
+$(VTK): $(SPREZZ)/vtk/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vtk_$(vtk_UPVER).orig.tar.gz $(TARARGS) $@
+
