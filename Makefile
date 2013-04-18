@@ -10887,3 +10887,11 @@ $(CGMINER): $(SPREZZ)/cgminer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf cgminer_$(cgminer_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ocl-icd
+ocl-icd:$(OCLICD)_$(ARCH).deb
+$(OCLICD): $(SPREZZ)/ocl-icd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ocl-icd_$(ocl-icd_UPVER).orig.tar.gz $(TARARGS) $@
+

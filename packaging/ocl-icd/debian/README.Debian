@@ -1,0 +1,344 @@
+Summary of the situation of OpenCL in Debian
+********************************************
+
+OpenCL goals
+============
+
+From wikipedia:
+  Open Computing Language (OpenCL) is a framework for writing programs that
+  execute across heterogeneous platforms consisting of central processing unit
+  (CPUs), graphics processing unit (GPUs), and other processors. 
+    OpenCL includes a language (based on C99) for writing kernels (functions
+  that execute on OpenCL devices), plus application programming interfaces
+  (APIs) that are used to define and then control the platforms.
+  [...]
+    OpenCL is an open standard maintained by the non-profit technology
+  consortium Khronos Group. It has been adopted by Intel, Advanced Micro
+  Devices, Nvidia, and ARM Holdings.
+
+What is important for Debian is that:
+- OpenCL is a standard maintained by the Khronos Group
+- OpenCL is a language (for target platforms) *and* an API.
+- there will be several implementations (we can hope that, at least one for
+  processors will be free)
+- API of OpenCL is design to support several implementations at the same time
+- API of OpenCL offert the possibility to choose the used platform (and OpenCL
+  vendor) at runtime (instead of compilation/link-time as this is the case for
+  MPI)
+- API of OpenCL offers the possibility to use vendor extensions, looking for
+  address function at runtime (here again by opposition to compile/runtime)
+
+Mechanisms used to archieve all these goals
+===========================================
+
+An application using OpenCL can compile with, and link directly at, a specific
+implementation (as in the MPI world). However, doing this will forbid most of
+the runtime choices presented in the previous paragraph.
+
+The classical situation for OpenCL is that:
+- each vendors (ie OpenCL implementor) must provide:
+  - an OpenCL ICD (Installable Client Driver) as a shared library with
+    some convention/features/symbols (see later)
+  - the path of this library in a vendor-specific text file in
+    /etc/OpenCL/vendors/ directory
+- the application is compiled with
+  - some OpenCL headers. This can be:
+    - the official Kronos OpenCL headers (all official features and extensions,
+      no private vendor extension)
+    - some vendors headers, generally based on the previous one but with
+      some extensions (functions, constants, ...) added
+  - OpenCL ICD Loader which offer the OpenCL API to the applications. The
+    ICD Loader is mainly a call dispatcher. Kronos group provides (nonfree)
+    sources of one to its members.
+    - most vendors (amd, intel, nvidia at least) provide a ICD Loader
+    - ocl-icd provides a free one after some reverse engeenering of the
+      previously cited ones.
+
+ICD Loaders and ICD
+===================
+In therory (see below), any ICD Loader should be able to load and use any ICD.
+An ICD must implement some mandatory functions. One of these functions allows
+the ICD Loader to get the address of a structure which contains the address of
+all ICD implementation of OpenCL functions.
+Writing such an ICD Loader is easy once you know the order of the functions
+in the structure (list and order that the Khronos group restrict to its members
+and that the ocl-icd projet reverse engeenered)
+  The Khronos group ensures that any functions added to this structure will
+never be removed (so that their won't be incompatibility between to ICD
+Loaders).
+
+In pratice, we can really use the ICD Loader from Intel to use the NVidia ICD.
+But, there is no support for the ICD to declare which version of the structure
+it provides. An ICD can offers (through the structure) more functions. It
+happens when the ICD provides an OpenCL version greater than the one provided
+by the ICD Loader. This is not really a problem but the an OpenCL application
+using the more recent OpenCL version will not be able to link to the ICD
+Loader. It will then fail at link time.
+  But there is also the opposite: the ICD Loader supports a greater version of
+OpenCL than the ICD. In this case, an OpenCL application using features from
+the new version will call the ICD Loader that will call the "function" at the
+address present in the memory after the end of the (old) structure provider by
+the ICD. This generally leads to a segfault.
+  The ICD Loader cannot do anything about that: it does not have the
+information. Even if ICDs declare a supported OpenCL version, it is the
+OpenCL version for which the support is full. At the time of writing, the Intel
+ICD declare to support OpenCL 1.1 but provides to the ICD Loader the structure
+of OpenCL 1.2 *with* some address of functions specific to OpenCL 1.2 (but not
+all of them, hence the no declaration of OpenCL 1.2 support).
+  This situation is also a problem for application (PyCL ?) that detect at
+compilation time which version of OpenCL is supported. They will get the
+OpenCL version of the ICD Loader, but not the one of the ICD itself that
+will be loaded at runtime.
+
+  An ICD not implementing one function of the structure puts a NULL pointer.
+But non-free ICD Loaders (cnot ocl-icd for now) do not do any checks for
+non-NULL value before dispatching the call. So it is again easy to get segfault
+with some combination of program/ICD.
+
+
+  About compatibility, each ICD must also implement the support for the OpenCL
+*language* (for the code dedicated to the target platforms). Of course, as the
+norm is not complete, or not fully implemented or implemented with extension,
+the portability of OpenCL code is not as good as one can hope. But there is
+little to do here with respect to Debian packaging.
+
+Current packaging situation
+===========================
+Brief overview of sources packages/OpenCL implementations:
+* AMD and NVidia OpenCL implementation are packaged into the non-free section.
+* Intel is not packaged. It is not redistribuable, so its packaging would
+  involve a 'installer' package.
+  Intel ICD Loader support OpenCL 1.2
+  Intel ICD support OpenCL 1.1 and some functions of OpenCL 1.2
+* Khronos OpenCL headers 1.2 are packaged in main
+* Ocl-icd project is packaged in main
+* Pocl, a free implementation of OpenCL, will be packaged in main. Its state
+  does not seem yet good enough to be able to run non simple OpenCL
+  applications. This should change in the future.
+
+Overview of binary packages currently in sid (and probably testing) on amd64:
+[AMD]
+* amd-libopencl1: AMD ICD Loader (support OpenCL 1.2)
+    install libOpenCL.so.1
+      shared library
+        soname libOpenCL.so.1
+        symbols versionned (with OpenCL version, but no conflicts on symbols)
+    install libOpenCL.so
+      symlink to libOpenCL.so.1
+  Multi-Arch: same
+  Provides: libopencl1
+  Conflicts: amd-app, nvidia-libopencl1
+    => should Conflicts and Provides libopencl1. See #679038
+* amd-opencl-icd: AMD ICD (support OpenCL 1.2)
+  Multi-Arch: same
+  Depends: libopencl1
+  Enhances: libopencl1
+  Conflicts: amd-app
+* amd-opencl-dev: AMD OpenCL development
+    Metapackage
+  Multi-Arch: same
+  Depends: amd-libopencl1 | libopencl1, opencl-headers (>= 1.2)
+* amd-clinfo:
+  No Multi-Arch
+  Depends: amd-libopencl1
+    => should depends on the virtual package libopencl1. See #679025 (pending)
+
+[NVidia]
+* nvidia-libopencl1: NVidia ICD Loader (support OpenCL 1.1)
+    install libOpenCL.so.1.0.0
+      shared library
+        soname libOpenCL.so.1
+        symbols not versionned
+    install libOpenCL.so.1
+      symlink to libOpenCL.so.1.0.0
+    install libOpenCL.so
+      symlink to libOpenCL.so.1
+  Multi-Arch: same
+  Provides: libopencl1
+  Recommends: opencl-icd | nvidia-opencl-icd
+  Conflicts: nvidia-libopencl1-dev
+    => should Conflicts and Provides libopencl1. See #679047
+* nvidia-libopencl1-ia32: 32-bit NVidia ICD Loader (support OpenCL 1.1)
+    install lib32/libOpenCL.so.1.0.0
+      shared library
+        soname libOpenCL.so.1
+        symbols not versionned
+    install lib32/libOpenCL.so.1
+      symlink to libOpenCL.so.1.0.0
+    install lib32/libOpenCL.so
+      symlink to libOpenCL.so.1
+  No Multi-Arch
+  Provides: lib32opencl1
+  Recommends: opencl-icd | nvidia-opencl-icd-ia32
+  => the Recommends to opencl-icd seems wrong to me
+  => this package should disappear (replaced by nvidia-libopencl1:i386)
+* nvidia-opencl-common: common files for NVidia ICD (support OpenCL 1.1)
+  Multi-Arch: foreign
+  Recommends: nvidia-opencl-icd | nvidia-opencl-icd-ia32
+* nvidia-opencl-icd: NVidia ICD (support OpenCL 1.1)
+  Multi-Arch: same
+  Provides: opencl-icd
+  Depends: nvidia-opencl-common, libopencl1
+  Enhances: libopencl1
+* nvidia-opencl-icd-ia32: 32-bit NVidia ICD (support OpenCL 1.1)
+  No Multi-Arch
+  Provides: opencl-icd
+  Depends: nvidia-opencl-common, lib32opencl1
+  Enhances: lib32opencl1
+  => the Provides opencl-icd seems wrong to me
+  =>  this package should disappear (replaced by nvidia-opencl-icd:i386)
+* nvidia-opencl-dev: NVidia OpenCL development
+    Metapackage
+  No Multi-Arch
+  Provides: opencl-dev
+  Depends: nvidia-libopencl1 | libopencl1, opencl-headers (>= 1.1)
+
+[ocl-icd] (version 1.3-2 currently in NEW or in my own repo)
+* ocl-icd-libopencl1: ocl-icd ICD Loader (support OpenCL 1.2)
+    install libOpenCL.so.1.0.0
+      shared library
+        soname libOpenCL.so.1
+        symbols versionned (with OpenCL version, but no conflicts on symbols)
+    install libOpenCL.so.1
+      symlink to libOpenCL.so.1.0.0
+    install libOpenCL.so
+      symlink to libOpenCL.so.1.0.0
+  Multi-Arch: same
+  Provides: libopencl1
+  Conflicts: libopencl1, amd-app, nvidia-libopencl1-dev
+  Replaces: libopencl1, amd-app, nvidia-libopencl1-dev
+   Note: amd-app, nvidia-libopencl1-dev seems to be old/external packages
+         providing some of these files
+  Suggests: opencl-icd
+   Note: would be promoted to a recommends once a free OpenCL implementation
+     will be available
+* ocl-icd-opencl-dev: OpenCL development
+    install OpenCL.pc
+      pkg-config file for OpenCL
+  Multi-Arch: same
+  Provides: opencl-dev
+  Depends: opencl-headers (>= 1.2), libopencl1
+  Conflicts: amd-app, opencl-dev
+  Replaces: amd-app, opencl-dev
+* ocl-icd-dev: devel package to develop an ICD
+    install ocl_icd.h
+      headers with the structure with all functions that an ICD must provide
+    install some examples (skeleton of a ICD source and linker map)
+    install ocl-icd.pc
+  No Multi-Arch
+  
+[Intel OpenCL SDK]: no public Debian packages (software not redistributable)
+* ICD Loader (support OpenCL 1.2): can be installed in Multi-Arch paths
+    install libOpenCL.so
+      shared library
+        soname libOpenCL.so
+        symbols not versionned
+    => problem with wrong soname
+    => can still be used by programs that require libOpenCL.so.1 by creating
+       a symlink (the dynamic linker do not check the soname)
+* ICD (support OpenCL 1.1 + some 1.2 functions)
+* OpenCL headers
+  based on the Khronos ones. Intel's one seem a little bit outdated but
+  include some constants/... that seems to be Intel specific...
+
+
+Virtual packages:
+* opencl-icd: existing virtual package for OpenCL ICD
+  ensure an OpenCL ICD is installed
+  a package providing opencl-icd should (must?):
+  - Provides: opencl-icd
+  - Enhances: libopencl1
+* opencl-dev: existing virtual package dor OpenCL development
+  ensure headers and libraries are installed
+  a package providing opencl-dev should (must?):
+  - Provides: opencl-dev
+  - install OpenCL headers
+    can be done with a (versionned) dependency on the opencl-headers package
+  - Depends: libopencl1
+  - Recommends: libgl1-mesa-dev | libgl-dev
+    GL headers are often required when compiling OpenCL program
+    => not done in amd-opencl-dev
+* libopencl1: existing virtual package for OpenCL ICD Loaders
+  ensure an OpenCL ICD Loader is installed
+  a package providing libopencl1 should (must?):
+  - Conflicts/Replaces/Provides: libopencl1
+    http://www.debian.org/doc/debian-policy/ch-relationships.html#s7.6.2
+  - Recommends: opencl-icd
+  - install libOpenCL.so.1 in library search path
+  - install libOpenCL.so in library search path
+    NOTE: this last one must not be in a -dev package if we want to
+    support binaries compiled with the Intel SDK
+  - libOpenCL.so.1 must have libOpenCL.so.1 as soname
+    [proposed, not right for the intel one]
+  - libOpenCL.so.1 must have its symbols versionned
+    [proposed, not right for the intel and nvidia ones]
+* libopencl1.1: proposed virtual package
+  a package providing libopencl1.1 must:
+  - provides libopencl1
+  - implements and dispatch all functions from OpenCL 1.1 API
+* libopencl1.2: proposed virtual package
+  a package providing libopencl1.2 must:
+  - provides libopencl1
+  - implements and dispatch all functions from OpenCL 1.2 API
+NOTE: libopencl1.0 is not proposed as a virtual package:
+  - the 1.0 API is not really designed to work with ICD Loaders
+  - most (all?) OpenCL implementations target at least OpenCL 1.1
+
+
+A few remarks:
+* due to the soname of Intel (libOpenCL.so instead of libOpenCL.so.1), it is
+  better to install the libOpenCL.so link in the libopencl1 packages instead
+  of installing it in the dev packages
+* is it really necessary to keep the three -dev packages?
+  + ocl-icd-opencl-dev is free and provides a OpenCL.pc file
+  + amd-opencl-dev is a metapackage that install by default the amd-libopencl1
+    that itself install by default the amd-opencl-icd
+  + same for nvidia-opencl-dev
+* if we keep the three -dev packages (to ease the installation of the
+  full AMD and NVidia SDK), do we want to rename ocl-icd-opencl-dev
+  into opencl-dev (ie use the virtual package name as the binary
+  package name of the free alternative)
+* do we want to keep the various *-libopencl1 (ie ICD loaders) packages in
+  Debian?
+  ocl-icd-libopencl1 provides a free alternative
+  {amd,nvidia}-libopencl1 will be useful:
+  - when ocl-icd-libopencl1 is not yet updated to the latest version
+    where as {amd,nvidia}-libopencl1 are
+  - if {amd,nvidia}-libopencl1 start to implement non standard things
+  - to ease the reverse engeenering required to improve ocl-icd-libopencl1
+    when non-free ICD loader implements more functions
+* at least, here is a summary of problems/warning for different combinaison of
+  ICD *Loaders* used at compile-time (CT) and at run-time (RT)
+  (problems with ICD compatibility themselves are not taken into account here)
+
+   \    |	  |	  |	    |	    |
+    \RT | ocl-icd | AMD   |  NVidia | Intel |
+     \  |	  |	  |	    |	    |
+   CT \ |	  |	  |	    |	    |
+--------+---------+-------+---------+-------+
+        |	  |       |	    |	    |
+ocl-icd |   ok    |  ok   |   MVS   |  MVS  |
+        |	  |       |   MS    |  MSO  |
+--------+---------+-------+---------+-------+
+	|	  |	  |	    |	    |
+AMD	|   ok    |  ok	  |   MVS   |  MVS  |
+	|	  |	  |   MS    |  MSO  |
+--------+---------+-------+---------+-------+
+        |	  |   	  |	    |	    |
+NVidia  |   ok    |  ok	  |   ok    |  MSO  |
+        |	  |       |         |	    |
+--------+---------+-------+---------+-------+
+        |	  |       |	    |	    |
+Intel   |   BSO   |  BSO  |   BSO   |  ok   |
+        |	  |       |   MS    |	    |
+--------+---------+-------+---------+-------+
+MVS: missing version on symbol => a warning from the linker at program start
+MS: missing symbols. The linker can fail to find some symbols (NVidia ICD
+    Loader still only support the 1.1 API)
+BSO: the libOpenCL.so link must be present at runtime.
+    The requested soname is libOpenCL.so
+    The soname in the loaded library (filename) is libOpenCL.so.1
+MSO: wrong soname:
+    The requested soname is libOpenCL.so.1
+    The soname in the loaded library (filename) is libOpenCL.so
+
