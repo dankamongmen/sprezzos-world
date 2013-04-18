@@ -735,3 +735,19 @@ $(LIBMIDIPERL): $(SPREZZ)/libmidi-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libmidi-perl_$(libmidi-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libnet-ipaddress-perl
+libnet-ipaddress-perl:$(LIBNETIPADDRESSPERL)_$(ARCH).deb
+$(LIBNETIPADDRESSPERL): $(SPREZZ)/libnet-ipaddress-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnet-ipaddress-perl_$(libnet-ipaddress-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libnet-idn-nameprep-perl
+libnet-idn-nameprep-perl:$(LIBNETIDNNAMEPREPPERL)_$(ARCH).deb
+$(LIBNETIDNNAMEPREPPERL): $(SPREZZ)/libnet-idn-nameprep-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnet-idn-nameprep-perl_$(libnet-idn-nameprep-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
