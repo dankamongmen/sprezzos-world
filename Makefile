@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -10846,4 +10846,36 @@ $(GEOIP): $(SPREZZ)/geoip/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf geoip_$(geoip_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: nocache
+nocache:$(NOCACHE)_$(ARCH).deb
+$(NOCACHE): $(SPREZZ)/nocache/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nocache_$(nocache_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: harvid
+harvid:$(HARVID)_$(ARCH).deb
+$(HARVID): $(SPREZZ)/harvid/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf harvid_$(harvid_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: padevchooser
+padevchooser:$(PADEVCHOOSER)_$(ARCH).deb
+$(PADEVCHOOSER): $(SPREZZ)/padevchooser/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf padevchooser_$(padevchooser_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: editorconfig
+editorconfig:$(EDITORCONFIG)_$(ARCH).deb
+$(EDITORCONFIG): $(SPREZZ)/editorconfig/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf editorconfig-core_$(editorconfig_UPVER).orig.tar.gz $(TARARGS) $@
 
