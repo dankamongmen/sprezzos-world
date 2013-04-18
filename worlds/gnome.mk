@@ -947,5 +947,5 @@ $(GSTPLUGINSGOOD1.0): $(SPREZZ)/gst-plugins-good1.0/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gst-plugins-good1.0_$(gst-plugins-good1.0_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf gst-plugins-good1.0_$(gst-plugins-good1.0_UPVER).orig.tar.xz $(TARARGS) $@
 
