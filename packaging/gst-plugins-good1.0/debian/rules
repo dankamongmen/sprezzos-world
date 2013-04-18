@@ -1,0 +1,193 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/gnome.mk
+include /usr/share/cdbs/1/rules/utils.mk
+-include /usr/share/cdbs/1/rules/autoreconf.mk
+
+# make autoreconf not call libtoolize since we ship a patch for ltmain.sh
+export LIBTOOLIZE=true
+# make autoreconf not call autopoint since we ship a patch for po/Makefile.in.in
+export AUTOPOINT=true
+
+CFLAGS += -Wno-error
+CXXFLAGS += -Wno-error
+LDFLAGS += -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+DEB_MAKE_CHECK_TARGET = check || true
+
+# this is for compatibility with dpkg-dev < 1.13.5, see
+# <http://lists.debian.org/debian-devel-announce/2005/06/msg00010.html>
+DEB_HOST_ARCH_CPU := $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU 2>/dev/null)
+DEB_HOST_ARCH_OS := $(shell dpkg-architecture -qDEB_HOST_ARCH_OS 2>/dev/null)
+
+# Take account of old dpkg-architecture output.
+ifeq ($(DEB_HOST_ARCH_CPU),)
+  DEB_HOST_ARCH_CPU := $(shell dpkg-architecture -qDEB_HOST_GNU_CPU)
+  ifeq ($(DEB_HOST_ARCH_CPU),x86_64)
+    DEB_HOST_ARCH_CPU := amd64
+  endif
+endif
+ifeq ($(DEB_HOST_ARCH_OS),)
+  DEB_HOST_ARCH_OS := $(subst -gnu,,$(shell dpkg-architecture -qDEB_HOST_GNU_SYSTEM))
+  ifeq ($(DEB_HOST_ARCH_OS),gnu)
+    DEB_HOST_ARCH_OS := hurd
+  endif
+endif
+# end of compatibility block
+
+# debian package version
+version=$(shell dpkg-parsechangelog | grep ^Version: | cut -d ' ' -f 2)
+# upstream version
+gst_version=$(shell echo $(version) | cut -d '-' -f 1)
+gst_major=1
+gst_minor=0
+gst_abi=$(gst_major).$(gst_minor)
+# gstreamer library package names
+gst_lib=libgstreamer$(gst_abi)-0
+gst_lib_dev=libgstreamer$(gst_abi)-dev
+# what gstreamer version is needed
+gst_lib_dev_dep=$(gst_lib_dev) (>= 1.0.0)
+
+gst_pkgname=gstreamer$(gst_abi)
+gst_deb_abi=$(gst_abi)-0
+
+gst_extra_build_depends =
+gst_extra_build_depends += libraw1394-dev (>= 2.0.0) [linux-any]
+gst_extra_build_depends += , libiec61883-dev (>= 1.0.0) [linux-any]
+gst_extra_build_depends += , libavc1394-dev [linux-any]
+gst_extra_build_depends += , libv4l-dev [linux-any]
+gst_extra_build_depends += , libgudev-1.0-dev (>= 143) [linux-any]
+
+# debug package
+DEB_DH_STRIP_ARGS := --dbg-package=$(gst_pkgname)-plugins-good-dbg
+
+# disable all CPU specific optimizations in commands launched by this Makefile
+# using liboil; this is to work around liboil related build failures which
+# are not specially interesting to catch on buildds as these might run very
+# specific hardware
+OIL_CPU_FLAGS=0
+export OIL_CPU_FLAGS
+
+# The plugins are basically the same.
+# Link special names to a template file.
+# still need "*.install" to be done by hand
+
+PLUGINS += pulseaudio plugins-good
+CONFIG_ARGS :=
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+PLUGINS +=
+endif
+VERSIONIZE= \
+	plugins-good-doc.install \
+
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+1394 = debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/gstreamer-$(gst_abi)/libgst1394.so
+video4linux2 = debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/gstreamer-$(gst_abi)/libgstvideo4linux2.so
+endif
+
+ifeq ($(DEB_HOST_ARCH_OS),hurd)
+CONFIG_ARGS += --disable-oss4
+else
+oss4 = debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/gstreamer-$(gst_abi)/libgstoss4audio.so
+endif
+
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+DEFAULT_AUDIOSINK = autoaudiosink
+DEFAULT_AUDIOSRC = autoaudiosrc
+DEFAULT_VIDEOSINK = autovideosink
+DEFAULT_VIDEOSRC = v4l2src
+DEFAULT_VISUALIZER = goom
+else
+DEFAULT_AUDIOSINK = autoaudiosink
+DEFAULT_AUDIOSRC = autoaudiosrc
+DEFAULT_VIDEOSINK = autovideosink
+DEFAULT_VIDEOSRC = videotestsrc
+DEFAULT_VISUALIZER = goom
+endif
+
+# Let's decide the package name and url depending on the distribution
+DISTRO = "$(shell dpkg-vendor --query vendor)"
+
+GST_PACKAGE_NAME := "GStreamer Good Plugins (unknown Debian derivative)"
+GST_PACKAGE_ORIGIN="http://packages.qa.debian.org/gst-plugins-good$(gst_abi)"
+
+ifeq ($(DISTRO),"Debian")
+GST_PACKAGE_NAME := "GStreamer Good Plugins (Debian)"
+GST_PACKAGE_ORIGIN="http://packages.qa.debian.org/gst-plugins-good$(gst_abi)"
+endif
+
+ifeq ($(DISTRO),"Ubuntu")
+GST_PACKAGE_NAME := "GStreamer Good Plugins (Ubuntu)"
+GST_PACKAGE_ORIGIN="https://launchpad.net/distros/ubuntu/+source/gst-plugins-good$(gst_abi)"
+endif
+
+
+# setup links for packages
+pre-build::
+	for p in $(PLUGINS); do \
+		rm -f debian/$(gst_pkgname)-$$p.install; \
+		sed \
+			-e 's/@GST_ABI@/$(gst_abi)/g' \
+			-e 's,@1394@,$(1394),g' \
+			-e 's,@video4linux2@,$(video4linux2),g' \
+			-e 's,@oss4@,$(oss4),g' \
+			debian/gstreamer-$$p.install \
+			> debian/$(gst_pkgname)-$$p.install; \
+	done
+
+	for f in $(VERSIONIZE); do \
+		sed 's/@GST_ABI@/$(gst_abi)/g' debian/gstreamer-$$f \
+			> debian/$(gst_pkgname)-$$f; \
+	done
+
+maint: debian/control
+
+debian/build-deps: debian/build-deps.in debian/rules
+	cat $< > $@
+
+debian/control:: debian/control.in debian/build-deps debian/mk.control debian/rules
+	perl debian/mk.control | sed \
+		-e 's/@GST_VERSION@/$(gst_version)/g' \
+		-e 's/@GST_ABI@/$(gst_abi)/g' \
+		-e 's/@GST_PKGNAME@/$(gst_pkgname)/g' \
+		-e 's/@GST_LIB@/$(gst_lib)/g' \
+		-e 's/@GST_LIB_DEV@/$(gst_lib_dev)/g' \
+		-e 's/@GST_LIB_DEV_DEP@/$(gst_lib_dev_dep)/g' \
+		-e 's/@GST_EXTRA_BUILD_DEPENDS@/$(gst_extra_build_depends)/g' \
+		>$@
+
+DEB_CONFIGURE_EXTRA_FLAGS += \
+	--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+	--disable-examples \
+	--enable-DEBUG \
+	--enable-debug \
+	--with-package-name=$(GST_PACKAGE_NAME) \
+	--with-package-origin=$(GST_PACKAGE_ORIGIN) \
+	--enable-gtk-doc \
+	--enable-experimental \
+	--with-default-audiosink=$(DEFAULT_AUDIOSINK) \
+	--with-default-audiosrc=$(DEFAULT_AUDIOSRC) \
+	--with-default-videosink=$(DEFAULT_VIDEOSINK) \
+	--with-default-videosrc=$(DEFAULT_VIDEOSRC) \
+	--with-default-visualizer=$(DEFAULT_VISUALIZER) \
+	$(CONFIG_ARGS)
+
+clean::
+	# get rid of the sym links
+	for i in $(PLUGINS); do \
+		rm -f debian/$(gst_pkgname)-$$i.install; \
+		rm -f debian/$(gst_pkgname)-$$i.preinst; \
+	done
+	for f in $(VERSIONIZE); do \
+		rm -f debian/$(gst_pkgname)-$$f; \
+	done
+
+common-binary-fixup-arch::
+	dh_gstscancodecs
+
+DEB_INSTALL_DOCS_ALL += debian/README.Debian NEWS
+
+# Disable inclusion of large upstream ChangeLog
+DEB_INSTALL_CHANGELOGS_ALL :=
+
+.PHONY: maint

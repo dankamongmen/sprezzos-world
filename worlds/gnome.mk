@@ -933,3 +933,19 @@ $(GNOMEUSERSHARE): $(SPREZZ)/gnome-user-share/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gnome-user-share_$(gnome-user-share_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: gst-libav1.0
+gst-libav1.0:$(GSTLIBAV1.0)_$(ARCH).deb
+$(GSTLIBAV1.0): $(SPREZZ)/gst-libav1.0/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf gst-libav1.0_$(gst-libav1.0_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: gst-plugins-good1.0
+gst-plugins-good1.0:$(GSTPLUGINSGOOD1.0)_$(ARCH).deb
+$(GSTPLUGINSGOOD1.0): $(SPREZZ)/gst-plugins-good1.0/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gst-plugins-good1.0_$(gst-plugins-good1.0_UPVER).orig.tar.gz $(TARARGS) $@
+
