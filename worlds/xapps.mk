@@ -649,3 +649,11 @@ $(WINSWITCH): $(SPREZZ)/winswitch/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf winswitch_$(winswitch_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: din
+din:$(DIN)_$(ARCH).deb
+$(DIN): $(SPREZZ)/din/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf din_$(din_UPVER).orig.tar.gz $(TARARGS) $@
+
