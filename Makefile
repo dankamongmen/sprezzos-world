@@ -10917,5 +10917,5 @@ $(LIBLANGTAG): $(SPREZZ)/liblangtag/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf liblangtag_$(liblangtag_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf liblangtag_$(liblangtag_UPVER).orig.tar.bz2 $(TARARGS) $@
 
