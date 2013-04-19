@@ -4894,3 +4894,19 @@ $(HASKELLYESODNEWSFEED): $(SPREZZ)/haskell-yesod-newsfeed/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-yesod-newsfeed_$(haskell-yesod-newsfeed_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: agda
+agda:$(AGDA)_$(ARCH).deb
+$(AGDA): $(SPREZZ)/agda/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf agda_$(agda_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-geniplate
+haskell-geniplate:$(HASKELLGENIPLATE)_$(ARCH).deb
+$(HASKELLGENIPLATE): $(SPREZZ)/haskell-geniplate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-geniplate_$(haskell-geniplate_UPVER).orig.tar.gz $(TARARGS) $@
+
