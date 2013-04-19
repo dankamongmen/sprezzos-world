@@ -4886,3 +4886,11 @@ $(HASKELLCONCRETETYPEREP): $(SPREZZ)/haskell-concrete-typerep/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-concrete-typerep_$(haskell-concrete-typerep_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-yesod-newsfeed
+haskell-yesod-newsfeed:$(HASKELLYESODNEWSFEED)_$(ARCH).deb
+$(HASKELLYESODNEWSFEED): $(SPREZZ)/haskell-yesod-newsfeed/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-yesod-newsfeed_$(haskell-yesod-newsfeed_UPVER).orig.tar.gz $(TARARGS) $@
+

@@ -10919,3 +10919,11 @@ $(LIBLANGTAG): $(SPREZZ)/liblangtag/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf liblangtag_$(liblangtag_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: fsharp
+fsharp:$(FSHARP)_$(ARCH).deb
+$(FSHARP): $(SPREZZ)/fsharp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fsharp_$(fsharp_UPVER).orig.tar.gz $(TARARGS) $@
+
