@@ -10935,3 +10935,11 @@ $(BITTWIST): $(SPREZZ)/bittwist/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bittwist_$(bittwist_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fatrace
+fatrace:$(FATRACE)_$(ARCH).deb
+$(FATRACE): $(SPREZZ)/fatrace/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf fatrace_$(fatrace_UPVER).orig.tar.bz2 $(TARARGS) $@
+
