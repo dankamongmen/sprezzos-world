@@ -3921,7 +3921,7 @@ $(ICEDOVE): $(SPREZZ)/icedove/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf icedove-$(icedove_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf icedove-$(icedove_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: icedtea-web
 icedtea-web:$(ICEDTEAWEB)_$(ARCH).deb
