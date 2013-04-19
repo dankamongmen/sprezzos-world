@@ -673,3 +673,11 @@ $(VTK): $(SPREZZ)/vtk/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vtk_$(vtk_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: bullet
+bullet:$(BULLET)_$(ARCH).deb
+$(BULLET): $(SPREZZ)/bullet/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bullet_$(bullet_UPVER).orig.tar.gz $(TARARGS) $@
+

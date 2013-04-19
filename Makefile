@@ -10903,3 +10903,11 @@ $(MAN2HTML): $(SPREZZ)/man2html/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf man2html_$(man2html_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fonts-font-awesome
+fonts-font-awesome:$(FONTSFONTAWESOME)_$(ARCH).deb
+$(FONTSFONTAWESOME): $(SPREZZ)/fonts-font-awesome/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fonts-font-awesome_$(fonts-font-awesome_UPVER).orig.tar.gz $(TARARGS) $@
+
