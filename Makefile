@@ -6944,8 +6944,8 @@ pciutils:$(PCIUTILS)_$(ARCH).deb
 $(PCIUTILS): $(SPREZZ)/pciutils/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version --repack
-	tar xzvf pciutils-$(pciutils_UPVER).tar.gz $(TARARGS) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf pciutils-$(pciutils_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: pcmciautils
 pcmciautils:$(PCMCIAUTILS)_$(ARCH).deb
