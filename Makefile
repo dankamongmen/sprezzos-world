@@ -10911,3 +10911,11 @@ $(FONTSFONTAWESOME): $(SPREZZ)/fonts-font-awesome/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fonts-font-awesome_$(fonts-font-awesome_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: liblangtag
+liblangtag:$(LIBLANGTAG)_$(ARCH).deb
+$(LIBLANGTAG): $(SPREZZ)/liblangtag/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liblangtag_$(liblangtag_UPVER).orig.tar.gz $(TARARGS) $@
+
