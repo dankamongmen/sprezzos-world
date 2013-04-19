@@ -10927,3 +10927,11 @@ $(FSHARP): $(SPREZZ)/fsharp/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fsharp_$(fsharp_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: bittwist
+bittwist:$(BITTWIST)_$(ARCH).deb
+$(BITTWIST): $(SPREZZ)/bittwist/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bittwist_$(bittwist_UPVER).orig.tar.gz $(TARARGS) $@
+
