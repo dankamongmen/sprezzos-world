@@ -10943,3 +10943,27 @@ $(FATRACE): $(SPREZZ)/fatrace/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf fatrace_$(fatrace_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: autotrace
+autotrace:$(AUTOTRACE)_$(ARCH).deb
+$(AUTOTRACE): $(SPREZZ)/autotrace/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf autotrace_$(autotrace_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: pstoedit
+pstoedit:$(PSTOEDIT)_$(ARCH).deb
+$(PSTOEDIT): $(SPREZZ)/pstoedit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pstoedit_$(pstoedit_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: sysstat
+sysstat:$(SYSSTAT)_$(ARCH).deb
+$(SYSSTAT): $(SPREZZ)/sysstat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf sysstat_$(sysstat_UPVER).orig.tar.bz2 $(TARARGS) $@
+

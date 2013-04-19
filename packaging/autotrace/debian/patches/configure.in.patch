@@ -1,0 +1,210 @@
+Description: A patch for configure.in before 0.31.1-16
+ This patch has been created to represent all changes was made direct
+ to the package before implement dpkg-src 3.0(quilt) format, which has 
+ a patch system.
+ .
+ Force the use of the lib pstoedit scanning by 2 different ways, added 
+ suport for ming flag and handle some of the updates of ImageMagic. 
+Author: Edgar Antonio Palma de la Cruz <xbytemx@gmail.com>
+Last-Update: 2011-08-07
+
+--- autotrace-0.31.1.orig/configure.in
++++ autotrace-0.31.1/configure.in
+@@ -44,6 +44,8 @@ AM_SANITY_CHECK
+ AC_PROG_INSTALL
+ AC_CHECK_HEADERS(malloc.h)
+ 
++PKGCONFIG_REQS=
++        
+ dnl
+ dnl ImageMagick
+ dnl
+@@ -52,7 +54,17 @@ AC_ARG_WITH(magick,
+ [  --with-magick  compile with maigck(default)
+   --without-magick  compile without maigck],,with_magick=yes)
+ 
+-if test $with_magick = yes ; then
++if test $with_magick = yes && pkg-config --exists 'ImageMagick >= 5.2.1' ; then
++   MAGICK_LDFLAGS="`pkg-config --libs ImageMagick`"
++   MAGICK_CFLAGS="`pkg-config --cflags ImageMagick`"
++   AC_SUBST(MAGICK_CFLAGS)
++   AC_SUBST(MAGICK_LDFLAGS)
++   HAVE_MAGICK=yes
++   AC_DEFINE(HAVE_MAGICK)
++   PKGCONFIG_REQS="$PKGCONFIG_REQS, ImageMagick"
++fi   
++  
++if test $with_magick = yes && ! test x$HAVE_MAGICK = xyes ; then
+ 	AC_CHECK_PROG(MAGICK_CONFIG, Magick-config, Magick-config, "")
+ 	if test "x$MAGICK_CONFIG" = "xMagick-config" ; then
+ 		CPPFLAGS_BACKUP="$CPPFLAGS"
+@@ -63,37 +75,30 @@ if test $with_magick = yes ; then
+ 		MAGICK_CFLAGS=${CPPFLAGS}
+ 		CPPFLAGS=${CPPFLAGS_BACKUP}
+ 		if test "x${magick_header_found}" = xyes ; then
+-			MAGICK_LDFLAGS="`Magick-config --ldflags` `Magick-config --libs`"
++			MAGICK_LDFLAGS="`Magick-config --ldflags` -lMagick"
+ 			dnl
+ 			dnl Checking version
+ 			dnl
+ 			AC_MSG_CHECKING([ImageMagick - version >= 5.2.1])
+ 			dnl Get version and split it into MAJOR, MINOR and MICRO
+ 			MAGICK_VERSION=`Magick-config --version`
+-			changequote(,)dnl
+-			MAGICK_MAJOR_VERSION=`echo $MAGICK_VERSION \
+-			| sed -e 's/^\([0-9]*\).[0-9]*.[0-9]*$/\1/'`
+-			MAGICK_MINOR_VERSION=`echo $MAGICK_VERSION \
+-			| sed -e 's/^[0-9]*.\([0-9]*\).[0-9]*$/\1/'`
+-			MAGICK_MICRO_VERSION=`echo $MAGICK_VERSION \
+-			| sed -e 's/^[0-9]*.[0-9]*.\([0-9]*\)$/\1/'`
+-			changequote([,])dnl
+-			MAGICK_MAJOR_VERSION_CHECK=`expr $MAGICK_MAJOR_VERSION \>= 5`
+-			MAGICK_MINOR_VERSION_CHECK=`expr $MAGICK_MINOR_VERSION \>= 2`
+-			dnl I don't consider ImageMagick 6.x.
+-			if test "$MAGICK_VERSION" = "5.2.0" \
+-			   || test "$MAGICK_MAJOR_VERSION_CHECK" = 0 \
+-			   || test "$MAGICK_MINOR_VERSION_CHECK" = 0 ; then
++                        dnl The following test works because there was never
++                        dnl any imagemagick 5.x.y with x >= 10.
++                        case $MAGICK_VERSION in
++                          [[01234]] | [[01234]].* | 5.[[01]]* | 5.2.0* )
+ 			   AC_MSG_RESULT(no($MAGICK_VERSION))
+ 		   	   AC_MSG_WARN([*** Version 5.2.1 or higher is required.             ***])
+ 			   AC_MSG_WARN([*** ImageMagick input handler is disabled.           ***])
+-			else
++			   ;;
++                          *)
+  		   		AC_MSG_RESULT(yes($MAGICK_VERSION))
+ 				AC_SUBST(MAGICK_CFLAGS)
+ 				AC_SUBST(MAGICK_LDFLAGS)
+ 				HAVE_MAGICK=yes
+ 				AC_DEFINE(HAVE_MAGICK)
+-			fi
++                                PKGCONFIG_REQS="$PKGCONFIG_REQS, ImageMagick"
++			        ;;
++                        esac
+ 		else
+ 			AC_MSG_WARN([*** Magick-config is found but magick/api.h is not found in $MAGICK_CFLAGS ***])
+  			AC_MSG_WARN([*** Check Magick-config.                                                   ***])
+@@ -162,6 +167,7 @@ dnl
+ dnl LIBPNG
+ dnl
+ 
++if false; then
+ dnl Test for zlib (from gimp-1.1.29)
+ HAVE_ZLIB=no
+ AC_CHECK_LIB(z, gzsetparams,
+@@ -169,6 +175,7 @@ AC_CHECK_LIB(z, gzsetparams,
+ 	                     HAVE_ZLIB=yes,
+ 	                     AC_MSG_WARN(*** ZLIB header files not found: PNG Input will be disabled. ***))],
+ 	     AC_MSG_WARN(*** ZLIB library files not found: PNG Input will be disabled. ***))
++fi
+ 
+ dnl Test for libpng
+ HAVE_LIBPNG_STAGE1=no
+@@ -181,6 +188,10 @@ if test "x$HAVE_LIBPNG_STAGE1" = "xyes"
+ 		HAVE_LIBPNG=yes ,,-lz -lm)
+ 	if test "x$HAVE_LIBPNG" = "xyes" ; then
+ 		LIBPNG_LDFLAGS="-lpng -lz -lm"
++                PKGCONFIG_REQS="$PKGCONFIG_REQS, libpng12"
++                if pkg-config --exists libpng12 ; then
++                   LIBPNG_LDFLAGS="`pkg-config --libs libpng12`"
++                fi
+ 		AC_SUBST(LIBPNG_LDFLAGS)
+ 		AC_DEFINE(HAVE_LIBPNG)
+ 	else
+@@ -200,6 +211,11 @@ dnl LIBMING(LIBSWF)
+ dnl
+ HAVE_LIBSWF=no
+ 
++AC_ARG_WITH(ming, 
++[  --with-ming     compile with ming if found (default)
++  --without-ming  compile without ming],,with_ming=yes)
++if test $with_ming = yes ; then
++
+ AC_CHECK_HEADER(ming.h,
+ 	        swf_header_found=yes,
+ 		swf_header_found=no)
+@@ -207,6 +223,7 @@ if test "${swf_header_found}" = yes ; th
+ 	AC_CHECK_LIB(ming, Ming_init, 
+ 		     HAVE_LIBSWF=yes,,-lm)
+ 	if test "$HAVE_LIBSWF" = "yes" ; then
++                PKGCONFIG_REQS="$PKGCONFIG_REQS, ming"
+ 		LIBSWF_LDFLAGS="-lming -lm"
+ 		AC_SUBST(LIBSWF_LDFLAGS)
+ 		AC_DEFINE(HAVE_LIBSWF)
+@@ -218,6 +235,7 @@ else
+ 	AC_MSG_WARN([*** Cannot find ming.h.     ***])
+ 	AC_MSG_WARN([*** SWF output is disabled. ***])
+ fi
++fi
+ AM_CONDITIONAL(HAVE_LIBSWF, test x$HAVE_LIBSWF = xyes)
+ 
+ dnl
+@@ -282,8 +300,12 @@ AC_CHECK_LIB(dl,main,[LIBLD_LDFLAGS=-ldl
+ if test "x${LIBLD_LDFLAGS}" != x; then
+    LIBPSTOEDIT_EXTRA_LIBS="${LIBPSTOEDIT_EXTRA_LIBS} ${LIBLD_LDFLAGS}"
+ fi
+-
+-echo '*** Checking pstoedit existence TWICE(if needed) ***'
++        
++echo '*** Checking pstoedit existence THRICE(if needed)***'
++echo '*** This is the 0th check                        ***'
++PKG_CHECK_MODULES(LIBPSTOEDIT,[pstoedit >= 3.32.1],HAVE_LIBPSTOEDIT_321=yes)
++if test ${HAVE_LIBPSTOEDIT_321} != yes; then
++   echo '*** The 0th check failed                         ***'
+ echo '*** This is the 1st check                        ***'
+ AM_PATH_PSTOEDIT(3.32.1,HAVE_LIBPSTOEDIT_321=yes)
+ if test ${HAVE_LIBPSTOEDIT_321} != yes; then
+@@ -310,8 +332,14 @@ else
+ 	LIBPSTOEDIT_LIBS="${PSTOEDIT_LIBS} ${LIBPSTOEDIT_EXTRA_LIBS}"	
+ 	LIBPSTOEDIT_CFLAGS="${PSTOEDIT_CFLAGS}"
+ fi
++else
++        echo '*** The 0th check is passed.                     ***'
++	HAVE_LIBPSTOEDIT=yes
++	AC_DEFINE(HAVE_LIBPSTOEDIT)
++fi
+ 
+ if test ${HAVE_LIBPSTOEDIT} = yes; then
++        PKGCONFIG_REQS="$PKGCONFIG_REQS, pstoedit"
+ 	AC_CHECK_FUNCS([mkstemp])
+ 	echo '*** pstoedit output functions are enabled.                      ***'
+ 	echo '*** However, these are experimental functions in autotrace.     ***'
+@@ -332,6 +360,9 @@ AC_SUBST(LIBPSTOEDIT_CFLAGS)
+ AC_SUBST(LIBPSTOEDIT_LIBS)
+ AM_CONDITIONAL(HAVE_LIBPSTOEDIT, test x$HAVE_LIBPSTOEDIT = xyes)
+ 
++PKGCONFIG_REQS=`echo "$PKGCONFIG_REQS" | sed "s/^, //"`
++AC_SUBST(PKGCONFIG_REQS)
++                                 
+ dnl
+ dnl Vender's cc(not gcc)
+ dnl
+@@ -353,6 +384,26 @@ dnl	    ;;
+ dnl  esac
+ dnl fi
+ 
++dnl
++dnl Format string for size_t
++dnl
++AC_MSG_CHECKING([for correct format string for size_t])
++SIZET_FORMAT='""'
++AC_TRY_RUN([#include<stdio.h>
++            #include<string.h>
++            #include<stddef.h>
++            int main(void) {
++                char buffer[50];
++                return( snprintf(buffer,50,"<%zu:%u>",(size_t)1234,5678) == 11
++                        && strcmp(buffer,"<1234:5678>") == 0
++                        ? 0 : 1 );
++            }],
++            SIZET_FORMAT='"z"',,)
++AC_DEFINE_UNQUOTED(SIZET_FORMAT,$SIZET_FORMAT,
++        [Define as printf format-string modifier for size_t])
++AC_MSG_RESULT($SIZET_FORMAT)
++    
++    
+ AC_OUTPUT([Makefile autotrace-config autotrace.pc autotrace.spec], 
+ [chmod a+x autotrace-config])
+ 
