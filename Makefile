@@ -10967,3 +10967,27 @@ $(SYSSTAT): $(SPREZZ)/sysstat/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf sysstat_$(sysstat_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: ming
+ming:$(MING)_$(ARCH).deb
+$(MING): $(SPREZZ)/ming/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ming_$(ming_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: pdf2djvu
+pdf2djvu:$(PDF2DJVU)_$(ARCH).deb
+$(PDF2DJVU): $(SPREZZ)/pdf2djvu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pdf2djvu_$(pdf2djvu_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: pstreams
+pstreams:$(PSTREAMS)_$(ARCH).deb
+$(PSTREAMS): $(SPREZZ)/pstreams/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pstreams_$(pstreams_UPVER).orig.tar.gz $(TARARGS) $@
+
