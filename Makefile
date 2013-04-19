@@ -10991,3 +10991,11 @@ $(PSTREAMS): $(SPREZZ)/pstreams/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pstreams_$(pstreams_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: jxrlib
+jxrlib:$(JXRLIB)_$(ARCH).deb
+$(JXRLIB): $(SPREZZ)/jxrlib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf jxrlib_$(jxrlib_UPVER).orig.tar.gz $(TARARGS) $@
+
