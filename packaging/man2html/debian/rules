@@ -1,0 +1,134 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# This file is public domain software, originally written by Joey Hess.
+#
+# This version is for a multibinary package. It also allows you to build any
+# of the binary packages independantly, via binary-<package> targets.
+#
+# $Id: rules 250 2011-03-06 17:56:08Z robert $
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+DESTDIR := $(CURDIR)/debian/tmp
+SHELL   := /bin/bash
+TMPMAN  := debian/tmp.man
+
+export DEBIAN_CFLAGS := -Wall -Wshadow $(shell dpkg-buildflags --get CFLAGS)
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	
+	./configure -d +fhs
+	touch configure-stamp
+
+build-arch:  build-stamp
+build-stamp: configure-stamp
+	dh_testdir
+	
+	# Add here commands to compile the package.
+	$(MAKE) makefiles CC=gcc && \
+	$(MAKE) -C src version.h CC=gcc && \
+	$(MAKE) -C man2html CC=gcc
+	cd debian/sources && $(MAKE) CC=gcc
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+	rm -rf $(TMPMAN)
+	test ! -f Makefile || $(MAKE) distclean
+	$(MAKE) -C  debian/sources clean
+	dh_clean
+
+install: DH_OPTIONS=
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	for pkg in $(shell dh_listpackages); do      \
+	        dh_installdirs -p$$pkg -P$(DESTDIR); \
+	done
+	dh_installdirs
+	
+	$(MAKE) -C man2html     PREFIX=$(DESTDIR) install  install-hman
+	$(MAKE) -C debian/sources PREFIX=$(DESTDIR) install
+	
+	chown root:www-data $(DESTDIR)/var/cache/man2html
+	chmod 0775 $(DESTDIR)/var/cache/man2html
+	
+	mkdir -p $(TMPMAN)
+	
+	find man man2html/locales ! -path '*/.svn/*' \( -name 'man2html.*' -o -name 'hman.*' \) \
+        | while read mp; do      \
+	        lang=`echo $$mp| sed -e 's|.*/\(..\)/[^/]*$$|\1|'` ;                            \
+	        file="$(TMPMAN)/`basename $$mp`";                                               \
+	        [ "$$lang" != "en"  ] || continue;                                              \
+	        case $$mp in                                                                    \
+	                *hman*) pkg=man2html ;;                                                 \
+	                *) pkg=man2html-base ;;                                                 \
+	        esac;                                                                           \
+	        echo "Installing $$mp man page ($$lang) into package $$pkg" ;                   \
+	        tr -d '\015' < "$$mp" > "$$file" || exit 1;                                     \
+	        dh_installman --package $$pkg --language "$$lang" "$$file"  || exit 1;          \
+	done
+	
+	dh_install --list-missing
+
+# This single target is used to build all the packages, all at once, or
+# one at a time. So keep in mind: any options passed to commands here will
+# affect _all_ packages. Anything you want to only affect one package
+# should be put in another target, such as the install target.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installdocs  --link-doc=man2html-base man2html/README man2html/TODO
+	dh_installchangelogs
+	dh_installexamples
+	dh_installmenu
+	dh_installdebconf
+#	dh_installlogrotate
+#	dh_installemacsen
+#	dh_installpam
+#	dh_installmime
+#	dh_installinit
+	dh_installcron
+#	dh_installinfo
+#	dh_undocumented
+	dh_installman
+	dh_lintian
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms -Xcache
+#	dh_makeshlibs
+	dh_installdeb
+#	dh_perl
+#	dh_python
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-indep build-indep:  # Nothing to do
+
+binary-arch: build-arch install
+	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
+
+# Any other binary targets build just one binary package at a time.
+binary-%: build install
+	make -f debian/rules binary-common DH_OPTIONS=-p$*
+
+binary: binary-indep  binary-arch
+build:  build-indep   build-arch
+
+.PHONY: clean install configure \
+	binary-indep  binary-arch binary-common binary \
+	build-indep   build-arch  build
+
+.DEFAULT_GOAL := binary

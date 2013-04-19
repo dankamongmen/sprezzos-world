@@ -10895,3 +10895,11 @@ $(OCLICD): $(SPREZZ)/ocl-icd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocl-icd_$(ocl-icd_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: man2html
+man2html:$(MAN2HTML)_$(ARCH).deb
+$(MAN2HTML): $(SPREZZ)/man2html/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf man2html_$(man2html_UPVER).orig.tar.gz $(TARARGS) $@
+

@@ -1,0 +1,301 @@
+#!/bin/sh
+#  vim:ts=4:et
+#
+#  Interface to a glimpse search of the man pages.
+#  Michael Hamilton <michael@actrix.gen.nz>
+#  Small changes - aeb, 980109
+#
+# $Id: mansearch,v 1.19 2005-10-19 20:56:30 robert Exp $
+
+
+type search++ > /dev/null 2> /dev/null || {
+    cat <<EOF
+Content-type: text/html; charset=ISO-8859-1
+
+<title>Swish++ not installed</title>
+<body>
+<h1>Swish++ not installed</h1>
+Search is only enabled if the <b>Swish++</b> package is installed.
+You may <a href="http://packages.debian.org/swish++">download</a> it from
+the <a href="http://www.debian.org">Debian</a> site.
+</body>
+EOF
+    exit 0
+}
+
+
+# Do we need lynxcgi URLs? For the moment our criterion is
+# 1) HTTP_USER_AGENT=Lynx*  and 2) HTTP_HOST is unset.
+AGENT="${HTTP_USER_AGENT-unknown}"
+
+case "$AGENT" in
+    Lynx*|lynx*)
+        HH="${HTTP_HOST-nohh}"
+        SED="s/%lynx //"
+        ;;
+    *)
+        HH=nolynx
+        SED="/%lynx/d"
+        ;;
+esac
+
+SERVER="${SERVER_NAME-localhost}"
+case "$HH" in
+    nohh)
+        CG="lynxcgi:/usr/lib/cgi-bin/man"
+        ;;
+    *)
+        CG="/cgi-bin/man"
+        ;;
+esac
+QUOTE="'"
+export CG QUOTE SED
+
+exec gawk '
+# Generate pages index
+function number_pages( searchfor, skip, maxperpage, resultcnt ) {
+    if ( resultcnt < maxperpage || skip < 0 ) {
+        return;
+    }
+    if (skip > resultcnt) {
+        skip = 0;
+    }
+   
+    max      = 10;  # max returned pages
+    searchurl= cgipath "/mansearch" urlencode(searchfor, 1); 
+    pagescnt = int (resultcnt / maxperpage) + 1;
+    pageno   = int (skip / maxperpage);
+    first    = int (pageno / max) * max - 1;
+    last     = first + max + 1;
+
+    print "<CENTER>";
+        
+
+    i    = first;
+    skip = i * maxperpage;
+    while (i <= last && i < pagescnt) {
+        ss = ""  
+        if (i == pageno ) {
+            ss = ss  "[<STRONG>" (i + 1) "</STRONG>]"
+        } else if (i >= 0) {
+            ss = ss "[<EM><A HREF=\"" searchurl;
+            if (skip > 0) {
+                ss = ss "&amp;skip=" skip;
+            }    
+            ss = ss "\">";    
+            if (i == first) {
+                ss = ss "&lt;&lt;";
+            } else if (i == last) {
+                ss = ss "&gt;&gt;";
+            } else {
+                ss = ss  (i + 1);
+            }
+        
+            ss = ss  "</A></EM>]";
+        }
+        print ss;
+        i++;
+        skip += maxperpage;
+    }
+    print "</CENTER>";
+}
+
+function urldecode(string) {
+    gsub(/\+/, " ", string);
+    oldIGNORECASE=IGNORECASE;
+    IGNORECASE=1;
+    while(match(string, /%[0-9a-f][0-9a-f]/)) {
+        a=substr(string, RSTART + 1, RLENGTH - 1);
+        b=sprintf("%c",strtonum("0x" a)) ;
+        retstr = retstr substr(string, 0, RSTART - 1) b;
+        string = substr(string, RSTART + RLENGTH);
+    }
+    IGNORECASE=oldIGNORECASE;
+    return retstr string;
+}
+
+# Encode URL; the force argument forces "query=...." format
+function urlencode(string, force) {
+# uses global ord table, set up in BEGIN
+    encoded = force;
+    retstr = "";
+    while(match(string, /[^a-zA-Z0-9_:\/\.\-]/)) {
+        a=substr(string, RSTART, RLENGTH);
+        if (a == " ") {
+            b = "+";
+        } else {
+            b = "%" sprintf("%02X", ord[a]);
+        }
+        retstr = retstr substr(string, 0, RSTART - 1) b;
+        string = substr(string, RSTART + RLENGTH);
+        encoded = 1;
+    }
+
+    if (encoded) {
+        return "?query=" retstr string;
+    } else {
+        return retstr string;
+    }
+}
+
+BEGIN {
+    # fill ord table, used by urlencode
+    for (i = 0; i < 255; i++) 
+        ord[sprintf("%c", i)] = i
+    
+    
+    searchdocument  = "/usr/share/man2html/mansearch.aux";
+    quote           = ENVIRON["QUOTE"];
+    cgipath         = ENVIRON["CG"];
+    sedcmd          = ENVIRON["SED"];
+    maxperpage      = 50;             # Single page display match limit.
+    
+    glimpse_cmd = "search++ --config-file=/usr/share/man2html/swish++.conf "
+    
+    
+    qry_str = ENVIRON["QUERY_STRING"];
+    if (match(qry_str, /skip=[0-9]+/)) {
+        skip = int(substr(qry_str, RSTART + 5, RLENGTH - 5) / maxperpage) * maxperpage;
+    } else {
+        skip = 0
+    }
+
+    if (match(qry_str, /query=[^&]+/)) {
+        qry_str = substr(qry_str, RSTART + 6, RLENGTH - 6);
+        string = urldecode(qry_str);
+    }
+    if (!string) {
+        for (i = 1; i < ARGC; i++) {
+            string = string " " ARGV[i];
+        }
+    }
+    
+    # Have to be careful to single quote this
+    # string later.
+    gsub(/[^a-zA-Z0-9\-_+ \t\/@%:;,$*|=]/, " ", string);
+    
+    #  string = removeopts(string);
+    
+    #  gsub(/[^a-zA-Z0-9-_+ \t\/@%:,]/, " ", options);
+    
+    
+    if (!string) {
+        if (system("test -r " searchdocument ) != 0) {
+            print "<HTML><HEAD>";
+            print "<TITLE>mansearch - file not found</TITLE>";
+            print "</HEAD>\n<BODY>";
+            print "Sorry - cannot read " searchdocument ".";
+            print "</BODY></HTML>";
+            exit;
+        }
+        system("sed " quote "s#%cg#" cgipath "#g;" sedcmd quote " " searchdocument );
+        exit;
+    }
+    
+    print "Content-type: text/html; charset=ISO-8859-1\n";
+    print "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\">";
+    print "<HTML>";
+    print "<HEAD>";
+    print "<TITLE>Manual Pages - Search Results: " string "</TITLE>";
+    print "</HEAD>";
+    print "<BODY>";
+    
+    print "<H1>Manual Pages - Search Results</H1>";
+    print "<H2>Target text: " string "</H2>";
+    
+    print "<A HREF=\"" cgipath "/mansearch\">";
+    print "Perform another search";
+    print "</A><BR>";
+    print "<A HREF=\"" cgipath "/man2html\">";
+    print "Return to Main Contents";
+    print "</A>";
+    
+    print "<HR>";  
+    
+    if ( skip > 0) {
+        options = options "--skip-results=" skip;
+    }
+    if ( maxperpage > 0 ) {
+        options = options "-m " maxperpage;
+    }    
+        
+    # Unless you like being hacked, the single
+    # forward quotes are most important.
+    cmd = glimpse_cmd " " options " " quote string quote " 2>/dev/null" ;
+    while ((cmd | getline matchline) > 0) {
+        if (split(matchline, part, "__--__") <= 3) {
+            if ( match( matchline, "^# results: .*$" ) ) {
+                resultcnt = substr( matchline, RSTART + 11, RLENGTH - 11 ) + 0;
+                number_pages( string, skip, maxperpage, resultcnt );
+                
+            }        
+            continue;
+        }
+        else {
+            fullname = part[2];
+        }
+    
+        if (fullname == last_fullname) {
+            continue;
+        }    
+    
+        last_fullname = fullname ;
+        last_text = "";
+        
+        if (match(fullname, ".*/")) {
+            dirname = substr(fullname, 1, RLENGTH);
+            filename = substr(fullname, RLENGTH + 1);
+        } else {
+            filename = fullname;
+        }
+         
+        if (match(filename, /\.[^.]+$/)) {
+            ref = substr(filename, 1, RSTART - 1) "+" substr(filename, RSTART + 1);
+        } else {
+            ref = filename;
+        }
+        textname = filename;
+        sub(/\.(gz|Z|z)$/, "", textname);
+    
+        # replace last "." with "(". gsub is used to count number of "."
+        textname = gensub(/\./, "(", gsub(/\./, ".", textname), textname);
+        textname = textname ")";
+        if (mcount == 0) {
+            print "<DL>";
+        }
+        mcount++; 
+        print "<DT><A HREF=\"" cgipath "/man2html" urlencode(fullname, 0) "\">" textname "</A>" \
+              " <EM>(" part[1] "%)</EM></DT>";
+    
+        text = part[4];
+        if ( text == filename ) { 
+            text = textname;
+        } else {
+            sub(/^ *.[^ ]+[- ]+/, "", text);
+            sub(/ +$/, "", text);
+            gsub(/\\f./,    "", text);
+            gsub(/\\&/,     "", text);
+            gsub(/\\/,      "", text);
+        }  
+        print "<DD>" text "</DD>";
+        print "<DT><BR></DT>";
+    }
+    close(cmd);
+    
+    print "</DL>";
+    
+    number_pages( string, skip, maxperpage, resultcnt );
+    if (resultcnt == 0) {
+        print "No matches found.";
+    }
+    else if (resultcnt == 1) {
+        print "<HR>\n<P>1 match found."
+    }
+    else {
+        print "<HR>\n<P>" resultcnt " matches found."
+    }
+    print "</BODY>";
+    print "</HTML>";
+    exit;    
+}' "$@"
+
