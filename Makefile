@@ -90,6 +90,15 @@ $(NEMO): $(SPREZZ)/nemo/debian/changelog
 #	cd $@ && uscan --force-download --download-current-version
 #	tar xzvf nemo_$(nemo_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fish
+fish:$(FISH)_$(ARCH).deb
+$(FISH): $(SPREZZ)/fish/debian/changelog
+	git clone git://github.com/fish-shell/fish-shell.git $@
+	rm -rf $@/debian
+	tar cJf fish-$(fish_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf fish-$(fish_UPVER).tar.xz fish_$(fish_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: usbutils
 usbutils:$(USBUTILS)_$(ARCH).deb
 $(USBUTILS): $(SPREZZ)/usbutils/debian/changelog
