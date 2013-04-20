@@ -1824,7 +1824,7 @@ $(CAIRODOCKPLUGINS): $(SPREZZ)/cairo-dock-plug-ins/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf cairo-dock-plugins-$(cairo-dock-plug-ins_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf cairo-dock-plugins-$(cairo-dock-plug-ins_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: cccc
 cccc:$(CCCC)_$(ARCH).deb
@@ -11047,4 +11047,12 @@ $(COMPIZCONFIGBACKENDGCONF): $(SPREZZ)/compizconfig-backend-gconf/debian/changel
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf compizconfig-backend-gconf_$(compizconfig-backend-gconf_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: compiz-fusion-bcop
+compiz-fusion-bcop:$(COMPIZFUSIONBCOP)_$(ARCH).deb
+$(COMPIZFUSIONBCOP): $(SPREZZ)/compiz-fusion-bcop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf compiz-fusion-bcop_$(compiz-fusion-bcop_UPVER).orig.tar.bz2 $(TARARGS) $@
 
