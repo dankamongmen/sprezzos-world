@@ -11040,3 +11040,11 @@ $(LIBRIME): $(SPREZZ)/librime/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf librime_$(librime_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: compizconfig-backend-gconf
+compizconfig-backend-gconf:$(COMPIZCONFIGBACKENDGCONF)_$(ARCH).deb
+$(COMPIZCONFIGBACKENDGCONF): $(SPREZZ)/compizconfig-backend-gconf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf compizconfig-backend-gconf_$(compizconfig-backend-gconf_UPVER).orig.tar.bz2 $(TARARGS) $@
+
