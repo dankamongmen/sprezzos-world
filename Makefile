@@ -11072,3 +11072,11 @@ $(COMPIZFUSIONPLUGINSUNSUPPORTED): $(SPREZZ)/compiz-fusion-plugins-unsupported/d
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf compiz-fusion-plugins-unsupported_$(compiz-fusion-plugins-unsupported_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: adns
+adns:$(ADNS)_$(ARCH).deb
+$(ADNS): $(SPREZZ)/adns/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf adns_$(adns_UPVER).orig.tar.gz $(TARARGS) $@
+
