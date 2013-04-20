@@ -1876,7 +1876,7 @@ $(HASKELLMAYBET): $(SPREZZ)/haskell-maybet/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf maybet-$(haskell-maybet_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf MaybeT-$(haskell-maybet_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-midi
 haskell-midi:$(HASKELLMIDI)_$(ARCH).deb
@@ -3244,7 +3244,7 @@ $(HASKELLLISTLIKE): $(SPREZZ)/haskell-listlike/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf listlike-$(haskell-listlike_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf ListLike-$(haskell-listlike_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: haskell-llvm-base
 haskell-llvm-base:$(HASKELLLLVMBASE)_$(ARCH).deb
@@ -4885,4 +4885,44 @@ $(HASKELLCONCRETETYPEREP): $(SPREZZ)/haskell-concrete-typerep/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf haskell-concrete-typerep_$(haskell-concrete-typerep_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-yesod-newsfeed
+haskell-yesod-newsfeed:$(HASKELLYESODNEWSFEED)_$(ARCH).deb
+$(HASKELLYESODNEWSFEED): $(SPREZZ)/haskell-yesod-newsfeed/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-yesod-newsfeed_$(haskell-yesod-newsfeed_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: agda
+agda:$(AGDA)_$(ARCH).deb
+$(AGDA): $(SPREZZ)/agda/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf agda_$(agda_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-geniplate
+haskell-geniplate:$(HASKELLGENIPLATE)_$(ARCH).deb
+$(HASKELLGENIPLATE): $(SPREZZ)/haskell-geniplate/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-geniplate_$(haskell-geniplate_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: haskell-storable-complex
+haskell-storable-complex:$(HASKELLSTORABLECOMPLEX)_$(ARCH).deb
+$(HASKELLSTORABLECOMPLEX): $(SPREZZ)/haskell-storable-complex/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-storable-complex_$(haskell-storable-complex_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: magic-haskell
+magic-haskell:$(MAGICHASKELL)_$(ARCH).deb
+$(MAGICHASKELL): $(SPREZZ)/magic-haskell/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf magic-haskell_$(magic-haskell_UPVER).orig.tar.gz $(TARARGS) $@
 

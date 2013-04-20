@@ -949,3 +949,11 @@ $(GSTPLUGINSGOOD1.0): $(SPREZZ)/gst-plugins-good1.0/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf gst-plugins-good1.0_$(gst-plugins-good1.0_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: smooth-themes
+smooth-themes:$(SMOOTHTHEMES)_$(ARCH).deb
+$(SMOOTHTHEMES): $(SPREZZ)/smooth-themes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf smooth-themes_$(smooth-themes_UPVER).orig.tar.gz $(TARARGS) $@
+

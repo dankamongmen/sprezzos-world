@@ -681,3 +681,19 @@ $(BULLET): $(SPREZZ)/bullet/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf bullet_$(bullet_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: thoggen
+thoggen:$(THOGGEN)_$(ARCH).deb
+$(THOGGEN): $(SPREZZ)/thoggen/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf thoggen_$(thoggen_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: toonloop
+toonloop:$(TOONLOOP)_$(ARCH).deb
+$(TOONLOOP): $(SPREZZ)/toonloop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf toonloop_$(toonloop_UPVER).orig.tar.gz $(TARARGS) $@
+

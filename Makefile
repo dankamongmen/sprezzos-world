@@ -90,6 +90,15 @@ $(NEMO): $(SPREZZ)/nemo/debian/changelog
 #	cd $@ && uscan --force-download --download-current-version
 #	tar xzvf nemo_$(nemo_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fish
+fish:$(FISH)_$(ARCH).deb
+$(FISH): $(SPREZZ)/fish/debian/changelog
+	git clone git://github.com/fish-shell/fish-shell.git $@
+	rm -rf $@/debian
+	tar cJf fish-$(fish_UPVER).tar.xz $@ --exclude-vcs
+	ln -sf fish-$(fish_UPVER).tar.xz fish_$(fish_UPVER).orig.tar.xz
+	cp -r $(<D) $@/
+
 .PHONY: usbutils
 usbutils:$(USBUTILS)_$(ARCH).deb
 $(USBUTILS): $(SPREZZ)/usbutils/debian/changelog
@@ -3921,7 +3930,7 @@ $(ICEDOVE): $(SPREZZ)/icedove/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf icedove-$(icedove_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf icedove-$(icedove_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: icedtea-web
 icedtea-web:$(ICEDTEAWEB)_$(ARCH).deb
@@ -10918,4 +10927,124 @@ $(LIBLANGTAG): $(SPREZZ)/liblangtag/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf liblangtag_$(liblangtag_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: fsharp
+fsharp:$(FSHARP)_$(ARCH).deb
+$(FSHARP): $(SPREZZ)/fsharp/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fsharp_$(fsharp_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: bittwist
+bittwist:$(BITTWIST)_$(ARCH).deb
+$(BITTWIST): $(SPREZZ)/bittwist/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf bittwist_$(bittwist_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: fatrace
+fatrace:$(FATRACE)_$(ARCH).deb
+$(FATRACE): $(SPREZZ)/fatrace/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf fatrace_$(fatrace_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: autotrace
+autotrace:$(AUTOTRACE)_$(ARCH).deb
+$(AUTOTRACE): $(SPREZZ)/autotrace/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf autotrace_$(autotrace_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: pstoedit
+pstoedit:$(PSTOEDIT)_$(ARCH).deb
+$(PSTOEDIT): $(SPREZZ)/pstoedit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pstoedit_$(pstoedit_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: sysstat
+sysstat:$(SYSSTAT)_$(ARCH).deb
+$(SYSSTAT): $(SPREZZ)/sysstat/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf sysstat_$(sysstat_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: ming
+ming:$(MING)_$(ARCH).deb
+$(MING): $(SPREZZ)/ming/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ming_$(ming_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: pdf2djvu
+pdf2djvu:$(PDF2DJVU)_$(ARCH).deb
+$(PDF2DJVU): $(SPREZZ)/pdf2djvu/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pdf2djvu_$(pdf2djvu_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: pstreams
+pstreams:$(PSTREAMS)_$(ARCH).deb
+$(PSTREAMS): $(SPREZZ)/pstreams/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pstreams_$(pstreams_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: jxrlib
+jxrlib:$(JXRLIB)_$(ARCH).deb
+$(JXRLIB): $(SPREZZ)/jxrlib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf jxrlib_$(jxrlib_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: fbcmd
+fbcmd:$(FBCMD)_$(ARCH).deb
+$(FBCMD): $(SPREZZ)/fbcmd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf fbcmd_$(fbcmd_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: hatop
+hatop:$(HATOP)_$(ARCH).deb
+$(HATOP): $(SPREZZ)/hatop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hatop_$(hatop_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: ibus-rime
+ibus-rime:$(IBUSRIME)_$(ARCH).deb
+$(IBUSRIME): $(SPREZZ)/ibus-rime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ibus-rime_$(ibus-rime_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: librime
+librime:$(LIBRIME)_$(ARCH).deb
+$(LIBRIME): $(SPREZZ)/librime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf librime_$(librime_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: compizconfig-backend-gconf
+compizconfig-backend-gconf:$(COMPIZCONFIGBACKENDGCONF)_$(ARCH).deb
+$(COMPIZCONFIGBACKENDGCONF): $(SPREZZ)/compizconfig-backend-gconf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf compizconfig-backend-gconf_$(compizconfig-backend-gconf_UPVER).orig.tar.bz2 $(TARARGS) $@
 
