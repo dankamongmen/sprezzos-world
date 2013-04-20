@@ -2228,7 +2228,7 @@ $(CCSM): $(SPREZZ)/ccsm/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf $(CCSM).orig.tar.bz2 $(TARARGS) $@
+	tar xjvf simple-$(CCSM).tar.bz2 $(TARARGS) $@
 
 .PHONY: compizconfig-python
 compizconfig-python:$(COMPIZCONFIGPYTHON)_$(ARCH).deb
@@ -11055,4 +11055,20 @@ $(COMPIZFUSIONBCOP): $(SPREZZ)/compiz-fusion-bcop/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf compiz-fusion-bcop_$(compiz-fusion-bcop_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: compiz-fusion-plugins-extra
+compiz-fusion-plugins-extra:$(COMPIZFUSIONPLUGINSEXTRA)_$(ARCH).deb
+$(COMPIZFUSIONPLUGINSEXTRA): $(SPREZZ)/compiz-fusion-plugins-extra/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf compiz-fusion-plugins-extra_$(compiz-fusion-plugins-extra_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: compiz-fusion-plugins-unsupported
+compiz-fusion-plugins-unsupported:$(COMPIZFUSIONPLUGINSUNSUPPORTED)_$(ARCH).deb
+$(COMPIZFUSIONPLUGINSUNSUPPORTED): $(SPREZZ)/compiz-fusion-plugins-unsupported/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf compiz-fusion-plugins-unsupported_$(compiz-fusion-plugins-unsupported_UPVER).orig.tar.bz2 $(TARARGS) $@
 
