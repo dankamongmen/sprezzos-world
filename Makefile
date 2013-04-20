@@ -11024,3 +11024,19 @@ $(HATOP): $(SPREZZ)/hatop/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf hatop_$(hatop_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ibus-rime
+ibus-rime:$(IBUSRIME)_$(ARCH).deb
+$(IBUSRIME): $(SPREZZ)/ibus-rime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ibus-rime_$(ibus-rime_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: librime
+librime:$(LIBRIME)_$(ARCH).deb
+$(LIBRIME): $(SPREZZ)/librime/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf librime_$(librime_UPVER).orig.tar.gz $(TARARGS) $@
+
