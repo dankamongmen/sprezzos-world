@@ -11007,3 +11007,11 @@ $(FBCMD): $(SPREZZ)/fbcmd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf fbcmd_$(fbcmd_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: hatop
+hatop:$(HATOP)_$(ARCH).deb
+$(HATOP): $(SPREZZ)/hatop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf hatop_$(hatop_UPVER).orig.tar.gz $(TARARGS) $@
+
