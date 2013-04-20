@@ -10999,3 +10999,11 @@ $(JXRLIB): $(SPREZZ)/jxrlib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf jxrlib_$(jxrlib_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fbcmd
+fbcmd:$(FBCMD)_$(ARCH).deb
+$(FBCMD): $(SPREZZ)/fbcmd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf fbcmd_$(fbcmd_UPVER).orig.tar.gz $(TARARGS) $@
+
