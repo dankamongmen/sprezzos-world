@@ -11080,3 +11080,11 @@ $(ADNS): $(SPREZZ)/adns/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf adns_$(adns_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: iw
+iw:$(IW)_$(ARCH).deb
+$(IW): $(SPREZZ)/iw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf iw_$(iw_UPVER).orig.tar.bz2 $(TARARGS) $@
+
