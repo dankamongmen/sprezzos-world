@@ -11112,3 +11112,11 @@ $(GRAPHICSMAGICK): $(SPREZZ)/graphicsmagick/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf graphicsmagick_$(graphicsmagick_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: flactag
+flactag:$(FLACTAG)_$(ARCH).deb
+$(FLACTAG): $(SPREZZ)/flactag/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf flactag_$(flactag_UPVER).orig.tar.gz $(TARARGS) $@
+
