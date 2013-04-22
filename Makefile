@@ -11104,3 +11104,11 @@ $(FONTSADOBESOURCECODEPRO): $(SPREZZ)/fonts-adobe-sourcecodepro/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf fonts-adobe-sourcecodepro_$(fonts-adobe-sourcecodepro_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: graphicsmagick
+graphicsmagick:$(GRAPHICSMAGICK)_$(ARCH).deb
+$(GRAPHICSMAGICK): $(SPREZZ)/graphicsmagick/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf graphicsmagick_$(graphicsmagick_UPVER).orig.tar.gz $(TARARGS) $@
+
