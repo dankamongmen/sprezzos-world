@@ -2878,13 +2878,13 @@ $(FONTSLINUXLIBERTINE): $(SPREZZ)/fonts-linuxlibertine/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fonts-linuxlibertine_$(fonts-linuxlibertine_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: fonts-sourcesanspro
-fonts-sourcesanspro:$(FONTSADOBESOURCESANSPRO)_$(ARCH).deb
+.PHONY: fonts-adobesourcesanspro
+fonts-adobesourcesanspro:$(FONTSADOBESOURCESANSPRO)_$(ARCH).deb
 $(FONTSADOBESOURCESANSPRO): $(SPREZZ)/fonts-adobe-sourcesanspro/debian/changelog
 	mkdir -p $@
 	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	unzip SourceSansPro_FontsOnly-$(fonts-adobe-sourcesanspro_UPVER).zip -d $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf fonts-adobe-sourcesanspro_$(fonts-adobe-sourcesanspro_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: fotoxx
 fotoxx:$(FOTOXX)_$(ARCH).deb
