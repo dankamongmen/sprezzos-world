@@ -454,3 +454,11 @@ $(OCAMLRE): $(SPREZZ)/ocaml-re/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ocaml-re_$(ocaml-re_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libfrei0r-ocaml
+libfrei0r-ocaml:$(LIBFREI0ROCAML)_$(ARCH).deb
+$(LIBFREI0ROCAML): $(SPREZZ)/libfrei0r-ocaml/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libfrei0r-ocaml_$(libfrei0r-ocaml_UPVER).orig.tar.gz $(TARARGS) $@
+
