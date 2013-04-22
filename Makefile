@@ -11120,3 +11120,11 @@ $(FLACTAG): $(SPREZZ)/flactag/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf flactag_$(flactag_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: lsdvd
+lsdvd:$(LSDVD)_$(ARCH).deb
+$(LSDVD): $(SPREZZ)/lsdvd/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf lsdvd_$(lsdvd_UPVER).orig.tar.gz $(TARARGS) $@
+
