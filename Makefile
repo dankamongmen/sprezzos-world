@@ -11088,3 +11088,11 @@ $(IW): $(SPREZZ)/iw/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf iw_$(iw_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: pinfo
+pinfo:$(PINFO)_$(ARCH).deb
+$(PINFO): $(SPREZZ)/pinfo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf pinfo_$(pinfo_UPVER).orig.tar.bz2 $(TARARGS) $@
+
