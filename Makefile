@@ -11096,3 +11096,11 @@ $(PINFO): $(SPREZZ)/pinfo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf pinfo_$(pinfo_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: fonts-adobesourcecodepro
+fonts-adobesourcecodepro:$(FONTSADOBESOURCECODEPRO)_$(ARCH).deb
+$(FONTSADOBESOURCECODEPRO): $(SPREZZ)/fonts-adobe-sourcecodepro/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf fonts-adobe-sourcecodepro_$(fonts-adobe-sourcecodepro_UPVER).orig.tar.gz $(TARARGS) $@
+
