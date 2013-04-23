@@ -11128,3 +11128,11 @@ $(MAKEBEAMERINFO): $(SPREZZ)/makebeamerinfo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf makebeamerinfo_$(makebeamerinfo_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ctorrent
+ctorrent:$(CTORRENT)_$(ARCH).deb
+$(CTORRENT): $(SPREZZ)/ctorrent/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ctorrent_$(ctorrent_UPVER).orig.tar.gz $(TARARGS) $@
+
