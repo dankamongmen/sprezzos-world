@@ -10816,14 +10816,6 @@ $(LIBSMF): $(SPREZZ)/libsmf/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libsmf_$(libsmf_UPVER).orig.tar.gz $(TARARGS) $@
 
-.PHONY: smokekde
-smokekde:$(SMOKEKDE)_$(ARCH).deb
-$(SMOKEKDE): $(SPREZZ)/smokekde/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf smokekde_$(smokekde_UPVER).orig.tar.gz $(TARARGS) $@
-
 .PHONY: mono3
 mono3:$(MONO3)_$(ARCH).deb
 $(MONO3): $(SPREZZ)/mono3/debian/changelog

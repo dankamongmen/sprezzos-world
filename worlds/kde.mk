@@ -614,6 +614,14 @@ $(OKULAR): $(SPREZZ)/okular/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf okular_$(okular_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: smokekde
+smokekde:$(SMOKEKDE)_$(ARCH).deb
+$(SMOKEKDE): $(SPREZZ)/smokekde/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf smokekde_$(smokekde_UPVER).orig.tar.xz $(TARARGS) $@
+
 .PHONY: smokegen
 smokegen:$(SMOKEGEN)_$(ARCH).deb
 $(SMOKEGEN): $(SPREZZ)/smokegen/debian/changelog
@@ -621,4 +629,20 @@ $(SMOKEGEN): $(SPREZZ)/smokegen/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf smokegen_$(smokegen_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: smokeqt
+smokeqt:$(SMOKEQT)_$(ARCH).deb
+$(SMOKEQT): $(SPREZZ)/smokeqt/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf smokeqt_$(smokeqt_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: qwt5
+qwt5:$(QWT5)_$(ARCH).deb
+$(QWT5): $(SPREZZ)/qwt5/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf qwt5_$(qwt5_UPVER).orig.tar.bz2 $(TARARGS) $@
 
