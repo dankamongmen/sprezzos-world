@@ -2396,7 +2396,7 @@ $(DARKTABLE): $(SPREZZ)/darktable/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf darktable-$(darktable_UPVER).tar.gz $(TARARGS) $@
+	tar xJvf darktable-$(darktable_UPVER).tar.xz $(TARARGS) $@
 
 .PHONY: dash
 dash:$(DASH)_$(ARCH).deb
