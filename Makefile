@@ -11136,3 +11136,11 @@ $(CTORRENT): $(SPREZZ)/ctorrent/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ctorrent_$(ctorrent_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: vorbis-tools
+vorbis-tools:$(VORBISTOOLS)_$(ARCH).deb
+$(VORBISTOOLS): $(SPREZZ)/vorbis-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vorbis-tools_$(vorbis-tools_UPVER).orig.tar.gz $(TARARGS) $@
+
