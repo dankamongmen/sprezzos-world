@@ -614,3 +614,11 @@ $(OKULAR): $(SPREZZ)/okular/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf okular_$(okular_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: smokegen
+smokegen:$(SMOKEGEN)_$(ARCH).deb
+$(SMOKEGEN): $(SPREZZ)/smokegen/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf smokegen_$(smokegen_UPVER).orig.tar.xz $(TARARGS) $@
+

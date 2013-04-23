@@ -1,0 +1,638 @@
+From: Modestas Vainius <modax@debian.org>
+From: Pino Toscano <pino@debian.org>
+Subject: get system #defines from current compiler
+Bug-Debian: http://bugs.debian.org/626631
+Forwarded: no
+Last-Update: 2011-09-23
+Origin: vendor
+
+Steal and port some setuphelpers code from the latest kdevelop (b3104e25) which
+dynamically gets system #defines from the current gcc and feeds them to
+smokegen macro preprocessor. This code replaces a couple of macros which were
+hardcoded in the preprocessor code but were insufficient in some cases (e.g.
+generator failed to generate proper code on kFreeBSD with eglibc >= 2.13, see
+build logs of kdebindings 4:4.4.5-6 [1]).
+
+While porting, KProcess was replaced by QProcess, kDebug() with qDebug(),
+adjusted include paths and setuphelpers functions were integrated into existing
+generator code. A few new interfaces had to be made to the pp-macro class to
+support some setuphelpers calls.
+
+[1] https://buildd.debian.org/status/fetch.php?pkg=kdebindings&arch=kfreebsd-amd64&ver=4%3A4.4.5-6&stamp=1304984309
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -30,6 +30,8 @@ set(generator_SRC
+     type_compiler.cpp
+     name_compiler.cpp
+     type.cpp
++    setuphelpers.cpp
++    setuphelpers_gcc.cpp
+ )
+ 
+ # force RPATH so that the binary is usable from within the build tree
+--- a/generatorpreprocessor.cpp
++++ b/generatorpreprocessor.cpp
+@@ -18,6 +18,7 @@
+ 
+ #include "generatorpreprocessor.h"
+ #include "generatorenvironment.h"
++#include "setuphelpers.h"
+ 
+ #include <rpp/pp-environment.h>
+ #include <rpp/pp-macro.h>
+@@ -39,94 +40,8 @@ Preprocessor::Preprocessor(const QList<Q
+     m_topBlock = new rpp::MacroBlock(0);
+     
+     // some basic definitions
+-    rpp::pp_macro* exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__cplusplus");
+-    exportMacro->definition.append(IndexedString('1'));
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__GNUC__");
+-    exportMacro->definition.append(IndexedString('4'));
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__GNUC_MINOR__");
+-    exportMacro->definition.append(IndexedString('1'));
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-
+-    exportMacro = new rpp::pp_macro;
+-#if defined(Q_OS_LINUX)
+-    exportMacro->name = IndexedString("__linux__");
+-#elif defined(Q_OS_WIN32)
+-    exportMacro->name = IndexedString("WIN32");
+-#elif defined(Q_OS_WIN64)
+-    exportMacro->name = IndexedString("WIN64");
+-#elif defined(Q_OS_DARWIN)
+-    exportMacro->name = IndexedString("__APPLE__");
+-#elif defined(Q_OS_SOLARIS)
+-    exportMacro->name = IndexedString("__sun");
+-#else
+-    // fall back to linux if nothing matches
+-    exportMacro->name = IndexedString("__linux__");
+-#endif
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-
+-#if defined(Q_OS_DARWIN64)
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__LP64__");
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-#endif
+-
+-#if (defined(QT_ARCH_ARM) || defined (QT_ARCH_ARMV6)) && !defined(QT_NO_ARM_EABI)
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__ARM_EABI__");
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-#endif
+-
+-    // ansidecl.h will define macros for keywords if we don't define __STDC__
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__STDC__");
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-
+-    // the following macros are gcc specialties
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__extension__");
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__restrict");
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__const");
+-    exportMacro->definition.append(IndexedString("const"));
+-    exportMacro->function_like = false;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
+-
+-    exportMacro = new rpp::pp_macro;
+-    exportMacro->name = IndexedString("__attribute__");
+-    exportMacro->function_like = true;
+-    exportMacro->variadics = false;
+-    m_topBlock->setMacro(exportMacro);
++    rpp::pp_macro* exportMacro = 0;
++    CppTools::setupStandardMacros(*m_topBlock);
+ 
+     exportMacro = new rpp::pp_macro;
+     exportMacro->name = IndexedString("__SMOKEGEN_RUN__");
+@@ -135,6 +50,11 @@ Preprocessor::Preprocessor(const QList<Q
+     exportMacro->variadics = false;
+     m_topBlock->setMacro(exportMacro);
+ 
++    // Do not add standard include paths
++//    foreach (QString dir, CppTools::setupStandardIncludePaths()) {
++//        m_includeDirs << QDir(dir);
++//    }
++
+     foreach (QString define, defines) {
+         exportMacro = new rpp::pp_macro;
+         exportMacro->name = IndexedString(define);
+--- /dev/null
++++ b/setuphelpers.cpp
+@@ -0,0 +1,167 @@
++/*
++* This file is part of KDevelop
++*
++* Copyright 2007-2008 David Nolden <david.nolden.kdevelop@art-master.de>
++* Copyright 2007 Kris Wong <kris.p.wong@gmail.com>
++* Copyright 2011 Modestas Vainius <modax@debian.org>
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU Library General Public License as
++* published by the Free Software Foundation; either version 2 of the
++* License, or (at your option) any later version.
++*
++* This program is distributed in the hope that it will be useful,
++* but WITHOUT ANY WARRANTY; without even the implied warranty of
++* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++* GNU General Public License for more details.
++*
++* You should have received a copy of the GNU General Public
++* License along with this program; if not, write to the
++* Free Software Foundation, Inc.,
++* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
++*/
++#include "setuphelpers.h"
++
++#include <QString>
++#include <QStringList>
++
++//#include <rpp/chartools.h>
++#include <rpp/pp-environment.h>
++#include <rpp/pp-macro.h>
++
++namespace CppTools {
++QStringList gccSetupStandardIncludePaths();
++const QVector<rpp::pp_macro*>& gccStandardMacros();
++
++#ifdef _MSC_VER
++QStringList msvcSetupStandardIncludePaths();
++const QVector<rpp::pp_macro*>& msvcStandardMacros();
++#endif
++
++QStringList setupStandardIncludePaths()
++{
++//TODO: this should happen depending on the actual compiler used for the target and not on the compiler used for kdevelop itself.
++#ifdef _MSC_VER
++    QStringList includePaths = msvcSetupStandardIncludePaths();
++#else
++    QStringList includePaths = gccSetupStandardIncludePaths();
++#endif
++    return includePaths;
++}
++
++void insertMacro(rpp::MacroBlock& macros, const rpp::pp_macro& macro)
++{
++  macros.setMacro(new rpp::pp_macro(macro));
++}
++
++void setupStandardMacros(rpp::MacroBlock& macros)
++{
++    //Add some macros to be compatible with the gnu c++ compiler
++    //Used in several headers like sys/time.h
++    insertMacro( macros, rpp::pp_macro("__restrict") );
++    insertMacro( macros, rpp::pp_macro("__extension__") );
++    {
++      //Used in several headers like sys/time.h
++      rpp::pp_macro m("__const");
++      m.setDefinitionText( "const" );
++      insertMacro( macros, m );
++    }
++    {
++      rpp::pp_macro m("__null");
++      m.setDefinitionText( "0" );
++      insertMacro( macros, m );
++      m.name = IndexedString("NULL");
++      insertMacro( macros, m );
++    }
++
++    {
++      //Used in several gcc headers
++      rpp::pp_macro m("__inline");
++      m.setDefinitionText( "inline" );
++      insertMacro( macros, m );
++      m.name = IndexedString("__always_inline");
++      insertMacro( macros, m );
++    }
++
++    {
++      //It would be better if the parser could deal with it, for example in class declarations. However it cannot.
++      //If we wouldn't need this, macros could be more transparent.
++      rpp::pp_macro m("__attribute__");
++      m.function_like = true;
++      m.formalsList().append(IndexedString("param"));
++      insertMacro( macros, m );
++    }
++    
++    /// The following macros are required for qt only. That's why we set them to become active only when their
++    /// 'real' versions become defined in qobjectdefs.h. A slight problem is that they are 'fixed', so they will block
++    /// any other macros with the same names.
++    {
++      rpp::pp_macro m("Q_SLOTS");
++      m.setDefinitionText( "__qt_slots__" );
++      
++      m.defined = false;
++      m.defineOnOverride = true;
++      m.file = IndexedString("/qobjectdefs.h"); // Only define the macro if it is overriden in this file
++      m.fixed = true;
++      
++      insertMacro( macros, m );
++
++      m.name = IndexedString("Q_PRIVATE_SLOT");
++      m.formalsList().append(IndexedString("d"));
++      m.formalsList().append(IndexedString("sig"));
++      m.function_like = true;
++      m.setDefinitionText( "private slots: sig{ d; }; private:" );
++      insertMacro( macros, m );
++      
++      m.name = IndexedString("slots");
++      m.setDefinitionText("__qt_slots__");
++      m.formalsList().clear();
++      m.function_like = false;
++      insertMacro( macros, m );
++
++      m.name = IndexedString("Q_SIGNALS");
++      m.setDefinitionText( "__qt_signals__" );
++      m.formalsList().clear();
++      insertMacro( macros, m );
++
++      m.name = IndexedString("signals");
++      m.setDefinitionText("__qt_signals__");
++      m.formalsList().clear();
++      insertMacro( macros, m );
++
++      m.name = IndexedString("SIGNAL");
++      m.setDefinitionText("__qt_signal__");
++      m.formalsList().clear();
++      insertMacro( macros, m );
++      
++      m.name = IndexedString("SLOT");
++      m.setDefinitionText("__qt_slot__");
++      m.formalsList().clear();
++      insertMacro( macros, m );
++
++      m.name = IndexedString("Q_PROPERTY");
++      m.setDefinitionText("__qt_property__");
++      m.formalsList().clear();
++      insertMacro( macros, m );
++    }
++    
++    {
++      // We don't provide a real implementation of offsetof, but at least provide a stub that allows correct use-building for the member.
++      rpp::pp_macro m("__builtin_offsetof");
++      m.function_like = true;
++      m.formalsList().append(IndexedString("TYPE"));
++      m.formalsList().append(IndexedString("MEMBER"));
++      m.setDefinitionText("(size_t)((void)TYPE::MEMBER)");
++      insertMacro( macros, m );
++    }
++
++#ifdef _MSC_VER    
++    foreach(const rpp::pp_macro* macro, msvcStandardMacros())
++#else
++    foreach(const rpp::pp_macro* macro, gccStandardMacros())
++#endif
++      insertMacro(macros, *macro);
++}
++
++}
++
+--- /dev/null
++++ b/setuphelpers.h
+@@ -0,0 +1,47 @@
++/*
++* This file is part of KDevelop
++*
++* Copyright 2007-2008 David Nolden <david.nolden.kdevelop@art-master.de>
++* Copyright 2007 Kris Wong <kris.p.wong@gmail.com>
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU Library General Public License as
++* published by the Free Software Foundation; either version 2 of the
++* License, or (at your option) any later version.
++*
++* This program is distributed in the hope that it will be useful,
++* but WITHOUT ANY WARRANTY; without even the implied warranty of
++* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++* GNU General Public License for more details.
++*
++* You should have received a copy of the GNU General Public
++* License along with this program; if not, write to the
++* Free Software Foundation, Inc.,
++* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
++*/
++#ifndef CPPTOOLSSETUPHELPERS_H
++#define CPPTOOLSSETUPHELPERS_H
++
++class QStringList;
++namespace rpp {
++    class MacroBlock;
++}
++
++namespace CppTools {
++
++    /**
++    * This function attempts to run a gcc command to retrieve the standard
++    * c++ include paths for this machine.
++    */
++    QStringList setupStandardIncludePaths();
++
++    /**
++    * This function attempts to run a gcc command to retrieve the standard
++    * c++ macro definitions.
++    */
++    void setupStandardMacros(rpp::MacroBlock& macros);
++
++}
++
++#endif
++
+--- /dev/null
++++ b/setuphelpers_gcc.cpp
+@@ -0,0 +1,161 @@
++/*
++* This file is part of KDevelop
++*
++* Copyright 2007-2008 David Nolden <david.nolden.kdevelop@art-master.de>
++* Copyright 2007 Kris Wong <kris.p.wong@gmail.com>
++* Copyright 2011 Modestas Vainius <modax@debian.org>
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU Library General Public License as
++* published by the Free Software Foundation; either version 2 of the
++* License, or (at your option) any later version.
++*
++* This program is distributed in the hope that it will be useful,
++* but WITHOUT ANY WARRANTY; without even the implied warranty of
++* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++* GNU General Public License for more details.
++*
++* You should have received a copy of the GNU General Public
++* License along with this program; if not, write to the
++* Free Software Foundation, Inc.,
++* 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
++*/
++#include "setuphelpers.h"
++
++#include <QString>
++#include <QStringList>
++#include <QDir>
++#include <QtCore/QProcess>
++#include <QtCore/QDebug>
++
++#include <rpp/pp-macro.h>
++
++#ifdef _WIN32
++#define NULL_DEVICE "NUL"
++#else
++#define NULL_DEVICE "/dev/null"
++#endif
++
++namespace CppTools {
++
++QStringList gccSetupStandardIncludePaths()
++{
++    QStringList includePaths;
++    
++    QProcess proc;
++    proc.setProcessChannelMode(QProcess::MergedChannels);
++    proc.setTextModeEnabled(true);
++
++    // The following command will spit out a bnuch of information we don't care
++    // about before spitting out the include paths.  The parts we care about
++    // look like this:
++    // #include "..." search starts here:
++    // #include <...> search starts here:
++    //  /usr/lib/gcc/i486-linux-gnu/4.1.2/../../../../include/c++/4.1.2
++    //  /usr/lib/gcc/i486-linux-gnu/4.1.2/../../../../include/c++/4.1.2/i486-linux-gnu
++    //  /usr/lib/gcc/i486-linux-gnu/4.1.2/../../../../include/c++/4.1.2/backward
++    //  /usr/local/include
++    //  /usr/lib/gcc/i486-linux-gnu/4.1.2/include
++    //  /usr/include
++    // End of search list.
++    proc.start("gcc", QStringList() <<"-xc++" <<"-E" <<"-v" <<NULL_DEVICE);
++
++    // We'll use the following constants to know what we're currently parsing.
++    const short parsingInitial = 0;
++    const short parsedFirstSearch = 1;
++    const short parsingIncludes = 2;
++    const short parsingFinished = 3;
++    short parsingMode = parsingInitial;
++
++    if (proc.waitForStarted() && proc.waitForFinished(5000) &&
++        proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0)
++    {
++        QString line;
++        while (proc.canReadLine() && parsingMode != parsingFinished) {
++            QByteArray buff = proc.readLine();
++            if (!buff.isEmpty()) {
++                line = buff;
++                switch (parsingMode) {
++                case parsingInitial:
++                    if (line.indexOf("#include \"...\"") != -1) {
++                        parsingMode = parsedFirstSearch;
++                    }
++                    break;
++                case parsedFirstSearch:
++                    if (line.indexOf("#include <...>") != -1) {
++                        parsingMode = parsingIncludes;
++                        break;
++                    }
++                case parsingIncludes:
++                    //if (!line.indexOf(QDir::separator()) == -1 && line != "." ) {
++                    //Detect the include-paths by the first space that is prepended. Reason: The list may contain relative paths like "."
++                    if (!line.startsWith(" ") ) {
++                        // We've reached the end of the list.
++                        parsingMode = parsingFinished;
++                    } else {
++                        line = line.trimmed();
++                        // This is an include path, add it to the list.
++                        includePaths << QDir::cleanPath(line);
++                    }
++                    break;
++                }
++            }
++        }
++    } else {
++        qDebug() <<"Unable to read standard c++ macro definitions from gcc:" <<QString(proc.readAll()) ;
++    }
++    
++    return includePaths;
++}
++
++QVector<rpp::pp_macro*> computeGccStandardMacros()
++{
++    QVector<rpp::pp_macro*> ret;
++    //Get standard macros from gcc
++    QProcess proc;
++    proc.setProcessChannelMode(QProcess::MergedChannels);
++    proc.setTextModeEnabled(true);
++
++    // The output of the following gcc commands is several line in the format:
++    // "#define MACRO [definition]", where definition may or may not be present.
++    // Parsing each line sequentially, we can easily build the macro set.
++    proc.start("gcc", QStringList() <<"-xc++" <<"-E" <<"-dM" <<NULL_DEVICE);
++
++    if (proc.waitForStarted() && proc.waitForFinished(5000) &&
++        proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0)
++    {
++        QString line;
++        while (proc.canReadLine()) {
++            QByteArray buff = proc.readLine();
++            if (!buff.isEmpty()) {
++                line = buff;
++                if (line.startsWith("#define ")) {
++                    line = line.right(line.length() - 8).trimmed();
++                    int pos = line.indexOf(' ');
++                    
++                    ret.append(new rpp::pp_macro);
++                    
++                    rpp::pp_macro& macro(*ret.back());
++                    if (pos != -1) {
++                        macro.name = IndexedString( line.left(pos) );
++                        macro.setDefinitionText( line.right(line.length() - pos - 1).toUtf8() );
++                    } else {
++                        macro.name = IndexedString( line );
++                    }
++                }
++            }
++        }
++    } else {
++        qDebug() <<"Unable to read standard c++ macro definitions from gcc:" <<QString(proc.readAll()) ;
++    }
++    return ret;
++}
++
++const QVector<rpp::pp_macro*>& gccStandardMacros()
++{
++  static QVector<rpp::pp_macro*> macros = computeGccStandardMacros();
++  return macros;
++}
++
++}
++
+--- a/generatorenvironment.cpp
++++ b/generatorenvironment.cpp
+@@ -38,15 +38,26 @@ GeneratorEnvironment::~GeneratorEnvironm
+ 
+ void GeneratorEnvironment::setMacro(rpp::pp_macro* macro)
+ {
+-    QString macroName = macro->name.str();
+-    if (   macroName == "signals" || macroName == "slots" || macroName == "Q_SIGNALS" || macroName == "Q_SLOTS"
+-        || ParserOptions::dropMacros.contains(macroName)) {
++    rpp::pp_macro* hadMacro = retrieveStoredMacro(macro->name);
++
++    if(hadMacro && hadMacro->fixed) {
++      if(hadMacro->defineOnOverride && (hadMacro->file.isEmpty() ||
++          (macro->file.length() >= hadMacro->file.length() &&
++           memcmp(macro->file.byteArray().data() + (macro->file.length() - hadMacro->file.length()), 
++                         hadMacro->file.byteArray().data(),
++                         hadMacro->file.length()) == 0)))
++      {
++        // We have to define the macro now, as it is being overridden
++        rpp::pp_macro* definedMacro = new rpp::pp_macro(*hadMacro);
++        definedMacro->defined = true;
+         delete macro;
+-        return;
+-    } else if (ParserOptions::qtMode && macroName == "Q_PROPERTY") {
++        macro = definedMacro;
++      }else{
++        // A fixed macro exists, simply ignore the added macro
+         delete macro;
+-        rpp::Environment::setMacro(q_property);
+         return;
++      }
+     }
++
+     rpp::Environment::setMacro(macro);
+ }
+--- a/parser/rpp/pp-macro.cpp
++++ b/parser/rpp/pp-macro.cpp
+@@ -50,6 +50,7 @@ bool pp_macro::operator==(const pp_macro
+          function_like == rhs.function_like &&
+          variadics == rhs.variadics &&
+          fixed == rhs.fixed &&
++         defineOnOverride == rhs.defineOnOverride &&
+          definition == rhs.definition &&
+          formals == rhs.formals;
+ //          listsEqual(rhs);
+@@ -66,6 +67,7 @@ pp_macro::pp_macro(const IndexedString&
+   , function_like(false)
+   , variadics(false)
+   , fixed(false)
++  , defineOnOverride(false)
+   , m_valueHashValid(false)
+   , m_valueHash(0)
+ {
+@@ -81,6 +83,7 @@ pp_macro::pp_macro(const pp_macro& rhs,
+    function_like(rhs.function_like),
+    variadics(rhs.variadics),
+    fixed(rhs.fixed),
++   defineOnOverride(rhs.defineOnOverride),
+    m_valueHashValid(true),
+    m_valueHash(rhs.valueHash()),
+    definition(rhs.definition),
+@@ -97,6 +100,7 @@ pp_macro::pp_macro(const char* nm) : nam
+   , function_like(false)
+   , variadics(false)
+   , fixed(false)
++  , defineOnOverride(false)
+   , m_valueHashValid(false)
+   , m_valueHash(0)
+ {
+@@ -139,7 +143,7 @@ void pp_macro::computeHash() const {
+ 
+     m_valueHash = 27 * ( 137 + (defined ? 1 : 0 ) );
+ 
+-    m_valueHash += 1741 * file.hash() + 238 * sourceLine + (hidden ? 19 : 0) + (function_like ? 811241 : 0) + (variadics ? 129119 : 0) + (fixed ? 1807 : 0);
++    m_valueHash += 1741 * file.hash() + 238 * sourceLine + (hidden ? 19 : 0) + (function_like ? 811241 : 0) + (variadics ? 129119 : 0) + (fixed ? 1807 : 0) + (defineOnOverride ? 31621 : 0);
+   
+     foreach(const IndexedString& definitionComponent, definition)
+       m_valueHash = definitionComponent.hash() + 17 * m_valueHash;
+--- a/parser/rpp/pp-macro.h
++++ b/parser/rpp/pp-macro.h
+@@ -66,6 +66,10 @@ struct CPPPARSER_EXPORT pp_macro
+   bool function_like: 1; // hasArguments
+   bool variadics: 1;
+   bool fixed : 1; //If this is set, the macro can not be overridden or undefined.
++  //If defineOnOverride is set, the macro is changed to "defined = true", if it is overridden.
++  //If the macro also has a valid "file" entry, the macro will only be defined if the file-name of the overriding
++  //macro ends with the string given in 'file'.
++  bool defineOnOverride : 1;
+   mutable bool m_valueHashValid : 1;
+   
+   //The valueHash is not necessarily valid
+@@ -152,6 +156,10 @@ struct CPPPARSER_EXPORT pp_macro
+   void setDefinitionText(const char* definition) {
+     setDefinitionText(QByteArray(definition));
+   }
++
++  inline QVector<IndexedString>& formalsList() {
++    return formals;
++  }
+   
+ //   START_APPENDED_LISTS(pp_macro)
+ //   APPENDED_LIST_FIRST(pp_macro, IndexedString, definition)
