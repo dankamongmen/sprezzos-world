@@ -606,3 +606,11 @@ $(SMB4K): $(SPREZZ)/smb4k/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf smb4k_$(smb4k_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: okular
+okular:$(OKULAR)_$(ARCH).deb
+$(OKULAR): $(SPREZZ)/okular/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf okular_$(okular_UPVER).orig.tar.xz $(TARARGS) $@
+

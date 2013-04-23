@@ -1,0 +1,88 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include /usr/share/quilt/quilt.make
+
+CFLAGS = -Wall -g -fPIC
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+
+export LDFLAGS+=/lib/x86_64-linux-gnu/libm.so.6
+export LIBS+=/lib/x86_64-linux-gnu/libm.so.6
+
+include tools.mk
+
+DESTDIR := $(CURDIR)/debian/gimp-plugin-registry
+
+build: build-stamp
+
+build-stamp: $(QUILT_STAMPFN)
+	dh_testdir
+
+	for plugin in $(PLUGINS); do \
+	    $(MAKE) -C $$plugin LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS)" CFLAGS="$(CFLAGS)" GIMPVER="$(GIMPVER)" build  || exit 1 ;\
+	done
+
+	touch $@
+
+clean: clean-patched debian/control debian/copyright
+clean-patched: unpatch
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+
+	-for plugin in $(PLUGINS); do \
+	    $(MAKE) -C $$plugin GIMPVER="$(GIMPVER)" clean ;\
+	done
+
+	dh_clean 
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k 
+	dh_installdirs
+
+	for plugin in `echo $(PLUGINS) | sed 's,gimp-fx-foundry,,;s,^,gimp-fx-foundry ,'`; do \
+		$(MAKE) -C $$plugin DESTDIR=$(DESTDIR) \
+                                    PLUGINBINDIR=/usr/lib/gimp/2.0/plug-ins  \
+	                            PLUGINSCRIPTDIR=/usr/share/gimp/2.0/scripts \
+				    DOCDIR=/usr/share/doc/gimp-plugin-registry/$$plugin \
+	                            GIMPVER="$(GIMPVER)" \
+                                    install || exit 1 ;\
+		for readme in README README.Debian; do \
+	          if [ -r $$plugin/$$readme ]; then \
+                    install -m 755 -d $(DESTDIR)/usr/share/doc/gimp-plugin-registry/$$plugin ;\
+	            cp -L $$plugin/$$readme $(DESTDIR)/usr/share/doc/gimp-plugin-registry/$$plugin ;\
+	          fi ;\
+		done ;\
+	done
+
+
+# Build architecture-independent files here.
+binary-indep: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs 
+	dh_installdocs
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps -l/usr/lib/lapack:/usr/lib/libblas
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure

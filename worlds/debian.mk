@@ -40,6 +40,15 @@ $(APTSETUP): $(SPREZZ)/apt-setup/debian/changelog
 	ln -sf apt-setup-$(apt-setup_UPVER).tar.xz $(APTSETUP).orig.tar.xz
 	cp -r $(<D) $@
 
+.PHONY: gimp-plugin-registry
+gimp-plugin-registry:$(GIMPPLUGINREGISTRY)_$(ARCH).deb
+$(GIMPPLUGINREGISTRY): $(SPREZZ)/gimp-plugin-registry/debian/changelog
+	@[ ! -e $@ ] || { echo "Removing $@..." && rm -rf $@ ; }
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf gimp-plugin-registry_$(gimp-plugin-registry_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
 .PHONY: aptitude
 aptitude:$(APTITUDE)_$(ARCH).deb
 $(APTITUDE): $(SPREZZ)/aptitude/debian/changelog

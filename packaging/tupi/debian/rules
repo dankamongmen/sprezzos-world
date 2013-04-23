@@ -1,0 +1,70 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+PDIR     := $(CURDIR)/debian/tupi
+QM_FILES := $(patsubst %.ts, %.qm, $(wildcard src/shell/data/translations/*.ts))
+
+%:
+	dh $@
+
+$(QM_FILES):
+	# rebuild translations
+	lupdate tupi.pro -locations none -silent -ts $(@:.qm=.ts)
+	lrelease $(@:.qm=.ts)
+
+override_dh_auto_clean:
+	# remove pre-generated binaries
+	cd configure.tests \
+	&& for dir in opengl ffmpeg aspell; do $(RM) $$dir/$$dir $$dir/*.o $$dir/Makefile; done
+	$(RM) launcher/tupi launcher/tupi.desktop $(QM_FILES)
+	# fix wrong upstream permissions
+	chmod -R a-x+X . \
+	&& chmod +x configure debian/rules
+	dh_auto_clean
+
+override_dh_auto_configure: $(QM_FILES)
+	# arch-dependent patching
+	cat debian/patches/series.$(DEB_HOST_ARCH_OS) >> debian/patches/series \
+	&& $(RM) debian/patches/series.$(DEB_HOST_ARCH_OS) \
+	&& dh_quilt_patch || return 0
+	# override qonf/defaults.rb
+	ruby configure.rb --debian-build=1 \
+                      --with-debug \
+                      --prefix=$(PDIR)/usr \
+                      --bindir=$(PDIR)/usr/lib/tupi/bin \
+                      --libdir=$(PDIR)/usr/lib/tupi \
+                      --sharedir=$(PDIR)-data/usr/share/tupi \
+                      --includedir=$(PDIR)-dev/usr/include/tupi
+	# force qmake-generated Makefiles to respect dpkg-provided flags
+	perl -0pi -e 's[(CXXFLAGS\s*=)][$$1 $$ENV{CFLAGS} $$ENV{CPPFLAGS}]; \
+                      s[(LFLAGS\s*=)][$$1 -Wl,--as-needed $$ENV{LDFLAGS}]; \
+                      s[(CFLAGS\s*=)][$$1 $$ENV{CFLAGS} $$ENV{CPPFLAGS}];' \
+                     $$(find . -name Makefile)
+
+override_dh_auto_install:
+	dh_auto_install
+	$(RM) $(PDIR)/usr/share/man/man1/tupi.1.gz
+	convert launcher/icons/tupi_32x32.png $(PDIR)/usr/share/pixmaps/tupi_32x32.xpm
+	# patch the launcher for the correct paths
+	mkdir "$(PDIR)/usr/bin" && mv "$(PDIR)/usr/lib/tupi/bin/tupi" "$(PDIR)/usr/bin/"
+	perl -pi -e 's{(/usr/lib)(?!/tupi)}{$$1/tupi}g; s{(export\s+TUPI_INCLUDE)}{#$$1}; s{/usr/bin}{/usr/lib/tupi/bin};' $(PDIR)/usr/bin/tupi
+	# wipe empty dirs, if any
+	find $(PDIR) -type d -empty -delete
+
+override_dh_shlibdeps:
+	LD_LIBRARY_PATH="$(PDIR)/usr/lib/tupi:$(PDIR)/usr/lib/tupi/plugins:$(LD_LIBRARY_PATH)" dh_shlibdeps
+
+override_dh_makeshlibs:
+	dh_makeshlibs --noscripts
+
+override_dh_strip:
+	dh_strip -v --dbg-package=tupi-dbg
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
+
+get-orig-source:
+	uscan --noconf --verbose --force-download --rename --repack --destdir=. --download-current-version

@@ -1,0 +1,3 @@
+
+include ../common-autotools.mk
+
