@@ -1,0 +1,208 @@
+This plug-in is designed for including into the Gimp source tree.
+If you would like to compile this plug-in with the Gimp, read this note.
+
+copy src/ directory to the name as focusblur/ under the gimp/plug-ins/
+
+	$ cp -a focusblur-3.2.0/src gimp/plug-ins/focusblur
+
+also copy pixmaps directory under the directoriy.
+
+	$ cp -a focusblur-3.2.0/pixmaps gimp/plug-ins/focusblur/
+
+apply this patch. it modifies configure.in, plug-ins/Makefile.am
+and some files in plug-ins/focusblur
+
+	$ cd gimp
+	$ patch -p0 < ../focusblur-3.2.0/merge.patch
+
+then re-run autogen.sh.
+
+	$ ./autogen.sh
+
+
+Index: configure.in
+===================================================================
+--- configure.in	(revision 24772)
++++ configure.in	(working copy)
+@@ -1137,6 +1137,29 @@ AC_SUBST(EXIF_LIBS)
+ 
+ 
+ #################
++# Check for FFTW3
++#################
++
++AC_CHECK_HEADERS(complex.h)
++
++have_fftw3=no
++AC_ARG_WITH(fftw3,  [  --without-fftw3       build without FFTW3 support])
++if test x$with_fftw3 != xno; then
++  have_fftw3=yes
++  if test -z "$FFTW3_CFLAGS" && test -z "$FFTW3_LIBS"; then
++    PKG_CHECK_MODULES(FFTW3, fftw3f,
++      AC_DEFINE(HAVE_FFTW3, 1, [Define to 1 if FFTW3 is available]),
++      have_fftw3="no (FFTW3 not found)")
++  fi
++fi
++
++AM_CONDITIONAL(HAVE_FFTW3, test x$have_fftw3 = xyes)
++
++AC_SUBST(FFTW3_CFLAGS)
++AC_SUBST(FFTW3_LIBS)
++
++
++#################
+ # Check for libaa
+ #################
+ 
+@@ -1926,6 +1949,8 @@ plug-ins/common/Makefile
+ plug-ins/faxg3/Makefile
+ plug-ins/fits/Makefile
+ plug-ins/flame/Makefile
++plug-ins/focusblur/Makefile
++plug-ins/focusblur/pixmaps/Makefile
+ plug-ins/gfig/Makefile
+ plug-ins/gfig/gfig-examples/Makefile
+ plug-ins/gfig/images/Makefile
+@@ -2070,6 +2095,7 @@ Optional Plug-Ins:
+ 
+ Plug-In Features:
+   EXIF support:        $have_libexif
++  FFTW3 support:       $have_fftw3
+   GNOME UI:            $have_gnomeui
+   GNOME keyring:       $have_gnome_keyring
+ 
+Index: plug-ins/Makefile.am
+===================================================================
+--- plug-ins/Makefile.am	(revision 24772)
++++ plug-ins/Makefile.am	(working copy)
+@@ -52,6 +52,7 @@ SUBDIRS = \
+ 	faxg3			\
+ 	fits			\
+ 	flame			\
++	focusblur		\
+ 	gfig			\
+ 	gflare			\
+ 	gfli			\
+Index: plug-ins/focusblur/Makefile.am
+===================================================================
+--- plug-ins/focusblur/Makefile.am	(revision 0)
++++ plug-ins/focusblur/Makefile.am	(revision 0)
+@@ -1,6 +1,7 @@
+ ## Process this file with automake to produce Makefile.in
+ 
+-libexecdir = $(GIMP_PLUGIN_DIR)/plug-ins
++SUBDIRS = pixmaps
++libexecdir = $(gimpplugindir)/plug-ins
+ 
+ libexec_PROGRAMS = focusblur
+ 
+@@ -42,6 +43,14 @@
+ 	fftblurproc.h
+ endif
+ 
++libgimpui = $(top_builddir)/libgimp/libgimpui-$(GIMP_API_VERSION).la
++libgimpconfig = $(top_builddir)/libgimpconfig/libgimpconfig-$(GIMP_API_VERSION).la
++libgimpwidgets = $(top_builddir)/libgimpwidgets/libgimpwidgets-$(GIMP_API_VERSION).la
++libgimp = $(top_builddir)/libgimp/libgimp-$(GIMP_API_VERSION).la
++libgimpcolor = $(top_builddir)/libgimpcolor/libgimpcolor-$(GIMP_API_VERSION).la
++libgimpbase = $(top_builddir)/libgimpbase/libgimpbase-$(GIMP_API_VERSION).la
++libgimpmath = $(top_builddir)/libgimpmath/libgimpmath-$(GIMP_API_VERSION).la
++
+ if OS_WIN32
+ mwindows = -mwindows
+ endif
+@@ -49,29 +58,24 @@
+ AM_LDFLAGS = $(mwindows)
+ 
+ INCLUDES = \
+-	$(GTHREAD_CFLAGS)	\
+-	$(GIMP_CFLAGS)		\
++	-I$(top_srcdir)		\
++	$(GTK_CFLAGS)		\
+ 	$(FFTW3_CFLAGS)		\
+ 	-I$(includedir)
+ 
+ LDADD = \
+-	$(GTHREAD_LIBS)		\
+-	$(GIMP_LIBS)		\
+-	$(FFTW3_LIBS)
+-
+-focusblurstock.$(OBJEXT): $(top_srcdir)/pixmaps/pixbufs.h
+-$(top_srcdir)/pixmaps/pixbufs.h:
+-	$(MAKE) -C $(top_srcdir)/pixmaps pixbufs.h
+-
+-install-user: $(libexec_PROGRAMS)
+-	@if test -d $(GIMP_USER_PLUGIN_DIR) ; then \
+-	  $(INSTALL_PROGRAM) $(libexec_PROGRAMS) $(GIMP_USER_PLUGIN_DIR) ; \
+-	fi
+-
+-uninstall-user:
+-	@if test -d $(GIMP_USER_PLUGIN_DIR) ; then \
+-	  for i in $(libexec_PROGRAMS) ; do \
+-	    echo " $(RM) '$(GIMP_USER_PLUGIN_DIR)/$$i'"; \
+-	    $(RM) "$(GIMP_USER_PLUGIN_DIR)$$i" ; \
+-	  done ; \
+-	fi
++	$(libgimpui)		\
++	$(libgimpwidgets)	\
++	$(libgimpconfig)	\
++	$(libgimp)		\
++	$(libgimpcolor)		\
++	$(libgimpmath)		\
++	$(libgimpbase)		\
++	$(GTK_LIBS)		\
++	$(FFTW3_LIBS)		\
++	$(RT_LIBS)		\
++	$(INTLLIBS)
++
++focusblurstock.$(OBJEXT): pixmaps/pixbufs.h
++pixmaps/pixbufs.h:
++	$(MAKE) -C pixmaps pixbufs.h
+Index: plug-ins/focusblur/focusblurenums.c
+===================================================================
+--- plug-ins/focusblur/focusblurenums.c	(revision 0)
++++ plug-ins/focusblur/focusblurenums.c	(revision 0)
+@@ -58,9 +58,7 @@
+         };
+ 
+       type = g_enum_register_static ("FblurModelType", values);
+-#ifdef ENABLE_NLS
+       gimp_type_set_translation_domain (type, GETTEXT_PACKAGE);
+-#endif
+       gimp_enum_set_value_descriptions (type, descs);
+     }
+ 
+@@ -89,9 +87,7 @@
+         };
+ 
+       type = g_enum_register_static ("FblurShineType", values);
+-#ifdef ENABLE_NLS
+       gimp_type_set_translation_domain (type, GETTEXT_PACKAGE);
+-#endif
+       gimp_enum_set_value_descriptions (type, descs);
+     }
+ 
+@@ -124,9 +120,7 @@
+         };
+ 
+       type = g_enum_register_static ("FblurQualityType", values);
+-#ifdef ENABLE_NLS
+       gimp_type_set_translation_domain (type, GETTEXT_PACKAGE);
+-#endif
+       gimp_enum_set_value_descriptions (type, descs);
+     }
+ 
+Index: plug-ins/focusblur/gimpplugin.c
+===================================================================
+--- plug-ins/focusblur/gimpplugin.c	(revision 0)
++++ plug-ins/focusblur/gimpplugin.c	(revision 0)
+@@ -90,9 +90,6 @@
+                           args, NULL);
+ 
+   gimp_plugin_menu_register (PLUG_IN_PROC, "<Image>/Filters/Blur");
+-#ifdef ENABLE_NLS
+-  gimp_plugin_domain_register (GETTEXT_PACKAGE, NULL);
+-#endif
+ }
+ 
+ static void

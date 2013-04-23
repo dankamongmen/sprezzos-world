@@ -697,3 +697,11 @@ $(TOONLOOP): $(SPREZZ)/toonloop/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf toonloop_$(toonloop_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: tupi
+tupi:$(TUPI)_$(ARCH).deb
+$(TUPI): $(SPREZZ)/tupi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf tupi_$(tupi_UPVER).orig.tar.gz $(TARARGS) $@
+

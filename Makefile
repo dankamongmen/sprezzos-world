@@ -11128,3 +11128,11 @@ $(LSDVD): $(SPREZZ)/lsdvd/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf lsdvd_$(lsdvd_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: makebeamerinfo
+makebeamerinfo:$(MAKEBEAMERINFO)_$(ARCH).deb
+$(MAKEBEAMERINFO): $(SPREZZ)/makebeamerinfo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf makebeamerinfo_$(makebeamerinfo_UPVER).orig.tar.gz $(TARARGS) $@
+
