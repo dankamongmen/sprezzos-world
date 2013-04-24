@@ -957,3 +957,11 @@ $(SMOOTHTHEMES): $(SPREZZ)/smooth-themes/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf smooth-themes_$(smooth-themes_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gbemol
+gbemol:$(GBEMOL)_$(ARCH).deb
+$(GBEMOL): $(SPREZZ)/gbemol/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gbemol_$(gbemol_UPVER).orig.tar.gz $(TARARGS) $@
+

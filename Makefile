@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j8
+	cd $< && debuild -k$(DEBKEY) #-j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -10279,7 +10279,7 @@ $(GCC4.8): $(SPREZZ)/gcc-4.8/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf gcc-4.8_$(gcc-4.8_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf gcc-4.8_$(gcc-4.8_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: libspectre
 libspectre:$(LIBSPECTRE)_$(ARCH).deb
@@ -11143,4 +11143,28 @@ $(VORBISTOOLS): $(SPREZZ)/vorbis-tools/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vorbis-tools_$(vorbis-tools_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: quvi
+quvi:$(QUVI)_$(ARCH).deb
+$(QUVI): $(SPREZZ)/quvi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf quvi_$(quvi_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: libquvi
+libquvi:$(LIBQUVI)_$(ARCH).deb
+$(LIBQUVI): $(SPREZZ)/libquvi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libquvi_$(libquvi_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: naturaldocs
+naturaldocs:$(NATURALDOCS)_$(ARCH).deb
+$(NATURALDOCS): $(SPREZZ)/naturaldocs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf naturaldocs_$(naturaldocs_UPVER).orig.tar.gz --exclude=$(shell echo $@ | tr _ -)/debian -C $@
 
