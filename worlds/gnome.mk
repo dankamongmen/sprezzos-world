@@ -965,3 +965,11 @@ $(GBEMOL): $(SPREZZ)/gbemol/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gbemol_$(gbemol_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gimmix
+gimmix:$(GIMMIX)_$(ARCH).deb
+$(GIMMIX): $(SPREZZ)/gimmix/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf gimmix_$(gimmix_UPVER).orig.tar.bz2 $(TARARGS) $@
+

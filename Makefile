@@ -11168,3 +11168,11 @@ $(NATURALDOCS): $(SPREZZ)/naturaldocs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf naturaldocs_$(naturaldocs_UPVER).orig.tar.gz --exclude=$(shell echo $@ | tr _ -)/debian -C $@
 
+.PHONY: libs3
+libs3:$(LIBS3)_$(ARCH).deb
+$(LIBS3): $(SPREZZ)/libs3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libs3_$(libs3_UPVER).orig.tar.gz $(TARARGS) $@
+
