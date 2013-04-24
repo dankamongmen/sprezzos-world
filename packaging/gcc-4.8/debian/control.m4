@@ -77,7 +77,7 @@ Build-Conflicts: binutils-gold
 ifelse(regexp(SRCNAME, `gnat'),0,`dnl
 Homepage: http://gcc.gnu.org/
 ', regexp(SRCNAME, `gdc'),0,`dnl
-Homepage: http://bitbucket.org/goshawk/gdc/
+Homepage: http://gdcproject.org/
 ', `dnl
 Homepage: http://gcc.gnu.org/
 ')dnl SRCNAME
@@ -641,6 +641,7 @@ ifdef(`TARGET', `dnl
 ')`'dnl libx32gcc
 
 ifenabled(`cdev',`
+ifenabled(`x32dev',`
 Package: libx32gcc`'PV-dev`'LS
 Architecture: ifdef(`TARGET',`CROSS_ARCH',`biarchx32_archs')
 Section: libdevel
@@ -651,6 +652,7 @@ BUILT_USING`'dnl
 Description: GCC support library (x32 development files)
  This package contains the headers and static library files necessary for
  building C programs which use libgcc, libgomp, libquadmath, libssp or libitm.
+')`'dnl x32dev
 ')`'dnl cdev
 
 ifdef(`TARGET', `', `
@@ -2438,6 +2440,7 @@ Description: Runtime library for GNU Objective-C applications (n32 development f
  This package contains the headers and static library files needed to build
  GNU ObjC applications.
 
+ifenabled(`x32dev',`
 Package: libx32objc`'PV-dev`'LS
 Architecture: ifdef(`TARGET',`CROSS_ARCH',`biarchx32_archs')
 Section: libdevel
@@ -2447,6 +2450,7 @@ BUILT_USING`'dnl
 Description: Runtime library for GNU Objective-C applications (x32 development files)
  This package contains the headers and static library files needed to build
  GNU ObjC applications.
+')`'dnl libx32objc
 
 ifenabled(`armml',`
 Package: libhfobjc`'PV-dev`'LS
@@ -2720,6 +2724,7 @@ Description: Runtime library for GNU Fortran applications (n32 development files
  This package contains the headers and static library files needed to build
  GNU Fortran applications.
 
+ifenabled(`x32dev',`
 Package: libx32gfortran`'PV-dev`'LS
 Architecture: ifdef(`TARGET',`CROSS_ARCH',`biarchx32_archs')
 Section: libdevel
@@ -2729,6 +2734,7 @@ BUILT_USING`'dnl
 Description: Runtime library for GNU Fortran applications (x32 development files)
  This package contains the headers and static library files needed to build
  GNU Fortran applications.
+')`'dnl libx32gfortran
 
 ifenabled(`armml',`
 Package: libhfgfortran`'PV-dev`'LS
@@ -3682,7 +3688,7 @@ ifdef(`TARGET', `dnl
  environment.
 ')`'dnl
 
-ifenabled(`libx32dbgcxx',`
+ifenabled(`x32dev',`
 Package: libx32stdc++`'PV-dev`'LS
 Architecture: ifdef(`TARGET',`CROSS_ARCH',`biarchx32_archs')
 Section: ifdef(`TARGET',`devel',`libdevel')
@@ -3701,7 +3707,9 @@ ifdef(`TARGET', `dnl
  This package contains files for TARGET architecture, for use in cross-compile
  environment.
 ')`'dnl
+')`'dnl x32dev
 
+ifenabled(`libx32dbgcxx',`
 Package: libx32stdc++CXX_SO`'PV-dbg`'LS
 Architecture: ifdef(`TARGET',`CROSS_ARCH',`biarchx32_archs')
 Section: debug
@@ -4064,20 +4072,21 @@ Description: GNU D compiler (version 2), based on the GCC backend
 
 ifenabled(`libphobos',`
 Package: libphobos`'PHOBOS_V`'PV`'TS-dev
-Architecture: any
+Architecture: ifdef(`TARGET',`CROSS_ARCH',`libphobos_archs')
 Section: libdevel
 Priority: PRI(optional)
 Depends: gdc`'PV`'TS (= ${gdc:Version}), zlib1g-dev, ${shlibs:Depends}, ${misc:Depends}
 Provides: libphobos`'PHOBOS_V`'TS-dev
+Suggests: libphobos`'PHOBOS_V`'PV`'TS-dbg
 BUILT_USING`'dnl
 Description: Phobos D standard library
  This is the Phobos standard library that comes with the D2 compiler.
  .
- For more information check http://www.d-programming-language.org/phobos/
+ For more information check http://www.dlang.org/phobos/
 
 Package: libphobos`'PHOBOS_V`'PV`'TS-dbg
 Section: debug
-Architecture: ifdef(`TARGET',`CROSS_ARCH',`any')
+Architecture: ifdef(`TARGET',`CROSS_ARCH',`libphobos_archs')
 Priority: extra
 Depends: gdc`'PV`'TS (= ${gdc:Version}), libphobos`'PHOBOS_V`'PV-dev (= ${gdc:Version}), ${misc:Depends}
 Provides: libphobos`'PHOBOS_V`'TS-dbg
@@ -4085,7 +4094,7 @@ BUILT_USING`'dnl
 Description: The Phobos D standard library (debug symbols)
  This is the Phobos standard library that comes with the D2 compiler.
  .
- For more information check http://www.d-programming-language.org/phobos/
+ For more information check http://www.dlang.org/phobos/
 ')`'dnl libphobos
 ')`'dnl d
 

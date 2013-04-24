@@ -198,7 +198,7 @@ define __do_libstdcxx
 
 	$(cross_makeshlibs) dh_makeshlibs -p$(p_l) || echo 'FIXME: libstdc++ symbols file'
 	$(call cross_mangle_shlibs,$(p_l))
-	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
+	$(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
 		$(call shlibdirs_to_search,$(subst stdc++$(CXX_SONAME),gcc$(GCC_SONAME),$(p_l)),$(2))
 	$(call cross_mangle_substvars,$(p_l))
 
@@ -240,7 +240,7 @@ define __do_libstdcxx_dbg
 		rm -f $(d_d)/$(usr_lib$(2))/debug/libstdc++_pic.a
 	)
 
-	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_d) \
+	$(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_d) \
 		$(call shlibdirs_to_search,$(subst $(pkg_ver),,$(subst stdc++$(CXX_SONAME),gcc$(GCC_SONAME),$(p_l))),$(2))
 	$(call cross_mangle_substvars,$(p_d))
 
@@ -406,11 +406,11 @@ endif
 		$(d_dev)/$(docdir)/$(p_base)/C++/changelog.libstdc++
 ifeq ($(with_check),yes)
 	cp -p debian/README.libstdc++-baseline \
-		$(d_dev)/$(docdir)/$(p_base)/C++/README.libstdc++-baseline
+		$(d_dev)/$(docdir)/$(p_base)/C++/README.libstdc++-baseline.$(DEB_TARGET_ARCH)
 	if [ -f $(buildlibdir)/libstdc++-v3/testsuite/current_symbols.txt ]; \
 	then \
 	  cp -p $(buildlibdir)/libstdc++-v3/testsuite/current_symbols.txt \
-	    $(d_dev)/$(docdir)/$(p_base)/C++/libstdc++_symbols.txt; \
+	    $(d_dev)/$(docdir)/$(p_base)/C++/libstdc++_symbols.txt.$(DEB_TARGET_ARCH); \
 	fi
 endif
 	cp -p $(buildlibdir)/libstdc++-v3/src/libstdc++-symbols.ver \
@@ -442,11 +442,11 @@ endif
 	dh_fixperms -p$(p_dev) -p$(p_pic) -p$(p_dbg)
 # XXX: what about biarchn32?
 #ifeq ($(biarch64),yes)
-#	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_dev) -p$(p_pic) -p$(p_dbg) -Xlib64
+#	$(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_dev) -p$(p_pic) -p$(p_dbg) -Xlib64
 #else
-#	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_dev) -p$(p_pic) -p$(p_dbg) -Xlib32/debug
+#	$(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_dev) -p$(p_pic) -p$(p_dbg) -Xlib32/debug
 #endif
-	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_dev) -p$(p_pic) -p$(p_dbg)
+	$(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_dev) -p$(p_pic) -p$(p_dbg)
 	$(call cross_mangle_substvars,$(p_dbg))
 	$(cross_gencontrol) dh_gencontrol -p$(p_dev) -p$(p_pic) -p$(p_dbg) \
 		-- -v$(DEB_VERSION) $(common_substvars)

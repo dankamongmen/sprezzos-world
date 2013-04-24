@@ -5,12 +5,12 @@ ifeq ($(with_libphobos),yes)
 endif
 
 p_gdc           = gdc$(pkg_ver)
-p_libphobos     = libphobos$(libphobos_version)$(pkg_ver)-dev
+p_libphobos     = libphobos$(pkg_ver)-dev
 
 d_gdc           = debian/$(p_gdc)
 d_libphobos     = debian/$(p_libphobos)
 
-gdc_include_dir := $(PF)/include/d$(libphobos_version)
+gdc_include_dir := $(PF)/include/d
 
 dirs_gdc = \
 	$(PF)/bin \
@@ -20,9 +20,7 @@ dirs_gdc = \
 
 files_gdc = \
 	$(PF)/bin/$(cmd_prefix)gdc$(pkg_ver) \
-	$(PF)/bin/$(cmd_prefix)gdmd$(pkg_ver) \
 	$(PF)/share/man/man1/gdc$(pkg_ver).1 \
-	$(PF)/share/man/man1/gdmd$(pkg_ver).1 \
 	$(gcc_lexec_dir)/cc1d
 
 
@@ -32,7 +30,7 @@ dirs_libphobos = \
 	$(gcc_lib_dir)
 
 files_libphobos = \
-	$(PF)/$(libdir)/libgphobos$(libphobos_version).a \
+	$(PF)/$(libdir)/libgphobos2.a \
 	$(gdc_include_dir)/$(BASE_VERSION)
 
 links_gdc = \
@@ -50,8 +48,7 @@ $(binary_stamp)-gdc: $(install_stamp)
 	rm -rf $(d_gdc)
 	dh_installdirs -p$(p_gdc) $(dirs_gdc)
 
-	dh_installdocs -p$(p_gdc) \
-		src/gcc/d/{README,GDC.html,History}
+	dh_installdocs -p$(p_gdc) src/gcc/d/README
 	dh_installchangelogs -p$(p_gdc) src/gcc/d/ChangeLog
 
 	DH_COMPAT=2 dh_movefiles -p$(p_gdc) -X/zlib/ $(files_gdc)
@@ -65,19 +62,10 @@ ifneq ($(DEB_CROSS),yes)
 	    $(d_gdc)/$(PF)/share/man/man1/$(DEB_TARGET_GNU_TYPE)-gdc$(pkg_ver).1
 	ln -sf gdc$(pkg_ver).1 \
 	    $(d_gdc)/$(PF)/share/man/man1/$(TARGET_ALIAS)-gdc$(pkg_ver).1
-
-	ln -sf gdmd$(pkg_ver) \
-	    $(d_gdc)/$(PF)/bin/$(DEB_TARGET_GNU_TYPE)-gdmd$(pkg_ver)
-	ln -sf gdmd$(pkg_ver) \
-	    $(d_gdc)/$(PF)/bin/$(TARGET_ALIAS)-gdmd$(pkg_ver)
-	ln -sf gdmd$(pkg_ver).1 \
-	    $(d_gdc)/$(PF)/share/man/man1/$(DEB_TARGET_GNU_TYPE)-gdmd$(pkg_ver).1
-	ln -sf gdmd$(pkg_ver).1 \
-	    $(d_gdc)/$(PF)/share/man/man1/$(TARGET_ALIAS)-gdmd$(pkg_ver).1
 endif
 
 	# Always needed by gdc.
-	cp $(srcdir)/gcc/d/druntime/object.di \
+	cp $(srcdir)/libphobos/libdruntime/object.di \
 	    $(d_gdc)/$(gdc_include_dir)/$(BASE_VERSION)/
 
 	dh_link -p$(p_gdc) $(links_gdc)
@@ -103,10 +91,10 @@ $(binary_stamp)-libphobos: $(install_stamp)
 	rm -rf $(d_libphobos)
 	dh_installdirs -p$(p_libphobos) $(dirs_libphobos)
 
-	DH_COMPAT=2 dh_movefiles -p$(p_libphobos) -X/zlib/ $(files_libphobos)
+	DH_COMPAT=2 dh_movefiles -p$(p_libphobos) $(files_libphobos)
 
 	# better to have it there, avoid conflicts
-	mv $(d_libphobos)/$(PF)/$(libdir)/libgphobos$(libphobos_version).a \
+	mv $(d_libphobos)/$(PF)/$(libdir)/libgphobos2.a \
 	    $(d_libphobos)/$(gcc_lib_dir)
 
 	# included in gdc package

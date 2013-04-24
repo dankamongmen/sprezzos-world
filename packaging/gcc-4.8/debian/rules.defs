@@ -53,10 +53,6 @@ EPOCH := 1
 DEB_EVERSION := $(EPOCH):$(DEB_VERSION)
 BASE_VERSION := $(shell echo $(DEB_VERSION) | sed -e 's/\([1-9]\.[0-9]\).*-.*/\1/')
 
-ifneq (,$(findstring gdc,$(PKGSOURCE)))
-  BASE_VERSION := $(shell echo $(DEB_VERSION) | sed -e 's/.*-\([1-9]\.[0-9]\).*-.*/\1/')
-endif
-
 # push glibc stack traces into stderr
 export LIBC_FATAL_STDERR_=1
 
@@ -306,10 +302,13 @@ endif
 # build using fsf or linaro
 ifeq ($(distribution),Ubuntu)
   ifeq (,$(findstring gnat, $(PKGSOURCE)))
-  ifneq (,$(findstring $(DEB_TARGET_ARCH),arm64 armel armhf amd64 i386 powerpc))
+  ifneq (,$(findstring $(DEB_TARGET_ARCH),arm64 armel armhf))
     with_linaro_branch = yes
   endif
   endif
+endif
+ifeq ($(distribution)-$(DEB_TARGET_ARCH),Debian-arm64)
+  with_linaro_branch = yes
 endif
 
 # check if we're building for armel or armhf
@@ -579,7 +578,7 @@ endif
 # - To build gcc and java from separate sources:
 #   with_separate_libgcj=yes, with_standalone_gcj=no
 
-java_no_cpus := arm64 # mips mipsel
+java_no_cpus := # arm64 mips mipsel
 java_no_systems := knetbsd-gnu
 
 ifneq ($(single_package),yes)
@@ -709,11 +708,13 @@ endif
 with_go := $(call envfilt, go, , , $(with_go))
 
 # Build all packages needed for Go development
-ifeq ($(with_go),yes)
-  ifeq ($(with_common_libs),yes)
-    with_libgo := yes
+ifneq (,$(findstring gcc, $(PKGSOURCE)))
+  ifeq ($(with_go),yes)
+    ifeq ($(with_common_libs),yes)
+      with_libgo := yes
+    endif
+    enabled_languages += go
   endif
-  enabled_languages += go
 endif
 
 ifeq ($(with_go)-$(with_separate_libgo),yes-yes)
@@ -742,28 +743,28 @@ ifeq ($(d_no_snap)-$(single_package),yes-yes)
   with_d := disabled for snapshot build
 endif
 
-ifeq ($(with_d)-$(with_separate_gdc),yes-yes)
-  ifneq (,$(findstring gdc,$(PKGSOURCE)))
-    languages := c c++
-    separate_lang := yes
-  else
-    # FIXME: not ready for 4.8
-    #debian_extra_langs += d
-    with_d := built from separate source
-  endif
-endif
-
 ifeq ($(with_base_only),yes)
   with_d := no
 endif
 
-ifeq ($(with_d),yes)
-  # no suffix for D 1.0
-  #libphobos_version :=
-  # still experimental
-  libphobos_version := 2
+ifeq ($(with_d)-$(with_separate_gdc),yes-yes)
+  ifneq (,$(findstring gdc,$(PKGSOURCE)))
+    languages := c c++
+    separate_lang := yes
 
-  with_libphobos := yes
+    # FIXME: language selection needs improvement.
+    with_go := disabled for d
+  else
+    debian_extra_langs += d
+    with_d := built from separate source
+  endif
+endif
+
+ifeq ($(with_d),yes)
+  libphobos_archs = amd64 i386 kfreebsd-amd64 kfreebsd-i386
+  ifneq (,$(filter $(DEB_TARGET_ARCH), $(libphobos_archs)))
+    with_libphobos := yes
+  endif
 
   libphobos_no_cpus := alpha avr arm hppa ia64 m68k mips mipsel powerpc powerpcspe ppc64 s390 s390x sh4 sparc sparc64
   libphobos_no_systems := gnu
@@ -956,7 +957,7 @@ endif
 # asan / sanitizer --------------------
 with_asan :=
 with_asan := $(call envfilt, asan, , , $(with_asan))
-asan_archs = amd64 i386 powerpc ppc64 sparc sparc64 x32
+asan_archs = amd64 armel armhf i386 powerpc ppc64 sparc sparc64 x32
 ifneq (,$(filter $(DEB_TARGET_ARCH),$(asan_archs)))
   with_asan := yes
 endif
@@ -1532,7 +1533,7 @@ ifneq (,$(findstring $(DEB_TARGET_GNU_SYSTEM),$(locale_no_systems)))
   force_gnu_locales := disabled for system $(DEB_TARGET_GNU_SYSTEM)
 endif
 
-gcc_tarpath		:= $(firstword $(wildcard gcc-*.tar.* /usr/src/gcc-$(BASE_VERSION)/gcc-*.tar.*))
+gcc_tarpath		:= $(firstword $(wildcard gcc-*.tar.* /usr/src/gcc-4.8/gcc-*.tar.*))
 gcc_tarball		:= $(notdir $(gcc_tarpath))
 gcc_srcdir		:= $(subst -dfsg,,$(patsubst %.tar.xz,%,$(patsubst %.tar.lzma,%,$(patsubst %.tar.gz,%,$(gcc_tarball:.tar.bz2=)))))
 
@@ -1667,6 +1668,12 @@ else
   endef
   define cross_mangle_substvars
   endef
+  # precise's dh_shlibdeps doesn't work well for ARM multilibs
+  ifneq (,$(filter $(distrelease),precise))
+    ifneq (,$(filter $(DEB_TARGET_ARCH), armel armhf))
+      ignshld = -
+    endif
+  endif
 endif
 
 # takes a *list* of package names as $1, the multilib dirname as $2

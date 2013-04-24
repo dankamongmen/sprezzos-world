@@ -64,8 +64,8 @@ $(binary_stamp)-gcc: $(install_dependencies)
 	dh_installdirs -p$(p_gcc) $(dirs_gcc)
 
 ifeq ($(with_linaro_branch),yes)
-	if [ -f $(srcdir)/ChangeLog.linaro ]; then \
-	  cp -p $(srcdir)/ChangeLog.linaro \
+	if [ -f $(srcdir)/gcc/ChangeLog.linaro ]; then \
+	  cp -p $(srcdir)/gcc/ChangeLog.linaro \
 		$(d_gcc)/$(docdir)/$(p_xbase)/changelog.linaro; \
 	fi
 endif

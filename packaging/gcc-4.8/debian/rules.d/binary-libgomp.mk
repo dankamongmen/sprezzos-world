@@ -35,7 +35,7 @@ define __do_gomp
 	dh_fixperms -p$(p_l) -p$(p_d)
 	$(cross_makeshlibs) dh_makeshlibs -p$(p_l)
 	$(call cross_mangle_shlibs,$(p_l))
-	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
+	$(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
 		$(call shlibdirs_to_search,$(subst gomp$(GOMP_SONAME),gcc$(GCC_SONAME),$(p_l)),$(2))
 	$(call cross_mangle_substvars,$(p_l))
 	$(cross_gencontrol) dh_gencontrol -p$(p_l) -p$(p_d)	\

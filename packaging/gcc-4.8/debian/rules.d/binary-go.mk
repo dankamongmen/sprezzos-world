@@ -104,7 +104,7 @@ define __do_gccgo
 	dh_fixperms -p$(p_l) -p$(p_d)
 	$(cross_makeshlibs) dh_makeshlibs -p$(p_l)
 	$(call cross_mangle_shlibs,$(p_l))
-	$(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
+	$(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
 		$(call shlibdirs_to_search, \
 			$(subst go$(GO_SONAME),gcc$(GCC_SONAME),$(p_l)) \
 			$(subst go$(GO_SONAME),atomic$(ATOMIC_SONAME),$(p_l)) \

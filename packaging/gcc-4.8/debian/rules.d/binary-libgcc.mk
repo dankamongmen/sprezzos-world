@@ -290,7 +290,7 @@ define __do_libgcc
 	)
 
 	$(if $(DEB_STAGE),,
-	    DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
+	    $(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps) dh_shlibdeps -p$(p_l) \
 		$(call shlibdirs_to_search,,$(2))
 	)
 	$(call cross_mangle_substvars,$(p_l))

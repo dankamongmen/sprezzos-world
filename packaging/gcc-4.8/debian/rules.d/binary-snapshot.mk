@@ -210,7 +210,7 @@ endif
 	  echo 'libgnarl-$(GNAT_SONAME) 1 ${p_snap} (>= $(DEB_VERSION))'; \
 	) > debian/shlibs.local
 
-	DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps)  \
+	$(ignshld)DIRNAME=$(subst n,,$(2)) $(cross_shlibdeps)  \
 	  dh_shlibdeps -p$(p_snap) -l$(CURDIR)/$(d_snap)/$(PF)/lib:$(CURDIR)/$(d_snap)/$(PF)/$(if $(filter $(DEB_TARGET_ARCH),amd64 ppc64),lib32,lib64):/usr/$(DEB_TARGET_GNU_TYPE)/lib -Xlibgcj-tools -Xlibmudflap
 	-sed -i -e 's/$(p_snap)[^,]*, //g' debian/$(p_snap).substvars
 
