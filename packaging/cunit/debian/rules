@@ -1,0 +1,110 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# hardening flags
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+config: config-stamp
+config-stamp:
+	dh_testdir
+
+# don't use *.orig as backup suffix since dh_clean removes them
+	if [ -r /usr/share/misc/config.sub ] && [ ! -f config.sub.backup ]; then \
+		mv -v config.sub config.sub.backup; \
+		cp -f /usr/share/misc/config.sub $(CURDIR)/config.sub; \
+	fi
+
+	if [ -r /usr/share/misc/config.guess ] && [ ! -f config.guess.backup ]; then \
+		mv -v config.guess config.guess.backup; \
+		cp -f /usr/share/misc/config.guess $(CURDIR)/config.guess; \
+	fi
+
+	touch $@
+
+config-clean:
+	dh_testdir
+	dh_testroot
+
+	if [ -f config.sub.backup ]; then \
+		mv -fv config.sub.backup config.sub; \
+	fi
+
+	if [ -f config.guess.backup ]; then \
+		mv -fv config.guess.backup config.guess; \
+	fi
+
+	$(RM) config-stamp
+
+clean: config-clean
+	dh_testdir
+	dh_testroot
+	rm -f install-stamp
+
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	dh_clean
+
+	@for i in debian/rules.d/*; do  \
+		$(MAKE) -f $$i clean; \
+	done
+
+# Unfortunately, the build system fails to compile in a separated
+# build directory. Hence, cunit has to be installed directly after
+# each build process.
+build: build-stamp
+build-arch: build-stamp
+build-indep: build-stamp
+build-stamp: $(QUILT_STAMPFN)
+install: config install-stamp
+install-stamp:
+	@for i in debian/rules.d/*; do  \
+		$(RM) config.status;    \
+		$(MAKE) -f $$i build;   \
+		$(MAKE) -f $$i install; \
+	done
+
+	touch $@
+
+get-orig-source: UPSTREAM_VERSION=2.1-0
+get-orig-source:
+	wget http://superb-west.dl.sourceforge.net/sourceforge/cunit/CUnit-$(UPSTREAM_VERSION)-src.tar.gz
+	tar -xzvf CUnit-$(UPSTREAM_VERSION)-src.tar.gz
+	mv CUnit-$(UPSTREAM_VERSION) cunit-$(UPSTREAM_VERSION).dfsg.orig
+	[ ! -f cunit-$(UPSTREAM_VERSION).dfsg.orig/Makefile ] || $(MAKE) -C cunit-$(UPSTREAM_VERSION).dfsg.orig distclean
+	-find cunit-$(UPSTREAM_VERSION).dfsg.orig -name "*.dsp" | xargs -r $(RM) -v
+	tar -cf - cunit-$(UPSTREAM_VERSION).dfsg.orig | gzip -9 > cunit_$(UPSTREAM_VERSION).dfsg.orig.tar.gz
+	$(RM) CUnit-$(UPSTREAM_VERSION)-src.tar.gz*
+	$(RM) -r cunit-$(UPSTREAM_VERSION).dfsg.orig
+
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_installexamples --exclude=.deps
+	dh_install --sourcedir=.
+	dh_installman
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_shlibdeps
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-independent files here.
+binary-indep: build install
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	$(MAKE) -f debian/rules DH_OPTIONS=-a binary-common
+
+binary: binary-indep binary-arch
+.PHONY: get-orig-source build clean binary-indep binary-arch binary-common binary install

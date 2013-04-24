@@ -2002,7 +2002,7 @@ $(CMAKE): $(SPREZZ)/cmake/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf cmake-$(cmake_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf cmake_$(cmake_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: cmtk
 cmtk:$(CMTK)_$(ARCH).deb
@@ -11175,4 +11175,20 @@ $(LIBS3): $(SPREZZ)/libs3/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libs3_$(libs3_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: scons
+scons:$(SCONS)_$(ARCH).deb
+$(SCONS): $(SPREZZ)/scons/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf scons_$(scons_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: cunit
+cunit:$(CUNIT)_$(ARCH).deb
+$(CUNIT): $(SPREZZ)/cunit/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf cunit_$(cunit_UPVER).orig.tar.bz2 $(TARARGS) $@
 

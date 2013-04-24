@@ -973,3 +973,11 @@ $(GIMMIX): $(SPREZZ)/gimmix/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf gimmix_$(gimmix_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: gpick
+gpick:$(GPICK)_$(ARCH).deb
+$(GPICK): $(SPREZZ)/gpick/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gpick_$(gpick_UPVER).orig.tar.gz $(TARARGS) $@
+

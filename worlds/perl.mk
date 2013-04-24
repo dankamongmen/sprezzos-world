@@ -751,3 +751,11 @@ $(LIBNETIDNNAMEPREPPERL): $(SPREZZ)/libnet-idn-nameprep-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libnet-idn-nameprep-perl_$(libnet-idn-nameprep-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libshell-perl
+libshell-perl:$(LIBSHELLPERL)_$(ARCH).deb
+$(LIBSHELLPERL): $(SPREZZ)/libshell-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libshell-perl_$(libshell-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
