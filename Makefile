@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) #-j8
+	cd $< && debuild -k$(DEBKEY) -j8
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -3019,14 +3019,6 @@ $(GAWK): $(SPREZZ)/gawk/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gawk-$(gawk_UPVER).tar.gz $(TARARGS) $@
-
-.PHONY: gcc-4.7
-gcc-4.7:$(GCC4.7)_$(ARCH).deb
-$(GCC4.7): $(SPREZZ)/gcc-4.7/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xjvf gcc-$(gcc-4.7_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: gcr
 gcr:$(GCR)_$(ARCH).deb
@@ -11191,4 +11183,20 @@ $(CUNIT): $(SPREZZ)/cunit/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf cunit_$(cunit_UPVER).orig.tar.bz2 $(TARARGS) $@
+
+.PHONY: libfishsound
+libfishsound:$(LIBFISHSOUND)_$(ARCH).deb
+$(LIBFISHSOUND): $(SPREZZ)/libfishsound/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libfishsound_$(libfishsound_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: gcc-4.7
+gcc-4.7:$(GCC4.7)_$(ARCH).deb
+$(GCC4.7): $(SPREZZ)/gcc-4.7/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gcc-4.7_$(gcc-4.7_UPVER).orig.tar.gz $(TARARGS) $@
 

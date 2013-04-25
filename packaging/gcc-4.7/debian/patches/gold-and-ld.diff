@@ -1,0 +1,302 @@
+# DP: Enable both gold and ld in a single toolchain.
+# DP: New option -fuse-ld=bfd, -fuse-ld=gold.
+
+2012-11-28   Nick Clifton  <nickc@redhat.com>
+	     Matthias Klose <doko@debian.org>
+	     Doug Kwan  <dougkwan@google.com>
+	     H.J. Lu  <hongjiu.lu@intel.com>
+
+	* collect2.c (main): Support -fuse-ld=bfd and -fuse-ld=gold.
+	* exec-tool.in: Likewise.
+
+	* common.opt: Add fuse-ld=bfd and fuse-ld=gold.
+
+	* gcc.c (LINK_COMMAND_SPEC): Pass -fuse-ld=* to collect2.
+
+	* opts.c (comman_handle_option): Ignore -fuse-ld=bfd and
+	-fuse-ld=gold.
+
+	* doc/invoke.texi: Document -fuse-ld=bfd and -fuse-ld=gold.
+
+2012-05-07  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* configure.ac (PLUGIN_LD): Rename into...
+	(PLUGIN_LD_SUFFIX): ...this and strip the target_alias triplet.
+	* config.in: Regenerate.
+	* configure: Likewise.
+	* collect2.c (main): Set plugin_ld_suffix to PLUGIN_LD_SUFFIX.
+
+Index: b/src/gcc/collect2.c
+===================================================================
+--- a/src/gcc/collect2.c
++++ b/src/gcc/collect2.c
+@@ -1020,8 +1020,21 @@
+ int
+ main (int argc, char **argv)
+ {
+-  static const char *const ld_suffix	= "ld";
+-  static const char *const plugin_ld_suffix = PLUGIN_LD;
++  enum linker_select
++    {
++      USE_DEFAULT_LD,
++      USE_PLUGIN_LD,
++      USE_GOLD_LD,
++      USE_BFD_LD,
++      USE_LD_MAX
++    } selected_linker = USE_DEFAULT_LD;
++  static const char *const ld_suffixes[USE_LD_MAX] =
++    {
++      "ld",
++      PLUGIN_LD_SUFFIX,
++      "ld.gold",
++      "ld.bfd"
++    };
+   static const char *const real_ld_suffix = "real-ld";
+   static const char *const collect_ld_suffix = "collect-ld";
+   static const char *const nm_suffix	= "nm";
+@@ -1032,16 +1045,13 @@
+   static const char *const strip_suffix = "strip";
+   static const char *const gstrip_suffix = "gstrip";
+ 
++  const char *full_ld_suffixes[USE_LD_MAX];
+ #ifdef CROSS_DIRECTORY_STRUCTURE
+   /* If we look for a program in the compiler directories, we just use
+      the short name, since these directories are already system-specific.
+      But it we look for a program in the system directories, we need to
+      qualify the program name with the target machine.  */
+ 
+-  const char *const full_ld_suffix =
+-    concat(target_machine, "-", ld_suffix, NULL);
+-  const char *const full_plugin_ld_suffix =
+-    concat(target_machine, "-", plugin_ld_suffix, NULL);
+   const char *const full_nm_suffix =
+     concat (target_machine, "-", nm_suffix, NULL);
+   const char *const full_gnm_suffix =
+@@ -1055,13 +1065,11 @@
+   const char *const full_gstrip_suffix =
+     concat (target_machine, "-", gstrip_suffix, NULL);
+ #else
+-  const char *const full_ld_suffix	= ld_suffix;
+-  const char *const full_plugin_ld_suffix = plugin_ld_suffix;
+-  const char *const full_nm_suffix	= nm_suffix;
+-  const char *const full_gnm_suffix	= gnm_suffix;
+ #ifdef LDD_SUFFIX
+   const char *const full_ldd_suffix	= ldd_suffix;
+ #endif
++  const char *const full_nm_suffix	= nm_suffix;
++  const char *const full_gnm_suffix	= gnm_suffix;
+   const char *const full_strip_suffix	= strip_suffix;
+   const char *const full_gstrip_suffix	= gstrip_suffix;
+ #endif /* CROSS_DIRECTORY_STRUCTURE */
+@@ -1078,6 +1086,7 @@
+   char **ld1_argv;
+   const char **ld1;
+   bool use_plugin = false;
++  bool use_collect_ld = false;
+ 
+   /* The kinds of symbols we will have to consider when scanning the
+      outcome of a first pass link.  This is ALL to start with, then might
+@@ -1097,6 +1106,15 @@
+   int first_file;
+   int num_c_args;
+   char **old_argv;
++  int i;
++
++  for (i = 0; i < USE_LD_MAX; i++)
++    full_ld_suffixes[i]
++#ifdef CROSS_DIRECTORY_STRUCTURE
++      = concat(target_machine, "-", ld_suffixes[i], NULL);
++#else
++      = ld_suffixes[i];
++#endif
+ 
+   p = argv[0] + strlen (argv[0]);
+   while (p != argv[0] && !IS_DIR_SEPARATOR (p[-1]))
+@@ -1158,7 +1176,6 @@
+      are called.  We also look for the -flto or -flto-partition=none flag to know
+      what LTO mode we are in.  */
+   {
+-    int i;
+     bool no_partition = false;
+ 
+     for (i = 1; argv[i] != NULL; i ++)
+@@ -1176,7 +1193,14 @@
+ 	  {
+ 	    use_plugin = true;
+ 	    lto_mode = LTO_MODE_NONE;
++	    if (selected_linker == USE_DEFAULT_LD)
++	      selected_linker = USE_PLUGIN_LD;
+ 	  }
++	else if (strcmp (argv[i], "-fuse-ld=bfd") == 0)
++	  selected_linker = USE_BFD_LD;
++	else if (strcmp (argv[i], "-fuse-ld=gold") == 0)
++	  selected_linker = USE_GOLD_LD;
++
+ #ifdef COLLECT_EXPORT_LIST
+ 	/* since -brtl, -bexport, -b64 are not position dependent
+ 	   also check for them here */
+@@ -1272,21 +1296,18 @@
+   ld_file_name = find_a_file (&cpath, real_ld_suffix);
+   /* Likewise for `collect-ld'.  */
+   if (ld_file_name == 0)
+-    ld_file_name = find_a_file (&cpath, collect_ld_suffix);
++    {
++      ld_file_name = find_a_file (&cpath, collect_ld_suffix);
++      use_collect_ld = ld_file_name != 0;
++    }
+   /* Search the compiler directories for `ld'.  We have protection against
+      recursive calls in find_a_file.  */
+   if (ld_file_name == 0)
+-    ld_file_name = find_a_file (&cpath,
+-				use_plugin
+-				? plugin_ld_suffix
+-				: ld_suffix);
++    ld_file_name = find_a_file (&cpath, ld_suffixes[selected_linker]);
+   /* Search the ordinary system bin directories
+      for `ld' (if native linking) or `TARGET-ld' (if cross).  */
+   if (ld_file_name == 0)
+-    ld_file_name = find_a_file (&path,
+-				use_plugin
+-				? full_plugin_ld_suffix
+-				: full_ld_suffix);
++    ld_file_name = find_a_file (&path, full_ld_suffixes[selected_linker]);
+ 
+ #ifdef REAL_NM_FILE_NAME
+   nm_file_name = find_a_file (&path, REAL_NM_FILE_NAME);
+@@ -1443,6 +1464,13 @@
+ 			 "configuration");
+ #endif
+ 		}
++	      else if (!use_collect_ld
++		       && strncmp (arg, "-fuse-ld=", 9) == 0)
++		{
++		  /* Do not pass -fuse-ld={bfd|gold} to the linker. */
++		  ld1--;
++		  ld2--;
++		}
+ #ifdef TARGET_AIX_VERSION
+ 	      else
+ 		{
+Index: b/src/gcc/common.opt
+===================================================================
+--- a/src/gcc/common.opt
++++ b/src/gcc/common.opt
+@@ -2089,6 +2089,15 @@
+ Common Report Var(flag_unwind_tables) Optimization
+ Just generate unwind tables for exception handling
+ 
++fuse-ld=bfd
++Common Var(flag_use_ld_bfd) Negative(fuse-ld=gold) Undocumented
++
++fuse-ld=gold
++Common Var(flag_use_ld_gold) Negative(fuse-ld=bfd) Undocumented
++
++fuse-ld=ld.bfd
++Common Alias(fuse-ld=bfd)
++
+ fuse-linker-plugin
+ Common Undocumented
+ 
+Index: b/src/gcc/exec-tool.in
+===================================================================
+--- a/src/gcc/exec-tool.in
++++ b/src/gcc/exec-tool.in
+@@ -36,13 +36,28 @@
+     dir=gas
+     ;;
+   collect-ld)
+-    # when using a linker plugin, gcc will always pass '-plugin' as the
+-    # first or second option to the linker.
+-    if test x"$1" = "x-plugin" || test x"$2" = "x-plugin"; then
+-      original=$ORIGINAL_PLUGIN_LD_FOR_TARGET
+-    else
+-      original=$ORIGINAL_LD_FOR_TARGET
+-    fi
++    # Check -fuse-ld=bfd and -fuse-ld=gold
++    case " $* " in
++      *\ -fuse-ld=bfd\ *)
++	if test -x ${ORIGINAL_LD_FOR_TARGET}.bfd; then
++	  original=${ORIGINAL_LD_FOR_TARGET}.bfd;
++	fi
++	;;
++      *\ -fuse-ld=gold\ *)
++	if test -x ${ORIGINAL_LD_FOR_TARGET}.gold; then
++	  original=${ORIGINAL_LD_FOR_TARGET}.gold;
++	fi
++	;;
++      *)
++	# when using a linker plugin, gcc will always pass '-plugin' as the
++	# first or second option to the linker.
++	if test x"$1" = "x-plugin" || test x"$2" = "x-plugin"; then
++	  original=$ORIGINAL_PLUGIN_LD_FOR_TARGET
++	else
++	  original=$ORIGINAL_LD_FOR_TARGET
++	fi
++	;;
++    esac
+     prog=ld-new$exeext
+     dir=ld
+     id=ld
+Index: b/src/gcc/gcc.c
+===================================================================
+--- a/src/gcc/gcc.c
++++ b/src/gcc/gcc.c
+@@ -675,7 +675,8 @@
+     LINK_PLUGIN_SPEC \
+     "%{flto|flto=*:%<fcompare-debug*} \
+     %{flto} %{flto=*} %l " LINK_PIE_SPEC \
+-   "%X %{o*} %{e*} %{N} %{n} %{r}\
++   "%{fuse-ld=*:-fuse-ld=%*}\
++    %X %{o*} %{e*} %{N} %{n} %{r}\
+     %{s} %{t} %{u*} %{z} %{Z} %{!nostdlib:%{!nostartfiles:%S}}\
+     %{static:} %{L*} %(mfwrap) %(link_libgcc) %o\
+     %{fopenmp|ftree-parallelize-loops=*:%:include(libgomp.spec)%(link_gomp)}\
+Index: b/src/gcc/opts.c
+===================================================================
+--- a/src/gcc/opts.c
++++ b/src/gcc/opts.c
+@@ -1735,6 +1735,8 @@
+       dc->max_errors = value;
+       break;
+ 
++    case OPT_fuse_ld_bfd:
++    case OPT_fuse_ld_gold:
+     case OPT_fuse_linker_plugin:
+       /* No-op. Used by the driver and passed to us because it starts with f.*/
+       break;
+Index: b/src/gcc/config.in
+===================================================================
+--- a/src/gcc/config.in
++++ b/src/gcc/config.in
+@@ -1700,7 +1700,7 @@
+ 
+ /* Specify plugin linker */
+ #ifndef USED_FOR_TARGET
+-#undef PLUGIN_LD
++#undef PLUGIN_LD_SUFFIX
+ #endif
+ 
+ 
+Index: b/src/gcc/configure.ac
+===================================================================
+--- a/src/gcc/configure.ac
++++ b/src/gcc/configure.ac
+@@ -2057,15 +2057,15 @@
+ fi])
+ 
+ ORIGINAL_PLUGIN_LD_FOR_TARGET=$gcc_cv_ld
+-PLUGIN_LD=`basename $gcc_cv_ld`
++PLUGIN_LD_SUFFIX=`basename $gcc_cv_ld | sed -e "s,$target_alias-,,"`
+ AC_ARG_WITH(plugin-ld,
+ [AS_HELP_STRING([[--with-plugin-ld=[ARG]]], [specify the plugin linker])],
+ [if test x"$withval" != x; then
+    ORIGINAL_PLUGIN_LD_FOR_TARGET="$withval"
+-   PLUGIN_LD="$withval"
++   PLUGIN_LD_SUFFIX=`echo $withval | sed -e "s,$target_alias-,,"`
+  fi])
+ AC_SUBST(ORIGINAL_PLUGIN_LD_FOR_TARGET)
+-AC_DEFINE_UNQUOTED(PLUGIN_LD, "$PLUGIN_LD", [Specify plugin linker])
++AC_DEFINE_UNQUOTED(PLUGIN_LD_SUFFIX, "$PLUGIN_LD_SUFFIX", [Specify plugin linker])
+ 
+ # Check to see if we are using gold instead of ld
+ AC_MSG_CHECKING(whether we are using gold)

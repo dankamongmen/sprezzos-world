@@ -1,0 +1,104 @@
+# backport bug fixes about address clauses and timed entry calls
+# taken from gcc-4.7
+#
+# http://gcc.gnu.org/ml/gcc-patches/2011-08/msg02277.html
+# Thanks to Arnaud Charlet
+
+--- a/src/gcc/ada/exp_ch9.adb
++++ b/src/gcc/ada/exp_ch9.adb
+@@ -24,6 +24,7 @@
+ ------------------------------------------------------------------------------
+ 
+ with Atree;    use Atree;
++with Atree.Copy_Separate_List;
+ with Checks;   use Checks;
+ with Einfo;    use Einfo;
+ with Elists;   use Elists;
+@@ -10908,6 +10909,11 @@
+    --          end if;
+    --       end if;
+    --    end;
++   --
++   --  The triggering statement and the timed statements have not been
++   --  analyzed yet (see Analyzed_Timed_Entry_Call).  They may contain local
++   --  declarations, and therefore the copies that are made during expansion
++   --  must be disjoint, as for any other inlining.
+ 
+    procedure Expand_N_Timed_Entry_Call (N : Node_Id) is
+       Loc : constant Source_Ptr := Sloc (N);
+@@ -11199,7 +11205,7 @@
+          --       <timed-statements>
+          --    end if;
+ 
+-         N_Stats := New_Copy_List_Tree (E_Stats);
++         N_Stats := Copy_Separate_List (E_Stats);
+ 
+          Prepend_To (N_Stats,
+            Make_If_Statement (Loc,
+@@ -11242,7 +11248,7 @@
+          --    <dispatching-call>;
+          --    <triggering-statements>
+ 
+-         Lim_Typ_Stmts := New_Copy_List_Tree (E_Stats);
++         Lim_Typ_Stmts := Copy_Separate_List (E_Stats);
+          Prepend_To (Lim_Typ_Stmts, New_Copy_Tree (E_Call));
+ 
+          --  Generate:
+--- /dev/null
++++ b/src/gcc/ada/atree-copy_separate_list.adb
+@@ -0,0 +1,15 @@
++with Nlists;
++
++function Atree.Copy_Separate_List (Source : List_Id) return List_Id is
++   use Atree.Atree_Private_Part.Nodes;
++   use Nlists;
++   Result : constant List_Id := New_List;
++   Nod    : Node_Id;
++begin
++   Nod := Nlists.First (Source);
++   while Present (Nod) loop
++      Append (Copy_Separate_Tree (Nod), Result);
++      Next (Nod);
++   end loop;
++   return Result;
++end Atree.Copy_Separate_List;
+--- /dev/null
++++ b/src/gcc/ada/atree-copy_separate_list.ads
+@@ -0,0 +1 @@
++function Atree.Copy_Separate_List (Source : List_Id) return List_Id;
+--- a/src/gcc/ada/gcc-interface/Make-lang.in
++++ b/src/gcc/ada/gcc-interface/Make-lang.in
+@@ -158,6 +158,7 @@
+  ada/exp_ch7.o	\
+  ada/exp_ch8.o	\
+  ada/exp_ch9.o	\
++ ada/atree-copy_separate_list.o \
+  ada/exp_code.o	\
+  ada/exp_dbug.o	\
+  ada/exp_disp.o	\
+@@ -1371,6 +1372,17 @@
+    ada/table.ads ada/table.adb ada/tree_io.ads ada/types.ads ada/uintp.ads \
+    ada/unchconv.ads ada/unchdeal.ads ada/urealp.ads 
+ 
++ada/atree-copy_separate_list.o : ada/ada.ads ada/a-except.ads ada/a-unccon.ads \
++   ada/a-uncdea.ads ada/alloc.ads ada/aspects.ads ada/atree.ads \
++   ada/atree.adb ada/casing.ads ada/debug.ads ada/einfo.ads \
++   ada/hostparm.ads ada/namet.ads ada/nlists.ads ada/nlists.adb \
++   ada/opt.ads ada/output.ads ada/sinfo.ads ada/sinfo.adb ada/sinput.ads \
++   ada/snames.ads ada/system.ads ada/s-exctab.ads ada/s-imenne.ads \
++   ada/s-memory.ads ada/s-os_lib.ads ada/s-parame.ads ada/s-stalib.ads \
++   ada/s-string.ads ada/s-traent.ads ada/s-unstyp.ads ada/s-wchcon.ads \
++   ada/table.ads ada/table.adb ada/tree_io.ads ada/types.ads ada/uintp.ads \
++   ada/unchconv.ads ada/unchdeal.ads ada/urealp.ads 
++
+ ada/back_end.o : ada/ada.ads ada/a-except.ads ada/a-unccon.ads \
+    ada/a-uncdea.ads ada/alloc.ads ada/aspects.ads ada/atree.ads \
+    ada/atree.adb ada/back_end.ads ada/back_end.adb ada/casing.ads \
+@@ -2006,6 +2018,7 @@
+ ada/exp_ch9.o : ada/ada.ads ada/a-except.ads ada/a-unccon.ads \
+    ada/a-uncdea.ads ada/alloc.ads ada/aspects.ads ada/atree.ads \
+    ada/atree.adb ada/casing.ads ada/checks.ads ada/csets.ads ada/debug.ads \
++   ada/atree-copy_separate_list.ads ada/atree-copy_separate_list.adb \
+    ada/einfo.ads ada/einfo.adb ada/elists.ads ada/elists.adb \
+    ada/err_vars.ads ada/errout.ads ada/erroutc.ads ada/exp_aggr.ads \
+    ada/exp_ch11.ads ada/exp_ch3.ads ada/exp_ch6.ads ada/exp_ch7.ads \

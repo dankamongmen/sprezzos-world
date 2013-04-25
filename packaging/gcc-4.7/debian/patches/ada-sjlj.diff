@@ -1,0 +1,728 @@
+# DP: There are two exception mechanisms to choose from: zero-cost and
+# DP: setjump/longjump.  The Ada run-time library uses either of them
+# DP: but not both.  Build both versions of the run-time library.
+
+# This patch changes the way the upstream Makefiles build the run-time
+# library.  Before the patch: libada/Makefile calls gcc/ada/Makefile,
+# which builds the "rts" subdirectory containing symbolic links to
+# most source files, and modified copies of a few source files (to
+# take target dependencies into account, and also to select the
+# exception handling mechanism in system.ads).  Then, gcc/ada/Makefile
+# calls itself recursively but in the "rts" subdirectory and builds
+# libgnat.a and libgnarl.a (and a couple other libraries:
+# libgccprefix.a, libgmem.a).  Upon return from this recursive call,
+# it deletes the source and object files from "rts", reconstructs the
+# source files, and builds libgnat.so and libgnarl.so by calling
+# itself recursively a second time in the "rts" directory.
+
+# Furthermore, gcc/ada/Makefile disables parallel makes, so building
+# the static and then shared versions of the RTS is entirely
+# sequential even on SMP systems.
+
+# As a consequence of the above, building the SJLJ version of the
+# library would overwrite the ZCX version.  Thus it is necessary to
+# manually save the previous version of the library before building the
+# second one.
+
+# After the patch: libada/Makefile calls gcc/ada/Makefile, which
+# builds the source directory (named gnatlib-sources instead of rts),
+# containing the symbolic links and target-dependent files.
+
+# In a second step, libada/Makefile calls gcc/ada/Makefile again to
+# build the targets gnatlib-shared-zcx, gnatlib-static-zcx and
+# gnatlib-static-sjlj (we could also build gnatlib-shared-sjlj, but
+# that triggers compiler errors on PowerPC).
+
+# Each of these three targets copies the source directory "rts" into a
+# new directory named rts-shared-zcx, rts-static-zcx or
+# rts-static-sjlj.  In the new directory, they change the value of
+# System.ZCX_By_Default, and then they call gcc/ada/Makefile
+# recursively in the new directory to build the library.
+
+# gcc/ada/Makefile.in has a .NOTPARALLEL directive preventing it from
+# launching commands in parallel.  However, libada/Makefile has no
+# such directive and can invoke up to three instances of
+# gcc/ada/Makefile.in in parallel.  This is okay because each of them
+# runs in a different directory.
+
+# This patch also updates libgnat{vsn,prj}/Makefile and
+# gnattools/Makefile to look for the shared ZCX version of the library
+# in the appropriate directory, rather than just "rts", and updates
+# the "make install" and binary targets as well.
+
+Index: b/src/libada/Makefile.in
+===================================================================
+--- a/src/libada/Makefile.in
++++ b/src/libada/Makefile.in
+@@ -16,7 +16,8 @@
+ # <http://www.gnu.org/licenses/>.
+ 
+ # Default target; must be first.
+-all: gnatlib
++GNATLIB = gnatlib-static-zcx gnatlib-static-sjlj gnatlib-shared-zcx
++all: $(GNATLIB)
+ 	$(MULTIDO) $(AM_MAKEFLAGS) DO=all multi-do # $(MAKE)
+ 
+ .PHONY: all
+@@ -97,26 +98,28 @@
+         "CFLAGS=$(CFLAGS) $(WARN_CFLAGS)"
+ 
+ # Rules to build gnatlib.
+-.PHONY: gnatlib gnatlib-plain gnatlib-sjlj gnatlib-zcx gnatlib-shared osconstool
+-gnatlib: @default_gnatlib_target@
++.PHONY: $(GNATLIB) osconstool
+ 
+-gnatlib-plain: osconstool $(GCC_DIR)/ada/Makefile
+-	test -f stamp-libada || \
+-	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) gnatlib \
+-	&& touch stamp-libada
+-	-rm -rf adainclude
+-	-rm -rf adalib
+-	$(LN_S) $(ADA_RTS_DIR) adainclude
+-	$(LN_S) $(ADA_RTS_DIR) adalib
+-
+-gnatlib-sjlj gnatlib-zcx gnatlib-shared: osconstool $(GCC_DIR)/ada/Makefile
+-	test -f stamp-libada || \
+-	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) $@ \
+-	&& touch stamp-libada
+-	-rm -rf adainclude
+-	-rm -rf adalib
+-	$(LN_S) $(ADA_RTS_DIR) adainclude
+-	$(LN_S) $(ADA_RTS_DIR) adalib
++$(GCC_DIR)/ada/gnatlib-sources-sjlj/a-except.ads:
++	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) \
++	  EH_MECHANISM="" \
++	  gnatlib-sources-sjlj/a-except.ads
++
++$(GCC_DIR)/ada/gnatlib-sources-zcx/a-except.ads:
++	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) \
++	  EH_MECHANISM="-gcc" \
++	  gnatlib-sources-zcx/a-except.ads
++
++$(GNATLIB): osconstool $(GCC_DIR)/ada/Makefile \
++$(GCC_DIR)/ada/gnatlib-sources-zcx/a-except.ads \
++$(GCC_DIR)/ada/gnatlib-sources-sjlj/a-except.ads
++	$(MAKE) -C $(GCC_DIR)/ada $(FLAGS_TO_PASS) \
++	  GNATLIBFLAGS="$(GNATLIBFLAGS)" \
++	  GNATLIBCFLAGS="$(GNATLIBCFLAGS)" \
++	  TARGET_LIBGCC2_CFLAGS="$(TARGET_LIBGCC2_CFLAGS)" \
++	  THREAD_KIND="$(THREAD_KIND)" \
++	  TRACE="$(TRACE)" \
++	  $@
+ 
+ osconstool:
+ 	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) ./bldtools/oscons/xoscons
+Index: b/src/gcc/ada/gcc-interface/Makefile.in
+===================================================================
+--- a/src/gcc/ada/gcc-interface/Makefile.in
++++ b/src/gcc/ada/gcc-interface/Makefile.in
+@@ -2234,57 +2234,75 @@
+  a-[a-o]*.adb a-[p-z]*.adb a-[a-o]*.ads a-[p-z]*.ads g-*.ad? i-*.ad? \
+  s-[a-o]*.adb s-[p-z]*.adb s-[a-o]*.ads s-[p-z]*.ads
+ 
+-../stamp-gnatlib-$(RTSDIR):
+-	@if [ ! -f stamp-gnatlib-$(RTSDIR) ] ; \
+-	then \
+-	  $(ECHO) You must first build the GNAT library: make gnatlib; \
+-	  false; \
+-	else \
+-	  true; \
+-	fi
++libgnat = libgnat$(hyphen)$(LIBRARY_VERSION)$(soext)
++libgnat-sjlj = libgnat$(hyphen)sjlj$(hyphen)$(LIBRARY_VERSION)$(soext)
+ 
+-install-gnatlib: ../stamp-gnatlib-$(RTSDIR)
++install-gnatlib: rts-static-zcx/libgnat$(arext) rts-static-sjlj/libgnat$(arext)
++install-gnatlib: rts-shared-zcx/$(libgnat)
+ #	Create the directory before deleting it, in case the directory is
+ #	a list of directories (as it may be on VMS). This ensures we are
+ #	deleting the right one.
+-	-$(MKDIR) $(DESTDIR)$(ADA_RTL_OBJ_DIR)
+-	-$(MKDIR) $(DESTDIR)$(ADA_INCLUDE_DIR)
+-	$(RMDIR) $(DESTDIR)$(ADA_RTL_OBJ_DIR)
+-	$(RMDIR) $(DESTDIR)$(ADA_INCLUDE_DIR)
+-	-$(MKDIR) $(DESTDIR)$(ADA_RTL_OBJ_DIR)
+-	-$(MKDIR) $(DESTDIR)$(ADA_INCLUDE_DIR)
+-	for file in $(RTSDIR)/*.ali; do \
+-	    $(INSTALL_DATA_DATE) $$file $(DESTDIR)$(ADA_RTL_OBJ_DIR); \
++	-$(MKDIR) $(DESTDIR)$(ADA_NATIVE_RTL_OBJ_DIR)
++	-$(MKDIR) $(DESTDIR)$(ADA_NATIVE_INCLUDE_DIR)
++	$(RMDIR) $(DESTDIR)$(ADA_NATIVE_RTL_OBJ_DIR)
++	$(RMDIR) $(DESTDIR)$(ADA_NATIVE_INCLUDE_DIR)
++	-$(MKDIR) $(DESTDIR)$(ADA_NATIVE_RTL_OBJ_DIR)
++	-$(MKDIR) $(DESTDIR)$(ADA_NATIVE_INCLUDE_DIR)
++
++	-$(MKDIR) $(DESTDIR)$(ADA_SJLJ_RTL_OBJ_DIR)
++	-$(MKDIR) $(DESTDIR)$(ADA_SJLJ_INCLUDE_DIR)
++	$(RMDIR) $(DESTDIR)$(ADA_SJLJ_RTL_OBJ_DIR)
++	$(RMDIR) $(DESTDIR)$(ADA_SJLJ_INCLUDE_DIR)
++	-$(MKDIR) $(DESTDIR)$(ADA_SJLJ_RTL_OBJ_DIR)
++	-$(MKDIR) $(DESTDIR)$(ADA_SJLJ_INCLUDE_DIR)
++
++	for file in rts-shared-zcx/*.ali; do \
++	$(INSTALL_DATA_DATE) $$file $(DESTDIR)$(ADA_NATIVE_RTL_OBJ_DIR); \
++	done
++	for file in rts-static-sjlj/*.ali; do \
++	$(INSTALL_DATA_DATE) $$file $(DESTDIR)$(ADA_SJLJ_RTL_OBJ_DIR); \
++	done
++
++	-cd rts-static-zcx; for file in *$(arext);do \
++	$(INSTALL_DATA) $$file $(DESTDIR)$(ADA_NATIVE_RTL_OBJ_DIR); \
++	$(RANLIB_FOR_TARGET) $(DESTDIR)$(ADA_NATIVE_RTL_OBJ_DIR)/$$file; \
+ 	done
+-	-cd $(RTSDIR); for file in *$(arext);do \
+-	    $(INSTALL_DATA) $$file $(DESTDIR)$(ADA_RTL_OBJ_DIR); \
+-	    $(RANLIB_FOR_TARGET) $(DESTDIR)$(ADA_RTL_OBJ_DIR)/$$file; \
++	-cd rts-static-sjlj; for file in *$(arext);do \
++	$(INSTALL_DATA) $$file $(DESTDIR)$(ADA_SJLJ_RTL_OBJ_DIR); \
++	$(RANLIB_FOR_TARGET) $(DESTDIR)$(ADA_SJLJ_RTL_OBJ_DIR)/$$file; \
+ 	done
++
++	-$(foreach file, $(EXTRA_ADALIB_FILES), \
++	    $(INSTALL_DATA_DATE) rts-static-zcx/$(file) $(DESTDIR)$(ADA_NATIVE_RTL_OBJ_DIR) && \
++	) true
+ 	-$(foreach file, $(EXTRA_ADALIB_FILES), \
+-	    $(INSTALL_DATA_DATE) $(RTSDIR)/$(file) $(DESTDIR)$(ADA_RTL_OBJ_DIR) && \
++	    $(INSTALL_DATA_DATE) rts-static-sjlj/$(file) $(DESTDIR)$(ADA_SJLJ_RTL_OBJ_DIR) && \
+ 	) true
+ #     Install the shared libraries, if any, using $(INSTALL) instead
+ #     of $(INSTALL_DATA). The latter may force a mode inappropriate
+ #     for shared libraries on some targets, e.g. on HP-UX where the x
+ #     permission is required.
+-#     Also install the .dSYM directories if they exist (these directories
+-#     contain the debug information for the shared libraries on darwin)
+ 	for file in gnat gnarl; do \
+-	   if [ -f $(RTSDIR)/lib$${file}$(hyphen)$(LIBRARY_VERSION)$(soext) ]; then \
+-	      $(INSTALL) $(RTSDIR)/lib$${file}$(hyphen)$(LIBRARY_VERSION)$(soext).1 \
+-			 $(DESTDIR)$(ADA_RTL_OBJ_DIR); \
+-	   fi; \
+-	   if [ -d $(RTSDIR)/lib$${file}$(hyphen)$(LIBRARY_VERSION)$(soext).dSYM ]; then \
+-	      $(CP) -r $(RTSDIR)/lib$${file}$(hyphen)$(LIBRARY_VERSION)$(soext).dSYM \
+-	        $(DESTDIR)$(ADA_RTL_OBJ_DIR); \
++	   if [ -f rts-shared-zcx/lib$${file}$(hyphen)$(LIBRARY_VERSION)$(soext).1 ]; then \
++	      $(INSTALL) rts-shared-zcx/lib$${file}$(hyphen)$(LIBRARY_VERSION)$(soext).1 \
++			 $(DESTDIR)$(ADA_NATIVE_RTL_OBJ_DIR); \
+ 	   fi; \
+ 	done
+ # This copy must be done preserving the date on the original file.
+-	for file in $(RTSDIR)/*.ad?; do \
+-	    $(INSTALL_DATA_DATE) $$file $(DESTDIR)$(ADA_INCLUDE_DIR); \
++	for file in rts-shared-zcx/*.adb rts-shared-zcx/*.ads; do \
++	    $(INSTALL_DATA_DATE) $$file $(DESTDIR)$(ADA_NATIVE_INCLUDE_DIR); \
+ 	done
+-	cd $(DESTDIR)$(ADA_INCLUDE_DIR); $(CHMOD) a-wx *.adb
+-	cd $(DESTDIR)$(ADA_INCLUDE_DIR); $(CHMOD) a-wx *.ads
++	$(CHMOD) u=rw,go=r $(DESTDIR)$(ADA_NATIVE_INCLUDE_DIR)/*.adb
++	$(CHMOD) u=rw,go=r $(DESTDIR)$(ADA_NATIVE_INCLUDE_DIR)/*.ads
++	for file in rts-static-sjlj/*.adb rts-static-sjlj/*.ads; do \
++	    $(INSTALL_DATA_DATE) $$file $(DESTDIR)$(ADA_SJLJ_INCLUDE_DIR); \
++	done
++	$(CHMOD) u=rw,go=r $(DESTDIR)$(ADA_SJLJ_INCLUDE_DIR)/*.adb
++	$(CHMOD) u=rw,go=r $(DESTDIR)$(ADA_SJLJ_INCLUDE_DIR)/*.ads
++
++	(cd $(DESTDIR)$(libsubdir); \
++	ln -s rts-native/adainclude adainclude; \
++	ln -s rts-native/adalib     adalib;)
+ 
+ # NOTE: The $(foreach ...) commands assume ";" is the valid separator between
+ #       successive target commands. Although the Gnu make documentation
+@@ -2295,30 +2313,37 @@
+ 
+ # GNULLI Begin ###########################################################
+ 
+-../stamp-gnatlib1-$(RTSDIR): Makefile
+-	$(RMDIR) $(RTSDIR)
+-	$(MKDIR) $(RTSDIR)
+-	$(CHMOD) u+w $(RTSDIR)
++replace_zcx_by_default=\
++'s/ZCX_By_Default.*/ZCX_By_Default            : constant Boolean := $(zcx_by_default);/'
++
++gnatlib-sources-zcx/a-except.ads: dir=$(dir $@)
++gnatlib-sources-zcx/a-except.ads: zcx_by_default=True
++
++gnatlib-sources-sjlj/a-except.ads: dir=$(dir $@)
++gnatlib-sources-sjlj/a-except.ads: zcx_by_default=False
++
++gnatlib-sources-zcx/a-except.ads gnatlib-sources-sjlj/a-except.ads:
++	$(MKDIR) $(dir)
++	$(CHMOD) u+w $(dir)
+ # Copy target independent sources
+ 	$(foreach f,$(ADA_INCLUDE_SRCS) $(LIBGNAT_SRCS), \
+-	  $(LN_S) $(fsrcpfx)ada/$(f) $(RTSDIR) ;) true
++	  $(LN_S) $(fsrcpfx)ada/$(f) $(dir) ;) true
+ # Remove files to be replaced by target dependent sources
+ 	$(RM) $(foreach PAIR,$(LIBGNAT_TARGET_PAIRS), \
+-	                $(RTSDIR)/$(word 1,$(subst <, ,$(PAIR))))
+-	for f in $(RTSDIR)/*-*-*.ads $(RTSDIR)/*-*-*.adb; do \
++	                $(dir)/$(word 1,$(subst <, ,$(PAIR))))
++	for f in $(dir)/*-*-*.ads $(dir)/*-*-*.adb; do \
+ 	  case "$$f" in \
+-	    $(RTSDIR)/s-stratt-*) ;; \
++	    $(dir)/s-stratt-*) ;; \
+ 	    *) $(RM) $$f ;; \
+ 	  esac; \
+ 	done
+ # Copy new target dependent sources
+ 	$(foreach PAIR,$(LIBGNAT_TARGET_PAIRS), \
+ 	          $(LN_S) $(fsrcpfx)ada/$(word 2,$(subst <, ,$(PAIR))) \
+-	                $(RTSDIR)/$(word 1,$(subst <, ,$(PAIR)));)
++	                $(dir)/$(word 1,$(subst <, ,$(PAIR)));)
++	sed -e $(replace_zcx_by_default) $(dir)/system.ads > $(dir)/s.ads
+ # Copy tsystem.h
+-	$(CP) $(srcdir)/tsystem.h $(RTSDIR)
+-	$(RM) ../stamp-gnatlib-$(RTSDIR)
+-	touch ../stamp-gnatlib1-$(RTSDIR)
++	$(CP) $(srcdir)/tsystem.h $(dir)
+ 
+ # GNULLI End #############################################################
+ 
+@@ -2347,9 +2372,10 @@
+ 	$(CP) $^ ./bldtools/oscons
+ 	(cd ./bldtools/oscons ; gnatmake -q xoscons)
+ 
+-$(RTSDIR)/s-oscons.ads: ../stamp-gnatlib1-$(RTSDIR) s-oscons-tmplt.c gsocket.h ./bldtools/oscons/xoscons
+-	$(RM) $(RTSDIR)/s-oscons-tmplt.i $(RTSDIR)/s-oscons-tmplt.s
+-	(cd $(RTSDIR) ; \
++%/s-oscons.ads: dir = $(dir $@)
++%/s-oscons.ads: s-oscons-tmplt.c gsocket.h ./bldtools/oscons/xoscons
++	$(RM) $(dir)/s-oscons-tmplt.i $(dir)/s-oscons-tmplt.s
++	(cd $(dir) ; \
+ 	    $(OSCONS_CPP) ; \
+ 	    $(OSCONS_EXTRACT) ; \
+ 	    ../bldtools/oscons/xoscons)
+@@ -2360,8 +2386,11 @@
+ # Example: cd $(RTSDIR); ar rc libfoo.a $(LONG_LIST_OF_OBJS)
+ # is guaranteed to overflow the buffer.
+ 
+-gnatlib: ../stamp-gnatlib1-$(RTSDIR) $(RTSDIR)/s-oscons.ads
+-	$(MAKE) -C $(RTSDIR) \
++%/libgnat$(arext): build_dir = $(dir $@)
++%/libgnat$(arext): libgnarl = $(subst libgnat,libgnarl,$@)
++%/libgnat$(arext): libgnala = $(subst libgnat,libgnala,$@)
++%/libgnat$(arext): % %/s-oscons.ads
++	$(MAKE) -C $(build_dir) \
+ 		CC="`echo \"$(GCC_FOR_TARGET)\" \
+ 		| sed -e 's,\./xgcc,../../xgcc,' -e 's,-B\./,-B../../,'`" \
+ 	        INCLUDES="$(INCLUDES_FOR_SUBDIR) -I./../.." \
+@@ -2369,7 +2398,7 @@
+ 	        FORCE_DEBUG_ADAFLAGS="$(FORCE_DEBUG_ADAFLAGS)" \
+ 		srcdir=$(fsrcdir) \
+ 	        -f ../Makefile $(LIBGNAT_OBJS)
+-	$(MAKE) -C $(RTSDIR) \
++	$(MAKE) -C $(build_dir) \
+ 		CC="`echo \"$(GCC_FOR_TARGET)\" \
+ 		| sed -e 's,\./xgcc,../../xgcc,' -e 's,-B\./,-B../../,'`" \
+ 	        ADA_INCLUDES="" \
+@@ -2377,35 +2406,37 @@
+ 	        ADAFLAGS="$(GNATLIBFLAGS)" \
+ 	        FORCE_DEBUG_ADAFLAGS="$(FORCE_DEBUG_ADAFLAGS)" \
+ 		srcdir=$(fsrcdir) \
+-	        -f ../Makefile \
+-	        $(GNATRTL_OBJS)
+-	$(RM) $(RTSDIR)/libgnat$(arext) $(RTSDIR)/libgnarl$(arext)
+-	$(AR_FOR_TARGET) $(AR_FLAGS) $(RTSDIR)/libgnat$(arext) \
+-	   $(addprefix $(RTSDIR)/,$(GNATRTL_NONTASKING_OBJS) $(LIBGNAT_OBJS) g-trasym.o convert_addresses.o)
+-	$(RANLIB_FOR_TARGET) $(RTSDIR)/libgnat$(arext)
+-	$(AR_FOR_TARGET) $(AR_FLAGS) $(RTSDIR)/libgnarl$(arext) \
+-	   $(addprefix $(RTSDIR)/,$(GNATRTL_TASKING_OBJS))
+-	$(RANLIB_FOR_TARGET) $(RTSDIR)/libgnarl$(arext)
+-	$(AR_FOR_TARGET) $(AR_FLAGS) $(RTSDIR)/libgnala$(arext) \
+-	   $(addprefix $(RTSDIR)/,$(GNATRTL_LINEARALGEBRA_OBJS))
+-	$(RANLIB_FOR_TARGET) $(RTSDIR)/libgnala$(arext)
++		-f ../Makefile \
++		$(GNATRTL_OBJS)
++	$(RM) $@ $(libgnarl)
++	$(AR_FOR_TARGET) $(AR_FLAGS) $@ \
++	   $(addprefix $(build_dir),$(GNATRTL_NONTASKING_OBJS) $(LIBGNAT_OBJS) g-trasym.o convert_addresses.o)
++	$(RANLIB_FOR_TARGET) $@
++	$(AR_FOR_TARGET) $(AR_FLAGS) $(libgnarl) \
++	   $(addprefix $(build_dir),$(GNATRTL_TASKING_OBJS))
++	$(RANLIB_FOR_TARGET) $(libgnarl)
++	$(AR_FOR_TARGET) $(AR_FLAGS) $(libgnala) \
++	   $(addprefix $(build_dir),$(GNATRTL_LINEARALGEBRA_OBJS))
++	$(RANLIB_FOR_TARGET) $(libgnala)
+         ifeq ($(GMEM_LIB),gmemlib)
+-		$(AR_FOR_TARGET) $(AR_FLAGS) $(RTSDIR)/libgmem$(arext) \
+-		  $(RTSDIR)/memtrack.o
+-		$(RANLIB_FOR_TARGET) $(RTSDIR)/libgmem$(arext)
++		$(AR_FOR_TARGET) $(AR_FLAGS) $(build_dir)libgmem$(arext) \
++		  $(build_dir)memtrack.o
++		$(RANLIB_FOR_TARGET) $(build_dir)libgmem$(arext)
+         endif
+-	touch ../stamp-gnatlib-$(RTSDIR)
+ 
+ # Warning: this target assumes that LIBRARY_VERSION has been set correctly.
+-gnatlib-shared-default: ../stamp-gnatlib1-$(RTSDIR)
+-	$(MAKE) -C $(RTSDIR) \
++%/$(libgnat) %/$(libgnat-sjlj): build_dir = $(dir $@)
++%/$(libgnat) %/$(libgnat-sjlj): libgnarl = $(notdir $(subst libgnat,libgnarl,$@))
++%/$(libgnat) %/$(libgnat-sjlj): libgnala = $(notdir $(subst libgnat,libgnala,$@))
++%/$(libgnat) %/$(libgnat-sjlj): % %/s-oscons.ads
++	$(MAKE) -C $(build_dir) \
+ 		CC="`echo \"$(GCC_FOR_TARGET)\" \
+ 		| sed -e 's,^\./xgcc,../../xgcc,' -e 's,-B\./,-B../../,'`" \
+ 	        INCLUDES="$(INCLUDES_FOR_SUBDIR) -I./../.." \
+                 CFLAGS="$(GNATLIBCFLAGS_FOR_C)" \
+ 		srcdir=$(fsrcdir) \
+ 	        -f ../Makefile $(LIBGNAT_OBJS)
+-	$(MAKE) -C $(RTSDIR) \
++	$(MAKE) -C $(build_dir) \
+ 		CC="`echo \"$(GCC_FOR_TARGET)\" \
+ 		| sed -e 's,^\./xgcc,../../xgcc,' -e 's,-B\./,-B../../,'`" \
+ 	        ADA_INCLUDES="" \
+@@ -2415,160 +2446,56 @@
+ 		srcdir=$(fsrcdir) \
+ 	        -f ../Makefile \
+ 	        $(GNATRTL_OBJS)
+-	$(RM) $(RTSDIR)/libgna*$(soext) $(RTSDIR)/libgna*$(soext).1
+-	cd $(RTSDIR); ../../xgcc -B../../ -shared $(GNATLIBCFLAGS) \
++	$(RM) $(build_dir)/libgna*$(soext) $(build_dir)/libgna*$(soext).1
++	cd $(build_dir); ../../xgcc -B../../ -shared $(GNATLIBCFLAGS) \
+ 		$(TARGET_LIBGCC2_CFLAGS) \
+-		-o libgnat$(hyphen)$(LIBRARY_VERSION)$(soext).1 \
++		-o $(notdir $@).1 \
+ 		$(GNATRTL_NONTASKING_OBJS) $(LIBGNAT_OBJS) \
+ 		g-trasym.o convert_addresses.o \
+-		$(SO_OPTS)libgnat$(hyphen)$(LIBRARY_VERSION)$(soext).1 \
++		$(SO_OPTS)$(notdir $@).1 \
+ 		$(MISCLIB) -lm
+-	cd $(RTSDIR); ../../xgcc -B../../ -shared $(GNATLIBCFLAGS) \
++	cd $(build_dir); $(LN_S) $(notdir $@).1 $(notdir $@)
++	cd $(build_dir); ../../xgcc -B../../ -shared $(GNATLIBCFLAGS) \
+ 		$(TARGET_LIBGCC2_CFLAGS) \
+-		-o libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext).1 \
++		-o $(libgnarl).1 \
+ 		$(GNATRTL_TASKING_OBJS) \
+-		$(SO_OPTS)libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext).1 \
++		$(SO_OPTS)$(libgnarl).1 \
+ 		$(THREADSLIB)
+-	cd $(RTSDIR); for lib in gnat gnarl; do \
+-		l=lib$${lib}$(hyphen)$(LIBRARY_VERSION)$(soext); \
+-		$(LN_S) $$l.1 $$l; \
+-	done
+-# Delete the object files, lest they be linked statically into the tools
+-# executables.  Only the .ali, .a and .so files must remain.
+-	rm -f $(RTSDIR)/*.o
+-	$(CHMOD) a-wx $(RTSDIR)/*.ali
+-
+-gnatlib-shared-dual:
+-	$(MAKE) $(FLAGS_TO_PASS) \
+-             GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+-	     GNATLIBCFLAGS="$(GNATLIBCFLAGS)" \
+-	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+-	     MULTISUBDIR="$(MULTISUBDIR)" \
+-	     THREAD_KIND="$(THREAD_KIND)" \
+-             gnatlib
+-	$(RM) $(RTSDIR)/*.o $(RTSDIR)/*.ali
+-	$(MAKE) $(FLAGS_TO_PASS) \
+-             GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+-	     GNATLIBCFLAGS="$(GNATLIBCFLAGS)" \
+-	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+-	     MULTISUBDIR="$(MULTISUBDIR)" \
+-	     THREAD_KIND="$(THREAD_KIND)" \
+-             gnatlib-shared-default
+-
+-gnatlib-shared-dual-win32:
+-	$(MAKE) $(FLAGS_TO_PASS) \
+-             GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+-	     GNATLIBCFLAGS="$(GNATLIBCFLAGS)" \
+-	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+-	     MULTISUBDIR="$(MULTISUBDIR)" \
+-	     THREAD_KIND="$(THREAD_KIND)" \
+-             gnatlib
+-	$(RM) $(RTSDIR)/*.o $(RTSDIR)/*.ali
+-	$(MAKE) $(FLAGS_TO_PASS) \
+-             GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+-	     GNATLIBCFLAGS="$(GNATLIBCFLAGS) $(TARGET_LIBGCC2_CFLAGS)" \
+-	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+-	     MULTISUBDIR="$(MULTISUBDIR)" \
+-	     THREAD_KIND="$(THREAD_KIND)" \
+-             gnatlib-shared-win32
+-
+-# ??? we need to add the option to support auto-import of arrays/records to
+-# the GNATLIBFLAGS when this will be supported by GNAT. At this point we will
+-# use the gnatlib-shared-dual-win32 target to build the GNAT runtimes on
+-# Windows.
+-gnatlib-shared-win32:
+-	$(MAKE) $(FLAGS_TO_PASS) \
+-             GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+-	     GNATLIBCFLAGS="$(GNATLIBCFLAGS) $(TARGET_LIBGCC2_CFLAGS)" \
+-	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+-	     MULTISUBDIR="$(MULTISUBDIR)" \
+-	     THREAD_KIND="$(THREAD_KIND)" \
+-             gnatlib
+-	$(RM) $(RTSDIR)/libgna*$(soext)
+-	cd $(RTSDIR); ../../xgcc -B../../ -shared -shared-libgcc \
+-		$(TARGET_LIBGCC2_CFLAGS) \
+-		-o libgnat$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		$(GNATRTL_NONTASKING_OBJS) $(LIBGNAT_OBJS) \
+-		$(SO_OPTS)libgnat$(hyphen)$(LIBRARY_VERSION)$(soext) $(MISCLIB)
+-	cd $(RTSDIR); ../../xgcc -B../../ -shared -shared-libgcc \
++	cd $(build_dir); $(LN_S) $(libgnarl).1 $(libgnarl)
++# TODO: enable building the shared libgnala
++ifeq (libgnala-shared-enabled,yes)
++	cd $(build_dir); ../../xgcc -B../../ -shared $(GNATLIBCFLAGS) \
+ 		$(TARGET_LIBGCC2_CFLAGS) \
+-		-o libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		$(GNATRTL_TASKING_OBJS) \
+-		$(SO_OPTS)libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		$(THREADSLIB) -Wl,libgnat$(hyphen)$(LIBRARY_VERSION)$(soext)
+-
+-gnatlib-shared-darwin:
+-	$(MAKE) $(FLAGS_TO_PASS) \
+-	     GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+-	     GNATLIBCFLAGS="$(GNATLIBCFLAGS) $(TARGET_LIBGCC2_CFLAGS)" \
+-	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C) -fno-common" \
+-	     MULTISUBDIR="$(MULTISUBDIR)" \
+-	     THREAD_KIND="$(THREAD_KIND)" \
+-	     gnatlib
+-	$(RM) $(RTSDIR)/libgnat$(soext) $(RTSDIR)/libgnarl$(soext)
+-	cd $(RTSDIR); ../../xgcc -B../../ -dynamiclib $(TARGET_LIBGCC2_CFLAGS) \
+-		-o libgnat$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		$(GNATRTL_NONTASKING_OBJS) $(LIBGNAT_OBJS) \
+-		$(SO_OPTS) \
+-		-Wl,-install_name,@rpath/libgnat$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		$(MISCLIB) -lm
+-	cd $(RTSDIR); ../../xgcc -B../../ -dynamiclib $(TARGET_LIBGCC2_CFLAGS) \
+-		-o libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		$(GNATRTL_TASKING_OBJS) \
+-		$(SO_OPTS) \
+-		-Wl,-install_name,@rpath/libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		$(THREADSLIB) -Wl,libgnat$(hyphen)$(LIBRARY_VERSION)$(soext)
+-	cd $(RTSDIR); $(LN_S) libgnat$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		libgnat$(soext)
+-	cd $(RTSDIR); $(LN_S) libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-		libgnarl$(soext)
+-	cd $(RTSDIR); dsymutil libgnat$(hyphen)$(LIBRARY_VERSION)$(soext)
+-	cd $(RTSDIR); dsymutil libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext)
++		-o $(libgnala).1 \
++		$(GNATRTL_LINEARALGEBRA_OBJS) \
++		$(SO_OPTS)$(libgnala).1
++	cd $(build_dir); $(LN_S) $(libgnala).1 $(libgnala)
++endif
+ 
+-gnatlib-shared-vms:
+-	$(MAKE) $(FLAGS_TO_PASS) \
+-             GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+-	     GNATLIBCFLAGS="$(GNATLIBCFLAGS)" \
+-	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+-	     MULTISUBDIR="$(MULTISUBDIR)" \
+-	     THREAD_KIND="$(THREAD_KIND)" \
+-             gnatlib
+-	$(RM) $(RTSDIR)/libgna*$(soext)
+-	cd $(RTSDIR) && \
+-	../../gnatsym -s SYMVEC_$$$$.opt \
+-	$(LIBGNAT_OBJS) $(GNATRTL_NONTASKING_OBJS) && \
+-	../../xgcc -g -B../../ -shared -shared-libgcc \
+-	   -o libgnat$(hyphen)$(LIBRARY_VERSION)$(soext) libgnat.a \
+-	   sys\$$library:trace.exe \
+-	   --for-linker=/noinform \
+-	   --for-linker=SYMVEC_$$$$.opt \
+-	   --for-linker=gsmatch=equal,$(GSMATCH_VERSION)
+-	cd $(RTSDIR) && \
+-	../../gnatsym -s SYMVEC_$$$$.opt \
+-	$(GNATRTL_TASKING_OBJS) && \
+-	../../xgcc -g -B../../ -shared -shared-libgcc \
+-	   -o libgnarl$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-	   libgnarl.a libgnat$(hyphen)$(LIBRARY_VERSION)$(soext) \
+-	   sys\$$library:trace.exe \
+-	   --for-linker=/noinform \
+-	   --for-linker=SYMVEC_$$$$.opt \
+-	   --for-linker=gsmatch=equal,$(GSMATCH_VERSION)
++gnatlib-shared-dual: gnatlib-static-zcx gnatlib-static-sjlj gnatlib-shared-zcx
+ 
+-gnatlib-shared:
++gnatlib-shared-zcx: rts = $(subst gnatlib,rts,$@)
++gnatlib-shared-zcx: gnatlib-sources-zcx/a-except.ads
++	if [ ! -d $(rts) ] ; then \
++	    cp -a gnatlib-sources-zcx $(rts); \
++	    $(MV) $(rts)/s.ads $(rts)/system.ads; \
++	fi
+ 	$(MAKE) $(FLAGS_TO_PASS) \
++	     EH_MECHANISM="-gcc" \
+              GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+ 	     GNATLIBCFLAGS="$(GNATLIBCFLAGS)" \
+ 	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+ 	     MULTISUBDIR="$(MULTISUBDIR)" \
+ 	     THREAD_KIND="$(THREAD_KIND)" \
+ 	     TARGET_LIBGCC2_CFLAGS="$(TARGET_LIBGCC2_CFLAGS)" \
+-             $(GNATLIB_SHARED)
++	     $(rts)/$(libgnat)
+ 
+-gnatlib-sjlj:
+-	$(MAKE) $(FLAGS_TO_PASS) EH_MECHANISM="" \
+-	THREAD_KIND="$(THREAD_KIND)" ../stamp-gnatlib1-$(RTSDIR)
+-	sed -e 's/ZCX_By_Default.*/ZCX_By_Default            : constant Boolean := False;/' $(RTSDIR)/system.ads > $(RTSDIR)/s.ads
+-	$(MV) $(RTSDIR)/s.ads $(RTSDIR)/system.ads
++gnatlib-static-sjlj: rts = $(subst gnatlib,rts,$@)
++gnatlib-static-sjlj: gnatlib-sources-sjlj/a-except.ads
++	if [ ! -d $(rts) ] ; then \
++	    cp -a gnatlib-sources-sjlj $(rts); \
++	    $(MV) $(rts)/s.ads $(rts)/system.ads; \
++	fi
+ 	$(MAKE) $(FLAGS_TO_PASS) \
+ 	     EH_MECHANISM="" \
+ 	     GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+@@ -2576,13 +2503,15 @@
+ 	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+ 	     MULTISUBDIR="$(MULTISUBDIR)" \
+ 	     THREAD_KIND="$(THREAD_KIND)" \
+-	     TARGET_LIBGCC2_CFLAGS="$(TARGET_LIBGCC2_CFLAGS)" gnatlib
++	     TARGET_LIBGCC2_CFLAGS="$(TARGET_LIBGCC2_CFLAGS)" \
++	     $(rts)/libgnat$(arext)
+ 
+-gnatlib-zcx:
+-	$(MAKE) $(FLAGS_TO_PASS) EH_MECHANISM="-gcc" \
+-	THREAD_KIND="$(THREAD_KIND)" ../stamp-gnatlib1-$(RTSDIR)
+-	sed -e 's/ZCX_By_Default.*/ZCX_By_Default            : constant Boolean := True;/' $(RTSDIR)/system.ads > $(RTSDIR)/s.ads
+-	$(MV) $(RTSDIR)/s.ads $(RTSDIR)/system.ads
++gnatlib-static-zcx: rts = $(subst gnatlib,rts,$@)
++gnatlib-static-zcx: gnatlib-sources-zcx/a-except.ads
++	if [ ! -d $(rts) ] ; then \
++	    cp -a gnatlib-sources-zcx $(rts); \
++	    $(MV) $(rts)/s.ads $(rts)/system.ads; \
++	fi
+ 	$(MAKE) $(FLAGS_TO_PASS) \
+ 	     EH_MECHANISM="-gcc" \
+ 	     GNATLIBFLAGS="$(GNATLIBFLAGS)" \
+@@ -2590,7 +2519,8 @@
+ 	     GNATLIBCFLAGS_FOR_C="$(GNATLIBCFLAGS_FOR_C)" \
+ 	     MULTISUBDIR="$(MULTISUBDIR)" \
+ 	     THREAD_KIND="$(THREAD_KIND)" \
+-	     TARGET_LIBGCC2_CFLAGS="$(TARGET_LIBGCC2_CFLAGS)" gnatlib
++	     TARGET_LIBGCC2_CFLAGS="$(TARGET_LIBGCC2_CFLAGS)" \
++	     $(rts)/libgnat$(arext)
+ 
+ # .s files for cross-building
+ gnat-cross: force
+@@ -2598,6 +2528,10 @@
+ 
+ ADA_INCLUDE_DIR = $(libsubdir)/adainclude
+ ADA_RTL_OBJ_DIR = $(libsubdir)/adalib
++ADA_NATIVE_INCLUDE_DIR = $(libsubdir)/rts-native/adainclude
++ADA_NATIVE_RTL_OBJ_DIR = $(libsubdir)/rts-native/adalib
++ADA_SJLJ_INCLUDE_DIR = $(libsubdir)/rts-sjlj/adainclude
++ADA_SJLJ_RTL_OBJ_DIR = $(libsubdir)/rts-sjlj/adalib
+ 
+ # force no sibling call optimization on s-traceb.o so the number of stack
+ # frames to be skipped when computing a call chain is not modified by
+Index: b/src/gnattools/Makefile.in
+===================================================================
+--- a/src/gnattools/Makefile.in
++++ b/src/gnattools/Makefile.in
+@@ -35,12 +35,13 @@
+ LN_S=@LN_S@
+ target_noncanonical=@target_noncanonical@
+ 
++RTS=../gcc/ada/rts-shared-zcx
+ CFLAGS=-O2 -Wall
+ ADA_CFLAGS=-O2 -gnatn
+-ADA_INCLUDES=-nostdinc -I- -I. -I../gcc/ada/rts -I../libgnatvsn -I../libgnatprj
++ADA_INCLUDES=-nostdinc -I- -I. -I$(RTS) -I../libgnatvsn -I../libgnatprj
+ LIB_VERSION=$(strip $(shell grep ' Library_Version :' \
+               ../libgnatvsn/gnatvsn.ads | sed -e 's/.*"\(.*\)".*/\1/'))
+-ADA_LIBS := -L../gcc/ada/rts -lgnat-$(LIB_VERSION)
++ADA_LIBS := -L$(RTS) -lgnat-$(LIB_VERSION)
+ ADA_LIBS += -L../libgnatvsn -lgnatvsn
+ ADA_LIBS += -L../libgnatprj -lgnatprj
+ 
+@@ -110,6 +111,7 @@
+ 
+ .PHONY: gnattools gnattools-native gnattools-cross regnattools
+ gnattools: @default_gnattools_target@
++	(cd $(RTS); if [ -d obj ]; then mv obj/* .; rmdir obj; fi)
+ 
+ BODIES := $(foreach f,$(OBJECTS),$(wildcard $(patsubst %.o,@srcdir@/../gcc/ada/%.adb,$(f))))
+ SPECS  := $(foreach f,$(OBJECTS),$(wildcard $(patsubst %.o,@srcdir@/../gcc/ada/%.ads,$(f))))
+@@ -120,9 +122,12 @@
+ 	for file in $(BODIES) $(SPECS); do \
+ 	   $(LN_S) -f $$file .; \
+ 	done
++# Move the RTS object files away lest they be linked statically into the
++# tools.  Only the .ali, .a and .so files must remain.
++	(cd $(RTS); mkdir obj; mv *.o obj; chmod a-wx *.ali)
+ 	touch $@
+ 
+-gnattools-native: ../gcc/ada/rts/libgnat-$(LIB_VERSION).so
++gnattools-native: $(RTS)/libgnat-$(LIB_VERSION).so
+ gnattools-native: ../libgnatvsn/libgnatvsn.so
+ gnattools-native: stamp-gnattools-sources
+ gnattools-native: $(TOOLS)
+@@ -138,7 +143,7 @@
+ 	$(GCC) -o $@ $^ \
+ 	   ../libgnatprj/libgnatprj.a \
+ 	   ../libgnatvsn/libgnatvsn.a \
+-	   ../gcc/ada/rts/libgnat.a \
++	   ../gcc/ada/rts-static-zcx/libgnat.a \
+ 	   ../libiberty/libiberty.a
+ 
+ gnatlink: $(GNATLINK_OBJS) b_gnatl.o
+@@ -156,7 +161,7 @@
+ 	$(GCC) -o $@ $(ADA_CFLAGS) $^ \
+ 	   ../libgnatprj/libgnatprj.a \
+ 	   ../libgnatvsn/libgnatvsn.a \
+-	   ../gcc/ada/rts/libgnat.a \
++	   ../gcc/ada/rts-static-zcx/libgnat.a \
+ 	   ../libiberty/libiberty.a
+ 
+ gnatmake: $(GNATMAKE_OBJS) b_gnatm.o
+Index: b/src/libgnatprj/Makefile.in
+===================================================================
+--- a/src/libgnatprj/Makefile.in
++++ b/src/libgnatprj/Makefile.in
+@@ -25,7 +25,8 @@
+                  @srcdir@/../gcc/ada/gnatvsn.ads | \
+ 	         sed -e 's/.*"\(.*\)".*/\1/'))
+ GCC:=../gcc/xgcc -B../gcc/
+-LIBGNAT_JUST_BUILT := -nostdinc -I../gcc/ada/rts
++RTS:=../gcc/ada/rts-shared-zcx
++LIBGNAT_JUST_BUILT := -nostdinc -I$(RTS)
+ LIBGNATVSN := -I../libgnatvsn
+ CFLAGS := -g -O2
+ ADAFLAGS := -g -O2 -gnatn
+@@ -70,7 +71,7 @@
+ libgnatprj.so.$(LIB_VERSION): $(addprefix obj-shared/,$(OBJECTS))
+ 	: # Make libgnatprj.so
+ 	$(GCC) -o $@ -shared -fPIC -Wl,--soname,$@ $^ \
+-	   -L../gcc/ada/rts -lgnat-$(LIB_VERSION) \
++	   -L$(RTS) -lgnat-$(LIB_VERSION) \
+ 	   -L../libgnatvsn -lgnatvsn
+ 	$(LN_S) -f libgnatprj.so.$(LIB_VERSION) libgnatprj.so
+ 	chmod a=r obj-shared/*.ali
+Index: b/src/libgnatvsn/Makefile.in
+===================================================================
+--- a/src/libgnatvsn/Makefile.in
++++ b/src/libgnatvsn/Makefile.in
+@@ -25,7 +25,8 @@
+                  @srcdir@/../gcc/ada/gnatvsn.ads | \
+ 	         sed -e 's/.*"\(.*\)".*/\1/'))
+ GCC:=../gcc/xgcc -B../gcc/
+-LIBGNAT_JUST_BUILT := -nostdinc -I../gcc/ada/rts
++RTS:=../gcc/ada/rts-shared-zcx
++LIBGNAT_JUST_BUILT := -nostdinc -I$(RTS)
+ CFLAGS := -g -O2 -gnatn
+ BASEVER := $(shell cat @srcdir@/../gcc/BASE-VER)
+ DEVPHASE := $(shell cat @srcdir@/../gcc/DEV-PHASE)
+@@ -66,7 +67,7 @@
+ libgnatvsn.so.$(LIB_VERSION): $(addprefix obj-shared/,$(OBJECTS))
+ 	: # Make libgnatvsn.so
+ 	$(GCC) -o $@ -shared -fPIC -Wl,--soname,$@ $^ \
+-	   -L../gcc/ada/rts -lgnat-$(LIB_VERSION)
++	   -L$(RTS) -lgnat-$(LIB_VERSION)
+ 	ln -s libgnatvsn.so.$(LIB_VERSION) libgnatvsn.so
+ 	chmod a=r obj-shared/*.ali
+ # Make the .ali files, but not the .o files, visible to the gnat tools.
+Index: b/src/gcc/ada/gcc-interface/Make-lang.in
+===================================================================
+--- a/src/gcc/ada/gcc-interface/Make-lang.in
++++ b/src/gcc/ada/gcc-interface/Make-lang.in
+@@ -70,7 +70,8 @@
+ 	"ADA_FOR_TARGET=$(ADA_FOR_TARGET)"	\
+ 	"INSTALL=$(INSTALL)" 			\
+ 	"INSTALL_DATA=$(INSTALL_DATA)"		\
+-	"INSTALL_PROGRAM=$(INSTALL_PROGRAM)"
++	"INSTALL_PROGRAM=$(INSTALL_PROGRAM)"	\
++	"GCC_FOR_TARGET=$(GCC_FOR_TARGET)"
+ 
+ # Say how to compile Ada programs.
+ .SUFFIXES: .ada .adb .ads

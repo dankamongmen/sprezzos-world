@@ -1,0 +1,237 @@
+-*- Outline -*-
+
+Read this file if you are a Debian Developer or would like to become
+one, or if you would like to create your own binary packages of GCC.
+
+* Overview
+
+From the GCC sources, Debian currently builds 3 source packages and
+almost 100 binary packages, using a single set of build scripts.  The
+3 source packages are:
+
+gcc-4.3: C, C++, Fortran, Objective-C and Objective-C++, plus many
+         common libraries like libssp, libmudflap, and libgcc.
+gcj-4.3: Java.
+gnat-4.3: Ada.
+
+The way we do this is quite peculiar, so listen up :)
+
+When we build from the gcc-4.3 source package, we produce, among many
+others, a gcc-4.3-source binary package that contains the pristine
+upstream tarball and some Debian-specific patches.  Any user can then
+install this package on their Debian system, and will have the full
+souces in /usr/src/gcc-4.3/gcc-<timestamp>.tar.bz2, along with the
+Makefile snippets that unpack and patch them.
+
+The intended use for this package is twofold: (a) allow users to build
+their own cross-compilers, and (b) build the other two packages,
+gcj-4.3 and gnat-4.3.
+
+For gcj-4.3 and gnat-4.3, the "source tarball" just contains an empty
+directory; e.g.:
+
+$ tar tzf gnat-4.3_4.3-20070609.orig.tar.gz
+gnat-4.3-4.3-20070609.orig/
+
+The build scripts for all source packages are the same, and they are
+included, as usual, in the .diff.gz file.
+
+* The build sequence
+
+As for all other Debian packages, you build GCC by calling
+debian/rules.
+
+The first thing debian/rules does it to look at the top-most entry in
+debian/changelog: this tells it which source package it is building.
+For example, if the first entry in debian/changelog reads:
+
+gcj-4.3 (4.3-20070609-1) unstable; urgency=low
+
+  * Upload as gcj-4.3.
+
+ -- Ludovic Brenta <lbrenta@debian.org>  Tue, 26 Jun 2007 00:26:42 +0200
+
+then, debian/rules will build only the Java binary packages.
+
+The second step is to unpack the GCC source tarball.  This tarball is
+either in the build directory (when building gcc-4.3), or in
+/usr/src/gcc-4.3/gcc-<timestamp>.tar.bz2 (when building the other
+source packages).
+
+The third step is to build debian/control from debian/control.m4 and a
+complex set of rules specified in debian/rules.conf.  The resulting
+control file contains only the binary packages to be built.
+
+The fourth step is to select which patches to apply (this is done in
+debian/rules.defs), and then to apply the selected patches (see
+debian/rules.patch).
+
+The fifth step is to create a "build" directory, cd into it, call
+../src/configure, and bootstrap the compiler and libraries selected.
+This is in debian/rules2.
+
+The sixth step is to call "make install" in the build directory: this
+installs the compiler and libraries into debian/tmp
+(i.e. debian/tmp/usr/bin/gcc, etc.)
+
+The seventh step is to run the GCC test suite (this actually takes at
+least as much time as bootstrapping, and you can disable it by setting
+WITHOUT_CHECK to "yes" in the environment).
+
+The eighth step is to build the binary packages, i.e. the .debs.  This
+is done by a set of language- and architecture-dependent Makefile
+snippets in the debian/rules.d/ directory, which move files from the
+debian/tmp tree to the debian/<package> trees.
+
+* Making your own packages
+
+In this example, we will build our own gnat-4.3 package.
+
+1) Create a .orig.tar.gz tarball containing a single, empty directory.
+
+$ mkdir gnat-4.3-4.3-20070609.orig
+$ tar czf gnat-4.3_4.3-20070609.orig.tar.gz gnat-4.3-4.3-20070609.orig
+
+2) Install gcc-4.3-source, which contains the real sources:
+
+# apt-get install gcc-4.3-source
+
+3) Create a build directory:
+
+$ mkdir gnat-4.3-4.3-20070609; cd gnat-4.3-4.3-20070609
+
+4) Checkout from Subversion:
+
+$ svn checkout svn://svn.debian.org/gcccvs/branches/sid/gcc-4.3/debian
+
+5) Edit the debian/changelog file, adding a new entry at the top that
+   starts with "gnat-4.3" instead of "gcc-4.3".
+
+6) Generate the debian/control file, adjusted for gnat:
+
+$ debian/rules control
+
+7) Build:
+
+$ dpkg-buildpackage -rfakeroot
+
+* Hints
+
+You need a powerful machine to build GCC.  The larger, the better.
+The build scripts take advantage of as many CPU threads as are
+available in your box (for example: 2 threads on a dual-core amd64; 4
+threads on a dual-core POWER5; 32 threads on an 8-core UltraSPARC T1,
+etc.).
+
+If you have 2 GB or more of physical RAM, you can achieve maximum
+performance by building in a tmpfs, like this:
+
+1) as root, create the new tmpfs:
+
+# mount -t tmpfs -o size=1280m none /home/lbrenta/src/debian/ram
+
+By default, the tmpfs will be limited to half your physical RAM.  The
+beauty of it is that it only consumes as much physical RAM as
+necessary to hold the files in it; deleting files frees up RAM.
+
+2) As your regular user, create the working directory in the tmpfs
+
+$ cp --archive ~/src/debian/gcc-4.3-4.3-20070901 ~/src/debian/ram
+
+3) Build in there.  On my dual-core, 2 GHz amd64, it takes 34 minutes
+   to build gnat, and the tmpfs takes 992 MiB of physical RAM but
+   exceeds 1 GiB during the build.
+
+Note that the build process uses a lot of temporary files.  Your $TEMP
+directory should therefore also be in a ram disk.  You can achieve
+that either by mounting it as tmpfs, or by setting TEMP to point to
+~/src/debian/ram.
+
+Also note that each thread in your processor(s) will run a compiler in
+it and use up RAM.  Therefore your physical memory should be:
+
+Physical_RAM >= 1.2 + 0.4 * Threads (in GiB)
+
+(this is an estimate; your mileage may vary).  If you have less
+physical RAM than recommended, reduce the number of threads allocated
+to the build process, or do not use a tmpfs to build.
+
+* Patching GCC
+
+Debian applies a large number of patches to GCC as part of the build
+process.  The patches are shell scripts located in debian/patches.
+The file debian/rules.defs selects the language front-ends and
+libraries to build.  Then, based on that, debian/rules.patch selects
+which patches to apply and in which order, then applies them and
+produces a file listing the applied patches in order in
+stamps/02-patch-stamp.
+
+There is currently no tool to help modify patches; you have to do it
+by hand.  Here is one possible way to do it:
+
+1) Apply all patches up to and EXCLUDING the patch you intend to
+   modify, in order.
+
+2) Make a deep copy of the src directory, e.g.
+   $ cp --archive src src.bak
+
+3) Apply the patch you intend to modify.
+
+4) Open the .dpatch file in your editor and remove the entire patch
+   section; leave alone the shell script part at the top.
+
+5) Change the files you want in the src directory.  After making
+   changes, you can experiment with
+   $ make -C build -jK
+   (where K is the number of processor threads you have)
+
+6) $ diff -rNu src.bak src >> debian/patches/<file>.dpatch
+
+7) Apply all remaining patches, to see if your change broke any of
+   them.
+
+8) $ svn commit debian/patches/<file>.dpatch
+
+If you want to add a new patch, the procedure is similar.  You must
+first choose where in the list of patches you want to insert your new
+patch.  Then, apply all patches up to that point and start editing.
+Do not forget to add a reference to your patch at the proper place in
+debian/rules.patch.
+
+** Patching GCC with Quilt
+
+The above method uses an entire copy of the source tree, which is
+currently 474 megabytes in size.  If you are in a one-gigabyte ram
+disk (see Hints above), this may be a problem.  One solution to this
+problem is to use quilt, which will only keep copies of the files
+touched by patches, not all files.  It also automates the updating of
+a patch after you change the sources.
+
+Quilt however does not take into account the selection of patches made
+in debian/rules.defs; instead it has a static list of patches.  After
+calling "debian/rules patch", you can generate such a list like this:
+
+$ egrep '^[^ ]+:' stamps/02-patch-stamp | \
+  sed 's!:!.dpatch -p0!' > debian/patches/series
+
+Unfortunately, not all patches are applied with -p0; you must then
+edit debian/patches/series by hand to replace -p0 with -p1 for a few
+patches.
+
+Once you have your debian/patches/series:
+
+$ debian/rules unpatch
+$ export QUILT_PATCHES=$PWD/debian/patches
+$ cd src
+$ quilt push -a (or quilt push <patch_name>)
+edit files at will; quilt add <file_name> to add a new file to the patch
+$ make -C ../build
+$ quilt refresh
+$ quilt push -a # check that no patch is broken
+$ quilt pop -a
+$ cd ..
+$ debian/rules clean build
+$ svn commit
+
+-- 
+Ludovic Brenta, 2007-12-05.

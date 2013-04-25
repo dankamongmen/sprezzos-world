@@ -705,3 +705,11 @@ $(TUPI): $(SPREZZ)/tupi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf tupi_$(tupi_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: sonic-visualiser
+sonic-visualiser:$(SONICVISUALISER)_$(ARCH).deb
+$(SONICVISUALISER): $(SPREZZ)/sonic-visualiser/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sonic-visualiser_$(sonic-visualiser_UPVER).orig.tar.gz $(TARARGS) $@
+

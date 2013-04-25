@@ -1,0 +1,85 @@
+# DP: In gnatlink, pass the options and libraries after objects to the
+# DP: linker to avoid link failures with --as-needed. Closes: #680292.
+
+--- a/src/gcc/ada/mlib-tgt-specific-linux.adb
++++ b/src/gcc/ada/mlib-tgt-specific-linux.adb
+@@ -81,19 +81,54 @@
+       Version_Arg          : String_Access;
+       Symbolic_Link_Needed : Boolean := False;
+ 
++      N_Options    : Argument_List := Options;
++      Options_Last : Natural := N_Options'Last;
++      --  After moving -lxxx to Options_2, N_Options up to index Options_Last
++      --  will contain the Options to pass to MLib.Utl.Gcc.
++
++      Real_Options_2 : Argument_List (1 .. Options'Length);
++      Real_Options_2_Last : Natural := 0;
++      --  Real_Options_2 up to index Real_Options_2_Last will contain the
++      --  Options_2 to pass to MLib.Utl.Gcc.
++
+    begin
+       if Opt.Verbose_Mode then
+          Write_Str ("building relocatable shared library ");
+          Write_Line (Lib_Path);
+       end if;
+ 
++      --  Move all -lxxx to Options_2
++
++      declare
++         Index : Natural := N_Options'First;
++         Arg   : String_Access;
++
++      begin
++         while Index <= Options_Last loop
++            Arg := N_Options (Index);
++
++            if Arg'Length > 2
++              and then Arg (Arg'First .. Arg'First + 1) = "-l"
++            then
++               Real_Options_2_Last := Real_Options_2_Last + 1;
++               Real_Options_2 (Real_Options_2_Last) := Arg;
++               N_Options (Index .. Options_Last - 1) :=
++                 N_Options (Index + 1 .. Options_Last);
++               Options_Last := Options_Last - 1;
++
++            else
++               Index := Index + 1;
++            end if;
++         end loop;
++      end;
++
+       if Lib_Version = "" then
+          Utl.Gcc
+            (Output_File => Lib_Path,
+             Objects     => Ofiles,
+-            Options     => Options,
++            Options     => N_Options (N_Options'First .. Options_Last),
+             Driver_Name => Driver_Name,
+-            Options_2   => No_Argument_List);
++            Options_2   => Real_Options_2 (1 .. Real_Options_2_Last));
+ 
+       else
+          declare
+@@ -111,18 +146,18 @@
+                Utl.Gcc
+                  (Output_File => Lib_Version,
+                   Objects     => Ofiles,
+-                  Options     => Options & Version_Arg,
++		  Options     => N_Options (N_Options'First .. Options_Last) & Version_Arg,
+                   Driver_Name => Driver_Name,
+-                  Options_2   => No_Argument_List);
++                  Options_2   => Real_Options_2 (1 .. Real_Options_2_Last));
+                Symbolic_Link_Needed := Lib_Version /= Lib_Path;
+ 
+             else
+                Utl.Gcc
+                  (Output_File => Lib_Dir & Directory_Separator & Lib_Version,
+                   Objects     => Ofiles,
+-                  Options     => Options & Version_Arg,
++		  Options     => N_Options (N_Options'First .. Options_Last) & Version_Arg,
+                   Driver_Name => Driver_Name,
+-                  Options_2   => No_Argument_List);
++                  Options_2   => Real_Options_2 (1 .. Real_Options_2_Last));
+                Symbolic_Link_Needed :=
+                  Lib_Dir & Directory_Separator & Lib_Version /= Lib_Path;
+             end if;
