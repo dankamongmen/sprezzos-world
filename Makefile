@@ -11208,3 +11208,11 @@ $(MADLIB): $(SPREZZ)/madlib/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf madlib_$(madlib_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: brailleutils
+brailleutils:$(BRAILLEUTILS)_$(ARCH).deb
+$(BRAILLEUTILS): $(SPREZZ)/brailleutils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf brailleutils_$(brailleutils_UPVER).orig.tar.gz $(TARARGS) $@
+
