@@ -11200,3 +11200,11 @@ $(GCC4.7): $(SPREZZ)/gcc-4.7/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gcc-4.7_$(gcc-4.7_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: madlib
+madlib:$(MADLIB)_$(ARCH).deb
+$(MADLIB): $(SPREZZ)/madlib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf madlib_$(madlib_UPVER).orig.tar.gz $(TARARGS) $@
+
