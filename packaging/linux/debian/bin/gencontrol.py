@@ -34,7 +34,6 @@ class Gencontrol(Base):
         'relations': {
         },
         'xen': {
-            'dom0-support': config.SchemaItemBoolean(),
             'flavours': config.SchemaItemList(),
             'versions': config.SchemaItemList(),
         }
@@ -60,6 +59,24 @@ class Gencontrol(Base):
             'SOURCEVERSION': self.version.complete,
         })
 
+    def do_main_makefile(self, makefile, makeflags, extra):
+        fs_enabled = [featureset
+                      for featureset in self.config['base', ]['featuresets']
+                      if self.config.merge('base', None, featureset).get('enabled', True)]
+        for featureset in fs_enabled:
+            makeflags_featureset = makeflags.copy()
+            makeflags_featureset['FEATURESET'] = featureset
+            cmds_source = ["$(MAKE) -f debian/rules.real source-featureset %s"
+                           % makeflags_featureset]
+            makefile.add('source_%s_real' % featureset, cmds=cmds_source)
+            makefile.add('source_%s' % featureset,
+                         ['source_%s_real' % featureset])
+            makefile.add('source', ['source_%s' % featureset])
+
+        makeflags = makeflags.copy()
+        makeflags['ALL_FEATURESETS'] = ' '.join(fs_enabled)
+        super(Gencontrol, self).do_main_makefile(makefile, makeflags, extra)
+
     def do_main_packages(self, packages, vars, makeflags, extra):
         packages.extend(self.process_packages(self.templates["control.main"], self.vars))
 
@@ -72,6 +89,10 @@ class Gencontrol(Base):
         self._setup_makeflags(self.arch_makeflags, makeflags, config_base)
 
     def do_arch_packages(self, packages, makefile, arch, vars, makeflags, extra):
+        # Some userland architectures require kernels from another
+        # (Debian) architecture, e.g. x32/amd64.
+        foreign_kernel = not self.config['base', arch].get('featuresets')
+
         if self.version.linux_modifier is None:
             try:
                 vars['abiname'] = '-%s' % self.config['abi', arch]['abiname']
@@ -79,8 +100,12 @@ class Gencontrol(Base):
                 vars['abiname'] = self.abiname
             makeflags['ABINAME'] = vars['abiname']
 
-        headers_arch = self.templates["control.headers.arch"]
-        packages_headers_arch = self.process_packages(headers_arch, vars)
+        if foreign_kernel:
+            packages_headers_arch = []
+            makeflags['FOREIGN_KERNEL'] = True
+        else:
+            headers_arch = self.templates["control.headers.arch"]
+            packages_headers_arch = self.process_packages(headers_arch, vars)
 
         libc_dev = self.templates["control.libc-dev"]
         packages_headers_arch[0:0] = self.process_packages(libc_dev, {})
@@ -91,44 +116,49 @@ class Gencontrol(Base):
         self.merge_packages(packages, packages_headers_arch, arch)
 
         cmds_binary_arch = ["$(MAKE) -f debian/rules.real binary-arch-arch %s" % makeflags]
-        cmds_source = ["$(MAKE) -f debian/rules.real source-arch %s" % makeflags]
         makefile.add('binary-arch_%s_real' % arch, cmds=cmds_binary_arch)
-        makefile.add('source_%s_real' % arch, cmds=cmds_source)
 
         # Shortcut to aid architecture bootstrapping
         makefile.add('binary-libc-dev_%s' % arch,
-                     ['source_%s_real' % arch],
+                     ['source_none_real'],
                      ["$(MAKE) -f debian/rules.real install-libc-dev_%s %s" %
                       (arch, makeflags)])
 
-        # Add udebs using kernel-wedge
-        installer_def_dir = 'debian/installer'
-        installer_arch_dir = os.path.join(installer_def_dir, arch)
-        if os.path.isdir(installer_arch_dir):
-            kw_env = os.environ.copy()
-            kw_env['KW_DEFCONFIG_DIR'] = installer_def_dir
-            kw_env['KW_CONFIG_DIR'] = installer_arch_dir
-            kw_proc = subprocess.Popen(
-                ['kernel-wedge', 'gen-control',
-                 self.abiname],
-                stdout=subprocess.PIPE,
-                env=kw_env)
-            udeb_packages = read_control(kw_proc.stdout)
-            kw_proc.wait()
-            if kw_proc.returncode != 0:
-                raise RuntimeError('kernel-wedge exited with code %d' %
-                                   kw_proc.returncode)
+        if os.getenv('DEBIAN_KERNEL_DISABLE_INSTALLER'):
+            if self.changelog[0].distribution == 'UNRELEASED':
+                import warnings
+                warnings.warn(u'Disable installer modules on request (DEBIAN_KERNEL_DISABLE_INSTALLER set)')
+            else:
+                raise RuntimeError(u'Unable to disable installer modules in release build (DEBIAN_KERNEL_DISABLE_INSTALLER set)')
+        else:
+            # Add udebs using kernel-wedge
+            installer_def_dir = 'debian/installer'
+            installer_arch_dir = os.path.join(installer_def_dir, arch)
+            if os.path.isdir(installer_arch_dir):
+                kw_env = os.environ.copy()
+                kw_env['KW_DEFCONFIG_DIR'] = installer_def_dir
+                kw_env['KW_CONFIG_DIR'] = installer_arch_dir
+                kw_proc = subprocess.Popen(
+                    ['kernel-wedge', 'gen-control',
+                     self.abiname],
+                    stdout=subprocess.PIPE,
+                    env=kw_env)
+                udeb_packages = read_control(kw_proc.stdout)
+                kw_proc.wait()
+                if kw_proc.returncode != 0:
+                    raise RuntimeError('kernel-wedge exited with code %d' %
+                                       kw_proc.returncode)
 
-            self.merge_packages(packages, udeb_packages, arch)
+                self.merge_packages(packages, udeb_packages, arch)
 
-            # These packages must be built after the per-flavour/
-            # per-featureset packages.
-            makefile.add(
-                'binary-arch_%s' % arch,
-                cmds=["$(MAKE) -f debian/rules.real install-udeb_%s %s "
-                        "PACKAGE_NAMES='%s'" %
-                        (arch, makeflags,
-                         ' '.join(p['Package'] for p in udeb_packages))])
+                # These packages must be built after the per-flavour/
+                # per-featureset packages.
+                makefile.add(
+                    'binary-arch_%s' % arch,
+                    cmds=["$(MAKE) -f debian/rules.real install-udeb_%s %s "
+                            "PACKAGE_NAMES='%s'" %
+                            (arch, makeflags,
+                             ' '.join(p['Package'] for p in udeb_packages))])
 
     def do_featureset_setup(self, vars, makeflags, arch, featureset, extra):
         config_base = self.config.merge('base', arch, featureset)
@@ -141,9 +171,7 @@ class Gencontrol(Base):
         self.merge_packages(packages, (package_headers,), arch)
 
         cmds_binary_arch = ["$(MAKE) -f debian/rules.real binary-arch-featureset %s" % makeflags]
-        cmds_source = ["$(MAKE) -f debian/rules.real source-featureset %s" % makeflags]
         makefile.add('binary-arch_%s_%s_real' % (arch, featureset), cmds=cmds_binary_arch)
-        makefile.add('source_%s_%s_real' % (arch, featureset), cmds=cmds_source)
 
     flavour_makeflags_base = (
         ('compiler', 'COMPILER', False),
@@ -241,17 +269,14 @@ class Gencontrol(Base):
         packages_dummy = []
         packages_own = []
 
-        if config_entry_image['type'] == 'plain-s390-tape':
-            image = self.templates["control.image.type-standalone"]
-        else:
-            image = self.templates["control.image.type-%s" % config_entry_image['type']]
+        image = self.templates["control.image.type-%s" % config_entry_image['type']]
 
         config_entry_xen = self.config.merge('xen', arch, featureset, flavour)
-        if config_entry_xen.get('dom0-support', False):
+        if config_entry_xen:
             p = self.process_packages(self.templates['control.xen-linux-system'], vars)
             l = PackageRelationGroup()
             for xen_flavour in config_entry_xen['flavours']:
-                l.append("xen-hypervisor-%s" % xen_flavour)
+                l.append("xen-system-%s" % xen_flavour)
             p[0]['Depends'].append(l)
             packages_dummy.extend(p)
 
@@ -269,10 +294,13 @@ class Gencontrol(Base):
 
         build_debug = config_entry_build.get('debug-info')
 
-        if build_debug and self.changelog[0].distribution == 'UNRELEASED' and os.getenv('DEBIAN_KERNEL_DISABLE_DEBUG'):
-            import warnings
-            warnings.warn(u'Disable building of debug infos on request (DEBIAN_KERNEL_DISABLE_DEBUG)')
-            build_debug = False
+        if os.getenv('DEBIAN_KERNEL_DISABLE_DEBUG'):
+            if self.changelog[0].distribution == 'UNRELEASED':
+                import warnings
+                warnings.warn(u'Disable debug infos on request (DEBIAN_KERNEL_DISABLE_DEBUG set)')
+                build_debug = False
+            else:
+                raise RuntimeError(u'Unable to disable debug infos in release build (DEBIAN_KERNEL_DISABLE_DEBUG set)')
 
         if build_debug:
             makeflags['DEBUG'] = True
@@ -315,6 +343,7 @@ class Gencontrol(Base):
             return check_config_files(configs)
 
         kconfig = check_config('config', True)
+        kconfig.extend(check_config("kernelarch-%s/config" % config_entry_base['kernel-arch'], False))
         kconfig.extend(check_config("%s/config" % arch, True, arch))
         kconfig.extend(check_config("%s/config.%s" % (arch, flavour), False, arch, None, flavour))
         kconfig.extend(check_config("featureset-%s/config" % featureset, False, None, featureset))
@@ -327,25 +356,11 @@ class Gencontrol(Base):
         cmds_binary_arch = ["$(MAKE) -f debian/rules.real binary-arch-flavour %s" % makeflags]
         if packages_dummy:
             cmds_binary_arch.append("$(MAKE) -f debian/rules.real install-dummy DH_OPTIONS='%s' %s" % (' '.join(["-p%s" % i['Package'] for i in packages_dummy]), makeflags))
-        cmds_build = ["$(MAKE) -f debian/rules.real build %s" % makeflags]
+        cmds_build = ["$(MAKE) -f debian/rules.real build-arch %s" % makeflags]
         cmds_setup = ["$(MAKE) -f debian/rules.real setup-flavour %s" % makeflags]
         makefile.add('binary-arch_%s_%s_%s_real' % (arch, featureset, flavour), cmds=cmds_binary_arch)
-        makefile.add('build_%s_%s_%s_real' % (arch, featureset, flavour), cmds=cmds_build)
+        makefile.add('build-arch_%s_%s_%s_real' % (arch, featureset, flavour), cmds=cmds_build)
         makefile.add('setup_%s_%s_%s_real' % (arch, featureset, flavour), cmds=cmds_setup)
-
-    def do_extra(self, packages, makefile):
-        apply = self.templates['patch.apply']
-
-        vars = {
-            'revisions': 'orig base ' + ' '.join([i.revision for i in self.versions[::-1]]),
-            'upstream': self.version.upstream,
-            'linux_upstream': self.version.linux_upstream,
-            'abiname': self.abiname,
-        }
-
-        apply = self.substitute(apply, vars)
-
-        file('debian/bin/patch.apply', 'w').write(apply)
 
     def merge_packages(self, packages, new, arch):
         for new_package in new:
@@ -379,10 +394,7 @@ class Gencontrol(Base):
             self.abiname_part = ''
         else:
             self.abiname_part = '-%s' % self.config['abi', ]['abiname']
-        # XXX: We need to add another part until after wheezy
-        self.abiname = (re.sub('^(\d+\.\d+)(?=-|$)', r'\1.0',
-                               self.version.linux_upstream)
-                        + self.abiname_part)
+        self.abiname = self.version.linux_upstream + self.abiname_part
         self.vars = {
             'upstreamversion': self.version.linux_upstream,
             'version': self.version.linux_version,
