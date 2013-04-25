@@ -7306,7 +7306,7 @@ $(QEMUSYSTEM): $(SPREZZ)/qemu-system/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf qemu-system-$(qemu-system_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf qemu_$(qemu-system_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: qpdf
 qpdf:$(QPDF)_$(ARCH).deb
@@ -11215,4 +11215,12 @@ $(BRAILLEUTILS): $(SPREZZ)/brailleutils/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf brailleutils_$(brailleutils_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: device-tree-compiler
+device-tree-compiler:$(DEVICETREECOMPILER)_$(ARCH).deb
+$(DEVICETREECOMPILER): $(SPREZZ)/device-tree-compiler/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf device-tree-compiler_$(device-tree-compiler_UPVER).orig.tar.gz $(TARARGS) $@
 
