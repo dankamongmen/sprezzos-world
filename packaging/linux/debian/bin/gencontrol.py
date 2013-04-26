@@ -199,9 +199,9 @@ class Gencontrol(Base):
         vars['longclass'] = config_description.get('hardware-long') or vars['class']
 
         vars['localversion-image'] = vars['localversion']
-        override_localversion = config_image.get('override-localversion', None)
-        if override_localversion is not None:
-            vars['localversion-image'] = vars['localversion_headers'] + '-' + override_localversion
+        #override_localversion = config_image.get('override-localversion', None)
+        #if override_localversion is not None:
+        #    vars['localversion-image'] = vars['localversion_headers'] + '-' + override_localversion
 
         self._setup_makeflags(self.flavour_makeflags_base, makeflags, config_base)
         self._setup_makeflags(self.flavour_makeflags_image, makeflags, config_image)
