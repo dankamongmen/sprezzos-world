@@ -1,0 +1,94 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+VGABIOSES = cirrus stdvga vmware qxl isavga
+VGABIOS_TARGETS = $(addprefix vgabios-, $(addsuffix .bin, $(VGABIOSES)))
+BUILD_TARGETS = out/bios.bin $(VGABIOS_TARGETS) build-optionrom-stamp
+
+build build-arch build-indep: $(BUILD_TARGETS)
+
+define build-vgabios
+rm -rf out/
+rm -f .config
+for x in BUILD_VGABIOS=y $1; do echo CONFIG_$$x; done > .config
+$(MAKE) oldnoconfig
+$(MAKE) out/vgabios.bin
+mv out/vgabios.bin $@
+endef
+
+# Since we use the same .config (and make oldconfig),
+# we can't make all vgabios-*.bin in parallel with each other.
+# Ensure they're made one after another by specifying
+# that next depends on previous, ie, making a dependency chain.
+# We build all vgabioses first, and end up at main bios.bin,
+# since we need other files from main bios.bin build.
+
+vgabios-cirrus.bin:
+	$(call build-vgabios,VGA_CIRRUS=y VGA_PCI=y)
+vgabios-stdvga.bin: vgabios-cirrus.bin
+	$(call build-vgabios,VGA_BOCHS=y VGA_PCI=y)
+vgabios-vmware.bin: vgabios-stdvga.bin
+	$(call build-vgabios,VGA_BOCHS=y VGA_PCI=y OVERRIDE_PCI_ID=y VGA_VID=0x15ad VGA_DID=0x0405)
+vgabios-qxl.bin: vgabios-vmware.bin
+	$(call build-vgabios,VGA_BOCHS=y VGA_PCI=y OVERRIDE_PCI_ID=y VGA_VID=0x1b36 VGA_DID=0x0100)
+vgabios-isavga.bin: vgabios-qxl.bin
+	$(call build-vgabios,VGA_BOCHS=y VGA_PCI=n)
+
+out/bios.bin: vgabios-isavga.bin
+	rm -rf out/
+	rm -f .config
+	$(MAKE)
+
+build-optionrom-stamp:
+	$(MAKE) -C debian/optionrom/
+	chmod -x debian/optionrom/*.bin
+	ln -s kvmvapic.bin debian/optionrom/vapic.bin
+	touch $@
+
+clean:
+	dh_testdir
+	rm -f $(BUILD_TARGETS)
+	rm -f .config .config.old
+	rm -rf out/
+	rm -f tools/*pyc
+	$(MAKE) -C debian/optionrom/ clean
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	dh_install
+
+# Build architecture-independent files here.
+binary-arch: build install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs
+	dh_installman
+	dh_installchangelogs
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install

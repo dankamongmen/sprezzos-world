@@ -11240,3 +11240,11 @@ $(LIBUTEMPTER): $(SPREZZ)/libutempter/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libutempter_$(libutempter_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: seabios
+seabios:$(SEABIOS)_$(ARCH).deb
+$(SEABIOS): $(SPREZZ)/seabios/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf seabios_$(seabios_UPVER).orig.tar.gz $(TARARGS) $@
+
