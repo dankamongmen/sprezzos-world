@@ -11224,3 +11224,11 @@ $(DEVICETREECOMPILER): $(SPREZZ)/device-tree-compiler/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf device-tree-compiler_$(device-tree-compiler_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libiscsi
+libiscsi:$(LIBISCSI)_$(ARCH).deb
+$(LIBISCSI): $(SPREZZ)/libiscsi/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libiscsi_$(libiscsi_UPVER).orig.tar.gz $(TARARGS) $@
+

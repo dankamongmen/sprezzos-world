@@ -1,0 +1,110 @@
+commit f96bcc98166f15c308a9460519fc5b9d167baed7
+Author: Michael Tokarev <mjt@tls.msk.ru>
+Date:   Sat May 12 00:15:04 2012 +0400
+
+    always export iscsi_set_tcp_keepalive()
+    
+    Set only the (socket) options which are defined on a given platform.
+    The function becomes a no-op if no option is known at complie time.
+    Remove autoconf test for HAVE_TCP_KEEPALIVE too.
+    
+    Signed-off-by: Michael Tokarev <mjt@tls.msk.ru>
+
+diff --git a/configure.ac b/configure.ac
+index f971597..bb95018 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -38,16 +38,6 @@ if test x"$libiscsi_cv_HAVE_SOCK_SIN_LEN" = x"yes"; then
+     AC_DEFINE(HAVE_SOCK_SIN_LEN,1,[Whether the sockaddr_in struct has a sin_len property])
+ fi
+ 
+-AC_CACHE_CHECK([for tcp keepalive],libiscsi_cv_HAVE_TCP_KEEPALIVE,[
+-AC_TRY_COMPILE([#include <sys/socket.h>
+-#include <netinet/in.h>
+-#include <netinet/tcp.h>],
+-[int foo = TCP_KEEPCNT + TCP_KEEPIDLE + TCP_KEEPINTVL],
+-libiscsi_cv_HAVE_TCP_KEEPALIVE=yes,libiscsi_cv_HAVE_TCP_KEEPALIVE=no)])
+-if test x"$libiscsi_cv_HAVE_TCP_KEEPALIVE" = x"yes"; then
+-    AC_DEFINE(HAVE_TCP_KEEPALIVE,1,[Whether we have support for tcp keepalive socket options])
+-fi
+-
+ AC_CACHE_CHECK([for sys filio.h],libiscsi_cv_NEED_SYS_FILIO_H,[
+ AC_TRY_COMPILE([#include <stdint.h>
+ #include <sys/filio.h>],
+diff --git a/include/iscsi.h b/include/iscsi.h
+index f05919f..96af979 100644
+--- a/include/iscsi.h
++++ b/include/iscsi.h
+@@ -61,8 +61,8 @@ EXTERN int iscsi_service(struct iscsi_context *iscsi, int revents);
+ EXTERN int iscsi_queue_length(struct iscsi_context *iscsi);
+ 
+ /*
+- * To set tcp keepalive for the session
+- * ONLY available on platforms with tcp keepalive socket options
++ * To set tcp keepalive for the session.
++ * Only options supported by given platform (if any) are set.
+  */
+ int iscsi_set_tcp_keepalive(struct iscsi_context *iscsi, int idle, int count, int interval);
+ 
+diff --git a/lib/socket.c b/lib/socket.c
+index c88cdfb..37ef103 100644
+--- a/lib/socket.c
++++ b/lib/socket.c
+@@ -452,9 +452,7 @@ iscsi_service(struct iscsi_context *iscsi, int revents)
+ 			return -1;
+ 		}
+ 
+-#ifdef HAVE_TCP_KEEPALIVE
+ 		iscsi_set_tcp_keepalive(iscsi, 30, 3, 30);
+-#endif
+ 		iscsi->is_connected = 1;
+ 		iscsi->socket_status_cb(iscsi, SCSI_STATUS_GOOD, NULL,
+ 					iscsi->connect_data);
+@@ -532,39 +530,42 @@ iscsi_free_iscsi_inqueue(struct iscsi_in_pdu *inqueue)
+ 	}
+ }
+ 
+-#ifdef HAVE_TCP_KEEPALIVE
+ int iscsi_set_tcp_keepalive(struct iscsi_context *iscsi, int idle, int count, int interval)
+ {
+ 	int value;
+ 
++#ifdef SO_KEEPALIVE
+ 	value =1;
+ 	if (setsockopt(iscsi->fd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(value)) != 0) {
+ 		iscsi_set_error(iscsi, "TCP: Failed to set socket option SO_KEEPALIVE. Error %s(%d)", strerror(errno), errno);
+ 		return -1;
+ 	}
+-
++#endif
++#ifdef TCP_KEEPCNT
+ 	value = count;
+ 	if (setsockopt(iscsi->fd, SOL_TCP, TCP_KEEPCNT, &value, sizeof(value)) != 0) {
+ 		iscsi_set_error(iscsi, "TCP: Failed to set tcp keepalive count. Error %s(%d)", strerror(errno), errno);
+ 		return -1;
+ 	}
+-
++#endif
++#ifdef TCP_KEEPINTVL
+ 	value = interval;
+ 	if (setsockopt(iscsi->fd, SOL_TCP, TCP_KEEPINTVL, &value, sizeof(value)) != 0) {
+ 		iscsi_set_error(iscsi, "TCP: Failed to set tcp keepalive interval. Error %s(%d)", strerror(errno), errno);
+ 		return -1;
+ 	}
+-
++#endif
++#ifdef TCP_KEEPIDLE
+ 	value = idle;
+ 	if (setsockopt(iscsi->fd, SOL_TCP, TCP_KEEPIDLE, &value, sizeof(value)) != 0) {
+ 		iscsi_set_error(iscsi, "TCP: Failed to set tcp keepalive idle. Error %s(%d)", strerror(errno), errno);
+ 		return -1;
+ 	}
++#endif
+ 
+ 	return 0;
+ }
+ 
+-#endif
+ #if defined(WIN32)
+ int poll(struct pollfd *fds, int nfsd, int timeout)
+ {
