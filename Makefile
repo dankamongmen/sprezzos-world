@@ -11232,3 +11232,11 @@ $(LIBISCSI): $(SPREZZ)/libiscsi/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libiscsi_$(libiscsi_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libutempter
+libutempter:$(LIBUTEMPTER)_$(ARCH).deb
+$(LIBUTEMPTER): $(SPREZZ)/libutempter/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libutempter_$(libutempter_UPVER).orig.tar.bz2 $(TARARGS) $@
+
