@@ -463,3 +463,12 @@ $(PYTHON3DEFAULTS): $(SPREZZ)/python3-defaults/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python3-defaults_$(python3-defaults_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: grub-installer
+grub-installer:$(GRUBINSTALLER)_$(ARCH).deb
+$(GRUBINSTALLER): $(SPREZZ)/grub-installer/debian/changelog
+	mkdir $@
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf grub-installer_$(grub-installer_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
+
