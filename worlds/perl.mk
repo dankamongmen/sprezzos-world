@@ -759,3 +759,11 @@ $(LIBSHELLPERL): $(SPREZZ)/libshell-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libshell-perl_$(libshell-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libio-socket-inet6-perl
+libio-socket-inet6-perl:$(LIBIOSOCKETINET6PERL)_$(ARCH).deb
+$(LIBIOSOCKETINET6PERL): $(SPREZZ)/libio-socket-inet6-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libio-socket-inet6-perl_$(libio-socket-inet6-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
