@@ -11256,3 +11256,123 @@ $(ATLAS): $(SPREZZ)/atlas/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf atlas_$(atlas_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: xserver-xorg-video-apm
+xserver-xorg-video-apm:$(XSERVERXORGVIDEOAPM)_$(ARCH).deb
+$(XSERVERXORGVIDEOAPM): $(SPREZZ)/xserver-xorg-video-apm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-apm_$(xserver-xorg-video-apm_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-ark
+xserver-xorg-video-ark:$(XSERVERXORGVIDEOARK)_$(ARCH).deb
+$(XSERVERXORGVIDEOARK): $(SPREZZ)/xserver-xorg-video-ark/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-ark_$(xserver-xorg-video-ark_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-i128
+xserver-xorg-video-i128:$(XSERVERXORGVIDEOI128)_$(ARCH).deb
+$(XSERVERXORGVIDEOI128): $(SPREZZ)/xserver-xorg-video-i128/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-i128_$(xserver-xorg-video-i128_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-mga
+xserver-xorg-video-mga:$(XSERVERXORGVIDEOMGA)_$(ARCH).deb
+$(XSERVERXORGVIDEOMGA): $(SPREZZ)/xserver-xorg-video-mga/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-mga_$(xserver-xorg-video-mga_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-openchrome
+xserver-xorg-video-openchrome:$(XSERVERXORGVIDEOOPENCHROME)_$(ARCH).deb
+$(XSERVERXORGVIDEOOPENCHROME): $(SPREZZ)/xserver-xorg-video-openchrome/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-openchrome_$(xserver-xorg-video-openchrome_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-rendition
+xserver-xorg-video-rendition:$(XSERVERXORGVIDEORENDITION)_$(ARCH).deb
+$(XSERVERXORGVIDEORENDITION): $(SPREZZ)/xserver-xorg-video-rendition/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-rendition_$(xserver-xorg-video-rendition_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-s3
+xserver-xorg-video-s3:$(XSERVERXORGVIDEOS3)_$(ARCH).deb
+$(XSERVERXORGVIDEOS3): $(SPREZZ)/xserver-xorg-video-s3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-s3_$(xserver-xorg-video-s3_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-s3virge
+xserver-xorg-video-s3virge:$(XSERVERXORGVIDEOS3VIRGE)_$(ARCH).deb
+$(XSERVERXORGVIDEOS3VIRGE): $(SPREZZ)/xserver-xorg-video-s3virge/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-s3virge_$(xserver-xorg-video-s3virge_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-siliconmotion
+xserver-xorg-video-siliconmotion:$(XSERVERXORGVIDEOSILICONMOTION)_$(ARCH).deb
+$(XSERVERXORGVIDEOSILICONMOTION): $(SPREZZ)/xserver-xorg-video-siliconmotion/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-siliconmotion_$(xserver-xorg-video-siliconmotion_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-sis
+xserver-xorg-video-sis:$(XSERVERXORGVIDEOSIS)_$(ARCH).deb
+$(XSERVERXORGVIDEOSIS): $(SPREZZ)/xserver-xorg-video-sis/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-sis_$(xserver-xorg-video-sis_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-sisusb
+xserver-xorg-video-sisusb:$(XSERVERXORGVIDEOSISUSB)_$(ARCH).deb
+$(XSERVERXORGVIDEOSISUSB): $(SPREZZ)/xserver-xorg-video-sisusb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-sisusb_$(xserver-xorg-video-sisusb_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-tdfx
+xserver-xorg-video-tdfx:$(XSERVERXORGVIDEOTDFX)_$(ARCH).deb
+$(XSERVERXORGVIDEOTDFX): $(SPREZZ)/xserver-xorg-video-tdfx/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-tdfx_$(xserver-xorg-video-tdfx_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-trident
+xserver-xorg-video-trident:$(XSERVERXORGVIDEOTRIDENT)_$(ARCH).deb
+$(XSERVERXORGVIDEOTRIDENT): $(SPREZZ)/xserver-xorg-video-trident/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-trident_$(xserver-xorg-video-trident_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-tseng
+xserver-xorg-video-tseng:$(XSERVERXORGVIDEOTSENG)_$(ARCH).deb
+$(XSERVERXORGVIDEOTSENG): $(SPREZZ)/xserver-xorg-video-tseng/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-tseng_$(xserver-xorg-video-tseng_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-voodoo
+xserver-xorg-video-voodoo:$(XSERVERXORGVIDEOVOODOO)_$(ARCH).deb
+$(XSERVERXORGVIDEOVOODOO): $(SPREZZ)/xserver-xorg-video-voodoo/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-voodoo_$(xserver-xorg-video-voodoo_UPVER).orig.tar.gz $(TARARGS) $@
+
