@@ -1,0 +1,229 @@
+#!/usr/bin/make -f
+# Copyright 2008-2010 Sylvestre Ledru <sylvestre@debian.org>
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+
+DEB_HOST_ARCH_CPU := $(shell dpkg-architecture -qDEB_BUILD_ARCH_CPU)
+DEB_BUILD_ARCH := $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+
+# Pointer bitwidth (default value)
+MODE_BITWIDTH = 32
+
+# First number in ARCHS:
+# - 0 means Unknown CPU. Leave Atlas find out
+# - 1 means POWER3, most generic PowerPC (see #680096)
+# - 26 means Generic x86 CPU
+# Second number in ARCHS:
+# - 1 means no instruction set extension
+X86_ARCHS := amd64 i386 kfreebsd-amd64 kfreebsd-i386 hurd-i386
+PPC_ARCHS := powerpc powerpcspe ppc64
+ifneq (,$(findstring $(DEB_HOST_ARCH),$(X86_ARCHS)))
+ARCHS=base_26_1
+else ifneq (,$(findstring $(DEB_HOST_ARCH),$(PPC_ARCHS)))
+ARCHS=base_1_1
+else
+ARCHS=base_0_1
+endif
+
+DEB_SHLIBDEPS_INCLUDE_libatlas3-base := $(CURDIR)/debian/libatlas3-base/usr/lib/atlas-base/:$(CURDIR)/debian/libatlas3-base/usr/lib/atlas-base/atlas/
+
+# # see what do we do with the amd64 / intel 64
+ifeq ($(DEB_HOST_ARCH_CPU),amd64)
+# # 64 bits
+MODE_BITWIDTH = 64
+endif
+
+ifeq ($(DEB_HOST_ARCH_CPU),ia64)
+MODE_BITWIDTH = 64
+endif
+
+ifeq ($(DEB_HOST_ARCH_CPU),ppc64)
+# Power PC 64
+MODE_BITWIDTH = 64
+endif
+
+GFORTRAN_LIB_PATH=`gcc -print-search-dirs|grep ^install:|awk '{print $$2}'`
+
+COMMON_CONFIG_PARAMS := --prefix="$(DEB_DESTDIR)" 	\
+	--incdir="$(DEB_DESTDIR)/usr/include/"			\
+	--libdir="$(DEB_DESTDIR)/usr/lib/$$targetName"		\
+	--cc="${CC}" 									\
+	--cflags="${CFLAGS}" 							\
+	-D c -DWALL 									\
+	-b $(MODE_BITWIDTH) 							\
+	-Fa alg '-Wa,--noexecstack -fPIC' 				\
+	-Ss f77lib "-L$(GFORTRAN_LIB_PATH) -lgfortran -lgcc_s -lpthread"  \
+	-Ss pmake '$(MAKE)'					\
+	--with-netlib-lapack=/usr/lib/liblapack_pic.a 	\
+	-A $$atlasArch									\
+	-V $$atlasISA 									\
+	-v 2
+# ../../configure --cc="cc" --cflags="-g -O2" -D c -DWALL -b 64 -Fa alg '-Wa,--noexecstack -fPIC' -Ss flapack /usr/lib/liblapack_pic.a -Ss f77lib "-L/usr/lib/gcc/x86_64-linux-gnu/4.4.5/ -lgfortran -lgcc_s -lpthread" -Ss pmake '/usr/bin/make -j 1' -A 0 -V 1 -v 2 -Si cputhrchk 0 -t 2
+custom: custom-stamp
+
+# Build a custom package optimized for the current arch
+custom-stamp:
+		rm -f configure-stamp
+
+		ncpu=$$(LANG=C cpufreq-info | grep "analyzing CPU" -c);\
+		cpu=0;\
+		while test $$cpu -lt $$ncpu ; do\
+		if test $$(cpufreq-info -p 2>&1 > /dev/null; echo $$?) \
+			-eq 0 -a -z "$$(LANG=C cpufreq-info -p -c $$cpu | grep performance)" ; then \
+			echo "frequency governor on cpu=$$cpu is not set to 'performance'"; \
+			echo "run: 'sudo cpufreq-set -g performance -c cpu#' for each cpu"; \
+			echo "aborting atlas build"; \
+			exit 1; \
+		fi; \
+		cpu=$$((cpu+1)) ;\
+		done
+
+		# Here, the trick is pretty simple:
+		# * We don't want to build all the optimized version of Atlas. Just the
+		#   one for the current CPU
+		# * We override ARCHS by base__
+		# * Base is the name of the package (libatlas3-base)
+		# * __ is provided to have the right expression
+		# * the regexp will consider that atlasArch and atlasISA are empty
+		#   therefor, leaving the choice of the optimization to Atlas
+		# * After that, we fall back to the normal build procedure by calling
+		#   debian/rules itself (yep, recursively)
+
+		# Remove all the other archs in this case
+		dch --local='+custom'  "custom build on: `uname -a`"
+		LANG=C debian/rules ARCHS=base__ binary
+		touch $@
+
+configure-stamp:
+		dh_testdir
+
+		set -e;											\
+		targetName=`echo $(ARCHS)|sed -e "s|\(.*\)_.*_.*|atlas-\1|g"`; \
+		atlasArch=`echo $(ARCHS)|sed -e "s|.*_\(.*\)_.*|\1|g"`; \
+		atlasISA=`echo $(ARCHS)|sed -e "s|.*_.*_\(.*\)|\1|g"`; \
+		mkdir -p build/$$targetName;					\
+		cd build/$$targetName; 							\
+		if test "$(ARCHS)" != "base__"; then 		\
+		../../configure $(COMMON_CONFIG_PARAMS) -t 2;	\
+		else						\
+		../../configure $(COMMON_CONFIG_PARAMS);	\
+		fi;						\
+		echo "Configure done. targetName = $$targetName / atlasArch = $$atlasArch / atlasISA = $$atlasISA";								\
+		if test ! -s Make.inc; then echo "Configure failed: Make.inc not found"; exit 1; fi;											\
+		cat Make.inc |grep ARCH|head -1|awk '{print $$3}'; \
+		echo "=============================================="; \
+		cd -
+		touch $@
+
+
+build: build-arch build-indep
+
+build-indep: build-indep-stamp
+build-indep-stamp: configure-stamp
+		touch $@
+
+build-arch: build-arch-stamp
+build-arch-stamp: configure-stamp
+		dh_testdir
+		set -e; 												\
+		targetName=`echo $(ARCHS)|sed -e "s|\(.*\)_.*_.*|atlas-\1|g"`; \
+		cd build/$$targetName;									\
+		$(MAKE) build;											\
+		cd lib;													\
+		$(MAKE) shared;											\
+		$(MAKE) ptshared;										\
+		cd ..;													\
+		$(MAKE) check;											\
+		$(MAKE) ptcheck;										\
+		echo "==============================================";	\
+		cd ../../../
+		# Do not build the help when building the custom package
+		if test "$(ARCHS)" != "base__"; then \
+			make -C TexDoc atlas_contrib.pdf atlas_devel.pdf atlas_install.pdf cblasqref.pdf  f77blasqref.pdf lapackqref.pdf; \
+		fi
+		touch $@
+
+clean:: clean-work #unpatch
+clean-work:
+		dh_testdir
+		dh_testroot
+		rm -rf build check 
+		rm -f build-arch-stamp build-indep-stamp
+		rm -f install-arch-stamp install-indep-stamp configure-stamp
+
+		[ ! -f Makefile ] || $(MAKE) distclean
+		# some additional cleanups
+		dh_clean 
+
+
+install: install-arch install-indep
+
+install-indep: configure build install-indep-stamp
+install-indep-stamp:
+		dh_testdir
+		dh_testroot
+		dh_installdirs -i
+
+install-arch: configure build  install-arch-stamp
+install-arch-stamp:
+		dh_testdir
+		dh_testroot
+
+		set -e;													\
+		targetName=`echo $(ARCHS)|sed -e "s|\(.*\)_.*_.*|atlas-\1|g"`; \
+		cd build/$$targetName;									\
+		echo "make install of $$targetName to $(DEB_DESTDIR)";	\
+		$(MAKE) DESTDIR=$(DEB_DESTDIR) install;					\
+		echo "=============================================";	\
+		cd -
+
+install/libatlas-dev::
+	if test -d $(CURDIR)/debian/libatlas-dev/usr/include/; then \
+		rm -rf $(CURDIR)/debian/libatlas-dev/usr/include/;  \
+	fi
+	mkdir -p $(CURDIR)/debian/libatlas-dev/usr/include/
+	mv $(CURDIR)/debian/tmp/usr/include/*.h $(CURDIR)/debian/tmp/usr/include/atlas/
+	mv $(CURDIR)/debian/tmp/usr/include/atlas $(CURDIR)/debian/libatlas-dev/usr/include/
+
+install/libatlas-doc::
+	if test "$(ARCHS)" != "base__"; then \
+		mkdir -p $(CURDIR)/debian/libatlas-doc/usr/share/doc/libatlas-doc/; \
+		cp -R $(CURDIR)/doc/* $(CURDIR)/TexDoc/*.pdf $(CURDIR)/debian/libatlas-doc/usr/share/doc/libatlas-doc/; \
+	fi
+
+binary: binary-indep binary-arch
+
+binary-indep: build install
+		dh_testdir -i
+		dh_testroot -i
+		dh_installchangelogs  -i
+#		dh_installexamples -patlas-doc examples/*
+		dh_installman -i
+		dh_link -i
+		dh_strip -i
+		dh_compress  -i -X.pdf
+		dh_fixperms -i
+		dh_makeshlibs -i -n
+		dh_installdeb -i
+		dh_shlibdeps -i -l $$(pwd)
+#		dh_shlibdeps -i
+		dh_gencontrol -i
+		dh_md5sums -i
+		dh_builddeb -i
+
+binary-arch: build install
+		dh_testdir -a
+		dh_testroot -a
+		dh_installchangelogs  -a
+		dh_installexamples -a
+		dh_installman -a
+		dh_link -a
+		dh_compress  -a
+		dh_fixperms -a
+		dh_installdeb -a
+
+.PHONY: build build-indep build-indep-stamp build-arch build-arch-stamp check clean binary binary-indep binary-arch configure-stamp configure custom custom-stamp
+
+
+get-orig-source:
+	-uscan --upstream-version 0

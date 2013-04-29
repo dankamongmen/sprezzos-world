@@ -11248,3 +11248,11 @@ $(SEABIOS): $(SPREZZ)/seabios/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf seabios_$(seabios_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: atlas
+atlas:$(ATLAS)_$(ARCH).deb
+$(ATLAS): $(SPREZZ)/atlas/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf atlas_$(atlas_UPVER).orig.tar.bz2 $(TARARGS) $@
+
