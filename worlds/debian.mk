@@ -472,3 +472,11 @@ $(GRUBINSTALLER): $(SPREZZ)/grub-installer/debian/changelog
 	tar cJvf grub-installer_$(grub-installer_UPVER).orig.tar.xz $@ --exclude-vcs
 	cp -r $(<D) $@
 
+.PHONY: partman-base
+partman-base:$(PARTMANBASE)_$(ARCH).deb
+$(PARTMANBASE): $(SPREZZ)/partman-base/debian/changelog
+	mkdir $@
+	cp -r $(<D)/.. $@
+	rm -rf $@/debian
+	tar cJvf partman-base_$(partman-base_UPVER).orig.tar.xz $@ --exclude-vcs
+	cp -r $(<D) $@
