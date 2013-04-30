@@ -11400,3 +11400,11 @@ $(XSERVERXORGVIDEOGLINT): $(SPREZZ)/xserver-xorg-video-glint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xserver-xorg-video-glint_$(xserver-xorg-video-glint_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fonts-stix
+fonts-stix:$(FONTSSTIX)_$(ARCH).deb
+$(FONTSSTIX): $(SPREZZ)/fonts-stix/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version --repack
+	tar xzvf fonts-stix_$(fonts-stix_UPVER).orig.tar.gz $(TARARGS) $@
+
