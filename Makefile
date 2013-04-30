@@ -11366,7 +11366,7 @@ $(XSERVERXORGVIDEOTSENG): $(SPREZZ)/xserver-xorg-video-tseng/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xserver-xorg-video-tseng_$(xserver-xorg-video-tseng_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf xserver-xorg-video-tseng_$(xserver-xorg-video-tseng_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: xserver-xorg-video-voodoo
 xserver-xorg-video-voodoo:$(XSERVERXORGVIDEOVOODOO)_$(ARCH).deb
@@ -11374,7 +11374,7 @@ $(XSERVERXORGVIDEOVOODOO): $(SPREZZ)/xserver-xorg-video-voodoo/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xserver-xorg-video-voodoo_$(xserver-xorg-video-voodoo_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf xserver-xorg-video-voodoo_$(xserver-xorg-video-voodoo_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: screenie
 screenie:$(SCREENIE)_$(ARCH).deb
