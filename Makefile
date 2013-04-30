@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) -j18
+	cd $< && debuild -k$(DEBKEY) #-j18
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -4002,7 +4002,7 @@ $(IPROUTE): $(SPREZZ)/iproute/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf iproute2-$(iproute_UPVER).tar.gz $(TARARGS) $@
+	tar xjvf iproute2-$(iproute_UPVER).tar.bz2 $(TARARGS) $@
 
 .PHONY: iptables
 iptables:$(IPTABLES)_$(ARCH).deb
@@ -11431,4 +11431,12 @@ $(GIRARA): $(SPREZZ)/girara/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf girara_$(girara_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: vde2
+vde2:$(VDE2)_$(ARCH).deb
+$(VDE2): $(SPREZZ)/vde2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf vde2_$(vde2_UPVER).orig.tar.gz $(TARARGS) $@
 

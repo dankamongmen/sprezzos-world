@@ -1,0 +1,279 @@
+VDE for Debian
+##############
+
+ifupdown usage
+==============
+
+The Debian package provides an extension for ``iface`` sections in
+``/etc/network/interfaces`` file:
+
+vde2-switch - | <parameters>
+
+  Start TAP interface with ``vde_switch`` command which has control directory
+  ``/var/run/vde/$IFACE.ctl``. The control directory is writable by vde2-net
+  group. The additional parameters might be --macaddr MAC for switch MAC
+  address or other parameters. See ``vde_switch --help`` or vde_switch(1) for
+  further information.
+
+  When using the ``manual`` method of ifupdown no further setup is made, thus
+  it is possible to connect only the unix socket, e.g.::
+
+    auto vde0
+    iface vde0 inet manual
+        vde2-switch -
+
+  starts a ``vde_switch`` on virtual interface ``vde0`` (not TAP!) at every
+  boot, see ifup(8).
+  In this case ``vde0`` is used only for future reference, for example
+  management socket can be accessed from ``/var/run/vde2/vde0.mgmt``
+
+  It might be also convenient to attach a ``vde_switch`` to a TAP on boot to
+  use for bridging, in this case you should specify the TAP interface because
+  ``manual`` method does no setup::
+
+    auto qemu
+    iface qemu inet manual
+        vde2-switch -t qemu
+
+vde2-slirp - | <parameters>
+
+  Start slirp interface connected to the VDE switch with ``slirpvde`` command.
+  The additional parameter might be -dhcp for DHCP server or -netaddr to
+  specify the network address (default 10.0.2.0).
+  See ``slirpvde --help`` for description.
+
+  Please note that slirp is a virtual router for VDE, it is commonly used as a
+  mean to connect the virtual network to the outside world.  Slirp does not
+  require root access, kernel ip forwarding or iptables configuration. TAP
+  however requires root access, providing any kind of routing like a real
+  interface and it is also faster.
+
+  Do not use TAP and slirp together in the same VDE LAN unless you know exactly
+  what you are doing. If you set up a slirp with DHCP on a TAP and you
+  autoconfigure the interface it will become the default route for the entire
+  system.
+
+vde2-plug <dpipe_arg2>
+
+  Start ``dpipe`` connecting a ``vde_plug`` with the given ``dpipe_arg2`` as
+  the second argument after =. See ``dpipe`` man page for further details.
+  For example it is possible to connect two local plugs::
+
+    vde2-plug vde_plug /tmp/vde2.ctl
+
+  connects the ``vde_switch`` controlling the stanza's TAP interface to another
+  local ``vde_switch`` running at ``/tmp/vde2.ctl``.
+  It is also possible to connect to a remote plug::
+
+    vde2-plug ssh remote.machine.org vde_plug /var/run/vde2/tap0.ctl
+
+  connects the given TAP interface to remote ``vde_switch`` using ssh to
+  encrypt the traffic.
+
+Commandline usage
+=================
+
+The encrypted tunnel
+--------------------
+
+The VDE is the simplest VPN solution.
+
+On local system::
+
+  iface tap0 inet static
+      address 10.0.2.2
+      netmask 255.255.255.0
+      vde2-switch -
+      vde2-plug ssh user@remote.machine.org vde_plug /var/run/vde2/tap0.ctl
+
+On remote system::
+
+  iface tap0 inet static
+      address 10.0.2.1
+      netmask 255.255.255.0
+      vde2-switch -
+
+If ``vde2-slirp`` option is used, the connection works without NAT. The VDE can
+be also started with non-root privileges on the remote machine.
+
+On local system::
+
+  iface tap0 inet dhcp
+    vde2-switch -
+    pre-up ssh user@remote.machine.org vde_switch -s /tmp/vde.ctl -p /tmp/vde_switch.pid -d
+    pre-up sleep 1
+    pre-up ssh user@remote.machine.org slirpvde -D -s /tmp/vde.ctl -p /tmp/slirpvde.pid -d
+    vde2-plug ssh user@remote.machine.org vde_plug /tmp/vde.ctl
+    post-down ssh user@remote.machine.org 'test -f /tmp/vde_switch.pid && kill `cat /tmp/vde_switch.pid` || true'
+    post-down ssh user@remote.machine.org 'test -f /tmp/slirpvde.pid && kill `cat /tmp/slirpvde.pid` || true'
+    post-down ssh user@remote.machine.org rm -f /tmp/vde_switch.pid /tmp/slirpvde.pid
+
+
+QEMU usage
+----------
+
+The VDE is very useful for connecting the QEMU virtual machines.
+
+In the first example we use VDE as a standard VLAN connected to a
+tap interface.
+
+Enabling the VDE networking using tap.
+
+1. Configure tap0::
+
+    auto tap0
+      iface tap0 inet static
+      address 10.0.3.1
+      netmask 255.255.255.0
+      vde2-switch -
+
+2. Start the interface::
+
+    # ifup tap0
+
+3. Add the user to vde2-net group::
+
+    # adduser user vde2-net
+
+3. Start the QEMUs with different MAC addresses::
+
+    $ vdeq qemu -m 660 -net nic,vlan=1,macaddr=52:54:00:12:01:00 \
+    -net vde,vlan=1,sock=/var/run/vde2/tap0.ctl \
+    -boot c -hda Debian1.img
+
+    $ vdeq qemu -m 660 -net nic,vlan=1,macaddr=52:54:00:12:02:00 \
+    -net vde,vlan=1,sock=/var/run/vde2/tap0.ctl \
+    -boot c -hda Debian2.img
+
+4. Configure the network inside QEMUs' virtual systems::
+
+    debian1# cat > /etc/network/interfaces << END
+    auto lo
+
+    auto eth0
+    iface eth0 inet static
+      address 10.0.3.101
+      netmask 255.255.255.0
+      broadcast 10.0.3.255
+    END
+
+    debian2# cat > /etc/network/interfaces << END
+    auto lo
+
+    iface lo inet loopback
+    auto eth0
+    iface eth0 inet static
+       address 10.0.3.102
+       netmask 255.255.255.0
+       broadcast 10.0.3.255
+    END
+
+5. Check if the systems are available::
+
+    # ping 10.0.3.101
+    # ping 10.0.3.102
+
+6. Configure the routing/masquerading/bridging on the host computer
+   for ``tap0`` as you do on any other interface.
+
+QEMU-Slirp
+----------
+
+1. Configure vde0::
+
+    auto vde0
+    iface vde0 inet manual
+        vde2-switch -
+        vde2-slirp -dhcp
+
+2. Start the interface::
+
+    # ifup vde0
+
+3. Add the user to vde2-net group::
+
+    # adduser <user> vde2-net
+
+4. Start the QEMUs with different MAC addresses::
+
+    $ vdeq qemu -m 660 -net nic,vlan=1,macaddr=52:54:00:12:01:00 \
+    -net vde,vlan=1,sock=/var/run/vde2/vde0.ctl \
+    -boot c -hda Debian1.img
+
+    $ vdeq qemu -m 660 -net nic,vlan=1,macaddr=52:54:00:12:02:00 \
+    -net vde,vlan=1,sock=/var/run/vde2/vde0.ctl \
+    -boot c -hda Debian2.img
+
+5. Configure the network inside QEMUs' virtual systems::
+
+    debian1# cat > /etc/network/interfaces << END
+    auto lo
+    iface lo inet loopback
+    auto eth0
+    iface eth0 inet dhcp
+    END
+
+    debian2# cat > /etc/network/interfaces << END
+    auto lo
+    iface lo inet loopback
+    auto eth0
+    iface eth0 inet dhcp
+    END
+
+6. Check if the systems can reach their default route::
+
+    debian1# ping 10.0.2.2
+    debian2# ping 10.0.2.2
+
+7. Try a service on a remote system::
+
+    debian1# ssh your.main.server
+
+  The virtual system are on the same network but they are on a masqueraded
+  network.
+
+  You can also start the VDE networking without root privileges::
+
+    $ vde_switch -s /tmp/vde1.ctl -d
+
+    $ vdeq qemu -net nic,vlan=1,macaddr=52:54:00:12:01:00 \
+      -net vde,vlan=1,sock=/tmp/vde1.ctl \
+      -boot c -hda Debian1.img
+
+    $ vdeq qemu -net nic,vlan=1,macaddr=52:54:00:12:02:00 \
+    -net vde,vlan=1,sock=/tmp/vde1.ctl \
+    -boot c -hda Debian2.img
+
+  In this case the networking is available only inside virtual machines.
+
+  It is possible to start a slirpvde server before the Qemu machines::
+
+    $ vde_switch -s /tmp/vde1.ctl -d
+    $ nohup slirpvde -s /tmp/vde1.ctl -dhcp &
+    $ vdeq qemu -net nic,vlan=1,macaddr=52:54:00:12:01:00 \
+    -net vde,vlan=1,sock=/tmp/vde1.ctl \
+    -boot c -hda Debian1.img
+    $ vdeq qemu -net nic,vlan=1,macaddr=52:54:00:12:02:00 \
+    -net vde,vlan=1,sock=/tmp/vde1.ctl \
+    -boot c -hda Debian2.img
+
+  These machines can auto-configure their interfaces using the dhcp server
+  on slirpvde and have access to the "outside world".
+  Slirp emulates a masqueraded subnetwork: TCP-IP client programs work
+  transparently while port forwarding is needed for server access
+  (see slirpvde man page for further details).
+
+Management console
+------------------
+
+  You can connect to remote console with unixterm command::
+
+    $ unixterm /var/run/vde2/tap0.mgmt
+
+  where ``tap0`` is the name of the interface.
+
+Authors
+-------
+
+  * Piotr Roszatycki <dexter@debian.org>  Thu, 14 Dec 2006 10:22:19 +0100
+  * Renzo Davoli <renzo@cs.unibo.it>  Fri Apr 20 2007 19:33:27 +0200
