@@ -11376,3 +11376,11 @@ $(XSERVERXORGVIDEOVOODOO): $(SPREZZ)/xserver-xorg-video-voodoo/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf xserver-xorg-video-voodoo_$(xserver-xorg-video-voodoo_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: screenie
+screenie:$(SCREENIE)_$(ARCH).deb
+$(SCREENIE): $(SPREZZ)/screenie/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf screenie_$(screenie_UPVER).orig.tar.gz $(TARARGS) $@
+
