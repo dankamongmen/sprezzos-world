@@ -11262,7 +11262,7 @@ $(XSERVERXORGVIDEOAPM): $(SPREZZ)/xserver-xorg-video-apm/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xserver-xorg-video-apm_$(xserver-xorg-video-apm_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf xserver-xorg-video-apm_$(xserver-xorg-video-apm_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: xserver-xorg-video-ark
 xserver-xorg-video-ark:$(XSERVERXORGVIDEOARK)_$(ARCH).deb
