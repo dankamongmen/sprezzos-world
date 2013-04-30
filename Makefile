@@ -11384,3 +11384,19 @@ $(SCREENIE): $(SPREZZ)/screenie/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf screenie_$(screenie_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: xserver-xorg-video-glide
+xserver-xorg-video-glide:$(XSERVERXORGVIDEOGLIDE)_$(ARCH).deb
+$(XSERVERXORGVIDEOGLIDE): $(SPREZZ)/xserver-xorg-video-glide/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-glide_$(xserver-xorg-video-glide_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: xserver-xorg-video-glint
+xserver-xorg-video-glint:$(XSERVERXORGVIDEOGLINT)_$(ARCH).deb
+$(XSERVERXORGVIDEOGLINT): $(SPREZZ)/xserver-xorg-video-glint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf xserver-xorg-video-glint_$(xserver-xorg-video-glint_UPVER).orig.tar.gz $(TARARGS) $@
+
