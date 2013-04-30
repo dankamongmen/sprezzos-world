@@ -11350,7 +11350,7 @@ $(XSERVERXORGVIDEOTDFX): $(SPREZZ)/xserver-xorg-video-tdfx/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xserver-xorg-video-tdfx_$(xserver-xorg-video-tdfx_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf xserver-xorg-video-tdfx_$(xserver-xorg-video-tdfx_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: xserver-xorg-video-trident
 xserver-xorg-video-trident:$(XSERVERXORGVIDEOTRIDENT)_$(ARCH).deb
@@ -11358,7 +11358,7 @@ $(XSERVERXORGVIDEOTRIDENT): $(SPREZZ)/xserver-xorg-video-trident/debian/changelo
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf xserver-xorg-video-trident_$(xserver-xorg-video-trident_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf xserver-xorg-video-trident_$(xserver-xorg-video-trident_UPVER).orig.tar.bz2 $(TARARGS) $@
 
 .PHONY: xserver-xorg-video-tseng
 xserver-xorg-video-tseng:$(XSERVERXORGVIDEOTSENG)_$(ARCH).deb
