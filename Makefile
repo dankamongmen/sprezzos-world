@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) #-j18
+	cd $< && debuild -k$(DEBKEY) -j18
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -11415,4 +11415,20 @@ $(CHRPATH): $(SPREZZ)/chrpath/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf chrpath_$(chrpath_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: jquery
+jquery:$(JQUERY)_$(ARCH).deb
+$(JQUERY): $(SPREZZ)/jquery/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf jquery_$(jquery_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: girara
+girara:$(GIRARA)_$(ARCH).deb
+$(GIRARA): $(SPREZZ)/girara/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf girara_$(girara_UPVER).orig.tar.gz $(TARARGS) $@
 

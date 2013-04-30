@@ -713,3 +713,11 @@ $(SONICVISUALISER): $(SPREZZ)/sonic-visualiser/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf sonic-visualiser_$(sonic-visualiser_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: zathura
+zathura:$(ZATHURA)_$(ARCH).deb
+$(ZATHURA): $(SPREZZ)/zathura/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf zathura_$(zathura_UPVER).orig.tar.gz $(TARARGS) $@
+

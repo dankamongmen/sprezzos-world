@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+export DEB_LDFLAGS_MAINT_APPEND=-Wl,--as-needed
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+# Use all hardening flags for zathura
+dpkg_buildflags = DEB_BUILD_MAINT_OPTIONS="hardening=+all" dpkg-buildflags
+
+# do not strip
+export SFLAGS=
+# build with verbose output
+export VERBOSE=1
+# build flags for the plugin
+export ZATHURA_INC=-I$(CURDIR)/zathura-headers/usr/include
+export PLUGINDIR=/usr/lib/zathura
+export PKG_CONFIG_PATH=$(CURDIR)/zathura-headers/usr/lib/pkgconfig
+# disable check's timeout funtionality
+export CK_DEFAULT_TIMEOUT=0
+
+PDFVER=0.1.1
+PDFVERC=$(subst .,-,$(PDFVER))
+
+DEB_DEBDIR=$(dir $(firstword $(MAKEFILE_LIST)))
+DEB_UPSTREAM_VER=$(shell dpkg-parsechangelog -l$(DEB_DEBDIR)/changelog \
+	| sed -ne 's/^Version: \(.*\)-[^-]*/\1/p')
+get-orig-source:
+	uscan --no-conf \
+		--force-download \
+		--rename \
+		--watchfile $(DEB_DEBDIR)/watch \
+		--package zathura \
+		--upstream-version $(DEB_UPSTREAM_VER) \
+		--destdir=.
+	TMPD=`mktemp -d` && \
+	uscan --no-conf \
+		--force-download \
+		--no-symlink \
+		--watchfile $(DEB_DEBDIR)/zathura-pdf-poppler.watch \
+		--package zathura-pdf-poppler \
+		--upstream-version $(PDFVER) \
+		--destdir=$$TMPD && \
+	mv $$TMPD/zathura-pdf-poppler-$(PDFVER).tar.gz \
+		zathura_$(DEB_UPSTREAM_VER).orig-pdf-poppler-$(PDFVERC).tar.gz && \
+	rmdir $$TMPD
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	$(shell $(dpkg_buildflags) --export=configure) $(MAKE)
+	# we need the headers to build the plugin
+	$(MAKE) install-headers DESTDIR=$(CURDIR)/zathura-headers
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	xvfb-run -a $(MAKE) test
+endif
+
+override_dh_gencontrol:
+	./debian/dh_zathura -pzathura --substvar=zathura:Provides
+	dh_gencontrol
