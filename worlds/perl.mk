@@ -775,3 +775,11 @@ $(LIBSTRINGAPPROXPERL): $(SPREZZ)/libstring-approx-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libstring-approx-perl_$(libstring-approx-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: liblingua-sentence-perl
+liblingua-sentence-perl:$(LIBLINGUASENTENCEPERL)_$(ARCH).deb
+$(LIBLINGUASENTENCEPERL): $(SPREZZ)/liblingua-sentence-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liblingua-sentence-perl_$(liblingua-sentence-perl_UPVER).orig.tar.gz $(TARARGS) $@
+

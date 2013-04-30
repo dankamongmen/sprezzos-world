@@ -23,7 +23,7 @@ $(RAPTORIAL): $(SPREZZ)/raptorial/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf raptorial_$(raptorial_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf raptorial_$(raptorial_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: libblossom
 libblossom:$(LIBBLOSSOM)_$(ARCH).deb

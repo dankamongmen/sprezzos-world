@@ -271,3 +271,19 @@ $(PYTHONCASMOOTHING): $(SPREZZ)/python-casmoothing/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf python-casmoothing_$(python-casmoothing_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-park
+python-park:$(PYTHONPARK)_$(ARCH).deb
+$(PYTHONPARK): $(SPREZZ)/python-park/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-park_$(python-park_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: pysubnettree
+pysubnettree:$(PYSUBNETTREE)_$(ARCH).deb
+$(PYSUBNETTREE): $(SPREZZ)/pysubnettree/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pysubnettree_$(pysubnettree_UPVER).orig.tar.gz $(TARARGS) $@
+
