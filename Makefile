@@ -11408,3 +11408,11 @@ $(FONTSSTIX): $(SPREZZ)/fonts-stix/debian/changelog
 	cd $@ && uscan --force-download --download-current-version --repack
 	tar xzvf fonts-stix_$(fonts-stix_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: chrpath
+chrpath:$(CHRPATH)_$(ARCH).deb
+$(CHRPATH): $(SPREZZ)/chrpath/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf chrpath_$(chrpath_UPVER).orig.tar.gz $(TARARGS) $@
+
