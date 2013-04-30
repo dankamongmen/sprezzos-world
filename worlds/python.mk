@@ -287,3 +287,11 @@ $(PYSUBNETTREE): $(SPREZZ)/pysubnettree/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pysubnettree_$(pysubnettree_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-sexy
+python-sexy:$(PYTHONSEXY)_$(ARCH).deb
+$(PYTHONSEXY): $(SPREZZ)/python-sexy/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-sexy_$(python-sexy_UPVER).orig.tar.gz $(TARARGS) $@
+
