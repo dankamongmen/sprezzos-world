@@ -767,3 +767,11 @@ $(LIBIOSOCKETINET6PERL): $(SPREZZ)/libio-socket-inet6-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libio-socket-inet6-perl_$(libio-socket-inet6-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libstring-approx-perl
+libstring-approx-perl:$(LIBSTRINGAPPROXPERL)_$(ARCH).deb
+$(LIBSTRINGAPPROXPERL): $(SPREZZ)/libstring-approx-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libstring-approx-perl_$(libstring-approx-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
