@@ -11440,3 +11440,19 @@ $(VDE2): $(SPREZZ)/vde2/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf vde2_$(vde2_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libiptcdata
+libiptcdata:$(LIBIPTCDATA)_$(ARCH).deb
+$(LIBIPTCDATA): $(SPREZZ)/libiptcdata/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libiptcdata_$(libiptcdata_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libieee1284
+libieee1284:$(LIBIEEE1284)_$(ARCH).deb
+$(LIBIEEE1284): $(SPREZZ)/libieee1284/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf libieee1284_$(libieee1284_UPVER).orig.tar.bz2 $(TARARGS) $@
+

@@ -783,3 +783,27 @@ $(LIBLINGUASENTENCEPERL): $(SPREZZ)/liblingua-sentence-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf liblingua-sentence-perl_$(liblingua-sentence-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libxml-dom-perl
+libxml-dom-perl:$(LIBXMLDOMPERL)_$(ARCH).deb
+$(LIBXMLDOMPERL): $(SPREZZ)/libxml-dom-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxml-dom-perl_$(libxml-dom-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libxml-perl
+libxml-perl:$(LIBXMLPERL)_$(ARCH).deb
+$(LIBXMLPERL): $(SPREZZ)/libxml-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxml-perl_$(libxml-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libxml-regexp-perl
+libxml-regexp-perl:$(LIBXMLREGEXPPERL)_$(ARCH).deb
+$(LIBXMLREGEXPPERL): $(SPREZZ)/libxml-regexp-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libxml-regexp-perl_$(libxml-regexp-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
