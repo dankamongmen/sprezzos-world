@@ -1,0 +1,144 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_SYSTEM ?= $(shell dpkg-architecture -qDEB_HOST_GNU_SYSTEM)
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+# Available python versions
+PYVERS = $(shell pyversions -v -r debian/control)
+
+autotools: autotools-stamp
+autotools-stamp:
+	rm -f config.sub config.guess
+	ln -s /usr/share/misc/config.sub config.sub
+	ln -s /usr/share/misc/config.guess config.guess
+
+	touch autotools-stamp
+
+configure: configure-stamp
+configure-stamp: $(PYVERS:%=configure-py%-stamp) autotools-stamp
+	dh_testdir
+	# Add here commands to configure the package.
+	./configure --without-python --prefix=/usr \
+		--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
+		--mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info $(shell dpkg-buildflags --export=configure)
+
+	touch configure-stamp
+
+configure-py%-stamp: autotools-stamp
+	dh_testdir
+
+	mkdir build-py$*
+
+	cd build-py$* && PYTHON=/usr/bin/python$* ../configure --with-python --prefix=/usr \
+		--mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info $(shell dpkg-buildflags --export=configure)
+
+	touch configure-py$*-stamp
+
+build-arch: build
+build-indep: build
+
+build: build-stamp
+build-stamp: $(PYVERS:%=build-py%-stamp) configure-stamp
+	dh_testdir
+
+	# Add here commands to compile the package.
+	$(MAKE)
+
+	touch build-stamp
+
+build-py%-stamp: configure-py%-stamp
+	dh_testdir
+
+	cd build-py$* && $(MAKE)
+
+	touch build-py$*-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp build-py*-stamp autotools-stamp configure-stamp configure-py*-stamp
+
+	rm -rf build-py*
+
+	# avoid a configure re-run
+	touch configure
+
+	[ ! -f Makefile ] || $(MAKE) distclean
+
+	rm -f debian/libieee1284-3.docs
+	rm -f config.sub config.guess
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	# Add here commands to install the package into debian/tmp
+	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
+
+	# Temporary symlink for Python modules
+	ln -s $(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libieee1284.so $(CURDIR)/debian/tmp/usr/lib/libieee1284.so
+
+	for pyver in $(PYVERS); do \
+		cd build-py$$pyver && \
+		$(MAKE) install-pyexecLTLIBRARIES prefix=$(CURDIR)/debian/tmp/usr && \
+		# remove rpath from the python module \
+		chrpath -d $(CURDIR)/debian/tmp/usr/lib/python$$pyver/site-packages/ieee1284module.so && \
+		cd - || exit 1 ; \
+	done
+
+	# Clean up temporary symlink
+	rm $(CURDIR)/debian/tmp/usr/lib/libieee1284.so
+
+# Build architecture-independent files here.
+binary-indep:
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_install --sourcedir=debian/tmp
+
+	cp debian/libieee1284-3.docs.in debian/libieee1284-3.docs
+ifeq (kfreebsd-gnu,$(DEB_HOST_GNU_SYSTEM))
+	echo README.FreeBSD >> debian/libieee1284-3.docs
+endif
+
+	dh_installdocs
+	dh_installman
+	dh_installinfo
+	dh_installchangelogs ChangeLog
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_python2
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install autotools configure
