@@ -1,0 +1,86 @@
+#! /usr/bin/env python
+
+import os, commands, pwd
+from optparse import OptionParser
+from Boinc.Debian import *
+
+# Popen preexec hook for running the command as a different user
+def do_setuid():
+    global uid, gid
+
+    os.setgid(gid)
+    os.setuid(uid)
+
+parser = OptionParser(usage="usage: %prog [options]")
+
+parser.add_option("-n", "--name", dest="name", action="store",
+                  default=None, help="Short name of the project (used in URLs)")
+parser.add_option("--skip-db", dest="skip_db", action="store_true",
+                  default=False, help="Skip destroying the database")
+parser.add_option("--db-user", dest="dbuser", action="store",
+                  default=None, help="Database user name")
+parser.add_option("--db-name", dest="dbname", action="store",
+                  default=None, help="Database name")
+
+options,args = parser.parse_args()
+
+if not options.name:
+    raise SystemExit("You must specify the project name")
+
+if not options.dbuser:
+    options.dbuser = "boinc_" + options.name
+if not options.dbname:
+    options.dbname = "boinc_" + options.name
+
+open_logfile()
+
+username = "boinc-" + options.name
+homedir = os.path.join("/var/lib/boinc", options.name)
+projectroot = os.path.join(homedir, "project")
+
+# Check if the user exists
+try:
+    pw = pwd.getpwnam(username)
+except KeyError:
+    raise SystemExit("The user " + username + " does not exist")
+uid = pw[2]
+gid = pw[3]
+
+notice("Deleting project " + options.name)
+
+notice("Stopping the project")
+os.environ["BOINC_PROJECT_DIR"] = projectroot
+try:
+    run_command("stop", preexec_fn = do_setuid)
+except SystemExit:
+    pass
+
+notice("Disabling the crontab")
+try:
+    run_command("crontab", "-u", username, "-r")
+except SystemExit:
+    pass
+
+notice("Deconfiguring the web frontend")
+try:
+    os.unlink(os.path.join("/etc/apache2/conf.d", "boinc-" + options.name + ".conf"))
+    run_command("invoke-rc.d", "--quiet", "apache2", "reload")
+except OSError:
+    pass
+except SystemExit:
+    pass
+
+if not options.skip_db:
+    notice("Dropping the database")
+    try:
+        run_command("mysql", "-e", "DROP USER %s" % options.dbuser)
+        run_command("mysql", "-e", "DROP DATABASE %s" % options.dbname)
+    except SystemExit:
+        pass
+
+notice("Deleting " + username)
+run_command("/usr/sbin/deluser", "--system", "--quiet", username)
+run_command("/usr/sbin/delgroup", "--system", "--quiet", username)
+run_command("/bin/rm", "-rf", "--one-file-system", homedir)
+# Restart Apache so it loses the group membership
+run_command("invoke-rc.d", "--quiet", "apache2", "restart")

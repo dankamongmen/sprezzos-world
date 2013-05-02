@@ -1,0 +1,118 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# This script creates symlinks for anonymous BOINC applications.
+# Copyright © 2006 Debian BOINC Maintainers
+#                  <pkg-boinc-devel@lists.alioth.debian.org>
+#
+# This file is licensed under the terms of the GNU General Public License,
+# Version 2 or any later version published by the Free Software Foundation.
+
+import ConfigParser
+import optparse
+import os
+import sys
+
+APPS_INFO_DIR = '/usr/share/boinc-apps/info/'
+
+def main():
+    opts = parse_options()
+
+    if not os.path.isdir(APPS_INFO_DIR):
+        sys.exit(0)
+
+    projects = parse_app_info_files()
+
+    # Show list of all available projects.
+    if opts.list_projects == True:
+        for project in projects:
+            print project
+
+    # Manage symbolic links and directories.
+    if opts.create == None:
+        return
+    for project in projects:
+        if opts.project == '' or project == opts.project:
+            for url in projects[project]['urls']:
+                project_dir = opts.data_dir + '/projects/' + url + '/'
+                manage_symlink(projects[project]['app_info'],
+                    project_dir + 'app_info.xml', opts.create)
+
+                for app_src in projects[project]['apps']:
+                    app_dst = project_dir + os.path.basename(app_src)
+                    manage_symlink(app_src, app_dst, opts.create)
+    return
+
+def get_list(res):
+    """ convert a space separated option value to a list """
+    res = res.replace('\n', ' ')
+    if ' ' in res:
+        res = res.split(' ')
+    else:
+        res = [res]
+    while '' in res:
+        res.remove('')
+    return res
+
+def parse_app_info_files():
+    projects = {}
+
+    for file in os.listdir(APPS_INFO_DIR):
+        if file.endswith('.cfg'):
+            cfg = ConfigParser.ConfigParser()
+            cfg.readfp(open(APPS_INFO_DIR + file))
+
+            project = cfg.get('DEFAULT', 'project')
+            cfg.remove_option('DEFAULT', 'project')
+
+            projects[project] = {}
+            list_options = ['apps', 'urls']
+            for item in cfg.items('DEFAULT'):
+                if item[0] in list_options:
+                    projects[project][item[0]] = get_list(item[1])
+                else:
+                    projects[project][item[0]] = item[1]
+    return projects
+
+def manage_symlink(src, dst, bool):
+    dirname = os.path.dirname(dst)
+
+    try:
+        if bool == True:
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
+            os.symlink(src, dst)
+        else:
+            if os.path.isfile(dst) and not os.path.islink(dst):
+                return
+            elif os.path.islink(dst):
+                os.remove(dst)
+            os.removedirs(dirname)
+    except OSError:
+        pass
+    return
+
+def parse_options():
+    parser = optparse.OptionParser()
+
+    parser.add_option('--create', action='store_true', dest='create',
+        help='create symlinks and project directories')
+
+    parser.add_option('--remove', action='store_false', dest='create',
+        help='remove symlinks and empty project directories')
+
+    parser.add_option('--data-dir', dest='data_dir', default='.',
+        metavar='DIR', help='destination directory for the symlinks')
+
+    parser.add_option('--project', dest='project', default='',
+        metavar='PROJECT', help='create only symlinks for project PROJECT')
+
+    parser.add_option('--list-projects', action='store_true',
+        dest='list_projects', default=False,
+        help='list all available projects')
+
+    (opts, args) = parser.parse_args()
+    return opts
+
+if __name__ == '__main__':
+    main()

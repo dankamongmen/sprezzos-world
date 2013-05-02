@@ -1,0 +1,406 @@
+--- a/client/app.cpp
++++ b/client/app.cpp
+@@ -424,8 +424,8 @@
+     int retval;
+ 
+     get_project_dir(result->project, project_dir, sizeof(project_dir));
+-    sprintf(old_path, "%s/trickle_up.xml", slot_dir);
+-    sprintf(new_path,
++    snprintf(old_path, sizeof(old_path), "%s/trickle_up.xml", slot_dir);
++    snprintf(new_path, sizeof(new_path),
+         "%s/trickle_up_%s_%d.xml",
+         project_dir, result->name, (int)time(0)
+     );
+@@ -460,7 +460,7 @@
+     return 0;
+ }
+ 
+-bool ACTIVE_TASK_SET::is_slot_in_use(int slot) {
++bool ACTIVE_TASK_SET::is_slot_in_use(const int slot) const {
+     unsigned int i;
+     for (i=0; i<active_tasks.size(); i++) {
+         if (active_tasks[i]->slot == slot) {
+@@ -470,7 +470,7 @@
+     return false;
+ }
+ 
+-bool ACTIVE_TASK_SET::is_slot_dir_in_use(char* dir) {
++bool ACTIVE_TASK_SET::is_slot_dir_in_use(const char* const dir) const {
+     char path[MAXPATHLEN];
+     unsigned int i;
+     for (i=0; i<active_tasks.size(); i++) {
+@@ -511,7 +511,7 @@
+ #endif
+ }
+ 
+-bool ACTIVE_TASK_SET::slot_taken(int slot) {
++bool ACTIVE_TASK_SET::slot_taken(const int slot) const {
+     unsigned int i;
+     for (i=0; i<active_tasks.size(); i++) {
+         if (active_tasks[i]->slot == slot) return true;
+@@ -623,7 +623,7 @@
+ #endif
+ 
+ int ACTIVE_TASK::parse(XML_PARSER& xp) {
+-    char result_name[256], project_master_url[256];
++    char result_name[MAXPATHLEN], project_master_url[MAXPATHLEN];
+     int n, dummy;
+     unsigned int i;
+     PROJECT* project=0;
+@@ -898,7 +898,7 @@
+ 
+     DirScanner dirscan(slot_dir);
+     while (dirscan.scan(filename)) {
+-        strcpy(buf, filename.c_str());
++        strncpy(buf, filename.c_str(), sizeof(buf));
+         if (strstr(buf, UPLOAD_FILE_REQ_PREFIX) == buf) {
+             char* p = buf+strlen(UPLOAD_FILE_REQ_PREFIX);
+             FILE_INFO* fip = result->lookup_file_logical(p);
+--- a/client/app.h
++++ b/client/app.h
+@@ -47,6 +47,7 @@
+ typedef int PROCESS_ID;
+ 
+ #define MAX_STDERR_LEN  65536
++#define SLOT_DIR_LEN 256
+     // The stderr output of an application is truncated to this length
+     // before sending to server,
+     // to protect against apps that write unbounded amounts.
+@@ -111,7 +112,7 @@
+     double bytes_sent;
+         // reported by the app if it does network I/O
+     double bytes_received;
+-    char slot_dir[256];
++    char slot_dir[SLOT_DIR_LEN];
+         // directory where process runs (relative)
+     char slot_path[MAXPATHLEN];
+         // same, absolute
+@@ -152,8 +153,8 @@
+         // but not descendants of the main process
+         // (e.g. VMs created by vboxwrapper)
+         // These are communicated via the app_status message channel
+-    char web_graphics_url[256];
+-    char remote_desktop_addr[256];
++    char web_graphics_url[MAXPATHLEN];
++    char remote_desktop_addr[MAXPATHLEN];
+     ASYNC_COPY* async_copy;
+     double finish_file_time;
+         // time when we saw finish file in slot dir.
+@@ -289,8 +290,8 @@
+     bool check_app_exited();
+     bool check_rsc_limits_exceeded();
+     bool check_quit_timeout_exceeded();
+-    bool is_slot_in_use(int);
+-    bool is_slot_dir_in_use(char*);
++    bool is_slot_in_use(const int) const;
++    bool is_slot_dir_in_use(const char* const) const;
+     void send_heartbeats();
+     void send_trickle_downs();
+     void report_overdue();
+@@ -299,7 +300,7 @@
+     bool want_network();    // does any task want network?
+     void network_available();   // notify tasks that network is available
+     void free_mem();
+-    bool slot_taken(int);
++    bool slot_taken(const int) const;
+     void get_memory_usage();
+ 
+     void process_control_poll();
+--- a/lib/filesys.cpp
++++ b/lib/filesys.cpp
+@@ -86,7 +86,7 @@
+ 
+ // routines for enumerating the entries in a directory
+ 
+-int is_file(const char* path) {
++int is_file(const char* const path) {
+     struct stat sbuf;
+ #ifdef _WIN32
+     int retval = stat(path, &sbuf);
+@@ -96,7 +96,7 @@
+     return (!retval && (((sbuf.st_mode) & S_IFMT) == S_IFREG));
+ }
+ 
+-int is_dir(const char* path) {
++int is_dir(const char* const path) {
+     struct stat sbuf;
+ #ifdef _WIN32
+     int retval = stat(path, &sbuf);
+@@ -108,19 +108,19 @@
+ 
+ #ifndef _WIN32
+ 
+-int is_file_follow_symlinks(const char* path) {
++int is_file_follow_symlinks(const char* const path) {
+     struct stat sbuf;
+     int retval = stat(path, &sbuf);
+     return (!retval && (((sbuf.st_mode) & S_IFMT) == S_IFREG));
+ }
+ 
+-int is_dir_follow_symlinks(const char* path) {
++int is_dir_follow_symlinks(const char* const path) {
+     struct stat sbuf;
+     int retval = stat(path, &sbuf);
+     return (!retval && (((sbuf.st_mode) & S_IFMT) == S_IFDIR));
+ }
+ 
+-int is_symlink(const char* path) {
++int is_symlink(const char* const path) {
+     struct stat sbuf;
+     int retval = lstat(path, &sbuf);
+     return (!retval && S_ISLNK(sbuf.st_mode));
+@@ -129,7 +129,7 @@
+ 
+ // Open a directory
+ //
+-DIRREF dir_open(const char* p) {
++DIRREF dir_open(const char* const p) {
+     DIRREF dirp;
+ #ifdef _WIN32
+     if (!is_dir(p)) return NULL;
+@@ -215,7 +215,7 @@
+ #endif
+ }
+ 
+-bool is_dir_empty(const char *p) {
++bool is_dir_empty(const char* const p) {
+     char file[MAXPATHLEN];
+ 
+     DIRREF dir = dir_open(p);
+@@ -295,7 +295,7 @@
+ #endif
+ }
+ 
+-static int boinc_delete_file_aux(const char* path) {
++static int boinc_delete_file_aux(const char* const path) {
+ #ifdef _WIN32
+     if (!DeleteFileA(path)) {
+         return ERR_UNLINK;
+@@ -309,7 +309,7 @@
+ 
+ // Delete the file located at path
+ //
+-int boinc_delete_file(const char* path) {
++int boinc_delete_file(const char* const path) {
+     int retval = 0;
+ 
+     if (!boinc_file_exists(path)) {
+@@ -333,7 +333,7 @@
+ 
+ // get file size
+ //
+-int file_size(const char* path, double& size) {
++int file_size(const char* const path, double& size) {
+     int retval;
+ 
+ #if defined(_WIN32) && !defined(__CYGWIN32__) && !defined(__MINGW32__)
+@@ -348,7 +348,7 @@
+     return 0;
+ }
+ 
+-int boinc_truncate(const char* path, double size) {
++int boinc_truncate(const char* const path, double size) {
+     int retval;
+ #if defined(_WIN32) && !defined(__CYGWIN32__)
+     // the usual Windows nightmare.
+@@ -369,7 +369,7 @@
+ 
+ // remove everything from specified directory
+ //
+-int clean_out_dir(const char* dirpath) {
++int clean_out_dir(const char* const dirpath) {
+     char filename[MAXPATHLEN], path[MAXPATHLEN];
+     int retval;
+     DIRREF dirp;
+@@ -397,7 +397,7 @@
+ // Win: use special version because stat() is slow, can be avoided
+ // Unix: follow symbolic links
+ //
+-int dir_size(const char* dirpath, double& size, bool recurse) {
++int dir_size(const char* const dirpath, double& size, bool recurse) {
+ #ifdef WIN32
+     char path2[_MAX_PATH];
+     sprintf(path2, "%s/*", dirpath);
+@@ -452,7 +452,7 @@
+     return 0;
+ }
+ 
+-FILE* boinc_fopen(const char* path, const char* mode) {
++FILE* boinc_fopen(const char* const path, const char* mode) {
+     // if opening for read, and file isn't there,
+     // leave now (avoid 5-second delay!!)
+     //
+@@ -503,7 +503,7 @@
+ }
+ 
+ 
+-int boinc_file_exists(const char* path) {
++int boinc_file_exists(const char* const path) {
+     struct stat buf;
+     if (stat(path, &buf)) {
+         return false;     // stat() returns zero on success
+@@ -513,7 +513,7 @@
+ 
+ // same, but doesn't traverse symlinks
+ //
+-int boinc_file_or_symlink_exists(const char* path) {
++int boinc_file_or_symlink_exists(const char* const path) {
+     struct stat buf;
+ #ifdef _WIN32
+     if (stat(path, &buf)) {
+@@ -527,7 +527,7 @@
+ 
+ // returns zero on success, nonzero if didn't touch file
+ //
+-int boinc_touch_file(const char *path) {
++int boinc_touch_file(const char* const path) {
+ 
+     if (boinc_file_exists(path)) {
+         return 0;
+@@ -628,7 +628,7 @@
+ 
+ // make a dir that's owner and group RWX
+ //
+-int boinc_mkdir(const char* path) {
++int boinc_mkdir(const char* const path) {
+     if (is_dir(path)) return 0;
+ #ifdef _WIN32
+     if (!CreateDirectoryA(path, NULL)) {
+@@ -643,7 +643,7 @@
+     return 0;
+ }
+ 
+-int boinc_rmdir(const char* name) {
++int boinc_rmdir(const char* const name) {
+ #ifdef _WIN32
+     if (!RemoveDirectoryA(name)) {
+         return ERR_RMDIR;
+@@ -656,7 +656,7 @@
+ }
+ 
+ #ifndef _WIN32
+-int boinc_chown(const char* path, gid_t gid) {
++int boinc_chown(const char* const path, gid_t gid) {
+     if (gid) {
+         if (chown(path, (uid_t)-1, gid)) {
+             return ERR_CHOWN;
+@@ -669,7 +669,7 @@
+ // if "filepath" is of the form a/b/c,
+ // create directories dirpath/a, dirpath/a/b etc.
+ //
+-int boinc_make_dirs(const char* dirpath, const char* filepath) {
++int boinc_make_dirs(const char* const dirpath, const char* const filepath) {
+     char buf[MAXPATHLEN], oldpath[MAXPATHLEN], newpath[MAXPATHLEN];
+     int retval;
+     char *p, *q;
+@@ -748,7 +748,7 @@
+     return 0;
+ }
+ 
+-void boinc_getcwd(char* path) {
++void boinc_getcwd(char* const path) {
+ #ifdef _WIN32
+     getcwd(path, MAXPATHLEN);
+ #else
+@@ -760,7 +760,7 @@
+ #endif
+ }
+ 
+-void relative_to_absolute(const char* relname, char* path) {
++void relative_to_absolute(const char* const relname, char* const path) {
+     boinc_getcwd(path);
+     if (strlen(relname)) {
+         strcat(path, "/");
+@@ -769,7 +769,7 @@
+ }
+ 
+ #if defined(_WIN32) && !(defined(WXDEBUG) || defined(WXNDEBUG))
+-int boinc_allocate_file(const char* path, double size) {
++int boinc_allocate_file(const char* const path, double size) {
+     int retval = 0;
+     HANDLE h = CreateFile(
+         path,
+@@ -831,7 +831,7 @@
+         total_space = (double)dwTotalClusters * dwSectPerClust * dwBytesPerSect;
+     }
+ #else
+-int get_filesystem_info(double &total_space, double &free_space, char* path) {
++int get_filesystem_info(double &total_space, double &free_space, const char* const path) {
+ #ifdef STATFS
+     struct STATFS fs_info;
+ 
+--- a/lib/filesys.h
++++ b/lib/filesys.h
+@@ -43,30 +43,30 @@
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+-  extern int boinc_delete_file(const char*);
+-  extern int boinc_touch_file(const char *path);
+-  extern FILE* boinc_fopen(const char* path, const char* mode);
++  extern int boinc_delete_file(const char* const);
++  extern int boinc_touch_file(const char* const path);
++  extern FILE* boinc_fopen(const char* const path, const char* mode);
+   extern int boinc_copy(const char* orig, const char* newf);
+   extern int boinc_rename(const char* old, const char* newf);
+-  extern int boinc_mkdir(const char*);
++  extern int boinc_mkdir(const char* const);
+ #ifdef _WIN32
+-  extern int boinc_allocate_file(const char*, double size);
++  extern int boinc_allocate_file(const char* const, double size);
+ #else
+-  extern int boinc_chown(const char*, gid_t);
++  extern int boinc_chown(const char* const, const gid_t);
+ #endif
+-  extern int boinc_rmdir(const char*);
+-  extern void boinc_getcwd(char*);
+-  extern void relative_to_absolute(const char* relname, char* path);
+-  extern int boinc_make_dirs(const char*, const char*);
++  extern int boinc_rmdir(const char* const);
++  extern void boinc_getcwd(/* not const*/ char* const);
++  extern void relative_to_absolute(const char* const relname, /* not const*/ char* const path);
++  extern int boinc_make_dirs(const char* const, const char* const);
+   extern char boinc_failed_file[MAXPATHLEN];
+-  extern int is_file(const char* path);
+-  extern int is_dir(const char* path);
+-  extern int is_file_follow_symlinks(const char* path);
+-  extern int is_dir_follow_symlinks(const char* path);
+-  extern int is_symlink(const char* path);
+-  extern int boinc_truncate(const char*, double);
+-  extern int boinc_file_exists(const char* path);
+-  extern int boinc_file_or_symlink_exists(const char* path);
++  extern int is_file(const char* const path);
++  extern int is_dir(const char* const path);
++  extern int is_file_follow_symlinks(const char* const path);
++  extern int is_dir_follow_symlinks(const char* const path);
++  extern int is_symlink(const char* const path);
++  extern int boinc_truncate(const char* const, double);
++  extern int boinc_file_exists(const char* const path);
++  extern int boinc_file_or_symlink_exists(const char* const path);
+ 
+ #ifdef __cplusplus
+ }
+@@ -75,10 +75,10 @@
+ /* C++ specific prototypes/defines follow here */
+ #ifdef __cplusplus
+ 
+-extern int file_size(const char*, double&);
+-extern int clean_out_dir(const char*);
+-extern int dir_size(const char* dirpath, double&, bool recurse=true);
+-extern int get_filesystem_info(double& total, double& free, char* path=const_cast<char *>("."));
++extern int file_size(const char* const, double&);
++extern int clean_out_dir(const char* const);
++extern int dir_size(const char* const dirpath, double&, bool recurse=true);
++extern int get_filesystem_info(double& total, double& free, const char* const path=const_cast<char *>("."));
+ 
+ // TODO TODO TODO
+ // remove this code - the DirScanner class does the same thing.
+@@ -100,7 +100,7 @@
+ extern int dir_scan(std::string&, DIRREF);
+ extern void dir_close(DIRREF);
+ 
+-extern bool is_dir_empty(const char*);
++extern bool is_dir_empty(const char* const);
+ 
+ class DirScanner {
+ #if defined(_WIN32) && !defined(__CYGWIN32__)

@@ -1,0 +1,304 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          boinc boinc-client
+# Required-Start:    $all
+# Required-Stop:     $local_fs $remote_fs
+# Should-Start:      x11-common network-manager gdm kdm dbus
+# Should-Stop:       x11-common
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: BOINC core client
+# Description:       core client for the BOINC distributed computing
+#                    infrastructure
+### END INIT INFO
+
+# Debian init.d script for the BOINC core client
+# Copyright © 2005, 2006, 2007, 2008
+# Debian BOINC Maintainers <pkg-boinc-devel@lists.alioth.debian.org>
+#
+# This file is licensed under the terms of the GNU General Public License,
+# Version 2 or any later version published by the Free Software Foundation.
+
+set -e
+. /lib/lsb/init-functions
+
+# Default values for the variables that are also set in the defaults file.
+ENABLED=0
+SCHEDULE=0
+BOINC_USER=boinc
+BOINC_DIR=/var/lib/boinc-client
+BOINC_CLIENT=/usr/bin/boinc
+BOINC_OOM_ADJ=15
+
+#VALGRIND_OPTIONS="-v --log-file=/tmp/valgrind_boinc.log "
+VALGRIND_OPTIONS=""
+
+# nice levels
+BOINC_NICE_CLIENT=10
+BOINC_NICE_APP_DEFAULT=19    # minimal
+#BOINC_NICE_APP_GPU=5        # less than regular, not yet used
+
+# ionice classes
+BOINC_IONICE_CLIENT=3        # idle
+#BOINC_IONICE_APP_DEFAULT=3  # idle, not yet used
+#BOINC_IONICE_APP_GPU=2      # best effort, not yet used
+
+
+# Source defaults file. Edit that file to configure this script.
+if [ -e /etc/default/boinc-client ]; then
+  . /etc/default/boinc-client
+fi
+
+# Quit quietly, if $ENABLED is 0.
+test "$ENABLED" != "0" || exit 0
+
+if [ "$BOINC_CLIENT" = "/usr/bin/boinc" ]; then
+  test -x "$BOINC_CLIENT" || exit 0
+elif [ ! -x "$BOINC_CLIENT" ]; then
+  log_failure_msg "BOINC client '$BOINC_CLIENT' does not exist or is not" \
+    "executable."
+  exit 5
+fi
+
+if [ ! -d "$BOINC_DIR" ]; then
+  log_failure_msg "BOINC data directory '$BOINC_DIR' does not exist."
+  exit 6
+fi
+
+if [ -z "$BOINC_USER" ]; then
+  log_failure_msg "BOINC_USER variable is empty. Set it to a user to run" \
+    "the BOINC core client."
+  exit 6
+fi
+
+if [ ! -z "$BOINC_OPTS" ]; then
+	(echo $BOINC_OPTS | grep -- '--daemon' 1>/dev/null) &&
+		log_warning_msg "\`--daemon' option detected \
+			on /etc/default/boinc-client, this \
+			can cause problems on boinc. The option \
+			will be suppressed"
+		BOINC_OPTS=`echo "$BOINC_OPTS" | sed 's/--daemon//g'`
+fi
+
+PIDFILE=/var/run/boinc.pid
+DESC="BOINC core client"
+NAME=`basename $BOINC_CLIENT`
+BOINC_OPTS="--check_all_logins --redirectio --dir $BOINC_DIR $BOINC_OPTS"
+
+is_running()
+{
+  retval=1
+  if [ -r $PIDFILE ]; then
+    pid=`cat $PIDFILE`
+    if [ -e /proc/$pid ]; then
+      procname=`/bin/ps h -p $pid`
+      [ -n "$procname" ] && retval=0
+    fi
+  fi
+  return $retval
+}
+
+start()
+{
+  log_begin_msg "Starting $DESC: $NAME"
+  if is_running; then
+    log_progress_msg "already running"
+  else
+    # workaround for ubuntu bug #933354
+    log_progress_msg "sleeping a little bit in order to let graphics start"
+    sleep 5
+    if [ -n "$DISPLAY" -a -x /usr/bin/xhost ]; then
+       # grant the boinc client to perform GPU computing
+       xhost local:boinc || echo -n "xhost error ignored, GPU computing may not be possible"
+    fi
+    if [ -n "$VALGRIND_OPTIONS" ]; then
+      start-stop-daemon --start --quiet --background --pidfile $PIDFILE \
+         --make-pidfile --user $BOINC_USER --chuid $BOINC_USER \
+         --chdir $BOINC_DIR --exec /usr/bin/valgrind -- $VALGRIND_OPTIONS $BOINC_CLIENT $BOINC_OPTS
+    else
+      start-stop-daemon --start --quiet --background --pidfile $PIDFILE \
+         --make-pidfile --user $BOINC_USER --chuid $BOINC_USER \
+         --chdir $BOINC_DIR --exec $BOINC_CLIENT -- $BOINC_OPTS
+    fi
+  fi
+  log_end_msg 0
+
+  if [ "$SCHEDULE" = "1" ]; then
+    schedule
+  fi
+}
+
+stop()
+{
+  log_begin_msg "Stopping $DESC: $NAME"
+  if ! is_running; then
+    log_progress_msg "not running"
+  else
+    start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE \
+      --user $BOINC_USER --exec $BOINC_CLIENT
+
+		# Wait until really stopped - $pid is set from is_running
+		# (waiting for max 60s (600 cycles at 100ms))
+		i=0
+		while kill -0 "$pid" 2> /dev/null;  do
+			if [ $i = '600' ]; then
+				break;
+			else
+				if [ $i = '0' ]; then
+					echo -n " ... waiting "
+				elif [ $(($i%10)) = 0 ]; then
+					echo -n "."
+				fi
+				i=$(($i+1))
+				sleep .1
+			fi
+		done
+  fi
+
+  rm -f "$BOINC_DIR/lockfile"
+  rm -f $PIDFILE
+  log_end_msg 0
+}
+
+chrt_many()
+{
+   POLICY="$1"
+   PRIO="$2"
+   NICE="$3"
+   shift 3
+   for i in "$@"; do
+     chrt -p $POLICY $PRIO $i || return
+     # increasing compatibility with older versions of renice
+     # in reaction to bug report #600134
+     renice $NICE -p $i > /dev/null || renice -n $NICE -p $i
+   done
+}
+
+schedule()
+{
+  log_begin_msg "Setting up scheduling for $DESC and children:"
+  if ! is_running; then
+    log_progress_msg "$NAME not running"
+  else
+    if [ ! -x "`which ionice 2>/dev/null`" ]; then
+      log_progress_msg "ionice not found,"
+    else
+      if ionice -c $BOINC_IONICE_CLIENT -p $pid 2>/dev/null; then
+        log_progress_msg "idle,"
+      else
+        log_progress_msg "ionice failed,"
+      fi
+    fi
+
+    children=`ps --ppid $pid -o pid= | tr '\n' ' '`
+
+    if [ ! -x "`which chrt 2>/dev/null`" ]; then
+      log_progress_msg "chrt not found"
+    else
+      # BOINC client needs higher priority than scientific apps
+      renice $BOINC_NICE_CLIENT -p $pid > /dev/null || renice -n $BOINC_NICE_CLIENT -p $pid
+      # Apps receive minimal priority
+      if [ -n "$children" ]; then
+        (chrt_many --idle 0 $BOINC_NICE_APP_DEFAULT $children >/dev/null \
+          && log_progress_msg "idleprio") || \
+        (chrt_many --batch 0 $BOINC_NICE_APP_DEFAULT $children >/dev/null \
+          && log_progress_msg "batch") || \
+        (chrt_many --other 0 $BOINC_NICE_APP_DEFAULT $children >/dev/null \
+          && log_progress_msg "normal") || \
+        log_progress_msg "chrt failed"
+      fi
+    fi
+    for BPID in ${pid} ${children}; do
+      if [ -w /proc/${BPID}/oom_adj ]; then
+        echo ${BOINC_OOM_AD} > /proc/${BPID}/oom_adj 2>/dev/null || true
+      else
+        echo "Could not write to /proc/${BPID}/oom_adj"
+      fi
+    done
+  fi
+  log_end_msg 0
+}
+
+status()
+{
+  STATUS="Status of $DESC:"
+  if is_running; then
+    log_success_msg "$STATUS running"
+    children=`ps --ppid $pid -o pid= | tr '\n' ' '`
+    if [ -x "`which chrt 2>/dev/null`" ]; then
+      log_success_msg "Scheduling of $DESC: $pid"
+      chrt -p $pid
+
+      if [ -n "$children" ]; then
+        log_success_msg "Scheduling of $DESC's children: $children"
+        for i in $children; do
+          chrt -p $i
+        done
+      fi
+    fi
+    log_success_msg "OOM killer status for $DESC:"
+    for BPID in ${pid} ${children}; do
+      echo -n "PID ${BPID}: "
+      if [ ! -d "/proc/${BPID}" ]; then
+        echo "/proc/${BPID} not found"
+        continue
+      fi
+
+      echo -n "adj "
+      if [  -r "/proc/${BPID}/oom_adj" ]; then
+        cat /proc/${BPID}/oom_adj
+      else 
+        echo "?"
+      fi
+      echo ", score "
+
+      if [  -r "/proc/${BPID}/oom_adj" ]; then
+        cat /proc/${BPID}/oom_score
+      else
+        echo -n "?"
+      fi
+
+      echo
+    done
+
+    # Display $BOINC_USER's cpu_share:
+    uid=`id -u $BOINC_USER`
+    cpu_share_file="/sys/kernel/uids/$uid/cpu_share"
+    if [ -f "$cpu_share_file" ]; then
+      log_success_msg "cpu_share: `cat "$cpu_share_file"`"
+    fi
+  else
+    log_success_msg "$STATUS stopped"
+  fi
+}
+
+case "$1" in
+  start)
+    start
+    ;;
+
+  stop)
+    stop
+    ;;
+
+  restart|force-reload)
+    stop
+    sleep 1
+    start
+    ;;
+
+  status)
+    status
+    ;;
+
+  schedule)
+    schedule
+    ;;
+
+  *)
+    log_success_msg "Usage: $0 {start|stop|restart|force-reload|status|schedule}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

@@ -1,0 +1,383 @@
+Author: Steffen Moeller <moeller@debian.org>
+Description: Conversion of xml_unescape into class method, no using::std string;
+Disclaimer: This patch should be removed with 7.0.24 when upstream found a working solution for avoiding a valgrind error.
+
+Index: boinc/client/cs_notice.cpp
+===================================================================
+--- boinc.orig/client/cs_notice.cpp	2012-03-27 16:49:03.152703887 +0200
++++ boinc/client/cs_notice.cpp	2012-03-27 16:54:40.936116709 +0200
+@@ -591,7 +591,7 @@
+             return 0;
+         }
+         if (xp.parse_str("url", url, sizeof(url))) {
+-            xml_unescape(url);
++            XML_PARSER::xml_unescape(url);
+         }
+         if (xp.parse_double("poll_interval", poll_interval)) continue;
+         if (xp.parse_double("next_poll_time", next_poll_time)) continue;
+Index: boinc/lib/app_ipc.cpp
+===================================================================
+--- boinc.orig/lib/app_ipc.cpp	2012-03-27 16:49:03.152703887 +0200
++++ boinc/lib/app_ipc.cpp	2012-03-27 18:46:53.896515933 +0200
+@@ -349,11 +349,11 @@
+         if (xp.parse_int("teamid", ai.teamid)) continue;
+         if (xp.parse_int("hostid", ai.hostid)) continue;
+         if (xp.parse_str("user_name", ai.user_name, sizeof(ai.user_name))) {
+-            xml_unescape(ai.user_name);
++            XML_PARSER::xml_unescape(ai.user_name);
+             continue;
+         }
+         if (xp.parse_str("team_name", ai.team_name, sizeof(ai.team_name))) {
+-            xml_unescape(ai.team_name);
++            XML_PARSER::xml_unescape(ai.team_name);
+             continue;
+         }
+         if (xp.parse_str("project_dir", ai.project_dir, sizeof(ai.project_dir))) continue;
+Index: boinc/lib/gui_rpc_client_ops.cpp
+===================================================================
+--- boinc.orig/lib/gui_rpc_client_ops.cpp	2012-03-27 16:49:03.152703887 +0200
++++ boinc/lib/gui_rpc_client_ops.cpp	2012-03-27 16:54:40.944116600 +0200
+@@ -254,11 +254,11 @@
+         if (xp.parse_double("resource_share", resource_share)) continue;
+         if (xp.parse_string("project_name", project_name)) continue;
+         if (xp.parse_string("user_name", user_name)) {
+-            xml_unescape(user_name);
++            XML_PARSER::xml_unescape(user_name);
+             continue;
+         }
+         if (xp.parse_string("team_name", team_name)) {
+-            xml_unescape(team_name);
++            XML_PARSER::xml_unescape(team_name);
+             continue;
+         }
+         if (xp.parse_int("hostid", hostid)) continue;
+Index: boinc/lib/notice.cpp
+===================================================================
+--- boinc.orig/lib/notice.cpp	2012-03-27 16:49:03.152703887 +0200
++++ boinc/lib/notice.cpp	2012-03-27 16:54:40.948116546 +0200
+@@ -48,7 +48,7 @@
+         if (xp.parse_int("seqno", seqno)) continue;
+         if (xp.parse_str("title", title, sizeof(title))) continue;
+         if (xp.parse_string("description", description)) {
+-            xml_unescape(description);   // 2nd pass
++            XML_PARSER::xml_unescape(description);   // 2nd pass
+             continue;
+         }
+         if (xp.parse_double("create_time", create_time)) continue;
+Index: boinc/lib/parse.cpp
+===================================================================
+--- boinc.orig/lib/parse.cpp	2012-03-27 16:54:40.804118501 +0200
++++ boinc/lib/parse.cpp	2012-03-27 18:47:05.980351651 +0200
+@@ -52,9 +52,6 @@
+ #include "boinc_fcgi.h"
+ #endif
+ 
+-using std::string;
+-
+-
+ 
+ // Parse a boolean; tag is of form "foobar"
+ // Accept either <foobar/>, <foobar />, or <foobar>0|1</foobar>
+@@ -90,7 +87,7 @@
+ // Use "<tag", not "<tag>", if there might be attributes
+ //
+ bool parse_str(const char* buf, const char* tag, char* dest, int destlen) {
+-    string str;
++    std::string str;
+     const char* p;
+     int len;
+ 
+@@ -105,11 +102,11 @@
+     memcpy(dest, p, len);
+     dest[len] = 0;
+     strip_whitespace(dest);
+-    xml_unescape(dest);
++    XML_PARSER::xml_unescape(dest);
+     return true;
+ }
+ 
+-bool parse_str(const char* buf, const char* tag, string& dest) {
++bool parse_str(const char* buf, const char* tag, std::string& dest) {
+     char tempbuf[1024];
+     if (!parse_str(buf, tag, tempbuf, 1024)) return false;
+     dest = tempbuf;
+@@ -234,7 +231,7 @@
+     return ERR_XML_PARSE;
+ }
+ 
+-int copy_element_contents(FILE* in, const char* end_tag, string& str) {
++int copy_element_contents(FILE* in, const char* end_tag, std::string& str) {
+     char buf[256];
+ 
+     str = "";
+@@ -405,16 +402,14 @@
+ 
+ // Note: XML unescaping never increases string length
+ //
+-void xml_unescape(string& in) {
+-    int n = (int)in.size()+1;
+-    char* buf = (char*)malloc(n);
+-    strcpy(buf, in.c_str());
+-    xml_unescape(buf);
+-    in = buf;
+-    free(buf);
++void XML_PARSER::xml_unescape(std::string& in) {
++    char writable[in.size()+1+17]; // may be specific to gcc
++    std::copy(in.begin(),in.end(),writable);
++    XML_PARSER::xml_unescape(writable);
++    in = writable;
+ }
+ 
+-void xml_unescape(char* buf) {
++void XML_PARSER::xml_unescape(char* buf) {
+     char* out = buf;
+     char* in = buf;
+     char* p;
+@@ -460,7 +455,7 @@
+ // Otherwise return ERR_XML_PARSE
+ //
+ int skip_unrecognized(char* buf, MIOFILE& fin) {
+-    char* p, *q, buf2[256];
++    char* p, *q, buf2[1024];
+     std::string close_tag;
+ 
+     p = strchr(buf, '<');
+@@ -476,8 +471,8 @@
+     }
+     if (q[-1] == '/') return 0;
+     *q = 0;
+-    close_tag = string("</") + string(p+1) + string(">");
+-    while (fin.fgets(buf2, 256)) {
++    close_tag = std::string("</") + std::string(p+1) + std::string(">");
++    while (fin.fgets(buf2, sizeof(buf2))) {
+         if (strstr(buf2, close_tag.c_str())) {
+             return 0;
+         }
+@@ -512,7 +507,7 @@
+ #define XML_PARSE_DATA      5
+ 
+ int XML_PARSER::scan_comment() {
+-    char buf[256];
++    char buf[1024];
+     char* p = buf;
+     while (1) {
+         int c = f->_getc();
+@@ -693,7 +688,7 @@
+     if (parsed_tag[n-1] == '/') {
+         strcpy(tag, parsed_tag);
+         tag[n-1] = 0;
+-        if (!strcmp(tag, start_tag)) {
++        if (!strncmp(tag, start_tag,sizeof(end_tag))) {
+             strcpy(buf, "");
+             return true;
+         }
+@@ -701,7 +696,7 @@
+ 
+     // check for start tag
+     //
+-    if (strcmp(parsed_tag, start_tag)) return false;
++    if (strncmp(parsed_tag, start_tag,sizeof(start_tag))) return false;
+ 
+     end_tag[0] = '/';
+     strcpy(end_tag+1, start_tag);
+@@ -714,7 +709,7 @@
+     // if it's the end tag, return empty string
+     //
+     if (retval == XML_PARSE_TAG) {
+-        if (strcmp(buf, end_tag)) {
++        if (strncmp(buf, end_tag,sizeof(end_tag))) {
+             return false;
+         } else {
+             strcpy(buf, "");
+@@ -727,13 +722,13 @@
+     if (!is_tag) return false;
+     if (strcmp(tag, end_tag)) return false;
+     if (retval != XML_PARSE_CDATA) {
+-        xml_unescape(buf);
++        XML_PARSER::xml_unescape(buf);
+     }
+     return true;
+ }
+ 
+-bool XML_PARSER::parse_string(const char* start_tag, string& str) {
+-    char buf[MAX_XML_STRING];
++bool XML_PARSER::parse_string(const char* start_tag, std::string& str) {
++    char buf[MAX_XML_STRING+2048];
+     bool flag = parse_str(start_tag, buf, sizeof(buf));
+     if (!flag) return false;
+     str = buf;
+@@ -743,9 +738,9 @@
+ // Same, for integers
+ //
+ bool XML_PARSER::parse_int(const char* start_tag, int& i) {
+-    char buf[256], *end;
++    char buf[1024], *end;
+     bool eof;
+-    char end_tag[256], tag[256];
++    char end_tag[1024], tag[1024];
+ 
+     if (strcmp(parsed_tag, start_tag)) return false;
+ 
+@@ -755,7 +750,7 @@
+     eof = get(buf, sizeof(buf), is_tag);
+     if (eof) return false;
+     if (is_tag) {
+-        if (!strcmp(buf, end_tag)) {
++        if (!strncmp(buf, end_tag,sizeof(end_tag))) {
+             i = 0;      // treat <foo></foo> as <foo>0</foo>
+             return true;
+         } else {
+@@ -770,7 +765,7 @@
+     eof = get(tag, sizeof(tag), is_tag);
+     if (eof) return false;
+     if (!is_tag) return false;
+-    if (strcmp(tag, end_tag)) return false;
++    if (strncmp(tag, end_tag,sizeof(end_tag))) return false;
+     i = val;
+     return true;
+ }
+@@ -778,11 +773,11 @@
+ // Same, for doubles
+ //
+ bool XML_PARSER::parse_double(const char* start_tag, double& x) {
+-    char buf[256], *end;
++    char buf[1024], *end;
+     bool eof;
+-    char end_tag[256], tag[256];
++    char end_tag[1024], tag[1024];
+ 
+-    if (strcmp(parsed_tag, start_tag)) return false;
++    if (strncmp(parsed_tag, start_tag,sizeof(start_tag))) return false;
+ 
+     end_tag[0] = '/';
+     strcpy(end_tag+1, start_tag);
+@@ -790,7 +785,7 @@
+     eof = get(buf, sizeof(buf), is_tag);
+     if (eof) return false;
+     if (is_tag) {
+-        if (!strcmp(buf, end_tag)) {
++        if (!strncmp(buf, end_tag, sizeof(end_tag))) {
+             x = 0;      // treat <foo></foo> as <foo>0</foo>
+             return true;
+         } else {
+@@ -817,7 +812,7 @@
+     bool eof;
+     char end_tag[256], tag[256];
+ 
+-    if (strcmp(parsed_tag, start_tag)) return false;
++    if (strncmp(parsed_tag, start_tag, sizeof(start_tag))) return false;
+ 
+     end_tag[0] = '/';
+     strcpy(end_tag+1, start_tag);
+@@ -825,7 +820,7 @@
+     eof = get(buf, sizeof(buf), is_tag);
+     if (eof) return false;
+     if (is_tag) {
+-        if (!strcmp(buf, end_tag)) {
++        if (!strncmp(buf, end_tag, sizeof(end_tag))) {
+             x = 0;      // treat <foo></foo> as <foo>0</foo>
+             return true;
+         } else {
+@@ -848,11 +843,11 @@
+ // Same, for unsigned long long
+ //
+ bool XML_PARSER::parse_ulonglong(const char* start_tag, unsigned long long& x) {
+-    char buf[256], *end;
++    char buf[1024], *end;
+     bool eof;
+-    char end_tag[256], tag[256];
++    char end_tag[1024], tag[1024];
+ 
+-    if (strcmp(parsed_tag, start_tag)) return false;
++    if (strncmp(parsed_tag, start_tag, sizeof(start_tag))) return false;
+ 
+     end_tag[0] = '/';
+     strcpy(end_tag+1, start_tag);
+@@ -883,15 +878,15 @@
+ // Same, for bools
+ //
+ bool XML_PARSER::parse_bool(const char* start_tag, bool& b) {
+-    char buf[256], *end;
++    char buf[1024], *end;
+     bool eof;
+-    char end_tag[256], tag[256];
++    char end_tag[1024], tag[1024];
+ 
+     // handle the archaic form <tag/>, which means true
+     //
+     strcpy(tag, start_tag);
+     strcat(tag, "/");
+-    if (!strcmp(parsed_tag, tag)) {
++    if (!strncmp(parsed_tag, tag,sizeof(tag))) {
+         b = true;
+         return true;
+     }
+@@ -911,7 +906,7 @@
+     eof = get(tag, sizeof(tag), is_tag);
+     if (eof) return false;
+     if (!is_tag) return false;
+-    if (strcmp(tag, end_tag)) return false;
++    if (strncmp(tag, end_tag,sizeof(end_tag))) return false;
+     b = val;
+     return true;
+ }
+@@ -919,7 +914,7 @@
+ // parse a start tag (optionally preceded by <?xml>)
+ //
+ bool XML_PARSER::parse_start(const char* start_tag) {
+-    char tag[256];
++    char tag[1024];
+     bool eof;
+ 
+     eof = get(tag, sizeof(tag), is_tag);
+@@ -932,7 +927,7 @@
+             return false;
+         }
+     }
+-    if (strcmp(tag, start_tag)) {
++    if (strncmp(tag, start_tag,sizeof(tag))) {
+         return false;
+     }
+     return true;
+@@ -998,7 +993,7 @@
+ void XML_PARSER::skip_unexpected(
+     const char* start_tag, bool verbose, const char* where
+ ) {
+-    char tag[256], end_tag[256];
++    char tag[4098], end_tag[4098];
+ 
+     if (verbose) {
+         fprintf(stderr, "Unrecognized XML in %s: %s\n", where, start_tag);
+@@ -1018,8 +1013,8 @@
+ // we just parsed a tag.
+ // copy this entire element, including start and end tags, to the buffer
+ //
+-int XML_PARSER::copy_element(string& out) {
+-    char end_tag[256], buf[1024];
++int XML_PARSER::copy_element(std::string& out) {
++    char end_tag[1024], buf[1024];
+ 
+     // handle <foo/> case
+     //
+Index: boinc/lib/parse.h
+===================================================================
+--- boinc.orig/lib/parse.h	2012-03-27 16:49:03.152703887 +0200
++++ boinc/lib/parse.h	2012-03-27 16:54:40.956116437 +0200
+@@ -65,6 +65,8 @@
+     void skip_unexpected(bool verbose=false, const char* msg="") {
+         skip_unexpected(parsed_tag, verbose, msg);
+     }
++    static void xml_unescape(std::string&);
++    static void xml_unescape(char*);
+ };
+ 
+ extern bool boinc_is_finite(double);
+@@ -189,8 +191,6 @@
+ extern char* sgets(char* buf, int len, char* &in);
+ extern void non_ascii_escape(const char*, char*, int len);
+ extern void xml_escape(const char*, char*, int len);
+-extern void xml_unescape(std::string&);
+-extern void xml_unescape(char*);
+ extern void extract_venue(const char*, const char*, char*);
+ extern int skip_unrecognized(char* buf, MIOFILE&);
+ 

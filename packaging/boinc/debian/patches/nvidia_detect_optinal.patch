@@ -1,0 +1,841 @@
+Index: boinc/client/coproc_detect.cpp
+===================================================================
+--- boinc.orig/client/coproc_detect.cpp	2012-05-03 13:58:43.000000000 +0200
++++ boinc/client/coproc_detect.cpp	2012-05-03 14:01:32.344886723 +0200
+@@ -43,6 +43,7 @@
+ 
+ #include "coproc.h"
+ #include "str_util.h"
++#include "str_replace.h"
+ #include "util.h"
+ 
+ #include "client_state.h"
+@@ -51,7 +52,7 @@
+ using std::string;
+ using std::vector;
+ 
+-static bool in_vector(int n, vector<int>& v) {
++static bool in_vector(const int n, const vector<int>& v) {
+     for (unsigned int i=0; i<v.size(); i++) {
+         if (v[i] == n) return true;
+     }
+@@ -71,14 +72,14 @@
+ vector<OPENCL_DEVICE_PROP> nvidia_opencls;
+ vector<OPENCL_DEVICE_PROP> ati_opencls;
+ 
++#define STEFFEN
+ 
+ void COPROCS::get(
+-    bool use_all, vector<string>&descs, vector<string>&warnings,
++    const bool use_all, vector<string>&descs, vector<string>&warnings,
+     vector<int>& ignore_nvidia_dev,
+     vector<int>& ignore_ati_dev
+ ) {
+-    unsigned int i;
+-    char buf[1024], buf2[1024];
++    char buf[4096], buf2[4096];
+ 
+ #ifdef _WIN32
+     try {
+@@ -99,13 +100,16 @@
+     catch (...) {
+         warnings.push_back("Caught SIGSEGV in OpenCL detection");
+     }
++
+ #else
++
+     void (*old_sig)(int) = signal(SIGSEGV, segv_handler);
+     if (setjmp(resume)) {
+         warnings.push_back("Caught SIGSEGV in NVIDIA GPU detection");
+     } else {
+         nvidia.get(use_all, warnings, ignore_nvidia_dev);
+     }
++
+ #ifndef __APPLE__       // ATI does not yet support CAL on Macs
+     if (setjmp(resume)) {
+         warnings.push_back("Caught SIGSEGV in ATI GPU detection");
+@@ -113,32 +117,37 @@
+         ati.get(use_all, warnings, ignore_ati_dev);
+     }
+ #endif
++
+     if (setjmp(resume)) {
+         warnings.push_back("Caught SIGSEGV in OpenCL detection");
+     } else {
+         get_opencl(use_all, warnings, ignore_ati_dev, ignore_nvidia_dev);
+     }
+     signal(SIGSEGV, old_sig);
++
+ #endif
+ 
+-    for (i=0; i<nvidia_gpus.size(); i++) {
++    for (unsigned int i=0; i<nvidia_gpus.size(); i++) {
+         nvidia_gpus[i].description(buf);
+         switch(nvidia_gpus[i].is_used) {
+         case COPROC_IGNORED:
+-            sprintf(buf2, "NVIDIA GPU %d (ignored by config): %s", nvidia_gpus[i].device_num, buf);
++            snprintf(buf2, sizeof(buf2), "NVIDIA GPU %d (ignored by config): %s",
++	                   nvidia_gpus[i].device_num, buf);
+             break;
+         case COPROC_USED:
+-            sprintf(buf2, "NVIDIA GPU %d: %s", nvidia_gpus[i].device_num, buf);
++            snprintf(buf2, sizeof(buf2), "NVIDIA GPU %d: %s",
++	                   nvidia_gpus[i].device_num, buf);
+             break;
+         case COPROC_UNUSED:
+         default:
+-            sprintf(buf2, "NVIDIA GPU %d (not used): %s", nvidia_gpus[i].device_num, buf);
++            snprintf(buf2, sizeof(buf2), "NVIDIA GPU %d (not used): %s",
++	                   nvidia_gpus[i].device_num, buf);
+             break;
+         }
+         descs.push_back(string(buf2));
+     }
+ 
+-    for (i=0; i<ati_gpus.size(); i++) {
++    for (unsigned int i=0; i<ati_gpus.size(); i++) {
+         ati_gpus[i].description(buf);
+         switch(ati_gpus[i].is_used) {
+         case COPROC_IGNORED:
+@@ -157,14 +166,14 @@
+ 
+     // Create descriptions for OpenCL NVIDIA GPUs
+     //
+-    for (i=0; i<nvidia_opencls.size(); i++) {
++    for (unsigned int i=0; i<nvidia_opencls.size(); i++) {
+         nvidia_opencls[i].description(buf, GPU_TYPE_NVIDIA);
+         descs.push_back(string(buf));
+     }
+ 
+     // Create descriptions for OpenCL ATI GPUs
+     //
+-    for (i=0; i<ati_opencls.size(); i++) {
++    for (unsigned int i=0; i<ati_opencls.size(); i++) {
+         ati_opencls[i].description(buf, GPU_TYPE_ATI);
+         descs.push_back(string(buf));
+     }
+@@ -228,7 +237,7 @@
+ 
+ // If "loose", tolerate small diff
+ //
+-int opencl_compare(OPENCL_DEVICE_PROP& c1, OPENCL_DEVICE_PROP& c2, bool loose) {
++int opencl_compare(const OPENCL_DEVICE_PROP& c1, const OPENCL_DEVICE_PROP& c2, const bool loose) {
+     if (c1.opencl_device_version_int > c2.opencl_device_version_int) return 1;
+     if (c1.opencl_device_version_int < c2.opencl_device_version_int) return -1;
+     if (loose) {
+@@ -248,7 +257,7 @@
+ // http://www.khronos.org/registry/cl/sdk/1.1/docs/man/xhtml/
+ 
+ void COPROCS::get_opencl(
+-    bool use_all,
++    const bool use_all,
+     vector<string>& warnings, 
+     vector<int>& ignore_ati_dev,
+     vector<int>& ignore_nvidia_dev
+@@ -351,8 +360,8 @@
+ //TODO: Must we check if multiple platforms found the same GPU and merge the records?
+ #if FAKE2NVIDIAOPENCLS
+ if (device_index == 2) {
+-strcpy(prop.name, "GEForce 120 GT");
+-strcpy(prop.vendor, "NVIDIA");
++safe_strcpy(prop.name, "GEForce 120 GT");
++safe_strcpy(prop.vendor, "NVIDIA");
+ prop.vendor_id = 16918016;
+ prop.available = 1;
+ prop.half_fp_config = 0;
+@@ -360,13 +369,13 @@
+ prop.double_fp_config = 63;
+ prop.endian_little = 1;
+ prop.execution_capabilities = 1;
+-strcpy(prop.extensions, "cl_APPLE_SetMemObjectDestructor cl_APPLE_ContextLoggingFunctions cl_APPLE_clut cl_APPLE_query_kernel_names cl_APPLE_gl_sharing cl_khr_gl_event cl_khr_byte_addressable_store cl_khr_global_int32_base_atomics cl_khr_global_int32_extended_atomics ");
++safe_strcpy(prop.extensions, "cl_APPLE_SetMemObjectDestructor cl_APPLE_ContextLoggingFunctions cl_APPLE_clut cl_APPLE_query_kernel_names cl_APPLE_gl_sharing cl_khr_gl_event cl_khr_byte_addressable_store cl_khr_global_int32_base_atomics cl_khr_global_int32_extended_atomics ");
+ prop.global_mem_size = 268435456;
+ prop.local_mem_size = 16384;
+ prop.max_clock_frequency = 1000;
+ prop.max_compute_units = 10;
+-strcpy(prop.opencl_device_version, "OpenCL 1.0 ");
+-strcpy(prop.opencl_driver_version, "CLH 1.0");
++safe_strcpy(prop.opencl_device_version, "OpenCL 1.0 ");
++safe_strcpy(prop.opencl_driver_version, "CLH 1.0");
+ } else
+ #endif
+             ciErrNum = get_opencl_info(prop, device_index, warnings);
+@@ -509,7 +518,7 @@
+     vector<string>&warnings
+ ) {
+     cl_int ciErrNum;
+-    char buf[256];
++    char buf[2048];
+     
+     ciErrNum = (*__clGetDeviceInfo)(prop.device_id, CL_DEVICE_NAME, sizeof(prop.name), prop.name, NULL);
+     if ((ciErrNum != CL_SUCCESS) || (prop.name[0] == 0)) {
+@@ -1039,7 +1048,6 @@
+     warnings.push_back(buf);
+ 
+     int j;
+-    unsigned int i;
+     size_t global_mem;
+     COPROC_NVIDIA cc;
+     string s;
+Index: boinc/client/cs_scheduler.cpp
+===================================================================
+--- boinc.orig/client/cs_scheduler.cpp	2012-05-03 13:38:04.000000000 +0200
++++ boinc/client/cs_scheduler.cpp	2012-05-03 14:01:32.352886613 +0200
+@@ -72,9 +72,8 @@
+ // to be sent to a scheduling server
+ //
+ int CLIENT_STATE::make_scheduler_request(PROJECT* p) {
+-    char buf[1024];
++    char buf[4096];
+     MIOFILE mf;
+-    unsigned int i;
+     RESULT* rp;
+ 
+     get_sched_request_filename(*p, buf, sizeof(buf));
+@@ -177,7 +176,7 @@
+     // Use project URL as tie-breaker.
+     //
+     PROJECT* winner = p;
+-    for (i=0; i<projects.size(); i++ ) {
++    for (unsigned int i=0; i<projects.size(); i++ ) {
+         PROJECT* project = projects[i];
+         if (project == p) continue;
+         if (strcmp(project->email_hash, p->email_hash)) continue;
+@@ -244,7 +243,7 @@
+     //
+     unsigned int last_reported_index = 0;
+     p->nresults_returned = 0;
+-    for (i=0; i<results.size(); i++) {
++    for (unsigned int i=0; i<results.size(); i++) {
+         rp = results[i];
+         if (rp->project == p && rp->ready_to_report) {
+             p->nresults_returned++;
+@@ -262,7 +261,7 @@
+ 
+     // report sticky files as needed
+     //
+-    for (i=0; i<file_infos.size(); i++) {
++    for (unsigned int i=0; i<file_infos.size(); i++) {
+         FILE_INFO* fip = file_infos[i];
+         if (fip->project != p) continue;
+         if (!fip->sticky) continue;
+@@ -292,7 +291,7 @@
+     //
+     fprintf(f, "<app_versions>\n");
+     j=0;
+-    for (i=0; i<app_versions.size(); i++) {
++    for (unsigned int i=0; i<app_versions.size(); i++) {
+         APP_VERSION* avp = app_versions[i];
+         if (avp->project != p) continue;
+         avp->write(mf, false);
+@@ -303,7 +302,7 @@
+     // send descriptions of jobs in progress for this project
+     //
+     fprintf(f, "<other_results>\n");
+-    for (i=0; i<results.size(); i++) {
++    for (unsigned int i=0; i<results.size(); i++) {
+         rp = results[i];
+         if (rp->project != p) continue;
+         if ((last_reported_index && (i > last_reported_index)) || !rp->ready_to_report) {
+@@ -334,7 +333,7 @@
+     //
+     if (p->send_full_workload) {
+         fprintf(f, "<in_progress_results>\n");
+-        for (i=0; i<results.size(); i++) {
++        for (unsigned int i=0; i<results.size(); i++) {
+             rp = results[i];
+             double x = rp->estimated_runtime_remaining();
+             if (x == 0) continue;
+@@ -495,9 +494,8 @@
+     SCHEDULER_REPLY sr;
+     FILE* f;
+     int retval;
+-    unsigned int i;
+     bool signature_valid, update_global_prefs=false, update_project_prefs=false;
+-    char buf[1024], filename[256];
++    char buf[4096], filename[1024];
+     std::string old_gui_urls = project->gui_urls;
+     PROJECT* p2;
+     vector<RESULT*>new_results;
+@@ -561,7 +559,7 @@
+     // make sure we don't already have a project of same name
+     //
+     bool dup_name = false;
+-    for (i=0; i<projects.size(); i++) {
++    for (unsigned int i=0; i<projects.size(); i++) {
+         p2 = projects[i];
+         if (project == p2) continue;
+         if (!strcmp(p2->project_name, project->project_name)) {
+@@ -581,7 +579,7 @@
+ 
+     // show messages from server
+     //
+-    for (i=0; i<sr.messages.size(); i++) {
++    for (unsigned int i=0; i<sr.messages.size(); i++) {
+         USER_MESSAGE& um = sr.messages[i];
+         int prio = (!strcmp(um.priority.c_str(), "notice"))?MSG_SCHEDULER_ALERT:MSG_INFO;
+         string_substitute(um.message.c_str(), buf, sizeof(buf), "%", "%%");
+@@ -711,7 +709,7 @@
+ 
+     // copy new entities to client state
+     //
+-    for (i=0; i<sr.apps.size(); i++) {
++    for (unsigned int i=0; i<sr.apps.size(); i++) {
+         APP* app = lookup_app(project, sr.apps[i].name);
+         if (app) {
+             strcpy(app->user_friendly_name, sr.apps[i].user_friendly_name);
+@@ -730,7 +728,7 @@
+         }
+     }
+     FILE_INFO* fip;
+-    for (i=0; i<sr.file_infos.size(); i++) {
++    for (unsigned int i=0; i<sr.file_infos.size(); i++) {
+         fip = lookup_file_info(project, sr.file_infos[i].name);
+         if (fip) {
+             fip->merge_info(sr.file_infos[i]);
+@@ -748,7 +746,7 @@
+             }
+         }
+     }
+-    for (i=0; i<sr.file_deletes.size(); i++) {
++    for (unsigned int i=0; i<sr.file_deletes.size(); i++) {
+         fip = lookup_file_info(project, sr.file_deletes[i].c_str());
+         if (fip) {
+             if (log_flags.file_xfer_debug) {
+@@ -760,7 +758,7 @@
+             fip->sticky = false;
+         }
+     }
+-    for (i=0; i<sr.app_versions.size(); i++) {
++    for (unsigned int i=0; i<sr.app_versions.size(); i++) {
+         if (project->anonymous_platform) {
+             msg_printf(project, MSG_INTERNAL_ERROR,
+                 "App version returned from anonymous platform project; ignoring"
+@@ -822,7 +820,7 @@
+         }
+         app_versions.push_back(avp);
+     }
+-    for (i=0; i<sr.workunits.size(); i++) {
++    for (unsigned int i=0; i<sr.workunits.size(); i++) {
+         if (lookup_workunit(project, sr.workunits[i].name)) continue;
+         WORKUNIT* wup = new WORKUNIT;
+         *wup = sr.workunits[i];
+@@ -842,7 +840,7 @@
+     for (int j=0; j<coprocs.n_rsc; j++) {
+         est_rsc_runtime[j] = 0;
+     }
+-    for (i=0; i<sr.results.size(); i++) {
++    for (unsigned int i=0; i<sr.results.size(); i++) {
+         if (lookup_result(project, sr.results[i].name)) {
+             msg_printf(project, MSG_INTERNAL_ERROR,
+                 "Already have task %s\n", sr.results[i].name
+@@ -912,7 +910,7 @@
+ 
+     // update records for ack'ed results
+     //
+-    for (i=0; i<sr.result_acks.size(); i++) {
++    for (unsigned int i=0; i<sr.result_acks.size(); i++) {
+         if (log_flags.sched_op_debug) {
+             msg_printf(project, MSG_INFO,
+                 "[sched_op] handle_scheduler_reply(): got ack for task %s\n",
+@@ -931,7 +929,7 @@
+ 
+     // handle result abort requests
+     //
+-    for (i=0; i<sr.result_abort.size(); i++) {
++    for (unsigned int i=0; i<sr.result_abort.size(); i++) {
+         RESULT* rp = lookup_result(project, sr.result_abort[i].name);
+         if (rp) {
+             ACTIVE_TASK* atp = lookup_active_task_by_result(rp);
+@@ -949,7 +947,7 @@
+             );
+         }
+     }
+-    for (i=0; i<sr.result_abort_if_not_started.size(); i++) {
++    for (unsigned int i=0; i<sr.result_abort_if_not_started.size(); i++) {
+         RESULT* rp = lookup_result(project, sr.result_abort_if_not_started[i].name);
+         if (!rp) {
+             msg_printf(project, MSG_INTERNAL_ERROR,
+@@ -1052,8 +1050,7 @@
+ #endif // SIM
+ 
+ void CLIENT_STATE::check_project_timeout() {
+-    unsigned int i;
+-    for (i=0; i<projects.size(); i++) {
++    for (unsigned int i=0; i<projects.size(); i++) {
+         PROJECT* p = projects[i];
+         if (p->possibly_backed_off && now > p->min_rpc_time) {
+             p->possibly_backed_off = false;
+@@ -1067,11 +1064,8 @@
+ // find a project that needs to have its master file fetched
+ //
+ PROJECT* CLIENT_STATE::next_project_master_pending() {
+-    unsigned int i;
+-    PROJECT* p;
+-
+-    for (i=0; i<projects.size(); i++) {
+-        p = projects[i];
++    for (unsigned int i=0; i<projects.size(); i++) {
++        PROJECT *p = projects[i];
+         if (p->waiting_until_min_rpc_time()) continue;
+         if (p->suspended_via_gui) continue;
+         if (p->master_url_fetch_pending) {
+@@ -1169,11 +1163,9 @@
+ PROJECT* CLIENT_STATE::find_project_with_overdue_results(
+     bool network_suspend_soon
+ ) {
+-    unsigned int i;
+-    RESULT* r;
+ 
+-    for (i=0; i<results.size(); i++) {
+-        r = results[i];
++    for (unsigned int i=0; i<results.size(); i++) {
++        RESULT *r = results[i];
+         if (!r->ready_to_report) continue;
+ 
+         PROJECT* p = r->project;
+Index: boinc/client/sim.cpp
+===================================================================
+--- boinc.orig/client/sim.cpp	2012-05-03 13:28:54.000000000 +0200
++++ boinc/client/sim.cpp	2012-05-03 14:01:32.356886558 +0200
+@@ -88,7 +88,7 @@
+ FILE* debt_file;
+ FILE* index_file;
+ FILE* summary_file;
+-char log_filename[256];
++char log_filename[1024];
+ 
+ string html_msg;
+ double active_time = 0;
+Index: boinc/client/client_types.h
+===================================================================
+--- boinc.orig/client/client_types.h	2012-05-03 13:38:04.000000000 +0200
++++ boinc/client/client_types.h	2012-05-03 14:01:32.360886503 +0200
+@@ -102,7 +102,7 @@
+ #define FILE_VERIFY_PENDING	2
+ 
+ struct FILE_INFO {
+-    char name[256];
++    char name[1024];
+     char md5_cksum[33];
+     double max_nbytes;
+     double nbytes;
+@@ -115,7 +115,7 @@
+     bool signature_required;    // true iff associated with app version
+     bool is_user_file;
+     bool is_project_file;
+-	bool is_auto_update_file;
++    bool is_auto_update_file;
+     bool anonymous_platform_file;
+     bool gzip_when_done;
+         // for output files: gzip file when done, and append .gz to its name
+@@ -172,17 +172,17 @@
+ // Describes a connection between a file and a workunit, result, or app version
+ //
+ struct FILE_REF {
+-    char file_name[256];
++    char file_name[1024];
+         // physical name
+-    char open_name[256];
++    char open_name[1024];
+         // logical name
+     bool main_program;
+     FILE_INFO* file_info;
+     bool copy_file;
+         // if true, core client will copy the file instead of linking
+-	bool optional;
+-		// for output files: app may not generate file;
+-		// don't treat as error if file is missing.
++    bool optional;
++        // for output files: app may not generate file;
++        // don't treat as error if file is missing.
+     int parse(XML_PARSER&);
+     int write(MIOFILE&);
+ };
+@@ -234,8 +234,8 @@
+ // base class for PROJECT and ACCT_MGR_INFO
+ //
+ struct PROJ_AM {
+-    char master_url[256];
+-    char project_name[256];
++    char master_url[1024];
++    char project_name[1024];
+         // descriptive.  not unique
+     std::vector<RSS_FEED> proj_feeds;
+     inline char *get_project_name() {
+@@ -273,9 +273,9 @@
+ };
+ 
+ struct APP_VERSION {
+-    char app_name[256];
++    char app_name[1024];
+     int version_num;
+-    char platform[256];
++    char platform[1024];
+     char plan_class[64];
+     char api_version[16];
+     double avg_ncpus;
+@@ -283,9 +283,9 @@
+     GPU_USAGE gpu_usage;    // can only use 1 GPUtype
+     double gpu_ram;
+     double flops;
+-    char cmdline[256];
++    char cmdline[2048];
+         // additional cmdline args
+-    char file_prefix[256];
++    char file_prefix[1024];
+         // prepend this to input/output file logical names
+         // (e.g. "share" for VM apps)
+     bool needs_network;
+@@ -294,8 +294,8 @@
+     PROJECT* project;
+     std::vector<FILE_REF> app_files;
+     int ref_cnt;
+-    char graphics_exec_path[512];
+-    char graphics_exec_file[256];
++    char graphics_exec_path[1024];
++    char graphics_exec_file[1024];
+     double max_working_set_size;
+         // max working set of tasks using this app version.
+         // unstarted jobs using this app version are assumed
+@@ -329,8 +329,8 @@
+ };
+ 
+ struct WORKUNIT {
+-    char name[256];
+-    char app_name[256];
++    char name[1024];
++    char app_name[1024];
+     int version_num;
+         // Deprecated, but need to keep around to let people revert
+         // to versions before multi-platform support
+@@ -366,7 +366,7 @@
+     int get_perm();
+     int get_prev();
+     int get_current();
+-	double delay();
++    double delay();
+ };
+ 
+ // a platform supported by the client.
+Index: boinc/lib/coproc.cpp
+===================================================================
+--- boinc.orig/lib/coproc.cpp	2012-05-03 13:58:43.000000000 +0200
++++ boinc/lib/coproc.cpp	2012-05-03 14:01:32.368886394 +0200
+@@ -135,7 +135,7 @@
+ }
+ 
+ int COPROC::parse(XML_PARSER& xp) {
+-    char buf[256];
++    char buf[2048];
+     strcpy(type, "");
+     clear();
+     for (int i=0; i<MAX_COPROC_INSTANCES; i++) {
+@@ -257,7 +257,7 @@
+ }
+ 
+ void OPENCL_DEVICE_PROP::description(char* buf, const char* type) {
+-    char s1[256], s2[256];
++    char s1[4096], s2[4096];
+     int n;
+     // openCL_device_version may have a trailing space
+     strlcpy(s1, opencl_device_version, sizeof(s1));
+@@ -281,19 +281,19 @@
+     }
+ }
+ 
+-void COPROCS::summary_string(char* buf, int len) {
+-    char buf2[1024];
++void COPROCS::summary_string(char* buf, const int len) {
++    char buf2[9192];
+ 
+     strcpy(buf, "");
+     if (nvidia.count) {
+         int mem = (int)(nvidia.prop.totalGlobalMem/MEGA);
+-        sprintf(buf2, "[CUDA|%s|%d|%dMB|%d]",
++        snprintf(buf2, sizeof(buf2), "[CUDA|%s|%d|%dMB|%d]",
+             nvidia.prop.name, nvidia.count, mem, nvidia.display_driver_version
+         );
+         strlcat(buf, buf2, len);
+     }
+     if (ati.count) {
+-        sprintf(buf2,"[CAL|%s|%d|%dMB|%s]",
++        snprintf(buf2, sizeof(buf2), "[CAL|%s|%d|%dMB|%s]",
+             ati.name, ati.count, ati.attribs.localRAM, ati.version
+         );
+         strlcat(buf, buf2, len);
+@@ -353,11 +353,11 @@
+      	int maj = display_driver_version >> 16;
+     	int min = (display_driver_version >> 8) & 0xff;
+     	int rev = display_driver_version & 0xff;
+-        sprintf(vers, "%d.%d.%d", maj, min, rev);
++        snprintf(vers, sizeof(vers), "%d.%d.%d", maj, min, rev);
+ #else
+         int maj = display_driver_version/100;
+         int min = display_driver_version%100;
+-        sprintf(vers, "%d.%d", maj, min);
++        snprintf(vers, sizeof(vers), "%d.%d", maj, min);
+ #endif
+     } else {
+         strcpy(vers, "unknown");
+@@ -365,7 +365,7 @@
+     if (cuda_version) {
+         int maj = cuda_version/1000;
+         int min = cuda_version%1000;
+-        sprintf(cuda_vers, "%d.%d", maj, min);
++        snprintf(cuda_vers, sizeof(cuda_vers), "%d.%d", maj, min);
+     } else {
+         strcpy(cuda_vers, "unknown");
+     }
+@@ -376,7 +376,7 @@
+ }
+ 
+ #ifndef _USING_FCGI_
+-void COPROC_NVIDIA::write_xml(MIOFILE& f, bool include_request) {
++void COPROC_NVIDIA::write_xml(MIOFILE& f, const bool include_request) {
+     f.printf(
+         "<coproc_cuda>\n"
+         "   <count>%d</count>\n"
+@@ -470,7 +470,7 @@
+ }
+ 
+ int COPROC_NVIDIA::parse(XML_PARSER& xp) {
+-    char buf2[256];
++    char buf2[4096];
+     int retval;
+ 
+     clear();
+@@ -589,7 +589,7 @@
+ ////////////////// ATI STARTS HERE /////////////////
+ 
+ #ifndef _USING_FCGI_
+-void COPROC_ATI::write_xml(MIOFILE& f, bool include_request) {
++void COPROC_ATI::write_xml(MIOFILE& f, const bool include_request) {
+     f.printf(
+         "<coproc_ati>\n"
+         "   <count>%d</count>\n"
+@@ -671,7 +671,7 @@
+ }
+ 
+ int COPROC_ATI::parse(XML_PARSER& xp) {
+-    int n, retval;
++    int n;
+ 
+     clear();
+ 
+@@ -763,7 +763,7 @@
+             continue;
+         }
+         if (xp.match_tag("coproc_opencl")) {
+-            retval = opencl_prop.parse(xp);
++            int retval = opencl_prop.parse(xp);
+             if (retval) return retval;
+             continue;
+         }
+Index: boinc/lib/coproc.h
+===================================================================
+--- boinc.orig/lib/coproc.h	2012-05-03 13:28:54.000000000 +0200
++++ boinc/lib/coproc.h	2012-05-03 14:01:32.372886339 +0200
+@@ -99,7 +99,7 @@
+ // (used in client only)
+ //
+ struct COPROC_REQ {
+-    char type[256];     // must be unique
++    char type[1024];     // must be unique
+     double count;
+     int parse(XML_PARSER&);
+ };
+@@ -109,8 +109,8 @@
+ //
+ struct OPENCL_DEVICE_PROP {
+     cl_device_id device_id;
+-    char name[256];                     // Device name
+-    char vendor[256];                   // Device vendor (NVIDIA, ATI, AMD, etc.)
++    char name[1024];                     // Device name
++    char vendor[1024];                   // Device vendor (NVIDIA, ATI, AMD, etc.)
+     cl_uint vendor_id;                  // OpenCL ID of device vendor
+     cl_bool available;                  // Is this device available?
+     cl_device_fp_config half_fp_config; // Half precision capabilities
+@@ -118,7 +118,7 @@
+     cl_device_fp_config double_fp_config;   // Double precision
+     cl_bool endian_little;              // TRUE if little-endian
+     cl_device_exec_capabilities execution_capabilities;
+-    char extensions[1024];              // List of device extensions
++    char extensions[9128];              // List of device extensions
+     cl_ulong global_mem_size;           // in bytes
+     cl_ulong local_mem_size;
+     cl_uint max_clock_frequency;        // in MHz
+@@ -140,7 +140,7 @@
+     void write_xml(MIOFILE&);
+ #endif
+     int parse(XML_PARSER&);
+-void description(char* buf, const char* type);
++    void description(char* buf, const char* type);
+ };
+ 
+ 
+@@ -150,7 +150,7 @@
+ // Used in both client and server.
+ //
+ struct COPROC {
+-    char type[256];     // must be unique
++    char type[1024];    // must be unique
+     int count;          // how many are present
+     double peak_flops;
+     double used;        // how many are in use (used by client)
+@@ -251,7 +251,7 @@
+         std::vector<int>& ignore_dev
+     );
+     void find_best_opencls(
+-        bool use_all,
++        const bool use_all,
+         std::vector<OPENCL_DEVICE_PROP> &opencls, 
+         std::vector<int>& ignore_dev
+     );
+@@ -291,7 +291,7 @@
+ #endif
+     COPROC_NVIDIA(): COPROC(GPU_TYPE_NVIDIA){}
+     void get(
+-        bool use_all,
++        const bool use_all,
+         std::vector<std::string>&,
+         std::vector<int>& ignore_devs
+     );
+@@ -328,7 +328,7 @@
+ #endif
+     COPROC_ATI(): COPROC(GPU_TYPE_ATI){}
+     void get(
+-        bool use_all,
++        const bool use_all,
+         std::vector<std::string>&,
+         std::vector<int>& ignore_devs
+     );
+@@ -348,14 +348,14 @@
+ 
+     void write_xml(MIOFILE& out, bool include_request);
+     void get(
+-        bool use_all, 
++        const bool use_all,
+         std::vector<std::string> &descs,
+         std::vector<std::string> &warnings,
+         std::vector<int>& ignore_nvidia_dev,
+         std::vector<int>& ignore_ati_dev
+     );
+     void get_opencl(
+-        bool use_all, 
++        const bool use_all,
+         std::vector<std::string> &warnings,
+         std::vector<int>& ignore_nvidia_dev, 
+         std::vector<int>& ignore_ati_dev
+@@ -369,13 +369,13 @@
+ #ifdef __APPLE__
+     void get_ati_mem_size_from_opengl();
+ #endif
+-    void summary_string(char* buf, int len);
++    void summary_string(char* buf, const int len);
+ 
+     // Copy a coproc set, possibly setting usage to zero.
+     // used in round-robin simulator and CPU scheduler,
+     // to avoid messing w/ master copy
+     //
+-    void clone(COPROCS& c, bool copy_used) {
++    void clone(const COPROCS& c, const bool copy_used) {
+         n_rsc = c.n_rsc;
+         for (int i=0; i<n_rsc; i++) {
+             coprocs[i] = c.coprocs[i];
+Index: boinc/client/cs_account.cpp
+===================================================================
+--- boinc.orig/client/cs_account.cpp	2012-05-03 13:58:43.000000000 +0200
++++ boinc/client/cs_account.cpp	2012-05-03 14:01:32.376886284 +0200
+@@ -97,7 +97,7 @@
+ // (since we don't know the host venue yet)
+ //
+ int PROJECT::parse_account(FILE* in) {
+-    char buf2[256];
++    char buf2[2048];
+     int retval;
+     bool in_project_prefs = false, btemp;
+     for (int i=0; i<coprocs.n_rsc; i++) {
+@@ -183,7 +183,7 @@
+ // (so that we know the host venue)
+ //
+ int PROJECT::parse_account_file_venue() {
+-    char attr_buf[256], venue[256], path[256], buf2[256];
++    char attr_buf[1024], venue[1024], path[1024], buf2[1024];
+     int retval;
+     bool in_right_venue = false, btemp;
+ 
+@@ -258,7 +258,7 @@
+ }
+ 
+ int PROJECT::parse_account_file() {
+-    char path[256];
++    char path[1024];
+     int retval;
+     FILE* f;
+ 
+Index: boinc/client/cs_statefile.cpp
+===================================================================
+--- boinc.orig/client/cs_statefile.cpp	2012-05-03 13:53:32.000000000 +0200
++++ boinc/client/cs_statefile.cpp	2012-05-03 14:01:32.380886230 +0200
+@@ -28,6 +28,7 @@
+ #include "md5_file.h"
+ #include "parse.h"
+ #include "str_util.h"
++#include "str_replace.h"
+ #include "util.h"
+ 
+ #include "client_msgs.h"
+@@ -47,10 +48,10 @@
+ }
+ 
+ static bool valid_state_file(const char* fname) {
+-    char buf[256];
++    char buf[1024];
+     FILE* f = boinc_fopen(fname, "r");
+     if (!f) return false;
+-    if (!fgets(buf, 256, f)) {
++    if (!fgets(buf, sizeof(buf), f)) {
+         fclose(f);
+         return false;
+     }
+@@ -58,7 +59,7 @@
+         fclose(f);
+         return false;
+     }
+-    while (fgets(buf, 256, f)) {
++    while (fgets(buf, sizeof(buf), f)) {
+         if (match_tag(buf, "</client_state>")) {
+             fclose(f);
+             return true;
+@@ -832,7 +833,7 @@
+ // parse a project's app_info.xml (anonymous platform) file
+ //
+ int CLIENT_STATE::parse_app_info(PROJECT* p, FILE* in) {
+-    char buf[256], path[1024];
++    char buf[1024], path[1024];
+     MIOFILE mf;
+     mf.init_file(in);
+     XML_PARSER xp(&mf);
+@@ -861,7 +862,7 @@
+             //
+             get_pathname(fip, path, sizeof(path));
+             if (!boinc_file_exists(path)) {
+-                strcpy(buf,
++                safe_strcpy(buf,
+                     _("File referenced in app_info.xml does not exist: ")
+                 );
+                 strcat(buf, fip->name);
+Index: boinc/client/work_fetch.cpp
+===================================================================
+--- boinc.orig/client/work_fetch.cpp	2012-05-03 13:58:43.000000000 +0200
++++ boinc/client/work_fetch.cpp	2012-05-03 14:01:32.388886120 +0200
+@@ -788,7 +788,7 @@
+         rsc_work_fetch[0].req_secs?rsc_work_fetch[0].busy_time_estimator.get_busy_time():0
+     );
+     if (log_flags.work_fetch_debug) {
+-        char buf[256];
++        char buf[4096];
+         request_string(buf);
+         msg_printf(p, MSG_INFO, "%s", buf);
+     }

@@ -1,0 +1,1397 @@
+Index: boinc/client/coproc_detect.cpp
+===================================================================
+--- boinc.orig/client/coproc_detect.cpp	2012-03-31 23:42:04.671901142 +0200
++++ boinc/client/coproc_detect.cpp	2012-04-01 18:52:21.333427782 +0200
+@@ -42,6 +42,7 @@
+ 
+ #include "coproc.h"
+ #include "str_util.h"
++#include "str_replace.h"
+ #include "util.h"
+ 
+ #include "client_state.h"
+@@ -50,7 +51,7 @@
+ using std::string;
+ using std::vector;
+ 
+-static bool in_vector(int n, vector<int>& v) {
++static bool in_vector(const int n, const vector<int>& v) {
+     for (unsigned int i=0; i<v.size(); i++) {
+         if (v[i] == n) return true;
+     }
+@@ -70,14 +71,14 @@
+ vector<OPENCL_DEVICE_PROP> nvidia_opencls;
+ vector<OPENCL_DEVICE_PROP> ati_opencls;
+ 
++#define STEFFEN
+ 
+ void COPROCS::get(
+-    bool use_all, vector<string>&descs, vector<string>&warnings,
++    const bool use_all, vector<string>&descs, vector<string>&warnings,
+     vector<int>& ignore_nvidia_dev,
+     vector<int>& ignore_ati_dev
+ ) {
+-    unsigned int i;
+-    char buf[1024], buf2[1024];
++    char buf[4096], buf2[4096];
+ 
+ #ifdef _WIN32
+     try {
+@@ -98,13 +99,18 @@
+     catch (...) {
+         warnings.push_back("Caught SIGSEGV in OpenCL detection");
+     }
++
+ #else
++
+     void (*old_sig)(int) = signal(SIGSEGV, segv_handler);
+     if (setjmp(resume)) {
+         warnings.push_back("Caught SIGSEGV in NVIDIA GPU detection");
+     } else {
++//#ifndef STEFFEN
+         nvidia.get(use_all, warnings, ignore_nvidia_dev);
++//#endif
+     }
++
+ #ifndef __APPLE__       // ATI does not yet support CAL on Macs
+     if (setjmp(resume)) {
+         warnings.push_back("Caught SIGSEGV in ATI GPU detection");
+@@ -112,32 +118,37 @@
+         ati.get(use_all, warnings, ignore_ati_dev);
+     }
+ #endif
++
+     if (setjmp(resume)) {
+         warnings.push_back("Caught SIGSEGV in OpenCL detection");
+     } else {
+         get_opencl(use_all, warnings, ignore_ati_dev, ignore_nvidia_dev);
+     }
+     signal(SIGSEGV, old_sig);
++
+ #endif
+ 
+-    for (i=0; i<nvidia_gpus.size(); i++) {
++    for (unsigned int i=0; i<nvidia_gpus.size(); i++) {
+         nvidia_gpus[i].description(buf);
+         switch(nvidia_gpus[i].is_used) {
+         case COPROC_IGNORED:
+-            sprintf(buf2, "NVIDIA GPU %d (ignored by config): %s", nvidia_gpus[i].device_num, buf);
++            snprintf(buf2, sizeof(buf2), "NVIDIA GPU %d (ignored by config): %s",
++	                   nvidia_gpus[i].device_num, buf);
+             break;
+         case COPROC_USED:
+-            sprintf(buf2, "NVIDIA GPU %d: %s", nvidia_gpus[i].device_num, buf);
++            snprintf(buf2, sizeof(buf2), "NVIDIA GPU %d: %s",
++	                   nvidia_gpus[i].device_num, buf);
+             break;
+         case COPROC_UNUSED:
+         default:
+-            sprintf(buf2, "NVIDIA GPU %d (not used): %s", nvidia_gpus[i].device_num, buf);
++            snprintf(buf2, sizeof(buf2), "NVIDIA GPU %d (not used): %s",
++	                   nvidia_gpus[i].device_num, buf);
+             break;
+         }
+         descs.push_back(string(buf2));
+     }
+ 
+-    for (i=0; i<ati_gpus.size(); i++) {
++    for (unsigned int i=0; i<ati_gpus.size(); i++) {
+         ati_gpus[i].description(buf);
+         switch(ati_gpus[i].is_used) {
+         case COPROC_IGNORED:
+@@ -156,14 +167,14 @@
+ 
+     // Create descriptions for OpenCL NVIDIA GPUs
+     //
+-    for (i=0; i<nvidia_opencls.size(); i++) {
++    for (unsigned int i=0; i<nvidia_opencls.size(); i++) {
+         nvidia_opencls[i].description(buf, GPU_TYPE_NVIDIA);
+         descs.push_back(string(buf));
+     }
+ 
+     // Create descriptions for OpenCL ATI GPUs
+     //
+-    for (i=0; i<ati_opencls.size(); i++) {
++    for (unsigned int i=0; i<ati_opencls.size(); i++) {
+         ati_opencls[i].description(buf, GPU_TYPE_ATI);
+         descs.push_back(string(buf));
+     }
+@@ -227,7 +238,7 @@
+ 
+ // If "loose", tolerate small diff
+ //
+-int opencl_compare(OPENCL_DEVICE_PROP& c1, OPENCL_DEVICE_PROP& c2, bool loose) {
++int opencl_compare(const OPENCL_DEVICE_PROP& c1, const OPENCL_DEVICE_PROP& c2, const bool loose) {
+     if (c1.opencl_device_version_int > c2.opencl_device_version_int) return 1;
+     if (c1.opencl_device_version_int < c2.opencl_device_version_int) return -1;
+     if (loose) {
+@@ -247,7 +258,7 @@
+ // http://www.khronos.org/registry/cl/sdk/1.1/docs/man/xhtml/
+ 
+ void COPROCS::get_opencl(
+-    bool use_all,
++    const bool use_all,
+     vector<string>& warnings, 
+     vector<int>& ignore_ati_dev,
+     vector<int>& ignore_nvidia_dev
+@@ -350,8 +361,8 @@
+ //TODO: Must we check if multiple platforms found the same GPU and merge the records?
+ #if FAKE2NVIDIAOPENCLS
+ if (device_index == 2) {
+-strcpy(prop.name, "GEForce 120 GT");
+-strcpy(prop.vendor, "NVIDIA");
++safe_strcpy(prop.name, "GEForce 120 GT");
++safe_strcpy(prop.vendor, "NVIDIA");
+ prop.vendor_id = 16918016;
+ prop.available = 1;
+ prop.half_fp_config = 0;
+@@ -359,13 +370,13 @@
+ prop.double_fp_config = 63;
+ prop.endian_little = 1;
+ prop.execution_capabilities = 1;
+-strcpy(prop.extensions, "cl_APPLE_SetMemObjectDestructor cl_APPLE_ContextLoggingFunctions cl_APPLE_clut cl_APPLE_query_kernel_names cl_APPLE_gl_sharing cl_khr_gl_event cl_khr_byte_addressable_store cl_khr_global_int32_base_atomics cl_khr_global_int32_extended_atomics ");
++safe_strcpy(prop.extensions, "cl_APPLE_SetMemObjectDestructor cl_APPLE_ContextLoggingFunctions cl_APPLE_clut cl_APPLE_query_kernel_names cl_APPLE_gl_sharing cl_khr_gl_event cl_khr_byte_addressable_store cl_khr_global_int32_base_atomics cl_khr_global_int32_extended_atomics ");
+ prop.global_mem_size = 268435456;
+ prop.local_mem_size = 16384;
+ prop.max_clock_frequency = 1000;
+ prop.max_compute_units = 10;
+-strcpy(prop.opencl_device_version, "OpenCL 1.0 ");
+-strcpy(prop.opencl_driver_version, "CLH 1.0");
++safe_strcpy(prop.opencl_device_version, "OpenCL 1.0 ");
++safe_strcpy(prop.opencl_driver_version, "CLH 1.0");
+ } else
+ #endif
+             ciErrNum = get_opencl_info(prop, device_index, warnings);
+@@ -508,7 +519,7 @@
+     vector<string>&warnings
+ ) {
+     cl_int ciErrNum;
+-    char buf[256];
++    char buf[2048];
+     
+     ciErrNum = (*__clGetDeviceInfo)(prop.device_id, CL_DEVICE_NAME, sizeof(prop.name), prop.name, NULL);
+     if ((ciErrNum != CL_SUCCESS) || (prop.name[0] == 0)) {
+@@ -786,6 +797,7 @@
+     return 0;
+ }
+ 
++#ifndef STEFFEN
+ enum CUdevice_attribute_enum {
+   CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1,
+   CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2,
+@@ -808,6 +820,7 @@
+   CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY = 19,
+   CU_DEVICE_ATTRIBUTE_COMPUTE_MODE = 20
+ };
++#endif
+ 
+ #ifdef _WIN32
+ typedef int (__stdcall *CUDA_GDC)(int *count);
+@@ -838,7 +851,9 @@
+ CUDA_MF __cuMemFree = NULL;
+ CUDA_MGI __cuMemGetInfo = NULL;
+ #else
++
+ void* cudalib;
++#ifndef STEFFEN
+ int (*__cuInit)(int);
+ int (*__cuDeviceGetCount)(int*);
+ int (*__cuDriverGetVersion)(int*);
+@@ -854,16 +869,18 @@
+ int (*__cuMemGetInfo)(unsigned int*, unsigned int*);
+ #endif
+ 
++#endif
++
+ // NVIDIA interfaces are documented here:
+ // http://developer.download.nvidia.com/compute/cuda/2_3/toolkit/docs/online/index.html
+ 
+ void COPROC_NVIDIA::get(
+-    bool use_all,    // if false, use only those equivalent to most capable
++    const bool use_all,    // if false, use only those equivalent to most capable
+     vector<string>& warnings,
+     vector<int>& ignore_devs
+ ) {
+-    int cuda_ndevs, retval;
+-    char buf[1024];
++    int cuda_ndevs;
++    char buf[4096];
+ 
+ #ifdef _WIN32
+     HMODULE cudalib = LoadLibrary("nvcuda.dll");
+@@ -894,7 +911,9 @@
+     NvAPI_Initialize();
+     nvapiStatus = NvAPI_GetDisplayDriverVersion(NULL, &Version);
+ #endif
++
+ #else
++	// not WIN32
+ 
+ #ifdef __APPLE__
+     cudalib = dlopen("/usr/local/cuda/lib/libcuda.dylib", RTLD_NOW);
+@@ -905,20 +924,28 @@
+         warnings.push_back("No NVIDIA library found");
+         return;
+     }
++
++//#ifdef STEFFEN
++ //   warnings.push_back("NVIDIA library found, but not using any function");
++  //  return;
++//#endif
++
++#endif
++
++#ifndef STEFFEN
+     __cuDeviceGetCount = (int(*)(int*)) dlsym(cudalib, "cuDeviceGetCount");
+     __cuDriverGetVersion = (int(*)(int*)) dlsym( cudalib, "cuDriverGetVersion" );
+     __cuInit = (int(*)(int)) dlsym( cudalib, "cuInit" );
+     __cuDeviceGet = (int(*)(int*, int)) dlsym( cudalib, "cuDeviceGet" );
+     __cuDeviceGetAttribute = (int(*)(int*, int, int)) dlsym( cudalib, "cuDeviceGetAttribute" );
+     __cuDeviceGetName = (int(*)(char*, int, int)) dlsym( cudalib, "cuDeviceGetName" );
+-    __cuDeviceTotalMem = (int(*)(unsigned int*, int)) dlsym( cudalib, "cuDeviceTotalMem" );
++    __cuDeviceTotalMem = (int(*)(size_t*, int)) dlsym( cudalib, "cuDeviceTotalMem" );
+     __cuDeviceComputeCapability = (int(*)(int*, int*, int)) dlsym( cudalib, "cuDeviceComputeCapability" );
+     __cuCtxCreate = (int(*)(void**, unsigned int, unsigned int)) dlsym( cudalib, "cuCtxCreate" );
+     __cuCtxDestroy = (int(*)(void*)) dlsym( cudalib, "cuCtxDestroy" );
+     __cuMemAlloc = (int(*)(unsigned int*, unsigned int)) dlsym( cudalib, "cuMemAlloc" );
+     __cuMemFree = (int(*)(unsigned int)) dlsym( cudalib, "cuMemFree" );
+     __cuMemGetInfo = (int(*)(unsigned int*, unsigned int*)) dlsym( cudalib, "cuMemGetInfo" );
+-#endif
+ 
+     if (!__cuDriverGetVersion) {
+         warnings.push_back("cuDriverGetVersion() missing from NVIDIA library");
+@@ -968,37 +995,34 @@
+         warnings.push_back("cuMemGetInfo() missing from NVIDIA library");
+         return;
+     }
++#endif
+ 
+-    retval = (*__cuInit)(0);
+-    if (retval) {
+-        sprintf(buf, "NVIDIA drivers present but no GPUs found");
++    if (CUresult CUDAAPI retval = cuInit(0)) {
++        snprintf(buf, sizeof(buf), "NVIDIA drivers present but no GPUs found (error no %d)", retval);
+         warnings.push_back(buf);
+         return;
+     }
+ 
+-    retval = (*__cuDriverGetVersion)(&cuda_version);
+-    if (retval) {
+-        sprintf(buf, "cuDriverGetVersion() returned %d", retval);
++    if (CUresult CUDAAPI retval = cuDriverGetVersion(&cuda_version)){
++        snprintf(buf, sizeof(buf), "cuDriverGetVersion() returned %d", retval);
+         warnings.push_back(buf);
+         return;
+     }
+ 
+-    retval = (*__cuDeviceGetCount)(&cuda_ndevs);
+-    if (retval) {
+-        sprintf(buf, "cuDeviceGetCount() returned %d", retval);
++    if (CUresult CUDAAPI retval = cuDeviceGetCount(&cuda_ndevs)) {
++        snprintf(buf, sizeof(buf), "cuDeviceGetCount() returned %d", retval);
+         warnings.push_back(buf);
+         return;
+     }
+-    sprintf(buf, "NVIDIA library reports %d GPU%s", cuda_ndevs, (cuda_ndevs==1)?"":"s");
++    snprintf(buf, sizeof(buf), "NVIDIA library reports %d GPU%s",
++                               cuda_ndevs, (cuda_ndevs==1)?"":"s");
+     warnings.push_back(buf);
+ 
+-    int j;
+-    unsigned int i;
+     COPROC_NVIDIA cc;
+     string s;
+-    for (j=0; j<cuda_ndevs; j++) {
++    for (int j=0; j<cuda_ndevs; j++) {
+         memset(&cc.prop, 0, sizeof(cc.prop));
+-        int device;
++        CUdevice device;
+ #if FAKENVIDIACUDA0
+ if (j == 0) {
+  cc.fake(0x40032, 256*MEGA, 64*MEGA, 1);
+@@ -1006,38 +1030,76 @@
+  nvidia_gpus.push_back(cc);
+ }
+ #endif
+-        retval = (*__cuDeviceGet)(&device, j);
++        CUresult CUDAAPI retval;
++
++	retval = cuDeviceGet(&device, j);
+         if (retval) {
+-            sprintf(buf, "cuDeviceGet(%d) returned %d", j, retval);
++            snprintf(buf, sizeof(buf), "cuDeviceGet(%d) returned %d", j, retval);
+             warnings.push_back(buf);
+             return;
+         }
+         cc.prop.deviceHandle = device;
+-        (*__cuDeviceGetName)(cc.prop.name, 256, device);
++
++        retval = cuDeviceGetName(cc.prop.name, sizeof(cc.prop.name), device);
+         if (retval) {
+-            sprintf(buf, "cuDeviceGetName(%d) returned %d", j, retval);
++            snprintf(buf, sizeof(buf), "cuDeviceGetName(%d) returned %d", device, retval);
+             warnings.push_back(buf);
+             return;
+         }
+-        (*__cuDeviceComputeCapability)(&cc.prop.major, &cc.prop.minor, device);
+-        (*__cuDeviceTotalMem)(&cc.prop.totalGlobalMem, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.sharedMemPerBlock, CU_DEVICE_ATTRIBUTE_SHARED_MEMORY_PER_BLOCK, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.regsPerBlock, CU_DEVICE_ATTRIBUTE_REGISTERS_PER_BLOCK, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.warpSize, CU_DEVICE_ATTRIBUTE_WARP_SIZE, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.memPitch, CU_DEVICE_ATTRIBUTE_MAX_PITCH, device);
+-        retval = (*__cuDeviceGetAttribute)(&cc.prop.maxThreadsPerBlock, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, device);
+-        retval = (*__cuDeviceGetAttribute)(&cc.prop.maxThreadsDim[0], CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.maxThreadsDim[1], CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.maxThreadsDim[2], CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.maxGridSize[0], CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.maxGridSize[1], CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.maxGridSize[2], CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.clockRate, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.totalConstMem, CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.textureAlignment, CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT, device);
+-        (*__cuDeviceGetAttribute)(&cc.prop.deviceOverlap, CU_DEVICE_ATTRIBUTE_GPU_OVERLAP, device);
+-        retval = (*__cuDeviceGetAttribute)(&cc.prop.multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device);
+-        //retval = (*__cuDeviceGetProperties)(&cc.prop, device);
++
++        retval = cuDeviceComputeCapability(&cc.prop.major, &cc.prop.minor, device);
++	if (retval) {
++            snprintf(buf, sizeof(buf), "cuDeviceTotalMem(%d) returned %d", device, retval);
++            warnings.push_back(buf);
++            return;
++	}
++
++        retval = cuDeviceTotalMem(&cc.prop.totalGlobalMem, device);
++	if (retval) {
++            snprintf(buf, sizeof(buf), "cuDeviceTotalMem(%d) returned %d", device, retval);
++            warnings.push_back(buf);
++            return;
++	}
++
++#define CUDAERRORCHECK(X) if(retval) {snprintf(buf, sizeof(buf), "Cuda Error: %s:%d",X,retval); warnings.push_back(buf); return;}
++
++        retval = cuDeviceGetAttribute(&cc.prop.sharedMemPerBlock, CU_DEVICE_ATTRIBUTE_SHARED_MEMORY_PER_BLOCK, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_SHARED_MEMORY_PER_BLOCK");
++
++        retval = cuDeviceGetAttribute(&cc.prop.regsPerBlock, CU_DEVICE_ATTRIBUTE_REGISTERS_PER_BLOCK, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_REGISTERS_PER_BLOCK");
++        retval = cuDeviceGetAttribute(&cc.prop.warpSize, CU_DEVICE_ATTRIBUTE_WARP_SIZE, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_WARP_SIZE");
++        retval = cuDeviceGetAttribute(&cc.prop.memPitch, CU_DEVICE_ATTRIBUTE_MAX_PITCH, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MAX_PITCH");
++        retval = cuDeviceGetAttribute(&cc.prop.maxThreadsPerBlock, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK");
++        retval = cuDeviceGetAttribute(&cc.prop.maxThreadsDim[0], CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X");
++        retval = cuDeviceGetAttribute(&cc.prop.maxThreadsDim[1], CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y");
++        retval = cuDeviceGetAttribute(&cc.prop.maxThreadsDim[2], CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z");
++        retval = cuDeviceGetAttribute(&cc.prop.maxGridSize[0], CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X");
++        retval = cuDeviceGetAttribute(&cc.prop.maxGridSize[1], CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y");
++        retval = cuDeviceGetAttribute(&cc.prop.maxGridSize[2], CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z");
++        retval = cuDeviceGetAttribute(&cc.prop.clockRate, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_CLOCK_RATE");
++        retval = cuDeviceGetAttribute(&cc.prop.totalConstMem, CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY");
++        retval = cuDeviceGetAttribute(&cc.prop.textureAlignment, CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT");
++        retval = cuDeviceGetAttribute(&cc.prop.deviceOverlap, CU_DEVICE_ATTRIBUTE_GPU_OVERLAP, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_GPU_OVERLAP");
++        retval = cuDeviceGetAttribute(&cc.prop.multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device);
++	CUDAERRORCHECK("CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT");
++
++#undef CUDAERRORCHECK
++
++        //retval = cuDeviceGetProperties(&cc.prop, device);
+         if (cc.prop.major <= 0) continue;  // major == 0 means emulation
+         if (cc.prop.major > 100) continue;  // e.g. 9999 is an error
+ #if defined(_WIN32) && !defined(SIM)
+@@ -1057,6 +1119,7 @@
+ #endif
+         nvidia_gpus.push_back(cc);
+     }
++
+     if (!nvidia_gpus.size()) {
+         warnings.push_back("No CUDA-capable NVIDIA GPUs found");
+         return;
+@@ -1065,7 +1128,7 @@
+     // identify the most capable non-ignored instance
+     //
+     bool first = true;
+-    for (i=0; i<nvidia_gpus.size(); i++) {
++    for (unsigned int i=0; i<nvidia_gpus.size(); i++) {
+         if (in_vector(nvidia_gpus[i].device_num, ignore_devs)) continue;
+         if (first) {
+             *this = nvidia_gpus[i];
+@@ -1079,7 +1142,7 @@
+     // and set the "count" and "device_nums" fields
+     //
+     count = 0;
+-    for (i=0; i<nvidia_gpus.size(); i++) {
++    for (unsigned int i=0; i<nvidia_gpus.size(); i++) {
+         if (in_vector(nvidia_gpus[i].device_num, ignore_devs)) {
+             nvidia_gpus[i].is_used = COPROC_IGNORED;
+         } else if (use_all || !nvidia_compare(nvidia_gpus[i], *this, true)) {
+@@ -1097,7 +1160,7 @@
+ void COPROC_NVIDIA::fake(
+     int driver_version, double ram, double avail_ram, int n
+ ) {
+-   strcpy(type, GPU_TYPE_NVIDIA);
++   safe_strcpy(type, GPU_TYPE_NVIDIA);
+    count = n;
+    for (int i=0; i<count; i++) {
+        device_nums[i] = i;
+@@ -1134,12 +1197,11 @@
+ //
+ void COPROC_NVIDIA::get_available_ram() {
+     int retval;
+-    unsigned int memfree, memtotal;
+-	int device;
+-    void* ctx;
+     
+     available_ram = prop.dtotalGlobalMem;
+-    retval = (*__cuDeviceGet)(&device, device_num);
++
++    CUdevice device;
++    retval = cuDeviceGet(&device, device_num);
+     if (retval) {
+         if (log_flags.coproc_debug) {
+             msg_printf(0, MSG_INFO,
+@@ -1148,7 +1210,9 @@
+         }
+         return;
+     }
+-    retval = (*__cuCtxCreate)(&ctx, 0, device);
++
++    CUcontext ctx;
++    retval = cuCtxCreate(&ctx, 0, device);
+     if (retval) {
+         if (log_flags.coproc_debug) {
+             msg_printf(0, MSG_INFO,
+@@ -1157,17 +1221,19 @@
+         }
+         return;
+     }
+-    retval = (*__cuMemGetInfo)(&memfree, &memtotal);
++
++    size_t memfree, memtotal;
++    retval = cuMemGetInfo(&memfree, &memtotal);
+     if (retval) {
+         if (log_flags.coproc_debug) {
+             msg_printf(0, MSG_INFO,
+                 "[coproc] cuMemGetInfo(%d) returned %d", device_num, retval
+             );
+         }
+-        (*__cuCtxDestroy)(ctx);
++        cuCtxDestroy(ctx);
+         return;
+     }
+-    (*__cuCtxDestroy)(ctx);
++    cuCtxDestroy(ctx);
+     available_ram = (double) memfree;
+ }
+ 
+@@ -1175,14 +1241,13 @@
+ // return true if there's been a change since last time
+ //
+ bool COPROC_NVIDIA::check_running_graphics_app() {
+-    int retval, j;
+     bool change = false;
+-    for (j=0; j<count; j++) {
++    for (int j=0; j<count; j++) {
+         bool new_val = true;
+         int device, kernel_timeout;
+-        retval = (*__cuDeviceGet)(&device, j);
++        int retval = cuDeviceGet(&device, j);
+         if (!retval) {
+-            retval = (*__cuDeviceGetAttribute)(&kernel_timeout, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT, device);
++            retval = cuDeviceGetAttribute(&kernel_timeout, CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT, device);
+             if (!retval && !kernel_timeout) {
+                 new_val = false;
+             }
+@@ -1266,7 +1331,7 @@
+ 	vector<int>& ignore_devs
+ ) {
+     CALuint numDevices, cal_major, cal_minor, cal_imp;
+-    char buf[256];
++    char buf[2048];
+     int retval;
+ 
+     attribs.struct_size = sizeof(CALdeviceattribs);
+Index: boinc/client/cs_scheduler.cpp
+===================================================================
+--- boinc.orig/client/cs_scheduler.cpp	2012-03-31 13:47:01.704998547 +0200
++++ boinc/client/cs_scheduler.cpp	2012-04-01 13:46:56.120345912 +0200
+@@ -70,9 +70,8 @@
+ // to be sent to a scheduling server
+ //
+ int CLIENT_STATE::make_scheduler_request(PROJECT* p) {
+-    char buf[1024];
++    char buf[4096];
+     MIOFILE mf;
+-    unsigned int i;
+     RESULT* rp;
+ 
+     get_sched_request_filename(*p, buf, sizeof(buf));
+@@ -175,7 +174,7 @@
+     // Use project URL as tie-breaker.
+     //
+     PROJECT* winner = p;
+-    for (i=0; i<projects.size(); i++ ) {
++    for (unsigned int i=0; i<projects.size(); i++ ) {
+         PROJECT* project = projects[i];
+         if (project == p) continue;
+         if (strcmp(project->email_hash, p->email_hash)) continue;
+@@ -242,7 +241,7 @@
+     //
+     unsigned int last_reported_index = 0;
+     p->nresults_returned = 0;
+-    for (i=0; i<results.size(); i++) {
++    for (unsigned int i=0; i<results.size(); i++) {
+         rp = results[i];
+         if (rp->project == p && rp->ready_to_report) {
+             p->nresults_returned++;
+@@ -260,7 +259,7 @@
+ 
+     // report sticky files as needed
+     //
+-    for (i=0; i<file_infos.size(); i++) {
++    for (unsigned int i=0; i<file_infos.size(); i++) {
+         FILE_INFO* fip = file_infos[i];
+         if (fip->project != p) continue;
+         if (!fip->sticky) continue;
+@@ -290,7 +289,7 @@
+     //
+     fprintf(f, "<app_versions>\n");
+     j=0;
+-    for (i=0; i<app_versions.size(); i++) {
++    for (unsigned int i=0; i<app_versions.size(); i++) {
+         APP_VERSION* avp = app_versions[i];
+         if (avp->project != p) continue;
+         avp->write(mf, false);
+@@ -301,7 +300,7 @@
+     // send descriptions of jobs in progress for this project
+     //
+     fprintf(f, "<other_results>\n");
+-    for (i=0; i<results.size(); i++) {
++    for (unsigned int i=0; i<results.size(); i++) {
+         rp = results[i];
+         if (rp->project != p) continue;
+         if ((last_reported_index && (i > last_reported_index)) || !rp->ready_to_report) {
+@@ -332,7 +331,7 @@
+     //
+     if (p->send_full_workload) {
+         fprintf(f, "<in_progress_results>\n");
+-        for (i=0; i<results.size(); i++) {
++        for (unsigned int i=0; i<results.size(); i++) {
+             rp = results[i];
+             double x = rp->estimated_time_remaining();
+             if (x == 0) continue;
+@@ -493,9 +492,8 @@
+     SCHEDULER_REPLY sr;
+     FILE* f;
+     int retval;
+-    unsigned int i;
+     bool signature_valid, update_global_prefs=false, update_project_prefs=false;
+-    char buf[1024], filename[256];
++    char buf[4096], filename[1024];
+     std::string old_gui_urls = project->gui_urls;
+     PROJECT* p2;
+     vector<RESULT*>new_results;
+@@ -559,7 +557,7 @@
+     // make sure we don't already have a project of same name
+     //
+     bool dup_name = false;
+-    for (i=0; i<projects.size(); i++) {
++    for (unsigned int i=0; i<projects.size(); i++) {
+         p2 = projects[i];
+         if (project == p2) continue;
+         if (!strcmp(p2->project_name, project->project_name)) {
+@@ -579,7 +577,7 @@
+ 
+     // show messages from server
+     //
+-    for (i=0; i<sr.messages.size(); i++) {
++    for (unsigned int i=0; i<sr.messages.size(); i++) {
+         USER_MESSAGE& um = sr.messages[i];
+         int prio = (!strcmp(um.priority.c_str(), "notice"))?MSG_SCHEDULER_ALERT:MSG_INFO;
+         string_substitute(um.message.c_str(), buf, sizeof(buf), "%", "%%");
+@@ -709,7 +707,7 @@
+ 
+     // copy new entities to client state
+     //
+-    for (i=0; i<sr.apps.size(); i++) {
++    for (unsigned int i=0; i<sr.apps.size(); i++) {
+         APP* app = lookup_app(project, sr.apps[i].name);
+         if (app) {
+             strcpy(app->user_friendly_name, sr.apps[i].user_friendly_name);
+@@ -728,7 +726,7 @@
+         }
+     }
+     FILE_INFO* fip;
+-    for (i=0; i<sr.file_infos.size(); i++) {
++    for (unsigned int i=0; i<sr.file_infos.size(); i++) {
+         fip = lookup_file_info(project, sr.file_infos[i].name);
+         if (fip) {
+             fip->merge_info(sr.file_infos[i]);
+@@ -746,7 +744,7 @@
+             }
+         }
+     }
+-    for (i=0; i<sr.file_deletes.size(); i++) {
++    for (unsigned int i=0; i<sr.file_deletes.size(); i++) {
+         fip = lookup_file_info(project, sr.file_deletes[i].c_str());
+         if (fip) {
+             if (log_flags.file_xfer_debug) {
+@@ -758,7 +756,7 @@
+             fip->sticky = false;
+         }
+     }
+-    for (i=0; i<sr.app_versions.size(); i++) {
++    for (unsigned int i=0; i<sr.app_versions.size(); i++) {
+         if (project->anonymous_platform) {
+             msg_printf(project, MSG_INTERNAL_ERROR,
+                 "App version returned from anonymous platform project; ignoring"
+@@ -820,7 +818,7 @@
+         }
+         app_versions.push_back(avp);
+     }
+-    for (i=0; i<sr.workunits.size(); i++) {
++    for (unsigned int i=0; i<sr.workunits.size(); i++) {
+         if (lookup_workunit(project, sr.workunits[i].name)) continue;
+         WORKUNIT* wup = new WORKUNIT;
+         *wup = sr.workunits[i];
+@@ -840,7 +838,7 @@
+     for (int j=0; j<coprocs.n_rsc; j++) {
+         est_rsc_duration[j] = 0;
+     }
+-    for (i=0; i<sr.results.size(); i++) {
++    for (unsigned int i=0; i<sr.results.size(); i++) {
+         if (lookup_result(project, sr.results[i].name)) {
+             msg_printf(project, MSG_INTERNAL_ERROR,
+                 "Already have task %s\n", sr.results[i].name
+@@ -909,7 +907,7 @@
+ 
+     // update records for ack'ed results
+     //
+-    for (i=0; i<sr.result_acks.size(); i++) {
++    for (unsigned int i=0; i<sr.result_acks.size(); i++) {
+         if (log_flags.sched_op_debug) {
+             msg_printf(project, MSG_INFO,
+                 "[sched_op] handle_scheduler_reply(): got ack for task %s\n",
+@@ -928,7 +926,7 @@
+ 
+     // handle result abort requests
+     //
+-    for (i=0; i<sr.result_abort.size(); i++) {
++    for (unsigned int i=0; i<sr.result_abort.size(); i++) {
+         RESULT* rp = lookup_result(project, sr.result_abort[i].name);
+         if (rp) {
+             ACTIVE_TASK* atp = lookup_active_task_by_result(rp);
+@@ -946,7 +944,7 @@
+             );
+         }
+     }
+-    for (i=0; i<sr.result_abort_if_not_started.size(); i++) {
++    for (unsigned int i=0; i<sr.result_abort_if_not_started.size(); i++) {
+         RESULT* rp = lookup_result(project, sr.result_abort_if_not_started[i].name);
+         if (!rp) {
+             msg_printf(project, MSG_INTERNAL_ERROR,
+@@ -1047,8 +1045,7 @@
+ #endif // SIM
+ 
+ void CLIENT_STATE::check_project_timeout() {
+-    unsigned int i;
+-    for (i=0; i<projects.size(); i++) {
++    for (unsigned int i=0; i<projects.size(); i++) {
+         PROJECT* p = projects[i];
+         if (p->possibly_backed_off && now > p->min_rpc_time) {
+             p->possibly_backed_off = false;
+@@ -1081,11 +1078,8 @@
+ // find a project that needs to have its master file fetched
+ //
+ PROJECT* CLIENT_STATE::next_project_master_pending() {
+-    unsigned int i;
+-    PROJECT* p;
+-
+-    for (i=0; i<projects.size(); i++) {
+-        p = projects[i];
++    for (unsigned int i=0; i<projects.size(); i++) {
++        PROJECT *p = projects[i];
+         if (p->waiting_until_min_rpc_time()) continue;
+         if (p->suspended_via_gui) continue;
+         if (p->master_url_fetch_pending) {
+@@ -1183,11 +1177,9 @@
+ PROJECT* CLIENT_STATE::find_project_with_overdue_results(
+     bool network_suspend_soon
+ ) {
+-    unsigned int i;
+-    RESULT* r;
+ 
+-    for (i=0; i<results.size(); i++) {
+-        r = results[i];
++    for (unsigned int i=0; i<results.size(); i++) {
++        RESULT *r = results[i];
+         if (!r->ready_to_report) continue;
+ 
+         PROJECT* p = r->project;
+Index: boinc/client/sim.cpp
+===================================================================
+--- boinc.orig/client/sim.cpp	2012-03-31 13:44:21.363188803 +0200
++++ boinc/client/sim.cpp	2012-04-01 13:18:11.803960851 +0200
+@@ -88,7 +88,7 @@
+ FILE* debt_file;
+ FILE* index_file;
+ FILE* summary_file;
+-char log_filename[256];
++char log_filename[1024];
+ 
+ string html_msg;
+ double active_time = 0;
+Index: boinc/client/client_types.h
+===================================================================
+--- boinc.orig/client/client_types.h	2012-03-31 23:42:04.735900263 +0200
++++ boinc/client/client_types.h	2012-04-01 13:32:08.196501594 +0200
+@@ -102,7 +102,7 @@
+ #define FILE_VERIFY_PENDING	2
+ 
+ struct FILE_INFO {
+-    char name[256];
++    char name[1024];
+     char md5_cksum[33];
+     double max_nbytes;
+     double nbytes;
+@@ -115,7 +115,7 @@
+     bool signature_required;    // true iff associated with app version
+     bool is_user_file;
+     bool is_project_file;
+-	bool is_auto_update_file;
++    bool is_auto_update_file;
+     bool anonymous_platform_file;
+     bool gzip_when_done;
+         // for output files: gzip file when done, and append .gz to its name
+@@ -172,17 +172,17 @@
+ // Describes a connection between a file and a workunit, result, or app version
+ //
+ struct FILE_REF {
+-    char file_name[256];
++    char file_name[1024];
+         // physical name
+-    char open_name[256];
++    char open_name[1024];
+         // logical name
+     bool main_program;
+     FILE_INFO* file_info;
+     bool copy_file;
+         // if true, core client will copy the file instead of linking
+-	bool optional;
+-		// for output files: app may not generate file;
+-		// don't treat as error if file is missing.
++    bool optional;
++        // for output files: app may not generate file;
++        // don't treat as error if file is missing.
+     int parse(XML_PARSER&);
+     int write(MIOFILE&);
+ };
+@@ -234,8 +234,8 @@
+ // base class for PROJECT and ACCT_MGR_INFO
+ //
+ struct PROJ_AM {
+-    char master_url[256];
+-    char project_name[256];
++    char master_url[1024];
++    char project_name[1024];
+         // descriptive.  not unique
+     std::vector<RSS_FEED> proj_feeds;
+     inline char *get_project_name() {
+@@ -251,7 +251,7 @@
+     // the following items come from the account file
+     // They are a function only of the user and the project
+     //
+-    char authenticator[256];
++    char authenticator[1024];
+         // user's authenticator on this project
+     std::string project_prefs;
+         // without the enclosing <project_preferences> tags.
+@@ -304,7 +304,7 @@
+     //
+     std::vector<std::string> scheduler_urls;
+         // where to find scheduling servers
+-    char symstore[256];
++    char symstore[1024];
+         // URL of symbol server (Windows)
+     char user_name[256];
+     char team_name[256];
+@@ -345,7 +345,7 @@
+         // we need to do a scheduler RPC, for various possible reasons:
+         // user request, propagate host CPID, time-based, etc.
+ 		// Reasons are enumerated in lib/common_defs.h
+-	bool possibly_backed_off;
++    bool possibly_backed_off;
+         // we need to call request_work_fetch() when a project
+         // transitions from being backed off to not.
+         // This (slightly misnamed) keeps track of whether this
+@@ -554,8 +554,8 @@
+ };
+ 
+ struct APP {
+-    char name[256];
+-    char user_friendly_name[256];
++    char name[1024];
++    char user_friendly_name[1024];
+     bool non_cpu_intensive;
+     PROJECT* project;
+ #ifdef SIM
+@@ -579,9 +579,9 @@
+ };
+ 
+ struct APP_VERSION {
+-    char app_name[256];
++    char app_name[1024];
+     int version_num;
+-    char platform[256];
++    char platform[1024];
+     char plan_class[64];
+     char api_version[16];
+     double avg_ncpus;
+@@ -589,9 +589,9 @@
+     GPU_USAGE gpu_usage;    // can only use 1 GPUtype
+     double gpu_ram;
+     double flops;
+-    char cmdline[256];
++    char cmdline[2048];
+         // additional cmdline args
+-    char file_prefix[256];
++    char file_prefix[1024];
+         // prepend this to input/output file logical names
+         // (e.g. "share" for VM apps)
+     bool needs_network;
+@@ -600,8 +600,8 @@
+     PROJECT* project;
+     std::vector<FILE_REF> app_files;
+     int ref_cnt;
+-    char graphics_exec_path[512];
+-    char graphics_exec_file[256];
++    char graphics_exec_path[1024];
++    char graphics_exec_file[1024];
+     double max_working_set_size;
+         // max working set of tasks using this app version.
+         // unstarted jobs using this app version are assumed
+@@ -635,8 +635,8 @@
+ };
+ 
+ struct WORKUNIT {
+-    char name[256];
+-    char app_name[256];
++    char name[1024];
++    char app_name[1024];
+     int version_num;
+         // Deprecated, but need to keep around to let people revert
+         // to versions before multi-platform support
+@@ -660,8 +660,8 @@
+ };
+ 
+ struct RESULT {
+-    char name[256];
+-    char wu_name[256];
++    char name[1024];
++    char wu_name[1024];
+     double received_time;   // when we got this from server
+     double report_deadline;
+     int version_num;        // identifies the app used
+@@ -824,12 +824,12 @@
+ 
+     int coproc_indices[MAX_COPROCS_PER_JOB];
+         // keep track of coprocessor reservations
+-    char resources[256];
++    char resources[2048];
+         // textual description of resources used
+     double schedule_backoff;
+         // don't try to schedule until this time
+         // (wait for free GPU RAM)
+-    char schedule_backoff_reason[256];
++    char schedule_backoff_reason[2048];
+ };
+ 
+ // represents an always/auto/never value, possibly temporarily overridden
+@@ -845,7 +845,7 @@
+     int get_perm();
+     int get_prev();
+     int get_current();
+-	double delay();
++    double delay();
+ };
+ 
+ // a platform supported by the client.
+Index: boinc/lib/coproc.cpp
+===================================================================
+--- boinc.orig/lib/coproc.cpp	2012-03-31 13:47:01.764997728 +0200
++++ boinc/lib/coproc.cpp	2012-04-01 15:30:46.719027928 +0200
+@@ -135,7 +135,7 @@
+ }
+ 
+ int COPROC::parse(XML_PARSER& xp) {
+-    char buf[256];
++    char buf[2048];
+     strcpy(type, "");
+     clear();
+     for (int i=0; i<MAX_COPROC_INSTANCES; i++) {
+@@ -257,7 +257,7 @@
+ }
+ 
+ void OPENCL_DEVICE_PROP::description(char* buf, const char* type) {
+-    char s1[256], s2[256];
++    char s1[4096], s2[4096];
+     int n;
+     // openCL_device_version may have a trailing space
+     strlcpy(s1, opencl_device_version, sizeof(s1));
+@@ -281,19 +281,19 @@
+     }
+ }
+ 
+-void COPROCS::summary_string(char* buf, int len) {
+-    char buf2[1024];
++void COPROCS::summary_string(char* buf, const int len) {
++    char buf2[9192];
+ 
+-    strcpy(buf, "");
++    buf[0]=0;
+     if (nvidia.count) {
+         int mem = (int)(nvidia.prop.dtotalGlobalMem/MEGA);
+-        sprintf(buf2, "[CUDA|%s|%d|%dMB|%d]",
++        snprintf(buf2, sizeof(buf2), "[CUDA|%s|%d|%dMB|%d]",
+             nvidia.prop.name, nvidia.count, mem, nvidia.display_driver_version
+         );
+         strlcat(buf, buf2, len);
+     }
+     if (ati.count) {
+-        sprintf(buf2,"[CAL|%s|%d|%dMB|%s]",
++        snprintf(buf2, sizeof(buf2), "[CAL|%s|%d|%dMB|%s]",
+             ati.name, ati.count, ati.attribs.localRAM, ati.version
+         );
+         strlcat(buf, buf2, len);
+@@ -353,11 +353,11 @@
+      	int maj = display_driver_version >> 16;
+     	int min = (display_driver_version >> 8) & 0xff;
+     	int rev = display_driver_version & 0xff;
+-        sprintf(vers, "%d.%d.%d", maj, min, rev);
++        snprintf(vers, sizeof(vers), "%d.%d.%d", maj, min, rev);
+ #else
+         int maj = display_driver_version/100;
+         int min = display_driver_version%100;
+-        sprintf(vers, "%d.%d", maj, min);
++        snprintf(vers, sizeof(vers), "%d.%d", maj, min);
+ #endif
+     } else {
+         strcpy(vers, "unknown");
+@@ -365,7 +365,7 @@
+     if (cuda_version) {
+         int maj = cuda_version/1000;
+         int min = cuda_version%1000;
+-        sprintf(cuda_vers, "%d.%d", maj, min);
++        snprintf(cuda_vers, sizeof(cuda_vers), "%d.%d", maj, min);
+     } else {
+         strcpy(cuda_vers, "unknown");
+     }
+@@ -376,7 +376,7 @@
+ }
+ 
+ #ifndef _USING_FCGI_
+-void COPROC_NVIDIA::write_xml(MIOFILE& f, bool include_request) {
++void COPROC_NVIDIA::write_xml(MIOFILE& f, const bool include_request) {
+     f.printf(
+         "<coproc_cuda>\n"
+         "   <count>%d</count>\n"
+@@ -472,7 +472,7 @@
+ }
+ 
+ int COPROC_NVIDIA::parse(XML_PARSER& xp) {
+-    char buf2[256];
++    char buf2[4096];
+     int retval;
+ 
+     clear();
+@@ -594,7 +594,7 @@
+ ////////////////// ATI STARTS HERE /////////////////
+ 
+ #ifndef _USING_FCGI_
+-void COPROC_ATI::write_xml(MIOFILE& f, bool include_request) {
++void COPROC_ATI::write_xml(MIOFILE& f, const bool include_request) {
+     f.printf(
+         "<coproc_ati>\n"
+         "   <count>%d</count>\n"
+@@ -676,7 +676,7 @@
+ }
+ 
+ int COPROC_ATI::parse(XML_PARSER& xp) {
+-    int n, retval;
++    int n;
+ 
+     clear();
+ 
+@@ -768,7 +768,7 @@
+             continue;
+         }
+         if (xp.match_tag("coproc_opencl")) {
+-            retval = opencl_prop.parse(xp);
++            int retval = opencl_prop.parse(xp);
+             if (retval) return retval;
+             continue;
+         }
+Index: boinc/lib/coproc.h
+===================================================================
+--- boinc.orig/lib/coproc.h	2012-03-31 13:44:25.107137662 +0200
++++ boinc/lib/coproc.h	2012-04-01 18:25:18.783600575 +0200
+@@ -76,6 +76,8 @@
+ #include "cal_boinc.h"
+ #include "cl_boinc.h"
+ 
++#include <cuda.h>
++
+ #define DEFER_ON_GPU_AVAIL_RAM  0
+ 
+ #define MAX_COPROC_INSTANCES 64
+@@ -99,7 +101,7 @@
+ // (used in client only)
+ //
+ struct COPROC_REQ {
+-    char type[256];     // must be unique
++    char type[1024];     // must be unique
+     double count;
+     int parse(XML_PARSER&);
+ };
+@@ -109,8 +111,8 @@
+ //
+ struct OPENCL_DEVICE_PROP {
+     cl_device_id device_id;
+-    char name[256];                     // Device name
+-    char vendor[256];                   // Device vendor (NVIDIA, ATI, AMD, etc.)
++    char name[1024];                     // Device name
++    char vendor[1024];                   // Device vendor (NVIDIA, ATI, AMD, etc.)
+     cl_uint vendor_id;                  // OpenCL ID of device vendor
+     cl_bool available;                  // Is this device available?
+     cl_device_fp_config half_fp_config; // Half precision capabilities
+@@ -118,7 +120,7 @@
+     cl_device_fp_config double_fp_config;   // Double precision
+     cl_bool endian_little;              // TRUE if little-endian
+     cl_device_exec_capabilities execution_capabilities;
+-    char extensions[1024];              // List of device extensions
++    char extensions[9128];              // List of device extensions
+     cl_ulong global_mem_size;           // in bytes
+     cl_ulong local_mem_size;
+     cl_uint max_clock_frequency;        // in MHz
+@@ -140,7 +142,7 @@
+     void write_xml(MIOFILE&);
+ #endif
+     int parse(XML_PARSER&);
+-void description(char* buf, const char* type);
++    void description(char* buf, const char* type);
+ };
+ 
+ 
+@@ -150,7 +152,7 @@
+ // Used in both client and server.
+ //
+ struct COPROC {
+-    char type[256];     // must be unique
++    char type[1024];    // must be unique
+     int count;          // how many are present
+     double peak_flops;
+     double used;        // how many are in use (used by client)
+@@ -251,7 +253,7 @@
+         std::vector<int>& ignore_dev
+     );
+     void find_best_opencls(
+-        bool use_all,
++        const bool use_all,
+         std::vector<OPENCL_DEVICE_PROP> &opencls, 
+         std::vector<int>& ignore_dev
+     );
+@@ -261,9 +263,9 @@
+ // doesn't have to match exactly since we get the attributes one at a time.
+ //
+ struct CUDA_DEVICE_PROP {
+-  char  name[256];
++  char  name[1024];
+   int   deviceHandle;
+-  unsigned int totalGlobalMem;
++  size_t totalGlobalMem;
+     // not used on the server; dtotalGlobalMem is used instead
+     // (since some boards have >= 4GB)
+   int   sharedMemPerBlock;
+@@ -294,7 +296,7 @@
+ #endif
+     COPROC_NVIDIA(): COPROC(GPU_TYPE_NVIDIA){}
+     void get(
+-        bool use_all,
++        const bool use_all,
+         std::vector<std::string>&,
+         std::vector<int>& ignore_devs
+     );
+@@ -316,8 +318,8 @@
+ }
+ 
+ struct COPROC_ATI : public COPROC {
+-    char name[256];
+-    char version[50];
++    char name[1024];
++    char version[100];
+     int version_num;
+         // CAL version (not driver version) encoded as an int
+     bool atirt_detected;
+@@ -331,7 +333,7 @@
+ #endif
+     COPROC_ATI(): COPROC(GPU_TYPE_ATI){}
+     void get(
+-        bool use_all,
++        const bool use_all,
+         std::vector<std::string>&,
+         std::vector<int>& ignore_devs
+     );
+@@ -351,14 +353,14 @@
+ 
+     void write_xml(MIOFILE& out, bool include_request);
+     void get(
+-        bool use_all, 
++        const bool use_all,
+         std::vector<std::string> &descs,
+         std::vector<std::string> &warnings,
+         std::vector<int>& ignore_nvidia_dev,
+         std::vector<int>& ignore_ati_dev
+     );
+     void get_opencl(
+-        bool use_all, 
++        const bool use_all,
+         std::vector<std::string> &warnings,
+         std::vector<int>& ignore_nvidia_dev, 
+         std::vector<int>& ignore_ati_dev
+@@ -372,7 +374,7 @@
+ #ifdef __APPLE__
+     void get_ati_mem_size_from_opengl();
+ #endif
+-    void summary_string(char* buf, int len);
++    void summary_string(char* buf, const int len);
+ 
+     // Copy a coproc set, possibly setting usage to zero.
+     // used in round-robin simulator and CPU scheduler,
+Index: boinc/client/main.cpp
+===================================================================
+--- boinc.orig/client/main.cpp	2012-03-31 13:44:21.295189732 +0200
++++ boinc/client/main.cpp	2012-04-01 15:29:27.448113944 +0200
+@@ -76,14 +76,14 @@
+         msg
+     );
+     if (!gstate.executing_as_daemon) {
+-        fprintf(stdout, evt_msg);
++        fprintf(stdout, "%s", evt_msg);
+     } else {
+ #ifdef _WIN32
+         LogEventInfoMessage(evt_msg);
+ #elif defined(__EMX__)
+ #elif defined (__APPLE__)
+ #else
+-        syslog(LOG_DAEMON|LOG_INFO, evt_msg);
++        syslog(LOG_DAEMON|LOG_INFO, "%s", evt_msg);
+ #endif
+     }
+ }
+@@ -105,14 +105,14 @@
+     );
+ #endif
+     if (!gstate.executing_as_daemon) {
+-        fprintf(stderr, evt_msg);
++        fprintf(stderr, "%s", evt_msg);
+     } else {
+ #ifdef _WIN32
+         LogEventErrorMessage(evt_msg);
+ #elif defined(__EMX__)
+ #elif defined (__APPLE__)
+ #else
+-        syslog(LOG_DAEMON|LOG_ERR, evt_msg);
++        syslog(LOG_DAEMON|LOG_ERR, "%s", evt_msg);
+ #endif
+     }
+ }
+@@ -125,14 +125,14 @@
+         msg, error_code
+     );
+     if (!gstate.executing_as_daemon) {
+-        fprintf(stderr, evt_msg);
++        fprintf(stderr, "%s", evt_msg);
+     } else {
+ #ifdef _WIN32
+         LogEventErrorMessage(evt_msg);
+ #elif defined(__EMX__)
+ #elif defined (__APPLE__)
+ #else
+-        syslog(LOG_DAEMON|LOG_ERR, evt_msg);
++        syslog(LOG_DAEMON|LOG_ERR, "%s", evt_msg);
+ #endif
+     }
+ }
+Index: boinc/client/cs_account.cpp
+===================================================================
+--- boinc.orig/client/cs_account.cpp	2012-03-31 13:44:21.195191098 +0200
++++ boinc/client/cs_account.cpp	2012-04-01 15:44:01.708132306 +0200
+@@ -77,7 +77,7 @@
+     fprintf(f, "<project_preferences>\n%s</project_preferences>\n",
+         project_prefs.c_str()
+     );
+-    fprintf(f, gui_urls.c_str());
++    fprintf(f, "%s", gui_urls.c_str());
+     fprintf(f, "</account>\n");
+     fclose(f);
+     retval = boinc_rename(TEMP_ACCT_FILE_NAME, path);
+@@ -95,7 +95,7 @@
+ // (since we don't know the host venue yet)
+ //
+ int PROJECT::parse_account(FILE* in) {
+-    char buf2[256];
++    char buf2[2048];
+     int retval;
+     bool in_project_prefs = false, btemp;
+     for (int i=0; i<coprocs.n_rsc; i++) {
+@@ -181,7 +181,7 @@
+ // (so that we know the host venue)
+ //
+ int PROJECT::parse_account_file_venue() {
+-    char attr_buf[256], venue[256], path[256], buf2[256];
++    char attr_buf[1024], venue[1024], path[1024], buf2[1024];
+     int retval;
+     bool in_right_venue = false, btemp;
+ 
+@@ -256,7 +256,7 @@
+ }
+ 
+ int PROJECT::parse_account_file() {
+-    char path[256];
++    char path[1024];
+     int retval;
+     FILE* f;
+ 
+Index: boinc/client/cs_benchmark.cpp
+===================================================================
+--- boinc.orig/client/cs_benchmark.cpp	2012-03-31 13:44:21.199191044 +0200
++++ boinc/client/cs_benchmark.cpp	2012-04-01 15:44:49.059483053 +0200
+@@ -463,7 +463,7 @@
+             }
+             ndone++;
+             if (benchmark_descs[i].error) {
+-                msg_printf(0, MSG_INFO, benchmark_descs[i].error_str);
++                msg_printf(0, MSG_INFO, "%s", benchmark_descs[i].error_str);
+                 had_error = true;
+             }
+         }
+Index: boinc/client/cs_statefile.cpp
+===================================================================
+--- boinc.orig/client/cs_statefile.cpp	2012-03-31 13:44:21.227190662 +0200
++++ boinc/client/cs_statefile.cpp	2012-04-01 15:46:52.945784433 +0200
+@@ -28,6 +28,7 @@
+ #include "md5_file.h"
+ #include "parse.h"
+ #include "str_util.h"
++#include "str_replace.h"
+ #include "util.h"
+ 
+ #include "cs_proxy.h"
+@@ -45,10 +46,10 @@
+ }
+ 
+ static bool valid_state_file(const char* fname) {
+-    char buf[256];
++    char buf[1024];
+     FILE* f = boinc_fopen(fname, "r");
+     if (!f) return false;
+-    if (!fgets(buf, 256, f)) {
++    if (!fgets(buf, sizeof(buf), f)) {
+         fclose(f);
+         return false;
+     }
+@@ -56,7 +57,7 @@
+         fclose(f);
+         return false;
+     }
+-    while (fgets(buf, 256, f)) {
++    while (fgets(buf, sizeof(buf), f)) {
+         if (match_tag(buf, "</client_state>")) {
+             fclose(f);
+             return true;
+@@ -830,7 +831,7 @@
+ // parse a project's app_info.xml (anonymous platform) file
+ //
+ int CLIENT_STATE::parse_app_info(PROJECT* p, FILE* in) {
+-    char buf[256], path[1024];
++    char buf[1024], path[1024];
+     MIOFILE mf;
+     mf.init_file(in);
+     XML_PARSER xp(&mf);
+@@ -859,11 +860,11 @@
+             //
+             get_pathname(fip, path, sizeof(path));
+             if (!boinc_file_exists(path)) {
+-                strcpy(buf,
++                safe_strcpy(buf,
+                     _("File referenced in app_info.xml does not exist: ")
+                 );
+                 strcat(buf, fip->name);
+-                msg_printf(p, MSG_USER_ALERT, buf);
++                msg_printf(p, MSG_USER_ALERT, "%s", buf);
+                 delete fip;
+                 continue;
+             }
+Index: boinc/client/work_fetch.cpp
+===================================================================
+--- boinc.orig/client/work_fetch.cpp	2012-03-31 13:47:01.720998329 +0200
++++ boinc/client/work_fetch.cpp	2012-04-01 15:48:04.444804120 +0200
+@@ -779,9 +779,9 @@
+         rsc_work_fetch[0].req_secs?rsc_work_fetch[0].busy_time_estimator.get_busy_time():0
+     );
+     if (log_flags.work_fetch_debug) {
+-        char buf[256];
++        char buf[4096];
+         request_string(buf);
+-        msg_printf(p, MSG_INFO, buf);
++        msg_printf(p, MSG_INFO, "%s", buf);
+     }
+ }
+ 
+Index: boinc/client/Makefile.am
+===================================================================
+--- boinc.orig/client/Makefile.am	2012-04-01 18:42:11.957756629 +0200
++++ boinc/client/Makefile.am	2012-04-01 18:42:39.285383149 +0200
+@@ -83,7 +83,7 @@
+ if OS_DARWIN
+ boinc_client_LDFLAGS += -Wl,-flat_namespace,-undefined,dynamic_lookup
+ endif
+-boinc_client_LDADD = $(LIBBOINC) $(LIBBOINC_CRYPT) $(BOINC_EXTRA_LIBS) $(PTHREAD_LIBS)
++boinc_client_LDADD = $(LIBBOINC) -lcuda $(LIBBOINC_CRYPT) $(BOINC_EXTRA_LIBS) $(PTHREAD_LIBS)
+ 
+ boinc_clientdir = $(bindir)
+ 
+Index: boinc/lib/libboinc.a
+===================================================================
+Binary files boinc.orig/lib/libboinc.a	2012-04-01 13:46:10.592969173 +0200 and boinc/lib/libboinc.a	2012-04-01 18:25:39.491317688 +0200 differ
+Index: boinc/lib/libboinc_la-app_ipc.o
+===================================================================
+Binary files boinc.orig/lib/libboinc_la-app_ipc.o	2012-04-01 13:46:05.421039975 +0200 and boinc/lib/libboinc_la-app_ipc.o	2012-04-01 18:25:33.711396648 +0200 differ
+Index: boinc/lib/libboinc_la-cc_config.o
+===================================================================
+Binary files boinc.orig/lib/libboinc_la-cc_config.o	2012-04-01 13:46:05.993032144 +0200 and boinc/lib/libboinc_la-cc_config.o	2012-04-01 18:25:34.391387358 +0200 differ
+Index: boinc/lib/libboinc_la-coproc.o
+===================================================================
+Binary files boinc.orig/lib/libboinc_la-coproc.o	2012-04-01 13:46:06.469025628 +0200 and boinc/lib/libboinc_la-coproc.o	2012-04-01 18:25:34.995379107 +0200 differ
+Index: boinc/lib/libboinc_la-gui_rpc_client.o
+===================================================================
+Binary files boinc.orig/lib/libboinc_la-gui_rpc_client.o	2012-04-01 13:46:07.505011446 +0200 and boinc/lib/libboinc_la-gui_rpc_client.o	2012-04-01 18:25:36.315361076 +0200 differ
+Index: boinc/lib/libboinc_la-gui_rpc_client_ops.o
+===================================================================
+Binary files boinc.orig/lib/libboinc_la-gui_rpc_client_ops.o	2012-04-01 13:46:09.320986586 +0200 and boinc/lib/libboinc_la-gui_rpc_client_ops.o	2012-04-01 18:25:38.183335558 +0200 differ
+Index: boinc/lib/libboinc_la-gui_rpc_client_print.o
+===================================================================
+Binary files boinc.orig/lib/libboinc_la-gui_rpc_client_print.o	2012-04-01 13:46:09.888978810 +0200 and boinc/lib/libboinc_la-gui_rpc_client_print.o	2012-04-01 18:25:38.759327688 +0200 differ
+Index: boinc/lib/libboinc_la-hostinfo.o
+===================================================================
+Binary files boinc.orig/lib/libboinc_la-hostinfo.o	2012-04-01 13:46:10.312973006 +0200 and boinc/lib/libboinc_la-hostinfo.o	2012-04-01 18:25:39.183321896 +0200 differ

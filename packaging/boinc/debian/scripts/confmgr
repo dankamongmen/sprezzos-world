@@ -1,0 +1,383 @@
+#! /usr/bin/env python
+#
+# Written by Gabor Gombas <gombasg@sztaki.hu>
+# Licensed under the same terms as the rest of BOINC.
+
+"""
+Manage project configuration settings from the command line.
+
+Run "confmgr --help" to list the available commands.
+Run "confmgr <command> --help" to get the description of a command.
+"""
+
+import os, re, shutil, string, tempfile
+from optparse import OptionParser
+
+import boinc_path_config
+from Boinc import configxml
+
+def write_config():
+    """ Write back the changed configuration with some extra care not to destroy
+    the original if e.g. the disk is full."""
+
+    if global_options.dry_run:
+        return
+    (handle, name) = tempfile.mkstemp(prefix = '.config.xml.', dir = os.path.dirname(config.filename))
+    try:
+        config.write(os.fdopen(handle, "w"))
+        shutil.copymode(config.filename, name)
+        if global_options.backup:
+            os.rename(config.filename, config.filename + '.bak')
+        os.rename(name, config.filename)
+    except:
+        os.unlink(name)
+        raise
+
+def get_matching_entry(list, cmdline, host, exact = True):
+    found = []
+    for entry in list:
+        if exact:
+            if entry.cmd != cmdline:
+                continue
+            if entry.__dict__.get('host') != host:
+                continue
+        else:
+            if not re.search(cmdline, entry.cmd):
+                continue
+            # re.search() does not like None as either argument
+            if not re.search(host or '^$', entry.__dict__.get('host') or ''):
+                continue
+        found.append(entry)
+    return found
+
+def task_str(task):
+    msg = "'" + task.cmd + "'"
+    if task.__dict__.get('host'):
+        msg += " (running on " + task.host + ")"
+    return msg
+
+def dump_config(args):
+    usage = """%prog dump
+Dump the project configuration variables."""
+
+    parser = OptionParser(usage = usage)
+    options, extra_args = parser.parse_args(args)
+    if (extra_args):
+        parser.error("Extra arguments on the command line")
+
+    for key in sorted(config.config.__dict__.keys()):
+        if key[0] != '_':
+            print "%s = %s" % (key, config.config.__dict__[key])
+
+def get_config(args):
+    usage = """%prog get <key>
+Returns the value of the configuration key <key>, or an empty string if it is
+not defined."""
+
+    parser = OptionParser(usage = usage)
+    options, extra_args = parser.parse_args(args)
+    if len(extra_args) != 1:
+        parser.error("Wrong number of arguments")
+
+    if extra_args[0] in config.config.__dict__:
+        print config.config.__dict__[extra_args[0]]
+
+def set_config(args):
+    usage = """%prog set <key> <value>
+Sets the value of configuration key <key> to <value>. Note that currently there
+are no checks to verify that either <key> or <value> is valid."""
+
+    parser = OptionParser(usage = usage)
+    options, extra_args = parser.parse_args(args)
+    if len(extra_args) != 2:
+        parser.error("Wrong number of arguments")
+
+    config.config.__dict__[extra_args[0]] = str(extra_args[1])
+    write_config()
+
+def add_task(args):
+    usage = """%prog add_task [options] --period TIME <task command line>
+
+Adds a new periodic task."""
+
+    parser = OptionParser(usage = usage)
+    parser.disable_interspersed_args()
+    parser.add_option("--host",
+                      metavar = "NAME",
+                      help = "run the task only on the specified host")
+    parser.add_option("--output",
+                      metavar = "FILE",
+                      help = "name of the file that will hold the tasks's output")
+    parser.add_option("--lock_file",
+                      metavar = "FILE",
+                      help = "name of the lock file used to prevent starting the task twice")
+    parser.add_option("--period",
+                      metavar = "TIME",
+                      help = "time between two runs")
+    parser.add_option("--disabled",
+                      action = "store_const",
+                      const = "1",
+                      help = "make the task disabled by default")
+    parser.add_option("--always_run",
+                      action = "store_const",
+                      const = "1",
+                      help = "let the task run even if the project is disabled")
+    options, extra_args = parser.parse_args(args)
+    if not extra_args:
+        parser.error("The command to run is missing")
+    if options.period is None:
+        parser.error("The task period must be specified")
+
+    cmd = string.join(extra_args, ' ')
+    if get_matching_entry(config.tasks, cmd, options.host):
+        raise SystemExit("ERROR: A task with the same command line can not be added to the same host twice")
+
+    task = config.tasks.make_node_and_append("task")
+    task.cmd = cmd
+
+    for option in ['host', 'output', 'lock_file', 'period', 'disabled', 'always_run']:
+        if options.__dict__[option] is not None:
+            task.__dict__[option] = options.__dict__[option]
+
+    print "Added task " + task_str(task)
+    write_config()
+
+def del_task(args):
+    usage = """%prog del_task [options] <task command line>
+
+Deletes a periodic task from the configuration."""
+
+    parser = OptionParser(usage = usage)
+    parser.disable_interspersed_args()
+    parser.add_option("--host",
+                      metavar = "NAME",
+                      help = "limit the operation to tasks running on the specified host")
+    parser.add_option("--regexp",
+                      action = "store_true",
+                      default = False,
+                      help = "treat the comand line and host name as a regular expressions")
+    options, extra_args = parser.parse_args(args)
+    if not extra_args:
+        parser.error("The command to delete is missing")
+
+    cmd = string.join(extra_args, ' ')
+    tasks = get_matching_entry(config.tasks, cmd, options.host,
+                               exact = not options.regexp)
+    if not tasks:
+        raise SystemExit("No matching tasks found")
+    for task in tasks:
+        config.tasks.remove_node(task)
+        print "Removed task " + task_str(task)
+
+    write_config()
+
+def update_task(args):
+    usage = """%prog update_task [options] <task command line>
+
+Modifies the settings of a periodic task."""
+
+    parser = OptionParser(usage = usage)
+    parser.disable_interspersed_args()
+    parser.add_option("--host",
+                      metavar = "NAME",
+                      help = "limit the operation to tasks running on the specified host")
+    parser.add_option("--regexp",
+                      action = "store_true",
+                      default = False,
+                      help = "treat the comand line and host name as a regular expressions")
+    parser.add_option("--output",
+                      metavar = "FILE",
+                      help = "set the name of the file that will hold the tasks's output")
+    parser.add_option("--lock_file",
+                      metavar = "FILE",
+                      help = "set the name of the lock file used to prevent starting the task twice")
+    parser.add_option("--period",
+                      metavar = "TIME",
+                      help = "set the time between two runs")
+    parser.add_option("--disabled",
+                      action = "store_const",
+                      const = "1",
+                      help = "disable the task")
+    parser.add_option("--enabled",
+                      dest = "disabled",
+                      action = "store_const",
+                      const = "0",
+                      help = "enable a disabled task")
+    parser.add_option("--always_run",
+                      action = "store_const",
+                      const = "1",
+                      help = "let the task run even if the project is disabled")
+    parser.add_option("--dont_run_always",
+                      action = "store_const",
+                      dest = "always_run",
+                      const = "0",
+                      help = "do not run the task if the project is disabled")
+    options, extra_args = parser.parse_args(args)
+    if not extra_args:
+        parser.error("The command to change is missing")
+
+    cmd = string.join(extra_args, ' ')
+    tasks = get_matching_entry(config.tasks, cmd, options.host,
+                               exact = not options.regexp)
+    if not tasks:
+        raise SystemExit("No matching tasks found")
+    for task in tasks:
+        for option in ['output', 'lock_file', 'period', 'disabled', 'always_run']:
+            if options.__dict__[option] is not None:
+                task.__dict__[option] = options.__dict__[option]
+        print "Modified task " + task_str(task)
+
+    write_config()
+
+def add_daemon(args):
+    usage = """%prog add_daemon [options] <daemon command line>
+
+Adds a new daemon. The daemon will be started the next time 'start' runs (unless
+you specify --disabled)."""
+
+    parser = OptionParser(usage = usage)
+    parser.disable_interspersed_args()
+    parser.add_option("--host",
+                      metavar = "NAME",
+                      help = "run the daemon only on the specified host")
+    parser.add_option("--output",
+                      metavar = "FILE",
+                      help = "name of the file that will hold the daemon's output")
+    parser.add_option("--pid_file",
+                      metavar = "FILE",
+                      help = "name of the file that will hold the daemon's PID")
+    parser.add_option("--disabled",
+                      action = "store_const",
+                      const = "1",
+                      help = "make the daemon disabled by default")
+    options, extra_args = parser.parse_args(args)
+    if not extra_args:
+        parser.error("The command to run is missing")
+
+    cmd = string.join(extra_args, ' ')
+    if get_matching_entry(config.daemons, cmd, options.host):
+        raise SystemExit("ERROR: A daemon with the same command-line cannot run on the same host twice")
+
+    daemon = config.daemons.make_node_and_append("daemon")
+    daemon.cmd = cmd
+
+    for option in ['host', 'output', 'pid_file', 'disabled']:
+        if options.__dict__[option] is not None:
+            task.__dict__[option] = options.__dict__[option]
+
+    print "Added daemon " + task_str(daemon)
+    write_config()
+
+def del_daemon(args):
+    usage = """%prog del_daemon [options] <daemon command line>
+
+Deletes a daemon definition from the configuration. Note that the daemon is not
+killed if it is still running."""
+
+    parser = OptionParser(usage = usage)
+    parser.disable_interspersed_args()
+    parser.add_option("--host",
+                      metavar = "NAME",
+                      help = "limit the operation to daemons running on the specified host")
+    parser.add_option("--regexp",
+                      action = "store_true",
+                      help = "treat the comand line and host name as a regular expressions")
+    options, extra_args = parser.parse_args(args)
+    if not extra_args:
+        parser.error("The command to delete is missing")
+
+    cmd = string.join(extra_args, ' ')
+    daemons = get_matching_entry(config.daemons, cmd, options.host,
+                                 exact = not options.regexp)
+    if not daemons:
+        raise SystemExit("No matching daemons found")
+    for daemon in daemons:
+        config.daemons.remove_node(daemon)
+        print "Removed daemon " + task_str(daemon)
+
+    write_config()
+
+def update_daemon(args):
+    usage = """%prog update_daemon [options] <daemon command line>
+
+Modifies the settings of a daemon."""
+
+    parser = OptionParser(usage = usage)
+    parser.disable_interspersed_args()
+    parser.add_option("--host",
+                      metavar = "NAME",
+                      help = "limit the operation to daemons running on the specified host")
+    parser.add_option("--regexp",
+                      action = "store_true",
+                      default = False,
+                      help = "treat the comand line and host name as a regular expressions")
+    parser.add_option("--output",
+                      metavar = "FILE",
+                      help = "set the name of the file that will hold the daemons's output")
+    parser.add_option("--pid_file",
+                      metavar = "FILE",
+                      help = "set the name of the pid file")
+    parser.add_option("--disabled",
+                      action = "store_const",
+                      const = "1",
+                      help = "disable the daemon")
+    parser.add_option("--enabled",
+                      dest = "disabled",
+                      action = "store_const",
+                      const = "0",
+                      help = "enable a disabled daemon")
+    options, extra_args = parser.parse_args(args)
+    if not extra_args:
+        parser.error("The command to change is missing")
+
+    cmd = string.join(extra_args, ' ')
+    daemons = get_matching_entry(config.daemons, cmd, options.host,
+                                 exact = not options.regexp)
+    if not daemons:
+        raise SystemExit("No matching daemons found")
+    for daemon in daemons:
+        for option in ['output', 'pid_file', 'disabled']:
+            if options.__dict__[option] is not None:
+                daemon.__dict__[option] = options.__dict__[option]
+        print "Modified daemon " + task_str(daemon)
+
+    write_config()
+
+command_table = {
+    'dump': dump_config,
+    'get': get_config,
+    'set': set_config,
+    'add_task': add_task,
+    'del_task': del_task,
+    'update_task': update_task,
+    'add_daemon': add_daemon,
+    'del_daemon': del_daemon,
+    'update_daemon': update_daemon,
+}
+
+usage = """%%prog [global options] <command> [command arguments]
+
+Available commands:
+
+%s
+
+Use "%%prog <command> --help" to get a description of the command.""" % \
+    string.join(map(lambda x: "\t" + x, sorted(command_table.keys())), "\n")
+
+parser = OptionParser(usage=usage)
+parser.disable_interspersed_args()
+parser.add_option("--backup", "-b",
+                  action = "store_true",
+                  help = "make a backup of config.xml before modifying it")
+parser.add_option("--dry-run", "-n",
+                  action = "store_true",
+                  help = "do not modify config.xml, just simulate what would happen")
+global_options, args = parser.parse_args()
+if not args:
+    parser.error("Command is not provided")
+if not args[0] in command_table:
+    parser.error("Unknown command " + args[0])
+
+config = configxml.default_config()
+
+command_table[args[0]](args[1:])

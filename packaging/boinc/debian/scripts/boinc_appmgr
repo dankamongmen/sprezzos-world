@@ -1,0 +1,223 @@
+#! /usr/bin/perl -w
+#
+# Manage applications for BOINC projects
+#
+# Author: Gabor Gombas <gombasg@sztaki.hu>
+#
+# This is free software; you can redistribute it and/or modify it under the
+# terms of the GNU Lesser General Public License as published by the Free
+# Software Foundation; either version 2.1 of the License, or (at your option)
+# any later version.
+
+=head1 NAME
+
+boinc_appmgr - manage applications installed under BOINC projects
+
+=head1 SYNOPSIS
+
+boinc_appmgr B<--list> [{B<--master>|B<--client>}]
+
+boinc_appmgr B<--add> B<--master> [B<--instance> I<name>] I<file>
+
+boinc_appmgr B<--add> B<--client> I<file>
+
+boinc_appmgr B<--delete> B<--master> I<application> [B<--instance> I<name>]
+
+boinc_appmgr B<--delete> B<--client> I<application> [B<--version> I<version>]
+
+boinc_appmgr B<--help>
+
+=head1 DESCRIPTION
+
+This script manages applications installed under BOINC projects. It can manage
+both client applications and master daemons.
+
+=head1 OPTIONS
+
+=over
+
+=item B<--help>
+
+Display a short help text and exit.
+
+=item B<--master>
+
+Operate on master applications.
+
+=item B<--client>
+
+Operate on client applications.
+
+=item B<--list>
+
+List installed applications. If none of B<--client> or B<--master>
+was given, list both master and client applications.
+
+=item B<--instance> I<name>
+
+The B<boinc_appmgr> script supports installing the same master application
+multiple times (operating on different sets of data). To achieve this, you
+must specify the B<--instance> I<name> option when adding the master application,
+where I<name> must be an identifier that is unique among the application
+installation instances.
+
+=item B<--add>
+
+Add the application described by I<file>. I<file> may be either an XML file or
+a (possibly compressed) tar archive.
+
+=over
+
+=item
+
+If the extension of I<file> is B<.xml>, then it is treated as an XML descriptor
+of the application to install.  If none of B<--client> or B<--master>
+was given, the root tag of the XML file specifies wether it is a
+client or master application.
+
+=item
+
+If the extension of I<file> is B<.tar>, B<.tar.gz> or B<.tar.bz2>, then it is
+extracted to a temporary directory. boinc_appmgr then looks for files named
+B<client.xml> and B<master.xml> in the extracted directory for
+specification of client and master applications, respectively.
+A single tar archive may contain multiple components (e.g. both the master and
+client applications).
+
+Note that B<client.xml> and B<master.xml> must be at the top-level
+in the B<tar> archive, they cannot be in a sub-directory. Also, all file
+references in the XML files must be relative.
+
+=back
+
+=item B<--delete>
+
+Uninstall the named I<application>. If B<--version> I<version> is not
+specified, all installed versions are removed (this only applies to client
+applications since multiple master versions cannot be installed
+simultaneously).
+
+Note: in case of client applications, only the application's files will be
+deleted, the application definition will NOT be removed from the Boinc
+database.
+
+=back
+
+=head1 AUTHOR
+
+Written by Gabor Gombas <gombasg@sztaki.hu>
+
+=head1 COPYRIGHT
+
+LGPL-2.1 or later
+
+=cut
+
+use Boinc::Config;
+use Boinc::Common;
+use Boinc::Application;
+
+use Getopt::Long;
+use English '-no_match_vars';
+use XML::Simple qw(:strict);
+use Pod::Usage;
+
+use strict;
+
+sub open_logfile($) {
+	my $project = shift;
+
+	my $dir = homedir($project) . '/appmgr';
+	mkdir $dir, 0755 unless -d $dir;
+
+	set_logfile($dir . '/appmgr.log');
+}
+
+#######################################################################
+# Main program
+
+my ($input_args, $master, $client, $add, $delete, $list, $help,
+	$version, $instance);
+GetOptions("input-args=s" => \$input_args,
+		"master" => \$master,
+		"client" => \$client,
+		"add" => \$add,
+		"delete" => \$delete,
+		"version=s" => \$version,
+		"instance=s" => \$instance,
+		"list" => \$list,
+		"help" => \$help)
+	or die("Failed to parse the command-line options\n");
+
+pod2usage(1) if ($help);
+
+# Normalize option values
+$list = $list ? 1 : 0;
+$add = $add ? 1 : 0;
+$delete = $delete ? 1 : 0;
+$client = $client ? 1 : 0;
+$master = $master ? 1 : 0;
+
+die("Multiple operations are not allowed\n") if $list + $add + $delete > 1;
+#die("--client and --master cannot be used together\n") if $client && $master;
+die("You must specify an operation\n") unless $list + $add + $delete;
+die("--version is only meaningful with --delete\n")
+	if $version && !$delete;
+
+my $user = getpwuid($EUID);
+die("This script must be run under the project's user\n")
+	unless $user =~ m/^boinc-(.*)$/;
+my $project = $1;
+
+die("Project configuration directory is missing\n")
+	unless -d projectroot($project);
+
+if ($list) {
+	$client = $master = 1 if !$client && !$master;
+	list_client_apps($project) if $client;
+	print "\n" if $client && $master;
+	list_master_apps($project) if $master;
+}
+
+if ($add) {
+	die("Application descriptor file name required\n") unless $ARGV[0];
+	open_logfile($project);
+
+	if ($ARGV[0] =~ m/\.tar(\.gz|\.bz2)?$/) {
+		my $options = {};
+
+		if (!($client + $master)) {
+			$client = $master = 1;
+		}
+		$options->{'CLIENT'} = 1 if $client;
+		$options->{'MASTER'} = 1 if $master;
+		$options->{'instance'} = $instance;
+
+		process_archive($project, $ARGV[0], $options);
+	}
+	else {
+		if (!($client + $master)) {
+			my $xml = XMLin($ARGV[0], ForceArray => [], KeyAttr => [],
+				KeepRoot => 1, SuppressEmpty => 1);
+			$client = 1 if exists $xml->{'client'};
+			$master = 1 if exists $xml->{'master'};
+			die("Unknown XML file\n") unless $client || $master;
+		}
+
+		add_client_app($project, $ARGV[0]) if $client;
+		add_master_app($project, $ARGV[0], $instance, 0) if $master;
+	}
+}
+
+if ($delete) {
+	die("Delete requires either --client or --master\n")
+		if !$client && !$master;
+	die("Application name required\n") unless $ARGV[0];
+
+	open_logfile($project);
+
+	delete_client_app($project, $ARGV[0], $version) if $client;
+	delete_master_app($project, $ARGV[0], $instance) if $master;
+}
+
+exit(0);

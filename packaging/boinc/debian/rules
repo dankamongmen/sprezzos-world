@@ -1,0 +1,429 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# Uncomment the following lines to compile with gcc-snapshot.
+#export  CC=/usr/lib/gcc-snapshot/bin/gcc
+#export CXX=/usr/lib/gcc-snapshot/bin/g++
+#export CPP=/usr/lib/gcc-snapshot/bin/cpp
+
+# Set default flags with dpkg-buildflags
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+  TYPE_FLAGS = --build $(DEB_HOST_GNU_TYPE)
+else
+  TYPE_FLAGS = --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+endif
+
+# On some architectures it is required to change the BOINC platform of the
+# core client (with the --with-boinc-platform configure option) to match the
+# official BOINC platform, otherwise it would not download any applications,
+# because projects mostly provide applications for official BOINC platforms
+# only. See http://boinc.berkeley.edu/trac/wiki/BoincPlatforms for the list
+# of official BOINC platforms.
+#
+# The table of architectures known to dpkg-architecture are listed on
+#  /usr/share/dpkg/archtable
+
+# Change BOINC platform alpha-unknown-linux-gnu to alpha-hp-linux-gnu and
+# declare alpha-unknown-linux-gnu as alternate platform, because some projects
+# offer applications for it.
+ifeq ($(DEB_HOST_GNU_TYPE), alpha-linux-gnu)
+  TYPE_FLAGS += --with-boinc-platform=alpha-hp-linux-gnu \
+    --with-boinc-alt-platform=alpha-unknown-linux-gnu
+endif
+
+# Change BOINC platform i486-pc-linux-gnu to i686-pc-linux-gnu.
+ifeq ($(DEB_HOST_GNU_TYPE), i486-linux-gnu)
+  TYPE_FLAGS += --with-boinc-platform=i686-pc-linux-gnu
+endif
+
+# Change BOINC platform x86_64-linux-gnu to x86_64-pc-linux-gnu.
+# Keeping the previous name temporarily.
+# The 32bit variants shall allow the execution of 32 bit 
+# executable in case the scientific application is no available
+# for the complete bit size.
+ifeq ($(DEB_HOST_GNU_TYPE), x86_64-linux-gnu)
+  TYPE_FLAGS += --with-boinc-platform=x86_64-pc-linux-gnu
+  # wrong previous name (since regular Debian name)
+  TYPE_FLAGS += --with-boinc-alt-platform=x86_64-linux-gnu
+  # if we did the following, the the ia32 libs would
+  # need to become a dependency - which is not wanted by too many
+  #TYPE_FLAGS += --with-boinc-alt-platform=i686-pc-linux-gnu
+endif
+
+# Change BOINC platform i486-pc-kfreebsd-gnu to i686-pc-kfreebsd-gnu to be
+# consistent with the official BOINC platform i686-pc-linux-gnu.
+ifeq ($(DEB_HOST_GNU_TYPE), i486-kfreebsd-gnu)
+  TYPE_FLAGS += --with-boinc-platform=i686-pc-kfreebsd-gnu
+endif
+
+# Declare i686-pc-kfreebsd-gnu as alternate platform for
+# x86_64-pc-kfreebsd-gnu.
+ifeq ($(DEB_HOST_GNU_TYPE), x86_64-kfreebsd-gnu)
+  TYPE_FLAGS += --with-boinc-platform=x86_64-pc-kfreebsd-gnu
+  TYPE_FLAGS += --with-boinc-alt-platform=i686-pc-kfreebsd-gnu
+endif
+
+# Change BOINC platform ia64-unknown-linux-gnu to ia64-linux-gnu.
+ifeq ($(DEB_HOST_GNU_TYPE), ia64-linux-gnu)
+  TYPE_FLAGS += --with-boinc-platform=ia64-linux-gnu
+endif
+
+# Change BOINC platform powerpc-unknown-linux-gnu to powerpc-linux-gnu.
+ifeq ($(DEB_HOST_GNU_TYPE), powerpc-linux-gnu)
+  TYPE_FLAGS += --with-boinc-platform=powerpc-linux-gnu
+endif
+
+# Change BOINC platform powerpc64-unknown-linux-gnu to ppc64-linux-gnu and
+# declare powerpc-linux-gnu as alternate platform.
+ifeq ($(DEB_HOST_GNU_TYPE), powerpc64-linux-gnu)
+  TYPE_FLAGS += --with-boinc-platform=ppc64-linux-gnu \
+    --with-boinc-alt-platform=powerpc-linux-gnu
+endif
+
+# Change BOINC platform sparc-unknown-linux-gnu to sparc-sun-linux-gnu.
+ifeq ($(DEB_HOST_GNU_TYPE), sparc-linux-gnu)
+  TYPE_FLAGS += --with-boinc-platform=sparc-sun-linux-gnu
+endif
+
+# Not touching BOINC platform for hurd for the very moment.
+# Manually specify the MAXPATHLEN for GNU where this limit
+# is not existing.
+ifeq ($(DEB_HOST_GNU_TYPE), i486-gnu)
+  # setting it to the regular limit for the other flavours of Debian
+  CFLAGS += -DMAXPATHLEN=4096
+  #TYPE_FLAGS += --with-boinc-platform=i686-pc-hurd-gnu
+endif
+
+GCCVERSION=$(shell gcc --version | tr " " "\n" | egrep '^[0-9]+\.[0-9]+\.[0-9]+$$' | cut -f1,2 -d.)
+# gcc 4.6 on precise has issues while gcc 4.7 on sid is just fine
+ifneq (4.6,$(GCCVERSION))
+ifneq (4.5,$(GCCVERSION))
+ifneq (4.4,$(GCCVERSION))
+  CFLAGS += -flto
+  LDFLAGS += -flto
+endif
+endif
+endif
+
+CFLAGS += -Wall
+CXXFLAGS += -Wall
+LDFLAGS += -Wl,--as-needed
+# hurd needs the following
+LDFLAGS += -Wl,--no-add-needed
+
+
+ifneq (,$(findstring clang,$(DEB_BUILD_OPTIONS)))
+  export CXX=clang
+endif
+
+CFLAGS += $(DEB_OPT_FLAGS)
+CXXFLAGS += $(DEB_OPT_FLAGS)
+
+CFLAGS_boinc-client := $(CFLAGS)
+CXXFLAGS_boinc-client := $(CXXFLAGS)
+
+ENABLE_SERVER_TEST := $(shell egrep '^Package:.*boinc-server-maker' debian/control.in)
+ENABLE_SERVER := --disable-server
+ifneq (,$(ENABLE_SERVER_TEST))
+ENABLE_SERVER := --enable-server
+TMP=$(shell sed -e 's/^%//' debian/control.in > debian/control)
+else
+TMP=$(shell egrep -v '^%' debian/control.in > debian/control)
+endif
+
+ENABLE_CLIENT_TEST := $(shell egrep '^Package:.*boinc$$' debian/control.in)
+ENABLE_CLIENT := --disable-client --disable-manager
+ifneq (,$(ENABLE_CLIENT_TEST))
+ENABLE_CLIENT := --enable-client --enable-manager --enable-dynamic-client-linkage
+TMP=$(shell sed -i 's/^@//' debian/control)
+else
+TMP=$(shell sed -i '/^@/d' debian/control)
+endif
+
+# --disable-static
+# For debugging, these options are useful:
+#   --enable-debug
+#   --enable-wx-debug (need to install libwxbase2.8-dbg and libwxgtk2.8-dbg)
+CFGFLAGS_boinc-client = \
+  $(TYPE_FLAGS) \
+  --prefix=/usr \
+  $(ENABLE_CLIENT) \
+  $(ENABLE_SERVER) \
+  --disable-fcgi \
+  --enable-libraries \
+  --enable-unicode \
+  --enable-shared \
+  --with-ssl \
+  --with-x \
+  CFLAGS="$(CFLAGS_boinc-client)" \
+  CXXFLAGS="$(CXXFLAGS_boinc-client)" \
+  CPPFLAGS="$(CPPFLAGS)" \
+  LDFLAGS="$(LDFLAGS)"
+
+
+# Default rule
+
+%:
+	if [ ! -f debian/control -o debian/control.in -nt debian/control ]; then \
+		echo "Generating debian/control file from debian/control.in" ; \
+		( \
+		if egrep -q '^Package:.*boinc-server-maker' debian/control.in; then \
+			sed -e 's/^%//' debian/control.in ; \
+		else \
+			egrep -v '^%' debian/control.in ; \
+		fi \
+		) | ( \
+		if egrep -q '^Package:.*boinc$$' debian/control.in; then \
+			sed -e 's/^@//' ; \
+		else \
+			sed -e '/^@/d' ; \
+		fi \
+		) > debian/control; \
+	fi
+	dh $@ --parallel --with python2
+
+override_dh_clean:
+	dh_clean
+	rm -rf config.log
+	rm -rf clientscr/.libs override_dh_auto_install
+	rm -rf debian/boinc-app-examples debian/boinc-server-maker debian/boinc-app-examples.substvars debian/boinc-server-maker.substvars
+	rm -rf debian/tmp autoreconf-stamp build-*-stamp install-*-stamp
+	rm -fr debian/boinc-amd-opencl debian/boinc-screensaver # for cases when this is not in debian/control
+	rm -f debian/boinc-screensaver.substvars debian/boinc-amd-opencl.substvars # dito
+
+# Commands not to execute - empty overrides
+override_dh_auto_test:
+
+#test-stamp:
+#	dh_testdir
+#	xmllint --nonet --noout \
+#	  debian/conffiles/cc_config.xml \
+#	  debian/conffiles/global_prefs_override.xml
+#	touch $@
+
+override_dh_auto_configure:
+	./_autosetup
+	#if [ ! -r ltmain.sh ]; then libtoolize; fi
+	#aclocal-1.9 -I m4 && autoheader && automake-1.9 --add-missing && autoconf
+	@echo
+	@echo "****             *****"
+	@echo "**** Configuring *****"
+	@echo "****             *****"
+	@echo
+	cp -f /usr/share/misc/config.guess config.guess
+	cp -f /usr/share/misc/config.sub config.sub
+	./configure $(CFGFLAGS_boinc-client)
+
+update-boinc-applinks.1: debian/manpages/update-boinc-applinks.xml
+	docbook2x-man debian/manpages/update-boinc-applinks.xml
+
+# noopt
+CFLAGS_noopt = $(subst -O2,-O0,$(CFLAGS))
+CXXFLAGS_noopt = $(subst -O2,-O0,$(CXXFLAGS))
+# noopt and no hardening
+CFLAGS_plain = -g -O0 -Wall
+CXXFLAGS_plain = $(CFLAGS_plain)
+
+override_dh_auto_build: update-boinc-applinks.1
+	@echo
+	@echo "****        *****"
+	@echo "**** Making ****"
+	@echo "****        *****"
+	@echo
+	# disable optimization in api/, for SETI to work
+	$(MAKE) -C api CFLAGS="$(CFLAGS_noopt)" CXXFLAGS="$(CXXFLAGS_noopt)"
+	$(MAKE)
+
+	# Generate binary message catalogs of the BOINC Manager.
+	if [ -d locale/client ]; then \
+	  for i in `ls locale/client`; do \
+	    if [ -f "locale/client/$$i/BOINC-Manager.po" ]; then \
+	     msgfmt -o "locale/client/$$i/BOINC-Manager.mo" \
+	      "locale/client/$$i/BOINC-Manager.po"; \
+	    fi; \
+	  done; \
+	fi
+ifneq (,$(ENABLE_SERVER_TEST))
+	$(MAKE) -C samples/sleeper
+	$(MAKE) -C samples/worker
+	$(MAKE) -C samples/example_app
+	$(MAKE) -C samples/wrapper
+endif
+
+BINARIES= sched/census sched/cgi sched/db_dump sched/db_purge \
+	sched/delete_file sched/feeder sched/file_deleter \
+	sched/file_upload_handler sched/get_file sched/make_work \
+	sched/message_handler sched/request_file_list sched/sample_assimilator \
+	sched/sample_bitwise_validator sched/sample_dummy_assimilator \
+	sched/sample_trivial_validator sched/sample_work_generator \
+	sched/sched_driver sched/send_file sched/show_shmem \
+	sched/single_job_assimilator sched/transitioner sched/trickle_handler \
+	sched/update_stats sched/wu_check \
+	clientgui/boincmgr
+BINARIES += samples/worker/worker samples/wrapper/wrapper samples/sleeper/sleeper \
+	samples/nvcuda/cuda samples/example_app/example_app samples/vm_wrapper/vm_wrapper \
+	samples/atiopencl/atiopencl
+
+override_dh_auto_clean: 
+	dh_auto_clean
+	[ -r samples/sleeper/Makefile ] && $(MAKE) -C samples/sleeper distclean
+	# fail on unpatched source
+	# $(MAKE) -C samples/worker distclean
+	rm -rf samples/worker/worker samples/worker/worker.o
+	[ -r samples/example_app/Makefile ] && $(MAKE) -C samples/example_app distclean || $(MAKE) -C samples/example_app clean
+	[ -r samples/wrapper/Makefile ] && $(MAKE) -C samples/wrapper distclean || $(MAKE) -C samples/wrapper clean
+	find . -name Makefile.in -o -name "*.a" -o -name "*.o" | xargs -r rm
+	find . -name "Makefile" | grep -v samples | xargs -r rm
+	rm -f configure clientscr/boincscr
+	rm -rf py/lib.linux-*-2.*
+	rm -f client_state.xml gui_rpc_auth.cfg
+	rm -rf  py/build py/lib.linux-x86_64-2.6
+	find . -name "*.pyc" | xargs -r rm
+	rm -f stderr.txt # remnant of application started
+	rm -f lib/crypt_prog test/run notices/feeds.xml
+	find test -name "run-*" | xargs -r rm -rf
+	rm -f $(BINARIES)
+	rm -f \
+	  boinc_lockfile lockfile \
+	  client/boinc.optimized \
+	  update-boinc-applinks.1 \
+	  aclocal.m4 \
+	  config.h \
+	  config.h.in \
+	  configure \
+	  compile \
+	  depcomp \
+	  doc/manpages/appmgr.8 \
+	  install-sh \
+	  ltmain.sh \
+	  m4/libtool.m4 \
+	  m4/ltoptions.m4 \
+	  m4/ltsugar.m4 \
+	  m4/ltversion.m4 \
+	  m4/lt~obsolete.m4 \
+	  missing \
+	  sched/credit_test \
+	  svn_version.h \
+	  locale/client/ar/BOINC\ Manager.mo \
+	  config.guess \
+	  config.sub \
+	  client/scripts/Makefile \
+	  client/scripts/boinc-client \
+	  clientgui/res/Makefile \
+	  sea/Makefile   \
+	  client/boinc \
+	  packages/solaris/CSW/boincclient/pkginfo \
+	  packages/solaris/CSW/boincclient/prototype \
+	  packages/solaris/CSW/boincdevel/pkginfo \
+	  packages/solaris/CSW/boincdevel/prototype \
+	  packages/solaris/CSW/boinclibs/pkginfo \
+	  packages/solaris/CSW/boinclibs/prototype \
+	  packages/solaris/CSW/boincmanager/pkginfo \
+	  packages/solaris/CSW/boincmanager/prototype \
+	  packages/solaris/CSW/Makefile \
+	  packages/generic/sea/Makefile \
+	  packages/solaris/CSW/boincclient/Makefile \
+	  packages/solaris/CSW/boincdevel/Makefile \
+	  packages/solaris/CSW/boinclibs/Makefile \
+	  packages/solaris/CSW/boincmanager/Makefile
+	debconf-updatepo
+
+SAMPLES=samples/sleeper/sleeper samples/worker/worker samples/example_app/uc2 samples/wrapper/wrapper
+
+override_dh_auto_install: update-boinc-applinks.1
+	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+ifneq (,$(ENABLE_SERVER_TEST))
+	echo "I: Installing example scientific applications"
+	mkdir -p $(CURDIR)/debian/tmp/samples
+	cp $(SAMPLES) $(CURDIR)/debian/tmp/samples || echo "W: Could not install samples ($(SAMPLES))"
+endif
+	for i in $(CURDIR)/debian/*/usr/bin ; \
+	do \
+		egrep -l "^#!.*env..*python" $$i/* | xargs -r sed -i '1s%#!.*%#!/usr/bin/python%' ; \
+	done
+#	-chmod +x $(CURDIR)/debian/boinc-server-maker/usr/share/boinc-server/sched/transitioner_catchup.php ; \
+
+override_dh_install:
+	# boinc apps are built only together with the server
+	dh_install
+	rm -rf debian/boinc-manager/usr/share/locale/en_US/
+	# delete empty dirs
+	if [ -d debian/boinc-manager/usr/share/locale ] ; then find debian/boinc-manager/usr/share/locale -type d -empty -delete; fi
+	# delete .la files (Closes: #621197)
+	find $(CURDIR)/debian -name "*.la" | xargs -r rm -f
+
+override_dh_strip:
+	[ -d debian/boinc-dbg ] && dh_strip -a --no-package=-boinc-server-dbg --no-package=boinc-server-maker --no-package=boinc-app-examples --dbg-package=boinc-dbg || true
+	[ -d debian/boinc-server-dbg ] && dh_strip -a -Nboinc -Nlibboinc7 -Nboinc-nvidia-cuda -Nboinc-amd-opencl -Nboinc-client -Nboinc-manager -Nboinc-dev -Nlibboinc-app-dev -Nlib || true
+
+override_dh_installchangelogs:
+	dh_installchangelogs -k checkin_notes
+
+override_dh_fixperms:
+	dh_fixperms
+	# some files are not right with 755
+	find debian -name "*.php" -o -name "*.php.example" -o -name "*.cpp" | grep -v "update_translations.php" | grep -v "transitioner_catchup.php" | xargs -L 1 -r chmod 644 --
+	# some other files are indeed to be executed via the command line
+	opsdir=debian/boinc-server-maker/usr/share/boinc-server-maker/html/ops ; \
+	if [ -d "$$opsdir" ]; then \
+		cd "$$opsdir" ; \
+		for i in *.php; do \
+			if head -n 1 "$$i" | grep -q "^#!"; then \
+				chmod 755 "$$i" ; \
+			fi ; \
+		done ; \
+	fi
+	# Correct catalog file perms
+	find debian -name "*.mo" -exec chmod 644   {} \;
+	chmod 755 \
+	  debian/boinc-client/usr/share/boinc-client/udev-cpu_share \
+	  debian/boinc-client/usr/share/bug/boinc-client/script \
+	  debian/boinc-manager/usr/share/doc/boinc-manager/examples/run-boincmgr
+
+override_dh_compress:
+	dh_compress -Xsamples -X.cpp
+
+override_dh_installexamples:
+	dh_installexamples -Xjpeglib 
+
+origDir ?= .
+
+get-orig-source:
+	diskfree=`df -k . | awk '{print $$4}' | tail -n +2` ; \
+	if [ -z "$$diskfree" -o "$$diskfree" -lt $$((250*1024)) ]; then \
+ 	  echo "Not enough disk space for download. Have 250MB available if not more."; \
+	  exit 1; \
+	fi
+	#LATEST_VERSION=`svn list http://boinc.berkeley.edu/svn/tags/ | \
+	#  sed 's/boinc_core_release_\(.*\)\//\1/' | \
+	#  sort -g -t_ -k1 -k2 -k3 | sed 's/_/./g' | tail -n 1 | tr -d '\n'`; \
+	#
+	echo "this script doesn't work anymore since the upstream switch from svn to git"
+	#VERSION=$(shell dpkg-parsechangelog | egrep '^Version:' | \
+	#cut -d ' ' -f 2 | cut -d '-' -f 1 | cut -d '+' -f 1 | cut -d '~' -f 1 | perl -pe 's/^.*?://')
+	#EXB=/tmp/index.html; \
+	#nice="nice -5"; if [ -x /usr/bin/ionice ]; then nice="$$nice ionice -c 3"; fi ; \
+	#$$nice wget -O $$EXB "http://boinc.berkeley.edu/git/boinc.git/refs/tags/" --quiet;
+	#LATEST_VERSION=`grep -e 'client_release_[0-9]\.[0-9]\.[0-9]*' $$EXB -o | tail -n 1 | sed 's/client_release_//g'`
+	#rm -f $$EXB
+	#FIXME
+	#next part should be done only if the two versions are different, how to perform this if?
+	##if [ "$$VERSION"!="$$LATEST_VERSION" ]; then
+	#EXB=/tmp/export-boinc; \
+	#$$nice wget -O $$EXB "http://git.debian.org/?p=pkg-boinc/scripts.git;a=blob_plain;f=export-boinc;hb=HEAD" --quiet; \
+	#chmod +x $$EXB; \
+	#$$nice $$EXB -r $$VERSION -t $(origDir); \
+	#rm -f $$EXB ;
+	##fi ;
+
+.PHONY: get-orig-source
+

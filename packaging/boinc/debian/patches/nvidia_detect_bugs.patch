@@ -1,0 +1,323 @@
+Index: boinc/client/coproc_detect.cpp
+===================================================================
+--- boinc.orig/client/coproc_detect.cpp	2012-05-03 13:53:32.000000000 +0200
++++ boinc/client/coproc_detect.cpp	2012-05-03 13:58:43.375200952 +0200
+@@ -38,6 +38,7 @@
+ #include <dlfcn.h>
+ #include <setjmp.h>
+ #include <signal.h>
++//#include <cuda.h>
+ #endif
+ 
+ #include "coproc.h"
+@@ -788,6 +789,19 @@
+     return 0;
+ }
+ 
++#ifndef __cuda_cuda_h__
++
++#if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64)
++typedef unsigned long long CUdeviceptr;
++#else
++typedef unsigned int CUdeviceptr;
++#endif
++
++typedef int CUdevice_attribute;
++typedef unsigned int CUresult;
++typedef int CUdevice;
++typedef void* CUcontext;
++
+ enum CUdevice_attribute_enum {
+   CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1,
+   CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2,
+@@ -811,20 +825,29 @@
+   CU_DEVICE_ATTRIBUTE_COMPUTE_MODE = 20
+ };
+ 
++#endif  // ifndef __cuda_cuda_h__
++
++
++#ifdef _WIN32
++#define CUDAAPI __stdcall
++#else
++#define CUDAAPI
++#endif
++
+ #ifdef _WIN32
+-typedef int (__stdcall *CUDA_GDC)(int *count);
+-typedef int (__stdcall *CUDA_GDV)(int* version);
+-typedef int (__stdcall *CUDA_GDI)(unsigned int);
+-typedef int (__stdcall *CUDA_GDG)(int*, int);
+-typedef int (__stdcall *CUDA_GDA)(int*, int, int);
+-typedef int (__stdcall *CUDA_GDN)(char*, int, int);
+-typedef int (__stdcall *CUDA_GDM)(size_t*, int);
+-typedef int (__stdcall *CUDA_GDCC)(int*, int*, int);
+-typedef int (__stdcall *CUDA_CC)(void**, unsigned int, unsigned int);
+-typedef int (__stdcall *CUDA_CD)(void*);
+-typedef int (__stdcall *CUDA_MA)(unsigned int*, size_t);
+-typedef int (__stdcall *CUDA_MF)(unsigned int);
+-typedef int (__stdcall *CUDA_MGI)(size_t*, size_t*);
++typedef CUresult CUDAAPI (*CUDA_GDC)(int *count);
++typedef CUresult CUDAAPI (*CUDA_GDV)(int* version);
++typedef CUresult CUDAAPI (*CUDA_GDI)(unsigned int);
++typedef CUresult CUDAAPI (*CUDA_GDG)(CUdevice*, int);
++typedef CUresult CUDAAPI (*CUDA_GDA)(int*, CUdevice_attribute, CUdevice);
++typedef CUresult CUDAAPI (*CUDA_GDN)(char*, int, CUdevice);
++typedef CUresult CUDAAPI (*CUDA_GDM)(sizt_t*, int);
++typedef CUresult CUDAAPI (*CUDA_GDCC)(int*, int*, int);
++typedef CUresult CUDAAPI (*CUDA_CC)(CUcontext*, unsigned int, CUdevice);
++typedef CUresult CUDAAPI (*CUDA_CD)(CUcontext);
++typedef CUresult CUDAAPI (*CUDA_MA)(CUdeviceptr*, size_t);
++typedef CUresult CUDAAPI (*CUDA_MF)(CUdeviceptr);
++typedef CUresult CUDAAPI (*CUDA_MGI)(size_t*, size_t*);
+ 
+ CUDA_GDC __cuDeviceGetCount = NULL;
+ CUDA_GDV __cuDriverGetVersion = NULL;
+@@ -841,21 +864,22 @@
+ CUDA_MGI __cuMemGetInfo = NULL;
+ #else
+ void* cudalib;
+-int (*__cuInit)(unsigned int);
+-int (*__cuDeviceGetCount)(int*);
+-int (*__cuDriverGetVersion)(int*);
+-int (*__cuDeviceGet)(int*, int);
+-int (*__cuDeviceGetAttribute)(int*, int, int);
+-int (*__cuDeviceGetName)(char*, int, int);
+-int (*__cuDeviceTotalMem)(size_t*, int);
+-int (*__cuDeviceComputeCapability)(int*, int*, int);
+-int (*__cuCtxCreate)(void**, unsigned int, unsigned int);
+-int (*__cuCtxDestroy)(void*);
+-int (*__cuMemAlloc)(unsigned int*, size_t);
+-int (*__cuMemFree)(unsigned int);
+-int (*__cuMemGetInfo)(size_t*, size_t*);
++CUresult (*__cuInit)(unsigned int);
++CUresult (*__cuDeviceGetCount)(int*);
++CUresult (*__cuDriverGetVersion)(int*);
++CUresult (*__cuDeviceGet)(CUdevice*, int);
++CUresult (*__cuDeviceGetAttribute)(int*, CUdevice_attribute, CUdevice);
++CUresult (*__cuDeviceGetName)(char*, int, CUdevice);
++CUresult (*__cuDeviceTotalMem)(size_t*, CUdevice);
++CUresult (*__cuDeviceComputeCapability)(int*, int*, int);
++CUresult (*__cuCtxCreate)(CUcontext*, unsigned int, CUdevice);
++CUresult (*__cuCtxDestroy)(CUcontext);
++CUresult (*__cuMemAlloc)(CUdeviceptr *, size_t);
++CUresult (*__cuMemFree)(CUdeviceptr);
++CUresult (*__cuMemGetInfo)(size_t*, size_t*);
+ #endif
+ 
++
+ // NVIDIA interfaces are documented here:
+ // http://developer.download.nvidia.com/compute/cuda/2_3/toolkit/docs/online/index.html
+ 
+@@ -907,21 +931,41 @@
+         warnings.push_back("No NVIDIA library found");
+         return;
+     }
+-    __cuDeviceGetCount = (int(*)(int*)) dlsym(cudalib, "cuDeviceGetCount");
+-    __cuDriverGetVersion = (int(*)(int*)) dlsym( cudalib, "cuDriverGetVersion" );
+-    __cuInit = (int(*)(unsigned int)) dlsym( cudalib, "cuInit" );
+-    __cuDeviceGet = (int(*)(int*, int)) dlsym( cudalib, "cuDeviceGet" );
+-    __cuDeviceGetAttribute = (int(*)(int*, int, int)) dlsym( cudalib, "cuDeviceGetAttribute" );
+-    __cuDeviceGetName = (int(*)(char*, int, int)) dlsym( cudalib, "cuDeviceGetName" );
+-    __cuDeviceTotalMem = (int(*)(size_t*, int)) dlsym( cudalib, "cuDeviceTotalMem" );
+-    __cuDeviceComputeCapability = (int(*)(int*, int*, int)) dlsym( cudalib, "cuDeviceComputeCapability" );
+-    __cuCtxCreate = (int(*)(void**, unsigned int, unsigned int)) dlsym( cudalib, "cuCtxCreate" );
+-    __cuCtxDestroy = (int(*)(void*)) dlsym( cudalib, "cuCtxDestroy" );
+-    __cuMemAlloc = (int(*)(unsigned int*, size_t)) dlsym( cudalib, "cuMemAlloc" );
+-    __cuMemFree = (int(*)(unsigned int)) dlsym( cudalib, "cuMemFree" );
+-    __cuMemGetInfo = (int(*)(size_t*, size_t*)) dlsym( cudalib, "cuMemGetInfo" );
++
++
++#ifndef __cuda_cuda_h__
++    __cuDeviceGetCount = (CUresult(*)(int*)) dlsym(cudalib, "cuDeviceGetCount");
++    __cuDriverGetVersion = (CUresult(*)(int*)) dlsym( cudalib, "cuDriverGetVersion" );
++    __cuInit = (CUresult(*)(unsigned int)) dlsym( cudalib, "cuInit" );
++    __cuDeviceGet = (CUresult(*)(CUdevice*, int)) dlsym( cudalib, "cuDeviceGet" );
++    __cuDeviceGetAttribute = (CUresult(*)(int*, int, CUdevice)) dlsym( cudalib, "cuDeviceGetAttribute" );
++    __cuDeviceGetName = (CUresult(*)(char*, int, CUdevice)) dlsym( cudalib, "cuDeviceGetName" );
++    __cuDeviceTotalMem = (CUresult(*)(size_t*, CUdevice)) dlsym( cudalib, "cuDeviceTotalMem" );
++    __cuDeviceComputeCapability = (CUresult(*)(int*, int*, CUdevice)) dlsym( cudalib, "cuDeviceComputeCapability" );
++    __cuCtxCreate = (CUresult(*)(CUcontext*, unsigned int, CUdevice)) dlsym( cudalib, "cuCtxCreate" );
++    __cuCtxDestroy = (CUresult(*)(CUcontext)) dlsym( cudalib, "cuCtxDestroy" );
++    __cuMemAlloc = (CUresult(*)(CUdeviceptr*, size_t)) dlsym( cudalib, "cuMemAlloc" );
++    __cuMemFree = (CUresult(*)(CUdeviceptr)) dlsym( cudalib, "cuMemFree" );
++    __cuMemGetInfo = (CUresult(*)(size_t*, size_t*)) dlsym( cudalib, "cuMemGetInfo" );
++#else
++    __cuDeviceGetCount = &cuDeviceGetCount;
++    __cuDriverGetVersion = &cuDriverGetVersion;
++    __cuInit = &cuInit;
++    __cuDeviceGet = &cuDeviceGet;
++    __cuDeviceGetAttribute = &cuDeviceGetAttribute;
++    __cuDeviceGetName = &cuDeviceGetName;
++    __cuDeviceTotalMem = &cuDeviceTotalMem;
++    __cuDeviceComputeCapability = &cuDeviceComputeCapability;
++    __cuCtxCreate = &cuCtxCreate;
++    __cuCtxDestroy = &cuCtxDestroy;
++    __cuMemAlloc = &cuMemAlloc;
++    __cuMemFree = &cuMemFree;
++    __cuMemGetInfo = &cuMemGetInfo;
+ #endif
+ 
++
++#endif	 // Win32
++
+     if (!__cuDriverGetVersion) {
+         warnings.push_back("cuDriverGetVersion() missing from NVIDIA library");
+         return;
+@@ -1152,6 +1196,8 @@
+         }
+         return;
+     }
++
++    CUcontext ctx; // no immediate better idea
+     retval = (*__cuCtxCreate)(&ctx, 0, device);
+     if (retval) {
+         if (log_flags.coproc_debug) {
+@@ -1161,6 +1207,8 @@
+         }
+         return;
+     }
++
++    size_t memfree, memtotal;
+     retval = (*__cuMemGetInfo)(&memfree, &memtotal);
+     if (retval) {
+         if (log_flags.coproc_debug) {
+Index: boinc/client/main.cpp
+===================================================================
+--- boinc.orig/client/main.cpp	2012-05-03 13:28:55.000000000 +0200
++++ boinc/client/main.cpp	2012-05-03 13:58:43.379200898 +0200
+@@ -76,14 +76,14 @@
+         msg
+     );
+     if (!gstate.executing_as_daemon) {
+-        fprintf(stdout, evt_msg);
++        fprintf(stdout, "%s", evt_msg);
+     } else {
+ #ifdef _WIN32
+         LogEventInfoMessage(evt_msg);
+ #elif defined(__EMX__)
+ #elif defined (__APPLE__)
+ #else
+-        syslog(LOG_DAEMON|LOG_INFO, evt_msg);
++        syslog(LOG_DAEMON|LOG_INFO, "%s", evt_msg);
+ #endif
+     }
+ }
+@@ -105,14 +105,14 @@
+     );
+ #endif
+     if (!gstate.executing_as_daemon) {
+-        fprintf(stderr, evt_msg);
++        fprintf(stderr, "%s", evt_msg);
+     } else {
+ #ifdef _WIN32
+         LogEventErrorMessage(evt_msg);
+ #elif defined(__EMX__)
+ #elif defined (__APPLE__)
+ #else
+-        syslog(LOG_DAEMON|LOG_ERR, evt_msg);
++        syslog(LOG_DAEMON|LOG_ERR, "%s", evt_msg);
+ #endif
+     }
+ }
+@@ -125,14 +125,14 @@
+         msg, error_code
+     );
+     if (!gstate.executing_as_daemon) {
+-        fprintf(stderr, evt_msg);
++        fprintf(stderr, "%s", evt_msg);
+     } else {
+ #ifdef _WIN32
+         LogEventErrorMessage(evt_msg);
+ #elif defined(__EMX__)
+ #elif defined (__APPLE__)
+ #else
+-        syslog(LOG_DAEMON|LOG_ERR, evt_msg);
++        syslog(LOG_DAEMON|LOG_ERR, "%s", evt_msg);
+ #endif
+     }
+ }
+Index: boinc/client/cs_account.cpp
+===================================================================
+--- boinc.orig/client/cs_account.cpp	2012-05-03 13:38:04.000000000 +0200
++++ boinc/client/cs_account.cpp	2012-05-03 13:58:43.387200788 +0200
+@@ -79,7 +79,7 @@
+     fprintf(f, "<project_preferences>\n%s</project_preferences>\n",
+         project_prefs.c_str()
+     );
+-    fprintf(f, gui_urls.c_str());
++    fprintf(f, "%s", gui_urls.c_str());
+     fprintf(f, "</account>\n");
+     fclose(f);
+     retval = boinc_rename(TEMP_ACCT_FILE_NAME, path);
+Index: boinc/client/cs_benchmark.cpp
+===================================================================
+--- boinc.orig/client/cs_benchmark.cpp	2012-05-03 13:28:55.000000000 +0200
++++ boinc/client/cs_benchmark.cpp	2012-05-03 13:58:43.391200733 +0200
+@@ -463,7 +463,7 @@
+             }
+             ndone++;
+             if (benchmark_descs[i].error) {
+-                msg_printf(0, MSG_INFO, benchmark_descs[i].error_str);
++                msg_printf(0, MSG_INFO, "%s", benchmark_descs[i].error_str);
+                 had_error = true;
+             }
+         }
+Index: boinc/client/work_fetch.cpp
+===================================================================
+--- boinc.orig/client/work_fetch.cpp	2012-05-03 13:38:04.000000000 +0200
++++ boinc/client/work_fetch.cpp	2012-05-03 13:58:43.395200679 +0200
+@@ -790,7 +790,7 @@
+     if (log_flags.work_fetch_debug) {
+         char buf[256];
+         request_string(buf);
+-        msg_printf(p, MSG_INFO, buf);
++        msg_printf(p, MSG_INFO, "%s", buf);
+     }
+ }
+ 
+Index: boinc/lib/coproc.cpp
+===================================================================
+--- boinc.orig/lib/coproc.cpp	2012-05-03 13:28:55.000000000 +0200
++++ boinc/lib/coproc.cpp	2012-05-03 13:58:43.399200624 +0200
+@@ -416,15 +416,15 @@
+         cuda_version,
+         display_driver_version,
+         prop.totalGlobalMem,
+-        (unsigned int)prop.sharedMemPerBlock,
++        prop.sharedMemPerBlock,
+         prop.regsPerBlock,
+         prop.warpSize,
+-        (unsigned int)prop.memPitch,
++        prop.memPitch,
+         prop.maxThreadsPerBlock,
+         prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2],
+         prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2],
+         prop.clockRate,
+-        (unsigned int)prop.totalConstMem,
++        prop.totalConstMem,
+         prop.major,
+         prop.minor,
+         (unsigned int)prop.textureAlignment,
+@@ -497,10 +497,10 @@
+         if (xp.parse_str("name", prop.name, sizeof(prop.name))) continue;
+         if (xp.parse_int("deviceHandle", prop.deviceHandle)) continue;
+         if (xp.parse_double("totalGlobalMem", prop.totalGlobalMem)) continue;
+-        if (xp.parse_int("sharedMemPerBlock", (int&)prop.sharedMemPerBlock)) continue;
++        if (xp.parse_int("sharedMemPerBlock", prop.sharedMemPerBlock)) continue;
+         if (xp.parse_int("regsPerBlock", prop.regsPerBlock)) continue;
+         if (xp.parse_int("warpSize", prop.warpSize)) continue;
+-        if (xp.parse_int("memPitch", (int&)prop.memPitch)) continue;
++        if (xp.parse_int("memPitch", prop.memPitch)) continue;
+         if (xp.parse_int("maxThreadsPerBlock", prop.maxThreadsPerBlock)) continue;
+         if (xp.parse_str("maxThreadsDim", buf2, sizeof(buf2))) {
+             // can't use sscanf here (FCGI)
+@@ -533,7 +533,7 @@
+             continue;
+         }
+         if (xp.parse_int("clockRate", prop.clockRate)) continue;
+-        if (xp.parse_int("totalConstMem", (int&)prop.totalConstMem)) continue;
++        if (xp.parse_int("totalConstMem", prop.totalConstMem)) continue;
+         if (xp.parse_int("major", prop.major)) continue;
+         if (xp.parse_int("minor", prop.minor)) continue;
+         if (xp.parse_int("textureAlignment", (int&)prop.textureAlignment)) continue;

@@ -1,0 +1,91 @@
+#!/bin/sh
+# postinst script for boinc-client
+
+set -e
+
+# Source the debconf shell library.
+. /usr/share/debconf/confmodule
+
+BOINC_DIR=/var/lib/boinc-client
+CONF_DIR=/etc/boinc-client
+
+mv_conffile()
+{
+    if [ ! -L "$BOINC_DIR/$1" ] && [ -f "$BOINC_DIR/$1" ]; then
+        mv -f "$BOINC_DIR/$1" "$CONF_DIR/$1"
+    fi
+    ln -sf "$CONF_DIR/$1" "$BOINC_DIR/$1"
+}
+
+ch_stat()
+{
+    # Don't do anything if an override exists.
+    if ! dpkg-statoverride --list "$3" >/dev/null 2>&1 && [ -e "$3" ]; then
+        chmod "$1" "$3"
+        chown "$2" "$3"
+    fi
+}
+
+case "$1" in
+    configure)
+        # Create boinc group if it doesn't already exist.
+        if ! getent group boinc >/dev/null; then
+            addgroup --quiet --system boinc
+        fi
+
+        # Create boinc user if it doesn't already exist.
+        if ! getent passwd boinc >/dev/null; then
+            adduser --quiet --system --ingroup boinc --home $BOINC_DIR \
+             --gecos "BOINC core client" boinc
+        fi
+
+	# Assign boinc user to group video if not already the case
+	if ! getent group video | grep -q boinc; then
+	    usermod -a -G video boinc || echo "Could not assign boinc user to group 'video'."
+	fi
+
+        # Make sure the /var/lib/boinc-client directory exists and
+        # is owned by the boinc user.
+        mkdir $BOINC_DIR 2>/dev/null || true
+        chown -h boinc:boinc $BOINC_DIR 2>/dev/null || true
+
+        # Move old configuration files to /etc/boinc-client/ and
+        # create symlinks for the BOINC core client.
+        mv_conffile cc_config.xml
+        mv_conffile global_prefs_override.xml
+        mv_conffile gui_rpc_auth.cfg
+        mv_conffile remote_hosts.cfg
+
+        # Set reasonable permissions for boinc-client's conffiles (see #407678
+        # and #458007) but only if no 'stat override' exists.
+
+	# cc_config.xml should be boinc:boinc and not root:boinc in order to avoid lp bug #1162596
+	# users should be able to change the boinc configuration by default
+
+        ch_stat 0644 boinc:boinc "$CONF_DIR/cc_config.xml"
+        ch_stat 0664 root:boinc "$CONF_DIR/global_prefs_override.xml"
+        ch_stat 0640 root:boinc "$CONF_DIR/gui_rpc_auth.cfg"
+        ch_stat 0644 root:boinc "$CONF_DIR/remote_hosts.cfg"
+
+        # Make a symlink to ca-certificates certs file. BOINC's original file
+        # is in curl/ca-bundle.crt (which is not in our tarball, because the
+        # export-boinc script removes the curl dir).
+        CA_FILE=/etc/ssl/certs/ca-certificates.crt
+        CA_LINK="$BOINC_DIR/ca-bundle.crt"
+        if [ ! -e $CA_LINK ] && [ -f $CA_FILE ]; then
+            ln -sf $CA_FILE $CA_LINK
+        fi
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

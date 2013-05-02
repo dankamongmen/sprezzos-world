@@ -11464,3 +11464,11 @@ $(GMSL): $(SPREZZ)/gmsl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gmsl_$(gmsl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: boinc
+boinc:$(BOINC)_$(ARCH).deb
+$(BOINC): $(SPREZZ)/boinc/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf boinc_$(boinc_UPVER).orig.tar.gz $(TARARGS) $@
+
