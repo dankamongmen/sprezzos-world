@@ -807,3 +807,35 @@ $(LIBXMLREGEXPPERL): $(SPREZZ)/libxml-regexp-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libxml-regexp-perl_$(libxml-regexp-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libstring-diff-perl
+libstring-diff-perl:$(LIBSTRINGDIFFPERL)_$(ARCH).deb
+$(LIBSTRINGDIFFPERL): $(SPREZZ)/libstring-diff-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libstring-diff-perl_$(libstring-diff-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libyaml-perl
+libyaml-perl:$(LIBYAMLPERL)_$(ARCH).deb
+$(LIBYAMLPERL): $(SPREZZ)/libyaml-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libyaml-perl_$(libyaml-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libyaml-shell-perl
+libyaml-shell-perl:$(LIBYAMLSHELLPERL)_$(ARCH).deb
+$(LIBYAMLSHELLPERL): $(SPREZZ)/libyaml-shell-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libyaml-shell-perl_$(libyaml-shell-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libtest-base-perl
+libtest-base-perl:$(LIBTESTBASEPERL)_$(ARCH).deb
+$(LIBTESTBASEPERL): $(SPREZZ)/libtest-base-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtest-base-perl_$(libtest-base-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
