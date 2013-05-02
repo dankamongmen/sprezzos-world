@@ -981,3 +981,11 @@ $(GPICK): $(SPREZZ)/gpick/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gpick_$(gpick_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: agave
+agave:$(AGAVE)_$(ARCH).deb
+$(AGAVE): $(SPREZZ)/agave/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf agave_$(agave_UPVER).orig.tar.bz2 $(TARARGS) $@
+
