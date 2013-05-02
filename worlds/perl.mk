@@ -839,3 +839,11 @@ $(LIBTESTBASEPERL): $(SPREZZ)/libtest-base-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtest-base-perl_$(libtest-base-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libextutils-pkgconfig-perl
+libextutils-pkgconfig-perl:$(LIBEXTUTILSPKGCONFIGPERL)_$(ARCH).deb
+$(LIBEXTUTILSPKGCONFIGPERL): $(SPREZZ)/libextutils-pkgconfig-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libextutils-pkgconfig-perl_$(libextutils-pkgconfig-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
