@@ -11472,3 +11472,19 @@ $(BOINC): $(SPREZZ)/boinc/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf boinc_$(boinc_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ext4magic
+ext4magic:$(EXT4MAGIC)_$(ARCH).deb
+$(EXT4MAGIC): $(SPREZZ)/ext4magic/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ext4magic_$(ext4magic_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: qupzilla
+qupzilla:$(QUPZILLA)_$(ARCH).deb
+$(QUPZILLA): $(SPREZZ)/qupzilla/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qupzilla_$(qupzilla_UPVER).orig.tar.gz $(TARARGS) $@
+
