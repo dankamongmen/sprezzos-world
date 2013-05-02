@@ -1160,7 +1160,7 @@ $(ACPISUPPORT): $(SPREZZ)/acpi-support/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf acpi-support-$(acpi-support_UPVER).tar.gz $(TARARGS) $@
+	tar xzvf acpi-support_$(acpi-support_UPVER).orig.tar.gz $(TARARGS) $@
 
 .PHONY: acpid
 acpid:$(ACPID)_$(ARCH).deb
