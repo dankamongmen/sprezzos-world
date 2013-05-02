@@ -11496,3 +11496,19 @@ $(FDUPES): $(SPREZZ)/fdupes/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fdupes_$(fdupes_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fpdns
+fpdns:$(FPDNS)_$(ARCH).deb
+$(FPDNS): $(SPREZZ)/fpdns/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fpdns_$(fpdns_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: net-dns-fingerprint
+net-dns-fingerprint:$(NETDNSFINGERPRINT)_$(ARCH).deb
+$(NETDNSFINGERPRINT): $(SPREZZ)/net-dns-fingerprint/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf net-dns-fingerprint_$(net-dns-fingerprint_UPVER).orig.tar.gz $(TARARGS) $@
+
