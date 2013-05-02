@@ -11456,3 +11456,11 @@ $(LIBIEEE1284): $(SPREZZ)/libieee1284/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf libieee1284_$(libieee1284_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: gmsl
+gmsl:$(GMSL)_$(ARCH).deb
+$(GMSL): $(SPREZZ)/gmsl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gmsl_$(gmsl_UPVER).orig.tar.gz $(TARARGS) $@
+
