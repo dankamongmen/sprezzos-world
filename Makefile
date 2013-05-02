@@ -11488,3 +11488,11 @@ $(QUPZILLA): $(SPREZZ)/qupzilla/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf qupzilla_$(qupzilla_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: fdupes
+fdupes:$(FDUPES)_$(ARCH).deb
+$(FDUPES): $(SPREZZ)/fdupes/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fdupes_$(fdupes_UPVER).orig.tar.gz $(TARARGS) $@
+
