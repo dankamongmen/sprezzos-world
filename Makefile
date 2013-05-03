@@ -11512,3 +11512,11 @@ $(NETDNSFINGERPRINT): $(SPREZZ)/net-dns-fingerprint/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf net-dns-fingerprint_$(net-dns-fingerprint_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libqb
+libqb:$(LIBQB)_$(ARCH).deb
+$(LIBQB): $(SPREZZ)/libqb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libqb_$(libqb_UPVER).orig.tar.gz $(TARARGS) $@
+

@@ -4926,3 +4926,11 @@ $(MAGICHASKELL): $(SPREZZ)/magic-haskell/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf magic-haskell_$(magic-haskell_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: haskell-vector-binary-instances
+haskell-vector-binary-instances:$(HASKELLVECTORBINARYINSTANCES)_$(ARCH).deb
+$(HASKELLVECTORBINARYINSTANCES): $(SPREZZ)/haskell-vector-binary-instances/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf haskell-vector-binary-instances_$(haskell-vector-binary-instances_UPVER).orig.tar.gz $(TARARGS) $@
+
