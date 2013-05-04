@@ -11520,3 +11520,11 @@ $(LIBQB): $(SPREZZ)/libqb/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libqb_$(libqb_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mono-tools
+mono-tools:$(MONOTOOLS)_$(ARCH).deb
+$(MONOTOOLS): $(SPREZZ)/mono-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf mono-tools_$(mono-tools_UPVER).orig.tar.bz2 $(TARARGS) $@
+
