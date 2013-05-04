@@ -295,3 +295,11 @@ $(PYTHONSEXY): $(SPREZZ)/python-sexy/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-sexy_$(python-sexy_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: pylucene
+pylucene:$(PYLUCENE)_$(ARCH).deb
+$(PYLUCENE): $(SPREZZ)/pylucene/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf pylucene_$(pylucene_UPVER).orig.tar.gz $(TARARGS) $@
+
