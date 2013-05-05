@@ -11528,3 +11528,11 @@ $(MONOTOOLS): $(SPREZZ)/mono-tools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf mono-tools_$(mono-tools_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: fadecut
+fadecut:$(FADECUT)_$(ARCH).deb
+$(FADECUT): $(SPREZZ)/fadecut/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf fadecut_$(fadecut_UPVER).orig.tar.gz $(TARARGS) $@
+
