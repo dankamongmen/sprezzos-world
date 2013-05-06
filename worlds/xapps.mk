@@ -721,3 +721,11 @@ $(ZATHURA): $(SPREZZ)/zathura/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf zathura_$(zathura_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: sane-backends
+sane-backends:$(SANEBACKENDS)_$(ARCH).deb
+$(SANEBACKENDS): $(SPREZZ)/sane-backends/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf sane-backends_$(sane-backends_UPVER).orig.tar.gz $(TARARGS) $@
+

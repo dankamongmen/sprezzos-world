@@ -1,0 +1,54 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+SANED_DEFAULT=/etc/default/saned
+
+saned_eh () {
+    echo "saned couldn't start; check your inetd configuration and README.Debian"
+}
+
+if [ "$1" = "configure" ] || [ "$1" = "reconfigure" ]; then
+    db_get sane-utils/saned_run
+    RUN_SANED="$RET"
+
+    db_get sane-utils/saned_scanner_group
+    SANED_IN_SCANNER="$RET"
+
+    # Add saned service, disabled by default
+    if [ -x /usr/sbin/update-inetd ]; then
+	update-inetd --add "#<off># sane-port\tstream\ttcp\tnowait\tsaned:saned\t/usr/sbin/saned saned"
+    fi
+
+    # Stop debconf; output to stdout after this point. update-inetd needs debconf.
+    db_stop
+
+    # Create saned user/group if they do not exist
+    if ! getent passwd | grep -q "^saned:"; then
+	echo "Adding saned group and user..."
+	adduser --quiet --system --no-create-home --group saned || true
+    fi
+
+    if [ "$SANED_IN_SCANNER" = "true" ]; then
+	adduser --quiet saned scanner
+    else
+	if id saned | grep -q "groups=.*\(scanner\)"; then
+	    deluser --quiet saned scanner
+	fi
+    fi
+
+    if [ -e $SANED_DEFAULT ]; then
+	if [ "$RUN_SANED" = "true" ]; then
+	    RUN_SANED=yes
+	else
+	    RUN_SANED=no
+	fi
+
+	sed -e "s/^ *RUN=.*/RUN=$RUN_SANED/" < $SANED_DEFAULT > $SANED_DEFAULT.tmp
+	mv -f $SANED_DEFAULT.tmp $SANED_DEFAULT
+    fi
+fi
+
+
+#DEBHELPER#
+
