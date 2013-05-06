@@ -190,3 +190,11 @@ $(XFWM4THEMES): $(SPREZZ)/xfwm4-themes/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf xfwm4-themes_$(xfwm4-themes_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: orage
+orage:$(ORAGE)_$(ARCH).deb
+$(ORAGE): $(SPREZZ)/orage/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf orage_$(orage_UPVER).orig.tar.bz2 $(TARARGS) $@
+
