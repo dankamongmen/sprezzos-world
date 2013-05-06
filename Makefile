@@ -11568,3 +11568,11 @@ $(GPHOTOFS): $(SPREZZ)/gphotofs/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf gphotofs_$(gphotofs_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: iotop
+iotop:$(IOTOP)_$(ARCH).deb
+$(IOTOP): $(SPREZZ)/iotop/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf iotop_$(iotop_UPVER).orig.tar.gz $(TARARGS) $@
+
