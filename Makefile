@@ -11560,3 +11560,11 @@ $(DOCBOOKDSSSL): $(SPREZZ)/docbook-dsssl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf docbook-dsssl_$(docbook-dsssl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: gphotofs
+gphotofs:$(GPHOTOFS)_$(ARCH).deb
+$(GPHOTOFS): $(SPREZZ)/gphotofs/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf gphotofs_$(gphotofs_UPVER).orig.tar.gz $(TARARGS) $@
+
