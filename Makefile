@@ -11536,3 +11536,11 @@ $(FADECUT): $(SPREZZ)/fadecut/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf fadecut_$(fadecut_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ffmpegthumbnailer
+ffmpegthumbnailer:$(FFMPEGTHUMBNAILER)_$(ARCH).deb
+$(FFMPEGTHUMBNAILER): $(SPREZZ)/ffmpegthumbnailer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ffmpegthumbnailer_$(ffmpegthumbnailer_UPVER).orig.tar.gz $(TARARGS) $@
+
