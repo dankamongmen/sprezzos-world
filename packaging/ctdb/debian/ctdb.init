@@ -1,0 +1,481 @@
+#!/bin/sh
+#
+##############################
+# ctdb:                        Starts the clustered tdb daemon
+#
+# chkconfig:           - 90 01
+#
+# description:                 Starts and stops the clustered tdb daemon
+# pidfile:             /var/run/ctdbd/ctdbd.pid
+#
+
+### BEGIN INIT INFO
+# Provides:            ctdb
+# Required-Start:      $network $local_fs $remote_fs
+# Required-Stop:       $network $local_fs $remote_fs
+# Default-Start:       2 3 4 5
+# Default-Stop:        0 1 6
+# Short-Description:   start and stop ctdb service
+# Description:         initscript for the ctdb service
+### END INIT INFO
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+NAME=ctdb
+DESC="Clustered TDB"
+
+#LSB
+if [ -f /lib/lsb/init-functions ] ; then
+  . /lib/lsb/init-functions
+fi
+if ! type 'log_daemon_msg' >/dev/null; then
+    log_daemon_msg () {
+        if [ -z "${1:-}" ]; then
+            return 1
+        fi
+
+        if [ -z "${2:-}" ]; then
+            echo -n "$1:"
+            return
+        fi
+        
+        echo -n "$1: $2"
+    }
+fi
+if ! type 'log_progress_msg' >/dev/null; then
+    log_progress_msg () {
+        if [ -z "${1:-}" ]; then
+            return 1
+        fi
+        echo -n " $@"
+    }
+fi
+if ! type 'log_end_msg' >/dev/null; then
+    log_end_msg () {
+        # If no arguments were passed, return
+        if [ -z "${1:-}" ]; then
+            return 1
+        fi
+
+        retval=$1
+
+        if [ $1 -eq 0 ]; then
+            echo "."
+        elif [ $1 -eq 255 ]; then
+            /bin/echo -e " (warning)."
+        else
+            /bin/echo -e " failed!"
+        fi
+        return $retval
+    }
+fi
+
+# Source function library.
+if [ -f /etc/init.d/functions ] ; then
+    . /etc/init.d/functions
+elif [ -f /etc/rc.d/init.d/functions ] ; then
+    . /etc/rc.d/init.d/functions
+fi
+
+# rc.status
+[ -f /etc/rc.status ] && {
+    . /etc/rc.status
+    rc_reset
+    LC_ALL=en_US.UTF-8
+}
+
+# Avoid using root's TMPDIR
+unset TMPDIR
+
+[ -z "$CTDB_BASE" ] && {
+    export CTDB_BASE="/etc/ctdb"
+}
+
+[ -z "$CTDB_VARDIR" ] && {
+    export CTDB_VARDIR="/var/lib/ctdb"
+}
+
+. $CTDB_BASE/functions
+loadconfig network
+loadconfig ctdb
+
+set -e
+
+# check networking is up (for redhat)
+[ "$NETWORKING" = "no" ] && exit 0
+
+detect_init_style
+export CTDB_INIT_STYLE
+
+ctdbd=${CTDBD:-/usr/sbin/ctdbd}
+
+test -x $ctdbd || exit 0
+
+if [ "$CTDB_VALGRIND" = "yes" ]; then
+    init_style="valgrind"
+else
+    init_style="$CTDB_INIT_STYLE"
+fi
+
+build_ctdb_options () {
+
+    maybe_set () {
+	# If the 2nd arg is null then return - don't set anything.
+	# Else if the 3rd arg is set and it doesn't match the 2nd arg
+	# then return
+	[ -z "$2" -o \( -n "$3" -a "$3" != "$2" \) ] && return
+
+	val="'$2'"
+	case "$1" in
+	    --*) sep="=" ;;
+	    -*)  sep=" " ;;
+	esac
+	# For these options we're only passing a value-less flag.
+	[ -n "$3" ] && {
+	    val=""
+	    sep=""
+	}
+
+	CTDB_OPTIONS="${CTDB_OPTIONS}${CTDB_OPTIONS:+ }${1}${sep}${val}"
+    }
+
+    [ -z "$CTDB_RECOVERY_LOCK" ] && {
+        echo "No recovery lock specified. Starting CTDB without split brain prevention"
+    }
+    maybe_set "--reclock"                "$CTDB_RECOVERY_LOCK"
+
+    # build up CTDB_OPTIONS variable from optional parameters
+    maybe_set "--logfile"                "$CTDB_LOGFILE"
+    maybe_set "--nlist"                  "$CTDB_NODES"
+    maybe_set "--socket"                 "$CTDB_SOCKET"
+    maybe_set "--public-addresses"       "$CTDB_PUBLIC_ADDRESSES"
+    maybe_set "--public-interface"       "$CTDB_PUBLIC_INTERFACE"
+    maybe_set "--dbdir"                  "$CTDB_DBDIR"
+    maybe_set "--dbdir-persistent"       "$CTDB_DBDIR_PERSISTENT"
+    maybe_set "--event-script-dir"       "$CTDB_EVENT_SCRIPT_DIR"
+    maybe_set "--transport"              "$CTDB_TRANSPORT"
+    maybe_set "-d"                       "$CTDB_DEBUGLEVEL"
+    maybe_set "--debug-hung-script"      "$CTDB_DEBUG_HUNG_SCRIPT"
+    maybe_set "--notification-script"    "$CTDB_NOTIFY_SCRIPT"
+    maybe_set "--start-as-disabled"      "$CTDB_START_AS_DISABLED"    "yes"
+    maybe_set "--start-as-stopped "      "$CTDB_START_AS_STOPPED"     "yes"
+    maybe_set "--no-recmaster"           "$CTDB_CAPABILITY_RECMASTER" "no"
+    maybe_set "--no-lmaster"             "$CTDB_CAPABILITY_LMASTER"   "no"
+    maybe_set "--lvs --single-public-ip" "$CTDB_LVS_PUBLIC_IP"
+    maybe_set "--script-log-level"       "$CTDB_SCRIPT_LOG_LEVEL"
+    maybe_set "--log-ringbuf-size"       "$CTDB_LOG_RINGBUF_SIZE"
+    maybe_set "--syslog"                 "$CTDB_SYSLOG"               "yes"
+    maybe_set "--max-persistent-check-errors" "$CTDB_MAX_PERSISTENT_CHECK_ERRORS"
+}
+
+# Log given message or stdin to either syslog or a CTDB log file
+do_log ()
+{
+    script_log "ctdb.init" "$@"
+}
+
+select_tdb_checker ()
+{
+    # Find the best TDB consistency check available.
+    use_tdb_tool_check=false
+    if [ -x /usr/bin/tdbtool ] && \
+	echo "help" | /usr/bin/tdbtool | grep -q check ; then
+
+	use_tdb_tool_check=true
+    elif [ -x /usr/bin/tdbtool -a -x /usr/bin/tdbdump ] ; then
+	    do_log <<EOF
+WARNING: The installed 'tdbtool' does not offer the 'check' subcommand.
+ Using 'tdbdump' for database checks.
+ Consider updating 'tdbtool' for better checks!
+EOF
+    elif [ -x /usr/bin/tdbdump ] ; then
+	do_log <<EOF
+WARNING: 'tdbtool' is not available.
+ Using 'tdbdump' to check the databases.
+ Consider installing a recent 'tdbtool' for better checks!
+EOF
+    else
+	do_log <<EOF
+WARNING: Cannot check databases since neither
+ 'tdbdump' nor 'tdbtool check' is available.
+ Consider installing tdbtool or at least tdbdump!
+EOF
+        return 1
+    fi
+}
+
+check_tdb ()
+{
+    _db="$1"
+
+    if $use_tdb_tool_check ; then
+	# tdbtool always exits with 0  :-(
+	if tdbtool "$_db" check 2>/dev/null |
+	    grep -q "Database integrity is OK" ; then
+	    return 0
+	else
+	    return 1
+	fi
+    else
+	tdbdump "$_db" >/dev/null 2>/dev/null
+	return $?
+    fi
+}
+
+check_persistent_databases ()
+{
+    _dir="${CTDB_DBDIR_PERSISTENT:-${CTDB_DBDIR:-/var/ctdb}/persistent}"
+    mkdir -p "$_dir" 2>/dev/null
+
+    [ "${CTDB_MAX_PERSISTENT_CHECK_ERRORS:-0}" = "0" ] || return 0
+
+    for _db in $(ls "$_dir/"*.tdb.*[0-9] 2>/dev/null) ; do
+	check_tdb $_db || {
+	    do_log "Persistent database $_db is corrupted! CTDB will not start."
+	    return 1
+	}
+    done
+}
+
+check_non_persistent_databases ()
+{
+    _dir="${CTDB_DBDIR:-/var/ctdb}"
+    mkdir -p "$_dir" 2>/dev/null
+
+    for _db in $(ls "${_dir}/"*.tdb.*[0-9] 2>/dev/null) ; do
+	check_tdb $_db || {
+	    _backup="${_db}.$(date +'%Y%m%d.%H%M%S.%N').corrupt"
+	    do_log <<EOF
+WARNING: database ${_db} is corrupted.
+ Moving to backup ${_backup} for later analysis.
+EOF
+	    mv "$_db" "$_backup"
+
+	    # Now remove excess backups
+	    ls -td "${_db}."*".corrupt" |
+	    tail -n +$((${CTDB_MAX_CORRUPT_DB_BACKUPS:-10} + 1)) |
+	    xargs rm -f
+	    
+	}
+    done
+}
+
+set_retval() {
+    return $1
+}
+
+wait_until_ready () {
+    _timeout="${1:-10}" # default is 10 seconds
+
+    _count=0
+    while ! is_ready ; do
+	if [ $_count -ge $_timeout ] ; then
+	    return 1
+	fi
+	sleep 1
+	_count=$(($_count + 1))
+    done
+}
+
+is_running() {
+    pkill -0 -f $ctdbd || return 1
+    return 0
+}
+
+is_ready() {
+    ctdb ping >/dev/null 2>&1 || return 1
+}
+
+start_ctdbd() {
+    # About to start new $ctdbd.  The ping above has failed and any
+    # new $ctdbd will destroy the Unix domain socket, so any processes
+    # that aren't yet completely useless soon will be...  so kill
+    # them.
+    pkill -9 -f "$ctdbd"
+
+    build_ctdb_options
+
+    # make sure we drop any ips that might still be held if previous
+    # instance of ctdb got killed with -9 or similar
+    drop_all_public_ips
+
+    if select_tdb_checker ; then
+	check_persistent_databases || return $?
+	check_non_persistent_databases
+    fi
+
+    if [ "$CTDB_SUPPRESS_COREFILE" = "yes" ]; then
+	ulimit -c 0
+    else
+	ulimit -c unlimited
+    fi
+
+    case $init_style in
+	valgrind)
+	    eval valgrind -q --log-file=/var/log/ctdb/ctdb_valgrind.log \
+		$ctdbd --valgrinding "$CTDB_OPTIONS"
+	    RETVAL=$?
+	    echo
+	    ;;
+	suse)
+	    eval startproc $ctdbd "$CTDB_OPTIONS"
+	    RETVAL=$?
+	    ;;
+	redhat)
+	    eval $ctdbd "$CTDB_OPTIONS"
+	    RETVAL=$?
+	    [ $RETVAL -eq 0 ] && touch /var/lock/subsys/ctdb || RETVAL=1
+	    ;;
+	debian)
+	    eval start-stop-daemon --start --quiet --background \
+		--exec $ctdbd -- "$CTDB_OPTIONS"
+	    RETVAL=$?
+	    ;;
+    esac
+
+    if [ $RETVAL -eq 0 ] ; then
+	if ! wait_until_ready ; then
+	    RETVAL=1
+	    pkill -9 -f $ctdbd >/dev/null 2>&1
+	fi
+    fi
+
+    case $init_style in
+	suse)
+	    set_retval $RETVAL
+	    rc_status -v
+	    ;;
+	redhat)
+	    [ $RETVAL -eq 0 ] && success || failure
+	    echo
+	    ;;
+    esac
+
+    return $RETVAL
+}	
+
+stop_ctdbd() {
+    ctdb shutdown >/dev/null 2>&1
+    RETVAL=$?
+    count=0
+    if [ "$init_style" = "debian" ]; then
+        start-stop-daemon --stop --quiet --exec $ctdbd
+        RETVAL=$?
+    fi
+    while is_running ; do
+        sleep 1
+        count=$(($count + 1))
+	[ $count -gt 30 ] && {
+	        echo -n "killing ctdbd "
+	        pkill -9 -f $ctdbd
+	        pkill -9 -f $CTDB_BASE/events.d/
+        }
+    done
+    # make sure all ips are dropped, pfkill -9 might leave them hanging around
+    drop_all_public_ips
+
+    case $init_style in
+        suse)
+	        # re-set the return code to the recorded RETVAL in order
+	        # to print the correct status message
+	        set_retval $RETVAL
+	        rc_status -v
+	    ;;
+        redhat)
+	        [ $RETVAL -eq 0 ] && success || failure
+	        [ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/ctdb
+	        echo ""
+	    ;;
+    esac
+
+    return $RETVAL
+}	
+
+case "$1" in
+    start)
+        log_daemon_msg "Starting $DESC " "$NAME"
+        # Check if it's running first
+        if is_running ;  then
+            log_progress_msg "already running"
+            log_end_msg 0
+            exit 0
+        fi
+        if start_ctdbd && is_running ;  then
+            # It's ok, the server started and is running
+            log_end_msg 0
+        else
+            # Either we could not start it or it is not running
+            # after we did
+            log_end_msg 1
+        fi
+        ;;
+    stop)
+        log_daemon_msg "Stopping $DESC" "$NAME"
+        if is_running ; then
+            # Only stop the server if we see it running
+            stop_ctdbd
+            log_end_msg $?
+        else
+        echo 'Output from "ctdb ping":'
+        echo "$_out"
+
+            # If it's not running don't do anything
+            log_progress_msg "not running"
+            log_end_msg 0
+            exit 0
+        fi
+        ;;
+    restart|force-reload)
+[ -x "$CTDB_BASE/rc.ctdb" ] && "$CTDB_BASE/rc.ctdb" $1
+
+        log_daemon_msg "Restarting $DESC" "$NAME"
+        is_running && stop_ctdbd
+        start_ctdbd
+        is_running
+        log_end_msg $?
+        ;;
+    status)
+        log_daemon_msg "Checking status of $DESC" "$NAME"
+        if is_running ;  then
+            log_progress_msg "running"
+            echo
+            ctdb status
+            log_end_msg 0
+        else
+            log_progress_msg "not running"
+            log_end_msg 1
+            exit 1
+        fi
+ 	    ;;
+    condrestart|try-restart)
+        if is_running ;  then
+            log_daemon_msg "Restarting $DESC" "$NAME"
+            stop_ctdbd
+            start_ctdbd
+            log_end_msg $?
+        fi
+        ;;
+    cron)
+        # used from cron to auto-restart ctdb
+        if ! is_running ; then
+            log_daemon_msg "Starting $DESC " "$NAME"
+            if start_ctdbd && is_running ;  then
+                # It's ok, the server started and is running
+                log_end_msg 0
+            else
+                # Either we could not start it or it is not running
+                # after we did
+                log_end_msg 1
+            fi
+        fi
+        ;;
+    reload)
+	# do nothing
+	;;
+    *)
+        echo "Usage: \$0 {start|stop|restart|force-reload|status|cron|condrestart|try-restart}"
+        exit 2
+        ;;
+esac
+
+exit $?

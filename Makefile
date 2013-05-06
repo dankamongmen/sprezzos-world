@@ -11544,3 +11544,11 @@ $(FFMPEGTHUMBNAILER): $(SPREZZ)/ffmpegthumbnailer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ffmpegthumbnailer_$(ffmpegthumbnailer_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: ctdb
+ctdb:$(CTDB)_$(ARCH).deb
+$(CTDB): $(SPREZZ)/ctdb/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ctdb_$(ctdb_UPVER).orig.tar.gz $(TARARGS) $@
+
