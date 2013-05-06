@@ -1,0 +1,208 @@
+#! /usr/bin/perl -w
+#
+# regexp-assemble - read lines from STDIN and assemble them into a pattern
+#
+# Copyright (C) David Landgren 2004-2008
+
+use strict;
+use Getopt::Std;
+use Regexp::Assemble;
+
+use Time::HiRes 'time';
+
+use vars '$VERSION';
+$VERSION = '0.92';
+
+getopts( 'abcd:f:i:nprsSt:TuUvw', \my %opt );
+
+print "$VERSION\n" and exit if $opt{v};
+
+$opt{d} |= 8 if $opt{T};
+
+my $ra = Regexp::Assemble->new(
+    chomp            => 1,
+    debug            => $opt{d} || 0,
+    fold_meta_pairs  => exists $opt{f} ? 0 : 1,
+    reduce           => exists $opt{r} ? 0 : 1,
+    dup_warn         => exists $opt{u} ? 1 : 0,
+    lookahead        => exists $opt{a} ? 1 : 0,
+    unroll_plus      => exists $opt{U} ? 1 : 0,
+);
+
+if( $opt{b} or $opt{c} ) {
+    if( !$opt{b} ) {
+        # filter comments
+        $ra->pre_filter( sub { $_[0] =~ s/\s*#.*$//; 1 } );
+    }
+    elsif( !$opt{c} ) {
+        # filter blank lines
+        $ra->pre_filter( sub { length(shift) } );
+    }
+    else {
+        # filter comments and blank lines.
+        # (removing a comment may can cause a line to become blank
+        $ra->pre_filter( sub {
+            $_[0] =~ s/\s*#.*$//;
+            length($_[0])
+        } );
+    }
+}
+
+$ra->add( <> );
+
+# need to tickle reduction explicitly in the event of -S and -d8
+$ra->_reduce() if $opt{S} and $opt{d} and ($opt{d} & 8);
+
+if( $opt{i} or $opt{p} or not ($opt{t} or $opt{S}) ) {
+    print $ra->as_string( indent => $opt{i} || 0 );
+    print "\n" unless $opt{n};
+}
+
+if( $opt{s} or $opt{S} ) {
+    warn qq{# nr=@{[$ra->stats_add]} dup=@{[$ra->stats_dup]} raw=@{[$ra->stats_raw]} cooked=@{[$ra->stats_cooked]} len=@{[$ra->stats_length]}\n};
+}
+
+if( $opt{t} ) {
+    my $error = 0;
+    my $file = $opt{t};
+    open IN, $file or die "Cannot open $file for input: $!\n";
+    print $ra->as_string, "\n";
+    while( <IN> ) {
+        chomp;
+        if( $opt{w} ) {
+            next if $_ =~ /^$ra$/;
+        }
+        else {
+            next if $_ =~ /$ra/;
+        }
+        print "FAIL <$_>\n";
+        ++$error;
+    }
+    close IN;
+    exit $error ? 1 : 0;
+}
+
+=head1 NAME
+
+regexp-assemble - Assemble a list of regular expressions from a file
+
+=head1 SYNOPSIS
+
+  regexp-assemble -abcdfinprsStTuUvw file [...]
+
+=head1 DESCRIPTION
+
+Assemble a list of regular expression either from standard input or a
+file, using the Regexp::Assemble module.
+
+=head1 OPTIONS
+
+=over 5
+
+=item B<-a>
+
+look Ahead. Insert C<(?=...)> zero-width lookahead assertions in the pattern,
+where necessary.
+
+=item B<-b>
+
+Blank. Ignore blank lines.
+
+=item B<-c>
+
+Comment. Basic comment filtering. Strip off perl/shell comments (C<\s*#.*$/>).
+
+=item B<-d>
+
+Debug. Turns on debugging output. See L<Regexp::Assemble> for suitable values.
+
+=item B<-i>
+
+Indent. Print the regular expression using and indent of n to display
+nesting. A.k.a pretty-printing. Implies -p.
+
+=item B<-n>
+
+No newline. Do not print a newline after the pattern. Useful when
+interpolating the output into a templating system or similar.
+
+=item B<-p>
+
+Print. Print the pattern. This is the default, however, it is
+required when the -t switch is enabled (because if you want to test
+patterns ordinarily you don't care what the the assembled pattern
+looks like).
+
+=item B<-r>
+
+Reduce. The default behaviour is to reduce the assembled pattern.
+Enabling this switch causes the reduction algorithm to be switched
+off. This can help you determine how much reduction is performed.
+
+  regexp-assemble pattern.file | wc
+  # versus
+  regexp-assemble -r pattern.file | wc
+
+=item B<-s>
+
+Statistics. Print some statistics about the assembled pattern. The
+output is sent to STDERR (in order to allow the generated pattern
+to be redirected elsewhere).
+
+=item B<-S>
+
+Statistics only. Like B<-s>, except that the pattern itself is not
+output. Useful with B<-d 8> to see the time taken.
+
+=item B<-t>
+
+Test. Test the assembled expression against the contents of a file.
+Each line is read from the file and is matched against the pattern.
+Lines that fail to match are printed. In other words, no output is
+good output. In this mode of operation, error status is 1 in the
+case of a failure, 0 if all lines matched.
+
+=item B<-T>
+
+Time. Print statistics on the time taken to reduce and assemble the
+pattern. (This is merely a lazy person's synonym for C<-d 8>).
+
+=item B<-u>
+
+Unique. Carp if duplicate patterns are found.
+
+=item B<-U>
+
+Unroll. Transform C<a+> I<et al> into C<aa*> (which may
+allow additional reductions).
+
+=item B<-v>
+
+Version. Print the version of the regexp-assemble script.
+
+=item B<-w>
+
+Word/Whole. When testing the contents of a file with C<-t>, bracket
+the expression with C<^> and C<$> in order to match the whole word
+or line from the file.
+
+=back
+
+=head1 DIAGNOSTICS
+
+Will print out a summary of the problem if an added pattern causes
+the assembly to fail.
+
+=head1 SEE ALSO
+
+L<Regexp::Assemble>
+
+=head1 AUTHOR
+
+Copyright (C) 2004-2008 David Landgren. All rights reserved.
+
+=head1 LICENSE
+
+This script is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
