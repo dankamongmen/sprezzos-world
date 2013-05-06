@@ -646,3 +646,11 @@ $(QWT5): $(SPREZZ)/qwt5/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf qwt5_$(qwt5_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: kamera
+kamera:$(KAMERA)_$(ARCH).deb
+$(KAMERA): $(SPREZZ)/kamera/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf kamera_$(kamera_UPVER).orig.tar.xz $(TARARGS) $@
+
