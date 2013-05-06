@@ -871,3 +871,43 @@ $(LIBTESTPODCOVERAGEPERL): $(SPREZZ)/libtest-pod-coverage-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libtest-pod-coverage-perl_$(libtest-pod-coverage-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libauthen-ntlm-perl
+libauthen-ntlm-perl:$(LIBAUTHENNTLMPERL)_$(ARCH).deb
+$(LIBAUTHENNTLMPERL): $(SPREZZ)/libauthen-ntlm-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libauthen-ntlm-perl_$(libauthen-ntlm-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libdigest-hmac-perl
+libdigest-hmac-perl:$(LIBDIGESTHMACPERL)_$(ARCH).deb
+$(LIBDIGESTHMACPERL): $(SPREZZ)/libdigest-hmac-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libdigest-hmac-perl_$(libdigest-hmac-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libnet-http-perl
+libnet-http-perl:$(LIBNETHTTPPERL)_$(ARCH).deb
+$(LIBNETHTTPPERL): $(SPREZZ)/libnet-http-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libnet-http-perl_$(libnet-http-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libhttp-negotiate-perl
+libhttp-negotiate-perl:$(LIBHTTPNEGOTIATEPERL)_$(ARCH).deb
+$(LIBHTTPNEGOTIATEPERL): $(SPREZZ)/libhttp-negotiate-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libhttp-negotiate-perl_$(libhttp-negotiate-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libhtml-form-perl
+libhtml-form-perl:$(LIBHTMLFORMPERL)_$(ARCH).deb
+$(LIBHTMLFORMPERL): $(SPREZZ)/libhtml-form-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libhtml-form-perl_$(libhtml-form-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
