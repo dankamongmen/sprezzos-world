@@ -7146,7 +7146,7 @@ $(PROCPS): $(SPREZZ)/procps/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xJvf procps-$(procps_UPVER).tar.xz $(TARARGS) $@
+	tar xJvf procps_$(procps_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: protobuf
 protobuf:$(PROTOBUF)_$(ARCH).deb
