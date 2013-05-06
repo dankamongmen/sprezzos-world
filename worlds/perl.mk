@@ -847,3 +847,27 @@ $(LIBEXTUTILSPKGCONFIGPERL): $(SPREZZ)/libextutils-pkgconfig-perl/debian/changel
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libextutils-pkgconfig-perl_$(libextutils-pkgconfig-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libconfig-file-perl
+libconfig-file-perl:$(LIBCONFIGFILEPERL)_$(ARCH).deb
+$(LIBCONFIGFILEPERL): $(SPREZZ)/libconfig-file-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libconfig-file-perl_$(libconfig-file-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libregexp-assemble-perl
+libregexp-assemble-perl:$(LIBREGEXPASSEMBLEPERL)_$(ARCH).deb
+$(LIBREGEXPASSEMBLEPERL): $(SPREZZ)/libregexp-assemble-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libregexp-assemble-perl_$(libregexp-assemble-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: libtest-pod-coverage-perl
+libtest-pod-coverage-perl:$(LIBTESTPODCOVERAGEPERL)_$(ARCH).deb
+$(LIBTESTPODCOVERAGEPERL): $(SPREZZ)/libtest-pod-coverage-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libtest-pod-coverage-perl_$(libtest-pod-coverage-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
