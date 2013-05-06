@@ -11574,5 +11574,5 @@ $(IOTOP): $(SPREZZ)/iotop/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf iotop_$(iotop_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xjvf iotop_$(iotop_UPVER).orig.tar.bz2 $(TARARGS) $@
 
