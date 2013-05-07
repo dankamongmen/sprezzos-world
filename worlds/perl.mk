@@ -911,3 +911,11 @@ $(LIBHTMLFORMPERL): $(SPREZZ)/libhtml-form-perl/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libhtml-form-perl_$(libhtml-form-perl_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libgd-gd2-noxpm-perl
+libgd-gd2-noxpm-perl:$(LIBGDGD2NOXPMPERL)_$(ARCH).deb
+$(LIBGDGD2NOXPMPERL): $(SPREZZ)/libgd-gd2-noxpm-perl/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libgd-gd2-noxpm-perl_$(libgd-gd2-noxpm-perl_UPVER).orig.tar.gz $(TARARGS) $@
+
