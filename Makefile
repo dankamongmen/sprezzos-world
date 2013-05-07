@@ -11576,3 +11576,11 @@ $(IOTOP): $(SPREZZ)/iotop/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf iotop_$(iotop_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: ebook-tools
+ebook-tools:$(EBOOKTOOLS)_$(ARCH).deb
+$(EBOOKTOOLS): $(SPREZZ)/ebook-tools/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf ebook-tools_$(ebook-tools_UPVER).orig.tar.gz $(TARARGS) $@
+
