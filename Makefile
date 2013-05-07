@@ -3898,7 +3898,7 @@ $(HWLOC): $(SPREZZ)/hwloc/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
-	tar xjvf hwloc-$(hwloc_UPVER).tar.bz2 $(TARARGS) $@
+	tar xzvf hwloc-$(hwloc_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: ibus
 ibus:$(IBUS)_$(ARCH).deb
