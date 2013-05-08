@@ -1,0 +1,51 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --parallel
+
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+CFLAGS+=-Wall -pedantic -g
+
+version:=$(shell dpkg-parsechangelog | grep ^Version: | sed -e 's/^Version: //' -e 's/-.*$$//')
+ver2:=$(shell echo $(version) | cut -d. -f-2)
+major:=$(shell echo $(version) | cut -d. -f1)
+minor:=$(shell echo $(version) | cut -d. -f3)
+nextminor:=$(shell echo $$(( $(minor) + 1 )))
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf qglviewer-qt4 designerPlugin-qt4
+
+override_dh_auto_build:
+	cp -a QGLViewer qglviewer-qt4
+	cd qglviewer-qt4 && qmake-qt4 LIB_DIR=/usr/lib/$(DEB_HOST_MULTIARCH) QMAKE_CXXFLAGS_RELEASE="$(CXXFLAGS) $(CPPFLAGS)" QMAKE_CFLAGS_RELEASE="$(CFLAGS) $(CPPFLAGS)" QMAKE_LFLAGS_RELEASE="$(LDFLAGS)"
+	cd qglviewer-qt4 && $(MAKE) all staticlib
+	#
+	cp -a designerPlugin designerPlugin-qt4
+	cd designerPlugin-qt4 && qmake-qt4 LIB_DIR=../qglviewer-qt4 QMAKE_CXXFLAGS_RELEASE="$(CXXFLAGS) $(CPPFLAGS)" QMAKE_CFLAGS_RELEASE="$(CFLAGS) $(CPPFLAGS)" QMAKE_LFLAGS_RELEASE="$(LDFLAGS)"
+	cd designerPlugin-qt4 && $(MAKE)
+	#
+
+override_dh_auto_install:
+	cd qglviewer-qt4 && $(MAKE) install INSTALL_ROOT=$(CURDIR)/debian/tmp
+	mkdir -p $(CURDIR)/debian/libqglviewer-dev/usr/lib/$(DEB_HOST_MULTIARCH) 
+	cd designerPlugin-qt4 && $(MAKE) install INSTALL_ROOT=$(CURDIR)/debian/libqglviewer-dev
+	cp qglviewer-qt4/libQGLViewer.a $(CURDIR)/debian/libqglviewer-dev/usr/lib/$(DEB_HOST_MULTIARCH)
+
+override_dh_fixperms-indep: 
+	rm $(CURDIR)/debian/libqglviewer-doc/usr/share/doc/libqglviewer-doc/doc/refManual/jquery.js
+	find $(CURDIR)/debian/libqglviewer-doc/usr/share/doc/libqglviewer-doc/doc -name "._*" | xargs rm -v
+	find $(CURDIR)/debian/libqglviewer-doc/usr/share/doc/libqglviewer-doc/examples -type f -name "*.vcproj" | xargs chmod a-x
+	dh_fixperms -i
+
+override_dh_installchangelogs-indep: 
+	dh_installchangelogs -i CHANGELOG doc/changeLog.html
+
+override_dh_compress-indep:
+	dh_compress -i -Xlibqglviewer-doc/examples
+
+override_dh_makeshlibs-arch:
+	dh_makeshlibs -V 'libqglviewer2 (>= $(version)), libqglviewer2 (<< $(ver2).$(nextminor)~)' -a
+
+override_dh_shlibdeps-arch:
+	dh_shlibdeps -ldebian/libqglviewer2/usr/lib/$(DEB_HOST_MULTIARCH) -a

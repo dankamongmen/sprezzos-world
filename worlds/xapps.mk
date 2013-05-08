@@ -729,3 +729,11 @@ $(SANEBACKENDS): $(SPREZZ)/sane-backends/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf sane-backends_$(sane-backends_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: libqglviewer
+libqglviewer:$(LIBQGLVIEWER)_$(ARCH).deb
+$(LIBQGLVIEWER): $(SPREZZ)/libqglviewer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf libqglviewer_$(libqglviewer_UPVER).orig.tar.gz $(TARARGS) $@
+
