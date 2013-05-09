@@ -11584,3 +11584,11 @@ $(EBOOKTOOLS): $(SPREZZ)/ebook-tools/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf ebook-tools_$(ebook-tools_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: mathjax
+mathjax:$(MATHJAX)_$(ARCH).deb
+$(MATHJAX): $(SPREZZ)/mathjax/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf mathjax_$(mathjax_UPVER).orig.tar.gz $(TARARGS) $@
+
