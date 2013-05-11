@@ -737,3 +737,11 @@ $(LIBQGLVIEWER): $(SPREZZ)/libqglviewer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf libqglviewer_$(libqglviewer_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: rasmol
+rasmol:$(RASMOL)_$(ARCH).deb
+$(RASMOL): $(SPREZZ)/rasmol/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf rasmol_$(rasmol_UPVER).orig.tar.gz $(TARARGS) $@
+
