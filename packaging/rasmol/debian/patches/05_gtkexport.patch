@@ -1,0 +1,491 @@
+From: Teemu Ikonen <tpikonen@gmail.com>
+Subject: Fix segfault in image export with GTK.
+X-git-branch: p/gtkexport
+
+    File->Export segfaulted when the exported image size was different
+    from the image buffer size currently on the screen.
+
+    The fix is to not try to render to user supplied buffer in
+    render_buffer(), but to copy FBuffer to the supplied buffer after
+    resizing.
+
+    Also fixed the temporary image buffer allocation in export_cb() to use
+    sizeof(Pixel) instead of 4.
+
+    Also, replace int with uintptr_t when casting pointers to ints.
+
+ src/gtkwin.c |  425 +++++++++++++++++++++++++++++++---------------------------
+ 1 files changed, 226 insertions(+), 199 deletions(-)
+
+diff --git a/src/gtkwin.c b/src/gtkwin.c
+index f5b70ac..2a324b3 100755
+--- a/src/gtkwin.c
++++ b/src/gtkwin.c
+@@ -155,7 +155,7 @@ enum {
+ 	RES_150,
+ 	RES_300
+ };
+-int print_resolution = RES_CURRENT;
++uintptr_t print_resolution = RES_CURRENT;
+ GtkPrintSettings *print_settings = NULL;
+ GtkPageSetup *print_pagesetup = NULL;
+ 
+@@ -392,109 +392,116 @@ void save_cb(GtkAction *action, gpointer user_data)
+ 	gtk_widget_destroy (dialog);
+ }
+ 
++
+ /* Render the current image to a given memory buffer with a given size */
+-void render_buffer(Pixel *buf, int xsize, int ysize)
+-{	
+-	Pixel *old_fbuffer; 
+-	int old_xrange, old_yrange, old_hrange, old_wrange, old_range, old_interactive, dx;
+-	
+-	old_fbuffer = FBuffer;
+-	old_xrange = XRange;
+-	old_yrange = YRange;
+-	FBuffer = buf;
+-	XRange = xsize;
+-	YRange = ysize;
+-	
+-	if( (dx = XRange%4) )
+-    	XRange += 4-dx;
+-	
+-	old_hrange = HRange;
+-	old_wrange = WRange;
+-	old_range = Range;
+-	HRange = YRange>>1;	
+-    WRange = XRange>>1;
+-    Range = MinFun(XRange,YRange);
+-	
+-	ReDrawFlag |= RFReSize;
+-	old_interactive = Interactive;
+-	Interactive = False;
+-	RefreshScreen(); // *buf now contains the image
+-	Interactive = old_interactive;
+-	
+-	FBuffer = old_fbuffer;
+-	XRange = old_xrange;
+-	YRange = old_yrange;
+-	HRange = old_hrange;
+-	WRange = old_wrange;
+-	Range = old_range;
+-	
+-	ReDrawFlag |= RFReSize;
+-	RefreshScreen();
+-	ReDrawFlag = NextReDrawFlag;
++void render_buffer(Pixel * buf, int xsize, int ysize)
++{
++    int old_xrange, old_yrange, old_hrange, old_wrange, old_range,
++        old_interactive, dx;
++
++    old_xrange = XRange;
++    old_yrange = YRange;
++    XRange = xsize;
++    YRange = ysize;
++    if ((dx = XRange % 4))
++        XRange += 4 - dx;
++
++    old_hrange = HRange;
++    old_wrange = WRange;
++    old_range = Range;
++    HRange = YRange >> 1;
++    WRange = XRange >> 1;
++    Range = MinFun(XRange, YRange);
++
++    ReDrawFlag |= RFReSize;
++    old_interactive = Interactive;
++    Interactive = False;
++    RefreshScreen();            // FBuffer now contains the image
++    memcpy(buf, FBuffer, sizeof(Pixel) * xsize * ysize);
++
++    Interactive = old_interactive;
++
++    XRange = old_xrange;
++    YRange = old_yrange;
++    HRange = old_hrange;
++    WRange = old_wrange;
++    Range = old_range;
++
++    ReDrawFlag |= RFReSize;
++    RefreshScreen();
++    ReDrawFlag = NextReDrawFlag;
+ }
+ 
++
+ gboolean sizespin_cb(GtkSpinButton button, gpointer data)
+ {
+-	GtkLabel *header = NULL;
+-	char header_str[128];
+-	
+-	if(gtk_toggle_button_get_active(
+-		GTK_TOGGLE_BUTTON(gtk_builder_get_object(sizebuilder, "size_custom"))))
+-	{
+-		export_x = gtk_spin_button_get_value_as_int(
+-				GTK_SPIN_BUTTON(gtk_builder_get_object(sizebuilder, "custom_x")));
+-		export_y = gtk_spin_button_get_value_as_int(
+-				GTK_SPIN_BUTTON(gtk_builder_get_object(sizebuilder, "custom_y")));
+-	
+-		header = GTK_LABEL(gtk_builder_get_object(sizebuilder, "size_header"));
+-		snprintf(header_str, 127, "Size: %d x %d", export_x, export_y);
+-		gtk_label_set_text(header, header_str);
+-	}
+-	
+-	return FALSE;
++    GtkLabel *header = NULL;
++    char header_str[128];
++
++    if (gtk_toggle_button_get_active
++        (GTK_TOGGLE_BUTTON
++         (gtk_builder_get_object(sizebuilder, "size_custom")))) {
++        export_x =
++            gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON
++                                             (gtk_builder_get_object
++                                              (sizebuilder, "custom_x")));
++        export_y =
++            gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON
++                                             (gtk_builder_get_object
++                                              (sizebuilder, "custom_y")));
++
++        header = GTK_LABEL(gtk_builder_get_object(sizebuilder, "size_header"));
++        snprintf(header_str, 127, "Size: %d x %d", export_x, export_y);
++        gtk_label_set_text(header, header_str);
++    }
++
++    return FALSE;
+ }
+ 
+-gboolean sizeradio_cb(GtkButton *button, gpointer data)
++
++gboolean sizeradio_cb(GtkButton * button, gpointer data)
+ {
+-	int radioid;
+-	GtkLabel *header = NULL;
+-	char header_str[128];
+-	
+-	radioid = (int) data;
+-	
+-	export_x = XRange;
+-	export_y = YRange;
+-	
+-	switch(radioid) {
+-		case RADIO_CURRENT:
+-			break;
+-		case RADIO_640:
+-			export_x = 640;
+-			export_y = 480;
+-			break;
+-		case RADIO_1024:
+-			export_x = 1024;
+-			export_y = 768;
+-			break;
+-		case RADIO_1600:
+-			export_x = 1600;
+-			export_y = 1200;
+-			break;
+-		case RADIO_CUSTOM:
+-			export_x = gtk_spin_button_get_value_as_int(
+-				GTK_SPIN_BUTTON(gtk_builder_get_object(sizebuilder, "custom_x")));
+-			export_y = gtk_spin_button_get_value_as_int(
+-				GTK_SPIN_BUTTON(gtk_builder_get_object(sizebuilder, "custom_y")));
+-			break;
+-		default:
+-			;
+-	}
+-	
+-	header = GTK_LABEL(gtk_builder_get_object(sizebuilder, "size_header"));
+-	snprintf(header_str, 127, "Size: %d x %d", export_x, export_y);
+-	gtk_label_set_text(header, header_str); 
+-	
+-	return FALSE;
++    GtkLabel *header = NULL;
++    char header_str[128];
++    uintptr_t radioid = (uintptr_t) data;
++
++    export_x = XRange;
++    export_y = YRange;
++
++    switch (radioid) {
++    case RADIO_CURRENT:
++        break;
++    case RADIO_640:
++        export_x = 640;
++        export_y = 480;
++        break;
++    case RADIO_1024:
++        export_x = 1024;
++        export_y = 768;
++        break;
++    case RADIO_1600:
++        export_x = 1600;
++        export_y = 1200;
++        break;
++    case RADIO_CUSTOM:
++        export_x =
++            gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON
++                                             (gtk_builder_get_object
++                                              (sizebuilder, "custom_x")));
++        export_y =
++            gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON
++                                             (gtk_builder_get_object
++                                              (sizebuilder, "custom_y")));
++        break;
++    default:
++        ;
++    }
++
++    header = GTK_LABEL(gtk_builder_get_object(sizebuilder, "size_header"));
++    snprintf(header_str, 127, "Size: %d x %d", export_x, export_y);
++    gtk_label_set_text(header, header_str);
++
++    return FALSE;
+ }
+ 
+ 
+@@ -560,101 +567,117 @@ void build_exportdialog(void)
+ 		
+ }
+ 
+-void export_cb(GtkAction *action, gpointer user_data)
++
++void export_cb(GtkAction * action, gpointer user_data)
+ {
+-	static char *fname = NULL;
++    static char *fname = NULL;
+ 
+-	if(!exportdialog) {
+-		build_exportdialog();
+-	}
+-	if(fname) {
+-		gtk_file_chooser_set_filename(GTK_FILE_CHOOSER (exportdialog), fname);
+-		gtk_file_chooser_unselect_all(GTK_FILE_CHOOSER (exportdialog));
+-	}
+-	if(gtk_toggle_button_get_active(
+-		GTK_TOGGLE_BUTTON(gtk_builder_get_object(sizebuilder, "size_current")))) 
+-	{
+-		GtkLabel *header = NULL;
+-		char header_str[128];
+-	
+-		export_x = XRange;
+-		export_y = YRange;
+-		header = GTK_LABEL(gtk_builder_get_object(sizebuilder, "size_header"));
+-		snprintf(header_str, 127, "Size: %d x %d", export_x, export_y);
+-		gtk_label_set_text(header, header_str);
+-	}
+-	while(TRUE) {
+-		GtkWidget *question;
+-		GdkPixbuf *pbuf;
+-		GError *err = NULL;
+-		gboolean success = TRUE;
+-		guint format = 0;
+-		gchar *formatname = NULL;
+-		GSList *tmplist = NULL;
+-	    guchar *tmpbuf;
+-	   
+-		if (gtk_dialog_run (GTK_DIALOG (exportdialog)) != GTK_RESPONSE_ACCEPT) {
+-			break;
+-		}
+-		
+-		if(fname) {
+-			g_free (fname);
+-		}
+-	    fname = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (exportdialog));
+-		if(g_file_test(fname, G_FILE_TEST_EXISTS)) {
+-	    	gint resp;
+-			question = gtk_message_dialog_new(GTK_WINDOW(exportdialog), 
+-				GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, 
+-				GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO, 
+-				"A file named \"%s\" already exists. Do you want to replace it?", 
+-				fname);
+-			resp = gtk_dialog_run(GTK_DIALOG(question));
+-			gtk_widget_destroy (question);
+-			if(resp != GTK_RESPONSE_YES) {
+-				continue;
+-			}
+-		}
+-		
+-		format = egg_file_format_chooser_get_format (
+-			EGG_FILE_FORMAT_CHOOSER(format_chooser), fname);
+-		if(!format) {
+-			char *tmp;
+-			question = gtk_message_dialog_new(GTK_WINDOW(exportdialog), 
+-				GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, 
+-				GTK_MESSAGE_WARNING, GTK_BUTTONS_OK, 
+-				"Could not recognise format of output file \"%s\", please choose another format.", 
+-				((tmp = rindex(fname, '/')) != NULL) ? (tmp+1) : (fname));
+-			gtk_dialog_run(GTK_DIALOG(question));			   
+-			gtk_widget_destroy (question);
+-			continue;
+-		}
+-		formatname = (gchar *) egg_file_format_chooser_get_format_data(
+-			EGG_FILE_FORMAT_CHOOSER(format_chooser), format);
+-		
+-	    tmpbuf = g_new(guchar, 4*export_x*export_y);
+-	    render_buffer((Pixel *) tmpbuf, export_x, export_y); 
+-	    pbuf = gdk_pixbuf_new_from_data(tmpbuf,
+-			GDK_COLORSPACE_RGB,
+-			TRUE, 8,
+-			export_x, export_y, 4*export_x,
+-			NULL, NULL);
+-		success = gdk_pixbuf_save(pbuf, fname, formatname, &err, NULL);
+-	  	
+-		if(!success && (err != NULL) ) {
+-			question = gtk_message_dialog_new(GTK_WINDOW(exportdialog), 
+-				GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, 
+-				GTK_MESSAGE_WARNING, GTK_BUTTONS_OK, "Error saving image: %s", 
+-				err->message);
+-			gtk_dialog_run(GTK_DIALOG(question));			   
+-			gtk_widget_destroy (question);				   
+-		}
+-		g_object_unref(pbuf);
+-	    g_free(tmpbuf);
+-	    break;
+-	}
+-	gtk_widget_hide (exportdialog);   
++    if (!exportdialog) {
++        build_exportdialog();
++    }
++    if (fname) {
++        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(exportdialog), fname);
++        gtk_file_chooser_unselect_all(GTK_FILE_CHOOSER(exportdialog));
++    }
++    if (gtk_toggle_button_get_active
++        (GTK_TOGGLE_BUTTON
++         (gtk_builder_get_object(sizebuilder, "size_current")))) {
++        GtkLabel *header = NULL;
++        char header_str[128];
++
++        export_x = XRange;
++        export_y = YRange;
++        header = GTK_LABEL(gtk_builder_get_object(sizebuilder, "size_header"));
++        snprintf(header_str, 127, "Size: %d x %d", export_x, export_y);
++        gtk_label_set_text(header, header_str);
++    }
++    while (TRUE) {
++        GtkWidget *question;
++        GdkPixbuf *pbuf;
++        GError *err = NULL;
++        gboolean success = TRUE;
++        guint format = 0;
++        gchar *formatname = NULL;
++        GSList *tmplist = NULL;
++        Pixel *tmpbuf;
++
++        if (gtk_dialog_run(GTK_DIALOG(exportdialog)) != GTK_RESPONSE_ACCEPT) {
++            break;
++        }
++
++        if (fname) {
++            g_free(fname);
++        }
++        fname = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(exportdialog));
++        if (g_file_test(fname, G_FILE_TEST_EXISTS)) {
++            gint resp;
++            question = gtk_message_dialog_new(GTK_WINDOW(exportdialog),
++                                              GTK_DIALOG_MODAL |
++                                              GTK_DIALOG_DESTROY_WITH_PARENT,
++                                              GTK_MESSAGE_QUESTION,
++                                              GTK_BUTTONS_YES_NO,
++                                              "A file named \"%s\" already exists. Do you want to replace it?",
++                                              fname);
++            resp = gtk_dialog_run(GTK_DIALOG(question));
++            gtk_widget_destroy(question);
++            if (resp != GTK_RESPONSE_YES) {
++                continue;
++            }
++        }
++
++        format =
++            egg_file_format_chooser_get_format(EGG_FILE_FORMAT_CHOOSER
++                                               (format_chooser), fname);
++        if (!format) {
++            char *tmp;
++            question = gtk_message_dialog_new(GTK_WINDOW(exportdialog),
++                                              GTK_DIALOG_MODAL |
++                                              GTK_DIALOG_DESTROY_WITH_PARENT,
++                                              GTK_MESSAGE_WARNING,
++                                              GTK_BUTTONS_OK,
++                                              "Could not recognise format of output file \"%s\", please choose another format.",
++                                              ((tmp =
++                                                rindex(fname,
++                                                       '/')) !=
++                                               NULL) ? (tmp + 1) : (fname));
++            gtk_dialog_run(GTK_DIALOG(question));
++            gtk_widget_destroy(question);
++            continue;
++        }
++        formatname =
++            (gchar *)
++            egg_file_format_chooser_get_format_data(EGG_FILE_FORMAT_CHOOSER
++                                                    (format_chooser), format);
++
++        tmpbuf = g_new(Pixel, export_x * export_y);
++        render_buffer(tmpbuf, export_x, export_y);
++        pbuf = gdk_pixbuf_new_from_data((guchar *) tmpbuf,
++                                        GDK_COLORSPACE_RGB,
++                                        TRUE, 8,
++                                        export_x, export_y,
++                                        sizeof(Pixel) * export_x,
++                                        NULL, NULL);
++        success = gdk_pixbuf_save(pbuf, fname, formatname, &err, NULL);
++
++        if (!success && (err != NULL)) {
++            question = gtk_message_dialog_new(GTK_WINDOW(exportdialog),
++                                              GTK_DIALOG_MODAL |
++                                              GTK_DIALOG_DESTROY_WITH_PARENT,
++                                              GTK_MESSAGE_WARNING,
++                                              GTK_BUTTONS_OK,
++                                              "Error saving image: %s",
++                                              err->message);
++            gtk_dialog_run(GTK_DIALOG(question));
++            gtk_widget_destroy(question);
++        }
++        g_object_unref(pbuf);
++        g_free(tmpbuf);
++        break;
++    }
++    gtk_widget_hide(exportdialog);
+ }
+ 
++
+ void pagesetup_cb(GtkAction *action, gpointer user_data)
+ {
+ 	if (print_pagesetup == NULL) {
+@@ -735,21 +758,25 @@ void print_draw(GtkPrintOperation *printop, GtkPrintContext *context,
+     g_free(tmpbuf);
+ }
+ 
+-void print_get_res_cb(GtkPrintOperation *print, GtkWidget *widget, gpointer rb)
++
++void print_get_res_cb(GtkPrintOperation * print, GtkWidget * widget,
++                      gpointer rb)
+ {
+-	GSList *el;
+-	
+-	el = gtk_radio_button_get_group(*((GtkRadioButton **)rb));
+-	while(el != NULL) {
+-		if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(el->data))) {
+-			print_resolution = (int) g_object_get_data(G_OBJECT(el->data), "res");
+-			return;
+-		} else
+-			el = el->next;
+-	}
+-	return;
++    GSList *el;
++
++    el = gtk_radio_button_get_group(*((GtkRadioButton **) rb));
++    while (el != NULL) {
++        if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(el->data))) {
++            print_resolution =
++                (uintptr_t) g_object_get_data(G_OBJECT(el->data), "res");
++            return;
++        } else
++            el = el->next;
++    }
++    return;
+ }
+ 
++
+ GObject *print_build_reswidget_cb(GtkPrintOperation *operation, gpointer radio_p) 
+ {
+ 	GtkBuilder *b = NULL;
