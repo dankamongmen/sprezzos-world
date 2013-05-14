@@ -11592,3 +11592,11 @@ $(MATHJAX): $(SPREZZ)/mathjax/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf mathjax_$(mathjax_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: latex-beamer
+latex-beamer:$(LATEXBEAMER)_$(ARCH).deb
+$(LATEXBEAMER): $(SPREZZ)/latex-beamer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf latex-beamer_$(latex-beamer_UPVER).orig.tar.gz $(TARARGS) $@
+
