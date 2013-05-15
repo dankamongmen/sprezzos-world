@@ -11616,3 +11616,11 @@ $(DATAQUAY): $(SPREZZ)/dataquay/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf dataquay_$(dataquay_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: taopm
+taopm:$(TAOPM)_$(ARCH).deb
+$(TAOPM): $(SPREZZ)/taopm/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf taopm_$(taopm_UPVER).orig.tar.gz $(TARARGS) $@
+

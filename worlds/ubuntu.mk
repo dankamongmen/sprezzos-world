@@ -43,15 +43,29 @@ $(COMPIZ9): $(SPREZZ)/compiz9/debian/changelog
 	ln -sf compiz-$(compiz9_UPVER).tar.xz $(COMPIZ9).orig.tar.xz
 	cp -r $(<D) $@/
 
-# There's a recipe for the released version commented out in worlds/ubuntu.mk
 .PHONY: nux
 nux:$(NUX)_$(ARCH).deb
 $(NUX): $(SPREZZ)/nux/debian/changelog
-	bzr branch lp:nux $@
-	rm -rf $@/debian
-	tar cJf nux-$(nux_UPVER).tar.xz $@ --exclude-vcs
-	ln -sf nux-$(nux_UPVER).tar.xz $(NUX).orig.tar.xz
+	mkdir $@
 	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nux-$(nux_UPVER).tar.gz $(TARARGS) $@
+
+nux3:$(NUX3)_$(ARCH).deb
+$(NUX3): $(SPREZZ)/nux3/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@/
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf nux-$(nux3_UPVER).tar.gz $(TARARGS) $@
+
+#.PHONY: nux
+#nux:$(NUX)_$(ARCH).deb
+#$(NUX): $(SPREZZ)/nux/debian/changelog
+#	bzr branch lp:nux $@
+#	rm -rf $@/debian
+#	tar cJf nux-$(nux_UPVER).tar.xz $@ --exclude-vcs
+#	ln -sf nux-$(nux_UPVER).tar.xz $(NUX).orig.tar.xz
+#	cp -r $(<D) $@/
 
 .PHONY: dbus-test-runner
 dbus-test-runner:$(DBUSTESTRUNNER)_$(ARCH).deb
@@ -310,22 +324,6 @@ $(UNITY): $(SPREZZ)/unity/debian/changelog
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf unity-$(unity_UPVER).tar.bz2 $(TARARGS) $@
-
-# We're building from bzr in Makefile
-#.PHONY: nux
-#nux:$(NUX)_$(ARCH).deb
-#$(NUX): $(SPREZZ)/nux/debian/changelog
-#	mkdir $@
-#	cp -r $(<D) $@/
-#	cd $@ && uscan --force-download --download-current-version
-#	tar xzvf nux-$(nux_UPVER).tar.gz $(TARARGS) $@
-
-nux3:$(NUX3)_$(ARCH).deb
-$(NUX3): $(SPREZZ)/nux3/debian/changelog
-	mkdir $@
-	cp -r $(<D) $@/
-	cd $@ && uscan --force-download --download-current-version
-	tar xzvf nux-$(nux3_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: usb-creator
 usb-creator:$(USBCREATOR)_$(ARCH).deb
