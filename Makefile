@@ -11600,3 +11600,19 @@ $(LATEXBEAMER): $(SPREZZ)/latex-beamer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf latex-beamer_$(latex-beamer_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: liblrdf
+liblrdf:$(LIBLRDF)_$(ARCH).deb
+$(LIBLRDF): $(SPREZZ)/liblrdf/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf liblrdf_$(liblrdf_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: dataquay
+dataquay:$(DATAQUAY)_$(ARCH).deb
+$(DATAQUAY): $(SPREZZ)/dataquay/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf dataquay_$(dataquay_UPVER).orig.tar.bz2 $(TARARGS) $@
+
