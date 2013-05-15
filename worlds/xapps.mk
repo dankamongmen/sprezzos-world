@@ -745,3 +745,11 @@ $(RASMOL): $(SPREZZ)/rasmol/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf rasmol_$(rasmol_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: raster3d
+raster3d:$(RASTER3D)_$(ARCH).deb
+$(RASTER3D): $(SPREZZ)/raster3d/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf raster3d_$(raster3d_UPVER).orig.tar.gz $(TARARGS) $@
+
