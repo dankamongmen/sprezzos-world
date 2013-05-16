@@ -303,3 +303,11 @@ $(PYLUCENE): $(SPREZZ)/pylucene/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf pylucene_$(pylucene_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: python-roman
+python-roman:$(PYTHONROMAN)_$(ARCH).deb
+$(PYTHONROMAN): $(SPREZZ)/python-roman/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf python-roman_$(python-roman_UPVER).orig.tar.gz $(TARARGS) $@
+
