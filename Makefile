@@ -11624,3 +11624,11 @@ $(TAOPM): $(SPREZZ)/taopm/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf taopm_$(taopm_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: alglib
+alglib:$(ALGLIB)_$(ARCH).deb
+$(ALGLIB): $(SPREZZ)/alglib/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf alglib_$(alglib_UPVER).orig.tar.gz $(TARARGS) $@
+
