@@ -989,3 +989,11 @@ $(AGAVE): $(SPREZZ)/agave/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf agave_$(agave_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: memphis
+memphis:$(MEMPHIS)_$(ARCH).deb
+$(MEMPHIS): $(SPREZZ)/memphis/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf memphis_$(memphis_UPVER).orig.tar.gz $(TARARGS) $@
+
