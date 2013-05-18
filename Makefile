@@ -53,7 +53,7 @@ sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 
 #cd $< && apt-get -y build-dep $(shell echo $@ | cut -d_ -f1) || true # source package might not exist
 %_$(ARCH).udeb %_$(ARCH).deb: %
-	cd $< && debuild -k$(DEBKEY) #-j8
+	cd $< && debuild -k$(DEBKEY) -j2
 
 # Packages which we take from upstream source repositories rather than a
 # release tarball. We must make our own *.orig.tar.* files for these.
@@ -11631,4 +11631,12 @@ $(ALGLIB): $(SPREZZ)/alglib/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf alglib_$(alglib_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: crda
+crda:$(CRDA)_$(ARCH).deb
+$(CRDA): $(SPREZZ)/crda/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf crda_$(crda_UPVER).orig.tar.bz2 $(TARARGS) $@
 
