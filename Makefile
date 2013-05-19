@@ -11640,3 +11640,11 @@ $(CRDA): $(SPREZZ)/crda/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf crda_$(crda_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: foomatic-filters
+foomatic-filters:$(FOOMATICFILTERS)_$(ARCH).deb
+$(FOOMATICFILTERS): $(SPREZZ)/foomatic-filters/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf foomatic-filters_$(foomatic-filters_UPVER).orig.tar.gz $(TARARGS) $@
+
