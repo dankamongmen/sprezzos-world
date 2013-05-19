@@ -1,0 +1,45 @@
+#!/usr/bin/make -f
+
+derives_from_ubuntu := $(shell (dpkg-vendor --derives-from Ubuntu && echo "yes") || echo "no")
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- --disable-file-converter-check
+
+override_dh_auto_build:
+	dh_auto_build
+	chmod -x filter.conf
+
+override_dh_install:
+	dh_install --fail-missing
+
+	rm -f $(CURDIR)/debian/foomatic-filters/etc/foomatic/filter.conf*
+	cp -p debian/parseconfig.pl $(CURDIR)/debian/foomatic-filters/usr/share/foomatic
+	chmod +x $(CURDIR)/debian/foomatic-filters/usr/share/foomatic/parseconfig.pl
+	# Install the apport hook on Ubuntu and derivatives
+ifeq ($(derives_from_ubuntu),yes)
+	install -D -m 644 debian/ubuntu/apport-hook.py $(CURDIR)/debian/foomatic-filters/usr/share/apport/package-hooks/source_foomatic-filters.py
+endif
+	
+	# Prepare the postinst with distro-specific versions
+	cp debian/foomatic-filters.postinst.in debian/foomatic-filters.postinst
+ifeq ($(derives_from_ubuntu),yes)
+	# We derive from Ubuntu, the ps_accounting default change was made in version 3.0.2-20070719-0ubuntu1
+	sed -i -e "s/#MOTHER_DISTRO#/Ubuntu/g" debian/foomatic-filters.postinst
+	sed -i -e "s/#FF_PS_DEFAULT_CHANGE_VERSION#/3.0.2-20070719-0ubuntu1/g" debian/foomatic-filters.postinst
+else
+	# We derive from Debian, the ps_accounting default change was made in version 4.0.5-1
+	sed -i -e "s/#MOTHER_DISTRO#/Debian/g" debian/foomatic-filters.postinst
+	sed -i -e "s/#FF_PS_DEFAULT_CHANGE_VERSION#/4.0.5-1/g" debian/foomatic-filters.postinst
+endif
+
+override_dh_clean:
+	dh_clean
+	# Update the translations (ensures no outdated file is left behind)
+	debconf-updatepo
+
+override_dh_perl:
+	# Perl scripts from this package don't use any perl modules, so call dh_perl with "-d" to avoid the unnecessary perl dependency
+	dh_perl -d
