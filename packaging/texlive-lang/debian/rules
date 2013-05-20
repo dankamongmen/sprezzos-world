@@ -1,0 +1,86 @@
+#!/usr/bin/make -f
+# 
+# debian/rules file for texlive-lang
+
+PACKAGES=texlive-lang-african texlive-lang-arabic texlive-lang-armenian texlive-lang-cjk texlive-lang-croatian texlive-lang-cyrillic texlive-lang-czechslovak texlive-lang-danish texlive-lang-dutch texlive-lang-finnish texlive-lang-french texlive-lang-german texlive-lang-greek texlive-lang-hebrew texlive-lang-hungarian texlive-lang-indic texlive-lang-italian texlive-lang-latin texlive-lang-latvian texlive-lang-lithuanian texlive-lang-mongolian texlive-lang-norwegian texlive-lang-other texlive-lang-polish texlive-lang-portuguese texlive-lang-spanish texlive-lang-swedish texlive-lang-tibetan texlive-lang-english texlive-lang-vietnamese
+METAPACKAGES=texlive-lang-all ptex-bin
+
+SHELL=/bin/bash
+
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
+
+build-stamp:
+	touch build-stamp
+
+clean: 
+	for i in $(PACKAGES) $(METAPACKAGES) ; do \
+	  rm -f debian/$$i.{README.Debian,links,links.generated} ; \
+	  rm -f debian/$$i.{postinst,postrm,preinst,prerm} ; \
+	  rm -f debian/$$i.{maps,hyphens,formats,info,manpages} ; \
+	done
+	# texlive contains some .orig files we need to keep otherwise
+	# the copy will fail due to the files occurring in the tlpdb
+	dh_clean -X.orig -X.bak
+	rm -f configure-stamp
+	rm -f build-stamp
+	rm -f install-stamp
+
+install: install-stamp
+
+install-stamp: build-stamp
+	# make sure we have texmf/web2c otherwise the media detection
+	# might break (like in texlive-lang)
+	mkdir -p texmf/web2c
+	perl debian/tpm2deb-bin.pl --nosource $(PACKAGES) $(METAPACKAGES)
+	for i in $(PACKAGES) $(METAPACKAGES) ; do \
+	  if [ -d debian/$$i.root ] ; then bash debian/merge-dist-tree debian/$$i.root debian/$$i ; fi ; \
+	  bash debian/generate-license-file $$i ; \
+	  install -D --mode=644 debian/$$i.override debian/$$i/usr/share/lintian/overrides/$$i ; \
+	  install -D --mode=755 debian/bug.script debian/$$i/usr/share/bug/$$i/script ; \
+	  install -D --mode=644 debian/bug.control debian/$$i/usr/share/bug/$$i/control ; \
+	  if [ -r debian/$$i.links.dist ] ; then cat debian/$$i.links.dist >> debian/$$i.links ; fi ; \
+	  if [ -r debian/$$i.README ] ; then cat debian/$$i.README > debian/$$i.README.Debian ; fi ; \
+	  cat debian/README.Debian >> debian/$$i.README.Debian ; \
+	done
+	# link pfb/afm files (type1 fonts) into /usr/share/fonts
+	for i in $(PACKAGES) $(METAPACKAGES) ; do \
+	  bash debian/create-font-links $$i >> debian/$$i.links ; \
+	done
+	touch install-stamp
+
+binary-arch:
+
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_install
+	dh_installdirs
+	dh_installmenu
+	dh_installdocs -A debian/README.source
+	dh_installtex -A --priority=10 --flavor=lsr:full,tree:texlive
+	dh_installchangelogs
+	# man pages
+	dh_installman
+	bash debian/fix-manpages.sh
+	# info pages
+	bash debian/convert-info-files-to-unix.sh
+	dh_installinfo
+	dh_installmime
+	dh_lintian
+	dh_link
+	dh_compress -X.pdf
+	dh_fixperms
+	# we also have to fix the permissions of the link targets from /usr/bin
+	bash debian/fix-bin-symlink-targets-permissions.sh
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -- -Zxz
+
+binary: binary-indep binary-arch
+
+.PHONY: build clean binary-indep binary-arch binary install
+
+# eof
