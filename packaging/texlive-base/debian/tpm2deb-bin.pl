@@ -32,61 +32,26 @@ use TeXLive::TLPOBJ;
 # use Data::Dumper;
 
 
-my $debdest;
 my $basedir;
-my $bindest;
-my $bincomponent = "/usr/bin";
-my $rundest;
-my $runcomponent = "/usr/share/texlive";
-my $docdest;
-my $doccomponent;
-my $etcdest;
-my $tmpdir;
+my $debdest = "./debian";
 
 
-#
-# Configuration for destination of files
-# DONT USER DOUBLE QUOTES; THESE VARIABLES HAVE TO GET REEVALUATED
-# AFTER $tmpdir IS SET!!
-#
-my $sysdebdest = '$tmpdir/debian';
-my $sysbasedir = '$debdest/$package';
-my $sysbindest = '$basedir/usr/bin';
-my $sysbincomponent = '/usr/bin';
-my $sysrundest = '$basedir/usr/share/texlive';
-my $sysruncomponent = '/usr/share/texlive';
-my $sysdocdest = '$basedir/usr/share/doc/$package';
-my $sysdoccomponent = '/usr/share/doc/$package';
-my $sysetcdest = '$basedir/etc/texmf';
-
-my $texmfdist = "texmf-dist";
 my $opt_nosource=0;
-my $optdestination="";
 our $opt_onlyscripts=0;
 my $opt_onlycopy=0;
 
 our $opt_debug; #global variable
-my $opt_master;
 our $Master;
 my $globalreclevel=1;
 
 my $result = GetOptions ("debug!" => \$opt_debug, 	# debug mode
 	"nosource!" => \$opt_nosource,			# don't include source files
-	"master=s" => \$opt_master,	# location of Master
-	"dest=s" => \$optdestination,	# where to write files
-	"reclevel=i" => \$globalreclevel,	# recursion level
 	"onlyscripts!" => \$opt_onlyscripts, # only create maintainer scripts
 	"onlycopy!" => \$opt_onlycopy # no maintscripts, only copy files
 	);
 
-# Norbert, is $, intended here, or should it rather be m{/.*$}?
-if (!($opt_master =~ m,/.*$,,)) {
-	$Master = `pwd`;
-	chomp($Master);
-	$Master .= "/$opt_master";
-} else {
-	$Master = $opt_master;
-}
+$Master = `pwd`;
+chomp($Master);
 
 my $startdir=getcwd();
 chdir($startdir);
@@ -109,9 +74,9 @@ sub main {
 	die "Cannot load tlpdb!" unless defined($::tlpdb);
 	initialize_config_file_data("debian/tpm2deb.cfg");
 	build_data_hash();
-    #    use Data::Dumper;
+	#    use Data::Dumper;
 	#    $Data::Dumper::Indent = 1;
-    #    print Dumper(\%TeXLive);
+	#    print Dumper(\%TeXLive);
     #    exit(1);
 	check_consistency();
 	foreach my $package (@packages) {
@@ -123,7 +88,7 @@ sub main {
 		print "Working on $package\n";
 		# determine variables used in all subsequent functions
 		$opt_debug && print STDERR "Setting global vars\n";
-		tl_set_global_vars($package);
+		$basedir = "./debian/$package";
 		#
 		# copy files etc.
 		# 
@@ -131,38 +96,7 @@ sub main {
 		#
 		# create the maintainer scripts
 		#
-		make_maintainer($package,$debdest) unless ($opt_onlycopy);
-	}
-}
-
-#
-# set global variables
-#
-sub tl_set_global_vars {
-	my ($package) = @_;
-	my $helper;
-	if ($optdestination ne "") {
-		$tmpdir = $optdestination;
-	} else {
-		$tmpdir = ".";
-	}
-	$opt_debug && print STDERR "tmpdir = $tmpdir\n";
-	$helper="\$debdest = \"$sysdebdest\""; eval $helper;
-	$helper="\$basedir = \"$sysbasedir\""; eval $helper;
-	$helper="\$bindest = \"$sysbindest\""; eval $helper;
-	$helper="\$rundest = \"$sysrundest\""; eval $helper;
-	$helper="\$docdest = \"$sysdocdest\""; eval $helper;
-	$helper="\$doccomponent = \"$sysdoccomponent\""; eval $helper;
-	$helper="\$etcdest = \"$sysetcdest\""; eval $helper;
-	$opt_debug && print STDERR "\nGlobal options:\n";
-	if ($opt_debug) {
-		print STDERR "debdest = $debdest\n";
-		print STDERR "basedir = $basedir\n";
-		print STDERR "bindest = $bindest\n";
-		print STDERR "rundest = $rundest\n";
-		print STDERR "docdest = $docdest\n";
-		print STDERR "doccomponent = $doccomponent\n";
-		print STDERR "etcdest = $etcdest\n";
+		make_maintainer($package) unless ($opt_onlycopy);
 	}
 }
 
@@ -195,19 +129,27 @@ sub tl_is_ignored {
 #
 # make_deb_copy_to_righplace
 #
-# depends on global var $rundest
 sub make_deb_copy_to_rightplace {
 	my ($package,$listref) = @_;
 	my %lists = %$listref;
 	my @all_files;
+	my @SpecialActions;
 	push @all_files, @{$lists{'RunFiles'}};
 	push @all_files, @{$lists{'DocFiles'}};
 	push @all_files, @{$lists{'SourceFiles'}} if (!$opt_nosource);
 	foreach my $file (@all_files) {
+		# all files are now in texmf-dist
+		my $lfile = $file;
+		# SWITCH to move all files to /usr/share/texmf
+		#$lfile =~ s:^texmf-dist/::;
 		next if tl_is_blacklisted($file);
 		if (!tl_is_ignored($file)) {
-			$opt_debug && print STDERR "NORMAL COPY: $basedir/usr/share/texlive/$file\n";
-			my $finaldest = "$basedir/usr/share/texlive/$file";
+			my $finaldest = "$basedir/usr/share/texlive/$lfile";
+			if ($lfile =~ m!^texmf-dist/doc/(.*)$!) {
+				$finaldest = "$basedir/usr/share/doc/texlive-doc/$1";
+			}
+			# SWITCH my $finaldest = "$basedir/usr/share/texmf/$lfile";
+			$opt_debug && print STDERR "NORMAL COPY: $finaldest\n";
 			&mkpath(dirname($finaldest));
 			mycopy("$Master/$file", $finaldest);
 		}
@@ -216,20 +158,31 @@ sub make_deb_copy_to_rightplace {
 		# actual link
 		if (defined($TeXLive{'all'}{'linkedscript'}{$file})) {
 			unless ($opt_onlyscripts == 1) {
+				my $bindest = "$basedir/usr/bin";
 				&mkpath($bindest);
 				my @foo = split ",", $TeXLive{'all'}{'linkedscript'}{$file};
 				for my $i (@foo) {
-					symlink("../share/texlive/$file", "$bindest/$i") or
-						die "Cannot symlink $bindest/$i -> ../share/texlive/$file: $!\n"
+					# SWITCH symlink("../share/texmf/$lfile", "$bindest/$i") or
+					symlink("../share/texlive/$lfile", "$bindest/$i") or
+						die "Cannot symlink $bindest/$i -> ../share/texlive/$lfile: $!\n"
 				}
 			};
 		}
-		do_special($file,"/usr/share/texlive/$file");
+		SPECIALS: foreach my $special (@{$TeXLive{'all'}{'special_actions_config'}}) {
+			my ($pat, $act) = ($special =~ m/(.*):(.*)/);
+			if ($file =~ m|$pat$|) {
+				if ($act eq "install-info") {
+					push @SpecialActions, "install-info:$file";
+				} elsif ( $act eq "install-man") {
+					push @SpecialActions, "install-man:$file";
+				} else {
+					print STDERR "Unknown special action $act, terminating!\n";
+					exit 1;
+				}
+			}
+		}
 	}
-	if ($package eq 'texlive-common') {
-		&mkpath("$debdest/texlive-common/usr/share/texlive/tlpkg");
-		mycopy("$Master/tlpkg/TeXLive","$debdest/texlive-common/usr/share/texlive/tlpkg/");
-	}
+	return(@SpecialActions);
 }
 
 #
@@ -315,24 +268,6 @@ sub make_deb {
 	#
 	# Do special actions as specified in the config file, like install info
 	# etc
-	our @SpecialActions = ();
-	sub do_special {
-		my ($origfn, $finalfn) = @_;
-		our @SpecialActions;
-		SPECIALS: foreach my $special (@{$TeXLive{'all'}{'special_actions_config'}}) {
-			my ($pat, $act) = ($special =~ m/(.*):(.*)/);
-			if ($origfn =~ m|$pat$|) {
-				if ($act eq "install-info") {
-					push @SpecialActions, "install-info:$origfn";
-				} elsif ( $act eq "install-man") {
-					push @SpecialActions, "install-man:$origfn";
-				} else {
-					print STDERR "Unknown special action $act, terminating!\n";
-					exit 1;
-				}
-			}
-		}
-	}
 	# real start
 	my ($package) = @_;
 	my $type_of_package = 'binary';
@@ -343,7 +278,7 @@ sub make_deb {
 	my %lists = %{&get_all_files($package, $globalreclevel)};
 	my $title = $TeXLive{$type_of_package}{$package}{'title'};
 	my $description = $TeXLive{$type_of_package}{$package}{'description'};
-	eval { mkpath($rundest) };
+	#eval { mkpath($rundest) };
 	if ($@) {
 		die "Couldn't create dir: $@";
 	}  
@@ -353,11 +288,11 @@ sub make_deb {
 		print STDERR "DOCFILES: ", @{$lists{'DocFiles'}}, "\n";
 		print STDERR "BINFILES: ", @{$lists{'BinFiles'}}, "\n";
 	}
-	&mkpath($docdest);
+	#&mkpath($docdest);
 	#
 	# DO REMAPPINGS and COPY FILES TO DEST
 	#
-	make_deb_copy_to_rightplace($package,\%lists);
+	my @SpecialActions = make_deb_copy_to_rightplace($package,\%lists);
 	#
 	# EXECUTE ACTIONS
 	#
@@ -396,7 +331,7 @@ sub make_deb {
 		#}
 		#close(MANLIST);
 		for my $f (@manfiles) {
-			if ($f =~ m!texmf[^/]*/doc/man/man(.*)/(.*)$!) {
+			if ($f =~ m!texmf-dist/doc/man/man(.*)/(.*)$!) {
 				mycopy($f, "$debdest/$package/usr/share/man/man$1/$2");
 			} else {
 				printf STDERR "Unhandled man page: $f\n";
@@ -421,7 +356,7 @@ sub make_maintainer {
 			close(SOURCE);
 		}
 	}
-	my ($package,$debdest) = @_;
+	my ($package) = @_;
 	print "Making maintainer scripts for $package in $debdest...\n";
 	&mkpath($debdest);
 	# create debian/maintscript

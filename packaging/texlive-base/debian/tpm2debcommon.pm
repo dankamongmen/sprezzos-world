@@ -90,20 +90,24 @@ sub build_data_hash {
 	# First the binary part
 	my @collections = ();
 	foreach my $bin_pkg ($::tlpdb->list_packages()) {
+		# package names with . in the name are of three types:
+		# - .arch packages
+		# - 00texlive.* packages
+		# - texlive.infra
+		# we want to have only the i386-linux and texlive.infra
 		next if ($bin_pkg =~ m/^00texlive/);
 		if ($bin_pkg =~ m/\.(.*)$/) {
-			next if ("$1" ne "i386-linux");
+			next if
+				(($bin_pkg ne "texlive.infra") && ("$1" ne "i386-linux"));
 		}
 		#
-		# TODO TODO TODO
-		# what todo with texlive.infra!!!!
 		next if is_blacklisted ($bin_pkg, "");
 		if ($bin_pkg =~ m/^(.*)\.i386-linux/) {
 			next if is_blacklisted( $1, "");
 		}
 		my $tlp = $::tlpdb->get_package($bin_pkg);
 		die "Cannot get $bin_pkg from tlpdb!" unless defined($tlp);
-		$tlp->cancel_reloc_prefix;
+		$tlp->replace_reloc_prefix;
 		my ($pkg) = tpm2debname($bin_pkg);
 		my $realtype = $tlp->category;
 		next if ($realtype eq "Scheme");
@@ -204,8 +208,8 @@ sub build_data_hash {
 		# we have to collect the depends from the config file and the 
 		# direct tpm dependencies
 		@depends = tpm2debname(@depends);
-		if ($pkg ne "texlive-common") {
-			push @depends, "texlive-common (>= $TeXLive{'all'}{'tl_common_version'})";
+		if ($pkg ne "texlive-base") {
+			push @depends, "texlive-base (>= $TeXLive{'all'}{'tl_common_version'})";
 		}
 		#
 		if (defined($Config{'depends'}{$pkg})) {
@@ -257,7 +261,7 @@ sub build_data_hash {
 			my @p = ();
 			my @pd = ();
 			foreach my $f (@{$TeXLive{'binary'}{$bin_pkg}{'docfiles'}}) {
-				if ($f =~ m;texmf[^/]*/doc/man/man.*/.*;) {
+				if ($f =~ m;texmf-dist/doc/man/man.*/.*;) {
 					push @p, $f;
 				} else {
 					push @pd, $f;
@@ -270,11 +274,11 @@ sub build_data_hash {
 			$TeXLive{'binary'}{$doc_pkg}{'description'} = "This package provides the documentation for $bin_pkg";
 			# what else do we have to set here ????
 			#
-			# the doc package needs to depend on texlive-common, it
+			# the doc package needs to depend on texlive-base, it
 			# doesn't get this dependency as ordinary packages do
 			$TeXLive{'binary'}{$doc_pkg}{'depends'} = 
 				[ @{$TeXLive{'binary'}{$doc_pkg}{'depends'}}, 
-				  "texlive-common (>= $TeXLive{'all'}{'tl_common_version'})" 
+				  "texlive-base (>= $TeXLive{'all'}{'tl_common_version'})" 
 				];
 			# add a recommends for the normal package on the doc pkg.
 			$TeXLive{'binary'}{$bin_pkg}{'recommends'} = [ @{$TeXLive{'binary'}{$bin_pkg}{'recommends'}}, "$bin_pkg-doc" ];
@@ -284,8 +288,8 @@ sub build_data_hash {
 			#
 			# necessary relations from the config file
 			#
-			# we need texlive-common (for tex-common)
-			push @{$TeXLive{'binary'}{$doc_pkg}{'depends'}}, "texlive-common (>= $TeXLive{'all'}{'tl_common_version'})";
+			# we need texlive-base (for tex-common)
+			push @{$TeXLive{'binary'}{$doc_pkg}{'depends'}}, "texlive-base (>= $TeXLive{'all'}{'tl_common_version'})";
 			if (defined($Config{'depends'}{$doc_pkg})) {
 				$TeXLive{'binary'}{$doc_pkg}{'depends'} = [ @{$Config{'depends'}{$doc_pkg}} ];
 			}
@@ -321,7 +325,7 @@ sub build_data_hash {
 								($TeXLive{'all'}{'file_map_actions'}{$f} eq "move")) {
 						push @p, $f;
 					} else {
-						if ($f =~ m;texmf[^/]*/doc/man/man.*/.*;) {
+						if ($f =~ m;texmf-dist/doc/man/man.*/.*;) {
 							push @p, $f;
 						} else {
 							push @pd, $f;
@@ -354,7 +358,7 @@ sub build_data_hash {
  		$TeXLive{'source'}{$srcpkg}{'section'} =
 			$Config{'section'}{$srcpkg};
 	}
-	# we let texlive-common CONFLICT with all texlive packages << then the 
+	# we let texlive-base CONFLICT with all texlive packages << then the 
 	# values set in latest-version
 	my @conflictpkgs = ();
 	foreach my $source_package (@{$TeXLive{'all'}{'sources'}}) {
@@ -362,6 +366,9 @@ sub build_data_hash {
 			push @conflictpkgs, "$bin_pkg (<< $TeXLive{'source'}{$source_package}{'latest_version'})";
 		}
 	}
+	# add conflict packages to texlive-base
+	$TeXLive{'binary'}{'texlive-base'}{'conflicts'} = [ @{$Config{'conflicts'}{'texlive-base'}}, @conflictpkgs  ];
+
 	# finally we let the package "texlive-full" depend on all texlive-* packages
 	my @allpkgs = ();
 	foreach my $source_package (@{$TeXLive{'all'}{'sources'}}) {
@@ -402,11 +409,7 @@ sub build_data_hash {
 		$TeXLive{'mbinary'}{$meta_package}{'recommends'}  = [ @{$Config{'recommends'}{$meta_package}} ];
 		$TeXLive{'mbinary'}{$meta_package}{'replaces'}    = [ @{$Config{'replaces'}{$meta_package}} ];
 		$TeXLive{'mbinary'}{$meta_package}{'breaks'}    = [ @{$Config{'breaks'}{$meta_package}} ];
-		if ($meta_package eq "texlive-common") {
-			$TeXLive{'mbinary'}{$meta_package}{'conflicts'}   = [ @{$Config{'conflicts'}{$meta_package}}, @conflictpkgs ];
-		} else {
-			$TeXLive{'mbinary'}{$meta_package}{'conflicts'}   = [ @{$Config{'conflicts'}{$meta_package}} ];
-		}
+		$TeXLive{'mbinary'}{$meta_package}{'conflicts'}   = [ @{$Config{'conflicts'}{$meta_package}} ];
 	  
 		# Short and long description
 		$TeXLive{'mbinary'}{$meta_package}{'title'}       = $Config{'title'}{$meta_package};
@@ -705,7 +708,7 @@ sub read_one_config_file {
 			$Config{'build_dep_indep'}{$a} = "$b";
 			next;
 		}
-		if ($type eq "texlive-common-version") {
+		if ($type eq "texlive-base-version") {
 			$TeXLive{'all'}{'tl_common_version'} = "$a";
 			next;
 		}
