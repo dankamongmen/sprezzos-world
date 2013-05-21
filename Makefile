@@ -11648,3 +11648,19 @@ $(FOOMATICFILTERS): $(SPREZZ)/foomatic-filters/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf foomatic-filters_$(foomatic-filters_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: texlive-lang
+texlive-lang:$(TEXLIVELANG)_$(ARCH).deb
+$(TEXLIVELANG): $(SPREZZ)/texlive-lang/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf texlive-lang_$(texlive-lang_UPVER).orig.tar.gz $(TARARGS) $@
+
+.PHONY: iputils
+iputils:$(IPUTILS)_$(ARCH).deb
+$(IPUTILS): $(SPREZZ)/iputils/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xjvf iputils_$(iputils_UPVER).orig.tar.bz2 $(TARARGS) $@
+
