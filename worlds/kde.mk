@@ -556,7 +556,7 @@ $(LIBKSANE): $(SPREZZ)/libksane/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
-	tar xzvf libksane_$(libksane_UPVER).orig.tar.gz $(TARARGS) $@
+	tar xJvf libksane_$(libksane_UPVER).orig.tar.xz $(TARARGS) $@
 
 .PHONY: apper
 apper:$(APPER)_$(ARCH).deb
@@ -653,4 +653,12 @@ $(KAMERA): $(SPREZZ)/kamera/debian/changelog
 	cp -r $(<D) $@
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf kamera_$(kamera_UPVER).orig.tar.xz $(TARARGS) $@
+
+.PHONY: libkdcraw
+libkdcraw:$(LIBKDCRAW)_$(ARCH).deb
+$(LIBKDCRAW): $(SPREZZ)/libkdcraw/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf libkdcraw_$(libkdcraw_UPVER).orig.tar.xz $(TARARGS) $@
 
