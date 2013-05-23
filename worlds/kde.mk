@@ -662,3 +662,11 @@ $(LIBKDCRAW): $(SPREZZ)/libkdcraw/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xJvf libkdcraw_$(libkdcraw_UPVER).orig.tar.xz $(TARARGS) $@
 
+.PHONY: qt-gstreamer
+qt-gstreamer:$(QTGSTREAMER)_$(ARCH).deb
+$(QTGSTREAMER): $(SPREZZ)/qt-gstreamer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf qt-gstreamer_$(qt-gstreamer_UPVER).orig.tar.gz $(TARARGS) $@
+
