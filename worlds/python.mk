@@ -311,3 +311,11 @@ $(PYTHONROMAN): $(SPREZZ)/python-roman/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xzvf python-roman_$(python-roman_UPVER).orig.tar.gz $(TARARGS) $@
 
+.PHONY: jinja2
+jinja2:$(JINJA2)_$(ARCH).deb
+$(JINJA2): $(SPREZZ)/jinja2/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xzvf jinja2_$(jinja2_UPVER).orig.tar.gz $(TARARGS) $@
+
