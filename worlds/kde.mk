@@ -670,3 +670,11 @@ $(QTGSTREAMER): $(SPREZZ)/qt-gstreamer/debian/changelog
 	cd $@ && uscan --force-download --download-current-version
 	tar xjvf qt-gstreamer_$(qt-gstreamer_UPVER).orig.tar.bz2 $(TARARGS) $@
 
+.PHONY: phonon-backend-gstreamer
+phonon-backend-gstreamer:$(PHONONBACKENDGSTREAMER)_$(ARCH).deb
+$(PHONONBACKENDGSTREAMER): $(SPREZZ)/phonon-backend-gstreamer/debian/changelog
+	mkdir $@
+	cp -r $(<D) $@
+	cd $@ && uscan --force-download --download-current-version
+	tar xJvf phonon-backend-gstreamer_$(phonon-backend-gstreamer_UPVER).orig.tar.xz $(TARARGS) $@
+
