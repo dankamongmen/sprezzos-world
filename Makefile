@@ -42,6 +42,16 @@ include worlds/mozilla.mk
 include worlds/obsolete.mk
 include worlds/sprezzatech.mk
 
+clean:
+	rm -rf -- sprezzos-world $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
+
+update:
+	for i in $(wildcard packaging/*) ; do \
+		[ ! -d $$i ] || tools/update $$i ; done
+
+clobber:
+	rm -rf -- $(FETCHED)
+
 sprezzos-world/%: $(SPREZZ)/%/debian/changelog
 	[ -d $(@D) ] || mkdir -p $(@D)
 	( echo "# Automatically generated from $<" && \
@@ -9027,15 +9037,6 @@ $(MKLIBS): $(SPREZZ)/mklibs/debian/changelog
 	cp -r $(<D)/.. $@
 	tar cJvf mklibs_$(mklibs_UPVER).orig.tar.xz $@ --exclude-vcs --exclude=debian
 
-clean:
-	rm -rf -- sprezzos-world $(DEBS) $(UDEBS) $(DSCS) $(CHANGES)
-
-update:
-	for i in $(wildcard packaging/*) ; do \
-		[ ! -d $$i ] || tools/update $$i ; done
-
-clobber:
-	rm -rf -- $(FETCHED)
 .PHONY: gsl
 gsl:$(GSL)_$(ARCH).deb
 $(GSL): $(SPREZZ)/gsl/debian/changelog
