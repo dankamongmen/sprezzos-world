@@ -5503,8 +5503,8 @@ $(LIBXVMC): $(SPREZZ)/libxvmc/debian/changelog
 	tar xzvf libXvMC-$(libxvmc_UPVER).tar.gz $(TARARGS) $@
 
 .PHONY: libxxf86dga
-libxxf86dga:$(libxxf86dga)_$(ARCH).deb
-$(libxxf86dga): $(SPREZZ)/libxxf86dga/debian/changelog
+libxxf86dga:$(LIBXXF86DGA)_$(ARCH).deb
+$(LIBXXF86DGA): $(SPREZZ)/libxxf86dga/debian/changelog
 	mkdir $@
 	cp -r $(<D) $@/
 	cd $@ && uscan --force-download --download-current-version
